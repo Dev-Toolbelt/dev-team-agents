@@ -25,7 +25,7 @@ Before any design work:
 Always load both before acting:
 
 - `design-system-audit` — for reading and documenting the current visual state
-- `anthropic-skills:frontend-design` — **required**; provides component patterns, layout techniques, and visual design guidance. Load at the start of every session.
+- `frontend-design` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load at the start of every session.
 
 ---
 

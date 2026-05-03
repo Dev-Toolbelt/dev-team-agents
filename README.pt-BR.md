@@ -183,17 +183,11 @@ CLAUDE.md  # adicione uma seção ## Project Rules
 
 ---
 
-## Obrigatório: `anthropic-skills:frontend-design`
+## Skill `frontend-design` (Instalada Automaticamente)
 
-Os agentes `frontend-developer` e `ui-ux-designer` **requerem** a skill `anthropic-skills:frontend-design`. Ela fornece os padrões de componentes, técnicas de layout e orientação de design visual dos quais esses agentes dependem.
+Os agentes `frontend-developer` e `ui-ux-designer` requerem a skill `frontend-design`. Ela fornece padrões de componentes, técnicas de layout e orientação de design visual.
 
-Instale o plugin `anthropic-skills` antes de usar qualquer agente relacionado a UI:
-
-```
-/mcp  →  pesquisar "anthropic-skills"  →  instalar
-```
-
-O `setup-assistant` irá lembrá-lo de fazer isso durante o setup do projeto.
+**O `scripts/install.sh` instala automaticamente** via symlink do cache de marketplace do Claude Code (sem chamada de rede, sem passo manual). Se o cache não estiver disponível na máquina, o instalador exibirá um passo manual único — execute `/plugins → frontend-design → install` no Claude Code, depois rode o instalador novamente para detectá-la.
 
 ---
 

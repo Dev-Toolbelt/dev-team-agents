@@ -152,4 +152,4 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ## `anthropic-skills:frontend-design` Integration
 
-This skill is used alongside the `anthropic-skills:frontend-design` skill, which provides component patterns, layout techniques, and visual design guidance. Load it at the start of every design session — it is required, not optional.
+This skill is used alongside the `frontend-design` skill (installed automatically by `scripts/install.sh`), which provides component patterns, layout techniques, and visual design guidance. Load it at the start of every design session — it is required, not optional.

@@ -43,10 +43,11 @@ Recent commits reveal the team's working cadence, areas of active development, a
 
 Summarize what you found (files + commit history) before asking questions.
 
-**anthropic-skills check:**
-Verify whether the `anthropic-skills:frontend-design` skill is available. If the project has any UI component or frontend work:
-- Remind the user to install the `anthropic-skills` plugin if not already installed
-- The `frontend-developer` and `ui-ux-designer` agents require it
+**frontend-design skill check:**
+Verify whether `.claude/skills/frontend-design/` exists. If the project has UI or frontend work and the skill is missing:
+- It means `scripts/install.sh` didn't find it in the marketplace cache
+- Ask the user to: open Claude Code → `/plugins` → search `frontend-design` → install → then re-run `.claude/dev-team-agents/scripts/install.sh` to pick it up automatically
+- The `frontend-developer` and `ui-ux-designer` agents depend on it
 
 ### Step 2 — Project Type Question
 
