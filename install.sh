@@ -1,28 +1,36 @@
 #!/bin/bash
-# install.sh — Installs or updates dev-team-agents.
+# install.sh — Installs or updates dev-team-agents at the PROJECT level.
 #
-# Usage:
-#   ./install.sh              # Install latest version
-#   ./install.sh latest       # Install latest version
-#   ./install.sh v1.2.0       # Install specific version
+# Run this script from your project root. It installs agents and skills
+# into .claude/ inside your project (not globally into ~/.claude/).
+#
+# Usage (from project root):
+#   curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash
+#   bash <(curl -sSL ...) v1.2.0                       # specific version
+#   .claude/dev-team-agents/install.sh latest           # update after first install
 #
 # What it does:
-#   1. Clones or updates the repository
+#   1. Clones or updates the repository into .claude/dev-team-agents/
 #   2. Checks out the requested tag
-#   3. Symlinks agents/ to ~/.claude/agents/dev-team/
-#   4. Symlinks skills/ to ~/.claude/skills/dev-team/
-#   5. Records the installed version
+#   3. Symlinks agents/ to .claude/agents/dev-team/
+#   4. Symlinks each skill to .claude/skills/<skill-name>/
+#   5. Configures the update-check hook in .claude/settings.json
+#   6. Records the installed version
 
 set -euo pipefail
 
-REPO_URL="https://github.com/YOUR_ORG/dev-team-agents.git"  # Update before publishing
-INSTALL_DIR="$HOME/.claude/dev-team-agents"
-AGENTS_TARGET="$HOME/.claude/agents"
-SKILLS_TARGET="$HOME/.claude/skills"
+REPO_URL="https://github.com/vaironaegos/dev-team-agents"
+PROJECT_ROOT="$(pwd)"
+INSTALL_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
+AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"
+SKILLS_TARGET="$PROJECT_ROOT/.claude/skills"
+SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
 VERSION="${1:-latest}"
 
-echo "dev-team-agents installer"
-echo "========================="
+echo "dev-team-agents installer (project-level)"
+echo "========================================="
+echo "Project root: $PROJECT_ROOT"
+echo ""
 
 # ── Step 1: Clone or update ───────────────────────────────────────
 if [ -d "$INSTALL_DIR/.git" ]; then
@@ -30,7 +38,8 @@ if [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
     git fetch --tags --quiet
 else
-    echo "→ Cloning repository to $INSTALL_DIR"
+    echo "→ Cloning repository to .claude/dev-team-agents/"
+    mkdir -p "$PROJECT_ROOT/.claude"
     git clone "$REPO_URL" "$INSTALL_DIR" --quiet
     cd "$INSTALL_DIR"
 fi
@@ -62,16 +71,12 @@ if [ -L "$AGENTS_LINK" ]; then
     rm "$AGENTS_LINK"
 fi
 ln -s "$INSTALL_DIR/agents" "$AGENTS_LINK"
-echo "→ Agents linked: $AGENTS_LINK → $INSTALL_DIR/agents"
+echo "→ Agents linked: .claude/agents/dev-team/"
 
 # ── Step 5: Link skills ───────────────────────────────────────────
-# Link each skill category individually to avoid conflicting with user's own skills
 for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
-    CATEGORY_NAME=$(basename "$SKILL_CATEGORY")
-    SKILL_LINK="$SKILLS_TARGET/$CATEGORY_NAME"
-
-    # Link individual skills within the category
     for SKILL_DIR in "$SKILL_CATEGORY"*/; do
+        [ -d "$SKILL_DIR" ] || continue
         SKILL_NAME=$(basename "$SKILL_DIR")
         SKILL_TARGET_PATH="$SKILLS_TARGET/$SKILL_NAME"
         if [ -L "$SKILL_TARGET_PATH" ]; then
@@ -82,23 +87,56 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
         fi
     done
 done
-echo "→ Skills linked to $SKILLS_TARGET"
+echo "→ Skills linked: .claude/skills/"
 
-# ── Step 6: Record installed version ─────────────────────────────
+# ── Step 6: Configure update-check hook in .claude/settings.json ─
+UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/check-updates.sh"
+
+if [ ! -f "$SETTINGS_FILE" ]; then
+    cat > "$SETTINGS_FILE" <<EOF
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$UPDATE_HOOK_CMD"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+    echo "→ Created .claude/settings.json with update-check hook"
+else
+    if grep -q "check-updates.sh" "$SETTINGS_FILE" 2>/dev/null; then
+        echo "→ Update-check hook already present in .claude/settings.json"
+    else
+        echo "→ NOTE: .claude/settings.json already exists."
+        echo "  Add this hook under PreToolUse to enable update checks:"
+        echo "  { \"type\": \"command\", \"command\": \"$UPDATE_HOOK_CMD\" }"
+    fi
+fi
+
+# ── Step 7: Record installed version ─────────────────────────────
 echo "$RESOLVED" > "$INSTALL_DIR/.installed-version"
 date +%s > "$INSTALL_DIR/.last-update-check"
 
-# ── Step 7: Make scripts executable ──────────────────────────────
+# ── Step 8: Make scripts executable ──────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
 
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
-echo "✓ dev-team-agents $RESOLVED installed successfully"
+echo "✓ dev-team-agents $RESOLVED installed in this project"
 echo ""
 echo "Next steps:"
-echo "  1. Run the setup-assistant in any project: 'Help me set up this project with dev-team-agents'"
-echo "  2. To update later: $INSTALL_DIR/install.sh latest"
-echo "  3. To switch versions: $INSTALL_DIR/install.sh v1.0.0"
+echo "  1. Add .claude/dev-team-agents/ to your .gitignore (or commit it — your choice)"
+echo "  2. Run the setup-assistant: \"Help me set up this project with dev-team-agents\""
+echo "  3. To update later: .claude/dev-team-agents/install.sh latest"
+echo "  4. To pin a version: .claude/dev-team-agents/install.sh v1.0.0"
 echo ""
-echo "Agents available in ~/.claude/agents/dev-team/"
-echo "Skills available in ~/.claude/skills/"
+echo "Agents available at: .claude/agents/dev-team/"
+echo "Skills available at: .claude/skills/"

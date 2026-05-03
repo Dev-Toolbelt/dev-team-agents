@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: Foundational rule for all dev-team-agents. Defines how agents must load and reconcile project-specific context against the global base standards. Every agent must apply this rule before acting. Covers coexistence, project override, immutability warnings, and context loading order.
+description: Foundational rule for all dev-team-agents. Defines how agents must load and reconcile project-specific context against the global base standards. Covers coexistence, project override, language policy, mandatory Plan Mode, immutability warnings, and context loading order. Every agent must apply this rule before acting.
 ---
 
 # Project Context Loading — Coexistence & Override Rule
@@ -20,13 +20,64 @@ This means every agent must:
 
 ---
 
+## Language Policy
+
+**All generated documents, plans, code comments, commit messages, and technical output must be written in English.**
+
+This applies to:
+- Architecture documents (`.claude/docs/development/`)
+- Backlog items, sprint plans, and estimates (`.claude/docs/backlog/`)
+- API contracts, code standards, design system docs
+- Plans presented in Plan Mode
+- Changelog entries and PR descriptions
+
+**Exception**: if the user explicitly requests a document in another language (e.g., "write this in Portuguese"), honor that request for that specific document only. Default always reverts to English.
+
+---
+
+## Mandatory Plan Mode — No Silent Execution
+
+**Before executing any non-trivial task, you MUST present a plan and wait for approval.**
+
+A "non-trivial task" is any task that involves:
+- Creating, modifying, or deleting files
+- Running commands with side effects (installs, migrations, deploys)
+- Architectural decisions or design choices
+- Generating project documentation or backlog items
+- Any task with more than one step
+
+### How to Enter Plan Mode
+
+1. Present the plan using the canonical format from `templates/plan-template.md`
+2. End the plan with: `---` followed by `**Awaiting your approval before proceeding.**`
+3. Stop. Do not execute anything.
+4. Only proceed after the user explicitly approves (e.g., "approved", "go ahead", "proceed")
+
+### What Requires a Plan
+- Implementing a feature or fix
+- Creating or modifying architecture documents
+- Running migrations or schema changes
+- Setting up environments or CI/CD
+- Security or performance changes
+- Any task a workflow step describes as "the agent will..."
+
+### What Does NOT Require a Plan
+- Answering a question
+- Explaining existing code
+- Showing a file's contents
+- Single-line typo fixes
+
+**Never execute and then explain. Always plan first, execute second.**
+
+---
+
 ## Context Loading Order
 
 Before starting any task, load context in this order (read what exists — skip what doesn't):
 
 ```
 1. README.md                  ← project overview, setup, conventions
-2. CLAUDE.md                  ← Claude-specific rules and workflow overrides
+2. CLAUDE.md                  ← Claude-specific rules (highest precedence)
 3. AGENTS.md                  ← agent-specific instructions for this project
 4. .claude/settings.json      ← Claude Code configuration
 5. .agents/ (directory)       ← project-level agent overrides
@@ -56,9 +107,9 @@ When a conflict exists between our base standard and a project convention:
 
 ## Immutability Warning
 
-If a user asks to modify any file inside the `dev-team-agents` installation directory (`~/.claude/agents/`, `~/.claude/skills/`), respond with:
+If a user asks to modify any file inside `.claude/dev-team-agents/`, respond with:
 
-> ⚠️ **Not recommended**: modifying files inside `dev-team-agents` directly means your changes will be **overwritten on the next update** (`install.sh latest`).
+> ⚠️ **Not recommended**: modifying files inside `.claude/dev-team-agents/` directly means your changes will be **overwritten on the next update** (`.claude/dev-team-agents/install.sh latest`).
 >
 > Instead, extend or override at the project level:
 >

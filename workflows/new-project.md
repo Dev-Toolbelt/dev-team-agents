@@ -2,6 +2,8 @@
 
 Use this workflow when starting a project with no existing codebase.
 
+> **Plan Mode**: every agent step below will present a structured plan for your approval before executing anything. You review, adjust if needed, and approve. Nothing runs until you say so.
+
 ---
 
 ## Pre-requisite: Input Document
@@ -33,10 +35,13 @@ Prompt: "I have a requirements document for a new project. [paste document or at
 ```
 
 The `product-analyst` will:
-- Identify scope gaps, missing validations, and ambiguous rules
-- Generate questions (formatted for the client if needed)
+- Present a plan covering: gap identification, question generation, iteration cycle
+- After approval: identify scope gaps, missing validations, and ambiguous rules
+- Generate clarification questions (formatted for the client if needed)
 - Iterate until scope is 100% closed
 - Produce `.claude/docs/backlog/` with overview, epics, DoD, and sprint plans with estimates
+
+All backlog documents are generated in **English**.
 
 ### 1.2 — Architecture Definition (software-architect)
 
@@ -46,9 +51,10 @@ Prompt: "The scope is closed. As the software-architect, review the backlog in
 ```
 
 The `software-architect` will:
-- Decide architecture, tech stack, patterns, and code standards
+- Present a plan covering: architectural decisions, tech stack choices, standards to define
+- After approval: decide architecture, tech stack, patterns, and code standards
 - Optionally collaborate with `database-specialist` for data decisions
-- Produce `.claude/docs/development/` with all technical decisions documented
+- Produce `.claude/docs/development/` with all technical decisions documented in English
 
 ---
 
@@ -59,7 +65,9 @@ Prompt: "As the ui-ux-designer in Design Mode, create the design system and
          visual specifications for this project based on [brief description of product]."
 ```
 
-The `ui-ux-designer` will produce `.claude/docs/design/design-system.md`.
+The `ui-ux-designer` will:
+- Present a plan covering: design system structure, component inventory, visual spec format
+- After approval: produce `.claude/docs/design/design-system.md` in English
 
 ---
 
@@ -74,6 +82,8 @@ Prompt: "As the devops-specialist, set up the development environment for this p
          Stack: [refer to .claude/docs/development/tech-stack.md]"
 ```
 
+The `devops-specialist` will present a plan (Dockerfile, compose, CI config) and wait for approval before creating any file.
+
 ### Backend Implementation (backend-developer)
 
 ```
@@ -81,12 +91,16 @@ Prompt: "As the backend-developer, implement [TASK-XXX from sprint-01.md].
          Follow the architecture in .claude/docs/development/"
 ```
 
+The `backend-developer` will present a plan (files to create/modify, approach, risks) and wait for approval before writing code.
+
 ### Frontend Implementation (frontend-developer)
 
 ```
 Prompt: "As the frontend-developer, implement [feature/component].
          Follow the design system in .claude/docs/design/ and the architecture in .claude/docs/development/"
 ```
+
+The `frontend-developer` will present a plan and wait for approval before writing code.
 
 ### Tests (backend-test-specialist / frontend-test-specialist)
 
@@ -96,6 +110,8 @@ Activate only if `TESTS_REQUIRED: yes` in CLAUDE.md:
 Prompt: "As the backend-test-specialist, write tests for the [feature] just implemented."
 ```
 
+The test specialist will present a plan (which cases, which files, approach) and wait for approval.
+
 ---
 
 ## Phase 4: QUALITY GATE
@@ -103,17 +119,19 @@ Prompt: "As the backend-test-specialist, write tests for the [feature] just impl
 Run in sequence or parallel depending on available capacity:
 
 ```
-Prompt: "As the code-reviewer, review the changes in [files/PR]. 
+Prompt: "As the code-reviewer, review the changes in [files/PR].
          Use .claude/docs/development/code-standards.md as the review guide."
 
 Prompt: "As the security-specialist, run a security review on [files/PR]."
 
-Prompt: "As the qa-specialist, validate that [feature] meets its acceptance criteria 
+Prompt: "As the qa-specialist, validate that [feature] meets its acceptance criteria
          in .claude/docs/backlog/sprint-01.md"
 
-Prompt: "As the software-architect, validate that [files/PR] conforms to the 
+Prompt: "As the software-architect, validate that [files/PR] conforms to the
          architecture decisions in .claude/docs/development/architecture.md"
 ```
+
+Quality gate agents present their findings as a structured report — no plan required, but findings are explicit before any remediation steps are taken.
 
 ---
 

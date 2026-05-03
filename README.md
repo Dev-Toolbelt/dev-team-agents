@@ -29,21 +29,64 @@ A set of Claude Code agents and skills that form a complete software development
 
 ---
 
-## Installation
+## Installation — Project Level
+
+`dev-team-agents` installs **inside your project** under `.claude/`, not globally. This keeps each project's agent configuration self-contained and version-pinned.
+
+### One-line install (latest version)
+
+Run from your **project root**:
 
 ```bash
-git clone https://github.com/YOUR_ORG/dev-team-agents.git ~/.claude/dev-team-agents
-~/.claude/dev-team-agents/install.sh
+curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash
 ```
 
-To install a specific version:
+### Install a specific version
+
 ```bash
-~/.claude/dev-team-agents/install.sh v1.0.0
+curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash -s v1.0.0
 ```
 
-To update to latest:
+### Update to latest (after first install)
+
 ```bash
-~/.claude/dev-team-agents/install.sh latest
+.claude/dev-team-agents/install.sh latest
+```
+
+### Pin to a specific version / downgrade
+
+```bash
+.claude/dev-team-agents/install.sh v1.0.0
+```
+
+After installation, `.claude/` will contain:
+
+```
+.claude/
+├── dev-team-agents/   ← cloned repository (source of truth)
+├── agents/
+│   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
+├── skills/
+│   ├── project-context/   ← symlink → skill directory
+│   ├── plan-mode/         ← symlink → skill directory
+│   └── ...                ← one symlink per skill
+└── settings.json      ← update-check hook configured automatically
+```
+
+---
+
+## .gitignore Recommendation
+
+You can choose to commit `.claude/dev-team-agents/` (version-locked, reproducible) or ignore it (always fetched fresh). The agents and skills symlinks should follow the same decision.
+
+```gitignore
+# Option A: ignore the installation (each developer installs locally)
+.claude/dev-team-agents/
+.claude/agents/dev-team/
+.claude/skills/
+
+# Option B: commit everything (version-locked in repo)
+# (no entry needed — git will track it)
 ```
 
 ---
@@ -53,19 +96,21 @@ To update to latest:
 This repository uses **semantic versioning via git tags** (`v1.0.0`, `v1.1.0`, `v2.0.0`).
 
 - Updates are released as tags — no auto-update on every commit
-- The `setup-assistant` configures a session-start hook that checks for new tags daily
+- A session-start hook checks for new tags daily (configured automatically by `install.sh`)
 - You control when to update — the system only notifies, never auto-updates
-- Downgrade to any version: `install.sh v1.0.0`
+- Downgrade to any version: `.claude/dev-team-agents/install.sh v1.0.0`
 
 ---
 
 ## Getting Started — Any Project
 
+After installing, run the setup-assistant:
+
 ```
 "Help me set up this project with dev-team-agents"
 ```
 
-The `setup-assistant` will ask about the project type, configure `CLAUDE.md`, create the `.claude/docs/` structure, and set up the update check hook.
+The `setup-assistant` will scan existing files, ask about the project type, configure `CLAUDE.md`, and create the `.claude/docs/` structure.
 
 ---
 
@@ -81,6 +126,14 @@ Agents are invoked by role:
 ```
 
 Claude will automatically load the right agent based on the role you specify.
+
+**Every agent presents a plan for approval before executing anything.** You review, adjust, and approve — then execution begins.
+
+---
+
+## Language
+
+**All generated documents are in English by default.** To request a specific document in another language, say so explicitly for that document. The default always reverts to English.
 
 ---
 
@@ -111,7 +164,7 @@ These agents are a **base layer**. The project's own conventions always take pre
 
 ## Customizing for a Project
 
-Do **not** modify files inside `~/.claude/dev-team-agents/` — they will be overwritten on update.
+Do **not** modify files inside `.claude/dev-team-agents/` — they will be overwritten on update.
 
 Instead, override at the project level:
 
@@ -120,7 +173,7 @@ Instead, override at the project level:
 .agents/backend-developer.md
 
 # Project-level rules for all agents
-.claude/CLAUDE.md  # add a ## Project Rules section
+CLAUDE.md  # add a ## Project Rules section
 
 # Project-specific code standards (used by code-reviewer and developers)
 .claude/docs/development/code-standards.md
@@ -142,15 +195,18 @@ Install the `anthropic-skills` plugin to enable it.
 dev-team-agents/
 ├── agents/          ← agent definitions (.md files)
 ├── skills/          ← modular skill knowledge
-│   ├── shared/      ← used by multiple agents
+│   ├── shared/      ← used by multiple agents (project-context, plan-mode, ...)
 │   ├── architecture/
 │   ├── testing/
 │   ├── security/
 │   ├── design/
 │   └── devops/      ← one skill per platform
 ├── workflows/       ← step-by-step workflow guides
+├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── scripts/         ← install and update scripts
-└── templates/       ← document templates
+├── install.sh       ← project-level installer
+├── CLAUDE.md        ← authoring conventions for this repo
+└── CHANGELOG.md
 ```
 
 ---
@@ -159,7 +215,7 @@ dev-team-agents/
 
 1. Fork the repository
 2. Create a branch: `fix/agent-name-improvement` or `feat/new-skill`
-3. Follow the skill/agent authoring standards in `docs/authoring.md`
+3. Follow the authoring standards in `CLAUDE.md`
 4. Open a PR with a clear description of what changed and why
 5. Releases are tagged by maintainers — your change ships in the next version
 
