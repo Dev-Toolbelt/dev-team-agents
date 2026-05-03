@@ -50,6 +50,23 @@ In server-rendered contexts: coordinate with the `backend-developer` since routi
 
 ---
 
+## UI Library Awareness
+
+When the project uses a UI component library, detect it and load the corresponding skill before writing any UI code.
+
+| Library | Detection signals | Skill |
+|---------|------------------|-------|
+| **shadcn/ui** | `components/ui/` dir, `components.json`, `@radix-ui/*` deps, `cn()` utility | `skills/ui-libraries/shadcn/SKILL.md` |
+| **MUI** | `@mui/material` dep, `ThemeProvider`, `sx` prop usage | `skills/ui-libraries/mui/SKILL.md` |
+| **Ant Design** | `antd` dep, `ConfigProvider`, `@ant-design/icons` | `skills/ui-libraries/antd/SKILL.md` |
+| **Bootstrap** | `bootstrap` dep or CDN link, `data-bs-*` attrs, `.col-*` classes | `skills/ui-libraries/bootstrap/SKILL.md` |
+| **Chakra UI** | `@chakra-ui/react` dep, `ChakraProvider`/`Provider`, style props | `skills/ui-libraries/chakra-ui/SKILL.md` |
+| **jQuery** | `jquery` dep or CDN `<script>`, `$()` / `$.ajax()` usage | `skills/ui-libraries/jquery/SKILL.md` |
+
+Skills with a **MCP available** (shadcn/ui, MUI, Ant Design): the skill file contains the exact `.claude/settings.json` config to auto-install the MCP — set it up before starting UI work for real-time component docs and API access.
+
+---
+
 ## Code Quality Standards (Base Defaults)
 
 These apply unless the project overrides in `code-standards.md`:

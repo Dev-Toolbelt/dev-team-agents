@@ -484,7 +484,8 @@ dev-team-agents/
 │   ├── security/
 │   ├── design/
 │   ├── devops/      ← uma skill por plataforma (docker, vps, ci/cd, aws, gcp, azure, cloudflare)
-│   └── integrations/ ← skills de referência por plataforma/integração (supabase, gotrue, jwt, kong, realtime, database-debug, pwa, offline-first)
+│   ├── integrations/ ← skills de referência por plataforma/integração (supabase, gotrue, jwt, kong, realtime, database-debug, pwa, offline-first)
+│   └── ui-libraries/ ← skills de bibliotecas de UI (shadcn, mui, antd, bootstrap, chakra-ui, jquery)
 ├── workflows/       ← guias passo a passo de workflow
 ├── templates/       ← templates de documentos (plan, backlog, ADR, etc.)
 ├── scripts/         ← install.sh, check-updates.sh

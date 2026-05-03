@@ -101,7 +101,8 @@ dev-team-agents/
 │   ├── security/
 │   ├── design/
 │   ├── devops/      ← one skill per platform
-│   └── integrations/ ← platform/integration-specific reference skills
+│   ├── integrations/ ← platform/integration-specific reference skills
+│   └── ui-libraries/ ← UI component library reference skills
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── scripts/         ← install.sh, check-updates.sh
