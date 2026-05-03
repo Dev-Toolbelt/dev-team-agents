@@ -14,7 +14,8 @@ Before any recommendation or analysis, load:
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/development/database.md` — existing database decisions
 3. `.claude/docs/development/tech-stack.md` — technology choices
-4. Existing schema files, migrations, and data access code
+4. `.env`, `.env.local`, `docker-compose.yml` — connection strings and credentials
+5. Existing schema files, migrations, and data access code
 
 **Project rules override base standards. Always.**
 
@@ -118,6 +119,81 @@ When producing `database.md`:
 When producing migration files, seed scripts, or query helpers:
 
 - **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
+
+---
+
+## Database Access
+
+Use the Bash tool to connect directly to the project's database for inspection, debugging, and validation. Never ask the user to paste credentials in chat — read them from the environment.
+
+### Connection Discovery
+
+Check these sources in order:
+1. `DATABASE_URL` / `SUPABASE_DB_URL` / `MONGO_URI` / `REDIS_URL` env vars
+2. `.env` or `.env.local` at the project root (`grep -E 'DB_|DATABASE_|MONGO|REDIS' .env`)
+3. `docker-compose.yml` — service `environment:` blocks reveal host, port, user, password
+4. `.claude/docs/development/database.md` — may document the connection strategy
+
+### CLI Patterns per Engine
+
+**PostgreSQL**
+```bash
+psql "$DATABASE_URL"
+# or with individual vars:
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME"
+```
+
+**Supabase (PostgreSQL)**
+```bash
+supabase db connect            # via Supabase CLI (uses project config)
+psql "$SUPABASE_DB_URL"        # direct connection string
+# local dev stack:
+psql "postgresql://postgres:postgres@localhost:54322/postgres"
+```
+
+**MySQL / MariaDB**
+```bash
+mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
+```
+
+**SQLite**
+```bash
+sqlite3 "$DB_PATH"
+```
+
+**MongoDB**
+```bash
+mongosh "$MONGO_URI"
+# or: mongosh "mongodb://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
+```
+
+**Redis**
+```bash
+redis-cli -h "${REDIS_HOST:-localhost}" -p "${REDIS_PORT:-6379}" -a "$REDIS_PASSWORD"
+```
+
+### Safety Protocol
+
+**Read-only by default.** Execute SELECT, EXPLAIN, DESCRIBE, SHOW, and inspection queries freely.
+
+**Before any mutation** (INSERT, UPDATE, DELETE, ALTER, DROP, TRUNCATE):
+1. Show the exact statement that will run
+2. State which rows or objects will be affected
+3. Wait for explicit user confirmation before executing
+
+**Before any non-trivial query on a production database:**
+- Run `EXPLAIN ANALYZE` first (Postgres/MySQL) to estimate cost and catch full-table scans
+- If the query will lock rows or tables, say so before running it
+
+**Never run without confirmation:**
+- `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`
+- `DELETE` without a `WHERE` clause
+- `ALTER TABLE` on large tables in production (may cause downtime)
+- Any statement that modifies schema or bulk-deletes data
+
+### Debug Toolkit
+
+Load `skills/integrations/database-debug/SKILL.md` for the full set of debug queries and CLI commands — slow query analysis, index inspection, lock detection, table stats, and memory profiling for PostgreSQL, MySQL, SQLite, MongoDB, and Redis.
 
 ---
 
