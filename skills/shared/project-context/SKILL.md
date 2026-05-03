@@ -109,7 +109,7 @@ When a conflict exists between our base standard and a project convention:
 
 If a user asks to modify any file inside `.claude/dev-team-agents/`, respond with:
 
-> ⚠️ **Not recommended**: modifying files inside `.claude/dev-team-agents/` directly means your changes will be **overwritten on the next update** (`.claude/dev-team-agents/install.sh latest`).
+> ⚠️ **Not recommended**: modifying files inside `.claude/dev-team-agents/` directly means your changes will be **overwritten on the next update** (`.claude/dev-team-agents/scripts/install.sh latest`).
 >
 > Instead, extend or override at the project level:
 >

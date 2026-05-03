@@ -152,4 +152,4 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ## `anthropic-skills:frontend-design` Integration
 
-This skill works best alongside the `anthropic-skills:frontend-design` skill, which provides additional UI component patterns, layout techniques, and visual design guidance. If available in the session, load it for richer design recommendations.
+This skill is used alongside the `anthropic-skills:frontend-design` skill, which provides component patterns, layout techniques, and visual design guidance. Load it at the start of every design session — it is required, not optional.

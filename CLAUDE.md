@@ -21,6 +21,10 @@ This applies to:
 - Template files
 - README.md, CHANGELOG.md, CLAUDE.md
 
+### README Sync Rule
+
+`README.pt-BR.md` is the Portuguese translation of `README.md`. **Any change made to `README.md` must also be reflected in `README.pt-BR.md`** in the same commit or PR. These two files must always be kept in sync. If you update one, update the other.
+
 ---
 
 ## Mandatory Plan Mode Before Any Execution
@@ -91,7 +95,7 @@ dev-team-agents/
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── scripts/         ← install and update scripts
-├── install.sh       ← project-level installer
+├── scripts/         ← install.sh, check-updates.sh
 ├── CHANGELOG.md
 ├── README.md
 └── CLAUDE.md        ← this file

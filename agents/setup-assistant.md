@@ -27,13 +27,26 @@ Apply the `project-context` skill before acting. Load context in order: `README.
 
 ### Step 1 — Scan What Exists
 
-Before asking anything, read:
+Before asking anything, gather context from all available sources:
+
+**Files to read:**
 - `README.md`, `CLAUDE.md`, `AGENTS.md` (if they exist)
 - `.claude/` directory structure
 - Package files to infer stack: `package.json`, `composer.json`, `requirements.txt`, `Gemfile`, `go.mod`, `Cargo.toml`, `Dockerfile`
-- Existing test files or CI configs
+- Existing test files or CI configs (`.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`)
 
-Summarize what you found before asking questions.
+**Git history (run if inside a git repo):**
+```bash
+git log --oneline -20
+```
+Recent commits reveal the team's working cadence, areas of active development, and naming conventions. They also surface tech debt, ongoing work, and what was recently changed — context that files alone don't show.
+
+Summarize what you found (files + commit history) before asking questions.
+
+**anthropic-skills check:**
+Verify whether the `anthropic-skills:frontend-design` skill is available. If the project has any UI component or frontend work:
+- Remind the user to install the `anthropic-skills` plugin if not already installed
+- The `frontend-developer` and `ui-ux-designer` agents require it
 
 ### Step 2 — Project Type Question
 
@@ -163,25 +176,25 @@ If `CURRENT != LATEST`:
 
 > A new version of `dev-team-agents` is available: **$LATEST** (you have $CURRENT)
 >
-> Run `.claude/dev-team-agents/install.sh latest` to update, or `.claude/dev-team-agents/install.sh $SPECIFIC_VERSION` for a specific version.
+> Run `.claude/dev-team-agents/scripts/install.sh latest` to update, or `.claude/dev-team-agents/scripts/install.sh $SPECIFIC_VERSION` for a specific version.
 >
 > See `.claude/dev-team-agents/CHANGELOG.md` for what changed.
 >
 > Would you like me to update now?
 
-If user confirms: run `.claude/dev-team-agents/install.sh latest`
+If user confirms: run `.claude/dev-team-agents/scripts/install.sh latest`
 
 ### Version Management
 
 ```bash
 # Update to latest
-.claude/dev-team-agents/install.sh latest
+.claude/dev-team-agents/scripts/install.sh latest
 
 # Install specific version
-.claude/dev-team-agents/install.sh v1.2.0
+.claude/dev-team-agents/scripts/install.sh v1.2.0
 
 # Downgrade
-.claude/dev-team-agents/install.sh v1.0.0
+.claude/dev-team-agents/scripts/install.sh v1.0.0
 ```
 
 ---

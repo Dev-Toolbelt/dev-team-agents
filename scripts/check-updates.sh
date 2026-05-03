@@ -41,7 +41,7 @@ if [ "$CURRENT" != "$LATEST" ]; then
     echo "┌─────────────────────────────────────────────────────────┐"
     echo "│  dev-team-agents update available                       │"
     echo "│  Current: $CURRENT  →  Latest: $LATEST                  │"
-    echo "│  Run: .claude/dev-team-agents/install.sh latest         │"
+    echo "│  Run: .claude/dev-team-agents/scripts/install.sh latest │"
     echo "│  See .claude/dev-team-agents/CHANGELOG.md for details.  │"
     echo "└─────────────────────────────────────────────────────────┘"
     echo ""

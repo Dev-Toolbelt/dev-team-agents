@@ -22,10 +22,10 @@ Before any design work:
 
 ## Load Design Skills
 
-Always load these before acting:
+Always load both before acting:
 
 - `design-system-audit` — for reading and documenting the current visual state
-- `anthropic-skills:frontend-design` — for additional component patterns, layout techniques, and visual design guidance (load if available in the session)
+- `anthropic-skills:frontend-design` — **required**; provides component patterns, layout techniques, and visual design guidance. Load at the start of every session.
 
 ---
 

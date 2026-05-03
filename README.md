@@ -1,5 +1,7 @@
 # dev-team-agents
 
+🇧🇷 [Veja a versão em Português do Brasil](README.pt-BR.md)
+
 A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware, and collaboratively maintained.
 
 ---
@@ -38,25 +40,25 @@ A set of Claude Code agents and skills that form a complete software development
 Run from your **project root**:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash
 ```
 
 ### Install a specific version
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash -s v1.0.0
+curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash -s v1.0.0
 ```
 
 ### Update to latest (after first install)
 
 ```bash
-.claude/dev-team-agents/install.sh latest
+.claude/dev-team-agents/scripts/install.sh latest
 ```
 
 ### Pin to a specific version / downgrade
 
 ```bash
-.claude/dev-team-agents/install.sh v1.0.0
+.claude/dev-team-agents/scripts/install.sh v1.0.0
 ```
 
 After installation, `.claude/` will contain:
@@ -96,9 +98,9 @@ You can choose to commit `.claude/dev-team-agents/` (version-locked, reproducibl
 This repository uses **semantic versioning via git tags** (`v1.0.0`, `v1.1.0`, `v2.0.0`).
 
 - Updates are released as tags — no auto-update on every commit
-- A session-start hook checks for new tags daily (configured automatically by `install.sh`)
+- A session-start hook checks for new tags daily (configured automatically by `scripts/install.sh`)
 - You control when to update — the system only notifies, never auto-updates
-- Downgrade to any version: `.claude/dev-team-agents/install.sh v1.0.0`
+- Downgrade to any version: `.claude/dev-team-agents/scripts/install.sh v1.0.0`
 
 ---
 
@@ -181,11 +183,17 @@ CLAUDE.md  # add a ## Project Rules section
 
 ---
 
-## Optional: `anthropic-skills:frontend-design`
+## Required: `anthropic-skills:frontend-design`
 
-The `frontend-developer` and `ui-ux-designer` agents work best with the `anthropic-skills:frontend-design` skill installed. It provides additional UI component patterns and layout techniques.
+The `frontend-developer` and `ui-ux-designer` agents **require** the `anthropic-skills:frontend-design` skill. It provides the component patterns, layout techniques, and visual design guidance these agents depend on.
 
-Install the `anthropic-skills` plugin to enable it.
+Install the `anthropic-skills` plugin before using any UI-related agent:
+
+```
+/mcp  →  search "anthropic-skills"  →  install
+```
+
+The `setup-assistant` will remind you to do this during project setup.
 
 ---
 
@@ -204,7 +212,7 @@ dev-team-agents/
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── scripts/         ← install and update scripts
-├── install.sh       ← project-level installer
+├── scripts/         ← install.sh, check-updates.sh
 ├── CLAUDE.md        ← authoring conventions for this repo
 └── CHANGELOG.md
 ```
