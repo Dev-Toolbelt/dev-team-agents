@@ -1,0 +1,96 @@
+---
+name: project-context
+description: Foundational rule for all dev-team-agents. Defines how agents must load and reconcile project-specific context against the global base standards. Every agent must apply this rule before acting. Covers coexistence, project override, immutability warnings, and context loading order.
+---
+
+# Project Context Loading — Coexistence & Override Rule
+
+This is the **foundational rule** for all agents in `dev-team-agents`. Read and apply it before acting on any task.
+
+---
+
+## Core Principle
+
+> The `dev-team-agents` standards are the **base layer**. Any rule, pattern, or convention defined explicitly in the project overrides our base. We provide the floor — the project sets the ceiling.
+
+This means every agent must:
+1. Load and understand the project's own context
+2. Identify where the project has explicit conventions
+3. Apply project conventions where they exist; apply base standards where they don't
+
+---
+
+## Context Loading Order
+
+Before starting any task, load context in this order (read what exists — skip what doesn't):
+
+```
+1. README.md                  ← project overview, setup, conventions
+2. CLAUDE.md                  ← Claude-specific rules and workflow overrides
+3. AGENTS.md                  ← agent-specific instructions for this project
+4. .claude/settings.json      ← Claude Code configuration
+5. .agents/ (directory)       ← project-level agent overrides
+6. .claude/docs/development/  ← architecture, code-standards, tech-stack
+7. .claude/docs/backlog/      ← current sprint and task context
+```
+
+Read each file that exists. Combine the information into a unified understanding of the project before acting.
+
+---
+
+## Override Logic
+
+When a conflict exists between our base standard and a project convention:
+
+| Scenario | Rule |
+|----------|------|
+| Project CLAUDE.md defines a code style | Use the project's style |
+| Project uses tabs, we recommend spaces | Use tabs |
+| Project has no defined convention | Apply our base standard |
+| Project explicitly states "do not use X" | Never use X, even if we recommend it |
+| Project is ambiguous or silent on a topic | Apply our base standard and note the assumption |
+
+**Explicit beats implicit.** A project convention must be clearly stated to override a base standard — don't infer overrides from one or two examples.
+
+---
+
+## Immutability Warning
+
+If a user asks to modify any file inside the `dev-team-agents` installation directory (`~/.claude/agents/`, `~/.claude/skills/`), respond with:
+
+> ⚠️ **Not recommended**: modifying files inside `dev-team-agents` directly means your changes will be **overwritten on the next update** (`install.sh latest`).
+>
+> Instead, extend or override at the project level:
+>
+> - **Agent behavior**: create or edit `.claude/CLAUDE.md` in your project with explicit instructions that override the agent's defaults
+> - **Workflow rules**: add a `.claude/docs/development/code-standards.md` with your project-specific conventions
+> - **Agent override**: create `.agents/<agent-name>.md` in your project to extend or replace agent instructions for that project only
+>
+> Project-level files always take precedence over the base agents. This is by design.
+
+---
+
+## Applying Combined Context
+
+When base standard and project context are both present, produce output that:
+
+1. Follows the project's conventions for naming, style, structure, and tools
+2. Fills gaps with our base standards
+3. Explicitly calls out assumptions: `"No convention found for X in project context — applying base standard: [rule]"`
+
+Example: if the project uses PHPDoc for all methods but our base standard says "only when WHY is non-obvious", follow the project — it has an explicit convention.
+
+---
+
+## What Counts as "Project Context"
+
+- Explicit rules in CLAUDE.md, README.md, AGENTS.md
+- Existing code patterns (if consistent across 3+ files, treat as a convention)
+- Linter/formatter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, etc.)
+- CI/CD config that enforces checks (failing lint = enforced rule)
+- Architecture docs in `.claude/docs/development/`
+
+What does **not** count:
+- One-off examples in a single file
+- Commented-out code
+- TODO comments

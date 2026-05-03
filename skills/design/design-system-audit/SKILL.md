@@ -1,0 +1,155 @@
+---
+name: design-system-audit
+description: Design system audit and consistency analysis for UI/UX work. Use when reading a project's existing visual patterns, identifying a design system (or the absence of one), and establishing or maintaining visual consistency. Works in both Design Mode (pre-build) and Consultive Mode (alongside frontend-developer).
+---
+
+# Design System Audit
+
+## Purpose
+
+Before creating or modifying any UI, understand the existing visual language of the project. This audit produces a snapshot of the current design state that guides all subsequent UI work.
+
+---
+
+## Step 1 — Detect Existing Design System
+
+Look for:
+
+```
+# Config files
+tailwind.config.js / tailwind.config.ts
+theme.js / tokens.js
+design-tokens.json
+_variables.scss / variables.css
+styles/theme.*
+
+# Component libraries in package.json
+"@mui/material", "@chakra-ui/react", "antd", "shadcn", 
+"mantine", "headlessui", "radix-ui", "bootstrap",
+"daisyui", "flowbite", "primevue", "vuetify"
+
+# Design files referenced in README
+Figma links, Zeplin links, Storybook URL
+
+# Existing component directory
+src/components/ui/
+src/components/base/
+src/design-system/
+```
+
+---
+
+## Step 2 — Audit Existing Patterns
+
+Read 10–15 components/pages and extract the actual patterns in use:
+
+### Color Palette
+```
+Primary:    [color value]   usage: CTAs, links
+Secondary:  [color value]   usage: secondary actions
+Neutral:    [scale]         usage: text, borders, backgrounds
+Semantic:   success/warning/error/info [values]
+```
+
+### Typography
+```
+Font family: [name]
+Scale: xs / sm / base / lg / xl / 2xl / ...
+Weight usage: regular for body, semibold for headings, bold for CTAs
+Line height: [value]
+```
+
+### Spacing System
+```
+Base unit: [4px / 8px / etc.]
+Scale: [values used]
+Pattern: [consistent use of spacing or chaotic?]
+```
+
+### Component Inventory
+```
+Buttons: [variants in use — primary, secondary, ghost, danger]
+Inputs: [types — text, select, checkbox, radio]
+Cards: [structure — has shadow? border? padding?]
+Navigation: [top nav, sidebar, breadcrumbs]
+Modals / Drawers: [exists? consistent behavior?]
+Tables: [used? responsive?]
+Feedback: [toast/snackbar, alerts, empty states, loading states]
+```
+
+### Responsiveness
+```
+Breakpoints: [values if defined]
+Approach: [mobile-first or desktop-first]
+Observed: [consistent or inconsistent across pages?]
+```
+
+---
+
+## Step 3 — Identify Gaps and Inconsistencies
+
+Document explicitly:
+
+```
+CONSISTENT: [list of patterns used uniformly]
+INCONSISTENT: [list of patterns with multiple competing implementations]
+MISSING: [patterns needed but not present — e.g., empty states, error states]
+PROBLEMATIC: [accessibility issues, low contrast, missing focus states]
+```
+
+---
+
+## Step 4 — Produce Design Context Document
+
+When in **Design Mode** (pre-build), generate `.claude/docs/design/design-system.md`:
+
+```markdown
+# Design System — [Project Name]
+
+## Status
+[From scratch / Extending [library] / Audited existing]
+
+## Color Tokens
+| Token | Value | Usage |
+|-------|-------|-------|
+| --color-primary | #... | CTAs, links |
+| --color-text | #... | Body text |
+
+## Typography
+| Style | Size | Weight | Usage |
+|-------|------|--------|-------|
+| Heading 1 | 2rem | 700 | Page titles |
+
+## Spacing
+Base: 4px. Scale: 4, 8, 12, 16, 24, 32, 48, 64px
+
+## Components
+[component list with variants]
+
+## Patterns to Follow
+[what to do]
+
+## Patterns to Avoid
+[what not to do — deviations, deprecated patterns]
+```
+
+---
+
+## UX Principles Applied in Consultive Mode
+
+When working alongside the `frontend-developer`, validate new UI against:
+
+1. **Consistency** — Does this match the existing visual language?
+2. **Hierarchy** — Is the most important element visually dominant?
+3. **Feedback** — Does every user action produce visible feedback?
+4. **Error recovery** — Are errors human-readable? Is there a clear path to recover?
+5. **Accessibility** — Minimum contrast ratio 4.5:1 (text), focus states visible, keyboard navigable
+6. **Mobile** — Does this work on a 375px viewport?
+
+Suggest improvements when any of these are violated — but always check `project-context` first for existing guidelines.
+
+---
+
+## `anthropic-skills:frontend-design` Integration
+
+This skill works best alongside the `anthropic-skills:frontend-design` skill, which provides additional UI component patterns, layout techniques, and visual design guidance. If available in the session, load it for richer design recommendations.
