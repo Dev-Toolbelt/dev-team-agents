@@ -17,8 +17,10 @@ Prompt: "As the software-architect, audit the existing codebase. Document the cu
          architecture, tech debt, questionable decisions, and risks in
          .claude/docs/development/"
 
-Prompt: "As the database-specialist, audit the existing database schema. Identify
-         modeling problems, missing indexes, and migration gaps."
+Prompt: "As the database-specialist, audit the existing database schema. Connect to
+         the running database if credentials are available in the environment, run
+         diagnostic queries to map the actual data state, and identify modeling
+         problems, missing indexes, missing foreign keys, bloat, and migration gaps."
 
 Prompt: "As the security-specialist, do a quick security audit of the existing codebase.
          Flag any CRITICAL or HIGH issues found."

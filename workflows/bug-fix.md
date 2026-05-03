@@ -69,3 +69,16 @@ Prompt: "As the backend-test-specialist, write a regression test that would have
 ```
 
 The test specialist presents a plan (test file, cases to cover, expected assertions) before writing any test code.
+
+---
+
+## Step 6: Documentation Update (technical-writer — optional)
+
+If the bug fix changes documented behavior — an API contract, a described flow, or a rule in the README:
+
+```
+Prompt: "As the technical-writer, check whether this bug fix changes any documented
+         behavior and update the relevant docs."
+```
+
+Skip if the fix is purely internal (no user-visible behavior change, no API contract change).

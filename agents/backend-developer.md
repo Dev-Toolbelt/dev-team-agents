@@ -183,6 +183,7 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 - [ ] No secrets hardcoded
 - [ ] API responses match the project's defined envelope format
 - [ ] Edge cases handled (null inputs, empty collections, concurrent writes if relevant)
+- [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---
 

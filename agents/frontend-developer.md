@@ -159,57 +159,19 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 - [ ] Linters pass
 - [ ] No debug artifacts
 - [ ] Browser console: no errors; warnings that require disproportionate effort may be skipped but must be noted
+- [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---
 
 ## Offline-First Projects
 
-When the project is offline-first, apply these standards:
-
-**Storage structure**
-- Define a clear schema for the local store (IndexedDB, SQLite via OPFS, etc.) — treat it as a real database with versioned migrations
-- Mirror the API shape when practical; document intentional divergences
-- Never store sensitive data (tokens, PII) in unencrypted client storage
-
-**Sync strategy**
-- Implement a sync queue: operations made offline are queued and replayed when connectivity is restored
-- Use timestamps or vector clocks for conflict resolution — define a clear policy (last-write-wins, server-wins, or manual merge)
-- Handle partial sync failures: operations must be atomic or rollback-safe
-- Expose sync status to the user — they must know whether data is saved locally only or confirmed on the server
-
-**Connectivity detection**
-- Combine `navigator.onLine` with an actual fetch probe — `navigator.onLine` alone is unreliable
-- React to `online`/`offline` events to trigger sync and update UI state accordingly
+When the project is offline-first (detected via IndexedDB usage, SQLite/OPFS, service worker with background sync, or explicit project description), load `skills/integrations/offline-first/SKILL.md` for storage schema standards, sync queue strategy, conflict resolution policy, and connectivity detection patterns.
 
 ---
 
 ## Progressive Web Apps (PWA)
 
-When the project is a PWA or needs to become one:
-
-**Manifest (`manifest.json` / `manifest.webmanifest`)**
-- Required fields: `name`, `short_name`, `description`, `start_url`, `display`, `theme_color`, `background_color`, `scope`
-- Provide icons at 192×192 and 512×512 (PNG); include a maskable icon variant
-
-**Service Worker**
-
-Choose a caching strategy per resource type:
-
-| Resource | Strategy |
-|----------|----------|
-| App shell (HTML, JS, CSS) | Cache First |
-| API responses | Network First with cache fallback |
-| Static assets (images, fonts) | Stale While Revalidate |
-
-- Use Workbox (via Vite PWA plugin, `@angular/service-worker`, Nuxt PWA module, etc.) unless there's a specific reason not to
-- Handle the SW update lifecycle: notify the user when a new version is available and prompt to reload
-
-**PWA checklist**
-- [ ] Lighthouse PWA audit passes (installable + PWA optimized)
-- [ ] HTTPS enforced (required for SW registration)
-- [ ] Offline fallback page defined
-- [ ] Install prompt handled (`beforeinstallprompt` event)
-- [ ] Push notifications configured if required (request permission only on explicit user action)
+When the project is a PWA or needs to become one (detected via `manifest.json`, `service-worker.js`, Workbox config, or Vite PWA plugin), load `skills/integrations/pwa/SKILL.md` for manifest required fields, service worker caching strategies, update lifecycle handling, and the full PWA compliance checklist.
 
 ---
 

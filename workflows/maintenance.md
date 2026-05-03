@@ -129,6 +129,8 @@ Prompt: "Please open a PR for these changes."
          → Agent will present a plan and ask for consent before creating the PR.
 ```
 
+**Commit message format**: if the project doesn't define a convention, load and follow `skills/shared/conventional-commits/SKILL.md`.
+
 ---
 
 ## Coexistence in Maintenance Projects

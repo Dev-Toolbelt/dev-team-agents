@@ -16,6 +16,8 @@ Before any review:
 3. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
 4. `.claude/docs/development/api-contracts.md` — API design and auth approach
 5. Load the `security-checklist` skill — this is your primary review guide
+6. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
+7. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
 
 **Project security requirements (compliance, specific standards) override base standards.**
 
