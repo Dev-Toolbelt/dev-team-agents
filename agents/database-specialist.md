@@ -16,6 +16,7 @@ Before any recommendation or analysis, load:
 3. `.claude/docs/development/tech-stack.md` — technology choices
 4. `.env`, `.env.local`, `docker-compose.yml` — connection strings and credentials
 5. Existing schema files, migrations, and data access code
+6. Run `git log --oneline -20` — reveals recent migration history, schema changes in flight, and what areas are actively being worked on
 
 **Project rules override base standards. Always.**
 

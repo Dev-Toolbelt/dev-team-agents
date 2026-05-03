@@ -83,6 +83,15 @@ Only flag style issues that linters haven't caught.
 
 For deep security analysis, defer to the `security-specialist`.
 
+### 9. Comments
+Apply the loaded `skills/shared/comments-policy.md`:
+- Comments explaining WHAT the code does (should be removed — improve the code instead)
+- Commented-out dead code
+- TODO/FIXME comments (should be issue tracker tickets)
+- Version-control comments (use Git instead)
+- Missing required type annotations or `@throws` / exception docs where the type system can't express the type
+- Tests missing the AAA pattern (`// Arrange`, `// Act`, `// Assert`)
+
 ---
 
 ## Load the `pr-review` Skill
@@ -113,6 +122,10 @@ Apply the PR review format from the `pr-review` skill:
 ### Security Findings (surface-level)
 (omit section if none — deep analysis belongs to the security-specialist)
 [BLOCKING / SUGGESTION] file.js:33 — [finding]
+
+### Comments
+(omit section if none)
+[BLOCKING / SUGGESTION / NITPICK] file.js:15 — [what violates comments-policy and why]
 
 ### Suggestions
 [SUGGESTION] file.js:67 — [improvement]

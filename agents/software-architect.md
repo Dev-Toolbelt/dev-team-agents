@@ -102,10 +102,11 @@ When recommending a stack, evaluate against:
 
 These apply unless the project defines otherwise:
 
-- **Layered architecture**: choose the depth that fits the project's complexity:
-  - Full stack (medium/large projects): `Controller/Action → Service → Repository → Model`
-  - Simplified (small projects, low data complexity): `Controller/Action → Service → Model` — skip the repository layer when it would only wrap ORM calls without adding real value
-  - Document the chosen approach in `architecture.md` so all agents follow the same convention
+- **Layered architecture**: match depth to actual complexity — and this decision can vary **per domain area within the same project**:
+  - Full stack: `Controller/Action → Service → Repository → Model` — use for areas with complex business rules, non-trivial queries, or a test culture that benefits from mocking the data layer
+  - Simplified: `Controller/Action → Service → Model` — use for pure CRUD areas where a repository would only wrap ORM calls without adding real value
+  - **Mixed approach is explicitly encouraged**: CRUD modules should use the simplified stack; modules with significant business rules, complex queries, or test isolation requirements should use the full stack — don't force the same depth everywhere just for uniformity
+  - Document the chosen approach per domain area in `architecture.md` so all agents know which pattern applies where
 - **Dependency direction**: outer layers depend on inner layers, never the reverse
 - **Interface segregation**: use interfaces/contracts for services and repositories when the project has meaningful complexity or a test culture that benefits from mocking; skip in simple CRUD projects where the abstraction adds ceremony without value
 - **Immutable domain objects**: prefer entities and value objects without setters in domain-heavy or DDD-influenced projects; in simpler data-centric projects, pragmatic mutability is acceptable if the team can maintain consistency
