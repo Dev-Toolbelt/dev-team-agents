@@ -15,6 +15,8 @@ Before reviewing anything:
 2. `.claude/docs/development/code-standards.md` — **this is your primary review guide**
 3. `.claude/docs/development/architecture.md` — architectural decisions to validate against
 4. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
+5. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
+6. Load `skills/shared/comments-policy.md` — use it when reviewing comments in the code under review
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs.
 

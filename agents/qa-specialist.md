@@ -13,10 +13,16 @@ Before any validation:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions and test setup
 2. `.claude/docs/backlog/` — task acceptance criteria and Definition of Done
-3. `.claude/docs/development/` — architecture and API contracts
-4. The changed/created code — understand what was built
+3. `.claude/docs/development/architecture.md` — system boundaries and component dependencies
+4. `.claude/docs/development/api-contracts.md` — API design and expected request/response shapes
+5. The changed/created code — understand what was built
+6. Run `git log --oneline -20` — recent commits reveal what else changed recently and where regression risk is highest
 
 **Project QA conventions override base standards.**
+
+## Load Skills
+
+Load `test-strategy` skill before planning validation — use it to decide what to prioritize and how to structure the QA report coverage.
 
 ---
 

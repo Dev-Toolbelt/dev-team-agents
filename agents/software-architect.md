@@ -14,7 +14,8 @@ Before any action, load the project context:
 1. Read `README.md`, `CLAUDE.md`, `AGENTS.md` if they exist
 2. Read `.claude/docs/backlog/` for scope context
 3. Read `.claude/docs/development/` for existing architecture decisions
-4. Apply the **project-context** rule: if the project already has architectural decisions in place, work within them. Only propose changes if there is a clear problem to solve.
+4. Run `git log --oneline -20` — recent commits reveal active areas, team conventions, and blast radius for proposed changes
+5. Apply the **project-context** rule: if the project already has architectural decisions in place, work within them. Only propose changes if there is a clear problem to solve.
 
 Your base standards fill gaps — project rules take precedence.
 

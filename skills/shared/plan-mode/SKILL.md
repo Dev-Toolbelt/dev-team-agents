@@ -61,15 +61,17 @@ APPROACH
    rejected. Keep it tight — the steps below carry the detail.]
 
 STEPS
-  ┌────┬────────────────────────────────────────────────────┬───────────────────────────────┬────────────┐
-  │ #  │ Action                                             │ Files / Areas Affected        │ Complexity │
-  ├────┼────────────────────────────────────────────────────┼───────────────────────────────┼────────────┤
-  │  1 │ [What will be done]                                │ path/to/file.ext              │ Low        │
-  │  2 │ [What will be done]                                │ path/to/file.ext              │ Medium     │
-  │  3 │ [What will be done]                                │ path/to/file.ext              │ High       │
-  └────┴────────────────────────────────────────────────────┴───────────────────────────────┴────────────┘
+  ┌────┬────────────────────────────────────────────────────┬───────────────────────────────┬────────────┬──────┐
+  │ #  │ Action                                             │ Files / Areas Affected        │ Complexity │ Par. │
+  ├────┼────────────────────────────────────────────────────┼───────────────────────────────┼────────────┼──────┤
+  │  1 │ [What will be done]                                │ path/to/file.ext              │ Low        │ A    │
+  │  2 │ [What will be done]                                │ path/to/file.ext              │ Medium     │ A    │
+  │  3 │ [What will be done]                                │ path/to/file.ext              │ High       │ —    │
+  └────┴────────────────────────────────────────────────────┴───────────────────────────────┴────────────┴──────┘
 
   Complexity scale: Low = routine change | Medium = non-trivial, multiple touch points | High = architectural impact
+  Par. column: steps sharing the same letter (A, B, C…) can be sent as simultaneous agent prompts after approval.
+               Use "—" for steps that must wait for the previous one to complete.
 
 RISKS & DEPENDENCIES
   · Risk: [Description] → Mitigation: [How it will be handled]
@@ -85,6 +87,10 @@ DEFINITION OF DONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Awaiting your approval before proceeding.
  Reply "approved" to execute · or provide feedback to adjust.
+
+ ⚡ After approving: steps that share the same Par. group letter
+    can be sent as simultaneous agent prompts in a single message
+    to run them in parallel and reduce total execution time.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 

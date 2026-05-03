@@ -14,7 +14,9 @@ Before writing any documentation:
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — existing conventions and docs style
 2. `.claude/docs/development/` — architecture context
 3. `.claude/docs/design/` — design context if UI-related
-4. Existing documentation — match the voice, style, and structure already in place
+4. `.claude/docs/backlog/` — sprint context for changelog entries and release notes
+5. Existing documentation — match the voice, style, and structure already in place
+6. Load `conventional-commits` skill when producing changelogs or commit message guidelines
 
 **Project documentation standards always override base standards.**
 

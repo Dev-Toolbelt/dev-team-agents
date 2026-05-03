@@ -98,17 +98,17 @@ These are guidelines, not mandates. A 40%-covered codebase with tests on the rig
 
 ## Test Naming Convention
 
-Tests should read like specifications:
+Tests should read like specifications. Use camelCase — no underscores:
 
 ```
-given_[context]_when_[action]_then_[expected_result]
+given[Context]When[Action]Then[ExpectedResult]
 // or simply:
-[method/feature]_[scenario]_[expected outcome]
+[methodOrFeature][Scenario][ExpectedOutcome]
 
 Examples:
-- calculateDiscount_withVIPCustomer_applies15Percent
-- createOrder_withOutOfStockItem_throwsUnavailableException
-- loginEndpoint_withWrongPassword_returns401
+- calculateDiscountWithVIPCustomerApplies15Percent
+- createOrderWithOutOfStockItemThrowsUnavailableException
+- loginEndpointWithWrongPasswordReturns401
 ```
 
 ---

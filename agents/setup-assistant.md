@@ -109,15 +109,21 @@ SCOPE
   · No source code changes
 
 STEPS
-  ┌────┬──────────────────────────────────────────────────┬────────────────────────┬────────────┐
-  │  1 │ Append ## dev-team-agents to CLAUDE.md           │ CLAUDE.md              │ Low        │
-  │  2 │ Create .claude/docs/backlog/ directory           │ .claude/docs/          │ Low        │
-  │  3 │ Create .claude/docs/development/ directory       │ .claude/docs/          │ Low        │
-  │  4 │ [Create .claude/docs/design/ if UI project]      │ .claude/docs/          │ Low        │
-  └────┴──────────────────────────────────────────────────┴────────────────────────┴────────────┘
+  ┌────┬──────────────────────────────────────────────────┬────────────────────────┬────────────┬──────┐
+  │ #  │ Action                                           │ Files / Areas Affected │ Complexity │ Par. │
+  ├────┼──────────────────────────────────────────────────┼────────────────────────┼────────────┼──────┤
+  │  1 │ Append ## dev-team-agents to CLAUDE.md           │ CLAUDE.md              │ Low        │ A    │
+  │  2 │ Create .claude/docs/backlog/ directory           │ .claude/docs/          │ Low        │ A    │
+  │  3 │ Create .claude/docs/development/ directory       │ .claude/docs/          │ Low        │ A    │
+  │  4 │ [Create .claude/docs/design/ if UI project]      │ .claude/docs/          │ Low        │ A    │
+  └────┴──────────────────────────────────────────────────┴────────────────────────┴────────────┴──────┘
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Awaiting your approval before proceeding.
+ Reply "approved" to execute · or provide feedback to adjust.
+
+ ⚡ After approving: steps that share the same Par. group letter
+    can be sent as simultaneous agent prompts in a single message.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 

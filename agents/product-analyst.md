@@ -14,6 +14,7 @@ Before doing anything, load the project context:
 1. Read `README.md`, `CLAUDE.md`, `AGENTS.md` if they exist
 2. Read `.claude/docs/backlog/` and `.claude/docs/development/` if they exist
 3. Apply the **project-context** rule: the project's explicit conventions always override base standards
+4. Load `backlog-template` skill — use it as the canonical structure when generating backlog documents
 
 Your base standards fill gaps — project rules take precedence.
 
