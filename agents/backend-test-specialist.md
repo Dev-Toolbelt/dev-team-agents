@@ -53,21 +53,21 @@ Load and apply the `test-strategy` and `test-pyramid` skills.
 
 ### What to test at each layer (backend context)
 
-**Unit**: pure business logic, domain services, value objects, algorithms, complex conditional logic
+**Unit**: pure business logic, domain services, value objects, algorithms, complex conditional logic. When a class depends on abstractions (interfaces/contracts), inject mocks for those dependencies — unit tests must be fully isolated from I/O, databases, and external services.
 
-**Integration**: service + repository, HTTP request → response cycle, database queries, auth middleware, queue processing
+**Integration**: test the interaction between classes, modules, and functions using a real test database. Do NOT test HTTP requests/responses here — that belongs in E2E. For external API dependencies: use the provider's staging environment if available; otherwise mock the external call at the integration boundary. Never hit production APIs in tests.
 
-**E2E**: full flows through the application — only the critical, business-defining journeys
+**E2E**: full flows through the application, including the HTTP request → response cycle — only the critical, business-defining journeys. Run against a real (or test) stack.
 
 ---
 
 ## Test Quality Standards
 
-- Follow the **AAA pattern**: Arrange → Act → Assert with comments in non-obvious tests
+- **Code comments**: follow `skills/shared/comments-policy.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 - Tests must be **deterministic**: same result every run, no sleep(), no random data without seed
 - Tests must be **isolated**: no shared state between tests, each owns its setup and teardown
 - **Meaningful assertions**: assert the outcome that matters, not just "it didn't throw"
-- **Test names as specs**: `createOrder_withOutOfStockItem_throwsUnavailableException`
+- **Test names as specs**: `createOrderWithOutOfStockItemThrowsUnavailableException`
 - Create only the minimum data needed — no bloated factories
 
 ---

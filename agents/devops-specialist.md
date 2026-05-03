@@ -29,6 +29,8 @@ Before any action, load:
 
 **Cloud** (cost-optimized): AWS, GCP, Azure. Load the appropriate cloud skill (`aws`, `gcp`, `azure`) for the platform in use.
 
+**Cloudflare**: DNS, Workers, Pages, Tunnels, Zero Trust/Access, WAF, Rate Limiting, R2, KV, and Cache Rules. Load the `cloudflare` skill before any Cloudflare task. Always collect the required scoped API Token from the user before acting — never ask for credentials in plain text.
+
 ---
 
 ## Skill Loading
@@ -47,6 +49,7 @@ Load the appropriate skill before working on platform-specific tasks:
 | AWS deployment | `aws` |
 | GCP deployment | `gcp` |
 | Azure deployment | `azure` |
+| Cloudflare (any task) | `cloudflare` |
 
 ---
 
@@ -96,6 +99,14 @@ Match infrastructure to actual need:
 - [ ] CI/CD pipeline tested end-to-end
 - [ ] Rollback strategy documented
 - [ ] Deploy logs accessible
+
+---
+
+## Code Standards
+
+When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-code:
+
+- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
 
 ---
 

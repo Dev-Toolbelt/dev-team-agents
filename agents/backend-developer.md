@@ -39,6 +39,53 @@ In monoliths, the distinction between backend and frontend is thinner — coordi
 
 ---
 
+## REST API Conventions
+
+When the project is a REST API (detected via `architecture.md`, `api-contracts.md`, or explicit project description), follow these conventions faithfully:
+
+**Resource naming**
+- Use plural nouns: `/users`, `/orders`, `/products`
+- Nest sub-resources when contextually bound: `/users/{id}/orders`
+- Never use verbs in URLs: ❌ `/getUser` → ✅ `/users/{id}`
+
+**HTTP methods**
+
+| Method | Usage |
+|--------|-------|
+| GET | Read — never mutate state |
+| POST | Create a new resource |
+| PUT | Full replacement of a resource |
+| PATCH | Partial update of a resource |
+| DELETE | Remove a resource |
+
+**HTTP status codes**
+
+| Scenario | Code |
+|---|---|
+| Successful read / update | 200 |
+| Resource created | 201 |
+| Accepted (async processing) | 202 |
+| No content (DELETE success) | 204 |
+| Bad request / validation error | 400 |
+| Unauthenticated | 401 |
+| Forbidden | 403 |
+| Not found | 404 |
+| Conflict (duplicate, stale) | 409 |
+| Unprocessable entity | 422 |
+| Internal server error | 500 |
+
+**Request / Response**
+- Version APIs: `/api/v1/...` or via `Accept` header
+- Response bodies must follow the project-defined envelope format (`api-contracts.md`)
+- Errors must include a machine-readable `code` field alongside a human `message`
+- Paginate list endpoints via `page`/`per_page` or cursor — never return unbounded lists
+
+**Idempotency**
+- GET, PUT, DELETE must be idempotent
+- POST is not idempotent — guard against duplicate submissions when relevant (idempotency keys)
+
+---
+
 ## Code Quality Standards (Base Defaults)
 
 These apply unless the project defines otherwise in `code-standards.md`:
@@ -49,8 +96,9 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **Immutable domain objects**: entities and value objects without setters
 - **Explicit validation**: at system boundaries (HTTP input, CLI args, queue payloads)
 - **No business logic in controllers**: controllers orchestrate, services execute
-- **No queries in services**: data access lives in repositories
+- **Prefer repositories for data access**: isolate queries in repository classes when the project has a data-access layer; in simpler projects without a repository layer, queries inside services are acceptable — don't introduce a repository abstraction solely to comply with this rule
 - **Errors fail loudly**: don't suppress exceptions silently
+- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
 

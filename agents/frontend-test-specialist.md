@@ -74,14 +74,55 @@ it('sets hasError class on input', () => {
 ```
 
 ### Integration Tests
-- Test a page with its data fetching mocked at the API layer
+- Test a page with its data fetching mocked at the network layer — prefer **Mock Service Worker (MSW)** over mocking `fetch`/`axios` directly; MSW intercepts at the network level so the component code runs as-is, making tests more realistic
 - Test form submission flows end-to-end within the component tree
 - Test routing/navigation behavior
+- Always test all async states: **loading → success → error** — since the `frontend-developer` must implement loading states, the test specialist must verify them
 
 ### E2E Tests (Playwright/Cypress)
 - Critical user journeys only: login, checkout, core product flows
 - Run against a real (or test) backend
 - Use `data-testid` attributes for selectors — never CSS classes or text that changes
+- Handle authentication via API shortcuts (set cookie/token directly) — never test login UI as a prerequisite for every test
+
+---
+
+## Decoupled Frontend — Extra Practices
+
+When the frontend is fully decoupled from the backend (SPA consuming a REST or GraphQL API):
+
+**MSW setup**
+- Define handlers that mirror real API contracts — if the backend has OpenAPI or TypeScript types, the mock responses must match them
+- Organize handlers by domain (`handlers/auth.ts`, `handlers/orders.ts`) so they're easy to override per test
+- Use `server.use(...)` inside tests to override the default handler for specific error or edge-case scenarios
+
+```ts
+// Override for a specific test
+server.use(
+  http.get('/api/orders', () => HttpResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+);
+```
+
+**State coverage — mandatory for every async feature**
+
+| State | Must be tested |
+|-------|---------------|
+| Loading | Skeleton / spinner visible while request is in flight |
+| Success | Data renders correctly |
+| Empty | Empty state UI shown when response is `[]` or `null` |
+| Error | Error message shown on 4xx / 5xx / network failure |
+| Optimistic update | UI reflects change immediately before server confirms |
+
+**Contract awareness**
+- Mock responses must stay in sync with the real API; if the backend changes a field name, tests should catch it before production does
+- When the project has TypeScript, type mock responses with the same interfaces used in production code — a type error in a handler means the mock drifted from the contract
+
+**Visual regression (optional but valuable)**
+- Playwright screenshot diffing or Storybook + Chromatic for design-system-level components
+- Only apply to stable, high-visibility components — not to every page; visual tests are expensive to maintain
+
+**Test data factories**
+- Use factories (e.g. `fishery`, `factory-bot` patterns) to build realistic objects rather than inline literals; factories make it easy to generate edge-case variants (long strings, null optionals, maximum item counts)
 
 ---
 
@@ -92,6 +133,12 @@ it('sets hasError class on input', () => {
 3. `getByText` — visible text content
 4. `getByTestId` — `data-testid` fallback (E2E only)
 5. **Never**: `querySelector`, CSS class selectors, XPath
+
+---
+
+## Test Quality Standards
+
+- **Code comments**: follow `skills/shared/comments-policy.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 
 ---
 

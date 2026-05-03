@@ -113,6 +113,14 @@ When producing `database.md`:
 
 ---
 
+## Code Standards
+
+When producing migration files, seed scripts, or query helpers:
+
+- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
+
+---
+
 ## Immutability Warning
 
 If asked to modify files inside `dev-team-agents`:
