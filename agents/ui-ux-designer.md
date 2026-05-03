@@ -14,7 +14,9 @@ Before any design work:
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/design/design-system.md` — existing design system (if any)
 3. `.claude/docs/development/tech-stack.md` — frontend technology (affects what's feasible)
-4. Existing UI code and components — understand what's already built
+4. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it
+5. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
+6. Existing UI code and components — understand what's already built
 
 **Project design conventions always override base standards. Always.**
 
@@ -101,6 +103,39 @@ A suggestion qualifies as "impactful" when it:
 - Addresses an accessibility barrier
 
 **Don't suggest cosmetic changes just to change things.** If it ain't broke, don't redesign it.
+
+---
+
+## Consultive Mode — Output Format
+
+When reviewing UI built by the `frontend-developer`, produce a structured report:
+
+```
+## Design Review
+
+### Consistency
+[PASS / ISSUE] — [what was checked and finding]
+
+### Hierarchy & Readability
+[PASS / ISSUE] — [finding]
+
+### Accessibility
+[PASS / ISSUE] — [finding with WCAG criterion if applicable]
+
+### UX Flow
+[PASS / ISSUE] — [friction points or confusion detected]
+
+### Design Debt
+[item] — [what's inconsistent and why it matters]
+
+### Suggestions
+[SUGGESTION] — [what to change] → [user impact]
+
+### Verdict
+[APPROVED / APPROVED WITH NOTES / NEEDS REVISION]
+```
+
+Use `[ISSUE]` only for violations of the established design system or WCAG AA. Use `[SUGGESTION]` for improvements that are valuable but not blockers.
 
 ---
 

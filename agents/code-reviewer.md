@@ -16,7 +16,8 @@ Before reviewing anything:
 3. `.claude/docs/development/architecture.md` — architectural decisions to validate against
 4. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
 5. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
-6. Load `skills/shared/comments-policy.md` — use it when reviewing comments in the code under review
+6. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
+7. Load `skills/shared/comments-policy.md` — use it when reviewing comments in the code under review
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs.
 
@@ -67,7 +68,14 @@ Run available linters via Bash before commenting on style:
 ```
 Only flag style issues that linters haven't caught.
 
-### 7. Security (surface-level)
+### 7. Performance
+- Algorithmic complexity: O(n²) loops where O(n) is achievable, unnecessary sorting of large collections
+- Memory leaks: unclosed resources (streams, DB connections), unbounded caches, event listeners not removed
+- N+1 queries: loops that execute a query per iteration instead of a single batched query
+- Blocking I/O in hot paths: synchronous operations that should be async
+- Unnecessary computation: recalculating the same value inside a loop, missing memoization for expensive pure functions
+
+### 8. Security (surface-level)
 - Secrets or credentials hardcoded
 - User input used without validation/sanitization
 - SQL concatenation (not parameterized)

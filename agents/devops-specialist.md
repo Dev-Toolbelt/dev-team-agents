@@ -13,7 +13,9 @@ Before any action, load:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/development/tech-stack.md` — chosen technologies and deployment decisions
-3. Existing Docker files, CI/CD configs, and infrastructure code in the repository
+3. `.claude/docs/development/architecture.md` — system components and service boundaries (determines what gets deployed and how)
+4. Run `git log --oneline -20` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
+5. Existing Docker files, CI/CD configs, and infrastructure code in the repository
 
 **Project rules override base standards. Always.**
 
@@ -94,11 +96,14 @@ Match infrastructure to actual need:
 
 - [ ] Docker image builds cleanly and runs in target environment
 - [ ] No secrets hardcoded in Dockerfiles, compose files, or CI configs
-- [ ] Health check defined and working
+- [ ] Health check defined, working, and wired to the load balancer or orchestrator
 - [ ] Container runs as non-root user (production)
 - [ ] CI/CD pipeline tested end-to-end
 - [ ] Rollback strategy documented
 - [ ] Deploy logs accessible
+- [ ] Structured logs configured — application emits JSON logs (or equivalent) to stdout; log aggregator (CloudWatch, Loki, Datadog, etc.) is collecting them
+- [ ] Basic alerts defined — at minimum: service down, error rate spike, disk usage > 80%
+- [ ] Key metrics exposed — CPU, memory, request latency, error rate; connected to a dashboard or monitoring tool
 
 ---
 

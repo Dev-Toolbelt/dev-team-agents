@@ -28,8 +28,10 @@ Before writing any test:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, database setup
 2. `.claude/docs/development/` — architecture, tech stack, code standards
-3. Existing test files — understand patterns, base classes, helpers, factories already in use
-4. The code to be tested — read it completely before deciding what to test
+3. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
+4. Existing test files — understand patterns, base classes, helpers, factories already in use
+5. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
+6. The code to be tested — read it completely before deciding what to test
 
 **Project test conventions always override base standards.**
 

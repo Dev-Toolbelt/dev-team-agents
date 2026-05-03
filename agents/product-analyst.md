@@ -69,7 +69,13 @@ When the user provides answers:
 3. If yes: generate the next round of questions — repeat Phase 2
 4. If no: proceed to Phase 4
 
-**Do not generate the backlog until all critical questions are answered.** State clearly when scope is closed.
+**Convergence rule**: if after **3 rounds** of clarification critical questions remain unanswered, do not block indefinitely. Instead:
+- Mark unresolved questions as `[ASSUMPTION]`
+- Propose a reasonable default for each (based on industry standards or most common pattern)
+- State explicitly: "I'm proceeding with the following assumptions — flag any that are wrong and I will revise"
+- Proceed to Phase 4 with assumptions documented in `overview.md`
+
+**Do not generate the backlog until all critical questions are answered or covered by documented assumptions.** State clearly when scope is closed.
 
 ### Phase 4 — Generate Backlog
 

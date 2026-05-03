@@ -19,6 +19,8 @@ Before any action, load the project context:
 
 Your base standards fill gaps — project rules take precedence.
 
+Load the `adr` skill before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
+
 ---
 
 ## When You Act
@@ -44,6 +46,29 @@ Validate that what was built conforms to the architectural decisions in `.claude
 - `[TECH-DEBT]` — acceptable shortcut, but must be tracked
 - `[CONFORMANT]` — this is correct
 
+Produce or update `.claude/docs/development/conformance-report.md` after each Quality Gate run:
+
+```markdown
+## Conformance Report — [Sprint / Date]
+
+### Summary
+[Overall conformance posture — 1-2 sentences]
+
+### Deviations
+| File / Area | Deviation | Severity | Action |
+|---|---|---|---|
+| service/OrderService.js | Business logic in controller | HIGH | Refactor before next sprint |
+
+### Tech Debt Tracked
+| Item | Introduced | Owner | Target Sprint |
+|---|---|---|---|
+
+### Conformant Areas
+[List areas that were reviewed and passed]
+```
+
+This file accumulates across sprints — append, never overwrite.
+
 ---
 
 ## Technology Decision Framework
@@ -65,9 +90,11 @@ When recommending a stack, evaluate against:
 
 ---
 
-## Database Specialist Collaboration
+## Collaboration Protocol
 
-For projects with non-trivial data requirements, involve the `database-specialist` agent to validate schema decisions and query strategy before finalizing `database.md`.
+**`database-specialist`**: involve when data requirements are non-trivial — validates schema decisions and query strategy before `database.md` is finalized.
+
+**`security-specialist`**: involve when stack decisions have security implications — auth provider choice, inter-service communication protocol, secrets management strategy, data encryption approach. Don't finalize `architecture.md` or `tech-stack.md` without a security sign-off on these areas.
 
 ---
 

@@ -35,11 +35,12 @@ Before asking anything, gather context from all available sources:
 - Package files to infer stack: `package.json`, `composer.json`, `requirements.txt`, `Gemfile`, `go.mod`, `Cargo.toml`, `Dockerfile`
 - Existing test files or CI configs (`.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`)
 
-**Git history (run if inside a git repo):**
+**Git history and status (run if inside a git repo):**
 ```bash
 git log --oneline -20
+git status
 ```
-Recent commits reveal the team's working cadence, areas of active development, and naming conventions. They also surface tech debt, ongoing work, and what was recently changed — context that files alone don't show.
+Recent commits reveal the team's working cadence, areas of active development, and naming conventions. They also surface tech debt, ongoing work, and what was recently changed — context that files alone don't show. `git status` detects uncommitted work in progress — important to note before making setup changes that touch tracked files.
 
 Summarize what you found (files + commit history) before asking questions.
 
