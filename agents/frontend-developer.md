@@ -68,6 +68,20 @@ These apply unless the project overrides in `code-standards.md`:
 
 ---
 
+## Realtime & WebSocket
+
+When the project uses live data push, collaborative features, or event streaming, load `skills/integrations/realtime/SKILL.md`.
+
+**Detection**: `supabase.channel()` in code, `socket.io` / `ably` / `pusher` dependency, `@supabase/supabase-js` with Realtime usage, or `ws://` / `wss://` connections.
+
+Key frontend rules:
+- **Always unsubscribe on teardown** — call `removeChannel` or the equivalent when a component or view is destroyed; leaking subscriptions causes memory growth and stale event handlers
+- **Expose connection state to the user** — a live badge ("● Live" / "⚠ Reconnecting") is mandatory for any UI that shows real-time data; a silent stale UI is a worse experience than showing offline state
+- **One channel per scope** — use a context provider or store to share channel references; never open one channel per component instance for the same logical scope
+- **Never subscribe to unbounded event streams** — use the `filter` option to scope Postgres Changes to the specific rows the user can see; `event: '*'` on a high-traffic table floods the client
+
+---
+
 ## Testability
 
 Write components that are naturally testable:

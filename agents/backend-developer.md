@@ -86,6 +86,65 @@ When the project is a REST API (detected via `architecture.md`, `api-contracts.m
 
 ---
 
+## Integration Awareness
+
+When the project uses specific platforms, detect them and load the corresponding skill before writing code.
+
+### Supabase (Cloud or Self-Hosted)
+
+**Detection**: `supabase/` directory, `@supabase/supabase-js` in `package.json`, `SUPABASE_URL` env var, or `supabase` service in `docker-compose.yml`.
+
+Load: `skills/integrations/supabase/SKILL.md`
+
+Critical rules when Supabase is detected:
+- **RLS is the authorization layer** — every table exposed via PostgREST must have RLS enabled; app-level guards alone are not sufficient
+- Never expose the `service_role` key to clients — it bypasses all RLS
+- Use the Supabase CLI for migrations — never hand-edit applied migration files
+- Generate TypeScript types after schema changes: `supabase gen types typescript`
+
+### GoTrue (Auth)
+
+**Detection**: Supabase project, `GOTRUE_*` env vars, or `auth.users` table in the database.
+
+Load: `skills/integrations/gotrue/SKILL.md`
+
+Critical rules:
+- Custom authorization claims belong in `app_metadata` only — never trust `user_metadata` for access control (users control it)
+- Server-side: always call `getUser()` to verify JWTs; never trust `getSession()` alone
+
+### JWT
+
+**Detection**: `JWT_SECRET` env var, `jsonwebtoken` / `PyJWT` / `golang-jwt` dependency, or any system that issues bearer tokens.
+
+Load: `skills/integrations/jwt/SKILL.md`
+
+Critical rules:
+- Always validate `exp`, `iss`, `aud`, and algorithm — never accept the `none` algorithm
+- Keep access tokens short-lived (≤ 1 hour); implement refresh token rotation for revocation
+
+### Kong (API Gateway)
+
+**Detection**: `kong` service in `docker-compose.yml`, `KONG_*` env vars, or `volumes/api/kong.yml` in a Supabase project.
+
+Load: `skills/integrations/kong/SKILL.md`
+
+Critical rules:
+- In Supabase self-hosted, all Kong config is declarative in `kong.yml` — Admin API changes are lost on restart
+- Always set `strip_path: true` on prefix-matched routes or the prefix forwards to the upstream
+
+### Realtime / WebSocket
+
+**Detection**: `supabase.channel()` calls, `REALTIME_*` env vars, `realtime` service in `docker-compose.yml`, or any `ws://` / `wss://` connections in the codebase.
+
+Load: `skills/integrations/realtime/SKILL.md`
+
+Critical rules (backend perspective):
+- RLS is enforced on Postgres Changes — enable it on tables before streaming to clients
+- Run `alter table <name> replica identity full` for tables where `UPDATE`/`DELETE` events must include old row data
+- Broadcast from server via the REST API — no persistent WebSocket connection needed server-side
+
+---
+
 ## Code Quality Standards (Base Defaults)
 
 These apply unless the project defines otherwise in `code-standards.md`:
