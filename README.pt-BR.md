@@ -478,14 +478,14 @@ Os agentes `frontend-developer` e `ui-ux-designer` requerem a skill `frontend-de
 dev-team-agents/
 ├── agents/          ← definições de agentes (arquivos .md)
 ├── skills/          ← conhecimento modular de skills
-│   ├── shared/      ← usadas por múltiplos agentes (project-context, plan-mode, adr, comments-policy, ...)
-│   ├── architecture/
-│   ├── testing/
-│   ├── security/
-│   ├── design/
-│   ├── devops/      ← uma skill por plataforma (docker, vps, ci/cd, aws, gcp, azure, cloudflare)
-│   ├── integrations/ ← skills de referência por plataforma/integração (supabase, gotrue, jwt, kong, realtime, database-debug, pwa, offline-first)
-│   └── ui-libraries/ ← skills de bibliotecas de UI (shadcn, mui, antd, bootstrap, chakra-ui, jquery)
+│   ├── shared/      ← usadas por múltiplos agentes (project-context, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template)
+│   ├── architecture/ ← api-design, async-jobs, design-patterns, graphql, object-calisthenics
+│   ├── testing/     ← test-strategy, test-pyramid
+│   ├── security/    ← security-checklist
+│   ├── design/      ← design-system-audit
+│   ├── devops/      ← docker-dev, docker-prod, vps-linux, cicd-github, cicd-gitlab, cicd-bitbucket, cicd-jenkins, aws, gcp, azure, cloudflare, iac-terraform, monitoring
+│   ├── integrations/ ← supabase, gotrue, jwt, kong, realtime, database-debug, database-multitenancy, database-production, pwa, offline-first
+│   └── ui-libraries/ ← shadcn, mui, antd, bootstrap, chakra-ui, jquery
 ├── workflows/       ← guias passo a passo de workflow
 ├── templates/       ← templates de documentos (plan, backlog, ADR, etc.)
 ├── scripts/         ← install.sh, check-updates.sh

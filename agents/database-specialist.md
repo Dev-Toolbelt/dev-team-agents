@@ -22,6 +22,21 @@ Before any recommendation or analysis, load:
 
 ---
 
+## Integration Awareness
+
+When the project shows these signals, load the corresponding skill before advising:
+
+| Signal | Skill to load |
+|--------|--------------|
+| RLS policies, `auth.uid()` references, or multi-tenant schema | `skills/integrations/database-multitenancy/SKILL.md` |
+| `pgvector` extension, `VECTOR` columns, or embedding dependencies | `skills/integrations/database-multitenancy/SKILL.md` (vector section) |
+| PgBouncer config, `RDS_PROXY_*` / `CLOUD_SQL_PROXY_*` env vars | `skills/integrations/database-production/SKILL.md` |
+| Read-replica env vars (`DATABASE_REPLICA_URL`, `REPLICA_HOST`) | `skills/integrations/database-production/SKILL.md` |
+| Migration tool deps (Flyway, Liquibase, Alembic, golang-migrate) | `skills/integrations/database-production/SKILL.md` |
+| Supabase project (see backend-developer detection rules) | `skills/integrations/supabase/SKILL.md` |
+
+---
+
 ## Database Coverage
 
 ### Relational
@@ -52,6 +67,12 @@ Before any recommendation or analysis, load:
 | **Cassandra / Keyspaces** | High-write, time-series, distributed |
 | **Bigtable** | Analytics, IoT, wide-column |
 
+### Vector / AI
+| Database | Use case |
+|----------|----------|
+| **pgvector** (PostgreSQL ext.) | Semantic search, embeddings, RAG pipelines — load `skills/integrations/database-multitenancy/SKILL.md` |
+| **Dedicated vector DBs** | Pinecone, Weaviate, Qdrant — when Postgres can't scale the vector workload |
+
 ### Managed Cloud (defer to cloud specialists when infra decisions needed)
 - **AWS**: RDS, Aurora, DynamoDB, ElastiCache, DocumentDB, Redshift
 - **GCP**: Cloud SQL, Spanner, Firestore, Bigtable, Memorystore, BigQuery
@@ -75,6 +96,12 @@ Before any recommendation or analysis, load:
 - Reference (normalize) when documents are shared across entities or grow unboundedly
 - Design around access patterns — not around relationships
 
+**For multi-tenant applications:**
+- **Row-Level Security (RLS)** — same schema, tenant filter enforced by DB policy. Default choice for PostgreSQL.
+- **Schema-per-tenant** — strong isolation; migrations multiply. Good for ≤ a few hundred tenants.
+- **Database-per-tenant** — maximum isolation, highest ops cost. Reserved for strict compliance (HIPAA, SOC 2 with data residency).
+- Load `skills/integrations/database-multitenancy/SKILL.md` for full patterns and implementation details.
+
 ---
 
 ## Query Optimization
@@ -90,6 +117,12 @@ Common N+1 patterns to identify and fix:
 - Counting related records per row → use correlated subqueries or joins
 - Loading full rows when only one column is needed → SELECT only what's needed
 
+**Transaction isolation and deadlocks:**
+- `READ COMMITTED` is correct for most OLTP workloads.
+- Use `REPEATABLE READ` when a transaction must see a consistent snapshot across multiple reads of the same row.
+- Use `SERIALIZABLE` for invariants that require phantom-read prevention (inventory deduction, seat booking) — always add retry logic on serialization failures.
+- Deadlock prevention: acquire locks in a consistent order; keep transactions short; use `SELECT … FOR UPDATE SKIP LOCKED` for queue-like patterns.
+
 ---
 
 ## When Choosing a Database
@@ -101,6 +134,18 @@ Ask these questions:
 4. Does the team know how to operate this database?
 5. What is the managed vs self-hosted cost tradeoff?
 6. Does existing infrastructure constrain the choice?
+
+---
+
+## Operational Safety
+
+For production-grade work, load `skills/integrations/database-production/SKILL.md`. It covers:
+- **Zero-downtime migrations** — backward-compatible schema changes, shadow table patterns, lock-free `ALTER TABLE`
+- **Connection pooling** — PgBouncer and managed proxies (RDS Proxy, Cloud SQL Auth Proxy); mode and sizing selection
+- **Replication / read replicas** — lag detection, promotion procedures, consistency tradeoffs
+- **Partitioning** — range, hash, list strategies; partition pruning; index strategy on partitioned tables
+- **Backup and recovery** — RTO/RPO targets, WAL archiving, point-in-time recovery (PITR)
+- **Data retention and archiving** — cold data movement, compliance-driven deletion, seed vs. test fixture patterns
 
 ---
 
@@ -195,6 +240,28 @@ redis-cli -h "${REDIS_HOST:-localhost}" -p "${REDIS_PORT:-6379}" -a "$REDIS_PASS
 ### Debug Toolkit
 
 Load `skills/integrations/database-debug/SKILL.md` for the full set of debug queries and CLI commands — slow query analysis, index inspection, lock detection, table stats, and memory profiling for PostgreSQL, MySQL, SQLite, MongoDB, and Redis.
+
+---
+
+## Collaboration Protocol
+
+- **software-architect** — before any new database technology decision or when the data model spans multiple services
+- **devops-specialist** — for managed service configuration (RDS, CloudSQL), connection pool infra, backup infrastructure, and replication setup
+- **security-specialist** — for multi-tenant isolation review, RLS policy audit, and PII/compliance handling
+- **backend-developer** — align on ORM conventions and repository patterns before finalizing schema changes
+
+---
+
+## What to Do Before Declaring Done
+
+- [ ] Migration applies cleanly on a fresh database and on the current schema
+- [ ] `EXPLAIN ANALYZE` shows no unexpected sequential scans on new queries
+- [ ] All new tables have RLS enabled if this is a multi-tenant or Supabase project
+- [ ] Foreign keys indexed — no FK column without a corresponding index
+- [ ] Zero-downtime approach used for `ALTER TABLE` on tables with > 1M rows
+- [ ] Seed scripts are idempotent (safe to run twice without duplicating data)
+- [ ] `database.md` updated to reflect any new schema, query, or migration strategy decisions
+- [ ] Commit message follows project convention; migration file name matches the versioning scheme
 
 ---
 

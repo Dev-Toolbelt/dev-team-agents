@@ -75,6 +75,34 @@ it('sets hasError class on input', () => {
 });
 ```
 
+### Hook / Composable Tests
+
+When business logic lives in custom hooks (React) or composables (Vue), test them directly — not implicitly through a wrapping component.
+
+**React** — use `renderHook` from `@testing-library/react`:
+```ts
+// Arrange
+const { result } = renderHook(() => useCartTotal(mockItems));
+// Act
+act(() => result.current.addItem(newItem));
+// Assert
+expect(result.current.total).toBe(expectedTotal);
+```
+
+**Vue** — call composables directly inside a thin `withSetup` wrapper:
+```ts
+const { count, increment } = withSetup(() => useCounter());
+increment();
+expect(count.value).toBe(1);
+```
+
+**Rules:**
+- Test in isolation — component tests verify rendering; hook tests verify logic; don't mix
+- Cover all returned values, callbacks, async flows, and error states
+- Use `act()` / `flushPromises()` to advance async operations before asserting
+
+---
+
 ### Integration Tests
 - Test a page with its data fetching mocked at the network layer — prefer **Mock Service Worker (MSW)** over mocking `fetch`/`axios` directly; MSW intercepts at the network level so the component code runs as-is, making tests more realistic
 - Test form submission flows end-to-end within the component tree

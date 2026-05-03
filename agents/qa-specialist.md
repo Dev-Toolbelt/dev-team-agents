@@ -59,6 +59,53 @@ Load `test-strategy` skill before planning validation — use it to decide what 
 - Is loading state indicated for async operations?
 - Does the flow handle going back/refreshing without breaking state?
 
+### Performance
+- Are response times acceptable for the use case (list pages, form submissions, heavy queries)?
+- Do concurrent users or parallel requests produce correct results — no race conditions or data corruption?
+- Do long-running or async operations complete within expected time bounds?
+- Is there observable resource accumulation (memory, open connections) across repeated operations?
+
+### Observability
+- Are relevant events logged — no silent failures that disappear without a trace?
+- Do error logs include enough context (IDs, inputs, stack) to debug without a debugger?
+- Are distributed traces propagated correctly across service boundaries?
+- Are key metrics emitted (counters, durations, error rates) for the new behavior?
+
+---
+
+## Validation Tiers
+
+Run in order; stop and report FAIL if a tier fails before proceeding to the next.
+
+| Tier | Focus | When to run |
+|------|-------|-------------|
+| **Smoke** | Core happy path end-to-end | First — if this fails, stop immediately |
+| **Functional** | All acceptance criteria, error states, edge cases | Pre-deploy gate |
+| **Regression** | Adjacent features and shared components affected by the change | Pre-deploy gate |
+
+Use **Smoke only** for quick post-deploy health checks. Use all three tiers for full pre-deploy validation.
+
+---
+
+## Test Data
+
+- Use isolated, reproducible data sets — never share mutable state between test runs
+- Seed the minimum data needed to exercise the scenario; avoid reusing production snapshots
+- Clean up after each run to prevent cross-test pollution
+- For edge cases, prepare explicit fixtures: empty table, maximum records, special characters, boundary values
+- Document the required seed state in the QA Report **Scope** section so results are reproducible
+
+---
+
+## Exploratory Testing
+
+After structured validation, spend time exploring outside the acceptance criteria:
+
+- Follow flows as a distracted or hurried user would — skip steps, go back mid-flow, submit twice
+- Probe what the spec did **not** say: missing branches, implicit assumptions, untested combinations
+- Try unexpected sequences: refresh mid-operation, open in two tabs, switch roles mid-flow
+- Document noteworthy findings even if they don't map cleanly to a severity level
+
 ---
 
 ## Legacy Project — Extra Care
@@ -87,6 +134,8 @@ When working in **Workflow C (Maintenance)** on legacy code:
 | Validation | ✅ Pass | |
 | Error states | ⚠️ Partial | Missing empty-state UI |
 | Auth flows | ✅ Pass | |
+| Performance | ✅ Pass | |
+| Observability | ✅ Pass | |
 | Regression | ⚠️ Risk | Shared component changed |
 
 ### Issues Found
@@ -111,6 +160,13 @@ When working in **Workflow C (Maintenance)** on legacy code:
 
 ### Verdict
 [PASS / PASS WITH NOTES / FAIL — reason]
+
+**Severity → deploy decision:**
+| Severity | Deploy? |
+|----------|---------|
+| [BLOCKER] | ❌ FAIL — blocks deploy |
+| [MAJOR] | ⚠️ PASS WITH NOTES — deploy only with explicit business sign-off |
+| [MINOR] | ✅ PASS WITH NOTES — ship, file a follow-up ticket |
 ```
 
 ---

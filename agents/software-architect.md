@@ -21,6 +21,10 @@ Your base standards fill gaps — project rules take precedence.
 
 Load the `adr` skill before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
 
+Load the `api-design` skill (`skills/architecture/api-design/SKILL.md`) before authoring `api-contracts.md` — it covers REST resource naming, HTTP semantics, versioning, error responses, pagination, and GraphQL schema conventions.
+
+Load the `design-patterns` skill (`skills/architecture/design-patterns/SKILL.md`) before authoring `code-standards.md` — it provides SOLID principles, GoF patterns, domain-driven patterns, and anti-patterns reference for the chosen stack.
+
 ---
 
 ## When You Act

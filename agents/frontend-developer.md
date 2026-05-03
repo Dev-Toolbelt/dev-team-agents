@@ -68,6 +68,26 @@ Skills with a **MCP available** (shadcn/ui, MUI, Ant Design): the skill file con
 
 ---
 
+## Server State & Data Fetching
+
+When the project uses a data-fetching library, detect it before writing any fetch logic:
+
+| Library | Detection signals |
+|---------|------------------|
+| **TanStack Query** | `@tanstack/react-query` / `vue-query`, `QueryClient`, `useQuery` |
+| **SWR** | `swr` dep, `useSWR` calls |
+| **Apollo Client** | `@apollo/client`, `ApolloProvider`, `useQuery` / `useMutation` |
+| **RTK Query** | `@reduxjs/toolkit`, `createApi`, `fetchBaseQuery` |
+
+**Rules:**
+- **Never duplicate server state in `useState`** — creates synchronization bugs; let the library own the state
+- **Invalidate cache after mutations** — call `queryClient.invalidateQueries` or `mutate()` (SWR) after writes so the UI reflects new state; don't leave stale data
+- **Use the library's built-in `isLoading` / `error`** — don't shadow them with your own booleans
+- **Co-locate query keys per domain** (`queries/orders.ts`) — key collisions cause cross-feature cache contamination
+- If no library is detected: `useEffect + useState` is acceptable for simple one-off fetches; for caching, background refetch, or shared state across components, recommend adopting TanStack Query or SWR
+
+---
+
 ## Code Quality Standards (Base Defaults)
 
 These apply unless the project overrides in `code-standards.md`:
@@ -141,6 +161,22 @@ async function handleSubmit() {
 
 ---
 
+## Error Boundaries & Global Error Handling
+
+A runtime error in one component must not crash the entire UI. Wrap every route/page-level component in an error boundary that shows a user-facing fallback.
+
+- **React**: class component with `componentDidCatch`, or `react-error-boundary` (`<ErrorBoundary FallbackComponent={...}>`)
+- **Vue**: `onErrorCaptured` in a wrapper component, or `app.config.errorHandler` for global handling
+- **Svelte**: `<svelte:boundary>` (Svelte 5) or a wrapper component with `onerror`
+
+**Rules:**
+- Place boundaries at the **route/page level** at minimum — a broken widget must not take down the entire app
+- Always show a user-facing fallback — never a blank screen or a raw JS stack trace
+- Register a global `window.addEventListener('unhandledrejection', ...)` to catch uncaught promise rejections and forward them to the project's error tracking service (Sentry, Datadog, etc.)
+- **Never swallow errors silently** — catching without logging or reporting creates invisible bugs
+
+---
+
 ## Realtime & WebSocket
 
 When the project uses live data push, collaborative features, or event streaming, load `skills/integrations/realtime/SKILL.md`.
@@ -152,6 +188,15 @@ Key frontend rules:
 - **Expose connection state to the user** — a live badge ("● Live" / "⚠ Reconnecting") is mandatory for any UI that shows real-time data; a silent stale UI is a worse experience than showing offline state
 - **One channel per scope** — use a context provider or store to share channel references; never open one channel per component instance for the same logical scope
 - **Never subscribe to unbounded event streams** — use the `filter` option to scope Postgres Changes to the specific rows the user can see; `event: '*'` on a high-traffic table floods the client
+
+---
+
+## Security
+
+- **`dangerouslySetInnerHTML` / `v-html` / `innerHTML`**: only render HTML from trusted, server-sanitized sources; run user-provided content through DOMPurify or equivalent before injecting — never render raw API strings as HTML
+- **Sensitive data in storage**: never store auth tokens, session identifiers, or PII in `localStorage` / `sessionStorage` — they are accessible to any script on the page; use `httpOnly` cookies for tokens
+- **Environment variables**: only expose vars prefixed for the build tool (`VITE_*`, `NEXT_PUBLIC_*`); never embed secrets or private API keys — they end up in the compiled bundle
+- **Third-party scripts**: any dynamically loaded script runs with full page privileges — audit before adding; prefer subresource integrity (`integrity` attr) for CDN-loaded scripts
 
 ---
 
@@ -177,6 +222,8 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 - [ ] Linters pass
 - [ ] No debug artifacts
 - [ ] Browser console: no errors; warnings that require disproportionate effort may be skipped but must be noted
+- [ ] No `dangerouslySetInnerHTML` / `v-html` with unsanitized content
+- [ ] No auth tokens or PII stored in `localStorage` / `sessionStorage`
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---

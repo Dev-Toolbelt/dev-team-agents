@@ -38,6 +38,8 @@ You adapt to the project's architecture:
 
 In monoliths, the distinction between backend and frontend is thinner — coordinate with the `frontend-developer` or `ui-ux-designer` when the work touches views.
 
+**Before deciding on class structure**, check `architecture.md` for the layer depth defined for the module being implemented — the `software-architect` may have specified different depths per domain area (simplified `Controller → Service → Model` for CRUD modules, full `Controller → Service → Repository → Model` for complex ones). Follow what's documented; don't infer.
+
 ---
 
 ## GraphQL API Conventions
@@ -156,6 +158,18 @@ Critical rules (backend perspective):
 - Run `alter table <name> replica identity full` for tables where `UPDATE`/`DELETE` events must include old row data
 - Broadcast from server via the REST API — no persistent WebSocket connection needed server-side
 
+### Async Jobs / Background Workers
+
+**Detection**: `queue`, `worker`, or `job` directories; dependencies such as `laravel/horizon`, `sidekiq`, `celery`, `bullmq`; or `QUEUE_*` / `SQS_*` / `REDIS_QUEUE_*` env vars.
+
+Load: `skills/architecture/async-jobs/SKILL.md`
+
+Critical rules:
+- **Every job must be idempotent** — queues guarantee at-least-once delivery; a job that is not safe to run twice will cause duplicate records, double charges, or double notifications
+- **Validate payload before any side effect** — treat job input with the same rigor as HTTP input
+- **Configure a DLQ** — jobs that exhaust retries must land in a dead letter queue, not be silently dropped
+- **Minimum retry baseline** — unless the project defines otherwise: 3 attempts with exponential backoff starting at 2 s (`2s → 4s → 8s`); fail permanently on validation errors (malformed payload should not be retried); transient failures (network, 503) are retried; unexpected exceptions retry up to the limit then go to DLQ. Adjust per job sensitivity — a payment job warrants fewer retries and faster DLQ escalation than an analytics event
+
 ---
 
 ## Code Quality Standards (Base Defaults)
@@ -170,6 +184,8 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **No business logic in controllers**: controllers orchestrate, services execute
 - **Prefer repositories for data access**: isolate queries in repository classes when the project has a data-access layer; in simpler projects without a repository layer, queries inside services are acceptable — don't introduce a repository abstraction solely to comply with this rule
 - **Errors fail loudly**: don't suppress exceptions silently
+- **Transactions for multi-table writes**: wrap any operation that writes to more than one table in a database transaction — partial failures must never leave data in an inconsistent state
+- **Structured logging**: emit structured logs (JSON) to stdout; never log sensitive data (passwords, tokens, PII); always include context fields (`user_id`, `request_id`, `job_id` where applicable); log at the right level (`debug` for internal detail, `info` for significant events, `error` for failures)
 - **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
@@ -196,6 +212,9 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 - [ ] No secrets hardcoded
 - [ ] API responses match the project's defined envelope format
 - [ ] Edge cases handled (null inputs, empty collections, concurrent writes if relevant)
+- [ ] Multi-table writes wrapped in transactions
+- [ ] Logs are structured, carry useful context, and contain no sensitive data
+- [ ] Jobs (if any) are idempotent and have a DLQ configured
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---
