@@ -10,7 +10,7 @@ Use this workflow when taking over a project from another team — unfinished, p
 
 ### Phase 1: AUDIT
 
-Run in parallel where possible:
+All three audit agents are independent. **Send all three prompts in a single message** to run them in parallel:
 
 ```
 Prompt: "As the software-architect, audit the existing codebase. Document the current
@@ -23,6 +23,8 @@ Prompt: "As the database-specialist, audit the existing database schema. Identif
 Prompt: "As the security-specialist, do a quick security audit of the existing codebase.
          Flag any CRITICAL or HIGH issues found."
 ```
+
+> ⚡ **Parallel tip**: copy all three prompts above into a single message. Each agent will present its own plan and wait for approval — approve them together, then all three audits run simultaneously.
 
 Each agent will:
 - Present a plan (scope of audit, areas to examine, output documents to create)

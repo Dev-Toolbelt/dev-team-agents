@@ -116,7 +116,7 @@ The test specialist will present a plan (which cases, which files, approach) and
 
 ## Phase 4: QUALITY GATE
 
-Run in sequence or parallel depending on available capacity:
+All four quality gate agents are independent of each other. **Send all four prompts in a single message** to run them in parallel:
 
 ```
 Prompt: "As the code-reviewer, review the changes in [files/PR].
@@ -130,6 +130,8 @@ Prompt: "As the qa-specialist, validate that [feature] meets its acceptance crit
 Prompt: "As the software-architect, validate that [files/PR] conforms to the
          architecture decisions in .claude/docs/development/architecture.md"
 ```
+
+> ⚡ **Parallel tip**: copy all four prompts above into a single message. Claude Code will run all four agents simultaneously, cutting quality gate time by ~75%.
 
 Quality gate agents present their findings as a structured report — no plan required, but findings are explicit before any remediation steps are taken.
 

@@ -149,6 +149,285 @@ Claude will automatically load the right agent based on the role you specify.
 | Bug fix | `workflows/bug-fix.md` | Isolated bug |
 | Security patch | `workflows/security-patch.md` | Security vulnerability |
 
+### A — New Project from Scratch
+
+```
+  [Input: requirements document]
+               │
+               ▼
+  ┌────────────────────────────┐
+  │         DISCOVERY          │
+  │                            │
+  │  product-analyst           │
+  │    · closes scope          │
+  │    · generates backlog     │
+  │    · sprint estimates      │
+  │                            │
+  │  software-architect        │
+  │    · architecture.md       │
+  │    · tech-stack.md         │
+  │    · code-standards.md     │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │    DESIGN  (optional)      │
+  │                            │
+  │  ui-ux-designer            │
+  │    · design-system.md      │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │        DEVELOPMENT         │
+  │                            │
+  │  devops-specialist         │
+  │    · dev environment       │
+  │  backend-developer         │
+  │    · implements tasks      │
+  │  frontend-developer        │
+  │    · implements UI         │
+  │  database-specialist       │
+  │    · schema + migrations   │
+  │  [test-specialists]        │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │       QUALITY GATE         │
+  │                            │
+  │  code-reviewer             │
+  │  security-specialist       │
+  │  qa-specialist             │
+  │  software-architect        │
+  │    · conformance check     │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │           SHIP             │
+  │                            │
+  │  technical-writer          │
+  │    · changelog + docs      │
+  └────────────────────────────┘
+```
+
+### B — Inherited / Unfinished Project
+
+```
+  [Input: codebase + client task list]
+               │
+               ▼
+  ┌────────────────────────────┐
+  │          AUDIT             │
+  │                            │
+  │  software-architect        │
+  │    · architecture audit    │
+  │    · tech debt mapping     │
+  │  database-specialist       │
+  │    · schema audit          │
+  │  security-specialist       │
+  │    · critical findings     │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │      CLIENT SCOPING        │
+  │                            │
+  │  product-analyst           │
+  │    · clarification Q&A     │
+  │    · iterate until scope   │
+  │      is 100% closed        │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │       GAP ANALYSIS         │
+  │                            │
+  │  product-analyst           │
+  │    · full backlog          │
+  │    · delivery forecast     │
+  │  software-architect        │
+  │    · refactor vs rewrite   │
+  └─────────────┬──────────────┘
+                │
+                ▼
+     DEVELOPMENT + QUALITY GATE
+        (same as Workflow A)
+```
+
+### C — Maintenance / Live Project
+
+```
+  [Input: ticket from board]
+               │
+               ▼
+  ┌────────────────────────────┐
+  │       TASK PICKUP          │
+  │                            │
+  │  software-architect        │
+  │    · loads project context │
+  │    · blast radius analysis │
+  │    · flags legacy risks    │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │    SCOPE VALIDATION        │
+  │       (recommended)        │
+  │                            │
+  │  product-analyst           │
+  │    · validates acceptance  │
+  │      criteria              │
+  │    · resolves ambiguities  │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │       DEVELOPMENT          │
+  │                            │
+  │  backend-developer         │
+  │  frontend-developer        │
+  │    · minimal scope         │
+  │    · no silent refactors   │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │  QUALITY GATE              │
+  │  (regression priority)     │
+  │                            │
+  │  code-reviewer             │
+  │  qa-specialist             │
+  │  [security-specialist]     │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │       PR + DEPLOY          │
+  │                            │
+  │  technical-writer          │
+  │  devops-specialist         │
+  └────────────────────────────┘
+```
+
+### Bug Fix
+
+```
+  [Input: bug report / stack trace]
+               │
+               ▼
+  ┌────────────────────────────┐
+  │        DIAGNOSIS           │
+  │                            │
+  │  software-architect        │
+  │    · root cause analysis   │
+  │    · diagnosis report      │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │           FIX              │
+  │                            │
+  │  backend-developer  or     │
+  │  frontend-developer        │
+  │    · fix root cause only   │
+  │    · no extra changes      │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │    REGRESSION CHECK        │
+  │                            │
+  │  qa-specialist             │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │      CODE REVIEW           │
+  │                            │
+  │  code-reviewer             │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │   REGRESSION TEST          │
+  │    (if required)           │
+  │                            │
+  │  backend-test-specialist   │
+  │  frontend-test-specialist  │
+  └────────────────────────────┘
+```
+
+### Security Patch
+
+```
+  [Input: CVE / security finding]
+               │
+               ▼
+  ┌────────────────────────────┐
+  │     ASSESS SEVERITY        │
+  │                            │
+  │  security-specialist       │
+  │    · CVSS score            │
+  │    · attack surface        │
+  │    · exploitation evidence │
+  └─────────────┬──────────────┘
+                │
+        ┌───────┴────────┐
+        │   CRITICAL?    │
+        └──┬─────────────┘
+      yes  │          no │
+       ▼                 │
+  escalate +             │
+  notify                 │
+  stakeholders           │
+           └─────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │          PATCH             │
+  │                            │
+  │  backend-developer         │
+  │    · minimal scope fix     │
+  │  devops-specialist         │
+  │    · dependency upgrade    │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │    SECURITY REVIEW         │
+  │                            │
+  │  security-specialist       │
+  │    · verify patch          │
+  │    · no new attack vectors │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │    CODE REVIEW + QA        │
+  │                            │
+  │  code-reviewer             │
+  │  qa-specialist             │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │         DEPLOY             │
+  │                            │
+  │  devops-specialist         │
+  │    · fastest safe strategy │
+  └─────────────┬──────────────┘
+                │
+                ▼
+  ┌────────────────────────────┐
+  │      POST-INCIDENT         │
+  │                            │
+  │  technical-writer          │
+  │    · security-incidents.md │
+  └────────────────────────────┘
+```
+
 ---
 
 ## Coexistence — Project Rules Override Base Standards

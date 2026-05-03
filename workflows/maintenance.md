@@ -89,6 +89,8 @@ Each developer will:
 
 ## Phase 3: QUALITY GATE (Regression Priority)
 
+The `code-reviewer`, `qa-specialist`, and `security-specialist` (when applicable) are independent of each other. **Send them in a single message** to run in parallel:
+
 ```
 Prompt: "As the code-reviewer, review the changes for this task.
          Pay special attention to legacy code that was touched —
@@ -105,6 +107,8 @@ Prompt: "As the security-specialist, review the changes — particularly if they
 Prompt: "As the devops-specialist, what's the safest deploy strategy for this change?
          [blue-green / canary / rolling update]"
 ```
+
+> ⚡ **Parallel tip**: copy all applicable prompts above into a single message. Quality gate agents run independently — sending them together cuts review time significantly.
 
 Quality gate agents present their findings as a structured report. Any remediation step (fixing a finding) requires a new plan before execution.
 

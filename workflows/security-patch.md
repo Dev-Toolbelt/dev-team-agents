@@ -52,13 +52,17 @@ The `security-specialist` presents a verification plan and waits for approval. O
 
 ---
 
-## Step 4: Code Review + QA
+## Step 4: Code Review + QA (parallel)
+
+Both agents are independent. **Send both prompts in a single message** to run them simultaneously:
 
 ```
 Prompt: "As the code-reviewer, review the security patch for correctness."
 
 Prompt: "As the qa-specialist, verify the patch doesn't regress any existing functionality."
 ```
+
+> ⚡ **Parallel tip**: copy both prompts into a single message. Both agents run simultaneously — no need to wait for one to finish before starting the other.
 
 Both agents present their respective plans and wait for approval before running checks.
 

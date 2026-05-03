@@ -41,25 +41,21 @@ The developer will:
 
 ---
 
-## Step 3: Regression Check (qa-specialist)
+## Step 3 + 4: Regression Check + Code Review (parallel)
+
+The `qa-specialist` and `code-reviewer` are independent. **Send both prompts in a single message** to run them simultaneously:
 
 ```
 Prompt: "As the qa-specialist, verify the bug is fixed and check that the fix
          doesn't break adjacent functionality."
-```
 
-The `qa-specialist` presents a validation plan (what to check, how to verify the fix, what adjacent areas to probe) and waits for approval before running any checks.
-
----
-
-## Step 4: Code Review (code-reviewer)
-
-```
 Prompt: "As the code-reviewer, review the bug fix — check that it actually fixes
          the root cause, doesn't introduce new issues, and follows project standards."
 ```
 
-The `code-reviewer` presents findings as a structured report. Any remediation step requires a new plan.
+> ⚡ **Parallel tip**: copy both prompts into a single message. Both agents run simultaneously — no need to wait for one to finish before starting the other.
+
+The `qa-specialist` presents a validation plan before running checks. The `code-reviewer` presents findings as a structured report. Any remediation step requires a new plan.
 
 ---
 

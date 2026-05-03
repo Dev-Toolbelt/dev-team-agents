@@ -39,6 +39,15 @@ One-liner fixes (typo, single-line change, rename in one file) may proceed witho
 
 **Never execute and then explain.** Always plan first, execute second.
 
+### Parallel Execution After Approval
+
+When generating a plan, use the `Par.` column in the STEPS table to group steps that can run simultaneously:
+- Assign the same letter (A, B, C…) to steps with no dependency on each other
+- Use `—` for steps that must complete before the next can start
+- After the user approves, explicitly instruct them: **send all prompts for the same Par. group in a single message** so the agents run in parallel
+
+This reduces total wall-clock time significantly on multi-agent tasks.
+
 ---
 
 ## Authoring Standards
