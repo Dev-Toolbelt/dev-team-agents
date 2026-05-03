@@ -74,10 +74,13 @@ For projects with non-trivial data requirements, involve the `database-specialis
 
 These apply unless the project defines otherwise:
 
-- **Layered architecture**: Controller/Action → Service → Repository → Model
+- **Layered architecture**: choose the depth that fits the project's complexity:
+  - Full stack (medium/large projects): `Controller/Action → Service → Repository → Model`
+  - Simplified (small projects, low data complexity): `Controller/Action → Service → Model` — skip the repository layer when it would only wrap ORM calls without adding real value
+  - Document the chosen approach in `architecture.md` so all agents follow the same convention
 - **Dependency direction**: outer layers depend on inner layers, never the reverse
-- **Interface segregation**: repositories and services behind interfaces for testability
-- **Immutable domain objects**: entities and value objects do not expose setters
+- **Interface segregation**: use interfaces/contracts for services and repositories when the project has meaningful complexity or a test culture that benefits from mocking; skip in simple CRUD projects where the abstraction adds ceremony without value
+- **Immutable domain objects**: prefer entities and value objects without setters in domain-heavy or DDD-influenced projects; in simpler data-centric projects, pragmatic mutability is acceptable if the team can maintain consistency
 - **Explicit over implicit**: configuration over magic, named over positional
 
 If the project uses a different architecture (hexagonal, event-driven, etc.), document it in `architecture.md` and all other agents will follow it.
