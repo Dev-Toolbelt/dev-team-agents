@@ -19,7 +19,7 @@ This applies to:
 - Skill bodies and reference material
 - Workflow steps and prompt examples
 - Template files
-- README.md, CHANGELOG.md, CLAUDE.md
+- README.md, CLAUDE.md
 
 ### README Sync Rule
 
@@ -100,12 +100,11 @@ dev-team-agents/
 │   ├── testing/
 │   ├── security/
 │   ├── design/
-│   └── devops/
+│   ├── devops/      ← one skill per platform
+│   └── integrations/ ← platform/integration-specific reference skills
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← install and update scripts
 ├── scripts/         ← install.sh, check-updates.sh
-├── CHANGELOG.md
 ├── README.md
 └── CLAUDE.md        ← this file
 ```
@@ -115,7 +114,6 @@ dev-team-agents/
 ## Versioning
 
 - Semantic versioning via git tags: `v1.0.0`, `v1.1.0`, `v2.0.0`
-- `CHANGELOG.md` must be updated before tagging a release
 - Breaking changes (agent behavior changes, removed skills) → major version bump
 - New agents/skills → minor version bump
 - Fixes, clarifications → patch bump
@@ -127,7 +125,7 @@ dev-team-agents/
 These files are installed via symlinks into user projects. Users are warned not to modify them directly. When authoring changes:
 
 - Maintain backward compatibility where possible
-- If a breaking change is unavoidable, document it clearly in CHANGELOG.md
+- If a breaking change is unavoidable, document it in the PR description and README release notes
 - Never remove a skill or agent without a deprecation cycle (one minor version with a warning)
 
 ---

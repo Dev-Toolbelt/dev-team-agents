@@ -476,18 +476,17 @@ The `frontend-developer` and `ui-ux-designer` agents require the `frontend-desig
 dev-team-agents/
 ├── agents/          ← agent definitions (.md files)
 ├── skills/          ← modular skill knowledge
-│   ├── shared/      ← used by multiple agents (project-context, plan-mode, ...)
+│   ├── shared/      ← used by multiple agents (project-context, plan-mode, adr, comments-policy, ...)
 │   ├── architecture/
 │   ├── testing/
 │   ├── security/
 │   ├── design/
-│   └── devops/      ← one skill per platform
+│   ├── devops/      ← one skill per platform (docker, vps, ci/cd, aws, gcp, azure, cloudflare)
+│   └── integrations/ ← platform/integration-specific reference skills (supabase, gotrue, jwt, kong, realtime, database-debug)
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← install and update scripts
 ├── scripts/         ← install.sh, check-updates.sh
-├── CLAUDE.md        ← authoring conventions for this repo
-└── CHANGELOG.md
+└── CLAUDE.md        ← authoring conventions for this repo
 ```
 
 ---

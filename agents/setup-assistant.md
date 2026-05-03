@@ -186,7 +186,7 @@ If `CURRENT != LATEST`:
 >
 > Run `.claude/dev-team-agents/scripts/install.sh latest` to update, or `.claude/dev-team-agents/scripts/install.sh $SPECIFIC_VERSION` for a specific version.
 >
-> See `.claude/dev-team-agents/CHANGELOG.md` for what changed.
+> See the release notes on the repository for what changed.
 >
 > Would you like me to update now?
 
