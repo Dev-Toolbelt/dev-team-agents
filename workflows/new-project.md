@@ -55,6 +55,7 @@ The `software-architect` will:
 - After approval: decide architecture, tech stack, patterns, and code standards
 - Optionally collaborate with `database-specialist` for data decisions
 - Produce `.claude/docs/development/` with all technical decisions documented in English
+- Establish commit message convention in `code-standards.md` — if none defined by the project, recommend `skills/shared/conventional-commits`
 
 ---
 

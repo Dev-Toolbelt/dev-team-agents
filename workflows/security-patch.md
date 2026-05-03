@@ -41,7 +41,20 @@ The `devops-specialist` presents a plan (upgrade steps, breaking change risk, te
 
 ---
 
-## Step 3: Security Review (security-specialist)
+## Step 3: Test Run
+
+Run the full test suite to verify the patch (or dependency upgrade) didn't break existing functionality:
+
+```
+Prompt: "As the backend-test-specialist, run the full test suite and report any
+         failures introduced by the security patch."
+```
+
+If no automated tests exist, the `qa-specialist` does a manual regression pass on the affected area instead.
+
+---
+
+## Step 4: Security Review (security-specialist)
 
 ```
 Prompt: "As the security-specialist, verify that the patch fully addresses the
@@ -52,7 +65,7 @@ The `security-specialist` presents a verification plan and waits for approval. O
 
 ---
 
-## Step 4: Code Review + QA (parallel)
+## Step 5: Code Review + QA (parallel)
 
 Both agents are independent. **Send both prompts in a single message** to run them simultaneously:
 
@@ -68,7 +81,7 @@ Both agents present their respective plans and wait for approval before running 
 
 ---
 
-## Step 5: Deploy (devops-specialist)
+## Step 6: Deploy (devops-specialist)
 
 ```
 Prompt: "As the devops-specialist, what's the fastest safe deploy strategy for
@@ -81,7 +94,7 @@ Security patches often justify faster deploy cycles — coordinate with the team
 
 ---
 
-## Step 6: Post-Incident
+## Step 7: Post-Incident
 
 ```
 Prompt: "As the technical-writer, document this vulnerability, the fix applied,

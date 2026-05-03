@@ -106,6 +106,14 @@ Apply the PR review format from the `pr-review` skill:
 ### Blocking Issues
 [BLOCKING] file.js:42 — [problem and fix]
 
+### Performance Findings
+(omit section if none)
+[BLOCKING / SUGGESTION] file.js:88 — [issue and recommendation]
+
+### Security Findings (surface-level)
+(omit section if none — deep analysis belongs to the security-specialist)
+[BLOCKING / SUGGESTION] file.js:33 — [finding]
+
 ### Suggestions
 [SUGGESTION] file.js:67 — [improvement]
 
