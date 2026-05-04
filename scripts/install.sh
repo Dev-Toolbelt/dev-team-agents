@@ -191,8 +191,9 @@ if ! grep -qxF "frontend-design" "$SKILLS_GITIGNORE" 2>/dev/null; then
     echo "frontend-design" >> "$SKILLS_GITIGNORE"
 fi
 
-# ── Step 6: Configure update-check hook in .claude/settings.json ─
+# ── Step 6: Configure hooks in .claude/settings.json ────────────
 UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/check-updates.sh"
+SESSION_HOOK_CMD=".claude/dev-team-agents/scripts/session-summary-hook.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -208,19 +209,64 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$SESSION_HOOK_CMD"
+          }
+        ]
+      }
     ]
   }
 }
 EOF
-    echo "→ Created .claude/settings.json with update-check hook"
+    echo "→ Created .claude/settings.json with update-check and session-summary hooks"
 else
-    if grep -q "check-updates.sh" "$SETTINGS_FILE" 2>/dev/null; then
-        echo "→ Update-check hook already present in .claude/settings.json"
-    else
-        echo "→ NOTE: .claude/settings.json already exists."
-        echo "  Add this hook under PreToolUse to enable update checks:"
-        echo "  { \"type\": \"command\", \"command\": \"$UPDATE_HOOK_CMD\" }"
-    fi
+    # Inject missing hooks into existing settings.json via python3 (safe JSON merge)
+    _inject_hook() {
+        local hook_type="$1"
+        local hook_cmd="$2"
+        local check_str="$3"
+
+        if grep -q "$check_str" "$SETTINGS_FILE" 2>/dev/null; then
+            echo "→ $hook_type hook already present in .claude/settings.json"
+            return
+        fi
+
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$SETTINGS_FILE" "$hook_type" "$hook_cmd" <<'PYEOF'
+import sys, json
+
+settings_file, hook_type, hook_cmd = sys.argv[1], sys.argv[2], sys.argv[3]
+
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+
+hooks = data.setdefault('hooks', {})
+entries = hooks.setdefault(hook_type, [])
+
+new_entry = {"hooks": [{"type": "command", "command": hook_cmd}]}
+if hook_type == "PreToolUse":
+    new_entry["matcher"] = ".*"
+
+entries.append(new_entry)
+
+with open(settings_file, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PYEOF
+            echo "→ Added $hook_type hook to .claude/settings.json"
+        else
+            echo "→ NOTE: python3 not found. Add this $hook_type hook manually to $SETTINGS_FILE:"
+            echo "  { \"type\": \"command\", \"command\": \"$hook_cmd\" }"
+        fi
+    }
+
+    _inject_hook "PreToolUse" "$UPDATE_HOOK_CMD" "check-updates.sh"
+    _inject_hook "Stop"       "$SESSION_HOOK_CMD" "session-summary-hook.sh"
 fi
 
 # ── Step 7: Record installed version ─────────────────────────────

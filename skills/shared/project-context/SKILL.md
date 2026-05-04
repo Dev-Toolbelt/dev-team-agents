@@ -76,18 +76,25 @@ A "non-trivial task" is any task that involves:
 Before starting any task, load context in this order (read what exists — skip what doesn't):
 
 ```
-1. README.md                  ← project overview, setup, conventions
-2. CLAUDE.md                  ← Claude-specific rules (highest precedence)
-3. .claude/docs/project.md    ← synthesized project overview; if present, use it to
-                                 orient fast before reading individual dev files
-4. AGENTS.md                  ← agent-specific instructions for this project
-5. .claude/settings.json      ← Claude Code configuration
-6. .agents/ (directory)       ← project-level agent overrides
-7. .claude/docs/development/  ← architecture, code-standards, tech-stack
-8. .claude/docs/backlog/      ← current sprint and task context
+1. README.md                              ← project overview, setup, conventions
+2. CLAUDE.md                              ← Claude-specific rules (highest precedence)
+3. .claude/docs/project.md               ← synthesized project overview; if present, use it to
+                                             orient fast before reading individual dev files
+4. .claude/session-summary.md            ← last session's decisions and next steps;
+                                             read the most recent entry (top of file)
+5. .claude/docs/development/adrs/        ← list ADR files and read any relevant to the task
+6. AGENTS.md                             ← agent-specific instructions for this project
+7. .claude/settings.json                 ← Claude Code configuration
+8. .agents/ (directory)                  ← project-level agent overrides
+9. .claude/docs/development/             ← architecture, code-standards, tech-stack
+10. .claude/docs/backlog/                ← current sprint and task context
 ```
 
 **When `.claude/docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
+
+**When `.claude/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
+
+**When `.claude/docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
 

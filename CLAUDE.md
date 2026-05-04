@@ -143,6 +143,52 @@ These files are installed via symlinks into user projects. Users are warned not 
 
 ---
 
+## Agent Memory System
+
+Three mechanisms work together to minimize context loss between sessions. All three are enforced automatically after installation.
+
+### Session Summary Rule
+
+**At the end of any session where files were created or modified**, write a new entry at the top of `.claude/session-summary.md`:
+
+```
+## YYYY-MM-DD | [brief task title]
+**Done**: what was implemented or changed
+**Decisions**: key choices made and why
+**Next**: what remains or is recommended next
+```
+
+- One entry per session per task; append to the same entry if continuing the same task the same day
+- This file is read at agent startup via `skills/shared/project-context/SKILL.md`
+- The `Stop` hook (`scripts/session-summary-hook.sh`) detects when this is missing and prompts you
+
+### ADR Trigger Rule
+
+Write an ADR when a decision is:
+- Hard to reverse (database engine, auth strategy, API design)
+- Affects multiple components or agents
+- Has non-obvious reasoning that future agents would question
+
+**Create an ADR by running:**
+
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+```
+
+The script auto-numbers the file and places it in `.claude/docs/development/adrs/`. Fill in the generated template and change the status from `Proposed` to `Accepted`.
+
+### Stop Hook (Automated Enforcement)
+
+`install.sh` registers `scripts/session-summary-hook.sh` as a `Stop` hook in `.claude/settings.json`. This hook:
+
+- Runs automatically each time Claude finishes responding
+- Detects uncommitted changes without a session-summary entry for today
+- Outputs a structured reminder visible to Claude on the next turn, which then writes the summary
+
+No manual setup is required — the installer handles registration.
+
+---
+
 ## Setup Trigger
 
 When the user writes any prompt matching the intent of setting up the project with dev-team-agents — such as:

@@ -82,7 +82,7 @@ Após a instalação, `.claude/` conterá:
 │   ├── project-context/   ← symlink → diretório da skill
 │   ├── plan-mode/         ← symlink → diretório da skill
 │   └── ...                ← um symlink por skill
-└── settings.json      ← hook de verificação de atualizações configurado automaticamente
+└── settings.json      ← hooks de verificação de atualizações e resumo de sessão configurados automaticamente
 ```
 
 ---
@@ -211,6 +211,47 @@ O arquivo de sessão é removido automaticamente quando o worktree é limpo (Ste
 
 ```gitignore
 .claude/.worktree-session
+```
+
+---
+
+## Sistema de Memória dos Agentes
+
+Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos trabalham juntos para minimizar a perda de contexto:
+
+### 1 — Resumo de Sessão (enforcement automático)
+
+Ao final de qualquer sessão em que arquivos foram alterados, os agentes escrevem uma entrada em `.claude/session-summary.md`:
+
+```
+## YYYY-MM-DD | [título breve da tarefa]
+**Done**: o que foi implementado ou alterado
+**Decisions**: decisões importantes tomadas e por quê
+**Next**: o que resta ou é recomendado a seguir
+```
+
+Um hook `Stop` (`scripts/session-summary-hook.sh`) é registrado automaticamente pelo `install.sh`. Ele detecta mudanças sem entrada de resumo no dia e exibe um aviso estruturado que o agente vê na próxima interação.
+
+No início de cada sessão, os agentes leem a entrada mais recente deste arquivo antes de agir.
+
+### 2 — Architecture Decision Records (ADRs)
+
+Decisões significativas e difíceis de reverter são registradas como ADRs em `.claude/docs/development/adrs/`. Para criar um:
+
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "título da decisão"
+```
+
+O script auto-numera o arquivo e preenche um template MADR. Agentes leem ADRs relevantes no startup para evitar contradizer decisões passadas.
+
+### 3 — Project Context Skill
+
+`skills/shared/project-context` define a ordem de carregamento de contexto que todo agente segue no startup. Inclui o resumo de sessão e o índice de ADRs, garantindo uma linha de base consistente entre todos os agentes e sessões.
+
+Adicione `.claude/session-summary.md` ao `.gitignore` se preferir não commitá-lo:
+
+```gitignore
+.claude/session-summary.md
 ```
 
 ---

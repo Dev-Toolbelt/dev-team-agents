@@ -82,7 +82,7 @@ After installation, `.claude/` will contain:
 │   ├── project-context/   ← symlink → skill directory
 │   ├── plan-mode/         ← symlink → skill directory
 │   └── ...                ← one symlink per skill
-└── settings.json      ← update-check hook configured automatically
+└── settings.json      ← update-check and session-summary hooks configured automatically
 ```
 
 ---
@@ -211,6 +211,47 @@ The session file is removed automatically when the worktree is cleaned up (Step 
 
 ```gitignore
 .claude/.worktree-session
+```
+
+---
+
+## Agent Memory System
+
+Agents start each session with no memory of previous ones. Three mechanisms work together to minimize context loss:
+
+### 1 — Session Summary (automatic enforcement)
+
+At the end of any session where files were changed, agents write an entry to `.claude/session-summary.md`:
+
+```
+## YYYY-MM-DD | [brief task title]
+**Done**: what was implemented or changed
+**Decisions**: key choices made and why
+**Next**: what remains or is recommended next
+```
+
+A `Stop` hook (`scripts/session-summary-hook.sh`) is registered automatically by `install.sh`. It detects uncommitted changes without a session-summary entry for today and outputs a structured reminder that the agent sees on the next turn.
+
+At the start of every session, agents read the most recent entry from this file before acting.
+
+### 2 — Architecture Decision Records (ADRs)
+
+Significant, hard-to-reverse decisions are recorded as ADRs in `.claude/docs/development/adrs/`. To create one:
+
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+```
+
+The script auto-numbers the file and fills a MADR template. Agents read relevant ADRs at startup to avoid contradicting past decisions.
+
+### 3 — Project Context Skill
+
+`skills/shared/project-context` defines the context-loading order every agent follows at startup. It includes the session summary and ADR index, ensuring a consistent baseline across all agents and sessions.
+
+Add `.claude/session-summary.md` to your `.gitignore` if you prefer it not to be committed:
+
+```gitignore
+.claude/session-summary.md
 ```
 
 ---
