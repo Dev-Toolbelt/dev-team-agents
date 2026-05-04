@@ -161,33 +161,14 @@ The full setup typically takes 5–10 minutes.
 
 ## Design Skills (Required for UI work)
 
-The `frontend-developer` and `ui-ux-designer` agents require two design skills:
+The `frontend-developer` and `ui-ux-designer` agents require two design skills that are bundled directly in this repository:
 
-### `frontend-design` (Claude Code marketplace)
+| Skill | Path | Purpose |
+|-------|------|---------|
+| `frontend-design` | `skills/design/frontend-design/` | Component patterns, layout techniques, and visual design guidance |
+| `web-design-guidelines` | `skills/design/web-design-guidelines/` | Audits UI code against Vercel's Web Interface Guidelines — design, accessibility, and UX coverage |
 
-**`scripts/install.sh` links it automatically** from the marketplace cache — no extra step needed if you have installed it before.
-
-If the installer prints a warning that the skill was not found:
-
-1. Open Claude Code
-2. Run `/plugins` → search `frontend-design` → install
-3. Re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
-
-Provides component patterns, layout techniques, and visual design guidance.
-
-### `web-design-guidelines` (vercel-labs/agent-skills)
-
-**`scripts/install.sh` installs it automatically** via `npx skills add` — no extra step needed if Node.js is available.
-
-If the installer prints a warning that the skill was not installed, run manually from the project root:
-
-```bash
-npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines
-```
-
-Then re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
-
-Audits UI code against Vercel's Web Interface Guidelines — design, accessibility, and UX coverage.
+Both skills are linked automatically by `scripts/install.sh` along with all other skills — no extra steps required. To update them, edit the `SKILL.md` files directly in this repository and re-run the installer.
 
 ---
 
@@ -608,12 +589,6 @@ Verify the symlink exists: `ls .claude/agents/dev-team/`. If the directory is mi
 
 **Skills are not loaded**
 Check that `.claude/skills/` contains symlinks pointing to each skill directory. Re-run the installer to restore broken links: `.claude/dev-team-agents/scripts/install.sh latest`.
-
-**`frontend-design` skill not found**
-The skill is not in the marketplace cache on this machine. Open Claude Code → `/plugins` → search `frontend-design` → install. Then re-run the installer.
-
-**`web-design-guidelines` skill not found**
-Node.js/npx was not available or the install failed. Run manually from the project root: `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines`. Then re-run the installer.
 
 **Update check hook fires on every tool call**
 The hook reads a timestamp file and only outputs a message once per day. If it prints every time, check that `.claude/dev-team-agents/.last-update-check` is a writable file (not a directory) and that `check-updates.sh` is executable.
