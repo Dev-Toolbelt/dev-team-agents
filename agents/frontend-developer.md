@@ -263,6 +263,14 @@ When the project is a PWA or needs to become one (detected via `manifest.json`, 
 
 ---
 
+## Docs Sync
+
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+
+Run in parallel with the commit — do not block delivery on doc updates.
+
+---
+
 ## Immutability Warning
 
 If asked to modify files inside `dev-team-agents`:

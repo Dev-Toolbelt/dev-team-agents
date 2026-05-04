@@ -145,14 +145,17 @@ After installing, start the setup flow by telling Claude:
 
 The `setup-assistant` will:
 
-1. **Scan** existing files — README, CLAUDE.md, package manifests, git history — and summarize what it found, including the installed version
-2. **Ask** which type of project this is: new from scratch, inherited/unfinished, or maintenance on a live system
-3. **Collect** configuration in a single exchange: tests required, CI/CD platform, cloud provider, issue tracker
-4. **Present a plan** for your approval before creating or modifying anything
-5. **Create** the `.claude/docs/` directory structure and append a `## dev-team-agents` section to `CLAUDE.md`
-6. **Confirm** what was configured and point you to the relevant workflow guide
+1. **Detect** whether this is a first-time setup or a refresh of an existing setup — and adapt accordingly
+2. **Scan** existing files — README, CLAUDE.md, package manifests, git history — and summarize what it found, including the installed version
+3. **Ask** which type of project this is: new from scratch, inherited/unfinished, or maintenance on a live system
+4. **Collect** configuration in a single exchange: tests required, CI/CD platform, cloud provider, issue tracker
+5. **Present a plan** for your approval before creating or modifying anything
+6. **Generate** living context docs in `.claude/docs/` populated with real project data (stack, architecture, code standards, backlog index) and append a `## dev-team-agents` section to `CLAUDE.md`
+7. **Confirm** what was configured and point you to the relevant workflow guide
 
 The full setup typically takes 5–10 minutes.
+
+**Re-running setup-assistant** on an existing project triggers refresh mode: it reads git history since the last run, identifies what changed, and patches only the affected docs — no full Q&A repeated.
 
 ---
 
@@ -569,7 +572,7 @@ Every agent is configured to present a plan before acting. If this did not happe
 dev-team-agents/
 ├── agents/          ← agent definitions (.md files)
 ├── skills/          ← modular skill knowledge
-│   ├── shared/      ← used by multiple agents (project-context, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
+│   ├── shared/      ← used by multiple agents (project-context, docs-sync, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
 │   ├── architecture/ ← api-design, async-jobs, design-patterns, graphql, object-calisthenics
 │   ├── testing/     ← test-strategy, test-pyramid
 │   ├── security/    ← security-checklist

@@ -145,14 +145,17 @@ Após instalar, inicie o fluxo de setup dizendo ao Claude:
 
 O `setup-assistant` irá:
 
-1. **Escanear** os arquivos existentes — README, CLAUDE.md, manifestos de pacotes, histórico git — e resumir o que encontrou, incluindo a versão instalada
-2. **Perguntar** qual tipo de projeto é este: novo do zero, herdado/inacabado, ou manutenção de sistema em produção
-3. **Coletar** a configuração em uma única troca: testes necessários, plataforma de CI/CD, provedor de nuvem, issue tracker
-4. **Apresentar um plano** para sua aprovação antes de criar ou modificar qualquer coisa
-5. **Criar** a estrutura de diretórios `.claude/docs/` e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
-6. **Confirmar** o que foi configurado e indicar o workflow relevante
+1. **Detectar** se é um setup inicial ou um refresh de uma configuração existente — e adaptar o comportamento de acordo
+2. **Escanear** os arquivos existentes — README, CLAUDE.md, manifestos de pacotes, histórico git — e resumir o que encontrou, incluindo a versão instalada
+3. **Perguntar** qual tipo de projeto é este: novo do zero, herdado/inacabado, ou manutenção de sistema em produção
+4. **Coletar** a configuração em uma única troca: testes necessários, plataforma de CI/CD, provedor de nuvem, issue tracker
+5. **Apresentar um plano** para sua aprovação antes de criar ou modificar qualquer coisa
+6. **Gerar** documentos de contexto vivos em `.claude/docs/` populados com dados reais do projeto (stack, arquitetura, padrões de código, índice de backlog) e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
+7. **Confirmar** o que foi configurado e indicar o workflow relevante
 
 O setup completo tipicamente leva de 5 a 10 minutos.
+
+**Rodar o setup-assistant novamente** em um projeto existente ativa o modo refresh: ele lê o histórico git desde a última execução, identifica o que mudou e aplica patches apenas nos docs afetados — sem repetir o Q&A completo.
 
 ---
 
@@ -571,7 +574,7 @@ Todo agente é configurado para apresentar um plano antes de agir. Se isso não 
 dev-team-agents/
 ├── agents/          ← definições de agentes (arquivos .md)
 ├── skills/          ← conhecimento modular de skills
-│   ├── shared/      ← usadas por múltiplos agentes (project-context, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
+│   ├── shared/      ← usadas por múltiplos agentes (project-context, docs-sync, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
 │   ├── architecture/ ← api-design, async-jobs, design-patterns, graphql, object-calisthenics
 │   ├── testing/     ← test-strategy, test-pyramid
 │   ├── security/    ← security-checklist

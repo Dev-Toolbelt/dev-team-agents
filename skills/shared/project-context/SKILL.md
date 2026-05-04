@@ -78,12 +78,16 @@ Before starting any task, load context in this order (read what exists — skip 
 ```
 1. README.md                  ← project overview, setup, conventions
 2. CLAUDE.md                  ← Claude-specific rules (highest precedence)
-3. AGENTS.md                  ← agent-specific instructions for this project
-4. .claude/settings.json      ← Claude Code configuration
-5. .agents/ (directory)       ← project-level agent overrides
-6. .claude/docs/development/  ← architecture, code-standards, tech-stack
-7. .claude/docs/backlog/      ← current sprint and task context
+3. .claude/docs/project.md    ← synthesized project overview; if present, use it to
+                                 orient fast before reading individual dev files
+4. AGENTS.md                  ← agent-specific instructions for this project
+5. .claude/settings.json      ← Claude Code configuration
+6. .agents/ (directory)       ← project-level agent overrides
+7. .claude/docs/development/  ← architecture, code-standards, tech-stack
+8. .claude/docs/backlog/      ← current sprint and task context
 ```
+
+**When `.claude/docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
 
