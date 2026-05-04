@@ -151,6 +151,49 @@ ISSUE_TRACKER_ACCESS: read-only
 - ui-ux-designer: [active — Design Mode on project start / Consultive Mode ongoing]
 - devops-specialist: [active]
 
+### Auto-Routing: Planning
+
+For any task that involves planning, breaking work into subtasks, entering plan mode, validating business rules, clarifying flows, or defining architecture — **automatically invoke all three agents below in parallel before any code is written**:
+
+| Agent | Role in Planning |
+|---|---|
+| `software-architect` | System design, architecture decisions, technical trade-offs, API contracts |
+| `database-specialist` | Data modeling, schema decisions, query strategy, migration planning |
+| `product-analyst` | Business rule validation, flow clarification, acceptance criteria, scope definition |
+
+Trigger conditions (any of these):
+- User asks to plan a feature, system, or change
+- Task is large enough to require breaking into subtasks
+- User enters plan mode or requests a plan before execution
+- There is ambiguity in business rules, flows, or scope
+
+These three agents collaborate to produce a unified plan. Only after the plan is approved does execution begin.
+
+### Auto-Routing: Execution
+
+For any coding task — with or without a prior plan — **automatically invoke the agents whose scope matches the work being done**:
+
+| Agent | Scope — invoke when the task touches… |
+|---|---|
+| `backend-developer` | APIs, business logic, services, workers, jobs, integrations, server-side code |
+| `frontend-developer` | UI components, pages, client-side state, forms, routing, browser-side logic |
+| `database-specialist` | Migrations, schema changes, queries, stored procedures, indexes, seeds |
+| `devops-specialist` | CI/CD pipelines, Dockerfiles, infra-as-code, environment config, deploy scripts |
+
+Rules:
+- Invoke only the agents whose scope is touched by the task — do not invoke all four by default
+- Multiple agents may be invoked in parallel when their scopes are independent
+- A task touching both API and UI invokes `backend-developer` + `frontend-developer` simultaneously
+
+### Quality Gate & Ship
+
+After all execution agents complete their work, **always run the following sequence**:
+
+1. **QUALITY GATE** — invoke `qa-specialist` + (if tests required) `backend-test-specialist` and/or `frontend-test-specialist` to validate correctness, coverage, and acceptance criteria
+2. **SHIP** — invoke `devops-specialist` to review deploy readiness, then hand off to the user for final approval and merge/deploy
+
+This sequence is mandatory — never skip it, even for small tasks.
+
 ### Workflow
 [A: new project | B: inherited | C: maintenance]
 

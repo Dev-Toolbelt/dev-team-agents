@@ -131,6 +131,19 @@ These files are installed via symlinks into user projects. Users are warned not 
 
 ---
 
+## Setup Trigger
+
+When the user writes any prompt matching the intent of setting up the project with dev-team-agents — such as:
+
+- "Help me set up this project with dev-team-agents"
+- "Configure dev-team-agents for this project"
+- "Set up the agent team for this project"
+- "Initialize dev-team-agents here"
+
+**Immediately invoke the `setup-assistant` agent.** Do not ask clarifying questions first, do not run any commands, do not read files yourself — hand off directly to `setup-assistant`, which is designed to gather all context and drive the full setup flow.
+
+---
+
 ## Coexistence Rule (Core Principle)
 
 `dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task.
