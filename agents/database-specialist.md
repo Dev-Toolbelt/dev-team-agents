@@ -24,9 +24,24 @@ Before any recommendation or analysis, load:
 
 ## Worktree Isolation
 
-If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md`/`AGENTS.md` mentions worktree workflow), load the `worktree` skill at the **very start** of any new task — before reading any other project file. The skill defines where to work and which branch to use. Project-level config takes precedence over the skill's defaults.
+**Before editing or creating any file**, check for an existing session decision:
 
-Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+```bash
+cat .claude/.worktree-session 2>/dev/null
+```
+
+| File content | Action |
+|---|---|
+| `worktree=no` | Continue on the current branch — no question |
+| `worktree=yes branch=<b>` | Load `skills/shared/worktree/SKILL.md` using `<b>` — no question |
+| File absent | Ask the user (below) |
+
+**If the file is absent**, ask:
+
+> "Do you want this task isolated in a git worktree? [y/N]"
+
+- **Yes** → Ask: "Which branch should the worktree branch off? (default: `main`)" → write `worktree=yes branch=<answer>` to `.claude/.worktree-session` → load and follow `skills/shared/worktree/SKILL.md`.
+- **No** → Write `worktree=no` to `.claude/.worktree-session` → continue on the current branch.
 
 ---
 

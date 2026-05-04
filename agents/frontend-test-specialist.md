@@ -22,6 +22,29 @@ If none indicate tests are required:
 
 ---
 
+## Worktree Isolation
+
+**Before editing or creating any file**, check for an existing session decision:
+
+```bash
+cat .claude/.worktree-session 2>/dev/null
+```
+
+| File content | Action |
+|---|---|
+| `worktree=no` | Continue on the current branch — no question |
+| `worktree=yes branch=<b>` | Load `skills/shared/worktree/SKILL.md` using `<b>` — no question |
+| File absent | Ask the user (below) |
+
+**If the file is absent**, ask:
+
+> "Do you want this task isolated in a git worktree? [y/N]"
+
+- **Yes** → Ask: "Which branch should the worktree branch off? (default: `main`)" → write `worktree=yes branch=<answer>` to `.claude/.worktree-session` → load and follow `skills/shared/worktree/SKILL.md`.
+- **No** → Write `worktree=no` to `.claude/.worktree-session` → continue on the current branch.
+
+---
+
 ## Foundational Rule — Load Context First
 
 Before writing any test:

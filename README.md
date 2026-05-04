@@ -93,6 +93,9 @@ If you prefer each developer to install locally instead (e.g. for a personal/exp
 .claude/dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
+
+# Always ignore the ephemeral worktree session file
+.claude/.worktree-session
 ```
 
 ---
@@ -134,6 +137,27 @@ Agents are invoked by role:
 Claude will automatically load the right agent based on the role you specify.
 
 **Every agent presents a plan for approval before executing anything.** You review, adjust, and approve — then execution begins.
+
+---
+
+## Worktree Isolation
+
+All coding agents (`backend-developer`, `frontend-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) ask **once** before editing any file:
+
+> "Do you want this task isolated in a git worktree? [y/N]"
+
+**The answer is shared across all agents in the same task** via `.claude/.worktree-session`. If a workflow involves multiple agents (e.g. backend + frontend + tests), only the first agent asks — the rest read the stored decision silently.
+
+| Answer | Behavior |
+|--------|----------|
+| Yes | Agent asks for a base branch (default: `main`), creates `.worktrees/<ctx>/<title>/`, and all subsequent work happens inside it |
+| No | All agents work on the current branch |
+
+The session file is removed automatically when the worktree is cleaned up (Step 8 of the worktree skill). Add it to `.gitignore` — the worktree skill does this automatically on cleanup:
+
+```gitignore
+.claude/.worktree-session
+```
 
 ---
 

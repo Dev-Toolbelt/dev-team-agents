@@ -64,6 +64,14 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - Max ~200 lines per agent; move reference material to skills
 
+**Coding agents** (`backend-developer`, `frontend-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical session-file pattern:
+
+1. Read `.claude/.worktree-session` — if it exists, follow the stored decision silently (`worktree=no` or `worktree=yes branch=<b>`)
+2. If absent, ask the user once, write the decision to `.claude/.worktree-session`, then act
+3. On "yes": load `skills/shared/worktree/SKILL.md` with the provided branch (default: `main`)
+
+This ensures multi-agent workflows ask the worktree question exactly once.
+
 ### Skills (`skills/**/*.md`)
 
 - Follow [agentskills.io specification](https://agentskills.io/specification)

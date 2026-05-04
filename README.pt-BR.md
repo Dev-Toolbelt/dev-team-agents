@@ -93,6 +93,9 @@ Se preferir que cada desenvolvedor instale localmente (ex.: setup pessoal/experi
 .claude/dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
+
+# Sempre ignore o arquivo efêmero de sessão worktree
+.claude/.worktree-session
 ```
 
 ---
@@ -134,6 +137,27 @@ Os agentes são invocados pelo papel:
 O Claude carregará automaticamente o agente correto com base no papel especificado.
 
 **Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa.
+
+---
+
+## Isolamento com Worktree
+
+Todos os agentes de codificação (`backend-developer`, `frontend-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) perguntam **uma única vez** antes de editar qualquer arquivo:
+
+> "Do you want this task isolated in a git worktree? [y/N]"
+
+**A resposta é compartilhada entre todos os agentes da mesma task** via `.claude/.worktree-session`. Se um workflow envolver múltiplos agentes (ex.: backend + frontend + testes), apenas o primeiro agente pergunta — os demais leem a decisão gravada silenciosamente.
+
+| Resposta | Comportamento |
+|----------|--------------|
+| Sim | O agente pergunta a branch base (padrão: `main`), cria `.worktrees/<ctx>/<title>/`, e todo o trabalho subsequente ocorre dentro dele |
+| Não | Todos os agentes trabalham na branch corrente |
+
+O arquivo de sessão é removido automaticamente quando o worktree é limpo (Step 8 da skill worktree). Adicione ao `.gitignore` — a skill faz isso automaticamente no cleanup:
+
+```gitignore
+.claude/.worktree-session
+```
 
 ---
 

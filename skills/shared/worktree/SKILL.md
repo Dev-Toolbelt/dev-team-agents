@@ -166,11 +166,12 @@ git -C .worktrees/<context>/<brief-title> commit -m "..."
 
 ## Step 8 — Cleanup after merge
 
-Once the branch is merged and the task is done, remove the worktree:
+Once the branch is merged and the task is done, remove the worktree and the session file:
 
 ```bash
 git worktree remove .worktrees/<context>/<brief-title>
 git branch -d <context>/<brief-title>
+rm -f .claude/.worktree-session
 ```
 
 If the branch has not been merged yet, use `--force` only when explicitly requested
@@ -178,6 +179,14 @@ by the user:
 
 ```bash
 git worktree remove --force .worktrees/<context>/<brief-title>
+```
+
+The `.worktree-session` file is always removed on cleanup — it is ephemeral and must
+not persist across tasks. Add it to `.gitignore` if not already present:
+
+```bash
+grep -qxF '.claude/.worktree-session' .gitignore 2>/dev/null \
+  || echo '.claude/.worktree-session' >> .gitignore
 ```
 
 ---
