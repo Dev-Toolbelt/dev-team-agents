@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: Implements frontend features following the project's design system and architecture. Works in both decoupled SPAs (React, Vue, Svelte) and server-rendered templates (Blade, Twig, ERB, Jinja). Collaborates with ui-ux-designer in consultive mode. Use for any client-side implementation task.
+description: Implements frontend features following the project's design system and architecture. Works in both decoupled SPAs (React, Vue, Svelte, Angular) and server-rendered templates (Blade, Twig, ERB, Jinja). Collaborates with ui-ux-designer in consultive mode. Use for any client-side implementation task.
 model: claude-sonnet-4-6
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -133,6 +133,7 @@ These apply unless the project overrides in `code-standards.md`:
 - **Type safety** (where the language supports it): avoid untyped escape hatches (`any` or equivalent); declare prop types and return types explicitly; never use forced type assertions without a guard — treat the type system as a first-class quality tool
 - **Prop sprawl**: a component with more than 5–7 props is a design smell — consider decomposing into smaller components, grouping related props into a configuration object, or moving state up or down the tree
 - For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
+- **Component structure** (container/presentational, smart/dumb, prop rules): load `skills/architecture/component-patterns/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
@@ -198,6 +199,7 @@ A runtime error in one component must not crash the entire UI. Wrap every route/
 
 - **React**: class component with `componentDidCatch`, or `react-error-boundary` (`<ErrorBoundary FallbackComponent={...}>`)
 - **Vue**: `onErrorCaptured` in a wrapper component, or `app.config.errorHandler` for global handling
+- **Angular**: implement `ErrorHandler` and provide it at the root level (`{ provide: ErrorHandler, useClass: AppErrorHandler }`)
 - **Svelte**: `<svelte:boundary>` (Svelte 5) or a wrapper component with `onerror`
 
 **Rules:**
