@@ -52,14 +52,14 @@ if [ "$VERSION" = "latest" ]; then
     _releases_json=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
     RESOLVED=$(echo "$_releases_json" \
         | grep '"tag_name"' | head -1 \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
 
     # Fallback: tags list (repo has tags but no formal release)
     if [ -z "$RESOLVED" ]; then
         _tags_json=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
         RESOLVED=$(echo "$_tags_json" \
             | grep '"name"' | head -1 \
-            | sed 's/.*"name": *"\([^"]*\)".*/\1/')
+            | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
     fi
 
     # Fallback: main branch (no tags yet)
