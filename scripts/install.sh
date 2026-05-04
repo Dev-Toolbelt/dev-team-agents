@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/vaironaegos/dev-team-agents"
+REPO_URL="git@github.com:vaironaegos/dev-team-agents.git"
 PROJECT_ROOT="$(pwd)"
 INSTALL_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
 AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"

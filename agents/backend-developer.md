@@ -101,6 +101,14 @@ When the project is a REST API (detected via `architecture.md`, `api-contracts.m
 
 ---
 
+## Worktree Isolation
+
+If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md`/`AGENTS.md` mentions worktree workflow), load the `worktree` skill at the **very start** of any new task — before reading any other project file. The skill defines where to work and which branch to use. Project-level config (base branch, container name) takes precedence over the skill's defaults.
+
+Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+
+---
+
 ## Integration Awareness
 
 When the project uses specific platforms, detect them and load the corresponding skill before writing code.

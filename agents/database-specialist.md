@@ -22,6 +22,14 @@ Before any recommendation or analysis, load:
 
 ---
 
+## Worktree Isolation
+
+If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md`/`AGENTS.md` mentions worktree workflow), load the `worktree` skill at the **very start** of any new task — before reading any other project file. The skill defines where to work and which branch to use. Project-level config takes precedence over the skill's defaults.
+
+Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+
+---
+
 ## Integration Awareness
 
 When the project shows these signals, load the corresponding skill before advising:

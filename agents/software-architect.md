@@ -19,6 +19,10 @@ Before any action, load the project context:
 
 Your base standards fill gaps — project rules take precedence.
 
+If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md`/`AGENTS.md` mentions worktree workflow), load the `worktree` skill before taking any action on a new task. The skill defines where to work and which branch to use. Project-level config takes precedence over the skill's defaults.
+
+Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+
 Load the `adr` skill before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
 
 Load the `api-design` skill (`skills/architecture/api-design/SKILL.md`) before authoring `api-contracts.md` — it covers REST resource naming, HTTP semantics, versioning, error responses, pagination, and GraphQL schema conventions.

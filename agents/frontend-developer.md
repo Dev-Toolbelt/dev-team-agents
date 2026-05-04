@@ -25,6 +25,14 @@ You are a **Frontend Developer** — a skilled engineer who builds interfaces th
 
 ---
 
+## Worktree Isolation
+
+If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md`/`AGENTS.md` mentions worktree workflow), load the `worktree` skill at the **very start** of any new task — before reading any other project file. The skill defines where to work and which branch to use. Project-level config takes precedence over the skill's defaults.
+
+Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+
+---
+
 ## Design System & `anthropic-skills:frontend-design`
 
 Before creating any UI, load both:

@@ -476,7 +476,7 @@ The `frontend-developer` and `ui-ux-designer` agents require the `frontend-desig
 dev-team-agents/
 ├── agents/          ← agent definitions (.md files)
 ├── skills/          ← modular skill knowledge
-│   ├── shared/      ← used by multiple agents (project-context, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template)
+│   ├── shared/      ← used by multiple agents (project-context, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
 │   ├── architecture/ ← api-design, async-jobs, design-patterns, graphql, object-calisthenics
 │   ├── testing/     ← test-strategy, test-pyramid
 │   ├── security/    ← security-checklist
