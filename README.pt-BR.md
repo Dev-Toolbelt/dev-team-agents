@@ -159,9 +159,11 @@ O setup completo tipicamente leva de 5 a 10 minutos.
 
 ---
 
-## Skill `frontend-design` (Necessária para trabalho com UI)
+## Skills de Design (Necessárias para trabalho com UI)
 
-Os agentes `frontend-developer` e `ui-ux-designer` requerem a skill `frontend-design` do marketplace do Claude Code.
+Os agentes `frontend-developer` e `ui-ux-designer` requerem duas skills de design:
+
+### `frontend-design` (marketplace do Claude Code)
 
 **O `scripts/install.sh` faz o link automaticamente** a partir do cache do marketplace — nenhum passo extra é necessário se você já a instalou antes.
 
@@ -171,7 +173,21 @@ Se o instalador exibir um aviso de que a skill não foi encontrada:
 2. Execute `/plugins` → pesquise `frontend-design` → instale
 3. Rode o instalador novamente: `.claude/dev-team-agents/scripts/install.sh latest`
 
-A skill fornece padrões de componentes, técnicas de layout e orientação de design visual utilizada por ambos os agentes.
+Fornece padrões de componentes, técnicas de layout e orientação de design visual.
+
+### `web-design-guidelines` (vercel-labs/agent-skills)
+
+**O `scripts/install.sh` instala automaticamente** via `npx skills add` — nenhum passo extra é necessário se o Node.js estiver disponível.
+
+Se o instalador exibir um aviso de que a skill não foi instalada, rode manualmente a partir da raiz do projeto:
+
+```bash
+npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines
+```
+
+Em seguida, rode o instalador novamente: `.claude/dev-team-agents/scripts/install.sh latest`
+
+Audita código de UI contra as Diretrizes de Interface Web da Vercel — cobertura de design, acessibilidade e UX.
 
 ---
 
@@ -597,6 +613,9 @@ Verifique se `.claude/skills/` contém symlinks apontando para cada diretório d
 
 **Skill `frontend-design` não encontrada**
 A skill não está no cache do marketplace nesta máquina. Abra o Claude Code → `/plugins` → pesquise `frontend-design` → instale. Depois rode o instalador novamente.
+
+**Skill `web-design-guidelines` não encontrada**
+Node.js/npx não estava disponível ou a instalação falhou. Rode manualmente a partir da raiz do projeto: `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines`. Depois rode o instalador novamente.
 
 **Hook de verificação de atualização dispara a cada tool call**
 O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/dev-team-agents/.last-update-check` é um arquivo gravável (não um diretório) e se `check-updates.sh` é executável.

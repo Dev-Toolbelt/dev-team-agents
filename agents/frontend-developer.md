@@ -49,12 +49,13 @@ cat .claude/.worktree-session 2>/dev/null
 
 ---
 
-## Design System & `anthropic-skills:frontend-design`
+## Design System & Design Skills
 
-Before creating any UI, load both:
+Before creating any UI, load all three:
 
 1. `design-system-audit` skill — reads and documents the project's current visual language
 2. `frontend-design` skill — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
+3. `web-design-guidelines` skill — **required**; audits UI code against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
 
 **Visual consistency is non-negotiable.** New UI must match the existing visual language of the project — same spacing scale, same color tokens, same component patterns. When in doubt, consult the `ui-ux-designer`.
 

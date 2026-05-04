@@ -159,9 +159,11 @@ The full setup typically takes 5–10 minutes.
 
 ---
 
-## `frontend-design` Skill (Required for UI work)
+## Design Skills (Required for UI work)
 
-The `frontend-developer` and `ui-ux-designer` agents require the `frontend-design` skill from the Claude Code marketplace.
+The `frontend-developer` and `ui-ux-designer` agents require two design skills:
+
+### `frontend-design` (Claude Code marketplace)
 
 **`scripts/install.sh` links it automatically** from the marketplace cache — no extra step needed if you have installed it before.
 
@@ -171,7 +173,21 @@ If the installer prints a warning that the skill was not found:
 2. Run `/plugins` → search `frontend-design` → install
 3. Re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
 
-The skill provides component patterns, layout techniques, and visual design guidance used by both agents.
+Provides component patterns, layout techniques, and visual design guidance.
+
+### `web-design-guidelines` (vercel-labs/agent-skills)
+
+**`scripts/install.sh` installs it automatically** via `npx skills add` — no extra step needed if Node.js is available.
+
+If the installer prints a warning that the skill was not installed, run manually from the project root:
+
+```bash
+npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines
+```
+
+Then re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
+
+Audits UI code against Vercel's Web Interface Guidelines — design, accessibility, and UX coverage.
 
 ---
 
@@ -595,6 +611,9 @@ Check that `.claude/skills/` contains symlinks pointing to each skill directory.
 
 **`frontend-design` skill not found**
 The skill is not in the marketplace cache on this machine. Open Claude Code → `/plugins` → search `frontend-design` → install. Then re-run the installer.
+
+**`web-design-guidelines` skill not found**
+Node.js/npx was not available or the install failed. Run manually from the project root: `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines`. Then re-run the installer.
 
 **Update check hook fires on every tool call**
 The hook reads a timestamp file and only outputs a message once per day. If it prints every time, check that `.claude/dev-team-agents/.last-update-check` is a writable file (not a directory) and that `check-updates.sh` is executable.

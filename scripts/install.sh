@@ -186,9 +186,46 @@ fi
 
 # ── Step 5c: Ignore machine-specific symlinks in .claude/skills/ ─────
 # frontend-design points to an absolute $HOME path — must not be committed.
+# web-design-guidelines is installed locally by npx skills — also excluded.
 SKILLS_GITIGNORE="$SKILLS_TARGET/.gitignore"
 if ! grep -qxF "frontend-design" "$SKILLS_GITIGNORE" 2>/dev/null; then
     echo "frontend-design" >> "$SKILLS_GITIGNORE"
+fi
+if ! grep -qxF "web-design-guidelines" "$SKILLS_GITIGNORE" 2>/dev/null; then
+    echo "web-design-guidelines" >> "$SKILLS_GITIGNORE"
+fi
+
+# ── Step 5d: Install web-design-guidelines via npx skills ────────────
+WEB_DESIGN_DEST="$SKILLS_TARGET/web-design-guidelines"
+
+if [ ! -d "$WEB_DESIGN_DEST" ]; then
+    if command -v npx >/dev/null 2>&1; then
+        if npx --yes skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines 2>/dev/null; then
+            echo "→ web-design-guidelines skill installed: .claude/skills/web-design-guidelines/"
+        else
+            echo ""
+            echo "  ┌─ web-design-guidelines install failed ────────────────────────┐"
+            echo "  │  npx skills add did not complete successfully.                 │"
+            echo "  │  One-time manual step (from the project root):                 │"
+            echo "  │    npx skills add                                              │"
+            echo "  │      https://github.com/vercel-labs/agent-skills               │"
+            echo "  │      --skill web-design-guidelines                             │"
+            echo "  └────────────────────────────────────────────────────────────────┘"
+            echo ""
+        fi
+    else
+        echo ""
+        echo "  ┌─ web-design-guidelines not installed ─────────────────────────┐"
+        echo "  │  Node.js / npx is not available on this machine.               │"
+        echo "  │  One-time manual step (after installing Node.js):              │"
+        echo "  │    npx skills add                                              │"
+        echo "  │      https://github.com/vercel-labs/agent-skills               │"
+        echo "  │      --skill web-design-guidelines                             │"
+        echo "  └────────────────────────────────────────────────────────────────┘"
+        echo ""
+    fi
+else
+    echo "→ web-design-guidelines skill already installed: .claude/skills/web-design-guidelines/"
 fi
 
 # ── Step 6: Configure hooks in .claude/settings.json ────────────

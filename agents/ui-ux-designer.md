@@ -48,10 +48,11 @@ cat .claude/.worktree-session 2>/dev/null
 
 ## Load Design Skills
 
-Always load both before acting:
+Always load all three before acting:
 
 - `design-system-audit` — for reading and documenting the current visual state
 - `frontend-design` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load at the start of every session.
+- `web-design-guidelines` — **required**; audits UI against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load at the start of every session.
 
 ---
 

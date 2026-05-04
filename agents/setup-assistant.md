@@ -81,6 +81,13 @@ Verify whether `.claude/skills/frontend-design/` exists. If the project has UI o
 - Ask the user to: open Claude Code → `/plugins` → search `frontend-design` → install → then re-run `.claude/dev-team-agents/scripts/install.sh` to pick it up automatically
 - The `frontend-developer` and `ui-ux-designer` agents depend on it
 
+**web-design-guidelines skill check:**
+Verify whether `.claude/skills/web-design-guidelines/` exists. If the project has UI or frontend work and the skill is missing:
+- It means `scripts/install.sh` couldn't install it (Node.js/npx unavailable or command failed)
+- Ask the user to run manually from the project root: `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines`
+- Then re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
+- The `frontend-developer` and `ui-ux-designer` agents depend on it
+
 ### Step 2 — Project Type Question
 
 Ask the user (mandatory — determines the workflow):
