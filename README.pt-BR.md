@@ -65,7 +65,7 @@ Após a instalação, `.claude/` conterá:
 
 ```
 .claude/
-├── dev-team-agents/   ← repositório clonado (fonte da verdade)
+├── dev-team-agents/   ← extraído de tarball (sem pasta .git — seguro para commitar)
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -77,18 +77,22 @@ Após a instalação, `.claude/` conterá:
 
 ---
 
-## Recomendação de .gitignore
+## Commitando no Seu Projeto
 
-Você pode optar por commitar `.claude/dev-team-agents/` (versão fixada, reproduzível) ou ignorá-lo (sempre buscado do zero). Os symlinks de agentes e skills devem seguir a mesma decisão.
+Como o `install.sh` baixa um tarball (não faz git clone), `.claude/dev-team-agents/` não contém nenhuma pasta `.git` aninhada. **Commite diretamente** — todo o time recebe os agentes e skills no `git pull`, sem passo de setup adicional.
+
+```bash
+git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/settings.json
+git commit -m "chore: add dev-team-agents"
+```
+
+Se preferir que cada desenvolvedor instale localmente (ex.: setup pessoal/experimental), adicione ao `.gitignore`:
 
 ```gitignore
-# Opção A: ignorar a instalação (cada desenvolvedor instala localmente)
+# Opcional: ignorar a instalação (cada desenvolvedor instala localmente)
 .claude/dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
-
-# Opção B: commitar tudo (versão fixada no repositório)
-# (nenhuma entrada necessária — o git vai rastrear)
 ```
 
 ---
@@ -98,7 +102,7 @@ Você pode optar por commitar `.claude/dev-team-agents/` (versão fixada, reprod
 Este repositório usa **versionamento semântico via git tags** (`v1.0.0`, `v1.1.0`, `v2.0.0`).
 
 - Atualizações são lançadas como tags — sem auto-atualização a cada commit
-- Um hook de início de sessão verifica novas tags diariamente (configurado automaticamente pelo `scripts/install.sh`)
+- Um hook verifica novas versões diariamente via GitHub API (configurado automaticamente pelo `scripts/install.sh`)
 - Você controla quando atualizar — o sistema apenas notifica, nunca atualiza automaticamente
 - Downgrade para qualquer versão: `.claude/dev-team-agents/scripts/install.sh v1.0.0`
 

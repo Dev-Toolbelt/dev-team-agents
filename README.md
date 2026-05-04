@@ -65,7 +65,7 @@ After installation, `.claude/` will contain:
 
 ```
 .claude/
-├── dev-team-agents/   ← cloned repository (source of truth)
+├── dev-team-agents/   ← extracted from tarball (no .git folder — safe to commit)
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -77,18 +77,22 @@ After installation, `.claude/` will contain:
 
 ---
 
-## .gitignore Recommendation
+## Committing to Your Project
 
-You can choose to commit `.claude/dev-team-agents/` (version-locked, reproducible) or ignore it (always fetched fresh). The agents and skills symlinks should follow the same decision.
+Because `install.sh` downloads a tarball (not a git clone), `.claude/dev-team-agents/` contains no nested `.git` folder. **Commit it directly** — your whole team gets the agents and skills on `git pull`, no extra setup step needed.
+
+```bash
+git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/settings.json
+git commit -m "chore: add dev-team-agents"
+```
+
+If you prefer each developer to install locally instead (e.g. for a personal/experimental setup), add the following to `.gitignore`:
 
 ```gitignore
-# Option A: ignore the installation (each developer installs locally)
+# Optional: ignore the installation (each developer installs locally)
 .claude/dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
-
-# Option B: commit everything (version-locked in repo)
-# (no entry needed — git will track it)
 ```
 
 ---
@@ -98,7 +102,7 @@ You can choose to commit `.claude/dev-team-agents/` (version-locked, reproducibl
 This repository uses **semantic versioning via git tags** (`v1.0.0`, `v1.1.0`, `v2.0.0`).
 
 - Updates are released as tags — no auto-update on every commit
-- A session-start hook checks for new tags daily (configured automatically by `scripts/install.sh`)
+- A hook checks for new versions daily via the GitHub API (configured automatically by `scripts/install.sh`)
 - You control when to update — the system only notifies, never auto-updates
 - Downgrade to any version: `.claude/dev-team-agents/scripts/install.sh v1.0.0`
 
