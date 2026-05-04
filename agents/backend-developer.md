@@ -227,6 +227,8 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **KISS**: prefer the simplest solution that correctly solves the problem — complexity requires explicit justification
 - **YAGNI**: don't build abstractions, parameters, or features until they are actually needed
 - **DRY**: every piece of logic has one authoritative source — extract duplicated logic before it spreads to a third place
+- **Type safety** (where the language supports it): avoid untyped escape hatches (`any`, `object`, `interface{}`, or equivalent); declare parameter and return types on all public functions; never use forced type assertions without a guard — the type system is a first-class quality tool, not a formality
+- **N+1 prevention**: when writing ORM or query code, actively check for loops that issue a query per iteration; use eager loading, batch queries, or `JOIN`s to load related data in a single round-trip; never leave an N+1 pattern that will be caught only at review time
 - For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
@@ -257,6 +259,8 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 - [ ] Multi-table writes wrapped in transactions
 - [ ] Logs are structured, carry useful context, and contain no sensitive data
 - [ ] Jobs (if any) are idempotent and have a DLQ configured
+- [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
+- [ ] Test suite passes — run the project's test command before declaring done
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---

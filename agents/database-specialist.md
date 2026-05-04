@@ -141,6 +141,8 @@ Common N+1 patterns to identify and fix:
 - Counting related records per row → use correlated subqueries or joins
 - Loading full rows when only one column is needed → SELECT only what's needed
 
+**No `SELECT *` in production queries**: always name the columns you need. `SELECT *` returns hidden columns, breaks when the schema changes, prevents index-only scans, and transfers unnecessary data across the wire. The only acceptable use is in exploratory debugging sessions.
+
 **Transaction isolation and deadlocks:**
 - `READ COMMITTED` is correct for most OLTP workloads.
 - Use `REPEATABLE READ` when a transaction must see a consistent snapshot across multiple reads of the same row.

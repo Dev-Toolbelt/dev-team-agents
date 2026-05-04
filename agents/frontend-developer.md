@@ -130,6 +130,8 @@ These apply unless the project overrides in `code-standards.md`:
 - **KISS**: prefer the simplest solution that correctly solves the problem — complexity requires explicit justification
 - **YAGNI**: don't build abstractions, props, or features until they are actually needed
 - **DRY**: every piece of logic has one authoritative source — extract duplicated logic before it spreads to a third place
+- **Type safety** (where the language supports it): avoid untyped escape hatches (`any` or equivalent); declare prop types and return types explicitly; never use forced type assertions without a guard — treat the type system as a first-class quality tool
+- **Prop sprawl**: a component with more than 5–7 props is a design smell — consider decomposing into smaller components, grouping related props into a configuration object, or moving state up or down the tree
 - For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
@@ -253,6 +255,9 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 - [ ] Browser console: no errors; warnings that require disproportionate effort may be skipped but must be noted
 - [ ] No `dangerouslySetInnerHTML` / `v-html` with unsanitized content
 - [ ] No auth tokens or PII stored in `localStorage` / `sessionStorage`
+- [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
+- [ ] Test suite passes — run the project's test command before declaring done
+- [ ] Bundle impact reviewed — no new dependency added without checking its size and necessity
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 
 ---

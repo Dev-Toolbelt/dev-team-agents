@@ -98,6 +98,16 @@ Apply the loaded `skills/shared/comments-policy/SKILL.md`:
 - Missing required type annotations or `@throws` / exception docs where the type system can't express the type
 - Tests missing the AAA pattern (`// Arrange`, `// Act`, `// Assert`)
 
+### 10. Type Safety
+
+Applies to languages with a static type system (TypeScript, Java, C#, Go, Kotlin, Swift, Rust, Python with type hints, etc.). Skip this category for dynamically typed languages with no type system in use.
+
+- **Untyped / escape-hatch usage**: `any`, `object`, `interface{}`, `dynamic`, `unsafe`, or equivalent — flag unless there is a documented reason why the type system cannot express the constraint
+- **Untyped function signatures**: functions without declared parameter types or return types; callers cannot reason about the contract without reading the implementation
+- **Forced type assertions without a guard**: `value as Type`, `value!`, or unchecked casts that bypass the type checker — they silently break at runtime if the assumption is wrong
+- **Mutation of function arguments**: modifying an input parameter creates invisible side effects on the caller's data; flag unless the signature explicitly signals mutation (pointer receiver, `ref`, `inout`, etc.)
+- **Implicit `null` / `undefined` paths**: optional values dereferenced without a null check; optional chaining that hides a required value rather than handling absence explicitly
+
 ---
 
 ## SonarQube Integration
