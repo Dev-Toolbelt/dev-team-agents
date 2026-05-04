@@ -52,14 +52,14 @@ if [ "$VERSION" = "latest" ]; then
     _releases_json=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
     RESOLVED=$(echo "$_releases_json" \
         | grep '"tag_name"' | head -1 \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
 
     # Fallback: tags list (repo has tags but no formal release)
     if [ -z "$RESOLVED" ]; then
         _tags_json=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
         RESOLVED=$(echo "$_tags_json" \
             | grep '"name"' | head -1 \
-            | sed 's/.*"name": *"\([^"]*\)".*/\1/')
+            | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
     fi
 
     # Fallback: main branch (no tags yet)
@@ -128,11 +128,12 @@ mkdir -p "$SKILLS_TARGET"
 
 # ── Step 4: Link agents ───────────────────────────────────────────
 AGENTS_LINK="$AGENTS_TARGET/dev-team"
-if [ -L "$AGENTS_LINK" ]; then
-    rm "$AGENTS_LINK"
+if [ ! -L "$AGENTS_LINK" ] && [ ! -e "$AGENTS_LINK" ]; then
+    ln -s "../dev-team-agents/agents" "$AGENTS_LINK"
+    echo "→ Agents linked: .claude/agents/dev-team/"
+else
+    echo "→ Agents already linked: .claude/agents/dev-team/ (skipped)"
 fi
-ln -s "../dev-team-agents/agents" "$AGENTS_LINK"
-echo "→ Agents linked: .claude/agents/dev-team/"
 
 # ── Step 5: Link skills ───────────────────────────────────────────
 for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
@@ -140,10 +141,7 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
         [ -d "$SKILL_DIR" ] || continue
         SKILL_NAME=$(basename "$SKILL_DIR")
         SKILL_TARGET_PATH="$SKILLS_TARGET/$SKILL_NAME"
-        if [ -L "$SKILL_TARGET_PATH" ]; then
-            rm "$SKILL_TARGET_PATH"
-        fi
-        if [ ! -e "$SKILL_TARGET_PATH" ]; then
+        if [ ! -L "$SKILL_TARGET_PATH" ] && [ ! -e "$SKILL_TARGET_PATH" ]; then
             REL_SKILL="${SKILL_DIR#$INSTALL_DIR/}"
             REL_SKILL="${REL_SKILL%/}"
             ln -s "../dev-team-agents/${REL_SKILL}" "$SKILL_TARGET_PATH"
@@ -158,8 +156,7 @@ FRONTEND_DESIGN_SRC="$HOME/.claude/plugins/marketplaces/claude-plugins-official/
 FRONTEND_DESIGN_DEST="$SKILLS_TARGET/frontend-design"
 
 if [ -d "$FRONTEND_DESIGN_SRC" ]; then
-    if [ -L "$FRONTEND_DESIGN_DEST" ]; then rm "$FRONTEND_DESIGN_DEST"; fi
-    if [ ! -e "$FRONTEND_DESIGN_DEST" ]; then
+    if [ ! -L "$FRONTEND_DESIGN_DEST" ] && [ ! -e "$FRONTEND_DESIGN_DEST" ]; then
         ln -s "$FRONTEND_DESIGN_SRC" "$FRONTEND_DESIGN_DEST"
     fi
     echo "→ frontend-design skill linked: .claude/skills/frontend-design/"
