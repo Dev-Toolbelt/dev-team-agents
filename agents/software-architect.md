@@ -26,6 +26,8 @@ Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2
 
 Load the `adr` skill before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
 
+Load the `discovery-mode` skill (`skills/shared/discovery-mode/SKILL.md`) when acting in DISCOVERY — apply its HARD-GATE, 2-3 approaches proposal, incremental validation, spec self-review, and user review gate before finalizing any architecture document.
+
 Load the `api-design` skill (`skills/architecture/api-design/SKILL.md`) before authoring `api-contracts.md` — it covers REST resource naming, HTTP semantics, versioning, error responses, pagination, and GraphQL schema conventions.
 
 Load the `design-patterns` skill (`skills/architecture/design-patterns/SKILL.md`) before authoring `code-standards.md` — it provides SOLID principles, GoF patterns, domain-driven patterns, and anti-patterns reference for the chosen stack.
@@ -36,7 +38,9 @@ Load the `design-patterns` skill (`skills/architecture/design-patterns/SKILL.md`
 
 ### In DISCOVERY (after product-analyst closes scope)
 
-Produce `.claude/docs/development/` with:
+**Step 1 — Propose 2-3 architectural approaches** before producing any document. For each significant decision (overall architecture style, tech stack direction, data strategy), present 2-3 options with trade-offs and lead with your recommendation. Ask one section at a time and wait for alignment before advancing to the next. Apply YAGNI — do not propose complexity that isn't justified by the closed scope.
+
+**Step 2 — Produce docs** once the approach is aligned:
 
 **`architecture.md`** — system design, layers, component boundaries, integration patterns. Write ADRs for every significant decision. Template from `adr` skill.
 
@@ -47,6 +51,14 @@ Produce `.claude/docs/development/` with:
 **`database.md`** — database choice, schema strategy, migration approach, indexing guidelines.
 
 **`api-contracts.md`** — API design decisions: REST vs GraphQL, versioning, auth, response format.
+
+**Step 3 — Spec self-review** — after writing all docs, silently check for: placeholders/TODOs, internal contradictions between documents, ambiguous decisions, YAGNI violations, and scope creep. Fix inline.
+
+**Step 4 — User review gate** — ask the user to review before proceeding:
+
+> "Architecture documents written to `.claude/docs/development/`. Please review them and let me know if anything needs to change before development starts."
+
+Wait for explicit approval. Apply changes and re-run self-review if requested.
 
 ### In QUALITY GATE
 
