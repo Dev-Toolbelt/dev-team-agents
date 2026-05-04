@@ -80,6 +80,19 @@ This ensures multi-agent workflows ask the worktree question exactly once.
 - Max ~500 lines; move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
 
+#### Token Efficiency
+
+All agents should apply token-efficient patterns by default. The canonical reference is `skills/shared/token-efficiency/SKILL.md`. Load it explicitly when:
+- Authoring or reviewing a coding agent that reads many files
+- Optimizing a workflow that involves large output or log files
+- Guiding model selection for multi-step tasks (Opus → understand, Sonnet → execute)
+
+Key rules (apply without loading the full skill):
+- Prefer `grep`/`head`/`tail` over reading entire files
+- Prefer `cp`/`sed`/`awk` bash commands over Read + Write for large or repetitive file operations
+- Summarize command output instead of dumping raw content
+- Use `--quiet`/`-q` flags by default
+
 #### User-Invocable Skills
 
 Skills that users trigger directly via slash command must be registered here:
