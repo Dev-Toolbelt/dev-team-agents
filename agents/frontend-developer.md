@@ -126,6 +126,10 @@ These apply unless the project overrides in `code-standards.md`:
 - **Loading states**: every API call or async operation must show a loading indicator while in flight — skeleton, spinner, disabled button, or equivalent; the implementation depends on context but user feedback is mandatory
 - **Page metadata**: update `<title>`, meta description, Open Graph tags, and favicon whenever the page or its context changes; use the framework's head manager (React Helmet, VueUse/head, Nuxt `useHead`, Angular `Title`/`Meta`, etc.)
 - **package.json metadata**: keep `name`, `version`, `description`, `author`, and `homepage` accurate and up to date
+- **KISS**: prefer the simplest solution that correctly solves the problem — complexity requires explicit justification
+- **YAGNI**: don't build abstractions, props, or features until they are actually needed
+- **DRY**: every piece of logic has one authoritative source — extract duplicated logic before it spreads to a third place
+- For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---

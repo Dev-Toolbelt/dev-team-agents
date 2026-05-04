@@ -120,6 +120,9 @@ These apply unless the project defines otherwise:
 - **Interface segregation**: use interfaces/contracts for services and repositories when the project has meaningful complexity or a test culture that benefits from mocking; skip in simple CRUD projects where the abstraction adds ceremony without value
 - **Immutable domain objects**: prefer entities and value objects without setters in domain-heavy or DDD-influenced projects; in simpler data-centric projects, pragmatic mutability is acceptable if the team can maintain consistency
 - **Explicit over implicit**: configuration over magic, named over positional
+- **KISS**: architectural decisions must be as simple as the problem allows — every layer of complexity requires justification
+- **YAGNI**: don't design for requirements that don't exist yet — extend the architecture when the need arises, not in advance
+- **DRY**: one source of truth per concept — avoid parallel decision trees, duplicated configuration, and redundant documentation
 
 If the project uses a different architecture (hexagonal, event-driven, etc.), document it in `architecture.md` and all other agents will follow it.
 

@@ -1,9 +1,39 @@
 ---
 name: design-patterns
-description: Software design patterns reference and guidance. Use when deciding how to structure code, solve recurring design problems, or review architectural decisions. Covers GoF patterns, SOLID principles, and domain-driven patterns.
+description: Software design patterns reference and guidance. Use when deciding how to structure code, solve recurring design problems, or review architectural decisions. Covers KISS, YAGNI, DRY, SOLID principles, GoF patterns, and domain-driven patterns.
 ---
 
 # Design Patterns
+
+## Pragmatic Engineering Principles
+
+These principles apply at every layer of the stack, independent of language or framework.
+
+| Principle | Rule | Violated when... |
+|-----------|------|------------------|
+| **KISS** — Keep It Simple | Prefer the simplest solution that correctly solves the problem | A simpler approach exists but a more complex one was chosen without justification |
+| **YAGNI** — You Aren't Gonna Need It | Don't build features, abstractions, or generalization until they are actually needed | Code is written for a hypothetical future requirement that doesn't exist yet |
+| **DRY** — Don't Repeat Yourself | Every piece of knowledge has a single, authoritative representation | Logic, validation rules, or configuration are duplicated across two or more places |
+
+### KISS — Observable violations
+- Multiple layers of indirection for a straight-line operation
+- Abstract base classes or interfaces with a single implementation
+- Configuration system for a value that never changes
+- Helper utilities that wrap a single built-in function call
+
+### YAGNI — Observable violations
+- Methods, parameters, or flags added "for future use"
+- Generic or pluggable architecture for a system with one known use case
+- Premature abstraction before a second consumer exists
+- Feature flags or extension points with no current users
+
+### DRY — Observable violations
+- Copy-pasted logic across two or more files
+- Identical validation rules defined independently per endpoint or form
+- Hardcoded values (strings, numbers, URLs) repeated in multiple places
+- Parallel data structures that must be kept manually in sync
+
+---
 
 ## SOLID Principles
 

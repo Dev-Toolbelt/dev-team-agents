@@ -210,6 +210,10 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **Errors fail loudly**: don't suppress exceptions silently
 - **Transactions for multi-table writes**: wrap any operation that writes to more than one table in a database transaction — partial failures must never leave data in an inconsistent state
 - **Structured logging**: emit structured logs (JSON) to stdout; never log sensitive data (passwords, tokens, PII); always include context fields (`user_id`, `request_id`, `job_id` where applicable); log at the right level (`debug` for internal detail, `info` for significant events, `error` for failures)
+- **KISS**: prefer the simplest solution that correctly solves the problem — complexity requires explicit justification
+- **YAGNI**: don't build abstractions, parameters, or features until they are actually needed
+- **DRY**: every piece of logic has one authoritative source — extract duplicated logic before it spreads to a third place
+- For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---

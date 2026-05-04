@@ -61,6 +61,9 @@ Before reviewing anything:
 - Anti-patterns: God Objects, Feature Envy, Primitive Obsession, Shotgun Surgery
 - Inappropriate use of static methods or global state
 - Business logic leaking into controllers or views
+- **KISS violations**: unnecessary indirection, abstractions with a single implementation, over-engineered solutions for straightforward problems
+- **YAGNI violations**: unused parameters or flags added "for future use", premature generalization, speculative features or extension points with no current consumer
+- For full reference on these principles, load `skills/architecture/design-patterns/SKILL.md`
 
 ### 6. Linting & Style
 Run available linters via Bash before commenting on style:
