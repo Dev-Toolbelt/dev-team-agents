@@ -189,6 +189,7 @@ When producing `database.md`:
 When producing migration files, seed scripts, or query helpers:
 
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
+- **Commit messages**: load `skills/shared/conventional-commits/SKILL.md` before committing — migration commits must follow the project's commit convention
 
 ---
 

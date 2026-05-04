@@ -26,6 +26,8 @@ Before any validation:
 
 Load `test-strategy` skill before planning validation — use it to decide what to prioritize and how to structure the QA report coverage.
 
+Load `security-checklist` skill to validate security behavior as part of QA — auth flows, input validation, access control, and sensitive data exposure are QA concerns, not only security-specialist concerns.
+
 ---
 
 ## What You Validate
