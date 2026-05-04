@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -147,8 +147,13 @@ done
 echo "🧠 Running Graphify..."
 graphify update graphify-src
 
+# graphify always outputs to graphify-out; rename to configured outputPath if different
+if [ "graphify-src/graphify-out" != "graphify-src/$OUTPUT_PATH" ] && [ -d "graphify-src/graphify-out" ]; then
+  mv "graphify-src/graphify-out" "graphify-src/$OUTPUT_PATH"
+fi
+
 if [ ! -d "graphify-src/$OUTPUT_PATH" ]; then
-  echo "❌ Graphify did not produce 'graphify-src/$OUTPUT_PATH'."
+  echo "❌ Graphify did not produce output at 'graphify-src/$OUTPUT_PATH'."
   exit 1
 fi
 
