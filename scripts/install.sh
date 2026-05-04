@@ -120,7 +120,7 @@ AGENTS_LINK="$AGENTS_TARGET/dev-team"
 if [ -L "$AGENTS_LINK" ]; then
     rm "$AGENTS_LINK"
 fi
-ln -s "$INSTALL_DIR/agents" "$AGENTS_LINK"
+ln -s "../dev-team-agents/agents" "$AGENTS_LINK"
 echo "→ Agents linked: .claude/agents/dev-team/"
 
 # ── Step 5: Link skills ───────────────────────────────────────────
@@ -133,7 +133,9 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
             rm "$SKILL_TARGET_PATH"
         fi
         if [ ! -e "$SKILL_TARGET_PATH" ]; then
-            ln -s "$SKILL_DIR" "$SKILL_TARGET_PATH"
+            REL_SKILL="${SKILL_DIR#$INSTALL_DIR/}"
+            REL_SKILL="${REL_SKILL%/}"
+            ln -s "../dev-team-agents/${REL_SKILL}" "$SKILL_TARGET_PATH"
         fi
     done
 done
@@ -160,6 +162,13 @@ else
     echo "  │    3. Re-run this installer to pick it up automatically        │"
     echo "  └─────────────────────────────────────────────────────────────────┘"
     echo ""
+fi
+
+# ── Step 5c: Ignore machine-specific symlinks in .claude/skills/ ─────
+# frontend-design points to an absolute $HOME path — must not be committed.
+SKILLS_GITIGNORE="$SKILLS_TARGET/.gitignore"
+if ! grep -qxF "frontend-design" "$SKILLS_GITIGNORE" 2>/dev/null; then
+    echo "frontend-design" >> "$SKILLS_GITIGNORE"
 fi
 
 # ── Step 6: Configure update-check hook in .claude/settings.json ─
