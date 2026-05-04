@@ -151,7 +151,12 @@ All agents read the project's own context first. Project-specific rules in `CLAU
 When all quality gate agents report no blocking findings:
 
 1. `technical-writer` — generate changelog and update documentation
-2. `devops-specialist` — confirm deploy readiness
-3. Hand off to the team for final merge and deploy
+2. `devops-specialist` — confirm deploy readiness and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
+
+If GitHub is configured and `gh` is installed:
+```
+Prompt: "Please open a PR for these changes."
+         → Agent will present a plan and ask for consent before creating the PR.
+```
 
 The workflow is complete when the quality gate passes and the deploy is confirmed. There is no automated completion signal — the decision is yours.

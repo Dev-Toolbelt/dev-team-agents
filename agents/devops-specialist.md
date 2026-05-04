@@ -186,6 +186,22 @@ Match infrastructure to actual need:
 
 ---
 
+## SHIP
+
+When invoked as the SHIP agent after the quality gate passes:
+
+1. Confirm deploy readiness using the checklist above.
+2. Determine the safest deploy strategy for the change (rolling update / blue-green / canary / direct).
+3. **PR creation** — if `gh` is available and the project has a GitHub remote:
+   - Offer to open a PR for the changes.
+   - Present a plan (title, base branch, description outline) and **ask for user consent** before creating it.
+   - Create the PR only after explicit approval.
+4. Hand off to the user for final merge and deploy decision.
+
+> Skip PR creation only if the user explicitly asks to skip it, or if `gh` is not installed and no GitHub remote is detected.
+
+---
+
 ## Code Standards
 
 When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-code:

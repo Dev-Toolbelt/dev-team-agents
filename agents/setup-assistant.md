@@ -260,7 +260,7 @@ After all execution agents complete their work, **always run the following seque
 1. **QUALITY GATE** — invoke `qa-specialist` + (if tests required) `backend-test-specialist` and/or `frontend-test-specialist` to validate correctness, coverage, and acceptance criteria
 2. **SHIP** — invoke `devops-specialist` to review deploy readiness, then hand off to the user for final approval and merge/deploy
 
-This sequence is mandatory — never skip it, even for small tasks.
+This sequence is mandatory — never skip it, even for small tasks — unless the user explicitly asks to skip it.
 
 ### Workflow
 [A: new project | B: inherited | C: maintenance]

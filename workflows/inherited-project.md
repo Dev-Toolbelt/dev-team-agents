@@ -119,7 +119,14 @@ The audit phase may discover that the existing project has conventions and patte
 When the backlog is approved, the gap analysis is done, and development + quality gate have completed:
 
 1. `technical-writer` — generate initial documentation (architecture summary, API reference if applicable)
-2. `devops-specialist` — confirm the environment is ready for the first delivery
-3. Hand off to the team for final review and deployment
+2. `devops-specialist` — confirm the environment is ready for the first delivery and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
+
+If GitHub is configured and `gh` is installed:
+```
+Prompt: "Please open a PR for these changes."
+         → Agent will present a plan and ask for consent before creating the PR.
+```
+
+Hand off to the team for final review and deployment.
 
 The workflow is complete when the client confirms the delivered scope meets the agreed acceptance criteria. There is no automated completion signal — the decision is yours.
