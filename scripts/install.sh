@@ -49,13 +49,15 @@ fi
 
 # ── Step 1: Resolve version via GitHub API ────────────────────────
 if [ "$VERSION" = "latest" ]; then
-    RESOLVED=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null \
+    _releases_json=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
+    RESOLVED=$(echo "$_releases_json" \
         | grep '"tag_name"' | head -1 \
         | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 
     # Fallback: tags list (repo has tags but no formal release)
     if [ -z "$RESOLVED" ]; then
-        RESOLVED=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null \
+        _tags_json=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
+        RESOLVED=$(echo "$_tags_json" \
             | grep '"name"' | head -1 \
             | sed 's/.*"name": *"\([^"]*\)".*/\1/')
     fi
