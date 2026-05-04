@@ -9,7 +9,7 @@ LAST_CHECK_FILE="$INSTALL_DIR/.last-update-check"
 VERSION_FILE="$INSTALL_DIR/.installed-version"
 TWENTY_FOUR_HOURS=86400
 
-GITHUB_OWNER="vaironaegos"
+GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
 GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
 

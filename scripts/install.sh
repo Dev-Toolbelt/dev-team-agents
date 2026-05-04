@@ -5,7 +5,7 @@
 # into .claude/ inside your project (not globally into ~/.claude/).
 #
 # Usage (from project root):
-#   curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash
 #   bash <(curl -sSL ...) v1.2.0                       # specific version
 #   .claude/dev-team-agents/scripts/install.sh latest  # update after first install
 #
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-GITHUB_OWNER="vaironaegos"
+GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
 GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
 

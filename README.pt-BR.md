@@ -40,13 +40,13 @@ O `dev-team-agents` instala **dentro do seu projeto** em `.claude/`, não global
 Execute a partir da **raiz do seu projeto**:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash
 ```
 
 ### Instalar uma versão específica
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash -s v1.0.0
+curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash -s v1.0.0
 ```
 
 ### Atualizar para a versão mais recente (após a primeira instalação)

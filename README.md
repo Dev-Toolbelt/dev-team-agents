@@ -40,13 +40,13 @@ A set of Claude Code agents and skills that form a complete software development
 Run from your **project root**:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash
 ```
 
 ### Install a specific version
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash -s v1.0.0
+curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash -s v1.0.0
 ```
 
 ### Update to latest (after first install)
