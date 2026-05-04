@@ -5,6 +5,17 @@ description: Pull Request review checklist and standards. Use when reviewing or 
 
 # Pull Request Review
 
+## PR Creation Standards
+
+Apply these rules whenever creating or drafting a pull request:
+
+- **Language**: all PR text (title, summary, bullet points, test plan) must be written in **English**.
+- **No Claude attribution**: do not include "🤖 Generated with Claude Code", "Co-Authored-By: Claude", or any other mention of Claude or AI tooling in the PR body, title, or commit messages.
+- **Authorship**: the PR and its commits must reflect only the authenticated git user. Never add Claude as a co-author or contributor.
+- **Content**: PR descriptions should reflect what the human developer is shipping — written as if authored entirely by the team.
+
+---
+
 ## Before Reviewing
 
 Read in order:

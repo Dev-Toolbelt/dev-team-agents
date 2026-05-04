@@ -172,7 +172,7 @@ When producing `database.md`:
 
 When producing migration files, seed scripts, or query helpers:
 
-- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
 
 ---
 

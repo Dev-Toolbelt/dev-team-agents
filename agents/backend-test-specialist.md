@@ -65,7 +65,7 @@ Load and apply the `test-strategy` and `test-pyramid` skills.
 
 ## Test Quality Standards
 
-- **Code comments**: follow `skills/shared/comments-policy.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 - Tests must be **deterministic**: same result every run, no sleep(), no random data without seed
 - Tests must be **isolated**: no shared state between tests, each owns its setup and teardown
 - **Meaningful assertions**: assert the outcome that matters, not just "it didn't throw"

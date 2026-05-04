@@ -110,7 +110,7 @@ These apply unless the project overrides in `code-standards.md`:
 - **Loading states**: every API call or async operation must show a loading indicator while in flight — skeleton, spinner, disabled button, or equivalent; the implementation depends on context but user feedback is mandatory
 - **Page metadata**: update `<title>`, meta description, Open Graph tags, and favicon whenever the page or its context changes; use the framework's head manager (React Helmet, VueUse/head, Nuxt `useHead`, Angular `Title`/`Meta`, etc.)
 - **package.json metadata**: keep `name`, `version`, `description`, `author`, and `homepage` accurate and up to date
-- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; use type annotations and test AAA markers as specified there
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
 

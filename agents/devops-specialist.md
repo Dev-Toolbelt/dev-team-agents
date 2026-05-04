@@ -166,7 +166,7 @@ Match infrastructure to actual need:
 
 When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-code:
 
-- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
 
 ---
 

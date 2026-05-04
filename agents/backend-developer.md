@@ -194,7 +194,7 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **Errors fail loudly**: don't suppress exceptions silently
 - **Transactions for multi-table writes**: wrap any operation that writes to more than one table in a database transaction — partial failures must never leave data in an inconsistent state
 - **Structured logging**: emit structured logs (JSON) to stdout; never log sensitive data (passwords, tokens, PII); always include context fields (`user_id`, `request_id`, `job_id` where applicable); log at the right level (`debug` for internal detail, `info` for significant events, `error` for failures)
-- **Code comments**: follow `skills/shared/comments-policy.md` — default to no comments; use type annotations and test AAA markers as specified there
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
 

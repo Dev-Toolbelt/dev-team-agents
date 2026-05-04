@@ -17,7 +17,7 @@ Before reviewing anything:
 4. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
 5. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
 6. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
-7. Load `skills/shared/comments-policy.md` — use it when reviewing comments in the code under review
+7. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
 8. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs.
@@ -85,7 +85,7 @@ Only flag style issues that linters haven't caught.
 For deep security analysis, defer to the `security-specialist`.
 
 ### 9. Comments
-Apply the loaded `skills/shared/comments-policy.md`:
+Apply the loaded `skills/shared/comments-policy/SKILL.md`:
 - Comments explaining WHAT the code does (should be removed — improve the code instead)
 - Commented-out dead code
 - TODO/FIXME comments (should be issue tracker tickets)

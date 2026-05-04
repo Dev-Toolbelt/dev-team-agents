@@ -37,7 +37,7 @@ Follow the [Conventional Commits 1.0.0](https://www.conventionalcommits.org/) sp
 - **Scope**: noun in parentheses describing the affected section. **Derive scope from this repository's history** — use folder names under `src/`, `app/`, `packages/`, or whatever the recent `git log` already uses. Do not invent scopes that don't match the repo.
 - **Breaking change**: append `!` after type/scope (`refactor(api)!:`). When `!` is used, the body **must** start with `BREAKING CHANGE:` followed by what breaks and migration notes.
 - **Body**: use when the WHY is not obvious; wrap at 72 characters. Explain motivation and context — the diff already shows what changed.
-- **Footers**: omit unless explicitly requested. Do not add `Co-Authored-By:`, `Reviewed-by:`, `Signed-off-by:`, `Fixes:`, `Closes:`, or similar footers unless the user asks for them.
+- **Footers**: omit unless explicitly requested. Do not add `Co-Authored-By:`, `Reviewed-by:`, `Signed-off-by:`, `Fixes:`, `Closes:`, or similar footers unless the user asks for them. **Never add Claude as co-author** (`Co-Authored-By: Claude` or any variant) — commits must only carry the authenticated git user's authorship.
 
 ## Layered Commits
 

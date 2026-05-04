@@ -168,7 +168,7 @@ server.use(
 
 ## Test Quality Standards
 
-- **Code comments**: follow `skills/shared/comments-policy.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 
 ---
 
