@@ -144,6 +144,31 @@ Example: if the project uses PHPDoc for all methods but our base standard says "
 
 ---
 
+## Docker Development Environment
+
+If the project uses Docker in development, **all commands and scripts must be executed inside the appropriate container** — not on the host machine.
+
+**Detection:** the project uses Docker in development if any of these files exist at the root:
+- `docker-compose.yml`
+- `docker-compose.override.yml`
+- `compose.yml`
+
+**Default behavior when Docker is detected:**
+
+| Task | Command form |
+|------|-------------|
+| Run a script or CLI command | `docker compose exec <service> <command>` |
+| Run a one-off command | `docker compose run --rm <service> <command>` |
+| Access a shell | `docker compose exec <service> sh` (or `bash`) |
+
+- Identify the correct service name from the compose file before running any command (e.g., `app`, `api`, `backend`, `web`)
+- If the containers are not running, start them first: `docker compose up -d`
+- Never install dependencies, run migrations, execute tests, or invoke framework CLIs directly on the host when Docker is the dev environment
+
+**Exception:** if the user explicitly says to run a command outside the container (e.g., "run this on the host", "run locally"), honor that request for that specific command only. Default always reverts to running inside the container.
+
+---
+
 ## What Counts as "Project Context"
 
 - Explicit rules in CLAUDE.md, README.md, AGENTS.md
