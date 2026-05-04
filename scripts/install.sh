@@ -106,10 +106,19 @@ fi
 PREV_CHECK=""
 [ -f "$INSTALL_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$INSTALL_DIR/.last-update-check")
 
+# Replace existing installation (handles tarball and legacy git-clone installs)
+# Uses atomic rename so the running script is never deleted mid-execution.
 mkdir -p "$(dirname "$INSTALL_DIR")"
-rm -rf "$INSTALL_DIR"
-mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-rm -rf "$TMP_DIR"
+if [ -d "$INSTALL_DIR" ]; then
+    [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
+    OLD_INSTALL="${INSTALL_DIR}.old.$$"
+    mv "$INSTALL_DIR" "$OLD_INSTALL"
+    mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
+    rm -rf "$OLD_INSTALL" "$TMP_DIR"
+else
+    mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
+    rm -rf "$TMP_DIR"
+fi
 
 # ── Step 3: Create target directories ────────────────────────────
 mkdir -p "$AGENTS_TARGET"
@@ -233,3 +242,17 @@ echo "  4. To pin a version: .claude/dev-team-agents/scripts/install.sh v1.0.0"
 echo ""
 echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"
+echo ""
+echo "  ┌─────────────────────────────────────────────────────────────────────┐"
+echo "  │  💡 Want to cut your token costs by up to 80%?                      │"
+echo "  │                                                                      │"
+echo "  │  Graphify builds a knowledge graph of your codebase so Claude        │"
+echo "  │  can answer questions and navigate code without reading every file.  │"
+echo "  │  Fewer tokens per task. Faster responses. Richer context.            │"
+echo "  │                                                                      │"
+echo "  │  To activate it, just tell Claude:                                   │"
+echo "  │    \"Set up Graphify for this project\"                               │"
+echo "  │                                                                      │"
+echo "  │  Claude will detect your OS, install all dependencies, and           │"
+echo "  │  configure everything automatically. Takes under 2 minutes.          │"
+echo "  └─────────────────────────────────────────────────────────────────────┘"

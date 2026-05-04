@@ -84,6 +84,29 @@ Ask only the relevant questions for the project type:
   - If yes: configure read-only access. Agents read tasks but only write with explicit user consent.
   - Instruct user on how to configure the relevant MCP (do not store credentials — map what's needed)
 
+**Graphify (context graph — opt-in) — ask this last, after all other questions:**
+
+> ⚠️ This question must always be asked at the end of Step 3, after all type-specific questions have been answered and all project context has been gathered. The `graphify-setup` skill benefits from knowing the full project stack, structure, and configuration before it runs.
+
+Ask the user:
+
+> 💡 **Want to dramatically reduce token costs on this project?**
+>
+> Graphify builds a knowledge graph of your codebase. Instead of reading dozens of files every task, Claude queries the graph — typically **60–80% fewer tokens**, faster responses, and richer context that persists across sessions.
+>
+> Set up Graphify now? **yes** / **no**
+
+- **yes** → invoke the `graphify-setup` skill immediately after this question. It will install dependencies, generate `.claude/dev-team-agents/scripts/graphify.json` using the project context already gathered, set up the auto-rebuild Stop hook, and add the Context Navigation section to `CLAUDE.md`.
+- **no** → display this message and continue:
+
+  > No worries! Whenever you change your mind, just tell Claude:
+  > **"Set up Graphify for this project"**
+  >
+  > The `graphify-setup` skill will walk you through everything — dependencies, config,
+  > and first build — in under 2 minutes. Your future self will thank you. 🚀
+
+Record the answer in CLAUDE.md as `GRAPHIFY: [enabled|disabled]`.
+
 ### Step 4 — Present Setup Plan
 
 Before creating any file, present a plan using `templates/plan-template.md`:
@@ -138,6 +161,7 @@ After approval, if a CLAUDE.md already exists, **append** a `## dev-team-agents`
 PROJECT_TYPE: [new|inherited|maintenance]
 TESTS_REQUIRED: [yes|no]
 CICD_PLATFORM: [github-actions|bitbucket|gitlab|jenkins|other]
+GRAPHIFY: [enabled|disabled]
 BACKLOG_LOCATION: [local|github-issues|gitlab-issues|jira|linear|clickup|other]
 CLOUD_PROVIDER: [aws|gcp|azure|vps|none]
 ISSUE_TRACKER: [none|github-projects|jira|linear|clickup|trello|other]
@@ -200,6 +224,25 @@ This sequence is mandatory — never skip it, even for small tasks.
 ### Language
 All generated documents must be in English unless explicitly overridden per document.
 ```
+
+### Step 5b — Inject Context Navigation Section (Graphify=enabled only)
+
+If the user opted in to Graphify **and** the `graphify-setup` skill has completed successfully, append this section to `CLAUDE.md` (only if not already present):
+
+```markdown
+## Context Navigation (Graphify)
+
+**3-Layer Query Rule:**
+1. Query `.graphify/graph.json` or `GRAPH_REPORT.md` for structure and relationships
+2. Check `.claude/docs/` for decisions and context
+3. Read raw source files only when editing or when layers 1–2 lack the answer
+
+**Rebuild:** always use `scripts/graphify-refresh.sh` — never `graphify update .` directly.
+Rebuild runs automatically after each Claude session via the Stop hook.
+Manual rebuild needed after: new modules/services, structural reorganization, or domain flow changes.
+```
+
+---
 
 ### Step 6 — Create Directory Structure
 
