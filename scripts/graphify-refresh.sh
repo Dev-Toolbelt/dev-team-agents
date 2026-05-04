@@ -32,7 +32,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 0
 fi
 
-OUTPUT_PATH=$(jq -r '.outputPath // ".graphify"' "$CONFIG_FILE")
+OUTPUT_PATH="graphify-out"
 
 SOURCES=()
 while IFS= read -r line; do
@@ -146,11 +146,6 @@ done
 
 echo "🧠 Running Graphify..."
 graphify update graphify-src
-
-# graphify always outputs to graphify-out; rename to configured outputPath if different
-if [ "graphify-src/graphify-out" != "graphify-src/$OUTPUT_PATH" ] && [ -d "graphify-src/graphify-out" ]; then
-  mv "graphify-src/graphify-out" "graphify-src/$OUTPUT_PATH"
-fi
 
 if [ ! -d "graphify-src/$OUTPUT_PATH" ]; then
   echo "❌ Graphify did not produce output at 'graphify-src/$OUTPUT_PATH'."

@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/dev-team-agents/scripts/graphify.json, configures the Stop hook in the project .claude/settings.json, adds .graphify/cache/ to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
+description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/dev-team-agents/scripts/graphify.json, configures the Stop hook in the project .claude/settings.json, adds graphify-out/.last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
 ---
 
 ## Purpose
@@ -131,7 +131,6 @@ Create the config file at `.claude/dev-team-agents/scripts/graphify.json` — th
 
 ```json
 {
-  "outputPath": ".graphify",
   "targetPaths": ["<inferred-dir1>", "<inferred-dir2>"],
   "manifestPaths": ["<inferred-manifest1>"]
 }
@@ -172,10 +171,10 @@ Use the `update-config` skill if available to safely merge settings. Otherwise m
 
 ## Step 7 — Update .gitignore
 
-Add `.graphify/cache/` to the project's `.gitignore` (the rest of `.graphify/` is versioned):
+Add `graphify-out/.last-run` to the project's `.gitignore` (the rest of `graphify-out/` is versioned):
 
 ```bash
-grep -qxF '.graphify/cache/' .gitignore 2>/dev/null || echo '.graphify/cache/' >> .gitignore
+grep -qxF 'graphify-out/.last-run' .gitignore 2>/dev/null || echo 'graphify-out/.last-run' >> .gitignore
 ```
 
 ---
@@ -186,7 +185,7 @@ grep -qxF '.graphify/cache/' .gitignore 2>/dev/null || echo '.graphify/cache/' >
 bash .claude/dev-team-agents/scripts/graphify-refresh.sh
 ```
 
-If the build succeeds, `.graphify/` will be created at the project root.
+If the build succeeds, `graphify-out/` will be created at the project root.
 
 If it fails, diagnose the error:
 
@@ -207,7 +206,7 @@ Check if the project `CLAUDE.md` already contains a `## Context Navigation (Grap
 ## Context Navigation (Graphify)
 
 **3-Layer Query Rule:**
-1. Query `.graphify/graph.json` or `GRAPH_REPORT.md` for structure and relationships
+1. Query `graphify-out/graph.json` or `GRAPH_REPORT.md` for structure and relationships
 2. Check `.claude/docs/` for decisions and context
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
@@ -225,8 +224,8 @@ Report to the user:
 ```
 ✅ Graphify is set up for this project.
 
-  Knowledge graph : .graphify/  (versioned)
-  Cache           : .graphify/cache/  (gitignored)
+  Knowledge graph : graphify-out/  (versioned)
+  Last-run marker : graphify-out/.last-run  (gitignored)
   Config          : .claude/dev-team-agents/scripts/graphify.json
   Auto-rebuild    : Stop hook → .claude/dev-team-agents/scripts/graphify-refresh.sh
 
