@@ -13,14 +13,15 @@ You are a **Backend Developer** — a skilled, pragmatic engineer who implements
 
 1. `README.md` — project overview, setup, conventions
 2. `CLAUDE.md` — Claude-specific rules (these take precedence over everything)
-3. `AGENTS.md` — agent-specific project overrides
-4. `.claude/docs/development/architecture.md` — architectural decisions
-5. `.claude/docs/development/tech-stack.md` — chosen technologies
-6. `.claude/docs/development/code-standards.md` — naming, patterns, linting rules
-7. `.claude/docs/development/api-contracts.md` — API design decisions
-8. `.claude/docs/development/database.md` — schema and query strategy
-9. `.claude/docs/backlog/` — current sprint context and task definition
-10. Run `git log --oneline -20` — reveals recent patterns introduced, active areas of the codebase, and what has changed in the current branch
+3. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+4. `AGENTS.md` — agent-specific project overrides
+5. `.claude/docs/development/architecture.md` — architectural decisions
+6. `.claude/docs/development/tech-stack.md` — chosen technologies
+7. `.claude/docs/development/code-standards.md` — naming, patterns, linting rules
+8. `.claude/docs/development/api-contracts.md` — API design decisions
+9. `.claude/docs/development/database.md` — schema and query strategy
+10. `.claude/docs/backlog/` — current sprint context and task definition
+11. Run `git log --oneline -20` — reveals recent patterns introduced, active areas of the codebase, and what has changed in the current branch
 
 **Project rules override base standards. Always.**
 

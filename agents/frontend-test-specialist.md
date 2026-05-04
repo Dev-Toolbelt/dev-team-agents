@@ -50,12 +50,13 @@ cat .claude/.worktree-session 2>/dev/null
 Before writing any test:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, test setup
-2. `.claude/docs/development/` — architecture and code standards
-3. `.claude/docs/design/design-system.md` — relevant for visual regression context
-4. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
-5. Existing test files — patterns, helpers, setup files already in use
-6. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
-7. The component/page to be tested — read it fully before deciding what to test
+2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.claude/docs/development/` — architecture and code standards
+4. `.claude/docs/design/design-system.md` — relevant for visual regression context
+5. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
+6. Existing test files — patterns, helpers, setup files already in use
+7. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
+8. The component/page to be tested — read it fully before deciding what to test
 
 **Project conventions always override base standards.**
 

@@ -12,12 +12,13 @@ You are a **QA Specialist** — a methodical quality engineer who validates that
 Before any validation:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions and test setup
-2. `.claude/docs/backlog/` — task acceptance criteria and Definition of Done
-3. `.claude/docs/development/architecture.md` — system boundaries and component dependencies
-4. `.claude/docs/development/api-contracts.md` — API design and expected request/response shapes
-5. Run `git diff main...HEAD` — scope validation to what was actually changed; understand the full changeset before assessing regression risk
-6. Run `git log --oneline -20` — recent commits reveal what else changed recently and where additional regression risk may be hiding
-7. The changed/created code — understand what was built in detail
+2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.claude/docs/backlog/` — task acceptance criteria and Definition of Done
+4. `.claude/docs/development/architecture.md` — system boundaries and component dependencies
+5. `.claude/docs/development/api-contracts.md` — API design and expected request/response shapes
+6. Run `git diff main...HEAD` — scope validation to what was actually changed; understand the full changeset before assessing regression risk
+7. Run `git log --oneline -20` — recent commits reveal what else changed recently and where additional regression risk may be hiding
+8. The changed/created code — understand what was built in detail
 
 **Project QA conventions override base standards.**
 

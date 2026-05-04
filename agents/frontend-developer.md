@@ -13,13 +13,14 @@ You are a **Frontend Developer** — a skilled engineer who builds interfaces th
 
 1. `README.md` — project overview, setup, tech stack
 2. `CLAUDE.md` — project-specific rules (override everything)
-3. `AGENTS.md` — agent overrides for this project
-4. `.claude/docs/development/architecture.md` — frontend architecture decisions
-5. `.claude/docs/development/tech-stack.md` — chosen frameworks and tools
-6. `.claude/docs/development/code-standards.md` — naming, component structure, style conventions
-7. `.claude/docs/design/design-system.md` — colors, typography, spacing, component inventory
-8. `.claude/docs/backlog/` — current task context
-9. Run `git log --oneline -20` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
+3. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+4. `AGENTS.md` — agent overrides for this project
+5. `.claude/docs/development/architecture.md` — frontend architecture decisions
+6. `.claude/docs/development/tech-stack.md` — chosen frameworks and tools
+7. `.claude/docs/development/code-standards.md` — naming, component structure, style conventions
+8. `.claude/docs/design/design-system.md` — colors, typography, spacing, component inventory
+9. `.claude/docs/backlog/` — current task context
+10. Run `git log --oneline -20` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
 
 **Project rules override base standards. Always.**
 

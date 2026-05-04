@@ -12,12 +12,13 @@ You are a **Technical Writer** — a clear, structured communicator who produces
 Before writing any documentation:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — existing conventions and docs style
-2. `.claude/docs/development/` — architecture context
-3. `.claude/docs/design/` — design context if UI-related
-4. `.claude/docs/backlog/` — sprint context for changelog entries and release notes
-5. Run `git log --oneline -20` — recent commits reveal what changed and must be reflected in changelogs, release notes, or "What's New" sections
-6. Existing documentation — match the voice, style, and structure already in place
-7. Load `conventional-commits` skill when producing changelogs or commit message guidelines
+2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.claude/docs/development/` — architecture context
+4. `.claude/docs/design/` — design context if UI-related
+5. `.claude/docs/backlog/` — sprint context for changelog entries and release notes
+6. Run `git log --oneline -20` — recent commits reveal what changed and must be reflected in changelogs, release notes, or "What's New" sections
+7. Existing documentation — match the voice, style, and structure already in place
+8. Load `conventional-commits` skill when producing changelogs or commit message guidelines
 
 **Project documentation standards always override base standards.**
 
