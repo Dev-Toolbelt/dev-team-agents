@@ -9,6 +9,10 @@ LAST_CHECK_FILE="$INSTALL_DIR/.last-update-check"
 VERSION_FILE="$INSTALL_DIR/.installed-version"
 TWENTY_FOUR_HOURS=86400
 
+GITHUB_OWNER="vaironaegos"
+GITHUB_REPO="dev-team-agents"
+GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
+
 # Check if within TTL window
 if [ -f "$LAST_CHECK_FILE" ]; then
     LAST_CHECK=$(cat "$LAST_CHECK_FILE")
@@ -19,18 +23,36 @@ if [ -f "$LAST_CHECK_FILE" ]; then
     fi
 fi
 
-# Update timestamp
+# Update timestamp before network call — prevents hammering on bad-network sessions
 date +%s > "$LAST_CHECK_FILE"
 
-# Fetch latest tags (quiet, non-blocking)
-cd "$INSTALL_DIR"
-if ! git fetch --tags --quiet 2>/dev/null; then
-    exit 0  # No network — fail silently
+# HTTP tool detection
+if command -v curl >/dev/null 2>&1; then
+    HTTP_GET() { curl -fsSL "$1"; }
+elif command -v wget >/dev/null 2>&1; then
+    HTTP_GET() { wget -qO- "$1"; }
+else
+    exit 0  # No HTTP tool — silent
 fi
 
+# Fetch latest version via GitHub API
+API_RESP=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
+LATEST=$(printf '%s' "$API_RESP" \
+    | grep '"tag_name"' | head -1 \
+    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+
+# Fallback: tags list (rate-limited or no formal release)
+if [ -z "$LATEST" ]; then
+    API_RESP=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
+    LATEST=$(printf '%s' "$API_RESP" \
+        | grep '"name"' | head -1 \
+        | sed 's/.*"name": *"\([^"]*\)".*/\1/')
+fi
+
+[ -n "$LATEST" ] || exit 0  # No network or rate-limited — silent
+
 # Get versions
-CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || git describe --tags HEAD 2>/dev/null || echo "unknown")
-LATEST=$(git describe --tags "$(git rev-list --tags --max-count=1)" 2>/dev/null || echo "unknown")
+CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 
 if [ "$LATEST" = "unknown" ] || [ "$CURRENT" = "unknown" ]; then
     exit 0

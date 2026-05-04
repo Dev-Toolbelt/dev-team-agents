@@ -5,13 +5,13 @@
 # into .claude/ inside your project (not globally into ~/.claude/).
 #
 # Usage (from project root):
-#   curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/vaironaegos/dev-team-agents/main/scripts/install.sh | bash
 #   bash <(curl -sSL ...) v1.2.0                       # specific version
-#   .claude/dev-team-agents/install.sh latest           # update after first install
+#   .claude/dev-team-agents/scripts/install.sh latest  # update after first install
 #
 # What it does:
-#   1. Clones or updates the repository into .claude/dev-team-agents/
-#   2. Checks out the requested tag
+#   1. Resolves the requested version via the GitHub API
+#   2. Downloads and extracts the release tarball (no .git folder)
 #   3. Symlinks agents/ to .claude/agents/dev-team/
 #   4. Symlinks each skill to .claude/skills/<skill-name>/
 #   5. Configures the update-check hook in .claude/settings.json
@@ -19,7 +19,10 @@
 
 set -euo pipefail
 
-REPO_URL="git@github.com:vaironaegos/dev-team-agents.git"
+GITHUB_OWNER="vaironaegos"
+GITHUB_REPO="dev-team-agents"
+GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
+
 PROJECT_ROOT="$(pwd)"
 INSTALL_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
 AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"
@@ -32,34 +35,81 @@ echo "========================================="
 echo "Project root: $PROJECT_ROOT"
 echo ""
 
-# ── Step 1: Clone or update ───────────────────────────────────────
-if [ -d "$INSTALL_DIR/.git" ]; then
-    echo "→ Updating existing installation at $INSTALL_DIR"
-    cd "$INSTALL_DIR"
-    git fetch --tags --quiet
+# ── HTTP tool detection ───────────────────────────────────────────
+if command -v curl >/dev/null 2>&1; then
+    HTTP_GET()      { curl -fsSL "$1"; }
+    HTTP_GET_FILE() { curl -fsSL -o "$2" "$1"; }
+elif command -v wget >/dev/null 2>&1; then
+    HTTP_GET()      { wget -qO- "$1"; }
+    HTTP_GET_FILE() { wget -qO "$2" "$1"; }
 else
-    echo "→ Cloning repository to .claude/dev-team-agents/"
-    mkdir -p "$PROJECT_ROOT/.claude"
-    git clone "$REPO_URL" "$INSTALL_DIR" --quiet
-    cd "$INSTALL_DIR"
+    echo "ERROR: curl or wget is required but neither was found." >&2
+    exit 1
 fi
 
-# ── Step 2: Resolve version ───────────────────────────────────────
+# ── Step 1: Resolve version via GitHub API ────────────────────────
 if [ "$VERSION" = "latest" ]; then
-    RESOLVED=$(git describe --tags "$(git rev-list --tags --max-count=1)" 2>/dev/null || echo "")
+    RESOLVED=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null \
+        | grep '"tag_name"' | head -1 \
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+
+    # Fallback: tags list (repo has tags but no formal release)
+    if [ -z "$RESOLVED" ]; then
+        RESOLVED=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null \
+            | grep '"name"' | head -1 \
+            | sed 's/.*"name": *"\([^"]*\)".*/\1/')
+    fi
+
+    # Fallback: main branch (no tags yet)
     if [ -z "$RESOLVED" ]; then
         echo "→ No tags found. Using main branch."
-        git checkout main --quiet 2>/dev/null || git checkout master --quiet
         RESOLVED="main"
     else
         echo "→ Installing latest: $RESOLVED"
-        git checkout "$RESOLVED" --quiet
     fi
 else
     echo "→ Installing version: $VERSION"
-    git checkout "$VERSION" --quiet
     RESOLVED="$VERSION"
 fi
+
+# ── Step 2: Download and extract tarball ──────────────────────────
+if [ "$RESOLVED" = "main" ]; then
+    TARBALL_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/archive/refs/heads/main.tar.gz"
+else
+    TARBALL_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/archive/refs/tags/${RESOLVED}.tar.gz"
+fi
+
+TMP_DIR=$(mktemp -d)
+TMP_TAR="$TMP_DIR/archive.tar.gz"
+
+if ! HTTP_GET_FILE "$TARBALL_URL" "$TMP_TAR" 2>/dev/null; then
+    rm -rf "$TMP_DIR"
+    if [ -f "$INSTALL_DIR/.installed-version" ]; then
+        echo "→ No network or download failed. Keeping existing install."
+        exit 0
+    fi
+    echo "ERROR: Failed to download $TARBALL_URL" >&2
+    exit 1
+fi
+
+mkdir -p "$TMP_DIR/extracted"
+tar -xzf "$TMP_TAR" -C "$TMP_DIR/extracted"
+
+EXTRACTED_ROOT=$(find "$TMP_DIR/extracted" -maxdepth 1 -mindepth 1 -type d | head -1)
+if [ -z "$EXTRACTED_ROOT" ]; then
+    rm -rf "$TMP_DIR"
+    echo "ERROR: Tarball extraction produced no directory." >&2
+    exit 1
+fi
+
+# Preserve last-check timestamp across installs
+PREV_CHECK=""
+[ -f "$INSTALL_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$INSTALL_DIR/.last-update-check")
+
+mkdir -p "$(dirname "$INSTALL_DIR")"
+rm -rf "$INSTALL_DIR"
+mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
+rm -rf "$TMP_DIR"
 
 # ── Step 3: Create target directories ────────────────────────────
 mkdir -p "$AGENTS_TARGET"
@@ -146,20 +196,31 @@ fi
 
 # ── Step 7: Record installed version ─────────────────────────────
 echo "$RESOLVED" > "$INSTALL_DIR/.installed-version"
-date +%s > "$INSTALL_DIR/.last-update-check"
+if [ -n "$PREV_CHECK" ]; then
+    echo "$PREV_CHECK" > "$INSTALL_DIR/.last-update-check"
+else
+    date +%s > "$INSTALL_DIR/.last-update-check"
+fi
 
 # ── Step 8: Make scripts executable ──────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
 
 # ── Done ──────────────────────────────────────────────────────────
+if [ -f "$PROJECT_ROOT/.gitignore" ] && grep -q "dev-team-agents" "$PROJECT_ROOT/.gitignore"; then
+    echo ""
+    echo "  NOTE: .gitignore contains 'dev-team-agents'."
+    echo "  The new installer uses tarballs — no nested .git folder."
+    echo "  Consider removing that entry and committing the files instead."
+fi
+
 echo ""
 echo "✓ dev-team-agents $RESOLVED installed in this project"
 echo ""
 echo "Next steps:"
-echo "  1. Add .claude/dev-team-agents/ to your .gitignore (or commit it — your choice)"
+echo "  1. Commit .claude/dev-team-agents/ — no nested .git, safe to commit with the project"
 echo "  2. Run the setup-assistant: \"Help me set up this project with dev-team-agents\""
-echo "  3. To update later: .claude/dev-team-agents/install.sh latest"
-echo "  4. To pin a version: .claude/dev-team-agents/install.sh v1.0.0"
+echo "  3. To update later: .claude/dev-team-agents/scripts/install.sh latest"
+echo "  4. To pin a version: .claude/dev-team-agents/scripts/install.sh v1.0.0"
 echo ""
 echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"
