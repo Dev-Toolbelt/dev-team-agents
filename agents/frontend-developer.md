@@ -256,6 +256,20 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 
 ---
 
+## SonarQube / SonarCloud Integration
+
+**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, `SONAR_TOKEN` in `.env` / `.env.example`, or `sonarqube` service in `docker-compose.yml`.
+
+Load: `skills/devops/sonarqube/SKILL.md`
+
+Critical rules when SonarQube is detected:
+- **Do not introduce new Bugs or Vulnerabilities** — before declaring done, verify the changeset does not add SonarQube issues of type Bug or Vulnerability; treat them as defects
+- **Maintain coverage** — new code must meet the quality gate coverage threshold (default ≥ 80%); if it falls short, flag it to the `frontend-test-specialist`
+- **Security Hotspots**: if your code touches `dangerouslySetInnerHTML`, `v-html`, `eval`, or dynamic script loading, document why it is safe so the reviewer can mark it `Safe` in the dashboard
+- **Code Smells**: address Blocker and Critical code smells before declaring done
+
+---
+
 ## Offline-First Projects
 
 When the project is offline-first (detected via IndexedDB usage, SQLite/OPFS, service worker with background sync, or explicit project description), load `skills/integrations/offline-first/SKILL.md` for storage schema standards, sync queue strategy, conflict resolution policy, and connectivity detection patterns.

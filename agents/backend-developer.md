@@ -182,6 +182,20 @@ Critical rules (backend perspective):
 - Run `alter table <name> replica identity full` for tables where `UPDATE`/`DELETE` events must include old row data
 - Broadcast from server via the REST API — no persistent WebSocket connection needed server-side
 
+### SonarQube / SonarCloud
+
+**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, `SONAR_TOKEN` in `.env` / `.env.example`, or `sonarqube` service in `docker-compose.yml`.
+
+Load: `skills/devops/sonarqube/SKILL.md`
+
+Critical rules when SonarQube is detected:
+- **Do not introduce new Bugs or Vulnerabilities** — before declaring done, verify the changeset does not add SonarQube issues of type Bug or Vulnerability; treat them as defects, not optional fixes
+- **Maintain coverage** — new code must meet the quality gate coverage threshold (default ≥ 80%); if it doesn't, flag it to the `backend-test-specialist`
+- **Security Hotspots**: if your code touches areas flagged as hotspots (cryptography, SQL construction, command execution), document why it is safe so the reviewer can mark it as `Safe`
+- **Code Smells**: address Blocker and Critical code smells; Major and below can be deferred but must not accumulate in a pattern
+
+---
+
 ### Async Jobs / Background Workers
 
 **Detection**: `queue`, `worker`, or `job` directories; dependencies such as `laravel/horizon`, `sidekiq`, `celery`, `bullmq`; or `QUEUE_*` / `SQS_*` / `REDIS_QUEUE_*` env vars.

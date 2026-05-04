@@ -196,6 +196,34 @@ server.use(
 
 ---
 
+## SonarQube Coverage Integration
+
+**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` present in the project.
+
+Load: `skills/devops/sonarqube/SKILL.md`
+
+When SonarQube is detected:
+
+1. **Generate coverage in LCOV format** — the standard for JavaScript/TypeScript projects:
+
+   ```bash
+   # Jest
+   jest --coverage --coverageReporters=lcov
+
+   # Vitest
+   vitest run --coverage --coverage.reporter=lcov
+   ```
+
+   Verify `sonar-project.properties` points to the output:
+   ```properties
+   sonar.javascript.lcov.reportPaths=coverage/lcov.info
+   ```
+
+2. **Coverage threshold**: the default SonarQube quality gate requires ≥ 80% on new code. Focus coverage on logic-bearing components, hooks, and composables — not on pure rendering with no conditional logic
+3. **Do not pad coverage**: don't write assertions that exist only to hit a number — every test must assert a real behavioral outcome; meaningless coverage inflates the metric but provides no safety net
+
+---
+
 ## Testability Feedback Loop
 
 If a component is hard to test:

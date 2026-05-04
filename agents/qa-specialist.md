@@ -28,6 +28,12 @@ Load `test-strategy` skill before planning validation — use it to decide what 
 
 Load `security-checklist` skill to validate security behavior as part of QA — auth flows, input validation, access control, and sensitive data exposure are QA concerns, not only security-specialist concerns.
 
+**SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`. When loaded:
+- Include the quality gate status (`OK` / `ERROR`) in the QA Report **Test Coverage Summary** table
+- Treat a failing quality gate as a `[BLOCKER]` — the product must not ship until the gate passes
+- Review all unresolved Security Hotspots introduced by the changeset — document each as a `[BLOCKER]` or `[MAJOR]` depending on exploitability
+- Verify that test coverage for the new code meets the quality gate threshold (default ≥ 80%)
+
 ---
 
 ## What You Validate

@@ -88,6 +88,7 @@ Scan the repository for these signals and load the corresponding skill **before*
 | Task targets GCP resources | `gcp` |
 | Task targets Azure resources | `azure` |
 | VPS setup or bare Linux server | `vps-linux` |
+| `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `sonarqube` |
 
 When multiple signals are present, load all relevant skills.
 
@@ -110,6 +111,7 @@ When multiple signals are present, load all relevant skills.
 | Monitoring / observability | `monitoring` |
 | Infrastructure as Code | `iac-terraform` |
 | Cloudflare (any task) | `cloudflare` |
+| SonarQube / SonarCloud | `sonarqube` |
 
 ---
 

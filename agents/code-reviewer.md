@@ -20,6 +20,7 @@ Before reviewing anything:
 7. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
 8. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
 9. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
+10. **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs. This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
@@ -96,6 +97,27 @@ Apply the loaded `skills/shared/comments-policy/SKILL.md`:
 - Version-control comments (use Git instead)
 - Missing required type annotations or `@throws` / exception docs where the type system can't express the type
 - Tests missing the AAA pattern (`// Arrange`, `// Act`, `// Assert`)
+
+---
+
+## SonarQube Integration
+
+When the SonarQube skill is loaded (project uses SonarQube or SonarCloud):
+
+1. **Check open issues on the changeset**: query `sonar-project.properties` for the `projectKey`, then check the dashboard for new Bugs, Vulnerabilities, and Code Smells introduced by the diff
+2. **Quality gate status**: report whether the current analysis passes or fails the configured quality gate — include it in the Review Summary
+3. **Security Hotspots**: flag any unreviewed hotspots introduced by the changeset as `[BLOCKING]` — they block the quality gate
+4. **Coverage delta**: note if the changeset lowers coverage below the quality gate threshold
+
+Add a **SonarQube** section to the review output when findings exist:
+
+```
+### SonarQube
+Quality Gate: [PASS / FAIL]
+New Issues: [count by type]
+[BLOCKING] security-hotspot — [file:line description]
+[SUGGESTION] code-smell — [file:line description]
+```
 
 ---
 

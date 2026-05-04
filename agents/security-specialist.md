@@ -91,6 +91,27 @@ Before any review:
 
 ---
 
+## SonarQube SAST Integration
+
+When `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is detected, load `skills/devops/sonarqube/SKILL.md`.
+
+Use SonarQube as a SAST layer in the security review:
+
+- Check **Security Hotspots** — all hotspots must be reviewed (Safe / Fixed / Acknowledged) before the quality gate passes; treat any unreviewed hotspot as `[HIGH]` until proven safe
+- Check **Vulnerabilities** — issues classified as Vulnerability type are direct security findings; treat Blocker/Critical as `[CRITICAL]`, Major as `[HIGH]`
+- Query the API for current security rating: `A` = no vulnerabilities; `B`–`E` = escalating severity; anything below `A` must be included in the Security Review findings
+
+```bash
+# Check security rating and open vulnerabilities via API
+curl -s -u $SONAR_TOKEN: \
+  "$SONAR_HOST_URL/api/measures/component?component=my-project&metricKeys=security_rating,vulnerabilities,security_hotspots_reviewed" \
+  | jq '.component.measures[]'
+```
+
+SonarQube SAST complements (does not replace) the manual analysis and other scanners below.
+
+---
+
 ## Tooling & Dependency Audit
 
 Run available scanners via Bash:

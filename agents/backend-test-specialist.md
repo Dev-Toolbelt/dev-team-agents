@@ -98,6 +98,29 @@ Load and apply the `test-strategy` and `test-pyramid` skills.
 
 ---
 
+## SonarQube Coverage Integration
+
+**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` present in the project.
+
+Load: `skills/devops/sonarqube/SKILL.md`
+
+When SonarQube is detected:
+
+1. **Generate coverage in the format SonarQube expects** — verify `sonar-project.properties` has the correct `sonar.*coverage.reportPaths` key for the project's language and that the test runner is configured to output that format:
+
+   | Language | Test runner flag | Output |
+   |---|---|---|
+   | PHP | `--coverage-clover coverage/clover.xml` | Clover XML |
+   | Python | `pytest --cov --cov-report=xml` | `coverage.xml` |
+   | Java | JaCoCo plugin | `target/site/jacoco/jacoco.xml` |
+   | Go | `go test -coverprofile=coverage.out ./...` | `coverage.out` |
+   | Ruby | SimpleCov (configured in `spec_helper`) | `coverage/.resultset.json` |
+
+2. **Coverage threshold**: the default SonarQube quality gate requires ≥ 80% on new code. Write tests to meet this threshold for the code being delivered; if coverage gaps remain, flag them explicitly to the `backend-developer`
+3. **Do not pad coverage**: don't write meaningless assertions to hit a number — every test must assert a real behavioral outcome
+
+---
+
 ## Testability Feedback Loop
 
 If the code to be tested is hard to test (requires complex mocking, tightly coupled, no dependency injection), flag it:
