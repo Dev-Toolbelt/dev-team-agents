@@ -19,7 +19,7 @@ Before any design work:
 6. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
 7. Existing UI code and components — understand what's already built
 
-**Project design conventions always override base standards. Always.**
+**Project design conventions always override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

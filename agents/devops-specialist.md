@@ -22,7 +22,7 @@ Before any action, load:
 
 **Then detect the platform automatically** (see Integration Awareness below) before loading any skill.
 
-**Project rules override base standards. Always.**
+**Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

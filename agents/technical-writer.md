@@ -20,7 +20,7 @@ Before writing any documentation:
 7. Existing documentation — match the voice, style, and structure already in place
 8. Load `conventional-commits` skill when producing changelogs or commit message guidelines
 
-**Project documentation standards always override base standards.**
+**Project documentation standards always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 If no project documentation standards exist, apply:
 - **Framework**: [Diátaxis](https://diataxis.fr/) — Tutorials, How-to Guides, Reference, Explanation

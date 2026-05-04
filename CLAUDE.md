@@ -80,6 +80,14 @@ This ensures multi-agent workflows ask the worktree question exactly once.
 - Max ~500 lines; move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
 
+#### User-Invocable Skills
+
+Skills that users trigger directly via slash command must be registered here:
+
+| Skill | Path | Trigger |
+|-------|------|---------|
+| `skill-creator` | `skills/skill-creator/SKILL.md` | `/skill-creator` or "create/update a skill" |
+
 ### Workflows (`workflows/*.md`)
 
 - Each step must include:

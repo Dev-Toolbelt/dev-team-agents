@@ -21,7 +21,7 @@ Before reviewing anything:
 8. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
 9. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
 
-**Project standards override base standards. Always.** If the project says to use tabs, review for tabs.
+**Project standards override base standards. Always.** If the project says to use tabs, review for tabs. This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

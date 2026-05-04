@@ -56,6 +56,16 @@ ADRs document significant architectural decisions — the context, what was deci
 **Risks**: [What could go wrong, and how to mitigate]
 ```
 
+## Creating an ADR
+
+Use the script to auto-number and scaffold the file:
+
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+```
+
+This creates `.claude/docs/development/adrs/adr-NNN-title.md` with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
+
 ## When to Write an ADR
 
 Write an ADR when the decision:

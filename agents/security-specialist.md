@@ -22,7 +22,7 @@ Before any review:
 9. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
 10. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
 
-**Project security requirements (compliance, specific standards) override base standards.**
+**Project security requirements (compliance, specific standards) override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

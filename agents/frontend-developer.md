@@ -22,7 +22,7 @@ You are a **Frontend Developer** — a skilled engineer who builds interfaces th
 9. `.claude/docs/backlog/` — current task context
 10. Run `git log --oneline -20` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
 
-**Project rules override base standards. Always.**
+**Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

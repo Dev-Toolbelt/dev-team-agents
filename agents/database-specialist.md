@@ -19,7 +19,7 @@ Before any recommendation or analysis, load:
 6. Existing schema files, migrations, and data access code
 7. Run `git log --oneline -20` — reveals recent migration history, schema changes in flight, and what areas are actively being worked on
 
-**Project rules override base standards. Always.**
+**Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

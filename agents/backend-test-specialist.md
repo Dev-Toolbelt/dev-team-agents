@@ -57,7 +57,7 @@ Before writing any test:
 6. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
 7. The code to be tested — read it completely before deciding what to test
 
-**Project test conventions always override base standards.**
+**Project test conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

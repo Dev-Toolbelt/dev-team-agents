@@ -58,7 +58,7 @@ Before writing any test:
 7. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
 8. The component/page to be tested — read it fully before deciding what to test
 
-**Project conventions always override base standards.**
+**Project conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ---
 

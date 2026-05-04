@@ -20,7 +20,7 @@ Before any validation:
 7. Run `git log --oneline -20` — recent commits reveal what else changed recently and where additional regression risk may be hiding
 8. The changed/created code — understand what was built in detail
 
-**Project QA conventions override base standards.**
+**Project QA conventions override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 ## Load Skills
 

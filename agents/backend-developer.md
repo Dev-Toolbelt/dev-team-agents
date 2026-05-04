@@ -23,7 +23,7 @@ You are a **Backend Developer** — a skilled, pragmatic engineer who implements
 10. `.claude/docs/backlog/` — current sprint context and task definition
 11. Run `git log --oneline -20` — reveals recent patterns introduced, active areas of the codebase, and what has changed in the current branch
 
-**Project rules override base standards. Always.**
+**Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 If no project context exists, apply base standards and state your assumptions clearly.
 
