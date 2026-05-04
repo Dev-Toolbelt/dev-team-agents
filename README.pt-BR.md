@@ -31,6 +31,16 @@ Um conjunto de agentes e skills do Claude Code que formam um time completo de de
 
 ---
 
+## Pré-requisitos
+
+- **Claude Code** — CLI, app desktop ou extensão de IDE. Instale em [claude.ai/code](https://claude.ai/code) se ainda não disponível.
+- **Git** — o instalador usa `git rev-parse` para verificar a raiz do projeto.
+- **curl** ou **wget** — utilizado para baixar o tarball de release. Um dos dois geralmente já está disponível no sistema.
+
+Nenhuma outra dependência global é necessária.
+
+---
+
 ## Instalação — Nível de Projeto
 
 O `dev-team-agents` instala **dentro do seu projeto** em `.claude/`, não globalmente. Isso mantém a configuração de agentes de cada projeto isolada e com versão fixada.
@@ -100,6 +110,20 @@ Se preferir que cada desenvolvedor instale localmente (ex.: setup pessoal/experi
 
 ---
 
+## Experimento Rápido
+
+Se quiser testar um agente antes de rodar o setup completo, você pode invocar qualquer agente diretamente após a instalação:
+
+```
+"Como o code-reviewer, revise o arquivo src/api/users.ts e aponte problemas."
+"Como o software-architect, explique a arquitetura de alto nível deste codebase."
+"Como o backend-developer, qual seria a forma mais limpa de adicionar paginação a este endpoint?"
+```
+
+Nenhuma configuração adicional é necessária — os agentes leem os arquivos do projeto e aplicam seu papel. O fluxo completo com o `setup-assistant` é recomendado para uso contínuo em equipe, mas não há setup obrigatório antes da primeira invocação de um agente.
+
+---
+
 ## Versionamento
 
 Este repositório usa **versionamento semântico via git tags** (`v1.0.0`, `v1.1.0`, `v2.0.0`).
@@ -113,19 +137,44 @@ Este repositório usa **versionamento semântico via git tags** (`v1.0.0`, `v1.1
 
 ## Primeiros Passos — Qualquer Projeto
 
-Após instalar, execute o setup-assistant:
+Após instalar, inicie o fluxo de setup dizendo ao Claude:
 
 ```
 "Ajude-me a configurar este projeto com dev-team-agents"
 ```
 
-O `setup-assistant` vai escanear os arquivos existentes, perguntar sobre o tipo de projeto, configurar o `CLAUDE.md` e criar a estrutura de `.claude/docs/`.
+O `setup-assistant` irá:
+
+1. **Escanear** os arquivos existentes — README, CLAUDE.md, manifestos de pacotes, histórico git — e resumir o que encontrou, incluindo a versão instalada
+2. **Perguntar** qual tipo de projeto é este: novo do zero, herdado/inacabado, ou manutenção de sistema em produção
+3. **Coletar** a configuração em uma única troca: testes necessários, plataforma de CI/CD, provedor de nuvem, issue tracker
+4. **Apresentar um plano** para sua aprovação antes de criar ou modificar qualquer coisa
+5. **Criar** a estrutura de diretórios `.claude/docs/` e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
+6. **Confirmar** o que foi configurado e indicar o workflow relevante
+
+O setup completo tipicamente leva de 5 a 10 minutos.
+
+---
+
+## Skill `frontend-design` (Necessária para trabalho com UI)
+
+Os agentes `frontend-developer` e `ui-ux-designer` requerem a skill `frontend-design` do marketplace do Claude Code.
+
+**O `scripts/install.sh` faz o link automaticamente** a partir do cache do marketplace — nenhum passo extra é necessário se você já a instalou antes.
+
+Se o instalador exibir um aviso de que a skill não foi encontrada:
+
+1. Abra o Claude Code
+2. Execute `/plugins` → pesquise `frontend-design` → instale
+3. Rode o instalador novamente: `.claude/dev-team-agents/scripts/install.sh latest`
+
+A skill fornece padrões de componentes, técnicas de layout e orientação de design visual utilizada por ambos os agentes.
 
 ---
 
 ## Como Usar os Agentes
 
-Os agentes são invocados pelo papel:
+Os agentes são invocados pelo papel no seu prompt para o Claude:
 
 ```
 "Como o product-analyst, analise este PRD: [documento]"
@@ -134,9 +183,11 @@ Os agentes são invocados pelo papel:
 "Como o code-reviewer, revise as mudanças em [arquivos]."
 ```
 
-O Claude carregará automaticamente o agente correto com base no papel especificado.
+Isso funciona no CLI do Claude Code (`claude`), no app desktop, no app web em [claude.ai/code](https://claude.ai/code) e em extensões de IDE (VS Code, JetBrains).
 
-**Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa.
+**Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa. Nenhum agente escreve arquivos ou executa comandos até você confirmar.
+
+Se um agente não for reconhecido, verifique se `.claude/agents/dev-team/` existe e contém os arquivos `.md` dos agentes. Rode o instalador novamente se o symlink estiver ausente ou quebrado.
 
 ---
 
@@ -492,11 +543,25 @@ CLAUDE.md  # adicione uma seção ## Project Rules
 
 ---
 
-## Skill `frontend-design` (Instalada Automaticamente)
+## Solução de Problemas
 
-Os agentes `frontend-developer` e `ui-ux-designer` requerem a skill `frontend-design`. Ela fornece padrões de componentes, técnicas de layout e orientação de design visual.
+**Agentes não são reconhecidos pelo Claude**
+Verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se o diretório estiver faltando, rode o instalador novamente a partir da raiz do projeto.
 
-**O `scripts/install.sh` instala automaticamente** via symlink do cache de marketplace do Claude Code (sem chamada de rede, sem passo manual). Se o cache não estiver disponível na máquina, o instalador exibirá um passo manual único — execute `/plugins → frontend-design → install` no Claude Code, depois rode o instalador novamente para detectá-la.
+**Skills não são carregadas**
+Verifique se `.claude/skills/` contém symlinks apontando para cada diretório de skill. Rode o instalador para restaurar links quebrados: `.claude/dev-team-agents/scripts/install.sh latest`.
+
+**Skill `frontend-design` não encontrada**
+A skill não está no cache do marketplace nesta máquina. Abra o Claude Code → `/plugins` → pesquise `frontend-design` → instale. Depois rode o instalador novamente.
+
+**Hook de verificação de atualização dispara a cada tool call**
+O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/dev-team-agents/.last-update-check` é um arquivo gravável (não um diretório) e se `check-updates.sh` é executável.
+
+**O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md**
+O assistente acrescenta ao arquivo existente — nunca substitui o conteúdo. Pesquise por `## dev-team-agents` no seu CLAUDE.md. Se estiver ausente, diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
+
+**Um agente executou sem apresentar um plano primeiro**
+Todo agente é configurado para apresentar um plano antes de agir. Se isso não aconteceu, seu CLAUDE.md de projeto pode conter uma regra que conflita com o requisito de plano. Verifique se há alguma instrução que desativa o plan mode.
 
 ---
 

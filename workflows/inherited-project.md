@@ -111,3 +111,15 @@ Use this to communicate predictability to the client.
 ## Coexistence Reminder
 
 The audit phase may discover that the existing project has conventions and patterns already established. Document them in `.claude/docs/development/code-standards.md`. All agents will then follow the project's patterns, not just the base standards.
+
+---
+
+## Workflow Complete
+
+When the backlog is approved, the gap analysis is done, and development + quality gate have completed:
+
+1. `technical-writer` — generate initial documentation (architecture summary, API reference if applicable)
+2. `devops-specialist` — confirm the environment is ready for the first delivery
+3. Hand off to the team for final review and deployment
+
+The workflow is complete when the client confirms the delivered scope meets the agreed acceptance criteria. There is no automated completion signal — the decision is yours.

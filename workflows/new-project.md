@@ -21,7 +21,7 @@ Before starting, provide a markdown document with as much business information a
 - Are there deadlines or budget constraints?
 - What does success look like at launch?
 
-Save this document anywhere and hand it to the `product-analyst`.
+Save this document — for example as `.claude/docs/requirements.md` — and hand it to the `product-analyst`.
 
 ---
 
@@ -133,6 +133,8 @@ Prompt: "As the software-architect, validate that [files/PR] conforms to the
 ```
 
 > ⚡ **Parallel tip**: copy all four prompts above into a single message. Claude Code will run all four agents simultaneously, cutting quality gate time by ~75%.
+>
+> To send multiple prompts at once: in the CLI or desktop app, type or paste all four messages in a single submission. Claude Code treats each `"As the [agent]..."` block as a parallel agent invocation.
 
 Quality gate agents present their findings as a structured report — no plan required, but findings are explicit before any remediation steps are taken.
 
@@ -141,3 +143,15 @@ Quality gate agents present their findings as a structured report — no plan re
 ## Coexistence Reminder
 
 All agents read the project's own context first. Project-specific rules in `CLAUDE.md`, `README.md`, or `AGENTS.md` always take precedence over base agent standards. The base standards fill gaps — the project rules define the ceiling.
+
+---
+
+## Workflow Complete
+
+When all quality gate agents report no blocking findings:
+
+1. `technical-writer` — generate changelog and update documentation
+2. `devops-specialist` — confirm deploy readiness
+3. Hand off to the team for final merge and deploy
+
+The workflow is complete when the quality gate passes and the deploy is confirmed. There is no automated completion signal — the decision is yours.

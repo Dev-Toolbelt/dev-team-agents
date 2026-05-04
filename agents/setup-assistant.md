@@ -42,7 +42,13 @@ git status
 ```
 Recent commits reveal the team's working cadence, areas of active development, and naming conventions. They also surface tech debt, ongoing work, and what was recently changed — context that files alone don't show. `git status` detects uncommitted work in progress — important to note before making setup changes that touch tracked files.
 
-Summarize what you found (files + commit history) before asking questions.
+**Installed version:**
+```bash
+cat .claude/dev-team-agents/.installed-version 2>/dev/null || echo "unknown"
+```
+Include the installed version in the scan summary so the user knows which version of dev-team-agents is active.
+
+Summarize what you found (files + commit history + installed version) before asking questions.
 
 **frontend-design skill check:**
 Verify whether `.claude/skills/frontend-design/` exists. If the project has UI or frontend work and the skill is missing:
@@ -66,6 +72,8 @@ Record the answer in CLAUDE.md as `PROJECT_TYPE: [new|inherited|maintenance]`.
 
 ### Step 3 — Additional Configuration Questions
 
+List all relevant questions for the project type in a single message — do not ask one question at a time. Collect the user's response and extract each configuration value from it.
+
 Ask only the relevant questions for the project type:
 
 **For all types:**
@@ -82,11 +90,22 @@ Ask only the relevant questions for the project type:
 - Does the project have an issue tracker board? (If yes → which one?)
   - **Supported trackers**: GitHub Projects, GitLab Issues, Jira, Linear, ClickUp, Trello, Asana, Monday.com, Notion, Azure DevOps Boards, Shortcut
   - If yes: configure read-only access. Agents read tasks but only write with explicit user consent.
-  - Instruct user on how to configure the relevant MCP (do not store credentials — map what's needed)
+  - Guide the user to configure the relevant MCP server. What each tracker needs:
+
+    | Tracker | MCP to configure | What's needed |
+    |---------|-----------------|---------------|
+    | GitHub Projects | `github` MCP | GitHub personal access token (read:project scope) |
+    | GitLab Issues | `gitlab` MCP | GitLab personal access token (read_api scope) |
+    | Jira | `atlassian` MCP | Atlassian API token + workspace URL |
+    | Linear | `linear` MCP | Linear API key (read-only) |
+    | ClickUp | `clickup` MCP | ClickUp personal API token |
+    | Others | no MCP required | Agents read task lists from user-provided markdown exports |
+
+  - Do not store credentials in project files. Instruct the user to configure the token in their Claude Code MCP settings (`~/.claude/settings.json` or via `/mcp` in Claude Code).
 
 **Graphify (context graph — opt-in) — ask this last, after all other questions:**
 
-> ⚠️ This question must always be asked at the end of Step 3, after all type-specific questions have been answered and all project context has been gathered. The `graphify-setup` skill benefits from knowing the full project stack, structure, and configuration before it runs.
+[Always ask the Graphify question last, after all type-specific questions are answered. The `graphify-setup` skill benefits from knowing the full project context before it runs.]
 
 Ask the user:
 
@@ -251,6 +270,32 @@ mkdir -p .claude/docs/backlog
 mkdir -p .claude/docs/development
 mkdir -p .claude/docs/design  # only if UI project
 ```
+
+---
+
+### Step 7 — Confirm Setup Complete
+
+After creating all directories and writing the CLAUDE.md section, read the installed version and emit a completion summary:
+
+```bash
+cat .claude/dev-team-agents/.installed-version 2>/dev/null || echo "unknown"
+```
+
+Then output to the user:
+
+> **dev-team-agents setup complete** (v[installed version])
+>
+> **Configured:**
+> - `CLAUDE.md` — `## dev-team-agents` section appended
+> - `.claude/docs/backlog/` — created
+> - `.claude/docs/development/` — created
+> [- `.claude/docs/design/` — created (UI project)]
+> [- Graphify — enabled and configured]
+>
+> **Start with the workflow that matches your project type:**
+> - New project → open `workflows/new-project.md` or say: `"As the product-analyst, I have a requirements document: [paste or attach]"`
+> - Inherited / unfinished → open `workflows/inherited-project.md`
+> - Maintenance / live project → open `workflows/maintenance.md`
 
 ---
 

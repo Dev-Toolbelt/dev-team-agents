@@ -35,6 +35,18 @@ echo "========================================="
 echo "Project root: $PROJECT_ROOT"
 echo ""
 
+# ── Prerequisites check ──────────────────────────────────────────
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "  WARNING: not inside a git repository."
+    echo "  Run this installer from your project root (where .git lives)."
+    echo ""
+fi
+if ! command -v claude >/dev/null 2>&1; then
+    echo "  NOTE: 'claude' command not found."
+    echo "  Install Claude Code before using agents: https://claude.ai/code"
+    echo ""
+fi
+
 # ── HTTP tool detection ───────────────────────────────────────────
 if command -v curl >/dev/null 2>&1; then
     HTTP_GET()      { curl -fsSL "$1"; }
@@ -234,8 +246,10 @@ echo ""
 echo "✓ dev-team-agents $RESOLVED installed in this project"
 echo ""
 echo "Next steps:"
-echo "  1. Commit .claude/dev-team-agents/ — no nested .git, safe to commit with the project"
-echo "  2. Run the setup-assistant: \"Help me set up this project with dev-team-agents\""
+echo "  1. Run the setup-assistant in Claude:"
+echo "       \"Help me set up this project with dev-team-agents\""
+echo "  2. Commit the installation to your project:"
+echo "       git add .claude/ && git commit -m \"chore: add dev-team-agents\""
 echo "  3. To update later: .claude/dev-team-agents/scripts/install.sh latest"
 echo "  4. To pin a version: .claude/dev-team-agents/scripts/install.sh v1.0.0"
 echo ""
@@ -243,15 +257,11 @@ echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"
 echo ""
 echo "  ┌─────────────────────────────────────────────────────────────────────┐"
-echo "  │  💡 Want to cut your token costs by up to 80%?                      │"
+echo "  │  Optional: Graphify (knowledge graph for this codebase)              │"
 echo "  │                                                                      │"
-echo "  │  Graphify builds a knowledge graph of your codebase so Claude        │"
-echo "  │  can answer questions and navigate code without reading every file.  │"
-echo "  │  Fewer tokens per task. Faster responses. Richer context.            │"
+echo "  │  Graphify indexes your codebase so agents can navigate code without  │"
+echo "  │  reading every file — fewer tokens per task, faster responses.       │"
 echo "  │                                                                      │"
-echo "  │  To activate it, just tell Claude:                                   │"
+echo "  │  To enable it, tell Claude:                                          │"
 echo "  │    \"Set up Graphify for this project\"                               │"
-echo "  │                                                                      │"
-echo "  │  Claude will detect your OS, install all dependencies, and           │"
-echo "  │  configure everything automatically. Takes under 2 minutes.          │"
 echo "  └─────────────────────────────────────────────────────────────────────┘"
