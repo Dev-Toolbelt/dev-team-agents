@@ -64,13 +64,25 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 ### Update to latest (after first install)
 
 ```bash
-.claude/dev-team-agents/scripts/install.sh latest
+.claude/dev-team-agents/scripts/update.sh
 ```
 
 ### Pin to a specific version / downgrade
 
 ```bash
-.claude/dev-team-agents/scripts/install.sh v1.0.0
+.claude/dev-team-agents/scripts/update.sh v1.0.0
+```
+
+### Enable automatic updates (opt-in)
+
+```bash
+.claude/dev-team-agents/scripts/update.sh --enable-auto
+```
+
+When enabled, the daily update check will apply new versions automatically instead of just showing a notification. Disable at any time:
+
+```bash
+.claude/dev-team-agents/scripts/update.sh --disable-auto
 ```
 
 After installation, `.claude/` will contain:
@@ -132,8 +144,8 @@ This repository uses **semantic versioning via git tags** (`v1.0.0`, `v1.1.0`, `
 
 - Updates are released as tags — no auto-update on every commit
 - A hook checks for new versions daily via the GitHub API (configured automatically by `scripts/install.sh`)
-- You control when to update — the system only notifies, never auto-updates
-- Downgrade to any version: `.claude/dev-team-agents/scripts/install.sh v1.0.0`
+- By default the system only notifies — run `update.sh` to apply, or enable auto-updates with `update.sh --enable-auto`
+- Downgrade to any version: `.claude/dev-team-agents/scripts/update.sh v1.0.0`
 
 ---
 

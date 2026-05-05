@@ -163,7 +163,7 @@ done
 echo "→ Skills linked: .claude/skills/"
 
 # ── Step 6: Configure hooks in .claude/settings.json ────────────
-UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/check-updates.sh"
+UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/update.sh --check"
 SESSION_HOOK_CMD=".claude/dev-team-agents/scripts/session-summary-hook.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
@@ -236,7 +236,7 @@ PYEOF
         fi
     }
 
-    _inject_hook "PreToolUse" "$UPDATE_HOOK_CMD" "check-updates.sh"
+    _inject_hook "PreToolUse" "$UPDATE_HOOK_CMD" "update.sh"
     _inject_hook "Stop"       "$SESSION_HOOK_CMD" "session-summary-hook.sh"
 fi
 
@@ -267,8 +267,8 @@ echo "  1. Run the setup-assistant in Claude:"
 echo "       \"Help me set up this project with dev-team-agents\""
 echo "  2. Commit the installation to your project:"
 echo "       git add .claude/ && git commit -m \"chore: add dev-team-agents\""
-echo "  3. To update later: .claude/dev-team-agents/scripts/install.sh latest"
-echo "  4. To pin a version: .claude/dev-team-agents/scripts/install.sh v1.0.0"
+echo "  3. To update later: .claude/dev-team-agents/scripts/update.sh"
+echo "  4. To pin a version: .claude/dev-team-agents/scripts/update.sh v1.0.0"
 echo ""
 echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"

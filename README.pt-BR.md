@@ -64,13 +64,25 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 ### Atualizar para a versão mais recente (após a primeira instalação)
 
 ```bash
-.claude/dev-team-agents/scripts/install.sh latest
+.claude/dev-team-agents/scripts/update.sh
 ```
 
 ### Fixar em uma versão específica / fazer downgrade
 
 ```bash
-.claude/dev-team-agents/scripts/install.sh v1.0.0
+.claude/dev-team-agents/scripts/update.sh v1.0.0
+```
+
+### Habilitar atualizações automáticas (opt-in)
+
+```bash
+.claude/dev-team-agents/scripts/update.sh --enable-auto
+```
+
+Quando habilitado, a verificação diária aplica novas versões automaticamente em vez de apenas exibir a notificação. Desabilite a qualquer momento:
+
+```bash
+.claude/dev-team-agents/scripts/update.sh --disable-auto
 ```
 
 Após a instalação, `.claude/` conterá:
@@ -132,8 +144,8 @@ Este repositório usa **versionamento semântico via git tags** (`v1.0.0`, `v1.1
 
 - Atualizações são lançadas como tags — sem auto-atualização a cada commit
 - Um hook verifica novas versões diariamente via GitHub API (configurado automaticamente pelo `scripts/install.sh`)
-- Você controla quando atualizar — o sistema apenas notifica, nunca atualiza automaticamente
-- Downgrade para qualquer versão: `.claude/dev-team-agents/scripts/install.sh v1.0.0`
+- Por padrão o sistema apenas notifica — rode `update.sh` para aplicar, ou habilite auto-update com `update.sh --enable-auto`
+- Downgrade para qualquer versão: `.claude/dev-team-agents/scripts/update.sh v1.0.0`
 
 ---
 
@@ -592,10 +604,10 @@ CLAUDE.md  # adicione uma seção ## Project Rules
 Verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se o diretório estiver faltando, rode o instalador novamente a partir da raiz do projeto.
 
 **Skills não são carregadas**
-Verifique se `.claude/skills/` contém symlinks apontando para cada diretório de skill. Rode o instalador para restaurar links quebrados: `.claude/dev-team-agents/scripts/install.sh latest`.
+Verifique se `.claude/skills/` contém symlinks apontando para cada diretório de skill. Rode o instalador para restaurar links quebrados: `.claude/dev-team-agents/scripts/update.sh`.
 
 **Hook de verificação de atualização dispara a cada tool call**
-O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/dev-team-agents/.last-update-check` é um arquivo gravável (não um diretório) e se `check-updates.sh` é executável.
+O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/dev-team-agents/.last-update-check` é um arquivo gravável (não um diretório) e se `update.sh` é executável.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md**
 O assistente acrescenta ao arquivo existente — nunca substitui o conteúdo. Pesquise por `## dev-team-agents` no seu CLAUDE.md. Se estiver ausente, diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`

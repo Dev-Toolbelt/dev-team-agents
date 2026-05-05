@@ -139,7 +139,7 @@ dev-team-agents/
 │   └── ui-libraries/ ← UI component library reference skills
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← install.sh, check-updates.sh
+├── scripts/         ← install.sh, update.sh, check-updates.sh
 ├── README.md
 └── CLAUDE.md        ← this file
 ```
