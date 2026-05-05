@@ -227,10 +227,14 @@ Three mechanisms work together to minimize context loss between sessions. All th
 **At the end of any session where files were created or modified**, write a new entry at the top of `.claude/user-data/session-summary.md`:
 
 ```
-## YYYY-MM-DD | [brief task title]
+## YYYY-MM-DD HH:MM:SS | [brief task title]
 **Done**: what was implemented or changed
+
 **Decisions**: key choices made and why
+
 **Next**: what remains or is recommended next
+
+---
 ```
 
 - One entry per session per task; append to the same entry if continuing the same task the same day
@@ -240,11 +244,22 @@ Three mechanisms work together to minimize context loss between sessions. All th
 **Multi-agent sessions**: when multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
 
 ```
-## YYYY-MM-DD | [task title]
+## YYYY-MM-DD HH:MM:SS | [task title]
 ### backend-developer
 **Done**: ...
+
+**Decisions**: ...
+
+**Next**: ...
+
 ### frontend-developer
 **Done**: ...
+
+**Decisions**: ...
+
+**Next**: ...
+
+---
 ```
 
 If no entry exists for today yet, create one with the agent name as the first sub-heading.

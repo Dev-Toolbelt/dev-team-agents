@@ -6,6 +6,7 @@ set -euo pipefail
 
 SUMMARY_FILE=".claude/user-data/session-summary.md"
 TODAY=$(date +%Y-%m-%d)
+NOW=$(date +%Y-%m-%d\ %H:%M:%S)
 
 TODAY_COMMITS=$(git log --since="${TODAY} 00:00:00" --oneline 2>/dev/null || true)
 
@@ -17,10 +18,14 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || 
         # Create the file with a placeholder entry so it exists for future appends.
         mkdir -p "$(dirname "$SUMMARY_FILE")"
         cat > "$SUMMARY_FILE" <<EOF
-## $TODAY | [session title — fill in]
+## $NOW | [session title — fill in]
 **Done**: (fill in what was implemented or changed)
+
 **Decisions**: (fill in key choices made and why)
+
 **Next**: (fill in what remains or is recommended next)
+
+---
 EOF
         cat <<EOF
 
@@ -32,10 +37,14 @@ EOF
 
  Please fill in the entry now:
 
- ## $TODAY | [brief task title]
+ ## $NOW | [brief task title]
  **Done**: what was implemented or changed
+
  **Decisions**: key choices made and why
+
  **Next**: what remains or is recommended next
+
+ ---
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
         exit 2
@@ -52,10 +61,14 @@ EOF
 
  Add a new entry at the top of the file:
 
- ## $TODAY | [brief task title]
+ ## $NOW | [brief task title]
  **Done**: what was implemented or changed
+
  **Decisions**: key choices made and why
+
  **Next**: what remains or is recommended next
+
+ ---
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
         exit 2
