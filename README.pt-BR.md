@@ -90,6 +90,10 @@ Após a instalação, `.claude/` conterá:
 ```
 .claude/
 ├── dev-team-agents/   ← extraído de tarball (sem pasta .git — seguro para commitar)
+├── user-data/         ← estado e config do usuário (preservados nos updates — seguro para commitar)
+│   ├── .installed-version
+│   ├── .last-update-check
+│   └── graphify.json  ← criado pelo setup do Graphify (se habilitado)
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -607,7 +611,7 @@ Verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se o diretório es
 Verifique se `.claude/skills/` contém symlinks apontando para cada diretório de skill. Rode o instalador para restaurar links quebrados: `.claude/dev-team-agents/scripts/update.sh`.
 
 **Hook de verificação de atualização dispara a cada tool call**
-O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/dev-team-agents/.last-update-check` é um arquivo gravável (não um diretório) e se `update.sh` é executável.
+O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `update.sh` é executável.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md**
 O assistente acrescenta ao arquivo existente — nunca substitui o conteúdo. Pesquise por `## dev-team-agents` no seu CLAUDE.md. Se estiver ausente, diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`

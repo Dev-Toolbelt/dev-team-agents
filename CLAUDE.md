@@ -139,10 +139,31 @@ dev-team-agents/
 │   └── ui-libraries/ ← UI component library reference skills
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← install.sh, update.sh, check-updates.sh
+├── scripts/         ← update.sh, session-summary-hook.sh, graphify-refresh.sh, new-adr.sh
 ├── README.md
 └── CLAUDE.md        ← this file
 ```
+
+---
+
+## User Data Directory
+
+When installed in a project, the installer creates two sibling directories under `.claude/`:
+
+| Directory | Purpose |
+|-----------|---------|
+| `.claude/dev-team-agents/` | Package files — replaced entirely on every update |
+| `.claude/user-data/` | User state and config — **never touched by the installer** |
+
+Files in `user-data/`:
+- `.installed-version` — current installed version tag
+- `.last-update-check` — Unix timestamp of last update check (prevents daily hammering)
+- `.auto-update` — flag file; present = automatic updates enabled
+- `graphify.json` — Graphify config (created by the `graphify-setup` skill if enabled)
+
+**Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
+
+**Package exclusions:** `scripts/install.sh` and `scripts/orphan-skill-scan.sh` are stripped from the extracted tarball before it is placed in the project. `install.sh` is accessed exclusively via `curl`; `orphan-skill-scan.sh` is a development tool for this repository and is not relevant to user projects.
 
 ---
 

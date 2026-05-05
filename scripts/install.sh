@@ -28,6 +28,7 @@ INSTALL_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
 AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"
 SKILLS_TARGET="$PROJECT_ROOT/.claude/skills"
 SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
+USER_DATA_DIR="$PROJECT_ROOT/.claude/user-data"
 VERSION="${1:-latest}"
 
 echo "dev-team-agents installer (project-level)"
@@ -98,7 +99,7 @@ TMP_TAR="$TMP_DIR/archive.tar.gz"
 
 if ! HTTP_GET_FILE "$TARBALL_URL" "$TMP_TAR" 2>/dev/null; then
     rm -rf "$TMP_DIR"
-    if [ -f "$INSTALL_DIR/.installed-version" ]; then
+    if [ -f "$USER_DATA_DIR/.installed-version" ]; then
         echo "→ No network or download failed. Keeping existing install."
         exit 0
     fi
@@ -118,11 +119,17 @@ fi
 
 # Preserve last-check timestamp across installs
 PREV_CHECK=""
-[ -f "$INSTALL_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$INSTALL_DIR/.last-update-check")
+[ -f "$USER_DATA_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$USER_DATA_DIR/.last-update-check")
 
 # Replace existing installation (handles tarball and legacy git-clone installs)
 # Uses atomic rename so the running script is never deleted mid-execution.
 mkdir -p "$(dirname "$INSTALL_DIR")"
+
+# Remove files that do not belong in user project installs
+rm -rf "$EXTRACTED_ROOT/.claude"
+rm -f "$EXTRACTED_ROOT/scripts/install.sh"
+rm -f "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
+
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
     OLD_INSTALL="${INSTALL_DIR}.old.$$"
@@ -241,11 +248,12 @@ PYEOF
 fi
 
 # ── Step 7: Record installed version ─────────────────────────────
-echo "$RESOLVED" > "$INSTALL_DIR/.installed-version"
+mkdir -p "$USER_DATA_DIR"
+echo "$RESOLVED" > "$USER_DATA_DIR/.installed-version"
 if [ -n "$PREV_CHECK" ]; then
-    echo "$PREV_CHECK" > "$INSTALL_DIR/.last-update-check"
+    echo "$PREV_CHECK" > "$USER_DATA_DIR/.last-update-check"
 else
-    date +%s > "$INSTALL_DIR/.last-update-check"
+    date +%s > "$USER_DATA_DIR/.last-update-check"
 fi
 
 # ── Step 8: Make scripts executable ──────────────────────────────

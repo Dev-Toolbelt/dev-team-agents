@@ -10,9 +10,10 @@
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LAST_CHECK_FILE="$INSTALL_DIR/.last-update-check"
-VERSION_FILE="$INSTALL_DIR/.installed-version"
-AUTO_UPDATE_FLAG="$INSTALL_DIR/.auto-update"
+USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
+LAST_CHECK_FILE="$USER_DATA_DIR/.last-update-check"
+VERSION_FILE="$USER_DATA_DIR/.installed-version"
+AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
 TWENTY_FOUR_HOURS=86400
 
 GITHUB_OWNER="Dev-Toolbelt"
@@ -23,6 +24,7 @@ INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/ma
 # ── Enable / Disable auto-update ──────────────────────────────────────────────
 
 if [[ "${1:-}" == "--enable-auto" ]]; then
+    mkdir -p "$USER_DATA_DIR"
     touch "$AUTO_UPDATE_FLAG"
     echo "✓ Auto-update enabled. dev-team-agents will update automatically when a new version is detected."
     exit 0
@@ -62,6 +64,7 @@ if [[ "${1:-}" == "--check" ]]; then
     fi
 
     # Update timestamp before network call — prevents hammering on bad-network sessions
+    mkdir -p "$USER_DATA_DIR"
     date +%s > "$LAST_CHECK_FILE"
 
     # Fetch latest version via GitHub API

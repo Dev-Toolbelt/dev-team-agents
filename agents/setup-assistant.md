@@ -69,7 +69,7 @@ Recent commits reveal the team's working cadence, areas of active development, a
 
 **Installed version:**
 ```bash
-cat .claude/dev-team-agents/.installed-version 2>/dev/null || echo "unknown"
+cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 Include the installed version in the scan summary so the user knows which version of dev-team-agents is active.
 
@@ -179,7 +179,7 @@ Ask the user:
 >
 > Set up Graphify now? **yes** / **no**
 
-- **yes** → invoke the `graphify-setup` skill immediately after this question. It will install dependencies, generate `.claude/dev-team-agents/scripts/graphify.json` using the project context already gathered, set up the auto-rebuild Stop hook, and add the Context Navigation section to `CLAUDE.md`.
+- **yes** → invoke the `graphify-setup` skill immediately after this question. It will install dependencies, generate `.claude/user-data/graphify.json` using the project context already gathered, set up the auto-rebuild Stop hook, and add the Context Navigation section to `CLAUDE.md`.
 - **no** → display this message and continue:
 
   > No worries! Whenever you change your mind, just tell Claude:
@@ -514,7 +514,7 @@ Omit section if no config files were found.]
 After creating all directories and writing the CLAUDE.md section, read the installed version and emit a completion summary:
 
 ```bash
-cat .claude/dev-team-agents/.installed-version 2>/dev/null || echo "unknown"
+cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
 Then output to the user:

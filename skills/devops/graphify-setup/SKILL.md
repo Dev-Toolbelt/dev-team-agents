@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/dev-team-agents/scripts/graphify.json, configures the Stop hook in the project .claude/settings.json, adds graphify-out/.last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
+description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/user-data/graphify.json, configures the Stop hook in the project .claude/settings.json, adds graphify-out/.last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
 ---
 
 ## Purpose
@@ -125,9 +125,9 @@ Include all manifest files found in Step 4a that exist at the root. Also include
 
 ---
 
-## Step 5 — Generate .claude/dev-team-agents/scripts/graphify.json
+## Step 5 — Generate .claude/user-data/graphify.json
 
-Create the config file at `.claude/dev-team-agents/scripts/graphify.json` — this is where `graphify-refresh.sh` reads it from (`$SCRIPT_DIR/graphify.json`, resolved relative to the script's own location):
+Create the config file at `.claude/user-data/graphify.json` — this is where `graphify-refresh.sh` reads it from:
 
 ```json
 {
@@ -193,8 +193,8 @@ If it fails, diagnose the error:
 |---------|-----|
 | `graphify not found` | Complete Step 2 |
 | `jq not found` | Complete Step 3 |
-| `graphify.json not found` | Complete Step 5 — file must be at `.claude/dev-team-agents/scripts/graphify.json` |
-| Source dir not found | Verify path with user and update `.claude/dev-team-agents/scripts/graphify.json` |
+| `graphify.json not found` | Complete Step 5 — file must be at `.claude/user-data/graphify.json` |
+| Source dir not found | Verify path with user and update `.claude/user-data/graphify.json` |
 
 ---
 
@@ -226,7 +226,7 @@ Report to the user:
 
   Knowledge graph : graphify-out/  (versioned)
   Last-run marker : graphify-out/.last-run  (gitignored)
-  Config          : .claude/dev-team-agents/scripts/graphify.json
+  Config          : .claude/user-data/graphify.json
   Auto-rebuild    : Stop hook → .claude/dev-team-agents/scripts/graphify-refresh.sh
 
 Rebuilds happen automatically after each Claude session when new files are

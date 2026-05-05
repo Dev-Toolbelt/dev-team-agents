@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 cd "$PROJECT_ROOT"
@@ -25,7 +24,7 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ── Load config ───────────────────────────────────────────────────────────────
-CONFIG_FILE="$SCRIPT_DIR/graphify.json"
+CONFIG_FILE="$PROJECT_ROOT/.claude/user-data/graphify.json"
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "⏭  graphify.json not found — skipping."
   echo "   Tell Claude: 'Set up Graphify for this project' to configure it."
