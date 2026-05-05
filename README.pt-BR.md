@@ -23,7 +23,9 @@ Um conjunto de agentes e skills do Claude Code que formam um time completo de de
 | `devops-specialist` | Docker, CI/CD, VPS, deploy em nuvem | DEVELOPMENT | Sonnet |
 | `backend-test-specialist` | Cobertura de testes backend (condicional) | DEVELOPMENT | Sonnet |
 | `frontend-test-specialist` | Cobertura de testes frontend (condicional) | DEVELOPMENT | Sonnet |
-| `code-reviewer` | Qualidade de código, padrões, lint, bugs | QUALITY GATE | Sonnet |
+| `code-reviewer` | Roteia para reviewer especialista conforme o diff (backend / frontend / ambos) | QUALITY GATE | Sonnet |
+| `backend-reviewer` | Review backend: contratos de API, transações, N+1, auth, jobs, SOLID | QUALITY GATE | Sonnet |
+| `frontend-reviewer` | Review frontend: componentes, re-renders, a11y, bundle, estado, XSS | QUALITY GATE | Sonnet |
 | `security-specialist` | OWASP, LGPD/GDPR, CVEs de dependências | QUALITY GATE | Opus |
 | `qa-specialist` | Validação comportamental, risco de regressão | QUALITY GATE | Sonnet |
 | `technical-writer` | Docs de API, READMEs, runbooks, changelogs | SUPPORT | Haiku |
