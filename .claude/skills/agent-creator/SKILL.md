@@ -15,8 +15,10 @@ Source of truth for all rules: `CLAUDE.md § Authoring Standards`.
 
 1. Ask the user: **agent name**, **role description**, and **agent type** (coding or non-coding)
 2. Determine the correct model (see table below)
-3. Draft the agent file following the structure below
-4. Run the **Validation Checklist** before presenting the result
+3. Present a plan showing: file path to be created, model chosen, sections to include, and any registration steps needed — then state **"Awaiting your approval before proceeding."**
+4. Draft the agent file following the structure below
+5. Run the **Validation Checklist** before presenting the result
+6. Run the **Post-Creation Checklist** after the file is written
 
 ---
 
@@ -107,8 +109,17 @@ Run before finalizing any agent file:
 - [ ] `## Immutability Warning` section present
 - [ ] If coding agent: `## Worktree Isolation` section present with correct pattern
 - [ ] No hardcoded framework, language, or tool references in core behavior
-- [ ] File is ≤ 200 lines — move reference material to a skill if needed
-- [ ] Content is in English
+- [ ] File is ≤ 200 lines — move reference material to a skill if over the limit
+- [ ] All content is in English
+
+---
+
+## Post-Creation Checklist
+
+Run after the file is written:
+
+- [ ] Run orphan scan: `bash scripts/orphan-skill-scan.sh` — resolve any ACTION REQUIRED lines before closing
+- [ ] Auto-Docs Rule: if the new agent changes observable behavior (new capability, renamed agent, changed tools list) → update `README.md` and `README.pt-BR.md` in the same session
 
 ---
 

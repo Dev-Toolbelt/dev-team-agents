@@ -17,6 +17,17 @@ Invoke this skill before creating any `vX.Y.Z` git tag. Do not tag directly — 
 
 ---
 
+## Step 0 — Present the Release Plan
+
+Before running any checks, present a plan with:
+- Proposed version bump (major / minor / patch) and rationale
+- List of validation steps to execute
+- Any known risks or items that may block the release
+
+State explicitly: **"Awaiting your approval before proceeding."**
+
+---
+
 ## Step 1 — Determine the Version Bump
 
 Read the commits since the last tag:
@@ -93,19 +104,46 @@ If `README.md` changed but `README.pt-BR.md` did not (or vice versa), stop and s
 
 ---
 
-## Step 5 — Verify CLAUDE.md is Excluded from Package
+## Step 5 — Verify Package Exclusions
 
-The install script strips `CLAUDE.md` from the tarball. Confirm the exclusion is still in place:
+The install script strips `CLAUDE.md`, `scripts/install.sh`, and `scripts/orphan-skill-scan.sh` from the tarball. Confirm all three exclusions are still in place:
 
 ```bash
-grep -n "CLAUDE.md" scripts/install.sh
+grep -n "CLAUDE.md\|orphan-skill-scan\|install.sh" scripts/install.sh
 ```
 
-Expected: at least one line referencing exclusion of `CLAUDE.md` from the extracted content.
+Expected: at least one line per file referencing exclusion from the extracted content.
 
 ---
 
-## Step 6 — Create the Tag
+## Step 6 — Validate User-Invocable Skills Table
+
+For each entry in the `§ User-Invocable Skills` table in `CLAUDE.md`, verify the skill file exists:
+
+```bash
+# Example for each row in the table:
+ls skills/skill-creator/SKILL.md
+ls .claude/skills/agent-creator/SKILL.md
+```
+
+If any file is missing, stop — do not tag until the table and the filesystem are in sync.
+
+---
+
+## Step 7 — Auto-Docs and Language Check
+
+Review commits since the last tag for:
+
+1. **Observable behavior changes** (new agent/skill, renamed file, changed install flow, new script flag) → `README.md` and `README.pt-BR.md` must be updated. If not, update before tagging.
+2. **Language** → scan new/modified `.md` files for non-English content (except intentional exceptions). Flag any violations.
+
+```bash
+git diff $(git describe --tags --abbrev=0)..HEAD --name-only | grep "\.md$"
+```
+
+---
+
+## Step 9 — Create the Tag
 
 After all checks pass:
 
