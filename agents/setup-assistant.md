@@ -88,6 +88,38 @@ Verify whether `.claude/skills/web-design-guidelines/` exists. If the project ha
 - Then re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
 - The `frontend-developer` and `ui-ux-designer` agents depend on it
 
+### Project Docs Discovery
+
+Before generating any `.claude/docs/` file, scan for existing documentation already present in the project:
+
+```bash
+# Root-level documentation files (excluding files already read above)
+find . -maxdepth 1 -name "*.md" ! -name "README.md" ! -name "CLAUDE.md" ! -name "AGENTS.md" | sort
+
+# Common documentation directories (up to 3 levels deep)
+find . -maxdepth 3 \( -path "*/docs/*" -o -path "*/documentation/*" -o -path "*/doc/*" -o -path "*/wiki/*" \) -name "*.md" 2>/dev/null | sort
+
+# OpenAPI / Swagger specs
+find . -maxdepth 3 \( -name "openapi.yaml" -o -name "openapi.json" -o -name "swagger.yaml" -o -name "swagger.json" \) 2>/dev/null | sort
+
+# Convention config files (already collected in Step 1 scan — confirm list here)
+find . -maxdepth 2 \( -name ".eslintrc*" -o -name ".prettierrc*" -o -name "phpcs.xml" -o -name "pyproject.toml" -o -name ".rubocop.yml" -o -name "golangci.yml" -o -name ".stylelintrc*" \) 2>/dev/null | sort
+```
+
+Record all discovered files grouped by their relevance to the docs to be generated:
+
+| Found File Pattern | Feeds Into |
+|-------------------|-----------|
+| `ARCHITECTURE.md`, `docs/architecture*` | `architecture.md` → System Type, Layers, Module Map |
+| `CONTRIBUTING.md`, `docs/contributing*`, `docs/development*` | `code-standards.md` → Naming Conventions, Patterns |
+| `docs/api*`, `API.md`, `openapi.yaml`, `swagger.yaml` | `architecture.md` → API Contracts |
+| `docs/stack*`, `docs/tech*`, `DEVELOPMENT.md`, `TECH*.md` | `tech-stack.md` → Tech Stack table, Dev Setup |
+| `.eslintrc*`, `.prettierrc*`, `phpcs.xml`, `pyproject.toml`, etc. | `code-standards.md` → Detected Config |
+| `CHANGELOG.md`, `docs/changelog*` | `project.md` → Active Areas (recent context) |
+| `docs/design*`, `DESIGN*.md` | `design/design-system.md` → UI conventions |
+
+These discovered files are used in Step 6: content is read, synthesized, and referenced — never duplicated.
+
 ### Step 2 — Project Type Question
 
 Ask the user (mandatory — determines the workflow):
@@ -303,6 +335,31 @@ After approval, create all `.claude/docs/` directories and generate the initial 
 
 Use real data from the scan wherever possible. Use `<!-- TODO: <agent> to fill -->` only for sections the agent has not yet determined. Omit sections entirely when they have no content yet.
 
+### Source Synthesis Rule
+
+Before generating each doc file, check the Project Docs Discovery results from Step 1. For every relevant file found:
+
+1. **Read** the source file
+2. **Synthesize** — extract and condense the relevant information into the appropriate template section (do not copy verbatim; summarize into table rows or bullets per the schema)
+3. **Add a `## Source References` section** at the end of the generated file listing every source file that contributed content
+
+`## Source References` format:
+
+```markdown
+## Source References
+| File | Sections Fed |
+|------|-------------|
+| [ARCHITECTURE.md](../../ARCHITECTURE.md) | System Type, Layers, Module Map |
+| [docs/api.md](../../docs/api.md) | API Contracts |
+```
+
+Rules:
+- **Only list files that actually provided content** — never list a file that was not read or contributed nothing
+- Use paths **relative to the project root** (e.g., `ARCHITECTURE.md`, `docs/api.md`) — not relative to `.claude/docs/`
+- **Omit the section entirely** if no source files were found for that doc
+- This section is navigation metadata — it does not count toward the file's line budget
+- Future agents updating these files via `docs-sync` must **preserve existing Source References** and add new entries when they read additional source files
+
 ---
 
 #### `.claude/docs/project.md`
@@ -349,6 +406,11 @@ Omit rows for layers not present in this project.]
 
 ## Notable Dependencies
 [Only non-obvious deps that affect how agents write code — omit well-known framework staples]
+
+[## Source References — include only if Project Docs Discovery found relevant files]
+[| File | Sections Fed |]
+[|------|-------------|]
+[| [DEVELOPMENT.md](../../DEVELOPMENT.md) | Tech Stack table, Dev Setup |]
 ```
 
 ---
@@ -374,6 +436,11 @@ Omit rows for layers not present in this project.]
 [For new projects: <!-- TODO: software-architect to complete -->]
 | Module/Service | Purpose | Key Entry Points |
 |---------------|---------|-----------------|
+
+[## Source References — include only if Project Docs Discovery found relevant files]
+[| File | Sections Fed |]
+[|------|-------------|]
+[| [ARCHITECTURE.md](../../ARCHITECTURE.md) | System Type, Layers, Module Map |]
 ```
 
 ---
@@ -395,6 +462,11 @@ Omit section if no config files were found.]
 
 ## Established Patterns
 <!-- TODO: software-architect or code-reviewer to complete -->
+
+[## Source References — include only if Project Docs Discovery found relevant files]
+[| File | Sections Fed |]
+[|------|-------------|]
+[| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Naming Conventions, Patterns, Detected Config |]
 ```
 
 ---

@@ -15,7 +15,7 @@ These rules govern every document under `.claude/docs/`. Violating them defeats 
 
 | Rule | Detail |
 |------|--------|
-| **Line budgets** | Each file has a hard max (see schemas below). Trim oldest or least-relevant entries to stay within budget when adding. |
+| **Line budgets** | Each file has a hard max (see schemas below). Trim oldest or least-relevant entries to stay within budget when adding. The `## Source References` section is navigation metadata and does not count toward the budget. |
 | **Tables over prose** | All structured data (stack, patterns, constraints) must be tables or bullet lists — never paragraphs. |
 | **No duplicates** | If the information is already in `CLAUDE.md`, do not repeat it here. These docs extend CLAUDE.md, not copy it. |
 | **No history** | Docs record current state only. Past decisions and change history belong in git commits and ADRs — not in these files. |
@@ -23,7 +23,8 @@ These rules govern every document under `.claude/docs/`. Violating them defeats 
 | **Freshness marker** | Every file has `<!-- last-updated: YYYY-MM-DD -->` on line 1. Update it on every write. |
 | **TODO markers** | Sections not yet populated use `<!-- TODO: <agent> to fill -->`. Remove on first write of that section. |
 | **No boilerplate** | Omit sections that are empty, N/A, or unknown — do not include placeholder headings with no content. |
-| **One source of truth** | If two docs would say the same thing, keep it in the more specific one and link from the other. |
+| **One source of truth** | If two docs would say the same thing, keep it in the more specific one and link from the other. If a project-native file (e.g., `ARCHITECTURE.md`) is the authoritative source, reference it in `## Source References` rather than duplicating its content. |
+| **Preserve source references** | When patching any section, read the `## Source References` table first. Preserve existing entries; add a new row only if you read an additional project-native file to produce the patch. |
 
 ---
 
@@ -77,7 +78,14 @@ Detected and confirmed stack. Updated when dependencies are added or changed.
 
 ## Notable Dependencies
 [Only non-obvious deps that affect how agents write code]
+
+## Source References
+| File | Sections Fed |
+|------|-------------|
+| [DEVELOPMENT.md](../../DEVELOPMENT.md) | Tech Stack table, Dev Setup |
 ```
+
+> `## Source References` is optional — omit entirely if no project-native files were read to populate this doc.
 
 ### `.claude/docs/development/architecture.md` — max 100 lines
 
@@ -100,7 +108,14 @@ System structure and module responsibilities. Updated when new modules or servic
 
 ## API Contracts
 [Summary or link to api-contracts.md]
+
+## Source References
+| File | Sections Fed |
+|------|-------------|
+| [ARCHITECTURE.md](../../ARCHITECTURE.md) | System Type, Layers, Module Map |
 ```
+
+> `## Source References` is optional — omit entirely if no project-native files were read to populate this doc.
 
 ### `.claude/docs/development/code-standards.md` — max 80 lines
 
@@ -123,7 +138,14 @@ Active conventions enforced in the project. Updated when new patterns are establ
 
 ## Anti-Patterns (project-specific)
 [Bullet list — things this project explicitly avoids]
+
+## Source References
+| File | Sections Fed |
+|------|-------------|
+| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Naming Conventions, Patterns, Detected Config |
 ```
+
+> `## Source References` is optional — omit entirely if no project-native files were read to populate this doc.
 
 ### `.claude/docs/backlog/README.md` — max 40 lines
 
