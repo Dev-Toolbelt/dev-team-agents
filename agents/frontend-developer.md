@@ -134,6 +134,9 @@ These apply unless the project overrides in `code-standards.md`:
 - **Prop sprawl**: a component with more than 5–7 props is a design smell — consider decomposing into smaller components, grouping related props into a configuration object, or moving state up or down the tree
 - For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
 - **Component structure** (container/presentational, smart/dumb, prop rules): load `skills/architecture/component-patterns/SKILL.md`
+- **Naming & file structure** (components, hooks, services, folders): load `skills/architecture/naming-conventions/SKILL.md`
+- **CSS & styling quality** (tokens, specificity, responsive, motion): load `skills/architecture/css-quality/SKILL.md`
+- **State management** (decision tree, library rules, server vs. client state): load `skills/architecture/state-management/SKILL.md`
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
 
 ---
@@ -275,6 +278,23 @@ Critical rules when SonarQube is detected:
 - **Maintain coverage** — new code must meet the quality gate coverage threshold (default ≥ 80%); if it falls short, flag it to the `frontend-test-specialist`
 - **Security Hotspots**: if your code touches `dangerouslySetInnerHTML`, `v-html`, `eval`, or dynamic script loading, document why it is safe so the reviewer can mark it `Safe` in the dashboard
 - **Code Smells**: address Blocker and Critical code smells before declaring done
+
+---
+
+## Forms
+
+When the task involves building or modifying a form, load `skills/architecture/form-handling/SKILL.md` for library detection, validation strategy, error feedback patterns, and submit state rules.
+
+---
+
+## Accessibility
+
+Load `skills/architecture/accessibility-patterns/SKILL.md` **only when**:
+- The project documents WCAG compliance as a requirement (check `CLAUDE.md`, `README.md`, or `.claude/docs/development/`)
+- The user explicitly asks for accessibility work or an a11y audit
+- An automated tool (axe, Lighthouse) flags specific violations that need to be fixed
+
+Do not apply accessibility patterns as a default constraint on every task.
 
 ---
 
