@@ -100,6 +100,7 @@ Skills that users trigger directly via slash command must be registered here:
 | Skill | Path | Trigger |
 |-------|------|---------|
 | `skill-creator` | `skills/skill-creator/SKILL.md` | `/skill-creator` or "create/update a skill" |
+| `agent-creator` | `.claude/skills/agent-creator/SKILL.md` | `/agent-creator` or "create/update an agent" |
 | `review` | `agents/code-reviewer.md` | `/review`, `/review backend`, `/review frontend`, `/review both` |
 
 ### Workflows (`workflows/*.md`)
