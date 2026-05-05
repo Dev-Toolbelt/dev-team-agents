@@ -103,6 +103,36 @@ Skills that users trigger directly via slash command must be registered here:
 | `agent-creator` | `.claude/skills/agent-creator/SKILL.md` | `/agent-creator` or "create/update an agent" |
 | `review` | `agents/code-reviewer.md` | `/review`, `/review backend`, `/review frontend`, `/review both` |
 
+#### User-Invocable Commands (`commands/*.md`)
+
+Slash commands installed to `.claude/commands/devteam/`. Each command spawns agents via the Task tool and restricts scope to the current git branch/worktree unless overridden by the user.
+
+| Command | Agents invoked | Use when… |
+|---------|---------------|-----------|
+| `/devteam-plan` | software-architect + product-analyst + database-specialist + backend¹ + frontend¹ + devops¹ | Planning a feature, system, or change |
+| `/devteam-backend` | backend-developer + database-specialist¹ → backend-test-specialist | Implementing backend changes |
+| `/devteam-frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist | Implementing frontend changes |
+| `/devteam-fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists | Implementing full-stack changes |
+| `/devteam-design` | ui-ux-designer | Design system, UX flows, visual decisions |
+| `/devteam-fix` | backend-developer¹ + frontend-developer¹ → test-specialist¹ | Fixing a bug |
+| `/devteam-refactor` | software-architect → backend-developer¹ + frontend-developer¹ | Refactoring existing code |
+| `/devteam-architect` | software-architect | Architecture decisions, ADRs, trade-offs |
+| `/devteam-review` | code-reviewer + software-architect + security-specialist + database¹ | Code review before merge |
+| `/devteam-qa` | qa-specialist | Validating feature behavior and acceptance criteria |
+| `/devteam-security` | security-specialist + software-architect | Security audit or vulnerability analysis |
+| `/devteam-dba` | database-specialist + software-architect | Schema design, query optimization, migrations |
+| `/devteam-devops` | devops-specialist | CI/CD, Docker, infra, deploy scripts |
+| `/devteam-tester` | backend-test-specialist + frontend-test-specialist¹ | Writing or updating tests only |
+| `/devteam-docs` | technical-writer | Docs, changelogs, runbooks, release notes |
+| `/devteam-pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request |
+| `/devteam-workflow-new` | follows `workflows/new-project.md` | Starting a new project |
+| `/devteam-workflow-maintenance` | follows `workflows/maintenance.md` | Maintenance / feature evolution |
+| `/devteam-workflow-bugfix` | follows `workflows/bug-fix.md` | Full bug-fix workflow |
+| `/devteam-workflow-inherited` | follows `workflows/inherited-project.md` | Taking over an existing project |
+| `/devteam-workflow-security-patch` | follows `workflows/security-patch.md` | Applying a security patch |
+
+¹ conditional — spawned only when the task context involves that scope.
+
 ### Workflows (`workflows/*.md`)
 
 - Each step must include:
@@ -138,6 +168,7 @@ dev-team-agents/
 │   ├── devops/      ← one skill per platform
 │   ├── integrations/ ← platform/integration-specific reference skills
 │   └── ui-libraries/ ← UI component library reference skills
+├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/)
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── scripts/         ← update.sh, session-summary-hook.sh, graphify-refresh.sh, new-adr.sh

@@ -143,8 +143,10 @@ else
 fi
 
 # ── Step 3: Create target directories ────────────────────────────
+COMMANDS_TARGET="$PROJECT_ROOT/.claude/commands"
 mkdir -p "$AGENTS_TARGET"
 mkdir -p "$SKILLS_TARGET"
+mkdir -p "$COMMANDS_TARGET"
 
 # ── Step 4: Link agents ───────────────────────────────────────────
 AGENTS_LINK="$AGENTS_TARGET/dev-team"
@@ -170,7 +172,16 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
 done
 echo "→ Skills linked: .claude/skills/"
 
-# ── Step 6: Configure hooks in .claude/settings.json ────────────
+# ── Step 6: Link commands ─────────────────────────────────────────
+COMMANDS_LINK="$COMMANDS_TARGET/devteam"
+if [ ! -L "$COMMANDS_LINK" ] && [ ! -e "$COMMANDS_LINK" ]; then
+    ln -s "../dev-team-agents/commands" "$COMMANDS_LINK"
+    echo "→ Commands linked: .claude/commands/devteam/"
+else
+    echo "→ Commands already linked: .claude/commands/devteam/ (skipped)"
+fi
+
+# ── Step 7: Configure hooks in .claude/settings.json ────────────
 UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/update.sh --check"
 SESSION_HOOK_CMD=".claude/dev-team-agents/scripts/session-summary-hook.sh"
 
@@ -248,7 +259,7 @@ PYEOF
     _inject_hook "Stop"       "$SESSION_HOOK_CMD" "session-summary-hook.sh"
 fi
 
-# ── Step 7: Record installed version ─────────────────────────────
+# ── Step 8: Record installed version ─────────────────────────────
 mkdir -p "$USER_DATA_DIR"
 echo "$RESOLVED" > "$USER_DATA_DIR/.installed-version"
 if [ -n "$PREV_CHECK" ]; then
@@ -257,7 +268,7 @@ else
     date +%s > "$USER_DATA_DIR/.last-update-check"
 fi
 
-# ── Step 8: Make scripts executable ──────────────────────────────
+# ── Step 9: Make scripts executable ──────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
 
 # ── Done ──────────────────────────────────────────────────────────

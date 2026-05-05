@@ -100,6 +100,8 @@ After installation, `.claude/` will contain:
 │   ├── project-context/   ← symlink → skill directory
 │   ├── plan-mode/         ← symlink → skill directory
 │   └── ...                ← one symlink per skill
+├── commands/
+│   └── devteam/       ← symlink → .claude/dev-team-agents/commands/
 └── settings.json      ← update-check and session-summary hooks configured automatically
 ```
 
@@ -110,7 +112,7 @@ After installation, `.claude/` will contain:
 Because `install.sh` downloads a tarball (not a git clone), `.claude/dev-team-agents/` contains no nested `.git` folder. **Commit it directly** — your whole team gets the agents and skills on `git pull`, no extra setup step needed.
 
 ```bash
-git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/settings.json
+git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
 git commit -m "chore: add dev-team-agents"
 ```
 
@@ -121,10 +123,53 @@ If you prefer each developer to install locally instead (e.g. for a personal/exp
 .claude/dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
+.claude/commands/devteam/
 
 # Always ignore the ephemeral worktree session file
 .claude/.worktree-session
 ```
+
+---
+
+## Slash Commands
+
+After installation, 21 slash commands are available under `/devteam-*`. Each command spawns the appropriate agents via the Task tool and automatically scopes its work to the current git branch or worktree.
+
+| Command | What it does |
+|---------|-------------|
+| `/devteam-plan` | Planning phase — software-architect + product-analyst + database-specialist (+ backend/frontend/devops when relevant) |
+| `/devteam-backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
+| `/devteam-frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
+| `/devteam-fullstack` | Full-stack implementation — backend + frontend teams in parallel |
+| `/devteam-design` | UI/UX design — ui-ux-designer |
+| `/devteam-fix` | Bug fix — relevant developer(s) → test-specialist |
+| `/devteam-refactor` | Refactoring — software-architect plans, then developer(s) execute |
+| `/devteam-architect` | Architecture decisions, ADRs, trade-offs — software-architect only |
+| `/devteam-review` | Code review — code-reviewer + software-architect + security-specialist |
+| `/devteam-qa` | Quality assurance — qa-specialist |
+| `/devteam-security` | Security audit — security-specialist + software-architect |
+| `/devteam-dba` | Database work — database-specialist + software-architect |
+| `/devteam-devops` | Infrastructure / CI/CD — devops-specialist |
+| `/devteam-tester` | Tests only — backend-test-specialist + frontend-test-specialist |
+| `/devteam-docs` | Documentation — technical-writer |
+| `/devteam-pr` | Pull request — drafts title + description, asks for confirmation before creating |
+| `/devteam-workflow-new` | Full new-project workflow |
+| `/devteam-workflow-maintenance` | Maintenance / feature evolution workflow |
+| `/devteam-workflow-bugfix` | Full bug-fix workflow |
+| `/devteam-workflow-inherited` | Inherited project onboarding workflow |
+| `/devteam-workflow-security-patch` | Security patch workflow |
+
+**Usage examples:**
+
+```
+/devteam-plan add an export-to-PDF feature for the fueling report
+/devteam-backend implement the PDF export endpoint
+/devteam-review
+/devteam-pr draft
+/devteam-pr review base staging
+```
+
+All commands accept optional `$ARGUMENTS` to narrow or expand the scope.
 
 ---
 
