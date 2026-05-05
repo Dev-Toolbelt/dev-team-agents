@@ -281,7 +281,7 @@ Agents start each session with no memory of previous ones. Three mechanisms work
 
 ### 1 — Session Summary (automatic enforcement)
 
-At the end of any session where files were changed, agents write an entry to `.claude/session-summary.md`:
+At the end of any session where files were changed, agents write an entry to `.claude/user-data/session-summary.md`:
 
 ```
 ## YYYY-MM-DD | [brief task title]
@@ -308,10 +308,10 @@ The script auto-numbers the file and fills a MADR template. Agents read relevant
 
 `skills/shared/project-context` defines the context-loading order every agent follows at startup. It includes the session summary and ADR index, ensuring a consistent baseline across all agents and sessions.
 
-Add `.claude/session-summary.md` to your `.gitignore` if you prefer it not to be committed:
+Add `.claude/user-data/session-summary.md` to your `.gitignore` if you prefer it not to be committed:
 
 ```gitignore
-.claude/session-summary.md
+.claude/user-data/session-summary.md
 ```
 
 ---

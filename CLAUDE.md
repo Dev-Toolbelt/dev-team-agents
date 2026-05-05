@@ -224,7 +224,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 
 ### Session Summary Rule
 
-**At the end of any session where files were created or modified**, write a new entry at the top of `.claude/session-summary.md`:
+**At the end of any session where files were created or modified**, write a new entry at the top of `.claude/user-data/session-summary.md`:
 
 ```
 ## YYYY-MM-DD | [brief task title]

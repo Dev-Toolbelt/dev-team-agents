@@ -13,7 +13,7 @@ Before any design work:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 4. `.claude/docs/design/design-system.md` — existing design system (if any)
 5. `.claude/docs/development/tech-stack.md` — frontend technology (affects what's feasible)
 6. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it

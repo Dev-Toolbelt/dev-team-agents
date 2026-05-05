@@ -80,7 +80,7 @@ Before starting any task, load context in this order (read what exists — skip 
 2. CLAUDE.md                              ← Claude-specific rules (highest precedence)
 3. .claude/docs/project.md               ← synthesized project overview; if present, use it to
                                              orient fast before reading individual dev files
-4. .claude/session-summary.md            ← last session's decisions and next steps;
+4. .claude/user-data/session-summary.md            ← last session's decisions and next steps;
                                              read the most recent entry (top of file)
 5. .claude/docs/development/adrs/        ← list ADR files and read any relevant to the task
 6. AGENTS.md                             ← agent-specific instructions for this project
@@ -96,7 +96,7 @@ After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` fiel
 
 > ⚠️ `project.md` may be stale (last updated: YYYY-MM-DD). Consider running `setup-assistant` in REFRESH mode to bring it up to date.
 
-**When `.claude/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
+**When `.claude/user-data/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
 
 **When `.claude/docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
 

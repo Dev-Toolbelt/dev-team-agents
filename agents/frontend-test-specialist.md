@@ -51,7 +51,7 @@ Before writing any test:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, test setup
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 4. `.claude/docs/development/` — architecture and code standards
 5. `.claude/docs/design/design-system.md` — relevant for visual regression context
 6. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work

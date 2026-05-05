@@ -54,7 +54,7 @@ Before any action, load the project context in this order:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview
-3. `.claude/session-summary.md` — most recent entry only (topmost ## block)
+3. `.claude/user-data/session-summary.md` — most recent entry only (topmost ## block)
 4. `.claude/docs/backlog/` — current scope and task definition
 5. `.claude/docs/development/` — architecture, tech stack, code standards
 6. Run `git log --oneline -20` — recent patterns and active areas

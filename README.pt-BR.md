@@ -281,7 +281,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos traba
 
 ### 1 — Resumo de Sessão (enforcement automático)
 
-Ao final de qualquer sessão em que arquivos foram alterados, os agentes escrevem uma entrada em `.claude/session-summary.md`:
+Ao final de qualquer sessão em que arquivos foram alterados, os agentes escrevem uma entrada em `.claude/user-data/session-summary.md`:
 
 ```
 ## YYYY-MM-DD | [título breve da tarefa]
@@ -308,10 +308,10 @@ O script auto-numera o arquivo e preenche um template MADR. Agentes leem ADRs re
 
 `skills/shared/project-context` define a ordem de carregamento de contexto que todo agente segue no startup. Inclui o resumo de sessão e o índice de ADRs, garantindo uma linha de base consistente entre todos os agentes e sessões.
 
-Adicione `.claude/session-summary.md` ao `.gitignore` se preferir não commitá-lo:
+Adicione `.claude/user-data/session-summary.md` ao `.gitignore` se preferir não commitá-lo:
 
 ```gitignore
-.claude/session-summary.md
+.claude/user-data/session-summary.md
 ```
 
 ---

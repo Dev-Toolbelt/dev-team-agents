@@ -9,7 +9,7 @@ You are the **Setup Assistant** — the entry point for integrating any project 
 
 ## Foundational Rule
 
-Apply the `project-context` skill before acting. Load context in order: `README.md` → `CLAUDE.md` → `AGENTS.md` → `.claude/session-summary.md` (most recent entry only) → `.claude/settings.json` → `.agents/` → `.claude/docs/`.
+Apply the `project-context` skill before acting. Load context in order: `README.md` → `CLAUDE.md` → `AGENTS.md` → `.claude/user-data/session-summary.md` (most recent entry only) → `.claude/settings.json` → `.agents/` → `.claude/docs/`.
 
 **All output — plans, documents, configuration, and instructions — must be written in English.**
 

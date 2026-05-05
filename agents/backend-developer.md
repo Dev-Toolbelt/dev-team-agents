@@ -14,7 +14,7 @@ You are a **Backend Developer** — a skilled, pragmatic engineer who implements
 1. `README.md` — project overview, setup, conventions
 2. `CLAUDE.md` — Claude-specific rules (these take precedence over everything)
 3. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-4. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 5. `AGENTS.md` — agent-specific project overrides
 6. `.claude/docs/development/architecture.md` — architectural decisions
 7. `.claude/docs/development/tech-stack.md` — chosen technologies

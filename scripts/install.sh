@@ -128,6 +128,9 @@ mkdir -p "$(dirname "$INSTALL_DIR")"
 # Remove files that do not belong in user project installs
 rm -rf "$EXTRACTED_ROOT/.claude"
 rm -f "$EXTRACTED_ROOT/CLAUDE.md"
+rm -f "$EXTRACTED_ROOT/README.md"
+rm -f "$EXTRACTED_ROOT/README.pt-BR.md"
+rm -f "$EXTRACTED_ROOT/.gitignore"
 rm -f "$EXTRACTED_ROOT/scripts/install.sh"
 rm -f "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
 
