@@ -92,11 +92,41 @@ Before starting any task, load context in this order (read what exists — skip 
 
 **When `.claude/docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
 
+After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` field from line 1. If the date is more than 30 days in the past, include this warning at the top of your first response:
+
+> ⚠️ `project.md` may be stale (last updated: YYYY-MM-DD). Consider running `setup-assistant` in REFRESH mode to bring it up to date.
+
 **When `.claude/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
 
 **When `.claude/docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
+
+---
+
+## Session Summary — Write Rules
+
+### Multi-Agent Sessions
+
+When multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
+
+```markdown
+## YYYY-MM-DD | [task title]
+### backend-developer
+**Done**: ...
+**Decisions**: ...
+**Next**: ...
+### frontend-developer
+**Done**: ...
+```
+
+If no entry exists for today, create one with the agent name as the first sub-heading.
+
+### Rotation Policy
+
+After writing a new entry, trim entries older than 30 days from the file. The file must not exceed 30 entries total.
+
+To trim: identify the cutoff date (`date -v-30d +%Y-%m-%d` on macOS, `date -d '30 days ago' +%Y-%m-%d` on Linux), then remove all `## YYYY-MM-DD` blocks with a date before the cutoff.
 
 ---
 

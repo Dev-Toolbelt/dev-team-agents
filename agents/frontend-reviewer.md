@@ -27,15 +27,16 @@ Before reviewing anything:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview
-3. `.claude/docs/development/code-standards.md` — **primary review guide**
-4. `.claude/docs/development/architecture.md` — architectural decisions to validate against
-5. `.claude/docs/design/design-system.md` — design tokens, component inventory, visual language
-6. Linter/style configs (`.eslintrc`, `.prettierrc`, `stylelint.config.js`) — source of truth for style
-7. Run `git log --oneline -20` — recent commits reveal what changed and team conventions
-8. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-9. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
-10. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
-11. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/code-standards.md` — **primary review guide**
+5. `.claude/docs/development/architecture.md` — architectural decisions to validate against
+6. `.claude/docs/design/design-system.md` — design tokens, component inventory, visual language
+7. Linter/style configs (`.eslintrc`, `.prettierrc`, `stylelint.config.js`) — source of truth for style
+8. Run `git log --oneline -20` — recent commits reveal what changed and team conventions
+9. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
+10. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
+11. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
+12. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 
 **Project standards override base standards. Always.**
 

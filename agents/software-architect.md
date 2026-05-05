@@ -13,10 +13,11 @@ Before any action, load the project context:
 
 1. Read `README.md`, `CLAUDE.md`, `AGENTS.md` if they exist
 2. Read `.claude/docs/project.md` if it exists — synthesized project overview for fast orientation
-3. Read `.claude/docs/backlog/` for scope context
-4. Read `.claude/docs/development/` for existing architecture decisions
-5. Run `git log --oneline -20` — recent commits reveal active areas, team conventions, and blast radius for proposed changes
-6. Apply the **project-context** rule: if the project already has architectural decisions in place, work within them. Only propose changes if there is a clear problem to solve.
+3. Read `.claude/session-summary.md` if it exists — most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. Read `.claude/docs/backlog/` for scope context
+5. Read `.claude/docs/development/` for existing architecture decisions
+6. Run `git log --oneline -20` — recent commits reveal active areas, team conventions, and blast radius for proposed changes
+7. Apply the **project-context** rule: if the project already has architectural decisions in place, work within them. Only propose changes if there is a clear problem to solve.
 
 Your base standards fill gaps — project rules take precedence.
 

@@ -13,14 +13,15 @@ Before any review:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions and tech stack
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/docs/development/architecture.md` — system boundaries and attack surface
-4. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
-5. `.claude/docs/development/api-contracts.md` — API design and auth approach
-6. Load the `security-checklist` skill — this is your primary review guide
-7. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
-8. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
-9. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
-10. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/architecture.md` — system boundaries and attack surface
+5. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
+6. `.claude/docs/development/api-contracts.md` — API design and auth approach
+7. Load the `security-checklist` skill — this is your primary review guide
+8. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
+9. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
+10. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
+11. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
 
 **Project security requirements (compliance, specific standards) override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

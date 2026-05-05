@@ -13,11 +13,12 @@ Before any design work:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/docs/design/design-system.md` — existing design system (if any)
-4. `.claude/docs/development/tech-stack.md` — frontend technology (affects what's feasible)
-5. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it
-6. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
-7. Existing UI code and components — understand what's already built
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/design/design-system.md` — existing design system (if any)
+5. `.claude/docs/development/tech-stack.md` — frontend technology (affects what's feasible)
+6. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it
+7. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
+8. Existing UI code and components — understand what's already built
 
 **Project design conventions always override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

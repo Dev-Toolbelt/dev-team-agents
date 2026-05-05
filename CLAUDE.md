@@ -205,6 +205,20 @@ Three mechanisms work together to minimize context loss between sessions. All th
 - This file is read at agent startup via `skills/shared/project-context/SKILL.md`
 - The `Stop` hook (`scripts/session-summary-hook.sh`) detects when this is missing and prompts you
 
+**Multi-agent sessions**: when multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
+
+```
+## YYYY-MM-DD | [task title]
+### backend-developer
+**Done**: ...
+### frontend-developer
+**Done**: ...
+```
+
+If no entry exists for today yet, create one with the agent name as the first sub-heading.
+
+**Rotation**: after writing a new entry, trim entries older than 30 days from the file. Keep the file under 30 entries total.
+
 ### ADR Trigger Rule
 
 Write an ADR when a decision is:
@@ -225,7 +239,7 @@ The script auto-numbers the file and places it in `.claude/docs/development/adrs
 `install.sh` registers `scripts/session-summary-hook.sh` as a `Stop` hook in `.claude/settings.json`. This hook:
 
 - Runs automatically each time Claude finishes responding
-- Detects uncommitted changes without a session-summary entry for today
+- Detects uncommitted changes **or commits made today** without a session-summary entry for today
 - Outputs a structured reminder visible to Claude on the next turn, which then writes the summary
 
 No manual setup is required — the installer handles registration.

@@ -51,11 +51,12 @@ Before writing any test:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, database setup
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/docs/development/` — architecture, tech stack, code standards
-4. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
-5. Existing test files — understand patterns, base classes, helpers, factories already in use
-6. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
-7. The code to be tested — read it completely before deciding what to test
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/` — architecture, tech stack, code standards
+5. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
+6. Existing test files — understand patterns, base classes, helpers, factories already in use
+7. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
+8. The code to be tested — read it completely before deciding what to test
 
 **Project test conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

@@ -27,16 +27,17 @@ Before reviewing anything:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview
-3. `.claude/docs/development/code-standards.md` — **primary review guide**
-4. `.claude/docs/development/architecture.md` — architectural decisions to validate against
-5. `.claude/docs/development/api-contracts.md` — API design decisions
-6. `.claude/docs/development/database.md` — schema and query strategy
-7. Linter/static analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — source of truth for style
-8. Run `git log --oneline -20` — recent commits reveal what changed and team conventions
-9. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-10. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
-11. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
-12. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/code-standards.md` — **primary review guide**
+5. `.claude/docs/development/architecture.md` — architectural decisions to validate against
+6. `.claude/docs/development/api-contracts.md` — API design decisions
+7. `.claude/docs/development/database.md` — schema and query strategy
+8. Linter/static analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — source of truth for style
+9. Run `git log --oneline -20` — recent commits reveal what changed and team conventions
+10. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
+11. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
+12. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
+13. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 
 **Project standards override base standards. Always.**
 

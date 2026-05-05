@@ -13,12 +13,13 @@ Before any action, load:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/docs/development/tech-stack.md` — chosen technologies and deployment decisions
-4. `.claude/docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
-5. Run `git log --oneline -20` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
-6. Existing Docker files, CI/CD configs, and infrastructure code in the repository
-7. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions
-8. `.env.example` — discover required environment variables and secrets
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/tech-stack.md` — chosen technologies and deployment decisions
+5. `.claude/docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
+6. Run `git log --oneline -20` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
+7. Existing Docker files, CI/CD configs, and infrastructure code in the repository
+8. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions
+9. `.env.example` — discover required environment variables and secrets
 
 **Then detect the platform automatically** (see Integration Awareness below) before loading any skill.
 

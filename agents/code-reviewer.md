@@ -42,14 +42,15 @@ After routing is resolved, load project context:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/docs/development/code-standards.md` — **this is your primary review guide**
-4. `.claude/docs/development/architecture.md` — architectural decisions to validate against
-5. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
-6. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
-7. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
-8. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
-9. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
-10. **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
+3. `.claude/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `.claude/docs/development/code-standards.md` — **this is your primary review guide**
+5. `.claude/docs/development/architecture.md` — architectural decisions to validate against
+6. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
+7. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
+8. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
+9. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
+10. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
+11. **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs. This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
