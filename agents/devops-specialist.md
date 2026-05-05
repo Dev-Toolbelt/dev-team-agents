@@ -24,6 +24,10 @@ Before any action, load:
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+Apply `skills/shared/token-efficiency/SKILL.md` when processing large Docker logs, CI/CD pipeline configs, or Terraform state files — prefer `head`/`grep` over reading entire files.
+
+Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infrastructure file — present a plan and wait for user approval.
+
 ---
 
 ## Worktree Isolation
@@ -73,22 +77,22 @@ Scan the repository for these signals and load the corresponding skill **before*
 
 | Signal detected | Load skill |
 |----------------|-----------|
-| `.github/workflows/` directory exists | `cicd-github` |
-| `.gitlab-ci.yml` exists | `cicd-gitlab` |
-| `bitbucket-pipelines.yml` exists | `cicd-bitbucket` |
-| `Jenkinsfile` exists | `cicd-jenkins` |
-| `*.tf` files or `terraform/` / `infra/` directory | `iac-terraform` |
-| `docker-compose.yml` at root (dev context) | `docker-dev` |
-| `docker-compose.yml` with production config | `docker-prod` |
-| `prometheus.yml`, `grafana/`, `alertmanager.yml`, or `monitoring/` directory | `monitoring` |
-| `DD_API_KEY` env var, `datadog.yml`, or `datadog` service in compose | `monitoring` |
-| `amazon-cloudwatch-agent.json` or `CloudWatch` resource in Terraform | `monitoring` |
-| `cloudflare.toml` or Wrangler config | `cloudflare` |
-| Task targets AWS resources | `aws` |
-| Task targets GCP resources | `gcp` |
-| Task targets Azure resources | `azure` |
-| VPS setup or bare Linux server | `vps-linux` |
-| `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `sonarqube` |
+| `.github/workflows/` directory exists | `skills/devops/cicd-github/SKILL.md` |
+| `.gitlab-ci.yml` exists | `skills/devops/cicd-gitlab/SKILL.md` |
+| `bitbucket-pipelines.yml` exists | `skills/devops/cicd-bitbucket/SKILL.md` |
+| `Jenkinsfile` exists | `skills/devops/cicd-jenkins/SKILL.md` |
+| `*.tf` files or `terraform/` / `infra/` directory | `skills/devops/iac-terraform/SKILL.md` |
+| `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md` |
+| `docker-compose.yml` with production config | `skills/devops/docker-prod/SKILL.md` |
+| `prometheus.yml`, `grafana/`, `alertmanager.yml`, or `monitoring/` directory | `skills/devops/monitoring/SKILL.md` |
+| `DD_API_KEY` env var, `datadog.yml`, or `datadog` service in compose | `skills/devops/monitoring/SKILL.md` |
+| `amazon-cloudwatch-agent.json` or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
+| `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md` |
+| Task targets AWS resources | `skills/devops/aws/SKILL.md` |
+| Task targets GCP resources | `skills/devops/gcp/SKILL.md` |
+| Task targets Azure resources | `skills/devops/azure/SKILL.md` |
+| VPS setup or bare Linux server | `skills/devops/vps-linux/SKILL.md` |
+| `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
 
 When multiple signals are present, load all relevant skills.
 
@@ -98,20 +102,20 @@ When multiple signals are present, load all relevant skills.
 
 | Task | Load skill |
 |------|-----------|
-| Dev environment | `docker-dev` |
-| Production containers | `docker-prod` |
-| VPS from scratch | `vps-linux` |
-| GitHub Actions | `cicd-github` |
-| Bitbucket Pipelines | `cicd-bitbucket` |
-| GitLab CI | `cicd-gitlab` |
-| Jenkins | `cicd-jenkins` |
-| AWS deployment | `aws` |
-| GCP deployment | `gcp` |
-| Azure deployment | `azure` |
-| Monitoring / observability | `monitoring` |
-| Infrastructure as Code | `iac-terraform` |
-| Cloudflare (any task) | `cloudflare` |
-| SonarQube / SonarCloud | `sonarqube` |
+| Dev environment | `skills/devops/docker-dev/SKILL.md` |
+| Production containers | `skills/devops/docker-prod/SKILL.md` |
+| VPS from scratch | `skills/devops/vps-linux/SKILL.md` |
+| GitHub Actions | `skills/devops/cicd-github/SKILL.md` |
+| Bitbucket Pipelines | `skills/devops/cicd-bitbucket/SKILL.md` |
+| GitLab CI | `skills/devops/cicd-gitlab/SKILL.md` |
+| Jenkins | `skills/devops/cicd-jenkins/SKILL.md` |
+| AWS deployment | `skills/devops/aws/SKILL.md` |
+| GCP deployment | `skills/devops/gcp/SKILL.md` |
+| Azure deployment | `skills/devops/azure/SKILL.md` |
+| Monitoring / observability | `skills/devops/monitoring/SKILL.md` |
+| Infrastructure as Code | `skills/devops/iac-terraform/SKILL.md` |
+| Cloudflare (any task) | `skills/devops/cloudflare/SKILL.md` |
+| SonarQube / SonarCloud | `skills/devops/sonarqube/SKILL.md` |
 
 ---
 

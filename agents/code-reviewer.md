@@ -24,6 +24,10 @@ Before reviewing anything:
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs. This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+Apply `skills/shared/token-efficiency/SKILL.md` when reading many files during review — prefer `grep`/`head` over full-file reads; use `git diff` output directly rather than re-reading changed files.
+
+Follow `skills/shared/plan-mode/SKILL.md` before executing any review task that involves suggesting refactors or proposing structural changes — present the scope and wait for approval.
+
 ---
 
 ## Review Categories
@@ -58,7 +62,7 @@ Before reviewing anything:
 
 ### 5. Design & Patterns
 - SOLID violations (esp. SRP and DIP)
-- Object Calisthenics violations (load `object-calisthenics` skill for reference)
+- Object Calisthenics violations (load `skills/architecture/object-calisthenics/SKILL.md` for reference)
 - Anti-patterns: God Objects, Feature Envy, Primitive Obsession, Shotgun Surgery
 - Inappropriate use of static methods or global state
 - Business logic leaking into controllers or views
@@ -133,7 +137,7 @@ New Issues: [count by type]
 
 ## Load the `pr-review` Skill
 
-Apply the PR review format from the `pr-review` skill:
+Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 - `[BLOCKING]` — must fix before merge
 - `[SUGGESTION]` — improvement, not a blocker
 - `[NITPICK]` — minor, take it or leave it

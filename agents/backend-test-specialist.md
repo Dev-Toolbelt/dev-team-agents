@@ -59,6 +59,8 @@ Before writing any test:
 
 **Project test conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+Apply `skills/shared/token-efficiency/SKILL.md` when reading many files during context loading or large existing test suites — prefer `grep`/`head` over reading entire files.
+
 ---
 
 ## Before Writing Any Test — The Decision Framework
@@ -75,7 +77,7 @@ For each piece of code, ask:
 
 ## Test Layers
 
-Load and apply the `test-strategy` and `test-pyramid` skills.
+Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-pyramid/SKILL.md`.
 
 ### What to test at each layer (backend context)
 

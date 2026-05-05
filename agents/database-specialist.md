@@ -21,6 +21,10 @@ Before any recommendation or analysis, load:
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+Apply `skills/shared/token-efficiency/SKILL.md` when reading many schema files, migrations, or query logs during context loading — prefer `grep`/`head` over reading entire files.
+
+Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial schema change or query optimization task — present a plan and wait for user approval before creating or modifying files.
+
 ---
 
 ## Worktree Isolation

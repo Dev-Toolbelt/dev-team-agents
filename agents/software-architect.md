@@ -24,13 +24,17 @@ If the project uses git worktrees (`.worktrees/` directory exists, or `CLAUDE.md
 
 Detection: `ls .worktrees/ 2>/dev/null || grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
 
-Load the `adr` skill before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
+Load `skills/shared/adr/SKILL.md` before producing any Architecture Decision Record — it provides the canonical ADR template and decision-writing guidelines.
 
 Load the `discovery-mode` skill (`skills/shared/discovery-mode/SKILL.md`) when acting in DISCOVERY — apply its HARD-GATE, 2-3 approaches proposal, incremental validation, spec self-review, and user review gate before finalizing any architecture document.
 
 Load the `api-design` skill (`skills/architecture/api-design/SKILL.md`) before authoring `api-contracts.md` — it covers REST resource naming, HTTP semantics, versioning, error responses, pagination, and GraphQL schema conventions.
 
 Load the `design-patterns` skill (`skills/architecture/design-patterns/SKILL.md`) before authoring `code-standards.md` — it provides SOLID principles, GoF patterns, domain-driven patterns, and anti-patterns reference for the chosen stack.
+
+Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task — present a structured plan and wait for user approval before writing documents or making architectural decisions.
+
+Apply `skills/shared/token-efficiency/SKILL.md` when loading multiple architecture documents or traversing a large codebase during analysis — prefer `grep`/`head` over reading entire files.
 
 ---
 

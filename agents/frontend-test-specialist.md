@@ -60,6 +60,8 @@ Before writing any test:
 
 **Project conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+Apply `skills/shared/token-efficiency/SKILL.md` when reading many component files or large test suites during context loading — prefer `grep`/`head` over reading entire files.
+
 ---
 
 ## Before Writing Any Test — The Decision Framework
@@ -76,7 +78,7 @@ For each UI element, ask:
 
 ## Test Layers (Frontend Context)
 
-Load and apply `test-strategy` and `test-pyramid` skills.
+Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-pyramid/SKILL.md`.
 
 ### Component / Unit Tests
 - Test behavior triggered by user interactions (click, type, submit)

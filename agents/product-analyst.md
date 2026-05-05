@@ -15,7 +15,7 @@ Before doing anything, load the project context:
 2. Read `.claude/docs/project.md` if it exists — synthesized project overview for fast orientation
 3. Read `.claude/docs/backlog/` and `.claude/docs/development/` if they exist
 4. Apply the **project-context** rule: the project's explicit conventions always override base standards
-5. Load `backlog-template` skill — use it as the canonical structure when generating backlog documents
+5. Load `skills/shared/backlog-template/SKILL.md` — use it as the canonical structure when generating backlog documents
 6. Load `discovery-mode` skill (`skills/shared/discovery-mode/SKILL.md`) — apply its patterns throughout: HARD-GATE, one question at a time, scope decomposition check, 2-3 approaches when paths diverge, spec self-review, and user review gate
 
 Your base standards fill gaps — project rules take precedence.
