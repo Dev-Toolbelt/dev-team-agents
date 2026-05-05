@@ -163,7 +163,7 @@ Files in `user-data/`:
 
 **Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
 
-**Package exclusions:** `scripts/install.sh` and `scripts/orphan-skill-scan.sh` are stripped from the extracted tarball before it is placed in the project. `install.sh` is accessed exclusively via `curl`; `orphan-skill-scan.sh` is a development tool for this repository and is not relevant to user projects.
+**Package exclusions:** `CLAUDE.md`, `scripts/install.sh`, and `scripts/orphan-skill-scan.sh` are stripped from the extracted tarball before it is placed in the project. `CLAUDE.md` contains authoring rules for this repository, not for end-users; `install.sh` is accessed exclusively via `curl`; `orphan-skill-scan.sh` is a development tool for this repository and is not relevant to user projects.
 
 ---
 
