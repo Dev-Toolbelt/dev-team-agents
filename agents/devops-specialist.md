@@ -205,6 +205,7 @@ When invoked as the SHIP agent after the quality gate passes:
    - Offer to open a PR for the changes.
    - Present a plan (title, base branch, description outline) and **ask for user consent** before creating it.
    - Create the PR only after explicit approval.
+   - PR title, description, and commit messages must carry no Claude or AI attribution.
 4. Hand off to the user for final merge and deploy decision.
 
 > Skip PR creation only if the user explicitly asks to skip it, or if `gh` is not installed and no GitHub remote is detected.
@@ -217,6 +218,7 @@ When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-cod
 
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
 - **Commit messages**: load `skills/shared/conventional-commits/SKILL.md` before committing — infrastructure changes must follow the project's commit convention
+- **No Claude attribution**: never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference to commit messages or PR bodies — authorship belongs only to the authenticated git user
 
 ---
 

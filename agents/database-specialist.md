@@ -197,6 +197,7 @@ When producing migration files, seed scripts, or query helpers:
 
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; add a comment only to explain a non-obvious business rule, algorithm, or workaround
 - **Commit messages**: load `skills/shared/conventional-commits/SKILL.md` before committing — migration commits must follow the project's commit convention
+- **No Claude attribution**: never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference to commit messages or PR bodies — authorship belongs only to the authenticated git user
 
 ---
 

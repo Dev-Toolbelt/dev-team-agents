@@ -267,6 +267,7 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 - [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
 - [ ] Test suite passes — run the project's test command before declaring done
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
+- [ ] No Claude attribution in commit messages or PR body — never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference; authorship belongs only to the authenticated git user
 
 ---
 

@@ -269,6 +269,7 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 - [ ] Test suite passes — run the project's test command before declaring done
 - [ ] Bundle impact reviewed — no new dependency added without checking its size and necessity
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
+- [ ] No Claude attribution in commit messages or PR body — never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference; authorship belongs only to the authenticated git user
 
 ---
 

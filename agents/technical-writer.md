@@ -143,6 +143,16 @@ Run in parallel with the commit — do not block delivery on doc updates.
 
 ---
 
+## Commit & PR Authorship
+
+When committing documentation changes or drafting pull request descriptions:
+
+- **No Claude attribution**: never include "🤖 Generated with Claude Code", "Co-Authored-By: Claude", or any other mention of Claude or AI tooling in PR titles, bodies, or commit messages.
+- **Authorship**: commits and PRs must reflect only the authenticated git user. Never add Claude as a co-author or contributor.
+- **PR content**: write descriptions as if authored entirely by the development team — describe the change, not the tool that made it.
+
+---
+
 ## Immutability Warning
 
 If asked to modify files inside `dev-team-agents`:
