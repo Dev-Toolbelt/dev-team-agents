@@ -210,6 +210,25 @@ No manual setup is required — the installer handles registration.
 
 ---
 
+## Orphan Skill Self-Check Rule
+
+**After any session where files in `agents/` or `skills/` were created or modified**, run:
+
+```bash
+bash scripts/orphan-skill-scan.sh
+```
+
+Read the output and act on it before considering the task done:
+
+- **AUTO-FIXED** lines: broken path references were automatically removed from agent files — verify the agent still reads correctly after the removal.
+- **ACTION REQUIRED** lines: a skill has no agent reference. Add a load reference in the suggested agent file, following that agent's existing skill-loading pattern (full path or backtick name form, whichever is already used).
+
+User-invocable skills (registered in the "User-Invocable Skills" table above) are excluded from this check — they are triggered by humans, not loaded by agents.
+
+The `Stop` hook (`.claude/settings.json`) runs `orphan-skill-scan.sh --quiet` automatically at the end of every session as a safety net.
+
+---
+
 ## Setup Trigger
 
 When the user writes any prompt matching the intent of setting up the project with dev-team-agents — such as:

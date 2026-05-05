@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/orphan-skill-scan.sh --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}
