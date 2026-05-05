@@ -128,10 +128,10 @@ if [ -d "$INSTALL_DIR" ]; then
     OLD_INSTALL="${INSTALL_DIR}.old.$$"
     mv "$INSTALL_DIR" "$OLD_INSTALL"
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    rm -rf "$OLD_INSTALL" "$TMP_DIR"
+    rm -rf "$OLD_INSTALL" "$TMP_DIR" || true
 else
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    rm -rf "$TMP_DIR"
+    rm -rf "$TMP_DIR" || true
 fi
 
 # ── Step 3: Create target directories ────────────────────────────
