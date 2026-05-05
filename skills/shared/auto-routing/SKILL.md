@@ -40,7 +40,7 @@ To disable routing permanently: add `AUTO_ROUTING: disabled` to this section.
 
 ### Auto-Routing: Planning
 
-Invoke `product-analyst` + `software-architect` + `database-specialist` **in parallel, before any code is written**, when any of the following is true:
+**MANDATORY:** You MUST use the Task tool to spawn these three agents **in parallel, before writing any code**, whenever any condition below is true. Do NOT plan inline — always delegate. The only exception is when the user explicitly asks not to use agents (see Agent Opt-Out above).
 
 - Message contains: plan, design, architect, structure, approach, strategy, how should we build, how should we implement, break into tasks, break down, create backlog, define scope, requirements, PRD, spec, user stories, acceptance criteria, ADR, trade-offs, what's the best way to, should we use
 - Task requires multiple subtasks or agents
@@ -48,37 +48,37 @@ Invoke `product-analyst` + `software-architect` + `database-specialist` **in par
 - User enters plan mode or asks for a plan before execution
 - New feature or system is being designed from scratch
 
-| Agent | Role |
-|---|---|
-| `product-analyst` | Scope closure, acceptance criteria, backlog generation |
-| `software-architect` | System design, trade-offs, API contracts, ADR authoring |
-| `database-specialist` | Data modeling, schema decisions, migration planning |
+| Agent | Path | Role |
+|---|---|---|
+| `product-analyst` | `.claude/agents/dev-team/product-analyst.md` | Scope closure, acceptance criteria, backlog generation |
+| `software-architect` | `.claude/agents/dev-team/software-architect.md` | System design, trade-offs, API contracts, ADR authoring |
+| `database-specialist` | `.claude/agents/dev-team/database-specialist.md` | Data modeling, schema decisions, migration planning |
 
-Execution begins only after the plan is approved.
+Execution begins only after the plan is approved by the user.
 
 ---
 
 ### Auto-Routing: Execution
 
-Invoke only agents whose scope matches the task. Independent scopes may run in parallel.
+**MANDATORY:** You MUST use the Task tool to spawn the named agent for every implementation task. Do NOT write code directly in the main context — always delegate to the agent whose scope matches. Independent scopes may run in parallel. The only exception is when the user explicitly asks not to use agents (see Agent Opt-Out above).
 
-#### `backend-developer`
+#### `backend-developer` → `.claude/agents/dev-team/backend-developer.md`
 - **Keywords:** API, endpoint, route, controller, action, service, use case, interactor, repository, DAO, middleware, guard, interceptor, worker, job, queue, cron, scheduler, webhook, integration, SDK, REST, GraphQL, gRPC, auth, authentication, authorization, JWT, OAuth, session, business logic, domain, entity, aggregate, event, command, handler, server-side, backend
 - **Files:** `*.php`, `*.py`, `*.go`, `*.java`, `*.rb`, `*.cs`, `*.rs`, `app/`, `src/`, `lib/`, `internal/`, `cmd/`, `api/`, `services/`, `domain/`, `infrastructure/`
 
-#### `frontend-developer`
+#### `frontend-developer` → `.claude/agents/dev-team/frontend-developer.md`
 - **Keywords:** component, page, view, screen, layout, template, form, input, button, modal, dialog, drawer, dropdown, table, list, card, navigation, menu, sidebar, header, footer, hook, composable, state, store, context, animation, transition, CSS, style, responsive, mobile, a11y, SPA, SSR, SSG
 - **Files:** `*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.html`, `*.css`, `*.scss`, `*.sass`, `*.less`, `pages/`, `components/`, `views/`, `layouts/`, `composables/`, `hooks/`, `stores/`
 
-#### `ui-ux-designer`
+#### `ui-ux-designer` → `.claude/agents/dev-team/ui-ux-designer.md`
 - **Keywords:** design system, component library, design token, color palette, color scheme, typography, font, spacing, grid, UX flow, user flow, wireframe, mockup, prototype, visual consistency, look and feel, brand, contrast, icon, illustration, design spec, Figma, Storybook
-- In Consultive Mode (alongside `frontend-developer`): invoke whenever the task involves visual decisions or design system adherence.
+- In Consultive Mode (alongside `frontend-developer`): spawn whenever the task involves visual decisions or design system adherence.
 
-#### `database-specialist`
+#### `database-specialist` → `.claude/agents/dev-team/database-specialist.md`
 - **Keywords:** migration, schema, table, column, index, foreign key, constraint, relation, join, query, stored procedure, view, trigger, seed, fixture, ORM model, normalization, denormalization, database design, database choice, N+1, slow query, explain plan, replication, sharding, partitioning, Redis, cache invalidation, Elasticsearch
 - **Files:** `migrations/`, `*.sql`, `*.prisma`, `schema.rb`, `database/`, `db/`
 
-#### `devops-specialist`
+#### `devops-specialist` → `.claude/agents/dev-team/devops-specialist.md`
 - **Keywords:** Docker, Dockerfile, docker-compose, container, registry, CI/CD, pipeline, GitHub Actions, GitLab CI, Bitbucket Pipelines, Jenkins, CircleCI, deploy, deployment, release, rollback, env vars, secrets, Kubernetes, k8s, Helm, Terraform, Ansible, Pulumi, AWS, GCP, Azure, VPS, nginx, load balancer, SSL, TLS, DNS, CDN, monitoring, observability, Prometheus, Grafana, Datadog, infrastructure as code
 - **Files:** `Dockerfile`, `docker-compose*.yml`, `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `*.tf`, `kubernetes/`, `k8s/`, `helm/`, `ansible/`
 
@@ -86,23 +86,25 @@ Invoke only agents whose scope matches the task. Independent scopes may run in p
 
 ### Auto-Routing: Quality Gate
 
-#### `backend-test-specialist`
-Invoke when: `TESTS_REQUIRED=yes` and `backend-developer` completed work this session, or user asks: write tests, unit tests, integration test, test coverage, test the service/API/repository.
+**MANDATORY:** After any execution agent completes work, you MUST spawn the appropriate quality gate agents via the Task tool. Do NOT skip this step. The only exception is when the user explicitly asks not to use agents (see Agent Opt-Out above).
 
-#### `frontend-test-specialist`
-Invoke when: `TESTS_REQUIRED=yes` and `frontend-developer` completed work this session, or user asks: component tests, E2E test, Cypress, Playwright, Testing Library, Vitest, Jest (frontend context).
+#### `backend-test-specialist` → `.claude/agents/dev-team/backend-test-specialist.md`
+Spawn when: `TESTS_REQUIRED=yes` and `backend-developer` completed work this session, or user asks: write tests, unit tests, integration test, test coverage, test the service/API/repository.
 
-#### `code-reviewer`
-Invoke when: review, code review, review this PR, review the diff, check the code, audit the code, or before merging. Routes internally to `backend-reviewer`, `frontend-reviewer`, or both.
+#### `frontend-test-specialist` → `.claude/agents/dev-team/frontend-test-specialist.md`
+Spawn when: `TESTS_REQUIRED=yes` and `frontend-developer` completed work this session, or user asks: component tests, E2E test, Cypress, Playwright, Testing Library, Vitest, Jest (frontend context).
 
-#### `security-specialist`
-Invoke when: security audit, security review, check for vulnerabilities, OWASP, is this secure, pentest, threat model, CVE, XSS, SQL injection, CSRF, sensitive data, LGPD, GDPR, or before any production release involving auth, payments, or user data.
+#### `code-reviewer` → `.claude/agents/dev-team/code-reviewer.md`
+Spawn when: review, code review, review this PR, review the diff, check the code, audit the code, or before merging. Routes internally to `backend-reviewer`, `frontend-reviewer`, or both.
 
-#### `qa-specialist`
-Invoke when: QA, validate this feature, test behavior, acceptance test, regression test, does this work correctly, end-to-end validation, test the flow. Run after implementation agents complete, before shipping.
+#### `security-specialist` → `.claude/agents/dev-team/security-specialist.md`
+Spawn when: security audit, security review, check for vulnerabilities, OWASP, is this secure, pentest, threat model, CVE, XSS, SQL injection, CSRF, sensitive data, LGPD, GDPR, or before any production release involving auth, payments, or user data.
 
-#### `technical-writer`
-Invoke when: document, write documentation, generate docs, README, API docs, runbook, playbook, changelog, release notes, architecture guide, write a guide. Run after shipping a feature or completing a significant change.
+#### `qa-specialist` → `.claude/agents/dev-team/qa-specialist.md`
+Spawn when: QA, validate this feature, test behavior, acceptance test, regression test, does this work correctly, end-to-end validation, test the flow. Run after implementation agents complete, before shipping.
+
+#### `technical-writer` → `.claude/agents/dev-team/technical-writer.md`
+Spawn when: document, write documentation, generate docs, README, API docs, runbook, playbook, changelog, release notes, architecture guide, write a guide. Run after shipping a feature or completing a significant change.
 
 ### Workflow
 [A: new project | B: inherited | C: maintenance]
