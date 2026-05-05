@@ -93,6 +93,7 @@ Scan the repository for these signals and load the corresponding skill **before*
 | Task targets Azure resources | `skills/devops/azure/SKILL.md` |
 | VPS setup or bare Linux server | `skills/devops/vps-linux/SKILL.md` |
 | `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
+| `SENTRY_DSN` env var, `@sentry/` in `package.json`, `sentry-sdk` in `requirements.txt`, or `sentry` service in compose | `skills/devops/sentry/SKILL.md` |
 
 When multiple signals are present, load all relevant skills.
 
@@ -116,6 +117,7 @@ When multiple signals are present, load all relevant skills.
 | Infrastructure as Code | `skills/devops/iac-terraform/SKILL.md` |
 | Cloudflare (any task) | `skills/devops/cloudflare/SKILL.md` |
 | SonarQube / SonarCloud | `skills/devops/sonarqube/SKILL.md` |
+| Error tracking / APM (Sentry) | `skills/devops/sentry/SKILL.md` |
 
 ---
 
