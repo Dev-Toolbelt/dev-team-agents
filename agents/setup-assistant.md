@@ -19,7 +19,7 @@ Apply the `project-context` skill before acting. Load context in order: `README.
 
 ## Core Principle
 
-`dev-team-agents` is the base layer. You configure around what already exists in the project. **You never overwrite existing CLAUDE.md, README.md, or project configs without explicit user consent.**
+`dev-team-agents` is the base layer. You configure around what already exists. **Never overwrite existing CLAUDE.md, README.md, or project configs without explicit user consent.**
 
 ---
 
@@ -27,290 +27,78 @@ Apply the `project-context` skill before acting. Load context in order: `README.
 
 ### Step 0 — First-Run vs Refresh Detection
 
-Before anything else, check whether `.claude/docs/project.md` already exists:
-
 ```bash
 test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 ```
 
 | Result | Mode | Behavior |
 |--------|------|----------|
-| `FIRST_RUN` | Full onboarding | Proceed with Steps 1–7 as normal |
-| `REFRESH` | Incremental update | Skip Q&A for already-answered questions; update only what changed |
+| `FIRST_RUN` | Full onboarding | Proceed with Steps 1–7 |
+| `REFRESH` | Incremental update | Skip answered questions; patch only what changed |
 
-**Refresh Mode Flow** (skip to this when `REFRESH`):
-
-1. Read `.claude/docs/project.md` → extract the `last-updated` date from line 1
-2. Read `CLAUDE.md` → extract all existing values from the `## dev-team-agents` section — do not ask questions already answered there
-3. Run `git log --since="<last-updated-date>" --oneline --name-only` to identify what changed since the last refresh
-4. Cross-reference changed files against the Update Triggers table in `skills/shared/docs-sync/SKILL.md` to determine which `.claude/docs/` sections need patching
-5. Present a brief plan listing only the docs that need updating — wait for approval
-6. After approval, apply surgical patches using `skills/shared/docs-sync/SKILL.md`
-7. If `CLAUDE.md` is missing fields (e.g., a new version of dev-team-agents added new config keys), ask only the missing questions
+**Refresh flow:** read `.claude/docs/project.md` → extract `last-updated` date → run `git log --since="<date>" --oneline --name-only` → cross-reference with `skills/shared/docs-sync/SKILL.md` Update Triggers → present patch plan → apply. Ask only for missing CLAUDE.md fields.
 
 ---
 
 ### Step 1 — Scan What Exists
 
-Before asking anything, gather context from all available sources:
+Load `skills/shared/setup-scan/SKILL.md`. Run all scan commands, check skill availability, and run Project Docs Discovery. Summarize findings before asking questions.
 
-**Files to read:**
-- `README.md`, `CLAUDE.md`, `AGENTS.md` (if they exist)
-- `.claude/` directory structure
-- Package files to infer stack: `package.json`, `composer.json`, `requirements.txt`, `Gemfile`, `go.mod`, `Cargo.toml`, `Dockerfile`
-- Existing test files or CI configs (`.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`)
-
-**Git history and status (run if inside a git repo):**
-```bash
-git log --oneline -20
-git status
-```
-Recent commits reveal the team's working cadence, areas of active development, and naming conventions. They also surface tech debt, ongoing work, and what was recently changed — context that files alone don't show. `git status` detects uncommitted work in progress — important to note before making setup changes that touch tracked files.
-
-**Installed version:**
-```bash
-cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
-```
-Include the installed version in the scan summary so the user knows which version of dev-team-agents is active.
-
-Summarize what you found (files + commit history + installed version) before asking questions.
-
-**frontend-design skill check:**
-Verify whether `.claude/skills/frontend-design/` exists. If the project has UI or frontend work and the skill is missing:
-- It means `scripts/install.sh` didn't find it in the marketplace cache
-- Ask the user to: open Claude Code → `/plugins` → search `frontend-design` → install → then re-run `.claude/dev-team-agents/scripts/install.sh` to pick it up automatically
-- The `frontend-developer` and `ui-ux-designer` agents depend on it
-
-**web-design-guidelines skill check:**
-Verify whether `.claude/skills/web-design-guidelines/` exists. If the project has UI or frontend work and the skill is missing:
-- It means `scripts/install.sh` couldn't install it (Node.js/npx unavailable or command failed)
-- Ask the user to run manually from the project root: `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines`
-- Then re-run the installer: `.claude/dev-team-agents/scripts/install.sh latest`
-- The `frontend-developer` and `ui-ux-designer` agents depend on it
-
-### Project Docs Discovery
-
-Before generating any `.claude/docs/` file, scan for existing documentation already present in the project:
-
-```bash
-# Root-level documentation files (excluding files already read above)
-find . -maxdepth 1 -name "*.md" ! -name "README.md" ! -name "CLAUDE.md" ! -name "AGENTS.md" | sort
-
-# Common documentation directories (up to 3 levels deep)
-find . -maxdepth 3 \( -path "*/docs/*" -o -path "*/documentation/*" -o -path "*/doc/*" -o -path "*/wiki/*" \) -name "*.md" 2>/dev/null | sort
-
-# OpenAPI / Swagger specs
-find . -maxdepth 3 \( -name "openapi.yaml" -o -name "openapi.json" -o -name "swagger.yaml" -o -name "swagger.json" \) 2>/dev/null | sort
-
-# Convention config files (already collected in Step 1 scan — confirm list here)
-find . -maxdepth 2 \( -name ".eslintrc*" -o -name ".prettierrc*" -o -name "phpcs.xml" -o -name "pyproject.toml" -o -name ".rubocop.yml" -o -name "golangci.yml" -o -name ".stylelintrc*" \) 2>/dev/null | sort
-```
-
-Record all discovered files grouped by their relevance to the docs to be generated:
-
-| Found File Pattern | Feeds Into |
-|-------------------|-----------|
-| `ARCHITECTURE.md`, `docs/architecture*` | `architecture.md` → System Type, Layers, Module Map |
-| `CONTRIBUTING.md`, `docs/contributing*`, `docs/development*` | `code-standards.md` → Naming Conventions, Patterns |
-| `docs/api*`, `API.md`, `openapi.yaml`, `swagger.yaml` | `architecture.md` → API Contracts |
-| `docs/stack*`, `docs/tech*`, `DEVELOPMENT.md`, `TECH*.md` | `tech-stack.md` → Tech Stack table, Dev Setup |
-| `.eslintrc*`, `.prettierrc*`, `phpcs.xml`, `pyproject.toml`, etc. | `code-standards.md` → Detected Config |
-| `CHANGELOG.md`, `docs/changelog*` | `project.md` → Active Areas (recent context) |
-| `docs/design*`, `DESIGN*.md` | `design/design-system.md` → UI conventions |
-
-These discovered files are used in Step 6: content is read, synthesized, and referenced — never duplicated.
+---
 
 ### Step 2 — Project Type Question
 
-Ask the user (mandatory — determines the workflow):
-
 > Which best describes this project?
+> 1. **New project** — starting from scratch
+> 2. **Unfinished / inherited** — taking over from another team
+> 3. **Maintenance / evolution** — production project, adding features or fixing bugs
 >
-> 1. **New project** — starting from scratch, no existing codebase
-> 2. **Unfinished / inherited project** — taking over from another team, project incomplete
-> 3. **Maintenance / evolution** — project in production, adding features or fixing bugs
->
-> Please choose a number and give a brief description of the project.
+> Choose a number and give a brief description.
 
-Record the answer in CLAUDE.md as `PROJECT_TYPE: [new|inherited|maintenance]`.
+Record as `PROJECT_TYPE: [new|inherited|maintenance]` in CLAUDE.md.
+
+---
 
 ### Step 3 — Additional Configuration Questions
 
-List all relevant questions for the project type in a single message — do not ask one question at a time. Collect the user's response and extract each configuration value from it.
+Ask all relevant questions in a single message:
 
-Ask only the relevant questions for the project type:
+**All types:** documentation standard · tests required · CI/CD platform
 
-**For all types:**
-- Does the project have a documentation standard? (If no → `technical-writer` will use Diátaxis + Google Style Guide)
-- Does the project require tests? (If yes → test specialists activate; record in CLAUDE.md)
-- What CI/CD platform does/will the project use? (GitHub Actions / Bitbucket / GitLab / Jenkins / Other)
+**New projects only:** backlog location · UI needed (→ ui-ux-designer in Design Mode) · cloud provider
 
-**For type 1 (New):**
-- Where should the backlog live? (Local markdown files / GitHub Issues+Projects / GitLab Issues / Jira / Linear / ClickUp / Other)
-- Does this project need a UI? (If yes → ui-ux-designer activates in Design Mode first)
-- What cloud provider is targeted? (AWS / GCP / Azure / VPS only / None yet)
+**Maintenance only:** issue tracker (see tracker MCP table in `skills/shared/setup-scan/SKILL.md`)
 
-**For type 3 (Maintenance):**
-- Does the project have an issue tracker board? (If yes → which one?)
-  - **Supported trackers**: GitHub Projects, GitLab Issues, Jira, Linear, ClickUp, Trello, Asana, Monday.com, Notion, Azure DevOps Boards, Shortcut
-  - If yes: configure read-only access. Agents read tasks but only write with explicit user consent.
-  - Guide the user to configure the relevant MCP server. What each tracker needs:
+**Graphify (ask last):**
 
-    | Tracker | MCP to configure | What's needed |
-    |---------|-----------------|---------------|
-    | GitHub Projects | `github` MCP | GitHub personal access token (read:project scope) |
-    | GitLab Issues | `gitlab` MCP | GitLab personal access token (read_api scope) |
-    | Jira | `atlassian` MCP | Atlassian API token + workspace URL |
-    | Linear | `linear` MCP | Linear API key (read-only) |
-    | ClickUp | `clickup` MCP | ClickUp personal API token |
-    | Others | no MCP required | Agents read task lists from user-provided markdown exports |
+> 💡 **Want to dramatically reduce token costs?**
+> Graphify builds a knowledge graph of your codebase — typically **60–80% fewer tokens**, faster responses, richer context across sessions.
+> Set up Graphify now? **yes / no**
 
-  - Do not store credentials in project files. Instruct the user to configure the token in their Claude Code MCP settings (`~/.claude/settings.json` or via `/mcp` in Claude Code).
+- **yes** → invoke `graphify-setup` skill immediately
+- **no** → reply: *"Whenever you change your mind, say: 'Set up Graphify for this project'."*
 
-**Graphify (context graph — opt-in) — ask this last, after all other questions:**
+Record as `GRAPHIFY: [enabled|disabled]`.
 
-[Always ask the Graphify question last, after all type-specific questions are answered. The `graphify-setup` skill benefits from knowing the full project context before it runs.]
-
-Ask the user:
-
-> 💡 **Want to dramatically reduce token costs on this project?**
->
-> Graphify builds a knowledge graph of your codebase. Instead of reading dozens of files every task, Claude queries the graph — typically **60–80% fewer tokens**, faster responses, and richer context that persists across sessions.
->
-> Set up Graphify now? **yes** / **no**
-
-- **yes** → invoke the `graphify-setup` skill immediately after this question. It will install dependencies, generate `.claude/user-data/graphify.json` using the project context already gathered, set up the auto-rebuild Stop hook, and add the Context Navigation section to `CLAUDE.md`.
-- **no** → display this message and continue:
-
-  > No worries! Whenever you change your mind, just tell Claude:
-  > **"Set up Graphify for this project"**
-  >
-  > The `graphify-setup` skill will walk you through everything — dependencies, config,
-  > and first build — in under 2 minutes. Your future self will thank you. 🚀
-
-Record the answer in CLAUDE.md as `GRAPHIFY: [enabled|disabled]`.
+---
 
 ### Step 4 — Present Setup Plan
 
-Before creating any file, present a plan using `templates/plan-template.md`:
+Present a plan using `templates/plan-template.md` before creating any file. Wait for approval.
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- PLAN  ·  dev-team-agents Project Setup
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CONTEXT
-  Setting up [project name] as a [new|inherited|maintenance] project
-  with dev-team-agents. Workflow [A|B|C] applies.
-
-SCOPE
-  In scope
-  ─────────
-  · Append dev-team-agents section to CLAUDE.md (or create it)
-  · Create .claude/docs/ directory structure
-  · [Any tracker MCP configuration]
-
-  Out of scope
-  ─────────────
-  · No existing CLAUDE.md content will be modified
-  · No source code changes
-
-STEPS
-  ┌────┬──────────────────────────────────────────────────┬────────────────────────┬────────────┬──────┐
-  │ #  │ Action                                           │ Files / Areas Affected │ Complexity │ Par. │
-  ├────┼──────────────────────────────────────────────────┼────────────────────────┼────────────┼──────┤
-  │  1 │ Append ## dev-team-agents to CLAUDE.md           │ CLAUDE.md              │ Low        │ A    │
-  │  2 │ Create .claude/docs/backlog/ directory           │ .claude/docs/          │ Low        │ A    │
-  │  3 │ Create .claude/docs/development/ directory       │ .claude/docs/          │ Low        │ A    │
-  │  4 │ [Create .claude/docs/design/ if UI project]      │ .claude/docs/          │ Low        │ A    │
-  └────┴──────────────────────────────────────────────────┴────────────────────────┴────────────┴──────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Awaiting your approval before proceeding.
- Reply "approved" to execute · or provide feedback to adjust.
-
- ⚡ After approving: steps that share the same Par. group letter
-    can be sent as simultaneous agent prompts in a single message.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+---
 
 ### Step 5 — Generate CLAUDE.md Section
 
-After approval, if a CLAUDE.md already exists, **append** a `## dev-team-agents` section — never replace:
+After approval, **append** a `## dev-team-agents` section to CLAUDE.md — never replace existing content.
 
-```markdown
-## dev-team-agents
+Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all values collected in Steps 2–3.
 
-PROJECT_TYPE: [new|inherited|maintenance]
-TESTS_REQUIRED: [yes|no]
-CICD_PLATFORM: [github-actions|bitbucket|gitlab|jenkins|other]
-GRAPHIFY: [enabled|disabled]
-BACKLOG_LOCATION: [local|github-issues|gitlab-issues|jira|linear|clickup|other]
-CLOUD_PROVIDER: [aws|gcp|azure|vps|none]
-ISSUE_TRACKER: [none|github-projects|jira|linear|clickup|trello|other]
-ISSUE_TRACKER_ACCESS: read-only
+---
 
-### Agent Activation
-- product-analyst: [active|inactive]
-- software-architect: [active|inactive]
-- backend-test-specialist: [active if TESTS_REQUIRED=yes]
-- frontend-test-specialist: [active if TESTS_REQUIRED=yes]
-- ui-ux-designer: [active — Design Mode on project start / Consultive Mode ongoing]
-- devops-specialist: [active]
+### Step 5b — Context Navigation Section (Graphify only)
 
-### Auto-Routing: Planning
-
-For any task that involves planning, breaking work into subtasks, entering plan mode, validating business rules, clarifying flows, or defining architecture — **automatically invoke all three agents below in parallel before any code is written**:
-
-| Agent | Role in Planning |
-|---|---|
-| `software-architect` | System design, architecture decisions, technical trade-offs, API contracts |
-| `database-specialist` | Data modeling, schema decisions, query strategy, migration planning |
-| `product-analyst` | Business rule validation, flow clarification, acceptance criteria, scope definition |
-
-Trigger conditions (any of these):
-- User asks to plan a feature, system, or change
-- Task is large enough to require breaking into subtasks
-- User enters plan mode or requests a plan before execution
-- There is ambiguity in business rules, flows, or scope
-
-These three agents collaborate to produce a unified plan. Only after the plan is approved does execution begin.
-
-### Auto-Routing: Execution
-
-For any coding task — with or without a prior plan — **automatically invoke the agents whose scope matches the work being done**:
-
-| Agent | Scope — invoke when the task touches… |
-|---|---|
-| `backend-developer` | APIs, business logic, services, workers, jobs, integrations, server-side code |
-| `frontend-developer` | UI components, pages, client-side state, forms, routing, browser-side logic |
-| `database-specialist` | Migrations, schema changes, queries, stored procedures, indexes, seeds |
-| `devops-specialist` | CI/CD pipelines, Dockerfiles, infra-as-code, environment config, deploy scripts |
-
-Rules:
-- Invoke only the agents whose scope is touched by the task — do not invoke all four by default
-- Multiple agents may be invoked in parallel when their scopes are independent
-- A task touching both API and UI invokes `backend-developer` + `frontend-developer` simultaneously
-
-### Quality Gate & Ship
-
-After all execution agents complete their work, **always run the following sequence**:
-
-1. **QUALITY GATE** — invoke `qa-specialist` + (if tests required) `backend-test-specialist` and/or `frontend-test-specialist` to validate correctness, coverage, and acceptance criteria
-2. **SHIP** — invoke `devops-specialist` to review deploy readiness, then hand off to the user for final approval and merge/deploy
-
-This sequence is mandatory — never skip it, even for small tasks — unless the user explicitly asks to skip it.
-
-### Workflow
-[A: new project | B: inherited | C: maintenance]
-
-### Language
-All generated documents must be in English unless explicitly overridden per document.
-```
-
-### Step 5b — Inject Context Navigation Section (Graphify=enabled only)
-
-If the user opted in to Graphify **and** the `graphify-setup` skill has completed successfully, append this section to `CLAUDE.md` (only if not already present):
+If Graphify was enabled and `graphify-setup` completed, append to CLAUDE.md (only if not already present):
 
 ```markdown
 ## Context Navigation (Graphify)
@@ -321,272 +109,67 @@ If the user opted in to Graphify **and** the `graphify-setup` skill has complete
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
 **Rebuild:** always use `scripts/graphify-refresh.sh` — never `graphify update .` directly.
-Rebuild runs automatically after each Claude session via the Stop hook.
-Manual rebuild needed after: new modules/services, structural reorganization, or domain flow changes.
+Rebuild runs automatically after each session via the Stop hook.
 ```
 
 ---
 
 ### Step 6 — Generate Project Docs
 
-After approval, create all `.claude/docs/` directories and generate the initial content for each document using context gathered in Steps 1–3.
+Load `skills/shared/docs-templates/SKILL.md` for all document templates and the Source Synthesis Rule.
 
-**All files follow the token-economy rules defined in `skills/shared/docs-sync/SKILL.md`**: line budgets, tables over prose, no duplicate content, surgical patches on future updates.
+Create directories and files:
+- `.claude/docs/project.md`
+- `.claude/docs/development/tech-stack.md`
+- `.claude/docs/development/architecture.md`
+- `.claude/docs/development/code-standards.md`
+- `.claude/docs/backlog/README.md`
+- `.claude/docs/design/design-system.md` (UI projects only)
 
-Use real data from the scan wherever possible. Use `<!-- TODO: <agent> to fill -->` only for sections the agent has not yet determined. Omit sections entirely when they have no content yet.
-
-### Source Synthesis Rule
-
-Before generating each doc file, check the Project Docs Discovery results from Step 1. For every relevant file found:
-
-1. **Read** the source file
-2. **Synthesize** — extract and condense the relevant information into the appropriate template section (do not copy verbatim; summarize into table rows or bullets per the schema)
-3. **Add a `## Source References` section** at the end of the generated file listing every source file that contributed content
-
-`## Source References` format:
-
-```markdown
-## Source References
-| File | Sections Fed |
-|------|-------------|
-| [ARCHITECTURE.md](../../ARCHITECTURE.md) | System Type, Layers, Module Map |
-| [docs/api.md](../../docs/api.md) | API Contracts |
-```
-
-Rules:
-- **Only list files that actually provided content** — never list a file that was not read or contributed nothing
-- Use paths **relative to the project root** (e.g., `ARCHITECTURE.md`, `docs/api.md`) — not relative to `.claude/docs/`
-- **Omit the section entirely** if no source files were found for that doc
-- This section is navigation metadata — it does not count toward the file's line budget
-- Future agents updating these files via `docs-sync` must **preserve existing Source References** and add new entries when they read additional source files
-
----
-
-#### `.claude/docs/project.md`
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Project: [project name from README title or directory name]
-
-## What It Does
-[1-2 sentences from README description or inferred from the scan]
-
-## Type & Config
-PROJECT_TYPE: [new|inherited|maintenance]
-TESTS_REQUIRED: [yes|no]
-CICD_PLATFORM: [detected or answered in Step 3]
-[CLOUD_PROVIDER: omit if not applicable]
-[ISSUE_TRACKER: omit if none]
-
-## Active Areas
-[Populate from `git log` if history exists; omit entire section for new projects with no commits]
-| Directory | Purpose | Last Active |
-|-----------|---------|-------------|
-
-## Key Constraints
-[Any hard rules from an existing CLAUDE.md that all agents must respect; omit section if no prior CLAUDE.md existed]
-```
-
----
-
-#### `.claude/docs/development/tech-stack.md`
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Tech Stack
-
-| Layer | Technology | Version | Notes |
-|-------|-----------|---------|-------|
-[Populate from package.json / composer.json / requirements.txt / Gemfile / go.mod / Cargo.toml / Dockerfile.
-Include: language, framework, database, cache, queue, auth, test runner, CI/CD.
-Omit rows for layers not present in this project.]
-
-## Dev Setup
-[From README or package.json scripts — 1–3 commands to start the dev environment; omit if unknown]
-
-## Notable Dependencies
-[Only non-obvious deps that affect how agents write code — omit well-known framework staples]
-
-[## Source References — include only if Project Docs Discovery found relevant files]
-[| File | Sections Fed |]
-[|------|-------------|]
-[| [DEVELOPMENT.md](../../DEVELOPMENT.md) | Tech Stack table, Dev Setup |]
-```
-
----
-
-#### `.claude/docs/development/architecture.md`
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Architecture
-
-## System Type
-[For inherited/maintenance: infer from scan (e.g., "Decoupled REST API + React SPA")]
-[For new projects: <!-- TODO: software-architect to define -->]
-
-## Layers
-[For inherited/maintenance: infer from top-level directory structure]
-[For new projects: <!-- TODO: software-architect to define -->]
-| Layer | Directory | Responsibility |
-|-------|-----------|---------------|
-
-## Module Map
-[For inherited/maintenance: populate from scan]
-[For new projects: <!-- TODO: software-architect to complete -->]
-| Module/Service | Purpose | Key Entry Points |
-|---------------|---------|-----------------|
-
-[## Source References — include only if Project Docs Discovery found relevant files]
-[| File | Sections Fed |]
-[|------|-------------|]
-[| [ARCHITECTURE.md](../../ARCHITECTURE.md) | System Type, Layers, Module Map |]
-```
-
----
-
-#### `.claude/docs/development/code-standards.md`
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Code Standards
-
-## Detected Config
-[Populate from .eslintrc / .prettierrc / phpcs.xml / pyproject.toml / .rubocop.yml / golangci.yml found in Step 1 scan.
-Omit section if no config files were found.]
-| Tool | Config File | Key Settings |
-|------|------------|-------------|
-
-## Naming Conventions
-<!-- TODO: software-architect to define, or auto-detect from consistent patterns in existing code -->
-
-## Established Patterns
-<!-- TODO: software-architect or code-reviewer to complete -->
-
-[## Source References — include only if Project Docs Discovery found relevant files]
-[| File | Sections Fed |]
-[|------|-------------|]
-[| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Naming Conventions, Patterns, Detected Config |]
-```
-
----
-
-#### `.claude/docs/backlog/README.md`
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Backlog
-
-## Tracker
-[From Step 3: "None" | "GitHub Projects: <url>" | "Jira: <workspace>" | "Linear: <team>" | ...]
-
-## Sprint Files
-| File | Sprint | Status |
-|------|--------|--------|
-| — | No sprints created yet | — |
-```
-
----
-
-#### `.claude/docs/design/design-system.md` (only if UI project)
-
-```markdown
-<!-- last-updated: [today's date YYYY-MM-DD] -->
-# Design System
-
-## UI Library
-[Detected from package.json: shadcn/ui, MUI, Ant Design, Bootstrap, Chakra UI — or "Not yet chosen" for new projects]
-
-## Color Tokens
-<!-- TODO: ui-ux-designer to complete in Design Mode -->
-
-## Typography Scale
-<!-- TODO: ui-ux-designer to complete -->
-
-## Component Inventory
-<!-- TODO: ui-ux-designer to complete -->
-```
+Use real data from the scan. Apply Source Synthesis Rule for any discovered source files.
 
 ---
 
 ### Step 7 — Confirm Setup Complete
 
-After creating all directories and writing the CLAUDE.md section, read the installed version and emit a completion summary:
-
 ```bash
 cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
-Then output to the user:
+Output completion summary listing all configured files. Close with the workflow entry point for the project type:
 
-> **dev-team-agents setup complete** (v[installed version])
->
-> **Configured:**
-> - `CLAUDE.md` — `## dev-team-agents` section appended
-> - `.claude/docs/project.md` — generated
-> - `.claude/docs/development/tech-stack.md` — generated
-> - `.claude/docs/development/architecture.md` — generated
-> - `.claude/docs/development/code-standards.md` — generated
-> - `.claude/docs/backlog/README.md` — generated
-> [- `.claude/docs/design/design-system.md` — generated (UI project)]
-> [- Graphify — enabled and configured]
->
-> **Start with the workflow that matches your project type:**
-> - New project → open `workflows/new-project.md` or say: `"As the product-analyst, I have a requirements document: [paste or attach]"`
-> - Inherited / unfinished → open `workflows/inherited-project.md`
-> - Maintenance / live project → open `workflows/maintenance.md`
+- **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"`
+- **Inherited** → open `workflows/inherited-project.md`
+- **Maintenance** → open `workflows/maintenance.md`
 
 ---
 
 ## Role 2 — Update Manager
 
-### Check for Updates
-
-When the user asks to check for updates, or when the update hook triggers:
+When the user asks to check for updates or the update hook triggers:
 
 ```bash
-cd .claude/dev-team-agents
-CURRENT=$(cat .installed-version 2>/dev/null || echo "unknown")
-LATEST=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "unknown")
+CURRENT=$(cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown")
+LATEST=$(curl -fsSL https://api.github.com/repos/Dev-Toolbelt/dev-team-agents/releases/latest | grep tag_name | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 ```
 
-If `CURRENT != LATEST`:
+If `CURRENT != LATEST`: notify the user and offer to run `.claude/dev-team-agents/scripts/install.sh latest`.
 
-> A new version of `dev-team-agents` is available: **$LATEST** (you have $CURRENT)
->
-> Run `.claude/dev-team-agents/scripts/install.sh latest` to update, or `.claude/dev-team-agents/scripts/install.sh $SPECIFIC_VERSION` for a specific version.
->
-> See the release notes on the repository for what changed.
->
-> Would you like me to update now?
-
-If user confirms: run `.claude/dev-team-agents/scripts/install.sh latest`
-
-### Version Management
-
+Version commands:
 ```bash
-# Update to latest
-.claude/dev-team-agents/scripts/install.sh latest
-
-# Install specific version
-.claude/dev-team-agents/scripts/install.sh v1.2.0
-
-# Downgrade
-.claude/dev-team-agents/scripts/install.sh v1.0.0
+.claude/dev-team-agents/scripts/install.sh latest      # update
+.claude/dev-team-agents/scripts/install.sh v1.2.0      # specific version
 ```
 
 ---
 
-## Immutability Warning (Critical)
+## Immutability Warning
 
 If the user asks to modify any file inside `.claude/dev-team-agents/`:
 
-> ⚠️ **Not recommended**: modifying files inside `.claude/dev-team-agents/` directly will be **overwritten on the next update**.
+> ⚠️ Files inside `.claude/dev-team-agents/` are overwritten on every update.
 >
-> Override at the project level instead:
->
-> - **Agent behavior**: add rules to your project's `CLAUDE.md` under a `## Project Rules` section
-> - **Agent override**: create `.agents/<agent-name>.md` in your project root — project-level agent files always take precedence
-> - **Workflow customization**: add a `.claude/docs/development/code-standards.md` with project-specific conventions
->
-> Project-level files always win over base agent files. This is by design.
+> Override at the project level:
+> - **Agent behavior** → add rules to `CLAUDE.md` under `## Project Rules`
+> - **Agent override** → create `.agents/<agent-name>.md` (project files always win)
+> - **Conventions** → add to `.claude/docs/development/code-standards.md`
