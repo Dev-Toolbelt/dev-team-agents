@@ -130,7 +130,22 @@ Use real data from the scan. Apply Source Synthesis Rule for any discovered sour
 
 ---
 
-### Step 7 — Confirm Setup Complete
+### Step 7 — Update .gitignore
+
+Ensure `.claude/user-data/session-summary.md` is excluded from version control (it is personal, per-user state and must never be committed):
+
+```bash
+if [ -f .gitignore ]; then
+    grep -qF ".claude/user-data/session-summary.md" .gitignore \
+        || echo ".claude/user-data/session-summary.md" >> .gitignore
+else
+    echo ".claude/user-data/session-summary.md" > .gitignore
+fi
+```
+
+---
+
+### Step 8 — Confirm Setup Complete
 
 ```bash
 cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"

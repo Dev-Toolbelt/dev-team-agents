@@ -15,27 +15,14 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || 
    [ -n "$(git status --porcelain 2>/dev/null)" ] || [ -n "$TODAY_COMMITS" ]; then
 
     if [ ! -f "$SUMMARY_FILE" ]; then
-        # Create the file with a placeholder entry so it exists for future appends.
-        mkdir -p "$(dirname "$SUMMARY_FILE")"
-        cat > "$SUMMARY_FILE" <<EOF
-## $NOW | [session title — fill in]
-**Done**: (fill in what was implemented or changed)
-
-**Decisions**: (fill in key choices made and why)
-
-**Next**: (fill in what remains or is recommended next)
-
----
-EOF
         cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  SESSION SUMMARY REQUIRED
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Changes detected. Created $SUMMARY_FILE with a
- placeholder entry for today ($TODAY).
+ Changes detected but $SUMMARY_FILE does not exist.
 
- Please fill in the entry now:
+ Create the file and write today's entry:
 
  ## $NOW | [brief task title]
  **Done**: what was implemented or changed
