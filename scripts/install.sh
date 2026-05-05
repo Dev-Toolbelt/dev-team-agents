@@ -173,10 +173,13 @@ done
 echo "→ Skills linked: .claude/skills/"
 
 # ── Step 6: Link commands ─────────────────────────────────────────
+# Commands are grouped under .claude/commands/devteam/ so they are invoked
+# as /devteam:plan, /devteam:backend, etc. — namespaced and separate from
+# any project-specific commands at the .claude/commands/ root.
 COMMANDS_LINK="$COMMANDS_TARGET/devteam"
 if [ ! -L "$COMMANDS_LINK" ] && [ ! -e "$COMMANDS_LINK" ]; then
     ln -s "../dev-team-agents/commands" "$COMMANDS_LINK"
-    echo "→ Commands linked: .claude/commands/devteam/"
+    echo "→ Commands linked: .claude/commands/devteam/ (invoke as /devteam:plan, /devteam:backend, etc.)"
 else
     echo "→ Commands already linked: .claude/commands/devteam/ (skipped)"
 fi

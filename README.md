@@ -101,7 +101,7 @@ After installation, `.claude/` will contain:
 │   ├── plan-mode/         ← symlink → skill directory
 │   └── ...                ← one symlink per skill
 ├── commands/
-│   └── devteam/       ← symlink → .claude/dev-team-agents/commands/
+│   └── devteam/       ← symlink → .claude/dev-team-agents/commands/ (invoke as /devteam:plan etc.)
 └── settings.json      ← update-check and session-summary hooks configured automatically
 ```
 
@@ -133,40 +133,40 @@ If you prefer each developer to install locally instead (e.g. for a personal/exp
 
 ## Slash Commands
 
-After installation, 21 slash commands are available under `/devteam-*`. Each command spawns the appropriate agents via the Task tool and automatically scopes its work to the current git branch or worktree.
+After installation, 21 slash commands are available under the `/devteam:` namespace. Each command spawns the appropriate agents via the Task tool and automatically scopes its work to the current git branch or worktree. All devteam commands are grouped under `.claude/commands/devteam/` — separate from any project-specific commands.
 
 | Command | What it does |
 |---------|-------------|
-| `/devteam-plan` | Planning phase — software-architect + product-analyst + database-specialist (+ backend/frontend/devops when relevant) |
-| `/devteam-backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
-| `/devteam-frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
-| `/devteam-fullstack` | Full-stack implementation — backend + frontend teams in parallel |
-| `/devteam-design` | UI/UX design — ui-ux-designer |
-| `/devteam-fix` | Bug fix — relevant developer(s) → test-specialist |
-| `/devteam-refactor` | Refactoring — software-architect plans, then developer(s) execute |
-| `/devteam-architect` | Architecture decisions, ADRs, trade-offs — software-architect only |
-| `/devteam-review` | Code review — code-reviewer + software-architect + security-specialist |
-| `/devteam-qa` | Quality assurance — qa-specialist |
-| `/devteam-security` | Security audit — security-specialist + software-architect |
-| `/devteam-dba` | Database work — database-specialist + software-architect |
-| `/devteam-devops` | Infrastructure / CI/CD — devops-specialist |
-| `/devteam-tester` | Tests only — backend-test-specialist + frontend-test-specialist |
-| `/devteam-docs` | Documentation — technical-writer |
-| `/devteam-pr` | Pull request — drafts title + description, asks for confirmation before creating |
-| `/devteam-workflow-new` | Full new-project workflow |
-| `/devteam-workflow-maintenance` | Maintenance / feature evolution workflow |
-| `/devteam-workflow-bugfix` | Full bug-fix workflow |
-| `/devteam-workflow-inherited` | Inherited project onboarding workflow |
-| `/devteam-workflow-security-patch` | Security patch workflow |
+| `/devteam:plan` | Planning phase — software-architect + product-analyst + database-specialist (+ backend/frontend/devops when relevant) |
+| `/devteam:backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
+| `/devteam:frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
+| `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
+| `/devteam:design` | UI/UX design — ui-ux-designer |
+| `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
+| `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
+| `/devteam:architect` | Architecture decisions, ADRs, trade-offs — software-architect only |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist |
+| `/devteam:qa` | Quality assurance — qa-specialist |
+| `/devteam:security` | Security audit — security-specialist + software-architect |
+| `/devteam:dba` | Database work — database-specialist + software-architect |
+| `/devteam:devops` | Infrastructure / CI/CD — devops-specialist |
+| `/devteam:tester` | Tests only — backend-test-specialist + frontend-test-specialist |
+| `/devteam:docs` | Documentation — technical-writer |
+| `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
+| `/devteam:workflow-new` | Full new-project workflow |
+| `/devteam:workflow-maintenance` | Maintenance / feature evolution workflow |
+| `/devteam:workflow-bugfix` | Full bug-fix workflow |
+| `/devteam:workflow-inherited` | Inherited project onboarding workflow |
+| `/devteam:workflow-security-patch` | Security patch workflow |
 
 **Usage examples:**
 
 ```
-/devteam-plan add an export-to-PDF feature for the fueling report
-/devteam-backend implement the PDF export endpoint
-/devteam-review
-/devteam-pr draft
-/devteam-pr review base staging
+/devteam:plan add an export-to-PDF feature for the fueling report
+/devteam:backend implement the PDF export endpoint
+/devteam:review
+/devteam:pr draft
+/devteam:pr review base staging
 ```
 
 All commands accept optional `$ARGUMENTS` to narrow or expand the scope.
