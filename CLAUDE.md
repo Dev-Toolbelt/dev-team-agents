@@ -171,7 +171,8 @@ dev-team-agents/
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← update.sh, session-summary-hook.sh, graphify-refresh.sh, new-adr.sh
+├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
+│   └── hooks/       ← pre-tool-use.sh, stop.sh (dispatchers) + pre-tool-use/, stop/ (sub-scripts)
 ├── README.md
 └── CLAUDE.md        ← this file
 ```
@@ -188,10 +189,13 @@ When installed in a project, the installer creates two sibling directories under
 | `.claude/user-data/` | User state and config — **never touched by the installer** |
 
 Files in `user-data/`:
-- `.installed-version` — current installed version tag
-- `.last-update-check` — Unix timestamp of last update check (prevents daily hammering)
-- `.auto-update` — flag file; present = automatic updates enabled
-- `graphify.json` — Graphify config (created by the `graphify-setup` skill if enabled)
+- `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
+- `.installed-version` — current installed version tag (**gitignored** by installer)
+- `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
+- `.auto-update` — flag file; present = auto-updates enabled (**gitignored** by installer)
+- `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
+
+`install.sh` automatically adds the four gitignored files to `.gitignore` during installation. `graphify.json` is intentionally left out — it is project-level config shared by the whole team.
 
 **Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
 
@@ -239,7 +243,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 
 - One entry per session per task; append to the same entry if continuing the same task the same day
 - This file is read at agent startup via `skills/shared/project-context/SKILL.md`
-- The `Stop` hook (`scripts/session-summary-hook.sh`) detects when this is missing and prompts you
+- The `Stop` dispatcher (`scripts/hooks/stop.sh`) runs `scripts/hooks/stop/01-session-summary.sh`, which detects when this is missing and prompts you
 
 **Multi-agent sessions**: when multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
 
@@ -283,7 +287,7 @@ The script auto-numbers the file and places it in `.claude/docs/development/adrs
 
 ### Stop Hook (Automated Enforcement)
 
-`install.sh` registers `scripts/session-summary-hook.sh` as a `Stop` hook in `.claude/settings.json`. This hook:
+`install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`. This dispatcher runs all sub-scripts in `scripts/hooks/stop/` in order, including `01-session-summary.sh`, which:
 
 - Runs automatically each time Claude finishes responding
 - Detects uncommitted changes **or commits made today** without a session-summary entry for today

@@ -90,10 +90,12 @@ After installation, `.claude/` will contain:
 ```
 .claude/
 ├── dev-team-agents/   ← extracted from tarball (no .git folder — safe to commit)
-├── user-data/         ← user state and config (preserved across updates — safe to commit)
-│   ├── .installed-version
-│   ├── .last-update-check
-│   └── graphify.json  ← created by Graphify setup (if enabled)
+├── user-data/         ← user state and config (preserved across updates)
+│   ├── graphify.json  ← created by Graphify setup (if enabled) — commit this
+│   ├── session-summary.md  ← gitignored automatically by installer
+│   ├── .installed-version  ← gitignored automatically by installer
+│   ├── .last-update-check  ← gitignored automatically by installer
+│   └── .auto-update        ← gitignored automatically by installer
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -102,7 +104,7 @@ After installation, `.claude/` will contain:
 │   └── ...                ← one symlink per skill
 ├── commands/
 │   └── devteam/       ← symlink → .claude/dev-team-agents/commands/ (invoke as /devteam:plan etc.)
-└── settings.json      ← update-check and session-summary hooks configured automatically
+└── settings.json      ← hook dispatchers configured automatically (single entry per event type)
 ```
 
 ---
@@ -290,7 +292,7 @@ At the end of any session where files were changed, agents write an entry to `.c
 **Next**: what remains or is recommended next
 ```
 
-A `Stop` hook (`scripts/session-summary-hook.sh`) is registered automatically by `install.sh`. It detects uncommitted changes without a session-summary entry for today and outputs a structured reminder that the agent sees on the next turn.
+A `Stop` dispatcher (`scripts/hooks/stop.sh`) is registered automatically by `install.sh`. It runs all sub-scripts in `scripts/hooks/stop/` in order, including session-summary enforcement. Sub-scripts are added to that folder (e.g. by `graphify-setup`) without touching `settings.json`.
 
 At the start of every session, agents read the most recent entry from this file before acting.
 
@@ -308,11 +310,7 @@ The script auto-numbers the file and fills a MADR template. Agents read relevant
 
 `skills/shared/project-context` defines the context-loading order every agent follows at startup. It includes the session summary and ADR index, ensuring a consistent baseline across all agents and sessions.
 
-Add `.claude/user-data/session-summary.md` to your `.gitignore` if you prefer it not to be committed:
-
-```gitignore
-.claude/user-data/session-summary.md
-```
+The installer automatically adds all personal user-data files to `.gitignore` (`session-summary.md`, `.installed-version`, `.last-update-check`, `.auto-update`). Only `graphify.json` is left uncommitted — it contains project-level configuration that the whole team should share.
 
 ---
 
@@ -654,7 +652,7 @@ Verify the symlink exists: `ls .claude/agents/dev-team/`. If the directory is mi
 Check that `.claude/skills/` contains symlinks pointing to each skill directory. Re-run the installer to restore broken links: `.claude/dev-team-agents/scripts/install.sh latest`.
 
 **Update check hook fires on every tool call**
-The hook reads a timestamp file and only outputs a message once per day. If it prints every time, check that `.claude/user-data/.last-update-check` is a writable file (not a directory) and that `update.sh` is executable.
+The hook sub-script reads a timestamp file and only outputs a message once per day. If it prints every time, check that `.claude/user-data/.last-update-check` is a writable file (not a directory) and that `scripts/hooks/pre-tool-use/01-check-updates.sh` is executable.
 
 **`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md**
 The assistant appends to an existing file — it never replaces content. Search for `## dev-team-agents` in your CLAUDE.md. If it is absent, tell Claude: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
@@ -680,7 +678,8 @@ dev-team-agents/
 │   └── ui-libraries/ ← shadcn, mui, antd, bootstrap, chakra-ui, jquery
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
-├── scripts/         ← install.sh, check-updates.sh
+├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
+│   └── hooks/       ← dispatchers + sub-scripts (pre-tool-use/, stop/)
 └── CLAUDE.md        ← authoring conventions for this repo
 ```
 

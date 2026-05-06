@@ -132,24 +132,26 @@ Use real data from the scan. Apply Source Synthesis Rule for any discovered sour
 
 ### Step 7 — Update .gitignore
 
-Ensure the following user-data files are excluded from version control (personal, per-user state that must never be committed):
+`install.sh` already adds these entries automatically. Verify they are present and add any that are missing:
 
 - `.claude/user-data/session-summary.md`
 - `.claude/user-data/.last-update-check`
 - `.claude/user-data/.installed-version`
+- `.claude/user-data/.auto-update`
 
 ```bash
 USER_DATA_ENTRIES=(
     ".claude/user-data/session-summary.md"
     ".claude/user-data/.last-update-check"
     ".claude/user-data/.installed-version"
+    ".claude/user-data/.auto-update"
 )
 
 for ENTRY in "${USER_DATA_ENTRIES[@]}"; do
     if [ -f .gitignore ]; then
         grep -qF "$ENTRY" .gitignore || echo "$ENTRY" >> .gitignore
     else
-        echo "$ENTRY" > .gitignore
+        echo "$ENTRY" >> .gitignore
     fi
 done
 ```
@@ -167,6 +169,157 @@ Output completion summary listing all configured files. Close with the workflow 
 - **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"`
 - **Inherited** → open `workflows/inherited-project.md`
 - **Maintenance** → open `workflows/maintenance.md`
+
+---
+
+## Role 3 — Health Check
+
+Triggered when the user says anything matching: "run a health check", "check the installation", "verify the setup", "health check on this project", or similar. Also runs automatically in REFRESH mode (Step 0).
+
+Present results as a categorized checklist. Each item gets one of: `✅ OK` · `⚠️ WARN` · `🔧 FIX`. After scanning all categories, auto-apply all FIX items that are safe (additive changes), then show a summary. **Before modifying `settings.json`, show a diff and ask for confirmation.**
+
+---
+
+### Category 1 — Symlinks
+
+```bash
+ls -la .claude/agents/dev-team 2>/dev/null || echo "MISSING"
+ls -la .claude/commands/devteam 2>/dev/null || echo "MISSING"
+ls .claude/skills/ 2>/dev/null | head -5 || echo "MISSING"
+```
+
+| Check | Expected | Auto-fix |
+|-------|----------|----------|
+| `.claude/agents/dev-team` symlink exists | → `../dev-team-agents/agents` | `ln -s ../dev-team-agents/agents .claude/agents/dev-team` |
+| `.claude/commands/devteam` symlink exists | → `../dev-team-agents/commands` | `ln -s ../dev-team-agents/commands .claude/commands/devteam` |
+| `.claude/skills/` has at least one symlink | Any skill dir linked | Re-run skill linking loop from `install.sh` |
+
+---
+
+### Category 2 — Scripts & Executability
+
+```bash
+for f in \
+  .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh \
+  .claude/dev-team-agents/scripts/hooks/stop.sh \
+  .claude/dev-team-agents/scripts/hooks/pre-tool-use/01-check-updates.sh \
+  .claude/dev-team-agents/scripts/hooks/stop/01-session-summary.sh \
+  .claude/dev-team-agents/scripts/update.sh; do
+  [ -f "$f" ] && [ -x "$f" ] && echo "OK: $f" || echo "FAIL: $f"
+done
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| All dispatcher and sub-scripts exist | Re-run `chmod +x` |
+| All scripts are executable | `chmod +x <script>` |
+
+---
+
+### Category 3 — User Data
+
+```bash
+ls -la .claude/user-data/ 2>/dev/null || echo "MISSING"
+cat .claude/user-data/.installed-version 2>/dev/null || echo "MISSING"
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| `.claude/user-data/` directory exists | `mkdir -p .claude/user-data/` |
+| `.installed-version` exists | WARN only — re-run installer to populate |
+
+---
+
+### Category 4 — settings.json
+
+```bash
+cat .claude/settings.json 2>/dev/null || echo "MISSING"
+```
+
+Verify the following and flag any deviation as FIX (show diff, ask confirmation before applying):
+
+| Check | Expected value | Fix action |
+|-------|---------------|------------|
+| `hooks.PreToolUse` has exactly one dev-team entry | command = `…/scripts/hooks/pre-tool-use.sh`, matcher `.*` | Replace old entries (e.g. `update.sh --check`, inline graphify command) with dispatcher |
+| `hooks.Stop` has exactly one dev-team entry | command = `…/scripts/hooks/stop.sh` | Replace old entries (e.g. `session-summary-hook.sh`, `graphify-refresh.sh`) with dispatcher |
+| No stale direct hook paths remain | No `update.sh --check`, `session-summary-hook.sh`, or `graphify-refresh.sh` as direct hook commands | Consolidate into dispatchers |
+
+---
+
+### Category 5 — Graphify (skip if not enabled)
+
+Detect: `[ -f .claude/user-data/graphify.json ] && echo ENABLED || echo DISABLED`
+
+If ENABLED:
+
+```bash
+ls .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null || echo "MISSING"
+ls .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
+ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| `stop/02-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
+| `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
+| `graphify-out/` directory exists | WARN — run: `bash .claude/dev-team-agents/scripts/graphify-refresh.sh` |
+
+---
+
+### Category 6 — CLAUDE.md
+
+```bash
+grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| `## dev-team-agents` section present in `CLAUDE.md` | WARN — re-run setup (Step 5) to append the section |
+
+---
+
+### Category 7 — .gitignore
+
+```bash
+for e in \
+  ".claude/user-data/session-summary.md" \
+  ".claude/user-data/.last-update-check" \
+  ".claude/user-data/.installed-version" \
+  ".claude/user-data/.auto-update"; do
+  grep -qF "$e" .gitignore 2>/dev/null && echo "OK: $e" || echo "MISSING: $e"
+done
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| All four user-data entries present in `.gitignore` | Append missing entries automatically |
+
+---
+
+### Health Check Output Format
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ HEALTH CHECK — dev-team-agents
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Symlinks ................ ✅ OK
+ Scripts ................. 🔧 FIX  (hooks/stop.sh not executable)
+ User Data ............... ✅ OK
+ settings.json ........... 🔧 FIX  (stale direct hooks found — see diff below)
+ Graphify ................ ✅ OK
+ CLAUDE.md ............... ✅ OK
+ .gitignore .............. ⚠️ WARN  (1 entry missing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2 items need attention. Proposed changes:
+  🔧 chmod +x .claude/dev-team-agents/scripts/hooks/stop.sh
+  🔧 settings.json — replace stale hooks with dispatcher [diff shown]
+  ⚠️ .gitignore — add missing entry (auto-applying)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Show the diff for any `settings.json` changes, then ask: **"Apply fixes to settings.json? (yes/no)"**. Apply all other auto-fixes without asking.
 
 ---
 

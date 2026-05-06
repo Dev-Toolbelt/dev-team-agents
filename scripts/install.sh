@@ -188,8 +188,8 @@ else
 fi
 
 # ── Step 7: Configure hooks in .claude/settings.json ────────────
-UPDATE_HOOK_CMD=".claude/dev-team-agents/scripts/update.sh --check"
-SESSION_HOOK_CMD=".claude/dev-team-agents/scripts/session-summary-hook.sh"
+PRE_TOOL_USE_HOOK=".claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
+STOP_HOOK=".claude/dev-team-agents/scripts/hooks/stop.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -201,7 +201,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$UPDATE_HOOK_CMD"
+            "command": "$PRE_TOOL_USE_HOOK"
           }
         ]
       }
@@ -211,7 +211,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$SESSION_HOOK_CMD"
+            "command": "$STOP_HOOK"
           }
         ]
       }
@@ -219,7 +219,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   }
 }
 EOF
-    echo "→ Created .claude/settings.json with update-check and session-summary hooks"
+    echo "→ Created .claude/settings.json with hook dispatchers"
 else
     # Inject missing hooks into existing settings.json via python3 (safe JSON merge)
     _inject_hook() {
@@ -261,8 +261,8 @@ PYEOF
         fi
     }
 
-    _inject_hook "PreToolUse" "$UPDATE_HOOK_CMD" "update.sh"
-    _inject_hook "Stop"       "$SESSION_HOOK_CMD" "session-summary-hook.sh"
+    _inject_hook "PreToolUse" "$PRE_TOOL_USE_HOOK" "hooks/pre-tool-use.sh"
+    _inject_hook "Stop"       "$STOP_HOOK"         "hooks/stop.sh"
 fi
 
 # ── Step 8: Record installed version ─────────────────────────────
@@ -274,8 +274,28 @@ else
     date +%s > "$USER_DATA_DIR/.last-update-check"
 fi
 
-# ── Step 9: Make scripts executable ──────────────────────────────
+# ── Step 9: Ensure user-data files are gitignored ────────────────
+_GITIGNORE="$PROJECT_ROOT/.gitignore"
+_USER_DATA_ENTRIES=(
+    ".claude/user-data/session-summary.md"
+    ".claude/user-data/.last-update-check"
+    ".claude/user-data/.installed-version"
+    ".claude/user-data/.auto-update"
+)
+for _ENTRY in "${_USER_DATA_ENTRIES[@]}"; do
+    if [ -f "$_GITIGNORE" ]; then
+        grep -qF "$_ENTRY" "$_GITIGNORE" || echo "$_ENTRY" >> "$_GITIGNORE"
+    else
+        echo "$_ENTRY" >> "$_GITIGNORE"
+    fi
+done
+echo "→ .gitignore updated with user-data entries"
+
+# ── Step 10: Make scripts executable ─────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
+chmod +x "$INSTALL_DIR/scripts/hooks/"*.sh 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/hooks/pre-tool-use/"*.sh 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/hooks/stop/"*.sh 2>/dev/null || true
 
 # ── Done ──────────────────────────────────────────────────────────
 if [ -f "$PROJECT_ROOT/.gitignore" ] && grep -q "dev-team-agents" "$PROJECT_ROOT/.gitignore"; then

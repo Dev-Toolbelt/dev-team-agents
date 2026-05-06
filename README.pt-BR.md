@@ -90,10 +90,12 @@ Após a instalação, `.claude/` conterá:
 ```
 .claude/
 ├── dev-team-agents/   ← extraído de tarball (sem pasta .git — seguro para commitar)
-├── user-data/         ← estado e config do usuário (preservados nos updates — seguro para commitar)
-│   ├── .installed-version
-│   ├── .last-update-check
-│   └── graphify.json  ← criado pelo setup do Graphify (se habilitado)
+├── user-data/         ← estado e config do usuário (preservados nos updates)
+│   ├── graphify.json  ← criado pelo setup do Graphify (se habilitado) — commitar este
+│   ├── session-summary.md  ← adicionado ao .gitignore automaticamente pelo installer
+│   ├── .installed-version  ← adicionado ao .gitignore automaticamente pelo installer
+│   ├── .last-update-check  ← adicionado ao .gitignore automaticamente pelo installer
+│   └── .auto-update        ← adicionado ao .gitignore automaticamente pelo installer
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -102,7 +104,7 @@ Após a instalação, `.claude/` conterá:
 │   └── ...                ← um symlink por skill
 ├── commands/
 │   └── devteam/       ← symlink → .claude/dev-team-agents/commands/ (invocar como /devteam:plan etc.)
-└── settings.json      ← hooks de verificação de atualizações e resumo de sessão configurados automaticamente
+└── settings.json      ← dispatchers de hooks configurados automaticamente (uma entrada por tipo de evento)
 ```
 
 ---
@@ -290,7 +292,7 @@ Ao final de qualquer sessão em que arquivos foram alterados, os agentes escreve
 **Next**: o que resta ou é recomendado a seguir
 ```
 
-Um hook `Stop` (`scripts/session-summary-hook.sh`) é registrado automaticamente pelo `install.sh`. Ele detecta mudanças sem entrada de resumo no dia e exibe um aviso estruturado que o agente vê na próxima interação.
+Um dispatcher `Stop` (`scripts/hooks/stop.sh`) é registrado automaticamente pelo `install.sh`. Ele executa em ordem todos os sub-scripts em `scripts/hooks/stop/`, incluindo o enforcement do session-summary. Sub-scripts são adicionados nessa pasta (ex: pelo `graphify-setup`) sem precisar tocar no `settings.json`.
 
 No início de cada sessão, os agentes leem a entrada mais recente deste arquivo antes de agir.
 
@@ -308,11 +310,7 @@ O script auto-numera o arquivo e preenche um template MADR. Agentes leem ADRs re
 
 `skills/shared/project-context` define a ordem de carregamento de contexto que todo agente segue no startup. Inclui o resumo de sessão e o índice de ADRs, garantindo uma linha de base consistente entre todos os agentes e sessões.
 
-Adicione `.claude/user-data/session-summary.md` ao `.gitignore` se preferir não commitá-lo:
-
-```gitignore
-.claude/user-data/session-summary.md
-```
+O installer adiciona automaticamente todos os arquivos user-data pessoais ao `.gitignore` (`session-summary.md`, `.installed-version`, `.last-update-check`, `.auto-update`). Apenas `graphify.json` fica fora da lista — ele contém configuração de projeto que o time deve compartilhar.
 
 ---
 
@@ -656,7 +654,7 @@ Verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se o diretório es
 Verifique se `.claude/skills/` contém symlinks apontando para cada diretório de skill. Rode o instalador para restaurar links quebrados: `.claude/dev-team-agents/scripts/update.sh`.
 
 **Hook de verificação de atualização dispara a cada tool call**
-O hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `update.sh` é executável.
+O sub-script de hook lê um arquivo de timestamp e só exibe uma mensagem uma vez por dia. Se estiver imprimindo sempre, verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md**
 O assistente acrescenta ao arquivo existente — nunca substitui o conteúdo. Pesquise por `## dev-team-agents` no seu CLAUDE.md. Se estiver ausente, diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
@@ -682,7 +680,8 @@ dev-team-agents/
 │   └── ui-libraries/ ← shadcn, mui, antd, bootstrap, chakra-ui, jquery
 ├── workflows/       ← guias passo a passo de workflow
 ├── templates/       ← templates de documentos (plan, backlog, ADR, etc.)
-├── scripts/         ← install.sh, check-updates.sh
+├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
+│   └── hooks/       ← dispatchers + sub-scripts (pre-tool-use/, stop/)
 └── CLAUDE.md        ← convenções de autoria para este repositório
 ```
 

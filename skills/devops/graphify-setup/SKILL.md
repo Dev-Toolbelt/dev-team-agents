@@ -140,32 +140,50 @@ Omit `manifestPaths` if no manifest files were found. Do not ask the user to con
 
 ---
 
-## Step 6 — Configure Stop Hook
+## Step 6 — Register Graphify Stop Sub-script
 
-Add the graphify-refresh script as a Stop hook so Claude triggers a rebuild automatically after completing each session.
+Create the graphify-refresh sub-script so the Stop dispatcher runs it automatically after each session:
 
-**Target the project-level settings file** — never the global `~/.claude/settings.json`. Read `<project-root>/.claude/settings.json`. If it doesn't exist, create it.
-
-Merge the following under the `hooks.Stop` array — preserve all existing hooks and keys:
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/dev-team-agents/scripts/graphify-refresh.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
+```bash
+cat > .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
+#!/usr/bin/env bash
+# Stop sub-script: rebuild the Graphify knowledge graph after each session.
+set -euo pipefail
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/graphify-refresh.sh"
+EOF
+chmod +x .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
 ```
 
-Use the `update-config` skill if available to safely merge settings. Otherwise merge the JSON manually, preserving all existing keys.
+The Stop dispatcher (`.claude/dev-team-agents/scripts/hooks/stop.sh`) picks this up automatically — no changes to `settings.json` are needed.
+
+---
+
+## Step 6b — Register Graphify PreToolUse Hint Sub-script
+
+Create the hint sub-script so the PreToolUse dispatcher injects graph context when Claude uses Glob or Grep:
+
+```bash
+cat > .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh << 'EOF'
+#!/usr/bin/env bash
+# PreToolUse sub-script: injects graphify context hint when Claude searches the codebase.
+# Only fires when graph.json exists and the current tool is Glob or Grep.
+set -euo pipefail
+
+GRAPH="graphify-out/graph.json"
+[ -f "$GRAPH" ] || exit 0
+
+INPUT=$(cat)
+TOOL_NAME=$(printf '%s' "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+case "$TOOL_NAME" in
+    Glob|Grep) ;;
+    *) exit 0 ;;
+esac
+
+printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify: Knowledge graph exists. First consult graphify-out/GRAPH_REPORT.md and graphify-out/graph.json to understand structure and relationships. Only search raw files if those two layers are insufficient."}}\n'
+EOF
+chmod +x .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh
+```
 
 ---
 

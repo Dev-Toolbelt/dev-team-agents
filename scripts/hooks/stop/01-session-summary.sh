@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Runs on Claude Code Stop event.
-# Warns when meaningful changes exist but .claude/user-data/session-summary.md has no entry for today.
+# Stop sub-script: warns when meaningful changes exist but session-summary has no entry for today.
 # Returns exit 2 to surface the warning in the Claude Code UI.
 set -euo pipefail
 
