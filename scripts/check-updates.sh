@@ -5,8 +5,9 @@
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LAST_CHECK_FILE="$INSTALL_DIR/.last-update-check"
-VERSION_FILE="$INSTALL_DIR/.installed-version"
+USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
+LAST_CHECK_FILE="$USER_DATA_DIR/.last-update-check"
+VERSION_FILE="$USER_DATA_DIR/.installed-version"
 TWENTY_FOUR_HOURS=86400
 
 GITHUB_OWNER="Dev-Toolbelt"

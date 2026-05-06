@@ -132,15 +132,26 @@ Use real data from the scan. Apply Source Synthesis Rule for any discovered sour
 
 ### Step 7 — Update .gitignore
 
-Ensure `.claude/user-data/session-summary.md` is excluded from version control (it is personal, per-user state and must never be committed):
+Ensure the following user-data files are excluded from version control (personal, per-user state that must never be committed):
+
+- `.claude/user-data/session-summary.md`
+- `.claude/user-data/.last-update-check`
+- `.claude/user-data/.installed-version`
 
 ```bash
-if [ -f .gitignore ]; then
-    grep -qF ".claude/user-data/session-summary.md" .gitignore \
-        || echo ".claude/user-data/session-summary.md" >> .gitignore
-else
-    echo ".claude/user-data/session-summary.md" > .gitignore
-fi
+USER_DATA_ENTRIES=(
+    ".claude/user-data/session-summary.md"
+    ".claude/user-data/.last-update-check"
+    ".claude/user-data/.installed-version"
+)
+
+for ENTRY in "${USER_DATA_ENTRIES[@]}"; do
+    if [ -f .gitignore ]; then
+        grep -qF "$ENTRY" .gitignore || echo "$ENTRY" >> .gitignore
+    else
+        echo "$ENTRY" > .gitignore
+    fi
+done
 ```
 
 ---
