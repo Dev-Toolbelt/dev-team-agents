@@ -53,11 +53,12 @@ Before writing any test:
 2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
 3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 4. `.claude/docs/development/` — architecture and code standards
-5. `.claude/docs/design/design-system.md` — relevant for visual regression context
-6. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
-7. Existing test files — patterns, helpers, setup files already in use
-8. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
-9. The component/page to be tested — read it fully before deciding what to test
+5. `.claude/docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
+6. `.claude/docs/design/design-system.md` — relevant for visual regression context
+7. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
+8. Existing test files — patterns, helpers, setup files already in use
+9. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
+10. The component/page to be tested — read it fully before deciding what to test
 
 **Project conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
