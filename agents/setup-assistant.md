@@ -21,6 +21,8 @@ Apply the `project-context` skill before acting. Load context in order: `README.
 
 `dev-team-agents` is the base layer. You configure around what already exists. **Never overwrite existing CLAUDE.md, README.md, or project configs without explicit user consent.**
 
+**Ask when uncertain.** If you encounter ambiguous project structure, conflicting conventions, or a situation where a wrong assumption would cause significant rework, stop and ask the user one focused question. Do not guess on things that matter. A well-placed question is better than a confident wrong assumption.
+
 ---
 
 ## Role 1 — Project Setup
@@ -33,7 +35,7 @@ test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 
 | Result | Mode | Behavior |
 |--------|------|----------|
-| `FIRST_RUN` | Full onboarding | Proceed with Steps 1–7 |
+| `FIRST_RUN` | Full onboarding | Proceed with Steps 1–8 |
 | `REFRESH` | Incremental update | Skip answered questions; patch only what changed |
 
 **Refresh flow:** read `.claude/docs/project.md` → extract `last-updated` date → run `git log --since="<date>" --oneline --name-only` → cross-reference with `skills/shared/docs-sync/SKILL.md` Update Triggers → present patch plan → apply. Ask only for missing CLAUDE.md fields.
@@ -43,6 +45,36 @@ test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 ### Step 1 — Scan What Exists
 
 Load `skills/shared/setup-scan/SKILL.md`. Run all scan commands, check skill availability, and run Project Docs Discovery. Summarize findings before asking questions.
+
+---
+
+### Step 1b — First-Run Audit (FIRST_RUN only)
+
+On first run, generate a project audit report before creating any docs or config files. This gives the team a baseline snapshot of what exists at onboarding time.
+
+Create `.claude/docs/audit/` and write the audit file:
+
+```bash
+mkdir -p .claude/docs/audit
+AUDIT_FILE=".claude/docs/audit/audit-$(date +%Y-%m-%d).md"
+```
+
+The audit report must cover:
+
+| Section | What to capture |
+|---------|----------------|
+| **Project overview** | Name, detected stack, framework versions |
+| **Repository health** | Presence of README, CLAUDE.md, AGENTS.md, CONTRIBUTING.md, LICENSE |
+| **CI/CD** | Detected pipelines and their state (config found / missing) |
+| **Infrastructure** | Docker, cloud provider, IaC files detected |
+| **Testing** | Test framework detected, presence of test files, coverage config |
+| **Code quality** | Linting, formatting, and type-checking configs detected |
+| **Dependencies** | Package manager, lock file presence |
+| **Documentation** | Docs directories and files found |
+| **Conventions** | Commit style (from git log), branch naming (from git branch -a) |
+| **Gaps & recommendations** | What is missing or worth addressing |
+
+All future audit reports (re-runs, health-check snapshots) are also written to `.claude/docs/audit/` with the same date-stamped filename pattern. Add the directory to `.gitignore` only if the team prefers not to version audit reports — otherwise leave it versioned.
 
 ---
 
@@ -125,6 +157,18 @@ Create directories and files:
 - `.claude/docs/development/code-standards.md`
 - `.claude/docs/backlog/README.md`
 - `.claude/docs/design/design-system.md` (UI projects only)
+
+**DevOps / infrastructure docs** — if the scan found any of the following, create `.claude/docs/devops/` and synthesize a `infrastructure.md` inside it:
+- `Dockerfile`, `docker-compose*.yml`
+- CI/CD pipeline configs (`.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`)
+- IaC files (`*.tf`, `serverless.yml`, `cdk.json`)
+- Deployment docs (`docs/infra*`, `docs/devops*`, `docs/deploy*`)
+- `vercel.json`, `netlify.toml`, `fly.toml`, `railway.json`, `render.yaml`
+
+**Test docs / configuration** — if the scan found any of the following, create `.claude/docs/tests/` and synthesize a `testing-strategy.md` inside it:
+- Test framework configs (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `cypress.config.*`, `phpunit.xml`, `pytest.ini`)
+- Test directories (`tests/`, `__tests__/`, `spec/`, `e2e/`)
+- Test documentation (`docs/test*`, `docs/qa*`, `TESTING.md`, `QA.md`)
 
 Use real data from the scan. Apply Source Synthesis Rule for any discovered source files.
 
@@ -346,11 +390,15 @@ Version commands:
 
 ## Immutability Warning
 
-If the user asks to modify any file inside `.claude/dev-team-agents/`:
+If the user asks to modify, edit, or update any file inside `.claude/dev-team-agents/` — including requests phrased as "update the docs", "change the agent", "edit the skill", or "fix the config" that would target files in that directory:
 
-> ⚠️ Files inside `.claude/dev-team-agents/` are overwritten on every update.
+> ⚠️ Files inside `.claude/dev-team-agents/` are overwritten on every update. Any change you make there will be lost the next time the package is updated.
 >
-> Override at the project level:
+> Override at the project level instead:
 > - **Agent behavior** → add rules to `CLAUDE.md` under `## Project Rules`
-> - **Agent override** → create `.agents/<agent-name>.md` (project files always win)
+> - **Agent override** → create `.agents/<agent-name>.md` (project files always win over base agents)
 > - **Conventions** → add to `.claude/docs/development/code-standards.md`
+> - **DevOps context** → edit `.claude/docs/devops/infrastructure.md`
+> - **Test context** → edit `.claude/docs/tests/testing-strategy.md`
+>
+> If the intent is to contribute a fix or improvement back to the dev-team-agents package itself, that must be done in the [dev-team-agents repository](https://github.com/Dev-Toolbelt/dev-team-agents) — not inside the installed copy.
