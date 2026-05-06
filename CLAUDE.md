@@ -242,6 +242,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 ```
 
 - One entry per session per task; append to the same entry if continuing the same task the same day
+- **Always write in English** — even if the conversation with the user is in another language
 - This file is read at agent startup via `skills/shared/project-context/SKILL.md`
 - The `Stop` dispatcher (`scripts/hooks/stop.sh`) runs `scripts/hooks/stop/01-session-summary.sh`, which detects when this is missing and prompts you
 
@@ -294,6 +295,16 @@ The script auto-numbers the file and places it in `.claude/docs/development/adrs
 - Outputs a structured reminder visible to Claude on the next turn, which then writes the summary
 
 No manual setup is required — the installer handles registration.
+
+---
+
+## Commit Rule
+
+When making a git commit for any task:
+
+1. **Load `skills/shared/conventional-commits/SKILL.md`** before writing the commit message
+2. **Defer to the project's own pattern first**: run `git log --oneline -10` and check whether the existing history follows Conventional Commits or a different format (e.g., GitHub-style `[feature]`, plain imperative, Jira ticket prefix). If a project-specific pattern is clearly in use, follow it instead.
+3. **Never include Claude attribution**: no `Co-Authored-By: Claude`, no `🤖 Generated with Claude Code`, no AI tooling references in commit messages, PR titles, or PR bodies.
 
 ---
 

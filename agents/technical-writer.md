@@ -19,7 +19,7 @@ Before writing any documentation:
 6. `.claude/docs/backlog/` — sprint context for changelog entries and release notes
 7. Run `git log --oneline -20` — recent commits reveal what changed and must be reflected in changelogs, release notes, or "What's New" sections
 8. Existing documentation — match the voice, style, and structure already in place
-9. Load `conventional-commits` skill when producing changelogs or commit message guidelines
+9. Load `conventional-commits` skill (`skills/shared/conventional-commits/SKILL.md`) when producing changelogs, commit messages, or commit message guidelines — check `git log --oneline -10` first; if the project follows a different pattern, apply that instead
 
 **Project documentation standards always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
