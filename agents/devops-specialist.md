@@ -18,8 +18,9 @@ Before any action, load:
 5. `.claude/docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
 6. Run `git log --oneline -20` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
 7. Existing Docker files, CI/CD configs, and infrastructure code in the repository
-8. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions
-9. `.env.example` — discover required environment variables and secrets
+8. `.claude/docs/devops/` — synthesized infrastructure and deployment context (if present, read before acting)
+9. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions
+10. `.env.example` — discover required environment variables and secrets
 
 **Then detect the platform automatically** (see Integration Awareness below) before loading any skill.
 
@@ -95,6 +96,7 @@ Scan the repository for these signals and load the corresponding skill **before*
 | VPS setup or bare Linux server | `skills/devops/vps-linux/SKILL.md` |
 | `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
 | `SENTRY_DSN` env var, `@sentry/` in `package.json`, `sentry-sdk` in `requirements.txt`, or `sentry` service in compose | `skills/devops/sentry/SKILL.md` |
+| `vercel.json`, `.vercel/`, `VERCEL_TOKEN` env var, or Vercel-hosted project | `skills/devops/vercel/SKILL.md` |
 
 When multiple signals are present, load all relevant skills.
 
@@ -119,6 +121,7 @@ When multiple signals are present, load all relevant skills.
 | Cloudflare (any task) | `skills/devops/cloudflare/SKILL.md` |
 | SonarQube / SonarCloud | `skills/devops/sonarqube/SKILL.md` |
 | Error tracking / APM (Sentry) | `skills/devops/sentry/SKILL.md` |
+| Vercel deployment / hosting | `skills/devops/vercel/SKILL.md` |
 
 ---
 
