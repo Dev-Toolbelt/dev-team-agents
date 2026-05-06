@@ -162,4 +162,4 @@ mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 echo "$CURRENT_COMMIT" > "$LAST_RUN_FILE"
 
 echo "✅ Done!" >&2
-exit 2
+exit 0
