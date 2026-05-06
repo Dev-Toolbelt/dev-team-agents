@@ -19,6 +19,8 @@ If and only if $ARGUMENTS contains the word `review`, also spawn before creating
 
 ---
 
+**No Claude attribution**: the PR title, body, and all commit messages must not contain "🤖 Generated with Claude Code", "Co-Authored-By: Claude", or any other reference to Claude or AI tooling. Commits must reflect only the authenticated git user. Pass this requirement explicitly to any spawned agent.
+
 After the technical-writer (and optionally code-reviewer) complete, present the PR draft to the user:
 - Title
 - Description body
