@@ -15,7 +15,7 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || 
    [ -n "$(git status --porcelain 2>/dev/null)" ] || [ -n "$TODAY_COMMITS" ]; then
 
     if [ ! -f "$SUMMARY_FILE" ]; then
-        cat <<EOF
+        cat >&2 <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  SESSION SUMMARY REQUIRED
@@ -38,7 +38,7 @@ EOF
     fi
 
     if ! grep -q "^## $TODAY" "$SUMMARY_FILE" 2>/dev/null; then
-        cat <<EOF
+        cat >&2 <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  SESSION SUMMARY REQUIRED
