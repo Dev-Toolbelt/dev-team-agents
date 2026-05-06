@@ -21,6 +21,8 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Changes detected but $SUMMARY_FILE does not exist.
 
+ IMPORTANT: Write the entry in English.
+
  Create the file and write today's entry:
 
  ## $NOW | [brief task title]
@@ -44,6 +46,8 @@ EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Changes detected but today's entry ($TODAY) is missing
  from $SUMMARY_FILE.
+
+ IMPORTANT: Write the entry in English.
 
  Add a new entry at the top of the file:
 
