@@ -149,7 +149,7 @@ cat > .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
 #!/usr/bin/env bash
 # Stop sub-script: rebuild the Graphify knowledge graph after each session.
 set -euo pipefail
-bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/graphify-refresh.sh"
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/scripts/graphify-refresh.sh"
 EOF
 chmod +x .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
 ```
