@@ -47,8 +47,17 @@ Run before generating any `.claude/docs/` file:
 # Root-level markdown (excluding already-read files)
 find . -maxdepth 1 -name "*.md" ! -name "README.md" ! -name "CLAUDE.md" ! -name "AGENTS.md" | sort
 
-# Documentation directories (up to 3 levels)
-find . -maxdepth 3 \( -path "*/docs/*" -o -path "*/documentation/*" -o -path "*/doc/*" -o -path "*/wiki/*" \) -name "*.md" 2>/dev/null | sort
+# Documentation directories (up to 3 levels) — markdown and office formats
+find . -maxdepth 3 \( -path "*/docs/*" -o -path "*/documentation/*" -o -path "*/doc/*" -o -path "*/wiki/*" \) \
+  \( -name "*.md" -o -name "*.txt" -o -name "*.rst" -o -name "*.pdf" \
+     -o -name "*.doc" -o -name "*.docx" -o -name "*.xls" -o -name "*.xlsx" \
+     -o -name "*.csv" -o -name "*.yaml" -o -name "*.yml" \) 2>/dev/null | sort
+
+# AI/agent config directories — may contain project instructions or conventions
+find . -maxdepth 2 \( -path "./.cursor/*" -o -path "./.agents/*" -o -path "./.github/*" \) \
+  -name "*.md" 2>/dev/null | sort
+ls .cursor/rules/ .cursor/*.md .agents/*.md .github/CODEOWNERS .github/CONTRIBUTING.md \
+  .github/pull_request_template.md 2>/dev/null || true
 
 # OpenAPI / Swagger specs
 find . -maxdepth 3 \( -name "openapi.yaml" -o -name "openapi.json" -o -name "swagger.yaml" -o -name "swagger.json" \) 2>/dev/null | sort
@@ -66,6 +75,11 @@ find . -maxdepth 2 \( -name ".eslintrc*" -o -name ".prettierrc*" -o -name "phpcs
 | `.eslintrc*`, `.prettierrc*`, `phpcs.xml`, `pyproject.toml`, etc. | `code-standards.md` → Detected Config |
 | `CHANGELOG.md`, `docs/changelog*` | `project.md` → Active Areas |
 | `docs/design*`, `DESIGN*.md` | `design/design-system.md` → UI conventions |
+| `.cursor/rules/*`, `.cursor/*.md` | `code-standards.md` → Cursor AI conventions |
+| `.agents/*.md` | `project.md` → Agent overrides in effect |
+| `.github/CODEOWNERS`, `.github/CONTRIBUTING.md`, `.github/pull_request_template.md` | `code-standards.md` → Review process, PR standards |
+| `docs/infra*`, `docs/devops*`, `docs/deploy*`, `*.tf`, `docker-compose*` | `.claude/docs/devops/` → Infrastructure and deployment docs |
+| `docs/test*`, `docs/qa*`, `jest.config*`, `vitest.config*`, `playwright.config*` | `.claude/docs/tests/` → Test strategy and configuration |
 
 Content is synthesized (not duplicated) into the target doc. Use `<!-- TODO: <agent> to fill -->` only for sections with no data yet.
 
