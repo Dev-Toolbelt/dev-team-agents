@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -6,29 +6,29 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$PROJECT_ROOT"
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "❌ Not inside a git repository."
+  echo "❌ Not inside a git repository." >&2
   exit 1
 fi
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
 if ! command -v graphify >/dev/null 2>&1; then
-  echo "⏭  graphify not installed — skipping."
-  echo "   Tell Claude: 'Set up Graphify for this project' to enable it."
-  exit 0
+  echo "⏭  graphify not installed — skipping." >&2
+  echo "   Tell Claude: 'Set up Graphify for this project' to enable it." >&2
+  exit 2
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "❌ 'jq' not found."
-  echo "   macOS: brew install jq   ·   Linux: apt-get install jq"
+  echo "❌ 'jq' not found." >&2
+  echo "   macOS: brew install jq   ·   Linux: apt-get install jq" >&2
   exit 1
 fi
 
 # ── Load config ───────────────────────────────────────────────────────────────
 CONFIG_FILE="$PROJECT_ROOT/.claude/user-data/graphify.json"
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo "⏭  graphify.json not found — skipping."
-  echo "   Tell Claude: 'Set up Graphify for this project' to configure it."
-  exit 0
+  echo "⏭  graphify.json not found — skipping." >&2
+  echo "   Tell Claude: 'Set up Graphify for this project' to configure it." >&2
+  exit 2
 fi
 
 OUTPUT_PATH="graphify-out"
@@ -38,7 +38,7 @@ while IFS= read -r line; do
   [ -n "$line" ] && SOURCES+=("$line")
 done < <(jq -r '.targetPaths[]? // empty' "$CONFIG_FILE")
 if [ ${#SOURCES[@]} -eq 0 ]; then
-  echo "❌ 'targetPaths' missing or empty in $CONFIG_FILE."
+  echo "❌ 'targetPaths' missing or empty in $CONFIG_FILE." >&2
   exit 1
 fi
 
@@ -113,7 +113,6 @@ if [ "$HAS_STRUCTURAL" -eq 0 ] && [ -n "$CURRENT_COMMIT" ]; then
 fi
 
 if [ "$HAS_STRUCTURAL" -eq 0 ]; then
-  echo "⏭  No structural changes in tracked directories. Skipping rebuild."
   exit 0
 fi
 
@@ -121,13 +120,13 @@ fi
 cleanup() { rm -rf "$PROJECT_ROOT/graphify-src"; }
 trap cleanup EXIT
 
-echo "🔄 Building graphify-src..."
+echo "🔄 Building graphify-src..." >&2
 rm -rf graphify-src
 mkdir -p graphify-src
 
 for src in "${SOURCES[@]}"; do
   if [ ! -e "$src" ]; then
-    echo "❌ Required source '$src' not found in $PROJECT_ROOT."
+    echo "❌ Required source '$src' not found in $PROJECT_ROOT." >&2
     exit 1
   fi
   mkdir -p "graphify-src/$(dirname "$src")"
@@ -137,25 +136,26 @@ done
 for manifest in "${MANIFESTS[@]}"; do
   [ -z "$manifest" ] && continue
   if [ ! -f "$manifest" ]; then
-    echo "⚠️  Manifest '$manifest' not found — skipping."
+    echo "⚠️  Manifest '$manifest' not found — skipping." >&2
     continue
   fi
   cp "$manifest" "graphify-src/$manifest"
 done
 
-echo "🧠 Running Graphify..."
+echo "🧠 Running Graphify..." >&2
 graphify update graphify-src
 
 if [ ! -d "graphify-src/$OUTPUT_PATH" ]; then
-  echo "❌ Graphify did not produce output at 'graphify-src/$OUTPUT_PATH'."
+  echo "❌ Graphify did not produce output at 'graphify-src/$OUTPUT_PATH'." >&2
   exit 1
 fi
 
-echo "📦 Moving $OUTPUT_PATH to project root..."
+echo "📦 Moving $OUTPUT_PATH to project root..." >&2
 rm -rf "$OUTPUT_PATH"
 mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 
 # Record the commit that triggered this build (used to skip redundant rebuilds)
 echo "$CURRENT_COMMIT" > "$LAST_RUN_FILE"
 
-echo "✅ Done!"
+echo "✅ Done!" >&2
+exit 2
