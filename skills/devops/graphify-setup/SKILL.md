@@ -189,11 +189,24 @@ chmod +x .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh
 
 ## Step 7 — Update .gitignore
 
-Add `.claude/user-data/.graphify-last-run` to the project's `.gitignore` (the rest of `graphify-out/` is versioned):
+Add the following entries to the project's `.gitignore`. Group them under a `# Dev Team Agents` comment so they are easy to identify:
 
 ```bash
-grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null || echo '.claude/user-data/.graphify-last-run' >> .gitignore
+GITIGNORE_ENTRIES=(
+  "# Dev Team Agents"
+  ".claude/user-data/.graphify-last-run"
+  "graphify-out/cache"
+  ".claude/worktrees"
+)
+
+for ENTRY in "${GITIGNORE_ENTRIES[@]}"; do
+  grep -qxF "$ENTRY" .gitignore 2>/dev/null || echo "$ENTRY" >> .gitignore
+done
 ```
+
+- `.claude/user-data/.graphify-last-run` — build marker, project-specific, not shared
+- `graphify-out/cache` — Graphify internal cache, rebuilt automatically
+- `.claude/worktrees` — worktree isolation directories, local only
 
 ---
 
