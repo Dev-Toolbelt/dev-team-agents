@@ -256,6 +256,7 @@ If ENABLED:
 ls .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null || echo "MISSING"
 ls .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
 ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
+grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 ```
 
 | Check | Auto-fix |
@@ -263,6 +264,7 @@ ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
 | `stop/02-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
 | `graphify-out/` directory exists | WARN — run: `bash .claude/dev-team-agents/scripts/graphify-refresh.sh` |
+| `.claude/user-data/.graphify-last-run` in `.gitignore` | `echo '.claude/user-data/.graphify-last-run' >> .gitignore` |
 
 ---
 

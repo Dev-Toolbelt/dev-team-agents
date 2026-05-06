@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/user-data/graphify.json, configures the Stop hook in the project .claude/settings.json, adds graphify-out/.last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
+description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/user-data/graphify.json, configures the Stop hook in the project .claude/settings.json, adds .claude/user-data/.graphify-last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
 ---
 
 ## Purpose
@@ -189,10 +189,10 @@ chmod +x .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh
 
 ## Step 7 — Update .gitignore
 
-Add `graphify-out/.last-run` to the project's `.gitignore` (the rest of `graphify-out/` is versioned):
+Add `.claude/user-data/.graphify-last-run` to the project's `.gitignore` (the rest of `graphify-out/` is versioned):
 
 ```bash
-grep -qxF 'graphify-out/.last-run' .gitignore 2>/dev/null || echo 'graphify-out/.last-run' >> .gitignore
+grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null || echo '.claude/user-data/.graphify-last-run' >> .gitignore
 ```
 
 ---
@@ -243,7 +243,7 @@ Report to the user:
 ✅ Graphify is set up for this project.
 
   Knowledge graph : graphify-out/  (versioned)
-  Last-run marker : graphify-out/.last-run  (gitignored)
+  Last-run marker : .claude/user-data/.graphify-last-run  (gitignored)
   Config          : .claude/user-data/graphify.json
   Auto-rebuild    : Stop hook → .claude/dev-team-agents/scripts/graphify-refresh.sh
 

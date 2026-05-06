@@ -32,6 +32,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 OUTPUT_PATH="graphify-out"
+USER_DATA_DIR=".claude/user-data"
 
 SOURCES=()
 while IFS= read -r line; do
@@ -49,7 +50,7 @@ done < <(jq -r '.manifestPaths[]? // empty' "$CONFIG_FILE")
 
 # ── Change detection ──────────────────────────────────────────────────────────
 CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-LAST_RUN_FILE="$OUTPUT_PATH/.last-run"
+LAST_RUN_FILE="$USER_DATA_DIR/.graphify-last-run"
 LAST_BUILD_COMMIT=""
 [ -f "$LAST_RUN_FILE" ] && LAST_BUILD_COMMIT="$(tr -d '[:space:]' < "$LAST_RUN_FILE")"
 
@@ -85,6 +86,9 @@ if [ ! -d "$OUTPUT_PATH" ]; then
   echo "📦 $OUTPUT_PATH not found — first-time build."
   HAS_STRUCTURAL=1
 fi
+
+# Ensure user-data directory exists for the last-run marker
+mkdir -p "$USER_DATA_DIR"
 
 # Check uncommitted structural changes in targetPaths
 if [ "$HAS_STRUCTURAL" -eq 0 ] && has_uncommitted_structural_changes; then
