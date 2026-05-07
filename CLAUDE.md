@@ -130,6 +130,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:workflow-bugfix` | follows `workflows/bug-fix.md` | Full bug-fix workflow |
 | `/devteam:workflow-inherited` | follows `workflows/inherited-project.md` | Taking over an existing project |
 | `/devteam:workflow-security-patch` | follows `workflows/security-patch.md` | Applying a security patch |
+| `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 
 ¹ conditional — spawned only when the task context involves that scope.
 
