@@ -273,6 +273,19 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 
 ---
 
+## Jira Integration
+
+**Detection**: the user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`), references a Jira board or sprint, or asks to start work on a Jira task.
+
+Load: `skills/integrations/jira/SKILL.md`
+
+Critical rules:
+- **Always create the branch using the Jira naming pattern** before writing any code: `{type}/{issueKey}_short-description` — derive `type` from the issue type/intent and `short-description` from the issue summary
+- Transition the issue to **In Progress** after the branch is created
+- Transition to **In Review** and add a comment summarizing what was done before declaring the task complete
+
+---
+
 ## SonarQube / SonarCloud Integration
 
 **Detection**: `sonar-project.properties`, `.sonarcloud.properties`, `SONAR_TOKEN` in `.env` / `.env.example`, or `sonarqube` service in `docker-compose.yml`.

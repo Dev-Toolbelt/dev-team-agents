@@ -145,6 +145,20 @@ If the project uses a different architecture (hexagonal, event-driven, etc.), do
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user references a Jira issue key in an architecture request
+- The user asks to link an ADR or architecture document to a Jira epic or task
+- Sprint or backlog context needs to be fetched from Jira to scope the architecture work
+
+When Jira is active:
+- Fetch the issue or epic (`mcp__atlassian__getJiraIssue`) to understand the full scope before starting any architecture document
+- Reference the Jira issue key in ADR titles and bodies so decisions are traceable to the originating requirement
+- Use JQL to query related issues when assessing blast radius: `"Epic Link" = EPIC-KEY ORDER BY priority DESC`
+
+---
+
 ## Backlog Integration
 
 When `database-specialist` is involved in technology decisions, their recommendation must be incorporated into `tech-stack.md` and `database.md` before those documents are finalized.

@@ -181,6 +181,22 @@ When working in **Workflow C (Maintenance)** on legacy code:
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key, board, or project
+- A QA report issue maps to a trackable Jira ticket
+- The user asks to create a bug, update a status, or log findings in Jira
+
+When Jira is active:
+- Fetch the issue before reporting (`mcp__atlassian__getJiraIssue`) — confirm the current status and assignee
+- Create bugs directly in Jira with type `Bug`, severity-matched priority, and steps to reproduce in the description
+- Transition the validated issue to **In Review** or **Done** after a PASS verdict — always call `mcp__atlassian__getTransitionsForJiraIssue` first to get valid transition IDs
+- Add a comment summarizing the QA verdict and any findings (`mcp__atlassian__addCommentToJiraIssue`)
+- Link the bug issue to the parent story or task with `mcp__atlassian__createIssueLink` (link type: `blocks`)
+
+---
+
 ## Immutability Warning
 
 If asked to modify files inside `dev-team-agents`:

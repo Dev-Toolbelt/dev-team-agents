@@ -128,6 +128,21 @@ The `setup-assistant` configures where backlog lives. Respect that configuration
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions Jira, a Jira issue key (e.g., `PROJ-123`), or a Jira project
+- Backlog mode is remote and the configured tracker is Jira
+- The user asks to create, update, search, or transition Jira issues
+
+When Jira is active:
+- Use `mcp__atlassian__searchJiraIssuesUsingJql` to list the current sprint or backlog before generating local backlog files — avoid duplicating what already exists in Jira
+- Use `mcp__atlassian__createJiraIssue` to create epics, stories, and tasks directly in Jira instead of local markdown when remote mode is configured
+- Always fetch issue details before editing (`mcp__atlassian__getJiraIssue`) — do not assume current field values
+- When creating a bug or task, apply the branch naming convention defined in the Jira skill so developers get a ready-to-use branch name alongside the issue
+
+---
+
 ## Rules
 
 - Never assume — ask
