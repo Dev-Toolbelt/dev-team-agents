@@ -127,6 +127,7 @@ mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Remove files that do not belong in user project installs
 rm -rf "$EXTRACTED_ROOT/.claude"
+rm -rf "$EXTRACTED_ROOT/docs"
 rm -f "$EXTRACTED_ROOT/CLAUDE.md"
 rm -f "$EXTRACTED_ROOT/README.md"
 rm -f "$EXTRACTED_ROOT/README.pt-BR.md"

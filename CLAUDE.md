@@ -172,6 +172,7 @@ dev-team-agents/
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
+├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
 ├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
 │   └── hooks/       ← pre-tool-use.sh, stop.sh (dispatchers) + pre-tool-use/, stop/ (sub-scripts)
 ├── README.md
@@ -200,7 +201,7 @@ Files in `user-data/`:
 
 **Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
 
-**Package exclusions:** `CLAUDE.md`, `scripts/install.sh`, and `scripts/orphan-skill-scan.sh` are stripped from the extracted tarball before it is placed in the project. `CLAUDE.md` contains authoring rules for this repository, not for end-users; `install.sh` is accessed exclusively via `curl`; `orphan-skill-scan.sh` is a development tool for this repository and is not relevant to user projects.
+**Package exclusions:** `CLAUDE.md`, `scripts/install.sh`, `scripts/orphan-skill-scan.sh`, and `docs/` are stripped from the extracted tarball before it is placed in the project. `CLAUDE.md` contains authoring rules for this repository, not for end-users; `install.sh` is accessed exclusively via `curl`; `orphan-skill-scan.sh` is a development tool for this repository and is not relevant to user projects; `docs/` contains repository-level reports and internal documentation irrelevant to users.
 
 ---
 
