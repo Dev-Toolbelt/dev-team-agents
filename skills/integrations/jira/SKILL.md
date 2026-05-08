@@ -61,6 +61,8 @@ If the user answers **yes**: call `mcp__atlassian__lookupJiraAccountId` with the
 
 If the Atlassian MCP is unavailable, guide the user through project-level setup. This approach registers the MCP server in the user's local Claude Code settings for that project only — no files are added to the repository and no global configuration is touched.
 
+**Authentication method: email + API token only.** OAuth is never used. Do not offer or suggest OAuth as an alternative. Before proceeding with any setup step, you must have both the user's Atlassian **email** and **API token** — if either is missing, stop and ask for it explicitly before continuing.
+
 ### Step 1 — Generate an API token
 
 Ask the user to visit the following URL and create a new API token:
