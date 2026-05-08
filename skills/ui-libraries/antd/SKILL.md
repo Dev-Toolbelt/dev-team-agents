@@ -1,6 +1,6 @@
 ---
 name: antd
-description: Ant Design (antd) — dominant enterprise React UI library (98k GitHub stars, 1.4M npm/week). Full-featured: forms, tables, date pickers, internationalization. Official MCP available for real-time docs and API reference.
+description: Ant Design — enterprise React UI with forms, tables, date pickers, and official MCP.
 ---
 
 ## Detection Signals

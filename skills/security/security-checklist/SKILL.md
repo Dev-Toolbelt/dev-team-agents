@@ -1,6 +1,6 @@
 ---
 name: security-checklist
-description: Security review checklist covering OWASP Top 10, LGPD/GDPR, API security, and infrastructure hardening. Use during security reviews, code audits, or before production releases.
+description: Security review checklist — OWASP Top 10, LGPD/GDPR, API security, infrastructure.
 ---
 
 # Security Checklist

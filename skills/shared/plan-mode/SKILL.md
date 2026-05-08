@@ -1,6 +1,6 @@
 ---
 name: plan-mode
-description: Mandatory planning protocol for all dev-team-agents. Before executing any non-trivial task, every agent must present a structured plan using the canonical template and wait for user approval. No execution happens before approval. Covers when to plan, how to format the plan, approval protocol, and replanning on rejection.
+description: Mandatory plan-before-execute — structured plan, user approval, replanning on rejection.
 ---
 
 # Plan Mode — Mandatory Planning Protocol

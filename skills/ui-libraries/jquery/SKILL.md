@@ -1,6 +1,6 @@
 ---
 name: jquery
-description: jQuery — deployed on 77%+ of all websites (W3Techs). Applies to legacy projects, server-rendered templates, WordPress themes, and codebases predating modern frameworks. Work with it, not against it.
+description: jQuery — for legacy, server-rendered, WordPress, and pre-framework codebases.
 ---
 
 ## Detection Signals

@@ -1,6 +1,6 @@
 ---
 name: design-system-audit
-description: Design system audit and consistency analysis for UI/UX work. Use when reading a project's existing visual patterns, identifying a design system (or the absence of one), and establishing or maintaining visual consistency. Works in both Design Mode (pre-build) and Consultive Mode (alongside frontend-developer).
+description: Design system audit — visual pattern discovery, consistency gaps; Design/Consultive modes.
 ---
 
 # Design System Audit

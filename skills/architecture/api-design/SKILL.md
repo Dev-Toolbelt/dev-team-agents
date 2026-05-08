@@ -1,6 +1,6 @@
 ---
 name: api-design
-description: REST and GraphQL API design principles. Use when designing, reviewing, or documenting APIs — covers resource naming, HTTP semantics, versioning, error responses, pagination, authentication, and GraphQL schema conventions.
+description: REST and GraphQL API design — naming, HTTP semantics, versioning, errors, pagination.
 ---
 
 # API Design

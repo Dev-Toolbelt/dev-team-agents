@@ -1,6 +1,6 @@
 ---
 name: cicd-jenkins
-description: Jenkins CI/CD pipeline patterns using Jenkinsfile (declarative syntax). Use when creating or reviewing Jenkins pipelines for build, test, and deploy workflows in enterprise or legacy environments.
+description: Jenkins CI/CD — declarative Jenkinsfile patterns for build, test, and deploy workflows.
 ---
 
 # Jenkins Pipelines

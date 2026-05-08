@@ -1,6 +1,6 @@
 ---
 name: chakra-ui
-description: Chakra UI — accessible, themeable React component library with style props and semantic color tokens. Top developer satisfaction in JS surveys. Critical: v2 and v3 APIs are incompatible — always confirm version before writing code.
+description: Chakra UI — accessible React components. Critical: v2 and v3 APIs are incompatible.
 ---
 
 ## Detection Signals

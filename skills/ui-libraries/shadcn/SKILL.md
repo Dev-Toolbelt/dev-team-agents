@@ -1,6 +1,6 @@
 ---
 name: shadcn-ui
-description: shadcn/ui — copy-paste component library built on Radix UI primitives and Tailwind CSS. Components live in the project codebase, not in node_modules. Official MCP available for component browsing and installation via natural language.
+description: shadcn/ui — Radix UI + Tailwind copy-paste components; MCP available for component install.
 ---
 
 ## Detection Signals

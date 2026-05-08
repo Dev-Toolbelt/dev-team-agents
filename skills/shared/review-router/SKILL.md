@@ -1,6 +1,6 @@
 ---
 name: review-router
-description: Analyzes a git diff to classify changes as backend, frontend, or both, then routes to the appropriate specialist reviewer agent. Loaded by code-reviewer at the start of every review session.
+description: Routes PR review by diff classification — delegates to backend or frontend specialist.
 ---
 
 # Review Router

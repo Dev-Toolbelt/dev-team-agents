@@ -1,6 +1,6 @@
 ---
 name: component-patterns
-description: Component architecture guidelines for frontend development. Use when designing or reviewing component structure, deciding when to split components, or applying container/presentational patterns in React, Vue, Angular, or Svelte.
+description: Component architecture — container/presentational patterns for React, Vue, Angular, Svelte.
 ---
 
 # Component Patterns

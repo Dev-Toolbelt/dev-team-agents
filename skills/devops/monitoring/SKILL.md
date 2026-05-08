@@ -1,6 +1,6 @@
 ---
 name: monitoring
-description: Observability stack setup — Prometheus/Grafana (self-hosted), CloudWatch (AWS), Google Cloud Monitoring, Azure Monitor, Datadog. Covers metrics collection, log aggregation, alerting rules, and dashboards.
+description: Observability stack — Prometheus/Grafana, CloudWatch, Datadog, metrics, logs, alerting.
 ---
 
 # Monitoring & Observability

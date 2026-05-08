@@ -1,6 +1,6 @@
 ---
 name: gotrue
-description: Working with GoTrue — the authentication microservice used by Supabase. Covers user management, sign-in methods, JWT structure, refresh tokens, custom claims, admin API, and hooks. Load when a project uses Supabase Auth or a standalone GoTrue instance.
+description: GoTrue auth — user management, JWT, refresh tokens, custom claims, and admin API.
 ---
 
 # GoTrue

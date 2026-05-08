@@ -1,6 +1,6 @@
 ---
 name: vps-linux
-description: Setting up a VPS Linux server from scratch with Docker, reverse proxy, SSL, and security hardening. Use when provisioning a new server, configuring a production environment on a VPS, or troubleshooting server setup.
+description: VPS Linux from scratch — Docker, reverse proxy, SSL, and security hardening.
 ---
 
 # VPS Linux Setup — Docker-Based

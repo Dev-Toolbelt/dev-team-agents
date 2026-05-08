@@ -1,6 +1,6 @@
 ---
 name: form-handling
-description: Form design and validation rules for frontend projects. Use when building forms, choosing a form library, or reviewing form state, validation, and error feedback. Framework-agnostic with per-library notes.
+description: Form design and validation — state, error feedback, library selection. Framework-agnostic.
 ---
 
 # Form Handling

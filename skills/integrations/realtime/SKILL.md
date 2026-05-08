@@ -1,6 +1,6 @@
 ---
 name: realtime
-description: Working with WebSocket-based real-time communication — Supabase Realtime (Phoenix channels), broadcast, presence, and Postgres changes. Also covers generic WebSocket patterns for non-Supabase projects. Load when a project requires live data push, collaborative features, or event streaming.
+description: Supabase Realtime and WebSocket — broadcast, presence, Postgres changes, event streaming.
 ---
 
 # Realtime (WebSocket)

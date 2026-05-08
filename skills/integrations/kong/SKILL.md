@@ -1,6 +1,6 @@
 ---
 name: kong
-description: Working with Kong API Gateway — routes, services, plugins, upstreams, and the Admin API. Covers both standalone Kong and the Supabase-embedded Kong configuration. Load when a project uses Kong as its API gateway.
+description: Kong API Gateway — routes, services, plugins, Admin API. Standalone and Supabase-embedded.
 ---
 
 # Kong API Gateway

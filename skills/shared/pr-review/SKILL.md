@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Pull Request review checklist and standards. Use when reviewing or preparing a PR — covers correctness, security, tests, performance, documentation, and style. Produces structured review comments.
+description: Pull Request review — correctness, security, tests, performance, docs, and style.
 ---
 
 # Pull Request Review

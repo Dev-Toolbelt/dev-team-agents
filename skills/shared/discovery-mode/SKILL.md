@@ -1,6 +1,6 @@
 ---
 name: discovery-mode
-description: Patterns for rigorous collaborative discovery before any implementation. Load this in any agent that operates in DISCOVERY — product-analyst, software-architect. Covers HARD-GATE, interaction style, scope decomposition, incremental validation, YAGNI, spec self-review, and user review gate.
+description: Rigorous discovery before implementation — HARD-GATE, YAGNI, incremental validation.
 ---
 
 # Discovery Mode Patterns

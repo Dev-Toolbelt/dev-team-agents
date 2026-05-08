@@ -1,6 +1,6 @@
 ---
 name: sentry
-description: Sentry error tracking and performance monitoring — SDK setup, DSN configuration, environments, releases, performance/tracing, custom context, alerts, source maps, and self-hosted deployment. Load when a project uses Sentry or when setting up error tracking / APM.
+description: Sentry error tracking and APM — SDK setup, environments, source maps, self-hosted deploy.
 ---
 
 # Sentry — Error Tracking & Performance Monitoring

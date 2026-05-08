@@ -1,6 +1,6 @@
 ---
 name: backlog-template
-description: Standard structure for generating project backlogs with epics, sprints, tasks, Definition of Done, dependencies, and time estimates. Use when the product-analyst or software-architect needs to produce or review backlog documents.
+description: Backlog structure — epics, sprints, tasks, Definition of Done, dependencies, estimates.
 ---
 
 # Backlog Template

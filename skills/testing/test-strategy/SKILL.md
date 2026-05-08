@@ -1,6 +1,6 @@
 ---
 name: test-strategy
-description: Testing strategy principles for deciding what, when, and how to test. Use when planning test coverage, evaluating whether a test is worth writing, or defining the testing approach for a project or feature.
+description: Testing strategy — what, when, and how to test; coverage planning and approach decisions.
 ---
 
 # Test Strategy

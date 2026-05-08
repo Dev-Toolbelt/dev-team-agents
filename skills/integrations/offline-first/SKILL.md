@@ -1,6 +1,6 @@
 ---
 name: offline-first
-description: Offline-first frontend standards — local storage schema design, sync queue strategy, conflict resolution policies, and reliable connectivity detection patterns.
+description: Offline-first frontend — local storage schema, sync queue, conflict resolution.
 ---
 
 ## Storage Structure

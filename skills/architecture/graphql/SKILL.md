@@ -1,6 +1,6 @@
 ---
 name: graphql
-description: GraphQL API conventions — schema design, naming, resolver patterns, N+1 prevention with DataLoader, pagination, mutations, subscriptions, and error handling. Load when the project exposes or consumes a GraphQL API.
+description: GraphQL conventions — schema design, resolvers, N+1/DataLoader, pagination, subscriptions.
 ---
 
 ## Detection Signals

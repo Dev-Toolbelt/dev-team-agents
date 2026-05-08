@@ -1,6 +1,6 @@
 ---
 name: iac-terraform
-description: Infrastructure-as-Code with Terraform/OpenTofu — project structure, remote state management, modules, workspaces, CI/CD integration, drift detection, and secrets handling.
+description: Terraform/OpenTofu IaC — structure, remote state, modules, CI/CD, drift detection.
 ---
 
 # Infrastructure as Code — Terraform / OpenTofu

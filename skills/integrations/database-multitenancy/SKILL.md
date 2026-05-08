@@ -1,6 +1,6 @@
 ---
 name: database-multitenancy
-description: Multi-tenancy patterns for database isolation (RLS, schema-per-tenant, database-per-tenant) and vector search with pgvector for AI/RAG applications.
+description: Multi-tenancy DB — RLS, schema-per-tenant, database-per-tenant, and pgvector/RAG.
 ---
 
 ## Choosing a Multi-Tenancy Strategy

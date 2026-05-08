@@ -1,6 +1,6 @@
 ---
 name: pwa
-description: Progressive Web App implementation standards — manifest required fields, service worker caching strategies per resource type, update lifecycle handling, and PWA compliance checklist.
+description: Progressive Web App — manifest fields, service worker caching strategies, update lifecycle.
 ---
 
 ## Manifest (`manifest.json` / `manifest.webmanifest`)

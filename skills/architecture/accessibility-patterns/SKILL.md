@@ -1,6 +1,6 @@
 ---
 name: accessibility-patterns
-description: Accessibility implementation patterns for frontend projects. Load only when the project explicitly requires WCAG compliance, the user asks for accessibility work, or an audit identifies gaps. Not a default requirement.
+description: Accessibility patterns for WCAG compliance. Load only when explicitly required.
 ---
 
 # Accessibility Patterns

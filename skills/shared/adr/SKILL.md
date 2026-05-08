@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Architecture Decision Records (ADR) authoring and management. Use when documenting architectural decisions, technology choices, design patterns adopted, or any significant technical decision that affects the project long-term. Follows the MADR (Markdown Architectural Decision Records) format.
+description: Architecture Decision Records — MADR format for documenting significant tech decisions.
 ---
 
 # Architecture Decision Records (ADR)

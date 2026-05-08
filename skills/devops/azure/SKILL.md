@@ -1,6 +1,6 @@
 ---
 name: azure
-description: Azure deployment patterns for cost-optimized production setups. Covers Container Apps, AKS, ACR, Azure SQL, Cosmos DB, and managed identity. Use when deploying to Azure or reviewing Azure infrastructure.
+description: Azure deployment — Container Apps, AKS, ACR, Azure SQL, Cosmos DB, managed identity.
 ---
 
 # Azure Deployment

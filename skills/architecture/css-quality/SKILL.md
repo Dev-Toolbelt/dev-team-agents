@@ -1,6 +1,6 @@
 ---
 name: css-quality
-description: CSS and styling quality rules for frontend projects. Use when writing or reviewing styles, choosing a styling strategy, or auditing for specificity issues, magic numbers, and responsive patterns. Framework-agnostic.
+description: CSS quality rules — specificity, magic numbers, responsive patterns. Framework-agnostic.
 ---
 
 # CSS Quality

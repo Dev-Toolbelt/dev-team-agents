@@ -1,6 +1,6 @@
 ---
 name: database-debug
-description: SQL and CLI snippets for database debugging — slow query analysis, index inspection, lock detection, table stats, and memory profiling. Covers PostgreSQL, MySQL/MariaDB, Redis, MongoDB, and SQLite. Load when diagnosing performance issues or inspecting runtime database state.
+description: DB debug — slow queries, index inspection, lock detection. PostgreSQL, MySQL, Redis, MongoDB.
 ---
 
 # Database Debug Toolkit

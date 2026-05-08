@@ -1,6 +1,6 @@
 ---
 name: async-jobs
-description: Background job and queue patterns for backend systems. Covers when to use async processing, idempotency, retry strategy, dead letter queues, payload validation, and observability. Load when the project uses a job queue or background worker system.
+description: Async job and queue patterns — idempotency, retry strategy, DLQ, and observability.
 ---
 
 ## Detection Signals

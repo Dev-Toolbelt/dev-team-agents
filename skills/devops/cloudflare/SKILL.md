@@ -1,6 +1,6 @@
 ---
 name: cloudflare
-description: Cloudflare configuration and operations skill. Covers DNS, Workers, Pages, Tunnels, Zero Trust/Access, WAF, Rate Limiting, R2, KV, and Cache Rules. Always collects credentials securely before acting.
+description: Cloudflare — DNS, Workers, Pages, Tunnels, Zero Trust, WAF, R2, KV, Cache Rules.
 ---
 
 # Cloudflare

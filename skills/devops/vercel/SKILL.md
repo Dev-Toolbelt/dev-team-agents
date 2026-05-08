@@ -1,6 +1,6 @@
 ---
 name: vercel
-description: Best practices and configuration reference for deploying projects on Vercel. Covers project setup, environment variables, build configuration, deployment regions, edge functions, caching, preview deployments, monorepo support, and team workflows.
+description: Vercel deployment — env vars, edge functions, caching, preview deploys, monorepo support.
 ---
 
 ## Project Configuration (`vercel.json`)

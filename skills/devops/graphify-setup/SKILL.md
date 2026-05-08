@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: OS-aware Graphify installation and project configuration. Installs graphify and jq autonomously, infers project structure from the codebase to generate .claude/user-data/graphify.json, configures the Stop hook in the project .claude/settings.json, adds .claude/user-data/.graphify-last-run to .gitignore, runs the first build, and injects the Context Navigation section into the project CLAUDE.md. Only prompts the user when a step fails due to permissions or when the configuration cannot be inferred confidently.
+description: Graphify install — autonomous setup: graphify.json, Stop hook, .gitignore, CLAUDE.md.
 ---
 
 ## Purpose

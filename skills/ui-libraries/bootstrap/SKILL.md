@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Bootstrap — most starred CSS UI framework on GitHub (170k stars). Responsive grid, utility classes, and ready-made components. Used in server-rendered templates, legacy apps, WordPress themes, and via React/Vue wrapper packages.
+description: Bootstrap — responsive grid and components for legacy, server-rendered, and WordPress apps.
 ---
 
 ## Detection Signals

@@ -1,6 +1,6 @@
 ---
 name: comments-policy
-description: Language-agnostic code commenting standards. Default is no comments; type annotations and test AAA markers are required where specified.
+description: Code commenting standards — no comments by default; type annotations and AAA markers.
 ---
 
 # Comments Policy

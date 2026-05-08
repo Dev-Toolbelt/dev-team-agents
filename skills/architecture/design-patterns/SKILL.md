@@ -1,6 +1,6 @@
 ---
 name: design-patterns
-description: Software design patterns reference and guidance. Use when deciding how to structure code, solve recurring design problems, or review architectural decisions. Covers KISS, YAGNI, DRY, SOLID principles, GoF patterns, and domain-driven patterns.
+description: Design patterns — KISS, YAGNI, DRY, SOLID, GoF, and domain-driven patterns reference.
 ---
 
 # Design Patterns

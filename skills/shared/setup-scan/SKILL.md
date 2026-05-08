@@ -1,6 +1,6 @@
 ---
 name: setup-scan
-description: Reference material for the setup-assistant's project scan phase. Contains scan commands, Project Docs Discovery table, skill availability checks, and issue tracker MCP configuration guide.
+description: Reference for setup-assistant scan — commands, discovery table, skill and MCP checks.
 ---
 
 ## Step 1 — Scan Commands

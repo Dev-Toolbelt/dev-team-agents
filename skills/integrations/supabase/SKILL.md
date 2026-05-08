@@ -1,6 +1,6 @@
 ---
 name: supabase
-description: Working with Supabase (Self-Hosted or Cloud). Covers detection, core services (Postgres, Auth, Storage, Edge Functions, Realtime), Row Level Security, CLI usage, and environment configuration. Load when a project uses Supabase as its backend platform.
+description: Supabase (Self-Hosted/Cloud) — Postgres, Auth, Storage, Edge Functions, RLS, CLI.
 ---
 
 # Supabase

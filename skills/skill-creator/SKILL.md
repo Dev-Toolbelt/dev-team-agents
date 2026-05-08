@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Creates and updates Claude Code skills following the agentskills.io specification. Extends the official anthropic-skills:skill-creator with mandatory spec validation. Use when creating a new skill or updating an existing one inside this repository.
+description: Creates and updates Claude Code skills following the agentskills.io specification.
 ---
 
 # Skill Creator — Project Extension

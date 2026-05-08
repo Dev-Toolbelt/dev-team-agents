@@ -1,6 +1,6 @@
 ---
 name: mui
-description: Material UI (MUI) — most downloaded React UI library (4.1M npm/week). Full suite of accessible, themeable components following Material Design. Official MCP available for component docs, props, and theming.
+description: Material UI — accessible React components with Material Design; official MCP available.
 ---
 
 ## Detection Signals

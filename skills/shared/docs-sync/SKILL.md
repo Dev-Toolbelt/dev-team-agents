@@ -1,6 +1,6 @@
 ---
 name: docs-sync
-description: Maintains living project documentation in .claude/docs/. Called by coding agents after completing work to patch relevant sections. Enforces token-economy rules — line budgets, tables over prose, surgical patches only, no duplicate content.
+description: Maintains .claude/docs/ — surgical patches, token-economy rules, no duplicate content.
 ---
 
 # Docs Sync

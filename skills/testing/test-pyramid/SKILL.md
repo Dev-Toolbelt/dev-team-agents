@@ -1,6 +1,6 @@
 ---
 name: test-pyramid
-description: Practical test pyramid implementation patterns by test type. Use when writing unit, integration, or E2E tests — covers structure, tooling suggestions, and common pitfalls per layer.
+description: Test pyramid — unit, integration, and E2E patterns with tooling and pitfall guidance.
 ---
 
 # Test Pyramid — Implementation Patterns

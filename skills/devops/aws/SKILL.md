@@ -1,6 +1,6 @@
 ---
 name: aws
-description: AWS deployment and infrastructure patterns for cost-optimized, production-ready setups. Covers ECS, EC2, ECR, RDS, S3, CloudFront, ALB, and IAM best practices. Use when deploying to AWS or reviewing AWS infrastructure.
+description: AWS deployment — ECS, EC2, RDS, S3, CloudFront, ALB, and IAM best practices.
 ---
 
 # AWS Deployment

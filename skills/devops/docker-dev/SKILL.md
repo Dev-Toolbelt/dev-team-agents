@@ -1,6 +1,6 @@
 ---
 name: docker-dev
-description: Docker configuration best practices for development environments. Use when creating or reviewing docker-compose files, Dockerfiles for local development, or debugging container issues in dev.
+description: Docker development setup — docker-compose, local Dockerfiles, and container debugging.
 ---
 
 # Docker for Development Environments

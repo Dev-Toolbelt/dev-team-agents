@@ -1,6 +1,6 @@
 ---
 name: conventional-commits
-description: Conventional Commits 1.0.0 standard for commit messages and changelogs. Use when writing, reviewing, or generating git commit messages. Covers types, scopes, breaking changes, layered commits, and multi-line body format.
+description: Conventional Commits 1.0.0 — types, scopes, breaking changes, and layered commits.
 ---
 
 # Conventional Commits

@@ -1,6 +1,6 @@
 ---
 name: docker-prod
-description: Docker best practices for production environments. Use when building production Dockerfiles, optimizing image size, setting up multi-stage builds, or configuring containers for production deployment.
+description: Docker production best practices — Dockerfiles, image optimization, multi-stage builds.
 ---
 
 # Docker for Production

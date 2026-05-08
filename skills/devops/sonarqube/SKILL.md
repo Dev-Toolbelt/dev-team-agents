@@ -1,6 +1,6 @@
 ---
 name: sonarqube
-description: SonarQube and SonarCloud integration — static analysis, quality gates, SAST, coverage reporting, self-hosted Docker setup, server configuration, CI/CD integration, and plugin management. Load when sonar-project.properties, .sonarcloud.properties, or SONAR_TOKEN are detected in the project.
+description: SonarQube/SonarCloud — static analysis, quality gates, SAST, CI/CD integration.
 ---
 
 # SonarQube / SonarCloud

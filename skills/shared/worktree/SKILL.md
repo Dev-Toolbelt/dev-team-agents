@@ -1,11 +1,6 @@
 ---
 name: worktree
-description: >
-  Creates and manages a git worktree for a task or feature. Invoke at the start of
-  any feature, fix, chore, or refactor before writing any code. Worktrees are placed
-  under .worktrees/<context>/<brief-title> with a matching branch named
-  <context>/<brief-title>. Trigger keywords: worktree, new task, start feature,
-  start fix, create branch, begin work, nova tarefa, iniciar feature, criar worktree.
+description: Git worktree per task — .worktrees/<context>/<title>. Trigger: new task, start feature/fix.
 allowed-tools: Bash, Read
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: Foundational rule for all dev-team-agents. Defines how agents must load and reconcile project-specific context against the global base standards. Covers coexistence, project override, language policy, mandatory Plan Mode, immutability warnings, and context loading order. Every agent must apply this rule before acting.
+description: Foundational agent rule — project context, coexistence, Plan Mode, language policy.
 ---
 
 # Project Context Loading — Coexistence & Override Rule

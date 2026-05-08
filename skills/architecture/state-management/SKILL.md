@@ -1,6 +1,6 @@
 ---
 name: state-management
-description: State management strategy and rules for frontend projects. Use when deciding where state should live, choosing a state library, or reviewing state architecture. Framework-agnostic with per-library notes.
+description: Frontend state management — where state lives, library selection, architecture review.
 ---
 
 # State Management

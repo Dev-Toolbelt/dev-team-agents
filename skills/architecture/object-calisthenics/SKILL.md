@@ -1,6 +1,6 @@
 ---
 name: object-calisthenics
-description: Object Calisthenics rules for writing clean, maintainable OOP code. Use when reviewing or writing object-oriented code to enforce discipline around encapsulation, cohesion, and simplicity.
+description: Object Calisthenics — 9 rules for encapsulation, cohesion, and OOP simplicity.
 ---
 
 # Object Calisthenics

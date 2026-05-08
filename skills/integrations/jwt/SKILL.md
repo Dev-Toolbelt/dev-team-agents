@@ -1,6 +1,6 @@
 ---
 name: jwt
-description: JWT (JSON Web Token) — structure, validation, claims, signing algorithms, refresh strategy, and security pitfalls. Language-agnostic. Load when a project issues, validates, or consumes JWTs for authentication or authorization.
+description: JWT — structure, claims, signing algorithms, refresh strategy, and security pitfalls.
 ---
 
 # JWT (JSON Web Token)

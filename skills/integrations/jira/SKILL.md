@@ -1,6 +1,6 @@
 ---
 name: jira
-description: Working with Jira via the official Atlassian MCP. Covers MCP detection and setup, project pattern detection, issue operations (create, read, update, comment, worklog, link), JQL search, the branch/worktree naming standard for Jira-tracked tasks, and PR-to-comment trigger.
+description: Jira via Atlassian MCP — issue ops, JQL, branch naming for tracked tasks, PR-to-comment.
 ---
 
 # Jira

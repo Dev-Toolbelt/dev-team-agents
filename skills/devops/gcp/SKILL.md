@@ -1,6 +1,6 @@
 ---
 name: gcp
-description: Google Cloud Platform deployment patterns for cost-optimized production setups. Covers Cloud Run, GKE, Artifact Registry, Cloud SQL, Cloud Storage, and IAM. Use when deploying to GCP or reviewing GCP infrastructure.
+description: GCP deployment — Cloud Run, GKE, Artifact Registry, Cloud SQL, Cloud Storage, IAM.
 ---
 
 # Google Cloud Platform Deployment
