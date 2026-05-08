@@ -15,6 +15,8 @@ mcp__atlassian__atlassianUserInfo
 
 If the tool is unavailable or returns a connection error, stop and guide the user through installation (see **MCP Setup** below).
 
+All MCP calls rely on the credentials registered via `claude mcp add --scope local`. These are stored in the user's local Claude Code settings (typically `~/.claude.json`) and are resolved automatically — never hardcode tokens, override headers, or attempt direct HTTP calls to the Atlassian API. If authentication fails, direct the user to re-run the setup command with a valid token rather than working around it.
+
 ---
 
 ## Project Pattern Detection
@@ -57,41 +59,56 @@ If the user answers **yes**: call `mcp__atlassian__lookupJiraAccountId` with the
 
 ## MCP Setup
 
-If the Atlassian MCP is not installed, walk the user through these steps:
+If the Atlassian MCP is unavailable, guide the user through project-level setup. This approach registers the MCP server in the user's local Claude Code settings for that project only — no files are added to the repository and no global configuration is touched.
 
-### Step 1 — Add the MCP server
+### Step 1 — Generate an API token
 
-Run in the project root (or globally with `--global`):
+Ask the user to visit the following URL and create a new API token:
 
-```bash
-claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/sse
+```
+https://id.atlassian.com/manage-profile/security/api-tokens
 ```
 
-> If using a self-hosted Jira instance, replace the URL with your instance's MCP endpoint, e.g.:
-> `https://your-domain.atlassian.net/gateway/api/mcp/v1/sse`
+Instructions to pass to the user:
+1. Click **Create API token**
+2. Give it a label (e.g., `claude-code`)
+3. Copy the generated token immediately — it will not be shown again
+4. Paste the token here, along with the email address associated with the Atlassian account
 
-### Step 2 — Authenticate
+### Step 2 — Register the MCP server locally
 
-After adding the server, Claude Code will prompt for Atlassian credentials on first use. The MCP uses OAuth 2.0 — the user must authorize access in the browser popup that appears.
-
-Alternatively, set credentials via environment:
+Once the user provides their **email** and **API token**, compute the Base64-encoded credential yourself:
 
 ```bash
-# API token (recommended for Jira Cloud)
-export ATLASSIAN_API_TOKEN=<your-token>
-export ATLASSIAN_EMAIL=<your-email>
-export ATLASSIAN_URL=https://your-domain.atlassian.net
+echo -n "{email}:{api_token}" | base64
 ```
 
-To generate an API token: https://id.atlassian.com/manage-profile/security/api-tokens
+Then show the user the ready-to-run command with the computed Base64 value already filled in — do not ask the user to compute anything:
 
-### Step 3 — Verify
+```bash
+cd path/to/target/project
+
+claude mcp add atlassian https://mcp.atlassian.com/v1/sse \
+  --transport http \
+  --header "Authorization: Basic <computed-base64-string>" \
+  --scope local
+```
+
+The `--scope local` flag stores the configuration in the user's local Claude Code settings for that project only — nothing is written to the repository and nothing is committed.
+
+### Step 3 — Restart Claude Code and verify
+
+Ask the user to restart Claude Code so it picks up the new MCP configuration. Then verify the connection:
 
 ```
 mcp__atlassian__atlassianUserInfo
 ```
 
-Expected: returns your Atlassian account info. If it fails, re-check the token and URL.
+Expected: returns account name, email, and accessible Atlassian sites. If it fails:
+- Confirm the email and token are correct (no trailing spaces)
+- Confirm the Base64 string was generated with `email:token` (colon separator, no extra characters)
+- Re-run `claude mcp add` with the corrected values — it will overwrite the previous entry
+- Confirm Claude Code was restarted after running the command
 
 ---
 
