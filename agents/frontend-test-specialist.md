@@ -236,6 +236,18 @@ If a component is hard to test:
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`)
+- The user asks to write or update frontend tests for a task tracked in Jira
+
+When Jira is active:
+- Create the branch using the Jira naming pattern with type `test`: `test/{issueKey}_short-description`
+- Add a QA-ready comment when the test suite is ready, listing the covered user flows, browsers/devices targeted if relevant, and how to run the tests
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.

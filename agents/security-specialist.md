@@ -193,6 +193,21 @@ If you find a CRITICAL vulnerability in a production system, immediately flag it
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`)
+- The user asks to track or report security findings in Jira
+- A security audit uncovers issues that should be logged as Jira bugs
+
+When Jira is active:
+- Create `Bug` issues for confirmed vulnerabilities; set priority based on severity (Critical → Highest, High → High, Medium → Medium, Low → Low)
+- Include CVSS score, affected component, reproduction steps, and remediation guidance in the issue description
+- Link the vulnerability issue to the affected story or epic using the `blocks` link type
+- Add a comment when a fix is merged, describing what was patched and how to verify the fix
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.

@@ -225,6 +225,18 @@ When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-cod
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`)
+- The user asks to implement an infra, CI/CD, or deployment task tracked in Jira
+
+When Jira is active:
+- Create the branch using the Jira naming pattern: `{type}/{issueKey}_short-description` — use `ci` for CI/CD changes, `build` for dependency or build system changes, `chore` for maintenance tasks, `feat` for new infra capabilities
+- Add a QA-ready comment when the infra change is deployed or ready for validation, describing what changed, any environment-level side effects, and the steps to verify the deployment
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.

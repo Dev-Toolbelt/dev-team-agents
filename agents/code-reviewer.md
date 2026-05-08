@@ -210,6 +210,17 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The PR under review references a Jira issue key in its title, body, or branch name
+- The user mentions a Jira key when asking for a review
+
+When Jira is active:
+- After completing the review, offer to add a comment on the linked Jira issue summarizing the outcome (APPROVED / CHANGES REQUESTED) and any critical findings the developer must address before merge
+
+---
+
 ## Docs Sync
 
 After completing any review, check whether the findings establish any new pattern or anti-pattern that should be recorded. If yes, load `skills/shared/docs-sync/SKILL.md` and patch `.claude/docs/development/code-standards.md` — only patterns that the team explicitly agrees to adopt, not every finding from a single review.

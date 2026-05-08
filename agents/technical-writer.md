@@ -135,6 +135,19 @@ Follow [Keep a Changelog](https://keepachangelog.com/) and Conventional Commits:
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`)
+- The user asks to document a feature or task tracked in Jira
+- A PR is being created for a Jira-tracked task — the PR trigger is especially relevant: offer to comment on the task with the PR link
+
+When Jira is active:
+- Use the Jira issue summary and description as the source of truth for what to document
+- Add a comment when documentation is complete, linking to the doc artifact (PR, Confluence page, or file path) and summarizing what was documented
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.

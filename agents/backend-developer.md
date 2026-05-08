@@ -195,8 +195,7 @@ Load: `skills/integrations/jira/SKILL.md`
 
 Critical rules:
 - **Always create the branch using the Jira naming pattern** before writing any code: `{type}/{issueKey}_short-description` — derive `type` from the issue type/intent and `short-description` from the issue summary
-- Transition the issue to **In Progress** after the branch is created
-- Transition to **In Review** and add a comment summarizing what was done before declaring the task complete
+- Add a QA-ready comment (following the Comment Style in the skill) when the task is ready for review — do not change the issue status unless the user explicitly asks
 
 ### SonarQube / SonarCloud
 

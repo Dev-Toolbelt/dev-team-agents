@@ -298,6 +298,18 @@ Load `skills/integrations/database-debug/SKILL.md` for the full set of debug que
 
 ---
 
+## Jira Integration
+
+**Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- The user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`)
+- The user asks to start database work tracked in Jira (migration, schema change, query optimization)
+
+When Jira is active:
+- Create the branch using the Jira naming pattern: `{type}/{issueKey}_short-description` — use `fix` for bug-driven schema fixes, `feat` for new schema additions, `refactor` for restructuring
+- Add a QA-ready comment (following the Comment Style in the skill) when the migration or schema change is ready for review, describing what changed, any side effects on dependent queries or services, and how to validate the change
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
