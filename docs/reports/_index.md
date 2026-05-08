@@ -44,6 +44,34 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
   Mantenha em ordem cronológica decrescente (mais recente primeiro).
 -->
 
+### 2026-05-07 — segunda passada (foco em comandos, robustez de scripts e modelo)
+
+- `docs-sync-claude-md-package-exclusions` — `install.sh` strippa `.claude/`, `README.md`, `README.pt-BR.md`, `.gitignore` mas o CLAUDE.md não documenta — [relatório](2026-05-07/01-referencias-e-consistencia.md)
+- `ref-commit-no-worktree-context` — `commit.md` é o único comando multi-passo que não detecta worktree atual — [relatório](2026-05-07/01-referencias-e-consistencia.md)
+- `docs-sync-commands-arguments-table` — Tabela de `$ARGUMENTS` existe apenas em `commit.md` (1/22 comandos) — [relatório](2026-05-07/01-referencias-e-consistencia.md)
+- `auto-installer-error-output` — `install.sh` engole stderr do `curl`/`wget` em downloads que falham — [relatório](2026-05-07/01-referencias-e-consistencia.md)
+- `flow-commands-par-column-missing` — Comandos com 2+ agentes não usam coluna `Par.` do plan-template — [relatório](2026-05-07/02-fluxos-e-comandos.md)
+- `flow-plan-database-conditional` — `database-specialist` é spawn incondicional em `/devteam:plan`, contradizendo a coluna conditional do CLAUDE.md — [relatório](2026-05-07/02-fluxos-e-comandos.md)
+- `flow-conditional-spawn-criteria-undefined` — Não há heurística textual/de path para decidir spawn condicional — [relatório](2026-05-07/02-fluxos-e-comandos.md)
+- `flow-inherited-no-explicit-await-checkpoint` — `inherited-project.md` não tem checkpoint formal entre fases paralelas — [relatório](2026-05-07/02-fluxos-e-comandos.md)
+- `flow-discovery-loop-exit-criteria` — Loop "repeat until scope is 100% closed" sem teto de iterações — [relatório](2026-05-07/02-fluxos-e-comandos.md)
+- `agent-setup-assistant-model-mismatch` — `setup-assistant` em Sonnet, mas executa decisões de Opus — [relatório](2026-05-07/03-agentes-e-skills.md)
+- `docs-sync-readme-test-skills-clarification` — README não explica complementaridade `test-pyramid` × `test-strategy` — [relatório](2026-05-07/03-agentes-e-skills.md)
+- `skill-comments-policy-missing-in-non-coding-agents` — `comments-policy` ausente em 5 agentes que produzem código exemplificativo — [relatório](2026-05-07/03-agentes-e-skills.md)
+- `gov-templates-physical-vs-inline` — Templates dispersos entre `templates/*.md` e blocos inline em skills — [relatório](2026-05-07/03-agentes-e-skills.md)
+- `skill-pwa-offline-weak-references` — Skills `pwa` e `offline-first` sem load explícito por agente — [relatório](2026-05-07/03-agentes-e-skills.md)
+- `token-current-context-block-deduplication` — Bloco "current working context" repetido em 18+ comandos — [relatório](2026-05-07/04-economia-tokens.md)
+- `token-agent-path-prefix-redundant` — `.claude/agents/dev-team/` em todas as 40+ linhas de spawn — [relatório](2026-05-07/04-economia-tokens.md)
+- `token-graphify-routing-in-project-context` — `project-context` não desvia leituras para Graphify quando disponível — [relatório](2026-05-07/04-economia-tokens.md)
+- `token-git-log-window-overshoot` — `git log --oneline -20` é supérfluo; `-10` cobre 80% dos casos — [relatório](2026-05-07/04-economia-tokens.md)
+- `token-setup-assistant-conditional-tracker-loading` — `setup-assistant` carrega 9 trackers; deveria carregar 1 sob demanda — [relatório](2026-05-07/04-economia-tokens.md)
+- `auto-hook-dispatchers-missing-errexit` — `pre-tool-use.sh` e `stop.sh` usam `set -uo pipefail` (faltando `-e`) — [relatório](2026-05-07/05-robustez-scripts.md)
+- `auto-curl-no-timeout-update-check` — `curl` no hook de update sem `--connect-timeout`/`--max-time` — [relatório](2026-05-07/05-robustez-scripts.md)
+- `auto-install-no-rollback-on-second-mv-failure` — `install.sh` corrompe instalação se o segundo `mv` falhar — [relatório](2026-05-07/05-robustez-scripts.md)
+- `auto-update-no-integrity-check` — Auto-update baixa e executa installer sem SHA256/GPG — [relatório](2026-05-07/05-robustez-scripts.md)
+- `auto-session-summary-no-git-detection` — Hook de session-summary não detecta ausência de repo git — [relatório](2026-05-07/05-robustez-scripts.md)
+- `auto-check-updates-mkdir-resilience` — `01-check-updates.sh` aborta em FS onde `mkdir` falha — [relatório](2026-05-07/05-robustez-scripts.md)
+
 ### 2026-05-06 — `relatorio-auditoria-inicial.md`
 
 - `docs-sync-readme-architecture-skills` — README lista apenas 5 skills de architecture; existem 11 — [relatório](2026-05-06/relatorio-auditoria-inicial.md)
@@ -76,3 +104,4 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
 | Data | Sugestões publicadas | Originais (acumulado) |
 |------|----------------------|-----------------------|
 | 2026-05-06 | 22 | 22 |
+| 2026-05-07 | 25 | 47 |
