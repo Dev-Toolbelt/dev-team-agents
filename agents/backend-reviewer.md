@@ -101,6 +101,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - SOLID violations (esp. SRP and DIP)
 - Business logic leaking into controllers
 - Dependency Injection: dependencies injected, never instantiated inside classes
+- **Single Action Controller violations** — load `skills/architecture/single-action-controller/SKILL.md`; flag any controller with more than one public action method as `[BLOCKING]`
 - Object Calisthenics violations — load `skills/architecture/object-calisthenics/SKILL.md` for reference
 - Anti-patterns: God Objects, Feature Envy, Primitive Obsession
 - KISS violations: unnecessary indirection, abstractions with a single implementation

@@ -33,6 +33,8 @@ Load the `api-design` skill (`skills/architecture/api-design/SKILL.md`) before a
 
 Load the `design-patterns` skill (`skills/architecture/design-patterns/SKILL.md`) before authoring `code-standards.md` — it provides SOLID principles, GoF patterns, domain-driven patterns, and anti-patterns reference for the chosen stack.
 
+Load `skills/architecture/single-action-controller/SKILL.md` when defining backend controller conventions in `code-standards.md` — the Single Action Controller pattern is the mandatory baseline for all backend controllers.
+
 Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task — present a structured plan and wait for user approval before writing documents or making architectural decisions.
 
 Apply `skills/shared/token-efficiency/SKILL.md` when loading multiple architecture documents or traversing a large codebase during analysis — prefer `grep`/`head` over reading entire files.

@@ -146,6 +146,14 @@ These apply unless the project overrides in `code-standards.md`:
 
 ---
 
+## File Upload (Multipart)
+
+When the task involves file upload (large files, progress tracking, or chunked upload), load `skills/architecture/multipart-upload/SKILL.md` before implementing.
+
+**Detection signals**: `file input`, `upload`, `drag-and-drop`, `progress bar`, `S3`, `presigned`, `attachment` in requirements or existing code.
+
+---
+
 ## Interaction Patterns
 
 ### Debounce

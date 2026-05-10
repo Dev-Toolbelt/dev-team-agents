@@ -225,6 +225,22 @@ Critical rules:
 
 ---
 
+## Single Action Controller — Mandatory
+
+**Every controller must follow the Single Action Controller pattern.** Load and apply `skills/architecture/single-action-controller/SKILL.md` before writing any controller class.
+
+This is not optional. One controller = one HTTP action. No multi-method resource controllers. See the skill for naming, structure, routing, and review criteria.
+
+---
+
+## File Upload (Multipart)
+
+When the task involves file upload (any file > 5 MB, or when using S3/R2/GCS/Azure Blob), load `skills/architecture/multipart-upload/SKILL.md` before implementing.
+
+**Detection signals**: `file`, `upload`, `attachment`, `presign`, `S3`, `storage`, `blob` in requirements or existing code.
+
+---
+
 ## Code Quality Standards (Base Defaults)
 
 These apply unless the project defines otherwise in `code-standards.md`:
