@@ -92,10 +92,10 @@ After installation, `.claude/` will contain:
 ├── dev-team-agents/   ← extracted from tarball (no .git folder — safe to commit)
 ├── user-data/         ← user state and config (preserved across updates)
 │   ├── graphify.json  ← created by Graphify setup (if enabled) — commit this
-│   ├── session-summary.md  ← gitignored automatically by installer
-│   ├── .installed-version  ← gitignored automatically by installer
-│   ├── .last-update-check  ← gitignored automatically by installer
-│   └── .auto-update        ← gitignored automatically by installer
+│   ├── session-summary.md  ← gitignored (entire user-data/ dir is ignored by installer)
+│   ├── .installed-version  ← gitignored
+│   ├── .last-update-check  ← gitignored
+│   └── .auto-update        ← gitignored
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -310,7 +310,7 @@ The script auto-numbers the file and fills a MADR template. Agents read relevant
 
 `skills/shared/project-context` defines the context-loading order every agent follows at startup. It includes the session summary and ADR index, ensuring a consistent baseline across all agents and sessions.
 
-The installer automatically adds all personal user-data files to `.gitignore` (`session-summary.md`, `.installed-version`, `.last-update-check`, `.auto-update`). Only `graphify.json` is left uncommitted — it contains project-level configuration that the whole team should share.
+The installer automatically ignores the entire `.claude/user-data/` directory, with one exception: `graphify.json` is explicitly kept (`!.claude/user-data/graphify.json`) because it contains project-level Graphify config that the whole team should share. The installer also adds `.claude/.worktree-session` to `.gitignore`.
 
 ---
 

@@ -92,10 +92,10 @@ Após a instalação, `.claude/` conterá:
 ├── dev-team-agents/   ← extraído de tarball (sem pasta .git — seguro para commitar)
 ├── user-data/         ← estado e config do usuário (preservados nos updates)
 │   ├── graphify.json  ← criado pelo setup do Graphify (se habilitado) — commitar este
-│   ├── session-summary.md  ← adicionado ao .gitignore automaticamente pelo installer
-│   ├── .installed-version  ← adicionado ao .gitignore automaticamente pelo installer
-│   ├── .last-update-check  ← adicionado ao .gitignore automaticamente pelo installer
-│   └── .auto-update        ← adicionado ao .gitignore automaticamente pelo installer
+│   ├── session-summary.md  ← ignorado (installer adiciona o dir user-data/ inteiro ao .gitignore)
+│   ├── .installed-version  ← ignorado
+│   ├── .last-update-check  ← ignorado
+│   └── .auto-update        ← ignorado
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/
@@ -310,7 +310,7 @@ O script auto-numera o arquivo e preenche um template MADR. Agentes leem ADRs re
 
 `skills/shared/project-context` define a ordem de carregamento de contexto que todo agente segue no startup. Inclui o resumo de sessão e o índice de ADRs, garantindo uma linha de base consistente entre todos os agentes e sessões.
 
-O installer adiciona automaticamente todos os arquivos user-data pessoais ao `.gitignore` (`session-summary.md`, `.installed-version`, `.last-update-check`, `.auto-update`). Apenas `graphify.json` fica fora da lista — ele contém configuração de projeto que o time deve compartilhar.
+O installer ignora automaticamente o diretório inteiro `.claude/user-data/`, com uma exceção: `graphify.json` é mantido explicitamente (`!.claude/user-data/graphify.json`) por ser configuração de projeto que o time deve compartilhar. O installer também adiciona `.claude/.worktree-session` ao `.gitignore`.
 
 ---
 

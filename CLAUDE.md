@@ -80,6 +80,14 @@ This ensures multi-agent workflows ask the worktree question exactly once.
 - Max ~500 lines; move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
 
+#### Contradiction Guard
+
+All agents automatically enforce the Contradiction Guard defined in `skills/shared/project-context/SKILL.md`. When a user request conflicts with an established rule (in `CLAUDE.md`, ADRs, architecture docs, or sprint scope), the agent must flag the conflict, cite the source, and ask for explicit confirmation before proceeding.
+
+#### Wiki Knowledge Base
+
+Every project gets a wiki at `.claude/docs/wiki/`. Agents write entries after completing tasks that reveal non-obvious domain knowledge — gotchas, multi-layer flows, behavioral quirks that aren't derivable from reading code. The `setup-assistant` creates `wiki/README.md` on FIRST_RUN. See `skills/shared/docs-sync/SKILL.md` for the wiki entry format, domain folder rules, and update protocol.
+
 #### Token Efficiency
 
 All agents should apply token-efficient patterns by default. The canonical reference is `skills/shared/token-efficiency/SKILL.md`. Load it explicitly when:
@@ -198,7 +206,7 @@ Files in `user-data/`:
 - `.auto-update` — flag file; present = auto-updates enabled (**gitignored** by installer)
 - `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 
-`install.sh` automatically adds the four gitignored files to `.gitignore` during installation. `graphify.json` is intentionally left out — it is project-level config shared by the whole team.
+`install.sh` adds `.claude/user-data/` (entire directory) and `!.claude/user-data/graphify.json` (exception) to `.gitignore` — this ignores all user-data files except `graphify.json`. It also adds `.claude/.worktree-session` to `.gitignore`. Projects with the old per-file entries will be migrated automatically by the health check or next installer run.
 
 **Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
 
