@@ -1,6 +1,6 @@
 ---
 name: api-design
-description: REST and GraphQL API design — naming, HTTP semantics, versioning, errors, pagination.
+description: REST API and GraphQL design conventions — resource naming, HTTP methods, status codes, response envelope, pagination, versioning, and idempotency.
 ---
 
 # API Design
@@ -43,13 +43,28 @@ description: REST and GraphQL API design — naming, HTTP semantics, versioning,
 
 ### Response Envelope
 
-Use a consistent envelope. Recommended: [JSend](https://github.com/omniti-labs/jsend):
+All responses use a consistent envelope:
 
 ```json
 { "status": "success", "data": { ... } }
-{ "status": "fail", "data": [{ "field": "message" }] }
-{ "status": "error", "message": "Internal error description" }
 ```
+
+```json
+{
+  "status": "error",
+  "message": "Human-readable summary",
+  "code": "MACHINE_READABLE_CODE",
+  "details": [
+    { "field": "email", "message": "must be a valid email address" }
+  ]
+}
+```
+
+- `status`: `"success"` or `"error"` — always present
+- `data`: payload on success; omitted on error
+- `message`: human-readable description of the error
+- `code`: machine-readable identifier in SCREAMING_SNAKE_CASE
+- `details`: optional array of field-level validation errors
 
 ### Pagination
 
@@ -81,16 +96,25 @@ GET /products?category=fuel&min_price=10&max_price=50
 
 ### Versioning
 
-Prefer URL versioning for clarity and caching:
+Use URL prefix versioning — never header-based versioning:
 ```
 /api/v1/users
 /api/v2/users
 ```
 
-Alternatively: `Accept: application/vnd.myapp.v2+json` header versioning (more REST-pure, harder to test).
-
 - Never remove a field without a major version bump
-- Deprecate with `Deprecation` and `Sunset` headers
+- Deprecate with `Deprecation` and `Sunset` response headers
+- Maintain at least one previous major version during deprecation cycles
+
+### Idempotency
+
+- `GET`, `PUT`, `DELETE` must be idempotent — repeated calls with the same payload produce the same result
+- `POST` is not idempotent by default
+- For payment processing and other critical operations, support the `Idempotency-Key` request header:
+  - Client generates a unique key per operation attempt
+  - Server stores the result and returns the same response for duplicate keys
+  - Key expiry: 24 hours minimum
+- Guard against duplicate `POST` submissions when relevant (e.g., order placement, account creation)
 
 ---
 
@@ -106,13 +130,25 @@ Alternatively: `Accept: application/vnd.myapp.v2+json` header versioning (more R
 
 ## GraphQL Schema Conventions
 
+> When the project exposes a GraphQL API, load `skills/architecture/graphql/SKILL.md` for the full reference. The rules below are always active.
+
+- **Schema-first**: define `.graphql` schema files before implementing resolvers
 - Types use `PascalCase`: `UserProfile`, `OrderItem`
 - Fields use `camelCase`: `firstName`, `totalAmount`
 - Queries: descriptive names — `userById`, `activeOrders`
 - Mutations: verb + noun — `createUser`, `updateOrderStatus`, `deleteProduct`
+- **Mutations always return** the affected resource plus any errors — never return `Boolean` alone
 - Use `input` types for mutation arguments: `CreateUserInput`, `UpdateProductInput`
+- **DataLoader is mandatory** for any resolver that fetches related entities — prevents N+1 queries
 - Pagination: use Relay Connection spec (`edges`, `node`, `pageInfo`)
-- Errors: use a union type `Result = Success | Error` for explicit error handling
+- Errors: expose `errors` alongside `data` in mutation payloads (not via HTTP 4xx):
+
+```graphql
+type UpdateUserPayload {
+  user: User
+  errors: [UserError!]!
+}
+```
 
 ---
 
