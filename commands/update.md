@@ -1,4 +1,10 @@
-You are running the **`/devteam:update`** command. Your job is to check for updates and, when available, apply them in a friendly, transparent way.
+You are running the **`/devteam:update`** command.
+
+**IMPORTANT — Output rules:**
+- Be direct and terse. No analysis, no side notes, no observations, no commentary beyond what is specified below.
+- Do NOT add any personal remarks, flag issues you noticed, or mention things "worth flagging".
+- Do NOT explain what you are about to do before doing it.
+- Only output exactly what each step below says to output.
 
 ---
 
@@ -8,64 +14,71 @@ You are running the **`/devteam:update`** command. Your job is to check for upda
 cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
-Display the current installed version to the user.
-
 ---
 
 ## Step 2 — Check for updates
 
-Run the check script (bypasses the 24h TTL by deleting the timestamp first, so the check is always fresh):
+Force a fresh check (bypass the 24h TTL):
 
 ```bash
 rm -f .claude/user-data/.last-update-check
 bash .claude/dev-team-agents/scripts/check-updates.sh
 ```
 
-Capture the output:
-- **No output** → already on the latest version. Tell the user: "You are already up to date." Stop here.
-- **Output with a new version** → parse current and latest version from the banner and continue to Step 3.
+**If the script produces no output** → already up to date. Output exactly:
+
+```
+Installed: <current-version>
+Latest:    <current-version>
+
+Up to date.
+```
+
+Then stop. Do not add anything else.
+
+**If the script outputs a banner with a new version** → parse current and latest from the output, then continue to Step 3.
 
 ---
 
 ## Step 3 — Offer to update
 
-Present the update clearly:
+Output exactly:
 
 ```
-A new version of dev-team-agents is available.
+Update available: <current-version> → <latest-version>
 
-  Current : vX.Y.Z
-  Latest  : vA.B.C
-
-Would you like to update now? (yes / no)
+Apply update? (yes / no)
 ```
 
-Wait for the user's confirmation before proceeding.
+Wait for the user's answer before proceeding.
 
 ---
 
-## Step 4 — Apply the update (only if the user confirmed)
-
-Run:
+## Step 4 — Apply the update (only if user said yes)
 
 ```bash
 bash .claude/dev-team-agents/scripts/update.sh latest
 ```
 
-Stream the output to the user as it runs so they can follow progress.
+After the script exits successfully, output exactly:
 
-After the script exits successfully, tell the user:
-- The update is complete.
-- Any agents or skills loaded in the current session are now outdated — start a fresh Claude Code session to pick up the new versions.
+```
+Updated to <latest-version>. Start a new session to pick up the changes.
+
+Run a health check to verify the installation:
+  "Run a health check on this project"
+```
+
+Do not add anything else.
 
 ---
 
-## Step 5 — Auto-update toggle (only if $ARGUMENTS contains a flag)
+## Auto-update toggle (only if $ARGUMENTS contains a flag)
 
-| Argument | Action |
-|----------|--------|
-| `--enable-auto` | Run `bash .claude/dev-team-agents/scripts/update.sh --enable-auto` and confirm to the user |
-| `--disable-auto` | Run `bash .claude/dev-team-agents/scripts/update.sh --disable-auto` and confirm to the user |
+| Argument | Command | Output |
+|----------|---------|--------|
+| `--enable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
+| `--disable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
 
 If either flag is present, skip Steps 1–4 and handle only the toggle.
 
@@ -79,4 +92,4 @@ Skip Steps 1–3. Run:
 bash .claude/dev-team-agents/scripts/update.sh $ARGUMENTS
 ```
 
-Tell the user which version was installed when the script completes.
+Output exactly: `Installed <version>.`
