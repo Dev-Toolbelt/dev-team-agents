@@ -10,7 +10,12 @@ Use this workflow when taking over a project from another team — unfinished, p
 
 ### Phase 1: AUDIT
 
-All three audit agents are independent. **Send all three prompts in a single message** to run them in parallel:
+**Run in parallel (send all prompts in one message):**
+| Step | Agent | Par. |
+|------|-------|------|
+| 1a | software-architect | A |
+| 1b | database-specialist | A |
+| 1c | security-specialist | A |
 
 ```
 Prompt: "As the software-architect, audit the existing codebase. Document the current
@@ -26,13 +31,25 @@ Prompt: "As the security-specialist, do a quick security audit of the existing c
          Flag any CRITICAL or HIGH issues found."
 ```
 
-> ⚡ **Parallel tip**: copy all three prompts above into a single message. Each agent will present its own plan and wait for approval — approve them together, then all three audits run simultaneously.
-
 Each agent will:
 - Present a plan (scope of audit, areas to examine, output documents to create)
 - Wait for your approval before reading files or generating reports
 
 All output documents are created in **English**.
+
+**ADR trigger**: any architectural decision you uncover during the audit should be documented as an ADR:
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "decision-title"
+```
+Fill in the generated template and set status to `Accepted` if the decision is already in effect, or `Proposed` if it should be revisited.
+
+**Audit exit criteria** — the discovery phase is complete when:
+- (a) `.claude/docs/development/architecture.md` exists and is populated
+- (b) at least one session-summary entry exists in `.claude/user-data/session-summary.md`
+- (c) all major unknowns have been documented or escalated (no silent gaps)
+
+▶ **CHECKPOINT — await: software-architect (1a), database-specialist (1b), security-specialist (1c)**
+All three audit reports must exist before moving to Phase 2.
 
 ### Phase 2: CLIENT SCOPING CYCLE
 
@@ -119,7 +136,8 @@ The audit phase may discover that the existing project has conventions and patte
 When the backlog is approved, the gap analysis is done, and development + quality gate have completed:
 
 1. `technical-writer` — generate initial documentation (architecture summary, API reference if applicable)
-2. `devops-specialist` — confirm the environment is ready for the first delivery and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
+2. `/devteam:commit` — group staged changes by layer and write commits following the project's convention
+3. `devops-specialist` — confirm the environment is ready for the first delivery and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
 
 If GitHub is configured and `gh` is installed:
 ```
@@ -130,3 +148,19 @@ Prompt: "Please open a PR for these changes."
 Hand off to the team for final review and deployment.
 
 The workflow is complete when the client confirms the delivered scope meets the agreed acceptance criteria. There is no automated completion signal — the decision is yours.
+
+Once the project is stable and in production, switch to `workflows/maintenance.md` for all ongoing feature work and bug fixes.
+
+---
+
+## Workflow Closure
+
+Before closing out the session, verify:
+
+- [ ] All three audit reports exist under `.claude/docs/development/`
+- [ ] Audit exit criteria met: `architecture.md` populated, session summary written, major unknowns documented
+- [ ] At least one ADR created for significant architectural decisions discovered during audit
+- [ ] Backlog approved by client and gap analysis complete
+- [ ] Quality gate passed (code-reviewer, qa-specialist, security-specialist)
+- [ ] Commits made and PR opened (if GitHub is configured)
+- [ ] Session summary written to `.claude/user-data/session-summary.md`

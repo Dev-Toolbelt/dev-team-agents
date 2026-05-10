@@ -67,7 +67,11 @@ The `security-specialist` presents a verification plan and waits for approval. O
 
 ## Step 5: Code Review + QA (parallel)
 
-Both agents are independent. **Send both prompts in a single message** to run them simultaneously:
+**Run in parallel (send both prompts in one message):**
+| Step | Agent | Par. |
+|------|-------|------|
+| 5a | code-reviewer | A |
+| 5b | qa-specialist | A |
 
 ```
 Prompt: "As the code-reviewer, review the security patch for correctness."
@@ -75,13 +79,29 @@ Prompt: "As the code-reviewer, review the security patch for correctness."
 Prompt: "As the qa-specialist, verify the patch doesn't regress any existing functionality."
 ```
 
-> ⚡ **Parallel tip**: copy both prompts into a single message. Both agents run simultaneously — no need to wait for one to finish before starting the other.
-
 Both agents present their respective plans and wait for approval before running checks.
+
+▶ **CHECKPOINT — await: code-reviewer (5a), qa-specialist (5b)**
+Both reports must be clear before proceeding to deploy.
 
 ---
 
-## Step 6: Deploy (devops-specialist)
+## Step 6: ROLLBACK PLAN — Document Before Deploying
+
+Before the `devops-specialist` executes any deploy, document the rollback plan. This must exist in writing before the deploy begins:
+
+```
+Prompt: "As the devops-specialist, document the rollback plan for this security patch:
+         (1) the exact command or procedure to revert the deployment,
+         (2) who to notify if a rollback is triggered,
+         (3) how long to monitor post-deploy before declaring the patch stable."
+```
+
+Capture the output in `.claude/docs/development/security-incidents.md` or your deploy notes. Do not proceed to deploy without this.
+
+---
+
+## Step 7: Deploy (devops-specialist)
 
 ```
 Prompt: "As the devops-specialist, what's the fastest safe deploy strategy for
@@ -94,7 +114,7 @@ Security patches often justify faster deploy cycles — coordinate with the team
 
 ---
 
-## Step 7: Post-Incident
+## Step 8: Post-Incident
 
 ```
 Prompt: "As the technical-writer, document this vulnerability, the fix applied,
@@ -109,3 +129,28 @@ Document:
 - What was the impact / blast radius
 - How it was fixed
 - How to prevent similar issues
+
+**Commit and PR**: run `/devteam:commit` to commit the patch with a clear security-scoped commit message. Open a PR if GitHub is configured:
+```
+Prompt: "Please open a PR for this security patch."
+         → Agent will present a plan and ask for consent before creating the PR.
+```
+
+If the vulnerability was caused by a bug in application logic (not just a dependency), see `workflows/bug-fix.md` for the complementary bug-fix workflow.
+
+---
+
+## Workflow Closure
+
+Before closing out the session, verify:
+
+- [ ] Severity assessment documented by `security-specialist`
+- [ ] Patch implemented with minimal blast radius
+- [ ] Full test suite passed (or manual regression completed)
+- [ ] Security-specialist confirmed patch fully addresses the vulnerability
+- [ ] Code review and QA passed
+- [ ] Rollback plan documented in writing before deploy
+- [ ] Deploy completed and monitoring period underway
+- [ ] Incident documented in `.claude/docs/development/security-incidents.md`
+- [ ] Commits made and PR opened (if GitHub is configured)
+- [ ] Session summary written to `.claude/user-data/session-summary.md`

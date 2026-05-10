@@ -4,6 +4,8 @@ Use for isolated bugs in any project type. Faster than the full workflow — foc
 
 > **Plan Mode**: every agent step below will present a structured plan for your approval before executing anything. You review, adjust if needed, and approve. Nothing runs until you say so.
 
+> **Command shortcut**: `/devteam:fix` runs this workflow.
+
 ---
 
 ## Step 1: Diagnosis
@@ -18,6 +20,8 @@ The `software-architect` will:
 - After approval: identify the root cause and produce a short diagnosis report
 
 Do not jump to fixing before the root cause is confirmed. A symptom fix without root cause understanding usually produces another bug.
+
+▶ CHECKPOINT — await: software-architect diagnosis
 
 ---
 
@@ -43,7 +47,12 @@ The developer will:
 
 ## Step 3 + 4: Regression Check + Code Review (parallel)
 
-The `qa-specialist` and `code-reviewer` are independent. **Send both prompts in a single message** to run them simultaneously:
+The `qa-specialist` and `code-reviewer` are independent. Send both prompts in a single message to run them simultaneously:
+
+| Step | Agent | Par. |
+|------|-------|------|
+| 3 | qa-specialist | A |
+| 4 | code-reviewer | A |
 
 ```
 Prompt: "As the qa-specialist, verify the bug is fixed and check that the fix
@@ -52,8 +61,6 @@ Prompt: "As the qa-specialist, verify the bug is fixed and check that the fix
 Prompt: "As the code-reviewer, review the bug fix — check that it actually fixes
          the root cause, doesn't introduce new issues, and follows project standards."
 ```
-
-> ⚡ **Parallel tip**: copy both prompts into a single message. Both agents run simultaneously — no need to wait for one to finish before starting the other.
 
 The `qa-specialist` presents a validation plan before running checks. The `code-reviewer` presents findings as a structured report. Any remediation step requires a new plan.
 
@@ -72,7 +79,23 @@ The test specialist presents a plan (test file, cases to cover, expected asserti
 
 ---
 
-## Step 6: Documentation Update (technical-writer — optional)
+## Step 6: Commit & PR
+
+After all findings are resolved and tests pass:
+
+```
+Prompt: "/devteam:commit"
+```
+
+Then optionally:
+
+```
+Prompt: "Please open a PR for these changes."
+```
+
+---
+
+## Step 7: Documentation Update (technical-writer — optional)
 
 If the bug fix changes documented behavior — an API contract, a described flow, or a rule in the README:
 
@@ -82,3 +105,18 @@ Prompt: "As the technical-writer, check whether this bug fix changes any documen
 ```
 
 Skip if the fix is purely internal (no user-visible behavior change, no API contract change).
+
+---
+
+## Workflow Closure
+
+☐ Root cause identified and documented
+☐ Fix implemented and reviewed
+☐ Regression test added (if project has test culture)
+☐ Quality gate passed (no [BLOCKING] findings)
+☐ Commit and PR created
+☐ Session summary written
+
+**Related workflows:**
+- Found a security issue? → `workflows/security-patch.md`
+- Fix requires broader refactoring? → `workflows/refactor.md`

@@ -10,7 +10,9 @@ The work here is primarily **context management** — ensuring agents understand
 
 ---
 
-## How to Start a Task
+## Phase 1: TASK PICKUP
+
+> Shortcut: `/devteam:workflow-maintenance` runs this workflow from any project directory.
 
 ### Step 1: Task Pickup
 
@@ -43,6 +45,11 @@ Prompt: "As the product-analyst, review the acceptance criteria for this task:
 ```
 
 Resolve ambiguities before writing code — not after.
+
+---
+
+▶ **CHECKPOINT — await: software-architect (Step 1), product-analyst (Step 2)**
+Confirm the risk report exists and all scope ambiguities are resolved before writing any code.
 
 ---
 
@@ -87,9 +94,22 @@ Each developer will:
 
 ---
 
+---
+
+▶ **CHECKPOINT — await: backend-developer, frontend-developer**
+All implementation is complete and code is staged before starting the quality gate.
+
+---
+
 ## Phase 3: QUALITY GATE (Regression Priority)
 
-The `code-reviewer`, `qa-specialist`, and `security-specialist` (when applicable) are independent of each other. **Send them in a single message** to run in parallel:
+**Run in parallel (send all applicable prompts in one message):**
+| Step | Agent | Par. |
+|------|-------|------|
+| 3a | code-reviewer | A |
+| 3b | qa-specialist | A |
+| 3c | security-specialist (when task touches auth/data/APIs) | A |
+| 3d | devops-specialist | A |
 
 ```
 Prompt: "As the code-reviewer, review the changes for this task.
@@ -108,13 +128,11 @@ Prompt: "As the devops-specialist, what's the safest deploy strategy for this ch
          [blue-green / canary / rolling update]"
 ```
 
-> ⚡ **Parallel tip**: copy all applicable prompts above into a single message. Quality gate agents run independently — sending them together cuts review time significantly.
-
 Quality gate agents present their findings as a structured report. Any remediation step (fixing a finding) requires a new plan before execution.
 
 ---
 
-## PR and Deploy
+## Phase 4: PR AND DEPLOY
 
 ```
 Prompt: "As the technical-writer, update the relevant documentation for this change
@@ -123,13 +141,13 @@ Prompt: "As the technical-writer, update the relevant documentation for this cha
 
 The `technical-writer` will present a plan (which docs to update, what to add to the changelog) before writing anything. All documentation is produced in **English**.
 
+**Commit**: run `/devteam:commit` to group staged changes by layer and write commits following the project's convention. If the project doesn't define a convention, load and follow `skills/shared/conventional-commits/SKILL.md`.
+
 If GitHub/GitLab is configured:
 ```
 Prompt: "Please open a PR for these changes."
          → Agent will present a plan and ask for consent before creating the PR.
 ```
-
-**Commit message format**: if the project doesn't define a convention, load and follow `skills/shared/conventional-commits/SKILL.md`.
 
 ---
 
@@ -141,3 +159,18 @@ These projects often have **no `.claude/docs/`** directory. In that case:
 - This documentation accumulates across tasks — each task adds to the project's knowledge base
 
 Treat this as incremental archaeology: document what you find, so the next task starts with more context.
+
+For security vulnerabilities discovered during maintenance, switch to `workflows/security-patch.md`.
+
+---
+
+## Workflow Closure
+
+Before closing out the session, verify:
+
+- [ ] Risk report from `software-architect` addressed
+- [ ] All scope ambiguities resolved before implementation began
+- [ ] Quality gate passed (code-reviewer, qa-specialist, and security-specialist if applicable)
+- [ ] Documentation and changelog updated by `technical-writer`
+- [ ] Commits made and PR opened (if GitHub/GitLab is configured)
+- [ ] Session summary written to `.claude/user-data/session-summary.md`

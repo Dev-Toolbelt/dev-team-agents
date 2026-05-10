@@ -57,6 +57,17 @@ The `software-architect` will:
 - Produce `.claude/docs/development/` with all technical decisions documented in English
 - Establish commit message convention in `code-standards.md` — if none defined by the project, recommend `skills/shared/conventional-commits`
 
+**ADR sub-step**: if this is the first architectural decision session, create an ADR for the tech stack choice:
+```bash
+bash .claude/dev-team-agents/scripts/new-adr.sh "tech-stack"
+```
+Fill in the generated template and change status from `Proposed` to `Accepted`.
+
+---
+
+▶ **CHECKPOINT — await: product-analyst (1.1), software-architect (1.2)**
+All of Phase 1 must be complete before proceeding. Verify `.claude/docs/backlog/` and `.claude/docs/development/` both exist and are populated.
+
 ---
 
 ## Phase 2: DESIGN (optional — projects with custom UI)
@@ -72,6 +83,11 @@ The `ui-ux-designer` will:
 
 ---
 
+▶ **CHECKPOINT — await: ui-ux-designer (Phase 2)**
+If Phase 2 is skipped, proceed directly. Otherwise, confirm `.claude/docs/design/design-system.md` is populated before starting development.
+
+---
+
 ## Phase 3: DEVELOPMENT
 
 Agents work from `.claude/docs/development/` and `.claude/docs/backlog/` as their source of truth.
@@ -84,6 +100,15 @@ Prompt: "As the devops-specialist, set up the development environment for this p
 ```
 
 The `devops-specialist` will present a plan (Dockerfile, compose, CI config) and wait for approval before creating any file.
+
+### Schema Definition (database-specialist)
+
+```
+Prompt: "As the database-specialist, define the initial schema and migrations for this
+         project based on .claude/docs/development/"
+```
+
+The `database-specialist` will present a plan (entity list, relationship model, migration strategy) and wait for approval before creating any schema or migration files.
 
 ### Backend Implementation (backend-developer)
 
@@ -117,7 +142,16 @@ The test specialist will present a plan (which cases, which files, approach) and
 
 ## Phase 4: QUALITY GATE
 
-All four quality gate agents are independent of each other. **Send all four prompts in a single message** to run them in parallel:
+▶ **CHECKPOINT — await: Backend Implementation, Frontend Implementation, Tests**
+All implementation and test steps must be complete before starting the quality gate.
+
+**Run in parallel (send all prompts in one message):**
+| Step | Agent | Par. |
+|------|-------|------|
+| 4a | code-reviewer | A |
+| 4b | security-specialist | A |
+| 4c | qa-specialist | A |
+| 4d | software-architect | A |
 
 ```
 Prompt: "As the code-reviewer, review the changes in [files/PR].
@@ -131,10 +165,6 @@ Prompt: "As the qa-specialist, validate that [feature] meets its acceptance crit
 Prompt: "As the software-architect, validate that [files/PR] conforms to the
          architecture decisions in .claude/docs/development/architecture.md"
 ```
-
-> ⚡ **Parallel tip**: copy all four prompts above into a single message. Claude Code will run all four agents simultaneously, cutting quality gate time by ~75%.
->
-> To send multiple prompts at once: in the CLI or desktop app, type or paste all four messages in a single submission. Claude Code treats each `"As the [agent]..."` block as a parallel agent invocation.
 
 Quality gate agents present their findings as a structured report — no plan required, but findings are explicit before any remediation steps are taken.
 
@@ -151,7 +181,8 @@ All agents read the project's own context first. Project-specific rules in `CLAU
 When all quality gate agents report no blocking findings:
 
 1. `technical-writer` — generate changelog and update documentation
-2. `devops-specialist` — confirm deploy readiness and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
+2. `/devteam:commit` — group staged changes by layer and write commits following the project's convention
+3. `devops-specialist` — confirm deploy readiness and handle SHIP (see `## SHIP` in `agents/devops-specialist.md`)
 
 If GitHub is configured and `gh` is installed:
 ```
@@ -160,3 +191,18 @@ Prompt: "Please open a PR for these changes."
 ```
 
 The workflow is complete when the quality gate passes and the deploy is confirmed. There is no automated completion signal — the decision is yours.
+
+---
+
+## Workflow Closure
+
+Before closing out the session, verify:
+
+- [ ] `.claude/docs/backlog/` contains overview, epics, DoD, and at least one sprint plan
+- [ ] `.claude/docs/development/` contains `architecture.md`, `tech-stack.md`, and `code-standards.md`
+- [ ] At least one ADR created for the tech-stack decision
+- [ ] All quality gate agents reported no blocking findings
+- [ ] Commits made and PR opened (if GitHub is configured)
+- [ ] Session summary written to `.claude/user-data/session-summary.md`
+
+**After launch**, use `workflows/maintenance.md` for all ongoing feature work and bug fixes.
