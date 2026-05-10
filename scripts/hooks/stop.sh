@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dispatcher for all Stop hooks.
 # Runs each sub-script in alphabetical order; a non-zero exit from any sub-script is propagated.
-set -uo pipefail
+set -euo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/stop" && pwd)"
 EXIT_CODE=0

@@ -28,8 +28,8 @@ fi
 
 # HTTP tool detection
 if command -v curl >/dev/null 2>&1; then
-    HTTP_GET() { curl -fsSL "$1"; }
-    HTTP_DL()  { curl -fsSL -o "$1" "$2"; }
+    HTTP_GET() { curl -fsSL --connect-timeout 5 --max-time 10 "$1"; }
+    HTTP_DL()  { curl -fsSL --connect-timeout 5 --max-time 30 -o "$1" "$2"; }
 elif command -v wget >/dev/null 2>&1; then
     HTTP_GET() { wget -qO- "$1"; }
     HTTP_DL()  { wget -qO "$1" "$2"; }
@@ -38,7 +38,7 @@ else
 fi
 
 # Update timestamp before network call — prevents hammering on bad-network sessions
-mkdir -p "$USER_DATA_DIR"
+mkdir -p "$USER_DATA_DIR" || exit 0
 date +%s > "$LAST_CHECK_FILE"
 
 # Fetch latest version via GitHub API

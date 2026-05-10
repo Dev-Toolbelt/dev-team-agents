@@ -3,6 +3,8 @@
 # Returns exit 2 to surface the warning in the Claude Code UI.
 set -euo pipefail
 
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
 SUMMARY_FILE=".claude/user-data/session-summary.md"
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%Y-%m-%d\ %H:%M:%S)
