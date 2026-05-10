@@ -275,22 +275,38 @@ else
     date +%s > "$USER_DATA_DIR/.last-update-check"
 fi
 
-# ── Step 9: Ensure user-data files are gitignored ────────────────
+# ── Step 9: Ensure user-data dir and worktree session are gitignored ─────────
 _GITIGNORE="$PROJECT_ROOT/.gitignore"
-_USER_DATA_ENTRIES=(
+
+# Remove legacy individual entries if present (migration to directory pattern)
+_LEGACY_ENTRIES=(
     ".claude/user-data/session-summary.md"
     ".claude/user-data/.last-update-check"
     ".claude/user-data/.installed-version"
     ".claude/user-data/.auto-update"
 )
-for _ENTRY in "${_USER_DATA_ENTRIES[@]}"; do
+if [ -f "$_GITIGNORE" ]; then
+    for _LEGACY in "${_LEGACY_ENTRIES[@]}"; do
+        # Use a temp file to remove the line in-place (portable, no sed -i -e portability issues)
+        grep -vF "$_LEGACY" "$_GITIGNORE" > "$_GITIGNORE.tmp" && mv "$_GITIGNORE.tmp" "$_GITIGNORE" || true
+    done
+fi
+
+# Add directory-level ignore (covers all user-data files at once)
+_add_gitignore() {
+    local _entry="$1"
     if [ -f "$_GITIGNORE" ]; then
-        grep -qF "$_ENTRY" "$_GITIGNORE" || echo "$_ENTRY" >> "$_GITIGNORE"
+        grep -qF "$_entry" "$_GITIGNORE" || echo "$_entry" >> "$_GITIGNORE"
     else
-        echo "$_ENTRY" >> "$_GITIGNORE"
+        echo "$_entry" >> "$_GITIGNORE"
     fi
-done
-echo "→ .gitignore updated with user-data entries"
+}
+
+_add_gitignore ".claude/user-data/"
+_add_gitignore "!.claude/user-data/graphify.json"
+_add_gitignore ".claude/.worktree-session"
+
+echo "→ .gitignore updated (user-data dir pattern + worktree-session)"
 
 # ── Step 10: Make scripts executable ─────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
