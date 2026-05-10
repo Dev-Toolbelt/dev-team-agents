@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  lint:
+    name: Lint and validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate agent frontmatter
+        run: bash scripts/agent-lint.sh
+
+      - name: Orphan skill scan
+        run: bash scripts/orphan-skill-scan.sh
+
+      - name: Shellcheck scripts
+        run: |
+          sudo apt-get install -y shellcheck
+          find scripts -name '*.sh' -exec shellcheck {} +
+
+      - name: README sync check
+        run: |
+          # Allow up to 5% line-count difference; larger gaps suggest one file wasn't updated
+          MAIN=$(wc -l < README.md)
+          PTBR=$(wc -l < README.pt-BR.md)
+          DIFF=$(( MAIN - PTBR ))
+          DIFF=${DIFF#-}  # abs value
+          THRESHOLD=$(( MAIN * 5 / 100 + 1 ))
+          if [ "$DIFF" -gt "$THRESHOLD" ]; then
+            echo "README.md ($MAIN lines) and README.pt-BR.md ($PTBR lines) differ by $DIFF lines (threshold: $THRESHOLD)."
+            echo "Update README.pt-BR.md to match README.md changes."
+            exit 1
+          fi
+          echo "README sync OK (diff: $DIFF lines, threshold: $THRESHOLD)"

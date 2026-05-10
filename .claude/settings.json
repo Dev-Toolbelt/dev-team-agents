@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/orphan-skill-scan.sh --quiet"
+            "command": "scripts/hooks/stop.sh"
           }
         ]
       }

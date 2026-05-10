@@ -68,6 +68,7 @@ done
 
 # ── Phase 2: Detect orphaned skills ──────────────────────────────────────────
 ORPHAN_MSGS=()
+DUPLICATE_MSGS=()
 
 while IFS= read -r skill_file; do
     rel_path="${skill_file#$REPO_ROOT/}"           # skills/category/name/SKILL.md
@@ -112,8 +113,23 @@ while IFS= read -r skill_file; do
     fi
 done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 
+# ── Phase 3: Detect duplicate skill loads in same agent ──────────────────────
+# Only scans non-table lines (lines not starting with |) so detection tables
+# that map multiple signals to the same skill don't produce false positives.
+for agent_file in "${AGENT_FILES[@]}"; do
+    rel_agent="${agent_file#$REPO_ROOT/}"
+    while IFS= read -r dup_path; do
+        [ -z "$dup_path" ] && continue
+        DUPLICATE_MSGS+=("  · $rel_agent loads $dup_path more than once")
+    done < <(
+        grep -v '^\s*|' "$agent_file" 2>/dev/null \
+          | grep -oE 'skills/[a-zA-Z0-9/_-]+/SKILL\.md' \
+          | sort | uniq -d || true
+    )
+done
+
 # ── Output ────────────────────────────────────────────────────────────────────
-if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ]; then
+if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ] && [ ${#DUPLICATE_MSGS[@]} -eq 0 ]; then
     [ "${1:-}" != "--quiet" ] && echo "orphan-skill-scan: clean ✓"
     exit 0
 fi
@@ -141,6 +157,14 @@ if [ ${#ORPHAN_MSGS[@]} -gt 0 ]; then
     echo " Fix: add a reference in the suggested agent file."
     echo " Use the full path form or name form already present"
     echo " in that agent's skill-loading section."
+fi
+
+if [ ${#DUPLICATE_MSGS[@]} -gt 0 ]; then
+    echo ""
+    echo " WARN — Skills loaded more than once in the same agent:"
+    for msg in "${DUPLICATE_MSGS[@]}"; do
+        echo "$msg"
+    done
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
