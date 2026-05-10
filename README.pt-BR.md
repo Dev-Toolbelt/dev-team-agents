@@ -292,7 +292,7 @@ Ao final de qualquer sessão em que arquivos foram alterados, os agentes escreve
 **Next**: o que resta ou é recomendado a seguir
 ```
 
-Um dispatcher `Stop` (`scripts/hooks/stop.sh`) é registrado automaticamente pelo `install.sh`. Ele executa em ordem todos os sub-scripts em `scripts/hooks/stop/`, incluindo o enforcement do session-summary. Sub-scripts são adicionados nessa pasta (ex: pelo `graphify-setup`) sem precisar tocar no `settings.json`.
+Um dispatcher `Stop` (`scripts/hooks/stop.sh`) é registrado automaticamente pelo `install.sh`. Ele executa em ordem todos os sub-scripts em `scripts/hooks/stop/` — incluindo o enforcement do session-summary, varredura de skills órfãs e lint de frontmatter dos agentes. Sub-scripts são adicionados nessa pasta (ex: pelo `graphify-setup`) sem precisar tocar no `settings.json`.
 
 No início de cada sessão, os agentes leem a entrada mais recente deste arquivo antes de agir.
 
@@ -329,6 +329,8 @@ O installer ignora automaticamente o diretório inteiro `.claude/user-data/`, co
 | Manutenção | `workflows/maintenance.md` | Projeto em produção, tarefas contínuas |
 | Correção de bug | `workflows/bug-fix.md` | Bug isolado |
 | Patch de segurança | `workflows/security-patch.md` | Vulnerabilidade de segurança |
+| Refatoração | `workflows/refactor.md` | Reestruturação planejada de código |
+| Revisão de código | `workflows/review.md` | Revisão de PR antes do merge |
 
 ### A — Novo Projeto do Zero
 

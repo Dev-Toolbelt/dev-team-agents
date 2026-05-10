@@ -292,7 +292,7 @@ At the end of any session where files were changed, agents write an entry to `.c
 **Next**: what remains or is recommended next
 ```
 
-A `Stop` dispatcher (`scripts/hooks/stop.sh`) is registered automatically by `install.sh`. It runs all sub-scripts in `scripts/hooks/stop/` in order, including session-summary enforcement. Sub-scripts are added to that folder (e.g. by `graphify-setup`) without touching `settings.json`.
+A `Stop` dispatcher (`scripts/hooks/stop.sh`) is registered automatically by `install.sh`. It runs all sub-scripts in `scripts/hooks/stop/` in order — including session-summary enforcement, orphan skill scan, and agent frontmatter lint. Sub-scripts are added to that folder (e.g. by `graphify-setup`) without touching `settings.json`.
 
 At the start of every session, agents read the most recent entry from this file before acting.
 
@@ -329,6 +329,8 @@ The installer automatically ignores the entire `.claude/user-data/` directory, w
 | Maintenance | `workflows/maintenance.md` | Live project, ongoing tasks |
 | Bug fix | `workflows/bug-fix.md` | Isolated bug |
 | Security patch | `workflows/security-patch.md` | Security vulnerability |
+| Refactor | `workflows/refactor.md` | Planned code restructuring |
+| Code review | `workflows/review.md` | PR review before merge |
 
 ### A — New Project from Scratch
 

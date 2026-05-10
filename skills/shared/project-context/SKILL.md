@@ -211,6 +211,18 @@ Example: if the project uses PHPDoc for all methods but our base standard says "
 
 ---
 
+## Quality / Security Scanners
+
+Detect and load the appropriate skill when any scanner config is present:
+
+| Detection | Skill to load |
+|-----------|--------------|
+| `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
+
+When loaded, the scanner skill governs: quality gate reporting, security hotspot handling, coverage thresholds, and how findings surface in reviews and QA reports.
+
+---
+
 ## Docker Development Environment
 
 If the project uses Docker in development, **all commands and scripts must be executed inside the appropriate container** — not on the host machine.
