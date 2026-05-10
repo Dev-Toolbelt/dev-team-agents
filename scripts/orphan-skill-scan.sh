@@ -57,10 +57,11 @@ for agent_file in "${AGENT_FILES[@]}"; do
 
     for ref in "${broken_refs[@]:-}"; do
         [ -z "$ref" ] && continue
+        # shellcheck disable=SC2016
         escaped_ref=$(printf '%s\n' "$ref" | sed 's/[[\.*^$()+?{|]/\\&/g; s/\//\\\//g')
         if sed -i.bak "/$escaped_ref/d" "$agent_file" 2>/dev/null; then
             rm -f "${agent_file}.bak"
-            rel_agent="${agent_file#$REPO_ROOT/}"
+            rel_agent="${agent_file#"$REPO_ROOT"/}"
             FIXED_MSGS+=("  · $rel_agent: removed broken ref → $ref")
         fi
     done
@@ -71,7 +72,7 @@ ORPHAN_MSGS=()
 DUPLICATE_MSGS=()
 
 while IFS= read -r skill_file; do
-    rel_path="${skill_file#$REPO_ROOT/}"           # skills/category/name/SKILL.md
+    rel_path="${skill_file#"$REPO_ROOT"/}"          # skills/category/name/SKILL.md
     skill_dir="$(dirname "$skill_file")"
     skill_name="$(basename "$skill_dir")"           # name (last dir before SKILL.md)
 
@@ -117,7 +118,7 @@ done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 # Only scans non-table lines (lines not starting with |) so detection tables
 # that map multiple signals to the same skill don't produce false positives.
 for agent_file in "${AGENT_FILES[@]}"; do
-    rel_agent="${agent_file#$REPO_ROOT/}"
+    rel_agent="${agent_file#"$REPO_ROOT"/}"
     while IFS= read -r dup_path; do
         [ -z "$dup_path" ] && continue
         DUPLICATE_MSGS+=("  · $rel_agent loads $dup_path more than once")

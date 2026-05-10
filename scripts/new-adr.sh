@@ -15,11 +15,10 @@ ADR_DIR=".claude/docs/development/adrs"
 mkdir -p "$ADR_DIR"
 
 # Find the next sequential number
-LAST=$(ls "$ADR_DIR"/adr-[0-9]*.md 2>/dev/null \
-    | grep -oE 'adr-[0-9]+' \
-    | grep -oE '[0-9]+' \
-    | sort -n \
-    | tail -1)
+LAST=$(for f in "$ADR_DIR"/adr-[0-9]*.md; do
+    [ -f "$f" ] || continue
+    basename "$f"
+done 2>/dev/null | grep -oE 'adr-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1)
 NEXT=$(printf "%03d" $(( ${LAST:-0} + 1 )))
 
 # Build a URL-safe slug from the title

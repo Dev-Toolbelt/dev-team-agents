@@ -26,8 +26,6 @@ ERRORS=()
 
 check_agent() {
   local file="$1"
-  local basename
-  basename=$(basename "$file")
 
   # Check frontmatter block exists
   local first_line

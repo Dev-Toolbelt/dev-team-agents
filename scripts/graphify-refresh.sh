@@ -121,6 +121,7 @@ if [ "$HAS_STRUCTURAL" -eq 0 ]; then
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
+# shellcheck disable=SC2317,SC2329  # invoked indirectly via trap
 cleanup() { rm -rf "$PROJECT_ROOT/graphify-src"; }
 trap cleanup EXIT
 

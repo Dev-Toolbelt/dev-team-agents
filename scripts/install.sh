@@ -168,7 +168,7 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
         SKILL_NAME=$(basename "$SKILL_DIR")
         SKILL_TARGET_PATH="$SKILLS_TARGET/$SKILL_NAME"
         if [ ! -L "$SKILL_TARGET_PATH" ] && [ ! -e "$SKILL_TARGET_PATH" ]; then
-            REL_SKILL="${SKILL_DIR#$INSTALL_DIR/}"
+            REL_SKILL="${SKILL_DIR#"$INSTALL_DIR"/}"
             REL_SKILL="${REL_SKILL%/}"
             ln -s "../dev-team-agents/${REL_SKILL}" "$SKILL_TARGET_PATH"
         fi
@@ -288,7 +288,9 @@ _LEGACY_ENTRIES=(
 if [ -f "$_GITIGNORE" ]; then
     for _LEGACY in "${_LEGACY_ENTRIES[@]}"; do
         # Use a temp file to remove the line in-place (portable, no sed -i -e portability issues)
-        grep -vF "$_LEGACY" "$_GITIGNORE" > "$_GITIGNORE.tmp" && mv "$_GITIGNORE.tmp" "$_GITIGNORE" || true
+        if grep -vF "$_LEGACY" "$_GITIGNORE" > "$_GITIGNORE.tmp"; then
+            mv "$_GITIGNORE.tmp" "$_GITIGNORE"
+        fi
     done
 fi
 
