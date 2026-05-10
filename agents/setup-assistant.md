@@ -157,6 +157,22 @@ Create directories and files:
 - `.claude/docs/development/code-standards.md`
 - `.claude/docs/backlog/README.md`
 - `.claude/docs/design/design-system.md` (UI projects only)
+- `.claude/docs/wiki/README.md` — always create this, even if empty
+
+**Wiki README initial content:**
+
+```markdown
+# Wiki
+
+Domain knowledge discovered by agents during development. Each entry captures non-obvious behavior, gotchas, or flows that aren't derivable from reading the code alone.
+
+## Domains
+
+| Folder | Covers | Entries |
+|--------|--------|---------|
+```
+
+Agents add domain rows and entries over time following `skills/shared/docs-sync/SKILL.md`.
 
 **DevOps / infrastructure docs** — if the scan found any of the following, create `.claude/docs/devops/` and synthesize a `infrastructure.md` inside it:
 - `Dockerfile`, `docker-compose*.yml`
@@ -176,28 +192,29 @@ Use real data from the scan. Apply Source Synthesis Rule for any discovered sour
 
 ### Step 7 — Update .gitignore
 
-`install.sh` already adds these entries automatically. Verify they are present and add any that are missing:
+`install.sh` already handles this automatically. Verify the new directory-pattern entries are present:
 
-- `.claude/user-data/session-summary.md`
-- `.claude/user-data/.last-update-check`
-- `.claude/user-data/.installed-version`
-- `.claude/user-data/.auto-update`
+- `.claude/user-data/` (ignore entire directory)
+- `!.claude/user-data/graphify.json` (exception — keep graphify config)
+- `.claude/.worktree-session`
 
 ```bash
-USER_DATA_ENTRIES=(
-    ".claude/user-data/session-summary.md"
-    ".claude/user-data/.last-update-check"
-    ".claude/user-data/.installed-version"
-    ".claude/user-data/.auto-update"
-)
+_add_if_missing() {
+    grep -qF "$1" .gitignore 2>/dev/null || echo "$1" >> .gitignore
+}
 
-for ENTRY in "${USER_DATA_ENTRIES[@]}"; do
-    if [ -f .gitignore ]; then
-        grep -qF "$ENTRY" .gitignore || echo "$ENTRY" >> .gitignore
-    else
-        echo "$ENTRY" >> .gitignore
-    fi
+# Remove legacy individual entries if present (migration)
+for _LEGACY in \
+    ".claude/user-data/session-summary.md" \
+    ".claude/user-data/.last-update-check" \
+    ".claude/user-data/.installed-version" \
+    ".claude/user-data/.auto-update"; do
+    [ -f .gitignore ] && grep -vF "$_LEGACY" .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore || true
 done
+
+_add_if_missing ".claude/user-data/"
+_add_if_missing "!.claude/user-data/graphify.json"
+_add_if_missing ".claude/.worktree-session"
 ```
 
 ---
@@ -327,18 +344,33 @@ grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"
 ### Category 7 — .gitignore
 
 ```bash
-for e in \
+# Check for new directory-pattern entries
+grep -qF ".claude/user-data/" .gitignore 2>/dev/null && echo "OK: user-data dir" || echo "MISSING: .claude/user-data/"
+grep -qF "!.claude/user-data/graphify.json" .gitignore 2>/dev/null && echo "OK: graphify exception" || echo "MISSING: !.claude/user-data/graphify.json"
+grep -qF ".claude/.worktree-session" .gitignore 2>/dev/null && echo "OK: worktree-session" || echo "MISSING: .claude/.worktree-session"
+
+# Detect legacy individual entries (outdated pattern from versions < current)
+for _LEGACY in \
   ".claude/user-data/session-summary.md" \
   ".claude/user-data/.last-update-check" \
   ".claude/user-data/.installed-version" \
   ".claude/user-data/.auto-update"; do
-  grep -qF "$e" .gitignore 2>/dev/null && echo "OK: $e" || echo "MISSING: $e"
+  grep -qF "$_LEGACY" .gitignore 2>/dev/null && echo "LEGACY: $_LEGACY"
 done
 ```
 
-| Check | Auto-fix |
-|-------|----------|
-| All four user-data entries present in `.gitignore` | Append missing entries automatically |
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| `.claude/user-data/` in `.gitignore` | Required | Append automatically |
+| `!.claude/user-data/graphify.json` in `.gitignore` | Required | Append automatically |
+| `.claude/.worktree-session` in `.gitignore` | Required | Append automatically |
+| Legacy individual entries present | Outdated | **Offer migration**: remove individual entries and add directory pattern |
+
+**Migration offer** — if legacy entries are detected, present:
+
+> ⚠️ Your `.gitignore` uses the old per-file pattern for `user-data/`. The current version uses a directory-level ignore (`.claude/user-data/`) with a `graphify.json` exception. Migrate automatically? (yes/no)
+
+On confirmation: remove the 4 legacy lines, add the 3 new entries.
 
 ---
 
