@@ -18,10 +18,13 @@ Before any review:
 5. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
 6. `.claude/docs/development/api-contracts.md` — API design and auth approach
 7. Load the `security-checklist` skill — this is your primary review guide
-8. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
-9. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
-10. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
-11. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
+8. Load `skills/security/supply-chain/SKILL.md` — supply chain attack vectors, CI/CD action pinning, dependency auditing
+9. Load `skills/security/idor/SKILL.md` — IDOR/BOLA detection patterns, ownership enforcement, test cases
+10. Load `skills/security/iso27001-sgsi/SKILL.md` — ISO 27001 controls, SGSI cycle, CIA Triad evaluation framework
+11. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
+12. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
+13. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
+14. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
 
 **Project security requirements (compliance, specific standards) override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
