@@ -1,0 +1,89 @@
+---
+name: spawn-classifier
+description: Conditional agent spawn rules — path patterns and text triggers that determine which agents to invoke for a given task.
+---
+
+## File-Path Triggers
+
+Evaluate changed files (from `git diff --name-only` or the task description) against these patterns:
+
+| Changed path pattern | Agent to spawn |
+|---|---|
+| `*.{go,py,rb,php,java,kt,rs}` | `backend-developer` |
+| `app/Http/`, `app/Services/`, `src/controllers/`, `routes/` | `backend-developer` |
+| `*.{tsx,jsx,vue,svelte}` | `frontend-developer` |
+| `src/components/`, `src/pages/`, `resources/js/`, `app/javascript/` | `frontend-developer` |
+| `database/migrations/`, `db/migrate/`, `prisma/`, `*.sql` | `database-specialist` |
+| `.github/workflows/`, `Dockerfile*`, `docker-compose*.yml` | `devops-specialist` |
+| `*.tf`, `*.tfvars`, `Pulumi.yaml`, `serverless.yml` | `devops-specialist` |
+| `Jenkinsfile`, `.gitlab-ci.yml`, `*.circleci/` | `devops-specialist` |
+| `*.spec.{ts,tsx,js}`, `*.test.{ts,tsx,js}`, `tests/`, `spec/` (frontend) | `frontend-test-specialist` |
+| `*.spec.{py,rb,go,java,kt}`, `tests/`, `spec/` (backend) | `backend-test-specialist` |
+| `*.stories.{ts,tsx,js}`, `storybook/`, `.storybook/` | `frontend-developer` + `ui-ux-designer` |
+
+---
+
+## Text / Intent Triggers
+
+Evaluate the task description or user message:
+
+| Keyword or phrase | Agent to spawn |
+|---|---|
+| "security", "vulnerability", "CVE", "auth bypass", "injection", "XSS", "CSRF" | `security-specialist` |
+| "penetration test", "threat model", "OWASP" | `security-specialist` + `software-architect` |
+| "test", "spec", "coverage", "unit test", "integration test" (frontend context) | `frontend-test-specialist` |
+| "test", "spec", "coverage", "unit test", "integration test" (backend context) | `backend-test-specialist` |
+| "design", "UX", "wireframe", "mockup", "user flow", "component library" | `ui-ux-designer` |
+| "design system", "token", "Figma" | `ui-ux-designer` + `frontend-developer` |
+| "database", "schema", "migration", "index", "query", "ORM" | `database-specialist` |
+| "deploy", "CI/CD", "pipeline", "Docker", "Kubernetes", "infra" | `devops-specialist` |
+| "architecture", "ADR", "design decision", "trade-off", "system design" | `software-architect` |
+| "API", "REST", "GraphQL", "endpoint", "service" | `backend-developer` |
+| "bug", "fix", "regression", "broken", "error" | context-dependent — see Default below |
+
+---
+
+## Multi-Agent Combinations
+
+Some tasks require more than one agent. Spawn in parallel when there are no dependencies:
+
+| Scenario | Agents |
+|---|---|
+| Full-stack feature | `backend-developer` + `frontend-developer` + optionally `database-specialist` |
+| Security audit | `security-specialist` + `software-architect` |
+| New API endpoint with UI | `backend-developer` → `frontend-developer` (sequential — API first) |
+| Database schema + migration | `database-specialist` → `backend-developer` (sequential — schema first) |
+| Test-only task (both layers) | `backend-test-specialist` + `frontend-test-specialist` (parallel) |
+| PR review | `code-reviewer` + `security-specialist` + optionally `database-specialist` |
+
+---
+
+## Conflict Resolution
+
+When a changed file matches multiple patterns:
+
+1. **Most specific pattern wins.** `src/controllers/UsersController.ts` matches both frontend (`src/`) and backend (controller) — the `controllers/` pattern is more specific, so spawn `backend-developer`.
+2. **When genuinely ambiguous**, spawn `software-architect` first to classify and produce a plan.
+3. **Never spawn an agent for a domain not touched by the task** — even if the agent is "usually helpful".
+
+---
+
+## Default Rule
+
+When scope is unclear — no strong file-path or text match — **spawn `software-architect` first**:
+
+1. `software-architect` analyzes the task and produces a plan
+2. Plan identifies which domains are affected
+3. Downstream agents are spawned based on the plan output
+
+This prevents incorrect agents from producing work that conflicts with the actual architecture.
+
+---
+
+## Classification Checklist
+
+- [ ] Run `git diff --name-only HEAD~1` to get changed files
+- [ ] Match files against path-pattern table above
+- [ ] Match task description against text-trigger table above
+- [ ] Identify parallel vs. sequential spawn order
+- [ ] If ambiguous, spawn `software-architect` first
