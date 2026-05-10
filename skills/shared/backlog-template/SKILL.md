@@ -81,6 +81,9 @@ A task is DONE when ALL of the following are true:
 ```
 
 ### `sprint-NN.md`
+
+**One file per sprint.** Each sprint gets its own file: `sprint-01.md`, `sprint-02.md`, etc. Never merge multiple sprints into one file.
+
 ```markdown
 # Sprint NN — [Theme]
 
@@ -88,13 +91,14 @@ A task is DONE when ALL of the following are true:
 **Start**: YYYY-MM-DD
 **End**: YYYY-MM-DD
 **Estimated duration**: N weeks
+**Agents**: [list of agents that will act in this sprint — see Agent Assignment table below]
 
 ## Tasks
 
 ### TASK-001 — [Name]
 **Epic**: Epic 1
 **Type**: [Feature | Fix | Chore | Spike]
-**Assignee**: [Role or "unassigned"]
+**Agent**: [agent name — see Agent Assignment table]
 **Estimate**: [hours or story points]
 **Depends on**: [TASK-XXX or "none"]
 **Status**: [ ] Pending
@@ -119,6 +123,26 @@ A task is DONE when ALL of the following are true:
 | Chore | N |
 | Estimated total | Nh / N pts |
 ```
+
+### Agent Assignment Table
+
+When generating sprint files, use this table to assign agents to tasks. Multiple agents can be listed when tasks require collaboration.
+
+| Task type | Primary agent | Secondary agent |
+|-----------|--------------|----------------|
+| API endpoint / service / business rule | `backend-developer` | `database-specialist` (if schema involved) |
+| Frontend screen / component / UI flow | `frontend-developer` | `ui-ux-designer` (if new UI pattern) |
+| Database schema / migration / query optimization | `database-specialist` | `backend-developer` |
+| Design system / UX flow / visual spec | `ui-ux-designer` | — |
+| CI/CD / Docker / infra / deploy | `devops-specialist` | — |
+| Backend tests | `backend-test-specialist` | — |
+| Frontend tests | `frontend-test-specialist` | — |
+| Security audit / vulnerability fix | `security-specialist` | `software-architect` |
+| Architecture decision / refactor | `software-architect` | relevant developer |
+| Documentation / changelog / runbook | `technical-writer` | — |
+| Full-stack feature | `backend-developer` + `frontend-developer` | `database-specialist` (if schema) · `ui-ux-designer` (if UI) |
+
+At the top of each sprint file, list all agents that will be active in that sprint under the `**Agents**:` field.
 
 ## Time Estimation Guidelines
 
