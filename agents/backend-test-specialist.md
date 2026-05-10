@@ -24,24 +24,7 @@ If none of these indicate tests are required, respond:
 
 ## Worktree Isolation
 
-**Before editing or creating any file**, check for an existing session decision:
-
-```bash
-cat .claude/.worktree-session 2>/dev/null
-```
-
-| File content | Action |
-|---|---|
-| `worktree=no` | Continue on the current branch — no question |
-| `worktree=yes branch=<b>` | Load `skills/shared/worktree/SKILL.md` using `<b>` — no question |
-| File absent | Ask the user (below) |
-
-**If the file is absent**, ask:
-
-> "Do you want this task isolated in a git worktree? [y/N]"
-
-- **Yes** → Ask: "Which branch should the worktree branch off? (default: `main`)" → write `worktree=yes branch=<answer>` to `.claude/.worktree-session` → load and follow `skills/shared/worktree/SKILL.md`.
-- **No** → Write `worktree=no` to `.claude/.worktree-session` → continue on the current branch.
+Load `skills/shared/worktree/SKILL.md` to apply the canonical session-file isolation protocol before editing any file.
 
 ---
 
@@ -80,6 +63,10 @@ For each piece of code, ask:
 ## Test Layers
 
 Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-pyramid/SKILL.md`.
+
+Load contextually based on the task:
+- `skills/testing/contract-testing/SKILL.md` — when testing API contracts between services (consumer-driven contracts, provider verification)
+- `skills/testing/mutation-testing/SKILL.md` — when assessing test suite quality or coverage confidence
 
 ### What to test at each layer (backend context)
 

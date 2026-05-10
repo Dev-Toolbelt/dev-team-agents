@@ -48,85 +48,25 @@ In monoliths, the distinction between backend and frontend is thinner — coordi
 
 ---
 
-## GraphQL API Conventions
+## API Conventions
 
-When the project exposes or consumes a GraphQL API (detected via `.graphql`/`.gql` files, `apollo-server`, `graphql-yoga`, `strawberry-graphql`, `gqlgen`, or a `GRAPHQL_ENDPOINT` env var), load:
+When the project exposes a REST or GraphQL API, load `skills/architecture/api-design/SKILL.md` for the full reference (resource naming, HTTP methods, status codes, response envelope, pagination, versioning, idempotency, and GraphQL conventions).
 
-```
-skills/architecture/graphql/SKILL.md
-```
+Load `skills/architecture/graphql/SKILL.md` when implementing a GraphQL API — covers schema design, resolver patterns, N+1 prevention via DataLoader, and subscription conventions.
 
-This skill covers: schema-first vs code-first detection, naming conventions, mutation payload patterns, N+1 prevention with DataLoader, Relay cursor pagination, subscription handling, error strategy, and the security checklist.
+Load `skills/architecture/i18n/SKILL.md` when implementing internationalization — covers locale detection, message catalog structure, pluralization rules, and date/number formatting.
 
----
+Load `skills/architecture/caching/SKILL.md` when implementing caching — covers cache topology, key design, invalidation patterns, and TTL selection.
 
-## REST API Conventions
+Load `skills/architecture/resilience/SKILL.md` when implementing retry logic, circuit breakers, or fault-tolerance patterns — covers backoff strategies, bulkhead isolation, and timeout configuration.
 
-When the project is a REST API (detected via `architecture.md`, `api-contracts.md`, or explicit project description), follow these conventions faithfully:
-
-**Resource naming**
-- Use plural nouns: `/users`, `/orders`, `/products`
-- Nest sub-resources when contextually bound: `/users/{id}/orders`
-- Never use verbs in URLs: ❌ `/getUser` → ✅ `/users/{id}`
-
-**HTTP methods**
-
-| Method | Usage |
-|--------|-------|
-| GET | Read — never mutate state |
-| POST | Create a new resource |
-| PUT | Full replacement of a resource |
-| PATCH | Partial update of a resource |
-| DELETE | Remove a resource |
-
-**HTTP status codes**
-
-| Scenario | Code |
-|---|---|
-| Successful read / update | 200 |
-| Resource created | 201 |
-| Accepted (async processing) | 202 |
-| No content (DELETE success) | 204 |
-| Bad request / validation error | 400 |
-| Unauthenticated | 401 |
-| Forbidden | 403 |
-| Not found | 404 |
-| Conflict (duplicate, stale) | 409 |
-| Unprocessable entity | 422 |
-| Internal server error | 500 |
-
-**Request / Response**
-- Version APIs: `/api/v1/...` or via `Accept` header
-- Response bodies must follow the project-defined envelope format (`api-contracts.md`)
-- Errors must include a machine-readable `code` field alongside a human `message`
-- Paginate list endpoints via `page`/`per_page` or cursor — never return unbounded lists
-
-**Idempotency**
-- GET, PUT, DELETE must be idempotent
-- POST is not idempotent — guard against duplicate submissions when relevant (idempotency keys)
+Load `skills/shared/git-workflow/SKILL.md` when creating branches or reviewing commit conventions — covers branching models, merge strategies, and naming rules.
 
 ---
 
 ## Worktree Isolation
 
-**Before editing or creating any file**, check for an existing session decision:
-
-```bash
-cat .claude/.worktree-session 2>/dev/null
-```
-
-| File content | Action |
-|---|---|
-| `worktree=no` | Continue on the current branch — no question |
-| `worktree=yes branch=<b>` | Load `skills/shared/worktree/SKILL.md` using `<b>` — no question |
-| File absent | Ask the user (below) |
-
-**If the file is absent**, ask:
-
-> "Do you want this task isolated in a git worktree? [y/N]"
-
-- **Yes** → Ask: "Which branch should the worktree branch off? (default: `main`)" → write `worktree=yes branch=<answer>` to `.claude/.worktree-session` → load and follow `skills/shared/worktree/SKILL.md`.
-- **No** → Write `worktree=no` to `.claude/.worktree-session` → continue on the current branch.
+Load `skills/shared/worktree/SKILL.md` to apply the canonical session-file isolation protocol before editing any file.
 
 ---
 

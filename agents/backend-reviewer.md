@@ -38,6 +38,8 @@ Before reviewing anything:
 11. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
 12. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
 13. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
+14. Load `skills/shared/reviewer-mindset/SKILL.md` — canonical reviewer mindset reference shared across all reviewer agents
+15. Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`
 
 **Project standards override base standards. Always.**
 
@@ -136,7 +138,7 @@ For deep security analysis, defer to the `security-specialist`.
 - Mutation of function arguments creating invisible side effects
 
 ### 13. Comments
-Apply `skills/shared/comments-policy/SKILL.md`:
+Apply the loaded comments policy:
 - Comments explaining WHAT the code does (remove — improve the code instead)
 - Commented-out dead code
 - TODO/FIXME that should be issue tracker tickets

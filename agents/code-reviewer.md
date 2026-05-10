@@ -51,6 +51,8 @@ After routing is resolved, load project context:
 9. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
 10. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
 11. **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
+12. Load `skills/shared/reviewer-mindset/SKILL.md` — the canonical reviewer mindset reference; the inline Reviewer Mindset section above is a summary; the skill is the authoritative cross-reference for all reviewer agents
+13. Load `skills/shared/reviewer-base/SKILL.md` — the canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`
 
 **Project standards override base standards. Always.** If the project says to use tabs, review for tabs. This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
@@ -124,7 +126,7 @@ Only flag style issues that linters haven't caught.
 For deep security analysis, defer to the `security-specialist`.
 
 ### 9. Comments
-Apply the loaded `skills/shared/comments-policy/SKILL.md`:
+Apply the loaded comments policy:
 - Comments explaining WHAT the code does (should be removed — improve the code instead)
 - Commented-out dead code
 - TODO/FIXME comments (should be issue tracker tickets)

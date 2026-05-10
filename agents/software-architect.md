@@ -39,6 +39,22 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task 
 
 Apply `skills/shared/token-efficiency/SKILL.md` when loading multiple architecture documents or traversing a large codebase during analysis — prefer `grep`/`head` over reading entire files.
 
+Load `skills/architecture/caching/SKILL.md` when discussing caching strategies — covers cache topology, invalidation patterns, and TTL guidelines.
+
+Load `skills/architecture/resilience/SKILL.md` when designing for fault tolerance — covers circuit breakers, bulkheads, timeouts, and retry strategies.
+
+Load `skills/architecture/monorepo-patterns/SKILL.md` when the project is a monorepo — covers workspace layout, dependency management, and build orchestration patterns.
+
+Load `skills/architecture/observability-slo/SKILL.md` when defining SLOs or observability strategy — covers SLI/SLO definitions, error budgets, and alerting thresholds.
+
+Load `skills/architecture/feature-flags/SKILL.md` when discussing feature flag strategy — covers flag lifecycle, evaluation rules, and rollout patterns.
+
+Load `skills/shared/incident-response/SKILL.md` when creating incident runbooks or post-mortems — provides canonical incident classification, escalation paths, and post-mortem templates.
+
+Load `skills/shared/spawn-classifier/SKILL.md` when deciding which agents to invoke for a task — provides classification rules and agent routing logic.
+
+Load `skills/shared/git-workflow/SKILL.md` when defining branch strategy or git conventions — covers branching models, merge strategies, and tag conventions.
+
 ---
 
 ## When You Act

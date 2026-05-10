@@ -30,24 +30,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial schem
 
 ## Worktree Isolation
 
-**Before editing or creating any file**, check for an existing session decision:
-
-```bash
-cat .claude/.worktree-session 2>/dev/null
-```
-
-| File content | Action |
-|---|---|
-| `worktree=no` | Continue on the current branch — no question |
-| `worktree=yes branch=<b>` | Load `skills/shared/worktree/SKILL.md` using `<b>` — no question |
-| File absent | Ask the user (below) |
-
-**If the file is absent**, ask:
-
-> "Do you want this task isolated in a git worktree? [y/N]"
-
-- **Yes** → Ask: "Which branch should the worktree branch off? (default: `main`)" → write `worktree=yes branch=<answer>` to `.claude/.worktree-session` → load and follow `skills/shared/worktree/SKILL.md`.
-- **No** → Write `worktree=no` to `.claude/.worktree-session` → continue on the current branch.
+Load `skills/shared/worktree/SKILL.md` to apply the canonical session-file isolation protocol before editing any file.
 
 ---
 
@@ -62,50 +45,14 @@ When the project shows these signals, load the corresponding skill before advisi
 | PgBouncer config, `RDS_PROXY_*` / `CLOUD_SQL_PROXY_*` env vars | `skills/integrations/database-production/SKILL.md` |
 | Read-replica env vars (`DATABASE_REPLICA_URL`, `REPLICA_HOST`) | `skills/integrations/database-production/SKILL.md` |
 | Migration tool deps (Flyway, Liquibase, Alembic, golang-migrate) | `skills/integrations/database-production/SKILL.md` |
+| Planning or reviewing database migrations (any migration task) | `skills/database/migration-zero-downtime/SKILL.md` |
 | Supabase project (see backend-developer detection rules) | `skills/integrations/supabase/SKILL.md` |
 
 ---
 
 ## Database Coverage
 
-### Relational
-| Database | Strengths | Watch out for |
-|----------|-----------|---------------|
-| **PostgreSQL** | Full SQL, JSONB, extensions, ACID | Config tuning needed for performance |
-| **MySQL / MariaDB** | Wide support, simple ops | Less feature-rich than Postgres |
-| **SQL Server** | Enterprise features, .NET integration | Licensing cost |
-| **SQLite** | Zero config, embedded | Not for concurrent writes |
-
-### Document
-| Database | Strengths | Watch out for |
-|----------|-----------|---------------|
-| **MongoDB** | Flexible schema, horizontal scale | No joins, eventual consistency tradeoffs |
-| **Firestore** | Real-time, serverless-friendly | Query limitations, cost at scale |
-| **Cosmos DB** | Multi-model, global distribution | Complex pricing, learning curve |
-
-### Key-Value / Cache
-| Database | Use case |
-|----------|----------|
-| **Redis** | Cache, sessions, queues, pub/sub, leaderboards |
-| **Memcached** | Simple distributed cache |
-| **ElastiCache / Memorystore / Azure Cache** | Managed Redis/Memcached |
-
-### Column-Family
-| Database | Use case |
-|----------|----------|
-| **Cassandra / Keyspaces** | High-write, time-series, distributed |
-| **Bigtable** | Analytics, IoT, wide-column |
-
-### Vector / AI
-| Database | Use case |
-|----------|----------|
-| **pgvector** (PostgreSQL ext.) | Semantic search, embeddings, RAG pipelines — load `skills/integrations/database-multitenancy/SKILL.md` |
-| **Dedicated vector DBs** | Pinecone, Weaviate, Qdrant — when Postgres can't scale the vector workload |
-
-### Managed Cloud (defer to cloud specialists when infra decisions needed)
-- **AWS**: RDS, Aurora, DynamoDB, ElastiCache, DocumentDB, Redshift
-- **GCP**: Cloud SQL, Spanner, Firestore, Bigtable, Memorystore, BigQuery
-- **Azure**: Azure SQL, Cosmos DB, Cache for Redis, Synapse Analytics
+Load `skills/database/db-comparison/SKILL.md` for the full comparison of relational, document, key-value, column-family, vector, and managed cloud databases — strengths, watch-outs, and use-case guidance.
 
 ---
 
@@ -129,7 +76,7 @@ When the project shows these signals, load the corresponding skill before advisi
 - **Row-Level Security (RLS)** — same schema, tenant filter enforced by DB policy. Default choice for PostgreSQL.
 - **Schema-per-tenant** — strong isolation; migrations multiply. Good for ≤ a few hundred tenants.
 - **Database-per-tenant** — maximum isolation, highest ops cost. Reserved for strict compliance (HIPAA, SOC 2 with data residency).
-- Load `skills/integrations/database-multitenancy/SKILL.md` for full patterns and implementation details.
+- See the integration detection table above — load the multitenancy skill when RLS, pgvector, or multi-tenant signals are detected.
 
 ---
 
@@ -170,7 +117,7 @@ Ask these questions:
 
 ## Operational Safety
 
-For production-grade work, load `skills/integrations/database-production/SKILL.md`. It covers:
+For production-grade work, load the database production skill (see integration detection table). It covers:
 - **Zero-downtime migrations** — backward-compatible schema changes, shadow table patterns, lock-free `ALTER TABLE`
 - **Connection pooling** — PgBouncer and managed proxies (RDS Proxy, Cloud SQL Auth Proxy); mode and sizing selection
 - **Replication / read replicas** — lag detection, promotion procedures, consistency tradeoffs

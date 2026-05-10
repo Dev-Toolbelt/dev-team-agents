@@ -21,6 +21,10 @@ Before any review:
 8. Load `skills/security/supply-chain/SKILL.md` — supply chain attack vectors, CI/CD action pinning, dependency auditing
 9. Load `skills/security/idor/SKILL.md` — IDOR/BOLA detection patterns, ownership enforcement, test cases
 10. Load `skills/security/iso27001-sgsi/SKILL.md` — ISO 27001 controls, SGSI cycle, CIA Triad evaluation framework
+11. Load `skills/security/owasp-top-10/SKILL.md` — always load during any security review; covers all OWASP Top 10 categories
+12. Load `skills/security/secret-management/SKILL.md` — when reviewing secret handling, credentials, vault usage, or env var patterns
+13. Load `skills/security/sast-pipeline/SKILL.md` — when setting up or reviewing CI security scanning (SAST tools, pipeline gates)
+14. Load `skills/security/dependency-vulnerabilities/SKILL.md` — when reviewing dependencies, package managers, or known CVEs
 11. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
 12. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
 13. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
