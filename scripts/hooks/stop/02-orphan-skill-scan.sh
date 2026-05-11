@@ -1,3 +1,10 @@
 #!/usr/bin/env bash
-# Shim — delegates to the canonical orphan-skill-scan at the end of each session.
+# Gate: only run if agents/ or skills/ were touched in this session
+TOUCHED=$(git status --porcelain agents/ skills/ 2>/dev/null | head -1)
+TODAY_COMMITS=$(git log --since="$(date +%Y-%m-%d) 00:00:00" --oneline -- agents/ skills/ 2>/dev/null | head -1)
+
+if [ -z "$TOUCHED" ] && [ -z "$TODAY_COMMITS" ]; then
+    exit 0
+fi
+
 exec "$(dirname "${BASH_SOURCE[0]}")/../../orphan-skill-scan.sh" --quiet "$@"

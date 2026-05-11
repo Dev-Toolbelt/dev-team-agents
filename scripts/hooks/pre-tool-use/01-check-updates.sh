@@ -26,23 +26,65 @@ if [ -f "$LAST_CHECK_FILE" ]; then
     fi
 fi
 
+ETAG_FILE="$USER_DATA_DIR/.last-releases-etag"
+
 # HTTP tool detection
 if command -v curl >/dev/null 2>&1; then
     HTTP_GET() { curl -fsSL --connect-timeout 5 --max-time 10 "$1"; }
     HTTP_DL()  { curl -fsSL --connect-timeout 5 --max-time 30 -o "$1" "$2"; }
-elif command -v wget >/dev/null 2>&1; then
-    HTTP_GET() { wget -qO- "$1"; }
-    HTTP_DL()  { wget -qO "$1" "$2"; }
 else
-    exit 0
+    # wget path: ETag not supported; fall through without ETag caching
+    if command -v wget >/dev/null 2>&1; then
+        HTTP_GET() { wget -qO- "$1"; }
+        HTTP_DL()  { wget -qO "$1" "$2"; }
+    else
+        exit 0
+    fi
 fi
 
 # Update timestamp before network call — prevents hammering on bad-network sessions
 mkdir -p "$USER_DATA_DIR" || exit 0
 date +%s > "$LAST_CHECK_FILE"
 
-# Fetch latest version via GitHub API
-API_RESP=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
+# Fetch latest version via GitHub API (with ETag caching when curl is available)
+TMP_HEADERS=$(mktemp)
+TMP_BODY=$(mktemp)
+trap 'rm -f "$TMP_HEADERS" "$TMP_BODY"' EXIT
+
+RELEASES_URL="${GITHUB_API}/releases/latest"
+HTTP_STATUS=""
+
+if command -v curl >/dev/null 2>&1; then
+    # Build ETag conditional request header if we have a cached ETag
+    ETAG_HEADER=""
+    if [ -f "$ETAG_FILE" ]; then
+        CACHED_ETAG=$(cat "$ETAG_FILE" 2>/dev/null || true)
+        [ -n "$CACHED_ETAG" ] && ETAG_HEADER="-H \"If-None-Match: ${CACHED_ETAG}\""
+    fi
+
+    HTTP_STATUS=$(eval curl -sS --connect-timeout 5 --max-time 10 \
+        -D "$TMP_HEADERS" \
+        -o "$TMP_BODY" \
+        -w "%{http_code}" \
+        "$ETAG_HEADER" \
+        "\"${RELEASES_URL}\"" 2>/dev/null || echo "000")
+
+    if [ "$HTTP_STATUS" = "304" ]; then
+        # Not Modified — no new release since last check
+        exit 0
+    fi
+
+    if [ "$HTTP_STATUS" = "200" ]; then
+        # Save new ETag for next check
+        NEW_ETAG=$(grep -i '^etag:' "$TMP_HEADERS" | head -1 | sed 's/^[Ee][Tt][Aa][Gg]: *//;s/\r//' || true)
+        [ -n "$NEW_ETAG" ] && printf '%s' "$NEW_ETAG" > "$ETAG_FILE"
+    fi
+
+    API_RESP=$(cat "$TMP_BODY" 2>/dev/null || true)
+else
+    API_RESP=$(HTTP_GET "${RELEASES_URL}" 2>/dev/null || true)
+fi
+
 LATEST=$(printf '%s' "$API_RESP" \
     | grep '"tag_name"' | head -1 \
     | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
