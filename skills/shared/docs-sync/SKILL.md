@@ -209,6 +209,49 @@ Write a new page (or update an existing one) when a task reveals:
 
 **Do NOT write** for: things clear from reading the code, standard library patterns, or anything already in `CLAUDE.md`.
 
+### User-intent triggers — write a wiki entry immediately
+
+When the user's message matches any of the patterns below, **treat it as an explicit wiki write request** — do not wait for the task to finish. Capture the convention or rule right away, then continue with the task.
+
+**Convention / standardization signals**
+| Pattern (PT) | Pattern (EN) | What to capture |
+|---|---|---|
+| "convencione …" | "establish as convention …" | The convention name, rule, and why |
+| "coloque como padrão …" | "set as project standard …" | The pattern, its scope, and any exceptions |
+| "torne padrão …" | "make the standard …" | The decision, rationale, and affected files/layers |
+| "adote como padrão …" | "adopt as standard …" | Same as above |
+| "defina como padrão …" | "define as the standard …" | The rule and where it applies |
+| "a partir de agora … sempre" | "from now on … always" | The behavioral rule being established |
+| "sempre que … faça …" | "whenever … do …" | The trigger → action pair as a project rule |
+| "nunca mais …" / "não faça mais …" | "never again …" / "stop doing …" | The anti-pattern and why it was banned |
+| "use somente …" / "apenas …" | "only use …" | The enforced choice and what it replaces |
+
+**Memory / note-taking signals**
+| Pattern (PT) | Pattern (EN) | What to capture |
+|---|---|---|
+| "anote isso …" | "note this …" | The fact or rule verbatim |
+| "não esqueça …" | "don't forget …" | The constraint or reminder |
+| "guarde essa informação …" | "save this information …" | The piece of knowledge |
+| "registre que …" | "record that …" | The statement being registered |
+| "lembre(-se) que …" | "remember that …" | The rule or fact |
+| "quero que você saiba que …" | "I want you to know that …" | The context being shared |
+| "isso é importante …" | "this is important …" | The highlighted rule or fact |
+| "para referência futura …" | "for future reference …" | The reference material |
+
+**Approval / confirmation signals** (user confirms an approach you proposed)
+| Pattern | What to capture |
+|---|---|
+| "sim, siga esse padrão" / "yes, follow that pattern" | The pattern as an established convention |
+| "exato, sempre assim" / "exactly, always like that" | The confirmed approach as a project rule |
+| "pode adotar isso" / "you can adopt that" | The decision, now official |
+| "fica assim então" / "let's go with that" | The finalized decision |
+
+**How to write the entry for user-triggered wiki writes:**
+1. Use `code-standards.md` (`## Patterns in Use` or `## Anti-Patterns`) for code conventions
+2. Use a wiki entry (`wiki/<domain>/<topic>.md`) for domain rules, behavioral constraints, or multi-layer decisions
+3. If unsure which document fits, prefer the wiki — it is the more flexible format
+4. Confirm with a one-line message: _"Noted — recorded in `wiki/<domain>/<topic>.md`."_
+
 ### Domain folders — dynamic, project-driven
 
 Domains are **not predefined**. Agents create folders based on the project's actual domain concepts. Examples:
@@ -288,6 +331,7 @@ Omit sections that add no value. Keep entries under 80 lines.
 | Schema migration applied | `architecture.md` | Module Map or API Contracts |
 | Architectural layer added or renamed | `architecture.md` | Layers |
 | Non-obvious domain behavior discovered | `wiki/<domain>/<topic>.md` | New or updated wiki entry |
+| User explicitly asks to standardize, note, or remember something | `wiki/<domain>/<topic>.md` or `code-standards.md` | User-triggered wiki write (see User-intent triggers) |
 
 ---
 
