@@ -125,22 +125,29 @@ PREV_CHECK=""
 # Uses atomic rename so the running script is never deleted mid-execution.
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
-# Remove files that do not belong in user project installs
-rm -rf "$EXTRACTED_ROOT/.claude"
-rm -rf "$EXTRACTED_ROOT/docs"
-rm -f "$EXTRACTED_ROOT/CLAUDE.md"
-rm -f "$EXTRACTED_ROOT/README.md"
-rm -f "$EXTRACTED_ROOT/README.pt-BR.md"
-rm -f "$EXTRACTED_ROOT/.gitignore"
+# Allowlist: only these top-level entries are distributed to users
+KEEP_ROOT=(agents scripts skills workflows templates commands LICENSE SECURITY.md CONTRIBUTING.md CHANGELOG.md)
+
+for item in "$EXTRACTED_ROOT"/*; do
+    name=$(basename "$item")
+    keep=false
+    for k in "${KEEP_ROOT[@]}"; do
+        [ "$name" = "$k" ] && keep=true && break
+    done
+    [ "$keep" = false ] && rm -rf "$item"
+done
+
+# Strip scripts that belong only in the source repo
 rm -f "$EXTRACTED_ROOT/scripts/install.sh"
 rm -f "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
-    OLD_INSTALL="${INSTALL_DIR}.old.$$"
-    mv "$INSTALL_DIR" "$OLD_INSTALL"
+    PREVIOUS_DIR="${INSTALL_DIR}.previous"
+    [ -d "$PREVIOUS_DIR" ] && rm -rf "$PREVIOUS_DIR"
+    mv "$INSTALL_DIR" "$PREVIOUS_DIR"
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    rm -rf "$OLD_INSTALL" "$TMP_DIR" || true
+    rm -rf "$TMP_DIR" || true
 else
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
     rm -rf "$TMP_DIR" || true
@@ -191,6 +198,7 @@ fi
 # ── Step 7: Configure hooks in .claude/settings.json ────────────
 PRE_TOOL_USE_HOOK=".claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
 STOP_HOOK=".claude/dev-team-agents/scripts/hooks/stop.sh"
+SESSION_START_HOOK=".claude/dev-team-agents/scripts/hooks/session-start.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -213,6 +221,16 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           {
             "type": "command",
             "command": "$STOP_HOOK"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$SESSION_START_HOOK"
           }
         ]
       }
@@ -262,8 +280,9 @@ PYEOF
         fi
     }
 
-    _inject_hook "PreToolUse" "$PRE_TOOL_USE_HOOK" "hooks/pre-tool-use.sh"
-    _inject_hook "Stop"       "$STOP_HOOK"         "hooks/stop.sh"
+    _inject_hook "PreToolUse"   "$PRE_TOOL_USE_HOOK"   "hooks/pre-tool-use.sh"
+    _inject_hook "Stop"         "$STOP_HOOK"           "hooks/stop.sh"
+    _inject_hook "SessionStart" "$SESSION_START_HOOK"  "hooks/session-start.sh"
 fi
 
 # ── Step 8: Record installed version ─────────────────────────────

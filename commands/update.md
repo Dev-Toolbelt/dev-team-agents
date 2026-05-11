@@ -8,6 +8,18 @@ You are running the **`/devteam:update`** command.
 
 ---
 
+## Arguments
+
+| Argument | Effect |
+|----------|--------|
+| _(none)_ | Check for updates and install if available |
+| `--rollback` | Restore the previously-installed version (saved during the last update) |
+| `--enable-auto` | Enable automatic updates |
+| `--disable-auto` | Disable automatic updates |
+| `vX.Y.Z` | Pin to a specific version |
+
+---
+
 ## Step 1 — Read current version
 
 ```bash
@@ -79,8 +91,21 @@ Do not add anything else.
 |----------|---------|--------|
 | `--enable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
 | `--disable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
+| `--rollback` | `bash .claude/dev-team-agents/scripts/update.sh --rollback` | `Rolled back to previous version.` |
 
 If either flag is present, skip Steps 1–4 and handle only the toggle.
+
+---
+
+## Rollback (only if $ARGUMENTS is `--rollback`)
+
+Skip Steps 1–4. Run:
+
+```bash
+bash .claude/dev-team-agents/scripts/update.sh --rollback
+```
+
+Output the script's output verbatim. If it exits with an error, relay the error message.
 
 ---
 
