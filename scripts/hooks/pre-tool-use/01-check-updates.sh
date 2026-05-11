@@ -8,8 +8,16 @@ INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
 LAST_CHECK_FILE="$USER_DATA_DIR/.last-update-check"
 VERSION_FILE="$USER_DATA_DIR/.installed-version"
-AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
-TWENTY_FOUR_HOURS=86400
+PREFS_FILE="$USER_DATA_DIR/preferences.json"
+
+# Read update_check_interval_hours from preferences.json (default: 24h)
+UPDATE_INTERVAL_HOURS=24
+if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    UPDATE_INTERVAL_HOURS=$(python3 -c \
+        "import json; d=json.load(open('$PREFS_FILE')); print(d.get('update_check_interval_hours',24))" \
+        2>/dev/null || echo 24)
+fi
+TWENTY_FOUR_HOURS=$(( UPDATE_INTERVAL_HOURS * 3600 ))
 
 GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
@@ -102,8 +110,17 @@ CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 [ "$CURRENT" != "unknown" ] && [ "$LATEST" != "unknown" ] || exit 0
 [ "$CURRENT" != "$LATEST" ] || exit 0
 
-# Auto-update mode
-if [ -f "$AUTO_UPDATE_FLAG" ]; then
+# Auto-update mode: check preferences.json first, fall back to legacy flag file
+AUTO_UPDATE=false
+if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    AUTO_UPDATE=$(python3 -c \
+        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('auto_update',False)).lower())" \
+        2>/dev/null || echo false)
+fi
+# Legacy flag file support (migration period)
+[ -f "${USER_DATA_DIR}/.auto-update" ] && AUTO_UPDATE=true
+
+if [ "$AUTO_UPDATE" = "true" ]; then
     echo ""
     echo "→ Auto-updating dev-team-agents: $CURRENT → $LATEST"
     TMP_INSTALLER=$(mktemp)
