@@ -335,6 +335,100 @@ chmod +x "$INSTALL_DIR/scripts/hooks/"*.sh 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/hooks/pre-tool-use/"*.sh 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/hooks/stop/"*.sh 2>/dev/null || true
 
+# ── Step 11: Set up user preferences ─────────────────────────────
+PREFS_FILE="$USER_DATA_DIR/preferences.json"
+PREFS_LANGUAGE="en"
+
+# Ask for language preference when running in an interactive terminal
+# and preferences.json does not yet exist
+if [ -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " LANGUAGE PREFERENCE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " In which language should agents converse with you?"
+    echo " (Documents and technical output always remain in English)"
+    echo ""
+    echo "  Examples: en  pt-BR  es  fr  de  ja  zh-CN"
+    printf " Language [en]: "
+    read -r PREFS_LANGUAGE </dev/tty || true
+    PREFS_LANGUAGE="${PREFS_LANGUAGE:-en}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+elif [ ! -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
+    echo "→ NOTE: Non-interactive install. Setting language to 'en'. Edit .claude/user-data/preferences.json to change."
+fi
+
+# Migrate legacy .auto-update flag → auto_update field in preferences.json
+AUTO_UPDATE_VALUE="false"
+if [ -f "$USER_DATA_DIR/.auto-update" ]; then
+    AUTO_UPDATE_VALUE="true"
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+    python3 - "$PREFS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" <<'PYEOF'
+import sys, json, os
+
+prefs_file, language, auto_update_str = sys.argv[1], sys.argv[2], sys.argv[3]
+auto_update = (auto_update_str == "true")
+
+defaults = {
+    "language": language,
+    "context_window_percent_warning": 55,
+    "context_window_percent_limit": 60,
+    "suppress_notifications": False,
+    "session_summary_max_days": 30,
+    "session_summary_max_entries": 30,
+    "docs_stale_after_days": 30,
+    "auto_update": auto_update,
+    "update_check_interval_hours": 24,
+}
+
+existing = {}
+if os.path.exists(prefs_file):
+    try:
+        with open(prefs_file, 'r') as f:
+            existing = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        pass
+
+# Merge: existing values win; missing keys get defaults
+merged = {**defaults, **existing}
+# On first install (no existing file), apply the prompted language
+if not os.path.exists(prefs_file):
+    merged["language"] = language
+    merged["auto_update"] = auto_update
+
+with open(prefs_file, 'w') as f:
+    json.dump(merged, f, indent=2)
+    f.write('\n')
+PYEOF
+    echo "→ User preferences: .claude/user-data/preferences.json"
+else
+    # Fallback: write a plain JSON file without python3
+    if [ ! -f "$PREFS_FILE" ]; then
+        cat > "$PREFS_FILE" <<EOF
+{
+  "language": "$PREFS_LANGUAGE",
+  "context_window_percent_warning": 55,
+  "context_window_percent_limit": 60,
+  "suppress_notifications": false,
+  "session_summary_max_days": 30,
+  "session_summary_max_entries": 30,
+  "docs_stale_after_days": 30,
+  "auto_update": $AUTO_UPDATE_VALUE,
+  "update_check_interval_hours": 24
+}
+EOF
+        echo "→ User preferences: .claude/user-data/preferences.json"
+    fi
+fi
+
+# Remove legacy .auto-update flag file (migrated to preferences.json)
+if [ -f "$USER_DATA_DIR/.auto-update" ]; then
+    rm -f "$USER_DATA_DIR/.auto-update"
+    echo "→ Migrated .auto-update flag → preferences.json (auto_update field)"
+fi
+
 # ── Done ──────────────────────────────────────────────────────────
 if [ -f "$PROJECT_ROOT/.gitignore" ] && grep -q "dev-team-agents" "$PROJECT_ROOT/.gitignore"; then
     echo ""
