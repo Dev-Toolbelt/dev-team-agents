@@ -64,18 +64,13 @@ HTTP_STATUS=""
 
 if command -v curl >/dev/null 2>&1; then
     # Build ETag conditional request header if we have a cached ETag
-    ETAG_HEADER=""
+    CURL_ARGS=(-sS --connect-timeout 5 --max-time 10 -D "$TMP_HEADERS" -o "$TMP_BODY" -w "%{http_code}")
     if [ -f "$ETAG_FILE" ]; then
         CACHED_ETAG=$(cat "$ETAG_FILE" 2>/dev/null || true)
-        [ -n "$CACHED_ETAG" ] && ETAG_HEADER="-H \"If-None-Match: ${CACHED_ETAG}\""
+        [ -n "$CACHED_ETAG" ] && CURL_ARGS+=(-H "If-None-Match: ${CACHED_ETAG}")
     fi
 
-    HTTP_STATUS=$(eval curl -sS --connect-timeout 5 --max-time 10 \
-        -D "$TMP_HEADERS" \
-        -o "$TMP_BODY" \
-        -w "%{http_code}" \
-        "$ETAG_HEADER" \
-        "\"${RELEASES_URL}\"" 2>/dev/null || echo "000")
+    HTTP_STATUS=$(curl "${CURL_ARGS[@]}" "${RELEASES_URL}" 2>/dev/null || echo "000")
 
     if [ "$HTTP_STATUS" = "304" ]; then
         # Not Modified — no new release since last check
@@ -95,13 +90,13 @@ fi
 
 LATEST=$(printf '%s' "$API_RESP" \
     | grep '"tag_name"' | head -1 \
-    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
 
 if [ -z "$LATEST" ]; then
     API_RESP=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
     LATEST=$(printf '%s' "$API_RESP" \
         | grep '"name"' | head -1 \
-        | sed 's/.*"name": *"\([^"]*\)".*/\1/')
+        | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
 fi
 
 [ -n "$LATEST" ] || exit 0
