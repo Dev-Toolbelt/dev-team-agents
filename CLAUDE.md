@@ -333,6 +333,7 @@ Other directories under `.claude/` created by agents:
 | `docs/` | Repository-level reports and internal docs irrelevant to users |
 | `scripts/install.sh` | Accessed exclusively via `curl` — never bundled |
 | `scripts/orphan-skill-scan.sh` | Development tool for this repo — not relevant to user projects |
+| `scripts/agent-lint.sh` | Development tool for this repo — not relevant to user projects |
 
 ---
 
