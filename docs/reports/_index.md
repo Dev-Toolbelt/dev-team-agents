@@ -40,9 +40,51 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
 
 <!--
   Formato de cada linha:
-    - `<fingerprint>` — `YYYY-MM-DD` — _título-curto_ — [relatório](caminho)
+    - `<fingerprint>` — descrição — [relatório](caminho) [— ✅ **Executed:** YYYY-MM-DD]
   Mantenha em ordem cronológica decrescente (mais recente primeiro).
+  
+  Legenda de status:
+    ✅ Executed    — item implementado; o agente de research NÃO precisa repropostar
+    ⚠️ Partial     — parcialmente endereçado; repropostar somente para o sub-escopo pendente
+    (sem marker)  — sugestão registrada, ainda não implementada
 -->
+
+### 2026-05-10 — quinta passada (foco em drift declarativo CLAUDE.md↔arquivos, community files, hook events não explorados, skills extraídas com inline mantido)
+
+- `ref-current-context-skill-orphaned-from-commands` — `CLAUDE.md` declara `current-context` para "todos os /devteam:*"; 0 dos 22 commands carregam — 21 inlinearam bloco git — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-spawn-classifier-skill-only-software-architect` — `CLAUDE.md` declara `spawn-classifier` para `/devteam:plan`; só `software-architect` carrega; `commands/plan.md` ignora — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-no-security-md` — Sem `SECURITY.md` em repo público com instalador via `curl | bash` — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-no-contributing-md` — Sem `CONTRIBUTING.md` apesar de 270+ linhas de regras em CLAUDE.md (orientadas a Claude, não a humanos) — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-no-changelog-md` — Sem `CHANGELOG.md` apesar de SemVer e referência no hook de update — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-no-pr-and-issue-templates` — Sem `.github/PULL_REQUEST_TEMPLATE.md` e `.github/ISSUE_TEMPLATE/` — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-no-codeowners-file` — Sem `.github/CODEOWNERS` — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-skill-frontmatter-allowed-tools-key-inconsistency` — `worktree/SKILL.md` é única skill com `allowed-tools:` entre 99; padrão não documentado em CLAUDE.md — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `ref-stop-hook-shim-numbering-undocumented` — Sub-scripts `01/02/03` em `hooks/stop/` numerados; convenção não documentada — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
+- `flow-hook-events-only-pretooluse-and-stop` — Installer registra só 2 de 7+ hook events suportados; `SessionStart`, `UserPromptSubmit`, `SubagentStop`, `Notification`, `PreCompact` inexplorados — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ⚠️ **Partial:** 2026-05-11 (`SessionStart` adicionado; `UserPromptSubmit`, `SubagentStop`, `Notification`, `PreCompact` permanecem para próxima passada)
+- `flow-update-command-no-rollback-path` — `/devteam:update` não tem `--rollback`; `INSTALL_DIR.old.$$` é deletado imediatamente após swap — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-commit-no-pre-commit-gate` — `/devteam:commit` não roda linters/formatters antes de commitar — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-workflows-no-failure-recovery` — Workflows não definem caminho de falha intermediária (review loop infinito, abort no meio, commit travado) — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-pr-command-no-template-file-link` — `/devteam:pr` produz prosa sem detectar `.github/PULL_REQUEST_TEMPLATE.md` — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-no-stale-branch-detection` — Nenhum workflow detecta branch atrasada de main antes de operar — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-setup-no-docker-compose-version-detection` — `setup-assistant` assume `docker compose` (V2); não testa fallback `docker-compose` (V1) — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-no-merge-conflict-preflight` — Workflows fix/refactor não rodam `git merge-tree` para detectar conflito potencial com main — [relatório](2026-05-10/02-fluxos-e-workflows.md)
+- `agent-database-specialist-no-per-engine-skills` — `database-specialist` (272 linhas) cobre 6+ engines inline; padrão `cicd-base+variantes` não replicado para database — [relatório](2026-05-10/03-agentes-e-skills.md) — ⚠️ **Partial:** 2026-05-11 (`postgres`, `mysql`, `mongodb` criadas e wired; `redis`, `sqlserver`, `cassandra`, `sqlite` e split do agente permanecem)
+- `skill-missing-event-driven-architecture` — Sem skill para CQRS/saga/event-sourcing/domain-vs-integration events — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-missing-rate-limiting` — Sem skill dedicada para algoritmos (token bucket, leaky bucket, sliding window) — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-missing-performance-budgets` — Sem skill para Core Web Vitals budgets, bundle size, Lighthouse CI — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-missing-api-versioning-dedicated` — `api-design` toca versioning brevemente; sem skill dedicada (URL/header/content negotiation/deprecation lifecycle) — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-diataxis-not-extracted` — Framework Diátaxis inline em `technical-writer.md`; sem skill `diataxis-framework` reusável por outros agentes — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-discovery-mode-not-loaded-by-setup-assistant` — Skill carregada por `software-architect` e `product-analyst`; `setup-assistant` (que classifica projetos) não — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `agent-product-analyst-jira-skill-not-loaded-foundational` — `product-analyst` cria backlog mas não carrega `skills/integrations/jira/SKILL.md` (carga só em qa/code-reviewer) — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `skill-database-debug-multitenancy-not-loaded-by-database-specialist` — Skills `database-debug` e `database-multitenancy` em `integrations/`; `database-specialist` é consumidor natural mas verificação de carga ausente — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
+- `token-current-context-skill-vs-21-inline-blocks` — Skill `current-context` (29 linhas) existe; 21 commands inlinearam ~7 linhas de git block + ~30 linhas de scope rule — ~150 linhas duplicadas — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-reviewer-mindset-extracted-but-inline-kept-with-double-load` — Skill extraída E inline mantido em 3 reviewer agents; ambos carregados no startup — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-token-efficiency-apply-line-six-variants` — Frase "Apply token-efficiency..." em 10 agentes com 6 redações distintas — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-install-sh-blocklist-vs-allowlist` — `install.sh` strippa por blocklist (8 itens); allowlist seria mais robusto a novos arquivos no repo — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-stop-hook-orphan-scan-unconditional-rerun` — `02-orphan-skill-scan.sh` roda a cada Stop sem gate por mudança em `agents/` ou `skills/` — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-claude-md-monolithic-load-every-session` — `CLAUDE.md` (272 linhas) carrega instruções de authoring + setup + memory + commit; fragmentar em `.claude-md/*` modular permite load on demand — [relatório](2026-05-10/04-economia-tokens.md)
+- `token-ci-shellcheck-no-binary-cache` — CI `apt-get install shellcheck` reinstala a cada run; usar action ou binário pré-instalado — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
+- `token-update-check-no-etag-handling` — `01-check-updates.sh` faz GET completo a cada 24h sem `If-None-Match` para `304 Not Modified` — [relatório](2026-05-10/04-economia-tokens.md) — ✅ **Executed:** 2026-05-11
 
 ### 2026-05-09 — quarta passada (foco em governance, frontmatter inconsistente, skills domain-strategic, duplicação estrutural)
 
@@ -170,9 +212,12 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
 
 ## Estatísticas
 
-| Data | Sugestões publicadas | Originais (acumulado) |
-|------|----------------------|-----------------------|
-| 2026-05-06 | 22 | 22 |
-| 2026-05-07 | 25 | 47 |
-| 2026-05-08 | 28 | 75 |
-| 2026-05-09 | 35 | 110 |
+| Data | Sugestões publicadas | Originais (acumulado) | Executadas |
+|------|----------------------|-----------------------|------------|
+| 2026-05-06 | 22 | 22 | — |
+| 2026-05-07 | 25 | 47 | — |
+| 2026-05-08 | 28 | 75 | — |
+| 2026-05-09 | 35 | 110 | — |
+| 2026-05-10 | 34 | 144 | **31** ✅ + 2 ⚠️ partial (2026-05-11) |
+
+> **Instrução para o agente de research:** Ao ler este índice, **exclua da geração** todos os fingerprints marcados com ✅ **Executed** — eles estão implementados no código. Fingerprints ⚠️ **Partial** podem ser repropostos com escopo **mais específico** cobrindo apenas a parte pendente descrita na nota.
