@@ -39,6 +39,22 @@ Use `git status --porcelain` to distinguish:
 
 This matters when the task involves committing or reviewing only staged work.
 
+## Branch Freshness Check
+
+After running the context commands, check if the branch is behind the remote main:
+
+```bash
+git fetch --quiet origin 2>/dev/null || true
+BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+```
+
+If `BEHIND` is greater than 7:
+- Warn the user: "This branch is N commits behind main. Consider rebasing before continuing."
+- Offer three options: (a) rebase now, (b) continue anyway, (c) abort.
+- If the user chooses (a), run `git rebase origin/main` and re-run the context detection.
+
+If `git fetch` fails (no network), skip the check silently and proceed.
+
 ## Summary Format
 
 After running the commands, produce a one-line context header before any action:

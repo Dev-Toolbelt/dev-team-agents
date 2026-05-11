@@ -1,7 +1,6 @@
 ---
 name: worktree
 description: Git worktree per task — .worktrees/<context>/<title>. Trigger: new task, start feature/fix.
-allowed-tools: Bash, Read
 ---
 
 # Worktree — Task Isolation Protocol
