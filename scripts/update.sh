@@ -17,20 +17,6 @@ GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
 INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/scripts/install.sh"
 
-# ── Rollback mode ─────────────────────────────────────────────────────────────
-
-if [[ "${1:-}" == "--rollback" ]]; then
-    PREVIOUS_DIR="${INSTALL_DIR}.previous"
-    if [ ! -d "$PREVIOUS_DIR" ]; then
-        echo "No previous version to roll back to." >&2
-        exit 1
-    fi
-    rm -rf "$INSTALL_DIR"
-    mv "$PREVIOUS_DIR" "$INSTALL_DIR"
-    echo "✓ Rolled back to previous version."
-    exit 0
-fi
-
 # ── Silent check mode — delegates to hook sub-script ─────────────────────────
 
 if [[ "${1:-}" == "--check" ]]; then

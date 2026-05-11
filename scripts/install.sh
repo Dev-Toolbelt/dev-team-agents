@@ -144,9 +144,7 @@ rm -f "$EXTRACTED_ROOT/scripts/agent-lint.sh"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
-    PREVIOUS_DIR="${INSTALL_DIR}.previous"
-    [ -d "$PREVIOUS_DIR" ] && rm -rf "$PREVIOUS_DIR"
-    mv "$INSTALL_DIR" "$PREVIOUS_DIR"
+    rm -rf "$INSTALL_DIR"
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
     rm -rf "$TMP_DIR" || true
 else
