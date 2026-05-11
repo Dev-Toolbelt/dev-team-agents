@@ -76,6 +76,7 @@ This ensures multi-agent workflows ask the worktree question exactly once.
 
 - Follow [agentskills.io specification](https://agentskills.io/specification)
 - Frontmatter: `name`, `description`
+  > Note: `allowed-tools:` is **not** a standard frontmatter key for skills in this repo. Use only `name` and `description`. The `allowed-tools:` key in `skills/shared/worktree/SKILL.md` was an experiment and has been removed.
 - Body is current rules only — no change history, no "was removed / replaced by" narratives
 - Max ~500 lines; move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
@@ -130,7 +131,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists | Implementing full-stack changes |
 | `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
 | `/devteam:fix` | backend-developer¹ + frontend-developer¹ → test-specialist¹ | Fixing a bug |
-| `/devteam:refactor` | software-architect → backend-developer¹ + frontend-developer¹ | Refactoring existing code |
+| `/devteam:refactor` | software-architect → backend/frontend-test-specialist + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring with test-first coverage, dependency mapping, consolidated plan, and ordered commit blocks (tests → refactoring) |
 | `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs |
 | `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ | Code review before merge |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
@@ -329,6 +330,24 @@ The script auto-numbers the file and places it in `.claude/docs/development/adrs
 - Outputs a structured reminder visible to Claude on the next turn, which then writes the summary
 
 No manual setup is required — the installer handles registration.
+
+### Stop Hook Sub-script Convention
+
+Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filename. The numeric prefix controls execution order:
+
+| Prefix | Reserved for | Current scripts |
+|--------|-------------|-----------------|
+| `01-` | State detection and collection (session context) | `01-session-summary.sh` |
+| `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
+| `03-` | Static validation | `03-agent-lint.sh` |
+| `99-` | Final/cleanup tasks | _(reserved, unused)_ |
+
+Each sub-script must:
+- Accept `--quiet` flag and suppress output when OK
+- Exit with code `0` when nothing is wrong
+- Exit non-zero only when action is required from the user
+
+Prefix `00-` is reserved for future preconditions. When adding a new sub-script, choose the correct tier and pick a number within that tier (e.g., `02-new-check.sh`).
 
 ---
 

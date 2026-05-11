@@ -1,6 +1,6 @@
 # Workflow — Refactor
 
-Use when improving the internal structure of existing code without changing its external behavior. Applies to any scope: a single module, a service layer, or a cross-cutting concern.
+Use when improving the internal structure of existing code without changing its external behavior. Applies to any scope: a single function, a module, a service layer, or a cross-cutting concern.
 
 > **Plan Mode**: every agent step below will present a structured plan for your approval before executing anything. You review, adjust if needed, and approve. Nothing runs until you say so.
 
@@ -8,109 +8,255 @@ Use when improving the internal structure of existing code without changing its 
 
 ---
 
-## Phase 1: ANALYSIS
+## Before You Start
 
-### Step 1: Scope Definition (software-architect)
+**Specify the scope explicitly.** This workflow requires a named routine, module, file, or class as its target. Broad scopes like "the whole project" or "everything" are accepted only after the user acknowledges the time and token cost and chooses a processing mode (module-by-module with checkpoints, or all at once).
+
+**Saved plans.** At the end of Phase 2, the consolidated Refactoring Plan is saved to `.claude/docs/refactoring/<context>/<name>-<YYYY-MM-DD>.md`. You can resume the workflow in a future session by sharing that file — no need to regenerate the analysis.
+
+---
+
+## Phase 0: WORKTREE / BRANCH SETUP
+
+Before any agent is spawned, decide where the work happens.
 
 ```
-Prompt: "As the software-architect, load the project context and analyze [area/file/module].
-         Define the refactor scope: what is wrong, what the target state looks like,
-         and what the blast radius of the change is."
+Prompt: "Should I work in a new worktree or on a new branch?
+         (worktree / branch)"
+```
+
+The answer is written to `.claude/.worktree-session` so multi-agent sessions do not ask twice.
+
+**If worktree:** the agent reads the last 20 branch names (`git branch -a`) to detect the project's naming convention, suggests a name that matches (e.g. `refactor/login-flow`), and asks for confirmation before creating.
+
+**If branch:** same convention check, new branch created from current HEAD.
+
+▶ CHECKPOINT — await: worktree or branch ready
+
+---
+
+## Phase 1: ANALYSIS
+
+### Step 1: Scope Document (software-architect)
+
+```
+Prompt: "As the software-architect, analyze [routine/module/file].
+         Produce a scope document with:
+         1. Code smells, dead code, coupling issues, and technical debt
+         2. Dependency map — every file, class, module, and third-party
+            library the scope uses or that depends on it (direct and
+            relevant transitive)
+         3. DB touchpoints — queries, ORM calls, migrations, schema refs
+
+         Uncertainty rule: whenever you find something ambiguous —
+         undocumented behavior, implicit dependency, non-obvious side
+         effect — STOP and ask me a specific question. Do not assume.
+         Do not infer silently."
 ```
 
 The `software-architect` will:
-- Present a plan (what to read, how to assess the code area)
-- Produce a refactor scope document: current state, target state, risks, and explicit boundaries
-- Identify whether this is a backend, frontend, or full-stack change
+- Produce the scope document as described
+- Pause and ask the user any clarifying questions before continuing
+- NOT change any code
 
-Do not begin implementation until the scope is approved. Scope creep during a refactor is one of the most common sources of regressions.
-
-▶ CHECKPOINT — await: software-architect scope document
+▶ CHECKPOINT — await: scope document confirmed by user
 
 ---
 
-## Phase 2: IMPLEMENTATION
+## Phase 2: JOINT PLANNING
 
-### Step 2: Refactor (backend-developer or frontend-developer)
+### Steps 2a + 2b + 2c + 2d — run in parallel after scope document is confirmed
 
-Choose the appropriate developer based on the scope identified in Phase 1.
+Send all applicable prompts in a single message:
 
-**Backend:**
+| Step | Agent | Condition | Par. |
+|------|-------|-----------|------|
+| 2a | software-architect | always | A |
+| 2b | backend-test-specialist | backend scope | A |
+| 2c | frontend-test-specialist | frontend scope | A |
+| 2d | database-specialist | DB touchpoints found | A |
+| 2e | security-specialist | always | A |
+
 ```
-Prompt: "As the backend-developer, implement the refactor defined in the scope document.
-         Do not change external behavior — no new features, no bug fixes beyond the scope."
+Prompt (software-architect):
+"Using the approved scope document, produce the architectural
+ refactoring plan: what changes, how it changes, exact file and
+ class boundaries, and risks."
+
+Prompt (backend-test-specialist or frontend-test-specialist):
+"Using the approved scope document, produce the test coverage plan
+ for the CURRENT behavior of [routine] — before any refactoring.
+
+ Coverage goal: 100% of observable behavior.
+
+ For every scenario you cannot cover, provide an explicit
+ justification. Only these exclusions are acceptable without
+ user confirmation:
+ - Dead branches / unreachable code paths
+ - Internal details with zero external effect
+
+ Any exclusion that affects observable behavior must be flagged
+ to the user for explicit confirmation before the plan is final."
+
+Prompt (database-specialist — if applicable):
+"Review the DB touchpoints in the scope document. Propose query,
+ schema, or ORM optimizations that can be included in the
+ refactoring plan without changing external behavior."
+
+Prompt (security-specialist):
+"Review the architectural refactoring plan. Verify that no
+ security control, validation, or access check is weakened,
+ removed, or bypassed by the planned changes. Flag any concern
+ as [BLOCKING] or [ADVISORY]."
 ```
 
-**Frontend:**
+### Consolidation
+
+After all agents finish, consolidate into a single **Refactoring Plan** document:
+
 ```
-Prompt: "As the frontend-developer, implement the refactor defined in the scope document.
-         Do not change external behavior — no new features, no bug fixes beyond the scope."
+# Refactoring Plan — <context> — <YYYY-MM-DD>
+
+## Scope
+[routine/module targeted]
+
+## Architectural Changes
+[from software-architect]
+
+## Test Coverage Plan
+[from test-specialist — including exclusion justifications]
+
+## DB Optimizations
+[from database-specialist, or "N/A"]
+
+## Security Review
+[from security-specialist findings]
+
+## Commit Order
+Block 1 — Test commits (list of planned commits)
+Block 2 — Refactoring commits (list of planned commits)
 ```
 
-**Both (full-stack scope):** send both prompts in a single message.
+**Save the plan to:**
+`.claude/docs/refactoring/<context>/<name>-<YYYY-MM-DD>.md`
 
-The developer will:
-- Present a plan (exact files, approach, what will NOT be touched)
-- Implement in small, reviewable steps
-- Flag any bugs discovered during refactoring as separate items — never fix silently
+Create the directory if it does not exist. Display the saved path to the user.
 
-▶ CHECKPOINT — await: implementation complete
+Present the full plan and await explicit approval. No code changes until approved.
+
+▶ CHECKPOINT — await: Refactoring Plan approved by user
 
 ---
 
-## Phase 3: QUALITY GATE
+## Phase 3: IMPLEMENTATION
 
-### Step 3 + 3b: Code Review + QA (parallel)
+### Step 3: Execute the approved plan
 
-Send both prompts in a single message to run them simultaneously:
+Spawn based on scope:
+- `backend-developer` — backend scope
+- `frontend-developer` — frontend scope
+- Both in parallel — full-stack scope
+
+```
+Prompt: "Execute the approved Refactoring Plan at [saved plan path].
+
+         BLOCK 1 — Test commits first:
+         Write all tests from the coverage plan. Each commit must
+         cover a cohesive unit (one test group, one scenario set,
+         one file) following the project's commit pattern.
+         All tests must pass against the original, unmodified code
+         before you write a single line of refactoring.
+
+         BLOCK 2 — Refactoring commits (only after Block 1 is green):
+         Execute the architectural changes. Each commit covers one
+         logical unit (extract a method, move a class, simplify a
+         query) following the project's commit pattern.
+         Atomic and descriptive — never a single big-bang commit.
+
+         No refactoring commit may precede the last test commit.
+         If you find a bug while refactoring, do NOT fix it silently —
+         flag it as a separate item for the user to decide."
+```
+
+▶ CHECKPOINT — await: Block 1 green (all tests passing on original code)
+▶ CHECKPOINT — await: Block 2 complete (all refactoring commits done)
+
+---
+
+## Phase 4: QUALITY GATE
+
+### Steps 4a + 4b — run in parallel
+
+Send both prompts in a single message:
 
 | Step | Agent | Par. |
 |------|-------|------|
-| 3a | code-reviewer | A |
-| 3b | qa-specialist | A |
+| 4a | code-reviewer | A |
+| 4b | qa-specialist | A |
 
 ```
-Prompt: "As the code-reviewer, review the refactor. Confirm that external behavior is
-         preserved, code quality improved, and no new issues were introduced."
+Prompt (code-reviewer):
+"Review the refactoring. Confirm that:
+ - External behavior is preserved
+ - Code quality improved relative to the scope document findings
+ - No new issues introduced
+ - All tests still pass"
 
-Prompt: "As the qa-specialist, verify that the refactored code behaves identically to
-         the original — run existing tests, check edge cases, and flag any regressions."
+Prompt (qa-specialist):
+"Validate that the refactored code behaves identically to the
+ original. Run the full test suite, verify every scenario from
+ the coverage plan, and flag any regression."
 ```
 
-The `code-reviewer` produces a structured findings report. The `qa-specialist` produces a validation report. Any [BLOCKING] finding must be resolved before proceeding.
+Any `[BLOCKING]` finding from either agent must be resolved before a PR is created. Non-blocking `[ADVISORY]` findings are logged but do not block.
 
-▶ CHECKPOINT — await: no [BLOCKING] findings from either agent
-
----
-
-## Phase 4: COMMIT & PR
-
-### Step 4: Commit
+### Step 5: PR
 
 ```
-Prompt: "/devteam:commit"
+Prompt: "As the technical-writer, draft the PR body for this
+         refactoring. Include: what changed, why, before/after
+         summary, and a note that behavior is preserved."
 ```
 
-The commit agent reads staged changes, groups them by layer, and writes commits following the project's commit pattern.
-
-### Step 5: Pull Request (optional)
-
-```
-Prompt: "Please open a PR for this refactor."
-```
-
-The `technical-writer` (via `/devteam:pr`) drafts the PR title and body, summarizing what changed and why.
+Then run `/devteam:pr` to create the pull request.
 
 ---
 
 ## Workflow Closure
 
-☐ Refactor scope defined and approved
-☐ Implementation complete — no behavior changes
-☐ Code review passed (no [BLOCKING] findings)
-☐ QA validated — no regressions
-☐ Commit and PR created
+☐ Scope confirmed and dependency map produced
+☐ Refactoring Plan approved and saved to `.claude/docs/refactoring/`
+☐ Block 1 complete — all tests passing on original code
+☐ Block 2 complete — all refactoring commits done
+☐ Quality gate passed — no `[BLOCKING]` findings
+☐ PR created with before/after summary
 ☐ Session summary written
+
+---
+
+## Fast Track (small scope, no DB)
+
+If the scope is a single small file with no DB touchpoints and existing tests already cover the behavior:
+
+1. Architect and test-specialist produce a joint single-document plan (no separate scope document checkpoint)
+2. `database-specialist` and `security-specialist` may be skipped **only if** the architect explicitly confirms no DB or security-relevant code is in scope
+3. User approval of the plan is still required before any implementation
+
+---
+
+## Recovery Paths
+
+| Failure point | Recovery |
+|---------------|----------|
+| Agent reports insufficient context | Architect asks clarifying questions; provide missing info and re-run the phase |
+| Test-specialist cannot reach 100% coverage | Flag exclusions to user; confirm before finalizing plan |
+| `[BLOCKING]` finding persists after 3 cycles | Re-scope the change or create an ADR for the contested decision |
+| Block 1 tests fail on original code | Tests have a bug — fix the tests first, do not touch the source code |
+| Block 2 introduces a regression | Revert the offending refactoring commit; isolate and re-plan that unit |
+| Commit or PR blocked by git state | Run `/devteam:fix git-state` or resolve manually |
+| User aborts mid-workflow | Resume by sharing the saved plan file from `.claude/docs/refactoring/` |
+
+---
 
 **Related workflows:**
 - Found a bug during refactoring? → `workflows/bug-fix.md`
