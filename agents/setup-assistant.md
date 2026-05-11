@@ -115,6 +115,16 @@ Ask all relevant questions in a single message:
 
 **Maintenance only:** issue tracker (see tracker MCP table in the loaded setup-scan skill)
 
+**Language preference (FIRST_RUN only, or REFRESH if field is absent):**
+
+Check `.claude/user-data/preferences.json` → `language` field. If missing or the file does not exist, ask:
+
+> In which language should agents converse with you?
+> (Documents, plans, and technical output always remain in English.)
+> Examples: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
+
+Write or update the field in `preferences.json`. If the file does not exist, create it with all defaults from `skills/shared/user-preferences/SKILL.md` and the chosen language. If the file exists but is missing fields, inject the missing ones with defaults without overwriting existing values.
+
 **Graphify (ask last):**
 
 > 💡 **Want to dramatically reduce token costs?**
@@ -256,6 +266,8 @@ Present results as a categorized checklist. Each item gets one of: `✅ OK` · `
 ---
 
 Load `skills/shared/setup-health-check/SKILL.md` for the full category checklist, bash commands, auto-fix logic, and output format template.
+
+Load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS notification format when emitting system messages (missing preferences, stale config, health check warnings).
 
 ---
 

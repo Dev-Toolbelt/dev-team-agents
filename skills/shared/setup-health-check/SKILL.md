@@ -25,8 +25,10 @@ ls .claude/skills/ 2>/dev/null | head -5 || echo "MISSING"
 for f in \
   .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh \
   .claude/dev-team-agents/scripts/hooks/stop.sh \
+  .claude/dev-team-agents/scripts/hooks/session-start.sh \
   .claude/dev-team-agents/scripts/hooks/pre-tool-use/01-check-updates.sh \
   .claude/dev-team-agents/scripts/hooks/stop/01-session-summary.sh \
+  .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh \
   .claude/dev-team-agents/scripts/update.sh; do
   [ -f "$f" ] && [ -x "$f" ] && echo "OK: $f" || echo "FAIL: $f"
 done
@@ -136,6 +138,88 @@ On confirmation: remove the 4 legacy lines, add the 3 new entries.
 
 ---
 
+---
+
+### Category 8 — User Preferences
+
+```bash
+cat .claude/user-data/preferences.json 2>/dev/null || echo "MISSING"
+```
+
+**Step 1 — File existence:**
+
+| Check | Auto-fix |
+|-------|----------|
+| `preferences.json` exists | WARN only — re-run installer or setup-assistant to create |
+
+**Step 2 — Schema validation (if file exists):**
+
+Run the following to detect missing fields:
+
+```bash
+python3 - <<'EOF'
+import json, sys
+required = {
+    "language": "en",
+    "context_window_percent_warning": 55,
+    "context_window_percent_limit": 60,
+    "suppress_notifications": False,
+    "session_summary_max_days": 30,
+    "session_summary_max_entries": 30,
+    "docs_stale_after_days": 30,
+    "auto_update": False,
+    "update_check_interval_hours": 24,
+}
+try:
+    with open(".claude/user-data/preferences.json") as f:
+        data = json.load(f)
+    missing = {k: v for k, v in required.items() if k not in data}
+    if missing:
+        print("MISSING_FIELDS: " + ", ".join(missing.keys()))
+    else:
+        print("OK")
+except Exception as e:
+    print(f"ERROR: {e}")
+EOF
+```
+
+| Result | Action |
+|--------|--------|
+| `OK` | ✅ — no action needed |
+| `MISSING_FIELDS: …` | 🔧 Auto-fix: inject missing fields with defaults (do not overwrite existing values) |
+| `ERROR: …` | 🔧 Ask user to re-run setup-assistant; file may be malformed |
+
+**Step 3 — Legacy migration:**
+
+```bash
+[ -f .claude/user-data/.auto-update ] && echo "LEGACY_FLAG_PRESENT" || echo "OK"
+```
+
+| Result | Action |
+|--------|--------|
+| `LEGACY_FLAG_PRESENT` | 🔧 Auto-fix: set `auto_update: true` in `preferences.json`, then `rm .claude/user-data/.auto-update` |
+
+---
+
+### Category 9 — Notifier
+
+```bash
+[ -f .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
+[ -x .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
+echo "OK" || echo "FAIL"
+
+[ -f .claude/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
+[ -f .claude/user-data/.notifier-state ] && echo "notifier-state: OK" || echo "notifier-state: MISSING (will be created on first stop hook)"
+```
+
+| Check | Auto-fix |
+|-------|----------|
+| `stop/04-notifier.sh` exists and is executable | `chmod +x .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
+| `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
+| `.notifier-state` missing | OK — created automatically by `stop/04-notifier.sh` on first turn |
+
+---
+
 ### Health Check Output Format
 
 ```
@@ -150,6 +234,8 @@ On confirmation: remove the 4 legacy lines, add the 3 new entries.
  Graphify ................ ✅ OK
  CLAUDE.md ............... ✅ OK
  .gitignore .............. ⚠️ WARN  (1 entry missing)
+ User Preferences ........ 🔧 FIX  (2 fields missing from preferences.json)
+ Notifier ................ ✅ OK
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  2 items need attention. Proposed changes:

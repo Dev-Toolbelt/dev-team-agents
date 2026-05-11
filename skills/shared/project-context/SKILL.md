@@ -22,6 +22,8 @@ This means every agent must:
 
 ## Language Policy
 
+### Documents — Always English
+
 **All generated documents, plans, code comments, commit messages, and technical output must be written in English.**
 
 This applies to:
@@ -32,6 +34,24 @@ This applies to:
 - Changelog entries and PR descriptions
 
 **Exception**: if the user explicitly requests a document in another language (e.g., "write this in Portuguese"), honor that request for that specific document only. Default always reverts to English.
+
+### Conversation — User's Preferred Language
+
+**All responses directed at the user (explanations, questions, confirmations, notifications) must use the language in `.claude/user-data/preferences.json` → `language` field.**
+
+Read this value at the start of every session:
+
+```bash
+python3 -c \
+  "import json; d=json.load(open('.claude/user-data/preferences.json')); print(d.get('language','en'))" \
+  2>/dev/null || echo "en"
+```
+
+If `preferences.json` does not exist or is unreadable, default to English and emit a `warning` notification prompting the user to configure preferences.
+
+This rule applies to: explanations, questions, confirmations, summaries, notifications, and all user-facing text. It does NOT apply to document content, code comments, or commit messages.
+
+When emitting system notifications (context window warnings, missing config, tips), load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS format and suppression rules.
 
 ---
 
@@ -124,9 +144,11 @@ If no entry exists for today, create one with the agent name as the first sub-he
 
 ### Rotation Policy
 
-After writing a new entry, trim entries older than 30 days from the file. The file must not exceed 30 entries total.
+After writing a new entry, trim entries according to `.claude/user-data/preferences.json`:
+- `session_summary_max_days` (default: 30) — remove entries older than this many days
+- `session_summary_max_entries` (default: 30) — keep at most this many entries total
 
-To trim: identify the cutoff date (`date -v-30d +%Y-%m-%d` on macOS, `date -d '30 days ago' +%Y-%m-%d` on Linux), then remove all `## YYYY-MM-DD` blocks with a date before the cutoff.
+To trim: identify the cutoff date (`date -v-${MAX_DAYS}d +%Y-%m-%d` on macOS, `date -d "${MAX_DAYS} days ago" +%Y-%m-%d` on Linux), then remove all `## YYYY-MM-DD` blocks with a date before the cutoff. If the remaining count still exceeds `session_summary_max_entries`, remove the oldest entries until within the limit.
 
 ---
 
