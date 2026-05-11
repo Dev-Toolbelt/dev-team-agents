@@ -126,7 +126,7 @@ PREV_CHECK=""
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Allowlist: only these top-level entries are distributed to users
-KEEP_ROOT=(agents scripts skills workflows templates commands LICENSE SECURITY.md CONTRIBUTING.md CHANGELOG.md)
+KEEP_ROOT=(agents scripts skills workflows templates commands)
 
 for item in "$EXTRACTED_ROOT"/*; do
     name=$(basename "$item")
@@ -137,10 +137,13 @@ for item in "$EXTRACTED_ROOT"/*; do
     [ "$keep" = false ] && rm -rf "$item"
 done
 
-# Strip scripts that belong only in the source repo
-rm -f "$EXTRACTED_ROOT/scripts/install.sh"
-rm -f "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
-rm -f "$EXTRACTED_ROOT/scripts/agent-lint.sh"
+# Strip dotfiles/dotdirs (not matched by glob above) and repo-only scripts
+rm -rf "$EXTRACTED_ROOT/.claude"
+rm -rf "$EXTRACTED_ROOT/.github"
+rm -f  "$EXTRACTED_ROOT/.gitignore"
+rm -f  "$EXTRACTED_ROOT/scripts/install.sh"
+rm -f  "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
+rm -f  "$EXTRACTED_ROOT/scripts/agent-lint.sh"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."

@@ -328,8 +328,13 @@ Other directories under `.claude/` created by agents:
 | `CLAUDE.md` | Authoring rules for this repo — not for end-users |
 | `README.md` | Replaced by the installed package's own README if present |
 | `README.pt-BR.md` | Same as README.md |
+| `CHANGELOG.md` | Release history for this repo — not for user projects |
+| `CONTRIBUTING.md` | Contribution guide for this repo — not for user projects |
+| `LICENSE` | Repo license file — not for user projects |
+| `SECURITY.md` | Vulnerability disclosure policy — not for user projects |
 | `.gitignore` | Repo-level gitignore — not for user projects |
 | `.claude/` | Repo-level Claude config — not for user projects |
+| `.github/` | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
 | `docs/` | Repository-level reports and internal docs irrelevant to users |
 | `scripts/install.sh` | Accessed exclusively via `curl` — never bundled |
 | `scripts/orphan-skill-scan.sh` | Development tool for this repo — not relevant to user projects |
