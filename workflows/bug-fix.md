@@ -120,3 +120,15 @@ Skip if the fix is purely internal (no user-visible behavior change, no API cont
 **Related workflows:**
 - Found a security issue? → `workflows/security-patch.md`
 - Fix requires broader refactoring? → `workflows/refactor.md`
+
+---
+
+## Recovery Paths
+
+| Failure point | Recovery |
+|---------------|----------|
+| Agent reports insufficient context | Spawn `software-architect` for clarifying questions; provide the missing info and re-run the phase |
+| `[BLOCKING]` findings persist after 3 review cycles | Escalate: re-scope the change, or create an ADR for the contested decision |
+| Commit or PR blocked by Git state | Run `/devteam:fix git-state` or resolve manually (`git status`, `git stash`, rebase) |
+| User aborts mid-workflow | Workflow state is in `.claude/user-data/session-summary.md` — resume by reading the last entry and continuing from the last completed phase |
+| Root cause cannot be reproduced | Add a "cannot reproduce" label in the tracker; document findings in session-summary |

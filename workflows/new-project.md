@@ -206,3 +206,14 @@ Before closing out the session, verify:
 - [ ] Session summary written to `.claude/user-data/session-summary.md`
 
 **After launch**, use `workflows/maintenance.md` for all ongoing feature work and bug fixes.
+
+---
+
+## Recovery Paths
+
+| Failure point | Recovery |
+|---------------|----------|
+| Agent reports insufficient context | Spawn `software-architect` for clarifying questions; provide the missing info and re-run the phase |
+| `[BLOCKING]` findings persist after 3 review cycles | Escalate: re-scope the change, or create an ADR for the contested decision |
+| Commit or PR blocked by Git state | Run `/devteam:fix git-state` or resolve manually (`git status`, `git stash`, rebase) |
+| User aborts mid-workflow | Workflow state is in `.claude/user-data/session-summary.md` — resume by reading the last entry and continuing from the last completed phase |
