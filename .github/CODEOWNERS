@@ -1,0 +1,25 @@
+# CODEOWNERS — path-based ownership for dev-team-agents
+# GitHub auto-requests review from these owners when files are changed.
+# Syntax: <path-pattern> <owner>...
+
+# Core package files — maintainer review required
+agents/                   @Dev-Toolbelt/maintainers
+skills/shared/            @Dev-Toolbelt/maintainers
+commands/                 @Dev-Toolbelt/maintainers
+workflows/                @Dev-Toolbelt/maintainers
+scripts/                  @Dev-Toolbelt/maintainers
+CLAUDE.md                 @Dev-Toolbelt/maintainers
+CHANGELOG.md              @Dev-Toolbelt/maintainers
+
+# Domain-specific skills — open to domain leads
+skills/architecture/      @Dev-Toolbelt/maintainers
+skills/security/          @Dev-Toolbelt/maintainers
+skills/devops/            @Dev-Toolbelt/maintainers
+skills/database/          @Dev-Toolbelt/maintainers
+skills/testing/           @Dev-Toolbelt/maintainers
+
+# Auto-generated / low-risk — no required reviewer
+docs/reports/             # auto-generated; no required reviewer
+
+# Templates
+templates/                @Dev-Toolbelt/maintainers
