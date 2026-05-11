@@ -21,9 +21,7 @@ jobs:
         run: bash scripts/orphan-skill-scan.sh
 
       - name: Shellcheck scripts
-        run: |
-          sudo apt-get install -y shellcheck
-          find scripts -name '*.sh' -exec shellcheck {} +
+        run: find scripts -name '*.sh' -exec shellcheck {} +
 
       - name: README sync check
         run: |
