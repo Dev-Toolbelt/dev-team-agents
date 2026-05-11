@@ -140,6 +140,7 @@ done
 # Strip scripts that belong only in the source repo
 rm -f "$EXTRACTED_ROOT/scripts/install.sh"
 rm -f "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
+rm -f "$EXTRACTED_ROOT/scripts/agent-lint.sh"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
@@ -451,6 +452,7 @@ echo ""
 echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"
 echo ""
+if [ ! -f "$USER_DATA_DIR/graphify.json" ]; then
 echo "  ┌─────────────────────────────────────────────────────────────────────┐"
 echo "  │  Optional: Graphify (knowledge graph for this codebase)              │"
 echo "  │                                                                      │"
@@ -460,3 +462,4 @@ echo "  │                                                                     
 echo "  │  To enable it, tell Claude:                                          │"
 echo "  │    \"Set up Graphify for this project\"                               │"
 echo "  └─────────────────────────────────────────────────────────────────────┘"
+fi
