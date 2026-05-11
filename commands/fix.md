@@ -1,10 +1,4 @@
-Before acting, identify the current working context:
-- Run `git branch --show-current` — active branch
-- Run `git diff --name-only HEAD` — locally modified files
-- Run `git diff --name-only main...HEAD` — all changes in this branch vs main
-- Check `.claude/.worktree-session` if present — active worktree
-
-Restrict all analysis and fixes to files and changes within this context. Do NOT touch unrelated code unless $ARGUMENTS explicitly requests a broader scope.
+Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
 
 ---
 
