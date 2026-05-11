@@ -1,6 +1,6 @@
 ---
 name: mui
-description: Material UI — accessible React components with Material Design; official MCP available.
+description: Material UI — accessible React + Material Design; official MCP.
 ---
 
 ## Detection Signals

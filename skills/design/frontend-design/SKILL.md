@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality.
+description: Distinctive, production-grade frontend interfaces.
 license: Complete terms in LICENSE
 ---
 

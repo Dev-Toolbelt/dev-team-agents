@@ -1,6 +1,6 @@
 ---
 name: comments-policy
-description: Code commenting standards — no comments by default; type annotations and AAA markers.
+description: Code comments — none by default; type annotations and AAA markers.
 ---
 
 # Comments Policy

@@ -1,6 +1,6 @@
 ---
 name: rate-limiting
-description: Rate-limiting algorithms, granularity tiers, storage backends, headers, and failure modes.
+description: Rate limiting — algorithms, tiers, backends, headers, failure modes.
 ---
 
 # Rate Limiting

@@ -1,6 +1,6 @@
 ---
 name: sentry
-description: Sentry error tracking and APM — SDK setup, environments, source maps, self-hosted deploy.
+description: Sentry — error tracking, APM, SDK setup, source maps.
 ---
 
 # Sentry — Error Tracking & Performance Monitoring

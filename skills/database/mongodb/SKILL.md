@@ -1,6 +1,6 @@
 ---
 name: mongodb
-description: MongoDB patterns: schema design, indexes, aggregation pipeline, sharding, and Atlas.
+description: MongoDB — schema design, indexes, aggregation, sharding, Atlas.
 ---
 
 # MongoDB Reference

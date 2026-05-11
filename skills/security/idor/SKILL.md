@@ -1,6 +1,6 @@
 ---
 name: idor
-description: IDOR (Insecure Direct Object Reference) — detection patterns, authorization enforcement, ID strategy, and test cases for every backend endpoint.
+description: IDOR — detection, authorization enforcement, ID strategy.
 ---
 
 # IDOR — Insecure Direct Object Reference

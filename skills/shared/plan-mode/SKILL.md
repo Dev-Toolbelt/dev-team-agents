@@ -1,6 +1,6 @@
 ---
 name: plan-mode
-description: Mandatory plan-before-execute — structured plan, user approval, replanning on rejection.
+description: Plan-before-execute — structured plan, approval, replanning.
 ---
 
 # Plan Mode — Mandatory Planning Protocol

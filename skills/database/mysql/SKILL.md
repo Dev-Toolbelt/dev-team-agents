@@ -1,6 +1,6 @@
 ---
 name: mysql
-description: MySQL/MariaDB patterns: InnoDB, indexing, replication, JSON type, and query tuning.
+description: MySQL/MariaDB — InnoDB, indexing, replication, JSON, query tuning.
 ---
 
 # MySQL Reference

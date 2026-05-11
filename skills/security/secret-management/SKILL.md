@@ -1,6 +1,6 @@
 ---
 name: secret-management
-description: Secret management patterns — environment variables, vaults, rotation, and preventing secrets in code or logs.
+description: Secret management — env vars, vaults, rotation, no secrets in code.
 ---
 
 ## Never-Do Table

@@ -1,6 +1,6 @@
 ---
 name: database-multitenancy
-description: Multi-tenancy DB — RLS, schema-per-tenant, database-per-tenant, and pgvector/RAG.
+description: Multi-tenancy DB — RLS, schema-per-tenant, database-per-tenant.
 ---
 
 ## Choosing a Multi-Tenancy Strategy

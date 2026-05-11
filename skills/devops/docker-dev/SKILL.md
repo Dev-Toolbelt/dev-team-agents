@@ -1,6 +1,6 @@
 ---
 name: docker-dev
-description: Docker development setup — docker-compose, local Dockerfiles, and container debugging.
+description: Docker dev — docker-compose, local Dockerfiles, container debugging.
 ---
 
 # Docker for Development Environments

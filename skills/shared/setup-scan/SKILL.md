@@ -1,6 +1,6 @@
 ---
 name: setup-scan
-description: Reference for setup-assistant scan — commands, discovery table, skill and MCP checks.
+description: Setup-assistant scan — commands, discovery table, skill/MCP checks.
 ---
 
 ## Step 1 — Scan Commands

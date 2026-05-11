@@ -1,6 +1,6 @@
 ---
 name: owasp-top-10
-description: OWASP Top 10 checklist — injection, broken auth, XSS, IDOR, security misconfiguration, and other top vulnerabilities.
+description: OWASP Top 10 — injection, broken auth, XSS, misconfig checklist.
 ---
 
 ## OWASP Top 10 (2021)

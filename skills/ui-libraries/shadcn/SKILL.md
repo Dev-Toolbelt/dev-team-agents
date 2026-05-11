@@ -1,6 +1,6 @@
 ---
 name: shadcn-ui
-description: shadcn/ui — Radix UI + Tailwind copy-paste components; MCP available for component install.
+description: shadcn/ui — Radix UI + Tailwind copy-paste; MCP for component install.
 ---
 
 ## Detection Signals

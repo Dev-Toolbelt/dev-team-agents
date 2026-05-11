@@ -1,6 +1,6 @@
 ---
 name: offline-first
-description: Offline-first frontend — local storage schema, sync queue, conflict resolution.
+description: Offline-first — local storage schema, sync queue, conflict resolution.
 ---
 
 ## Storage Structure

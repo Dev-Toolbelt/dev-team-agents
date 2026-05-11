@@ -1,6 +1,6 @@
 ---
 name: graphql
-description: GraphQL conventions — schema design, resolvers, N+1/DataLoader, pagination, subscriptions.
+description: GraphQL — schema, resolvers, N+1/DataLoader, pagination.
 ---
 
 ## Detection Signals

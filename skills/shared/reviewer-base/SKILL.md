@@ -1,6 +1,6 @@
 ---
 name: reviewer-base
-description: Shared Foundational Rule for all code reviewers — context loading, SonarQube detection, comments-policy, and conventional-commits loading.
+description: Code reviewer shared rules — context, SonarQube, commit style.
 ---
 
 ## Foundational Rule — Load Context First

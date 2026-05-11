@@ -1,6 +1,6 @@
 ---
 name: conventional-commits
-description: Conventional Commits 1.0.0 — types, scopes, breaking changes, and layered commits.
+description: Conventional Commits — types, scopes, breaking changes, layered.
 ---
 
 # Conventional Commits

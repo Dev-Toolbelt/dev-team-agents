@@ -1,6 +1,6 @@
 ---
 name: jwt
-description: JWT — structure, claims, signing algorithms, refresh strategy, and security pitfalls.
+description: JWT — structure, signing algorithms, refresh, security pitfalls.
 ---
 
 # JWT (JSON Web Token)

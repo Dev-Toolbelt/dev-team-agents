@@ -1,6 +1,6 @@
 ---
 name: notifier
-description: Format, types, conditions, and rotation rules for Dev Team Agents notifications — used by agents and hooks to emit informational, warning, and critical messages in the user's language.
+description: Dev Team Agents notifications — format, types, conditions, rotation.
 ---
 
 # Dev Team Agents Notifier

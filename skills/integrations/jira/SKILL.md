@@ -1,23 +1,33 @@
 ---
 name: jira
-description: Jira via Atlassian MCP — issue ops, JQL, branch naming for tracked tasks, PR-to-comment.
+description: Jira via Atlassian MCP — issue ops, JQL, branch naming, PR comment.
 ---
 
 # Jira
 
 ## MCP Detection
 
-Before any Jira operation, verify the Atlassian MCP is available using this two-step check:
+Before any Jira operation, verify the Atlassian MCP is available using this three-step check. **Do not show setup instructions until all three steps fail.**
 
-**Step 1 — Check for deferred tools.** Atlassian MCP tools may start in a deferred state in new sessions. Always run ToolSearch first:
+**Step 1 — Check `~/.claude.json` for existing configuration.** Before anything else, read the user-level Claude settings file:
+
+```bash
+cat ~/.claude.json
+```
+
+Look for an entry under `mcpServers` (or `projects[*].mcpServers`) with a key containing `atlassian` and a URL pointing to `mcp.atlassian.com`. If found, the MCP is already configured — do **not** show setup instructions. Instead, proceed to Step 2. If the MCP is configured but not loaded in the current session, tell the user:
+
+> "The Atlassian MCP is already configured in `~/.claude.json`. It may not have been loaded in this session — please restart Claude Code and try again."
+
+**Step 2 — Check for deferred tools.** Atlassian MCP tools may start in a deferred state in new sessions. Always run ToolSearch:
 
 ```
 ToolSearch: query="atlassian", max_results=5
 ```
 
-If ToolSearch returns Atlassian tools (e.g., `mcp__atlassian__atlassianUserInfo`), the MCP is installed — load the schema and proceed to Step 2. Do **not** show setup instructions just because the tool wasn't immediately callable.
+If ToolSearch returns Atlassian tools (e.g., `mcp__atlassian__atlassianUserInfo`), the MCP is installed — load the schema and proceed to Step 3. Do **not** show setup instructions just because the tool wasn't immediately callable.
 
-**Step 2 — Verify connectivity.** After loading the schema, attempt a lightweight call:
+**Step 3 — Verify connectivity.** After loading the schema, attempt a lightweight call:
 
 ```
 mcp__atlassian__atlassianUserInfo
@@ -25,7 +35,7 @@ mcp__atlassian__atlassianUserInfo
 
 If this call succeeds, the MCP is fully operational. If it returns a connection or authentication error (not a "tool not found" error), stop and guide the user through re-authentication (see **MCP Setup** below).
 
-Only show setup instructions when **both** steps fail — i.e., ToolSearch returns no Atlassian tools AND the direct call fails.
+Only show setup instructions when **all three steps fail** — i.e., no `atlassian` entry in `~/.claude.json`, ToolSearch returns no Atlassian tools, AND the direct call fails.
 
 All MCP calls rely on the credentials registered via `claude mcp add --scope local`. These are stored in the user's local Claude Code settings (typically `~/.claude.json`) and are resolved automatically — never hardcode tokens, override headers, or attempt direct HTTP calls to the Atlassian API. If authentication fails, direct the user to re-run the setup command with a valid token rather than working around it.
 

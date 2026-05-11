@@ -1,6 +1,6 @@
 ---
 name: contract-testing
-description: Consumer-driven contract testing — Pact, API contract verification, schema validation, and preventing breaking changes.
+description: Contract testing — Pact, schema validation, breaking change prevention.
 ---
 
 ## What It Solves

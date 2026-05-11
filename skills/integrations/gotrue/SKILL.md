@@ -1,6 +1,6 @@
 ---
 name: gotrue
-description: GoTrue auth — user management, JWT, refresh tokens, custom claims, and admin API.
+description: GoTrue auth — user management, JWT, refresh tokens, custom claims.
 ---
 
 # GoTrue

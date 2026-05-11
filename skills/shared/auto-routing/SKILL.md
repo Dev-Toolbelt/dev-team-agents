@@ -1,6 +1,6 @@
 ---
 name: auto-routing
-description: CLAUDE.md dev-team-agents section template — opt-out rules and auto-routing triggers.
+description: CLAUDE.md devteam section — opt-out rules and auto-routing triggers.
 ---
 
 ## CLAUDE.md Template — `## dev-team-agents` Section

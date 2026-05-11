@@ -1,6 +1,6 @@
 ---
 name: vercel
-description: Vercel deployment — env vars, edge functions, caching, preview deploys, monorepo support.
+description: Vercel — env vars, edge functions, caching, preview, monorepo.
 ---
 
 ## Project Configuration (`vercel.json`)

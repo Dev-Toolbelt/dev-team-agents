@@ -1,6 +1,6 @@
 ---
 name: backlog-template
-description: Backlog structure — epics, sprints, tasks, Definition of Done, dependencies, estimates.
+description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 ---
 
 # Backlog Template

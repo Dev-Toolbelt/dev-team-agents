@@ -1,6 +1,6 @@
 ---
 name: token-efficiency
-description: Token optimization — efficient reads, bash over file ops, model selection (Opus/Sonnet).
+description: Token optimization — efficient reads, bash ops, model selection.
 ---
 
 # Token Efficiency

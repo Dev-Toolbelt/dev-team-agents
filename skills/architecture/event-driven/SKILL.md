@@ -1,6 +1,6 @@
 ---
 name: event-driven
-description: Patterns for event-driven systems: event sourcing, CQRS, saga, idempotency, schema registry.
+description: Event-driven — sourcing, CQRS, saga, idempotency, schema registry.
 ---
 
 # Event-Driven Architecture

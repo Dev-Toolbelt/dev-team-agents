@@ -1,6 +1,6 @@
 ---
 name: feature-flags
-description: Feature flag patterns — flag types, targeting rules, gradual rollout, LaunchDarkly/Unleash integration, and cleanup lifecycle.
+description: Feature flags — types, targeting rules, rollout, lifecycle.
 ---
 
 ## Flag Types

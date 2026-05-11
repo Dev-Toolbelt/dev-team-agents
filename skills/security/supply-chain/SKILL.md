@@ -1,6 +1,6 @@
 ---
 name: supply-chain
-description: Supply chain attack prevention — dependency auditing, CI/CD action pinning, lock file verification, typosquatting detection, and private registry hardening.
+description: Supply chain security — dependency audit, CI pinning, typosquatting.
 ---
 
 # Supply Chain Attack Prevention

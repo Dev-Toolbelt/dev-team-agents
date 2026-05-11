@@ -1,6 +1,6 @@
 ---
 name: cicd-jenkins
-description: Jenkins CI/CD — declarative Jenkinsfile patterns for build, test, and deploy workflows.
+description: Jenkins — declarative Jenkinsfile for build, test, and deploy.
 ---
 
 # Jenkins Pipelines

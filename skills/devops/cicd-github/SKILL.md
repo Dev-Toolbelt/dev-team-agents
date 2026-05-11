@@ -1,6 +1,6 @@
 ---
 name: cicd-github
-description: GitHub Actions — CI/CD patterns for build, test, lint, deploy, and release.
+description: GitHub Actions — build, test, lint, deploy, and release workflows.
 ---
 
 # GitHub Actions

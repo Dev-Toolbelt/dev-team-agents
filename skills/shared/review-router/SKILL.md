@@ -1,6 +1,6 @@
 ---
 name: review-router
-description: Routes PR review by diff classification — delegates to backend or frontend specialist.
+description: Routes PR review by diff — delegates to backend/frontend specialist.
 ---
 
 # Review Router

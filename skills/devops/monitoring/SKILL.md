@@ -1,6 +1,6 @@
 ---
 name: monitoring
-description: Observability stack — Prometheus/Grafana, CloudWatch, Datadog, metrics, logs, alerting.
+description: Observability stack — Prometheus/Grafana, Datadog, metrics, alerting.
 ---
 
 # Monitoring & Observability

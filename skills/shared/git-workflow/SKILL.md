@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Git branching strategy, commit conventions, PR workflow, merge strategy, and release tagging.
+description: Git — branching, commits, PR workflow, merge, release tagging.
 ---
 
 ## Detect First

@@ -1,6 +1,6 @@
 ---
 name: cicd-bitbucket
-description: Bitbucket Pipelines — CI/CD patterns for build, test, and deploy workflows.
+description: Bitbucket Pipelines — build, test, and deploy workflows.
 ---
 
 # Bitbucket Pipelines

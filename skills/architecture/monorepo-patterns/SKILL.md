@@ -1,6 +1,6 @@
 ---
 name: monorepo-patterns
-description: Monorepo architecture patterns — workspace tooling, package boundaries, shared dependencies, CI optimization, and inter-package versioning.
+description: Monorepo — workspace tooling, package boundaries, CI optimization.
 ---
 
 ## Tooling Options

@@ -1,6 +1,6 @@
 ---
 name: component-patterns
-description: Component architecture — container/presentational patterns for React, Vue, Angular, Svelte.
+description: Component patterns — container/presentational for React/Vue/Angular.
 ---
 
 # Component Patterns

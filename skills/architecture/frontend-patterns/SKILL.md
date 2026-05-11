@@ -1,6 +1,6 @@
 ---
 name: frontend-patterns
-description: Frontend interaction patterns — debounce, double-submission prevention, and error boundaries with framework-specific implementation guidance.
+description: Frontend patterns — debounce, double-submit prevention, error boundaries.
 ---
 
 ## Interaction Patterns

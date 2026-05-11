@@ -1,6 +1,6 @@
 ---
 name: accessibility-patterns
-description: Accessibility patterns for WCAG compliance. Load only when explicitly required.
+description: WCAG accessibility — load only when explicitly required.
 ---
 
 # Accessibility Patterns

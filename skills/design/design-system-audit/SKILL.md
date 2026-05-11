@@ -1,6 +1,6 @@
 ---
 name: design-system-audit
-description: Design system audit — visual pattern discovery, consistency gaps; Design/Consultive modes.
+description: Design system audit — visual patterns, consistency; Design/Consultive.
 ---
 
 # Design System Audit

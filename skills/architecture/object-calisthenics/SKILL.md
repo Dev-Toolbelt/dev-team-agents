@@ -1,6 +1,6 @@
 ---
 name: object-calisthenics
-description: Object Calisthenics — 9 rules for encapsulation, cohesion, and OOP simplicity.
+description: Object Calisthenics — 9 rules for encapsulation and OOP simplicity.
 ---
 
 # Object Calisthenics

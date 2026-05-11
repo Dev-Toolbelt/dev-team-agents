@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Architecture Decision Records — MADR format for documenting significant tech decisions.
+description: Architecture Decision Records — MADR format.
 ---
 
 # Architecture Decision Records (ADR)

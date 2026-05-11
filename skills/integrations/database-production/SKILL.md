@@ -1,6 +1,6 @@
 ---
 name: database-production
-description: Production DB ops — zero-downtime migrations, pooling, replication, backup, retention.
+description: Production DB — zero-downtime migrations, pooling, backup, retention.
 ---
 
 ## Zero-Downtime Migrations

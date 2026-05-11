@@ -1,6 +1,6 @@
 ---
 name: supabase
-description: Supabase (Self-Hosted/Cloud) — Postgres, Auth, Storage, Edge Functions, RLS, CLI.
+description: Supabase — Postgres, Auth, Storage, Edge Functions, RLS, CLI.
 ---
 
 # Supabase

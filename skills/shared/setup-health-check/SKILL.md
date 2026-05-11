@@ -1,6 +1,6 @@
 ---
 name: setup-health-check
-description: Health check categories, bash commands, expected values, auto-fix actions, and output format for the setup-assistant health check role.
+description: Setup health check — categories, commands, auto-fix actions.
 ---
 
 ### Category 1 — Symlinks

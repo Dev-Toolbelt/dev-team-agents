@@ -1,6 +1,6 @@
 ---
 name: cloudflare
-description: Cloudflare — DNS, Workers, Pages, Tunnels, Zero Trust, WAF, R2, KV, Cache Rules.
+description: Cloudflare — DNS, Workers, Pages, Tunnels, WAF, R2, KV.
 ---
 
 # Cloudflare

@@ -1,6 +1,6 @@
 ---
 name: cicd-gitlab
-description: GitLab CI/CD — .gitlab-ci.yml patterns for build, test, lint, and deploy.
+description: GitLab CI — .gitlab-ci.yml for build, test, lint, and deploy.
 ---
 
 # GitLab CI/CD

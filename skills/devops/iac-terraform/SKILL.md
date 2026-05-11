@@ -1,6 +1,6 @@
 ---
 name: iac-terraform
-description: Terraform/OpenTofu IaC — structure, remote state, modules, CI/CD, drift detection.
+description: Terraform/OpenTofu — remote state, modules, CI/CD, drift detection.
 ---
 
 # Infrastructure as Code — Terraform / OpenTofu

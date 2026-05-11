@@ -1,6 +1,6 @@
 ---
 name: observability-slo
-description: Observability and SLO/SLI — defining service level objectives, error budgets, alerting, and the four golden signals.
+description: SLO/SLI — error budgets, alerting, four golden signals.
 ---
 
 ## Four Golden Signals

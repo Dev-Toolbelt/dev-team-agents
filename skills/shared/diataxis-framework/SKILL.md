@@ -1,6 +1,6 @@
 ---
 name: diataxis-framework
-description: Diataxis documentation framework: tutorials, how-to guides, reference, and explanation — when to use each type.
+description: Diataxis — tutorials, how-to, reference, explanation types.
 ---
 
 # Diataxis Documentation Framework

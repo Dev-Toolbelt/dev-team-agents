@@ -1,6 +1,6 @@
 ---
 name: sqlserver
-description: SQL Server patterns: T-SQL, indexes, Always On AG, CDC, columnstore, and CLI connection.
+description: SQL Server — T-SQL, indexes, Always On AG, CDC, columnstore.
 ---
 
 # SQL Server Reference

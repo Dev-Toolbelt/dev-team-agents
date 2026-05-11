@@ -1,6 +1,6 @@
 ---
 name: cassandra
-description: Cassandra patterns: partition key design, CQL, consistency levels, compaction, and CLI connection.
+description: Cassandra — partition keys, CQL, consistency levels, CLI.
 ---
 
 # Cassandra Reference

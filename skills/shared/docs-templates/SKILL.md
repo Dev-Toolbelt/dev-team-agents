@@ -1,6 +1,6 @@
 ---
 name: docs-templates
-description: Templates for .claude/docs/ — project, tech-stack, architecture, and code-standards.
+description: Templates for .claude/docs/ — project, tech, architecture, standards.
 ---
 
 ## Source Synthesis Rule

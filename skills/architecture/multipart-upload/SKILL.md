@@ -1,6 +1,6 @@
 ---
 name: multipart-upload
-description: Multipart/chunked file upload — pre-signed URLs, chunk management, progress tracking, retry logic, and storage config for backend, frontend, and devops.
+description: Chunked file upload — pre-signed URLs, chunk management, retry.
 ---
 
 # Multipart Upload

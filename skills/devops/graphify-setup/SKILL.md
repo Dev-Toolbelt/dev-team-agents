@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: Graphify install — autonomous setup: graphify.json, Stop hook, .gitignore, CLAUDE.md.
+description: Graphify — autonomous setup: graphify.json, Stop hook, CLAUDE.md.
 ---
 
 ## Purpose

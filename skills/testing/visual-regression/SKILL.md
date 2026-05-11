@@ -1,6 +1,6 @@
 ---
 name: visual-regression
-description: Visual regression testing — screenshot diffing, Playwright/Chromatic, baseline management, and CI integration.
+description: Visual regression — screenshot diffing, Playwright/Chromatic, CI.
 ---
 
 ## Tools

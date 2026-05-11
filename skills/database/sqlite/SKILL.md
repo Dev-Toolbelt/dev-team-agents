@@ -1,6 +1,6 @@
 ---
 name: sqlite
-description: SQLite patterns: WAL mode, connection modes, JSON1, FTS5, indexes, and CLI connection.
+description: SQLite — WAL mode, JSON1, FTS5, indexes, CLI.
 ---
 
 # SQLite Reference

@@ -1,6 +1,6 @@
 ---
 name: azure
-description: Azure deployment — Container Apps, AKS, ACR, Azure SQL, Cosmos DB, managed identity.
+description: Azure — Container Apps, AKS, ACR, Azure SQL, Cosmos DB, managed identity.
 ---
 
 # Azure Deployment

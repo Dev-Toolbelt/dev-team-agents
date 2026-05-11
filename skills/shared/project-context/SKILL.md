@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: Foundational agent rule — project context, coexistence, Plan Mode, language policy.
+description: Foundational rule — context, coexistence, Plan Mode, language.
 ---
 
 # Project Context Loading — Coexistence & Override Rule

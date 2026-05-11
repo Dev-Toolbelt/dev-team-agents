@@ -1,6 +1,6 @@
 ---
 name: docs-sync
-description: Maintains .claude/docs/ — surgical patches, token-economy rules, no duplicate content.
+description: Maintains .claude/docs/ — surgical patches, no duplicate content.
 ---
 
 # Docs Sync

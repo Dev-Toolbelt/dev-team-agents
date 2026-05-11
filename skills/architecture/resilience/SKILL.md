@@ -1,6 +1,6 @@
 ---
 name: resilience
-description: Resilience patterns — circuit breaker, retry with backoff, bulkhead, timeout, fallback, rate limiting, and health checks.
+description: Resilience — circuit breaker, retry, bulkhead, health checks.
 ---
 
 ## Patterns Reference

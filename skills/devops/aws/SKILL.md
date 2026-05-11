@@ -1,6 +1,6 @@
 ---
 name: aws
-description: AWS deployment — ECS, EC2, RDS, S3, CloudFront, ALB, and IAM best practices.
+description: AWS — ECS, EC2, RDS, S3, CloudFront, ALB, IAM best practices.
 ---
 
 # AWS Deployment

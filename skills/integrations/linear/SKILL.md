@@ -1,6 +1,6 @@
 ---
 name: linear
-description: Linear issue tracker integration — issue creation, status transitions, team/project context, and cycle management.
+description: Linear — issue ops, status transitions, cycle management.
 ---
 
 ## Detection

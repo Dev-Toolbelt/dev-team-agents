@@ -1,6 +1,6 @@
 ---
 name: user-preferences
-description: User preferences schema and how agents read and apply conversation language and system settings from .claude/user-data/preferences.json.
+description: User preferences — language and settings from preferences.json.
 ---
 
 # User Preferences

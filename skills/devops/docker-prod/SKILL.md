@@ -1,6 +1,6 @@
 ---
 name: docker-prod
-description: Docker production best practices — Dockerfiles, image optimization, multi-stage builds.
+description: Docker prod — image optimization, multi-stage builds, best practices.
 ---
 
 # Docker for Production

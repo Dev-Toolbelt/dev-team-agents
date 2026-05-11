@@ -1,6 +1,6 @@
 ---
 name: antd
-description: Ant Design — enterprise React UI with forms, tables, date pickers, and official MCP.
+description: Ant Design — enterprise React UI with forms, tables; official MCP.
 ---
 
 ## Detection Signals

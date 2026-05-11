@@ -1,6 +1,6 @@
 ---
 name: mutation-testing
-description: Mutation testing — measuring test suite quality by injecting code mutations and verifying test failure rates.
+description: Mutation testing — code mutations to measure test suite quality.
 ---
 
 ## What It Measures

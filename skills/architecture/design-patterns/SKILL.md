@@ -1,6 +1,6 @@
 ---
 name: design-patterns
-description: Design patterns — KISS, YAGNI, DRY, SOLID, GoF, and domain-driven patterns reference.
+description: Design patterns — KISS, YAGNI, DRY, SOLID, GoF, DDD reference.
 ---
 
 # Design Patterns

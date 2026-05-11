@@ -1,6 +1,6 @@
 ---
 name: realtime
-description: Supabase Realtime and WebSocket — broadcast, presence, Postgres changes, event streaming.
+description: Supabase Realtime/WebSocket — broadcast, presence, Postgres changes.
 ---
 
 # Realtime (WebSocket)

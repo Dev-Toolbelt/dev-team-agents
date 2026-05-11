@@ -1,6 +1,6 @@
 ---
 name: vps-linux
-description: VPS Linux from scratch — Docker, reverse proxy, SSL, and security hardening.
+description: VPS Linux — Docker, reverse proxy, SSL, security hardening.
 ---
 
 # VPS Linux Setup — Docker-Based

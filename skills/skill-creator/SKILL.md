@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Creates and updates Claude Code skills following the agentskills.io specification.
+description: Creates and updates skills per agentskills.io spec.
 ---
 
 # Skill Creator — Project Extension

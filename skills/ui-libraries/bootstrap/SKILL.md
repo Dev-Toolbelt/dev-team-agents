@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Bootstrap — responsive grid and components for legacy, server-rendered, and WordPress apps.
+description: Bootstrap — responsive grid for legacy, server-rendered, WordPress.
 ---
 
 ## Detection Signals

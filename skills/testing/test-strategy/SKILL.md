@@ -1,6 +1,6 @@
 ---
 name: test-strategy
-description: Testing strategy — what, when, and how to test; coverage planning and approach decisions.
+description: Testing strategy — what, when, how; coverage planning.
 ---
 
 # Test Strategy

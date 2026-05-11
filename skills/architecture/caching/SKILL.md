@@ -1,6 +1,6 @@
 ---
 name: caching
-description: Caching strategies — in-memory, distributed, CDN, cache invalidation patterns, TTL policy, and cache warming.
+description: Caching — in-memory, distributed, CDN, invalidation, TTL.
 ---
 
 ## Cache Tiers

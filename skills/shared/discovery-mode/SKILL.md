@@ -1,6 +1,6 @@
 ---
 name: discovery-mode
-description: Rigorous discovery before implementation — HARD-GATE, YAGNI, incremental validation.
+description: Discovery before implementation — HARD-GATE, YAGNI, incremental.
 ---
 
 # Discovery Mode Patterns

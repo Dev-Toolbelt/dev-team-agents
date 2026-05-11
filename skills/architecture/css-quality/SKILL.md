@@ -1,6 +1,6 @@
 ---
 name: css-quality
-description: CSS quality rules — specificity, magic numbers, responsive patterns. Framework-agnostic.
+description: CSS quality — specificity, magic numbers, responsive. Agnostic.
 ---
 
 # CSS Quality

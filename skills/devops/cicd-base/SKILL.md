@@ -1,6 +1,6 @@
 ---
 name: cicd-base
-description: Shared CI/CD pipeline structure — standard stages, quality gates, secret management, artifact strategy, and rollback patterns used across all platform-specific CI skills.
+description: Shared CI/CD — stages, quality gates, secret management, rollback.
 ---
 
 ## Standard Pipeline Stages

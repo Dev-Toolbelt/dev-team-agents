@@ -1,6 +1,6 @@
 ---
 name: api-versioning
-description: API versioning strategies, backwards-compatibility rules, deprecation lifecycle, and mobile client considerations.
+description: API versioning — compatibility rules and deprecation lifecycle.
 ---
 
 # API Versioning

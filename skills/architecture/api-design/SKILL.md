@@ -1,6 +1,6 @@
 ---
 name: api-design
-description: REST API and GraphQL design conventions — resource naming, HTTP methods, status codes, response envelope, pagination, versioning, and idempotency.
+description: REST/GraphQL design — naming, status codes, pagination, idempotency.
 ---
 
 # API Design

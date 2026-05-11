@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Pull Request review — correctness, security, tests, performance, docs, and style.
+description: PR review — correctness, security, tests, performance, style.
 ---
 
 # Pull Request Review

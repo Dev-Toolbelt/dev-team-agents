@@ -1,6 +1,6 @@
 ---
 name: iso27001-sgsi
-description: ISO 27001, SGSI (Information Security Management System), and CIA Triad — controls, risk assessment, and software-level requirements for information security.
+description: ISO 27001/SGSI — CIA triad, controls, risk assessment.
 ---
 
 # ISO 27001 / SGSI / CIA Triad

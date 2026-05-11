@@ -1,6 +1,6 @@
 ---
 name: kong
-description: Kong API Gateway — routes, services, plugins, Admin API. Standalone and Supabase-embedded.
+description: Kong API Gateway — routes, services, plugins, Admin API.
 ---
 
 # Kong API Gateway

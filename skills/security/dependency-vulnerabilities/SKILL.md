@@ -1,6 +1,6 @@
 ---
 name: dependency-vulnerabilities
-description: Dependency vulnerability management — scanning tools, CVE triage, update strategy, and supply chain security.
+description: Dependency vulnerabilities — scanning, CVE triage, update strategy.
 ---
 
 ## Scanning Tools by Ecosystem

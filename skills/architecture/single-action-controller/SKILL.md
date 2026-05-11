@@ -1,6 +1,6 @@
 ---
 name: single-action-controller
-description: Mandatory Single Action Controller pattern — one controller class per HTTP action. Enforced for all backend controllers. Covers naming, structure, DI, routing, and review criteria.
+description: One controller per HTTP action — naming, structure, DI, routing.
 ---
 
 # Single Action Controller Pattern

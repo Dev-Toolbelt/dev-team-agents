@@ -1,6 +1,6 @@
 ---
 name: gcp
-description: GCP deployment — Cloud Run, GKE, Artifact Registry, Cloud SQL, Cloud Storage, IAM.
+description: GCP — Cloud Run, GKE, Artifact Registry, Cloud SQL, Storage, IAM.
 ---
 
 # Google Cloud Platform Deployment

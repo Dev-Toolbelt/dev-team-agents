@@ -1,6 +1,6 @@
 ---
 name: migration-zero-downtime
-description: Zero-downtime database migration patterns — expand/contract, additive changes only, multi-phase deploys, and rollback strategies.
+description: Zero-downtime migrations — expand/contract and rollback.
 ---
 
 ## Core Rule

@@ -1,6 +1,6 @@
 ---
 name: jquery
-description: jQuery — for legacy, server-rendered, WordPress, and pre-framework codebases.
+description: jQuery — legacy, server-rendered, WordPress, pre-framework codebases.
 ---
 
 ## Detection Signals

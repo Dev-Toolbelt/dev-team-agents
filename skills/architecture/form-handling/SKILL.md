@@ -1,6 +1,6 @@
 ---
 name: form-handling
-description: Form design and validation — state, error feedback, library selection. Framework-agnostic.
+description: Form design — state, validation, error feedback. Framework-agnostic.
 ---
 
 # Form Handling

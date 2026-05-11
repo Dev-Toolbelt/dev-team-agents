@@ -1,6 +1,6 @@
 ---
 name: test-pyramid
-description: Test pyramid — unit, integration, and E2E patterns with tooling and pitfall guidance.
+description: Test pyramid — unit, integration, E2E patterns and pitfall guidance.
 ---
 
 # Test Pyramid — Implementation Patterns

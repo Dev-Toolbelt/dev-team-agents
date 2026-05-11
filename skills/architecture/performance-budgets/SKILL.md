@@ -1,6 +1,6 @@
 ---
 name: performance-budgets
-description: Core Web Vitals targets, bundle size budgets, Lighthouse CI gates, and image optimization rules.
+description: Core Web Vitals, bundle budgets, Lighthouse CI, image optimization.
 ---
 
 # Performance Budgets

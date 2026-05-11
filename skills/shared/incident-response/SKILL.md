@@ -1,6 +1,6 @@
 ---
 name: incident-response
-description: Incident response runbook — severity classification, communication, investigation, mitigation, and post-mortem process.
+description: Incident response — severity, communication, mitigation, post-mortem.
 ---
 
 ## Severity Levels

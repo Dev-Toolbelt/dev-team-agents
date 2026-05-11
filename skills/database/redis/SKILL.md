@@ -1,6 +1,6 @@
 ---
 name: redis
-description: Redis patterns: data structures, keyspace design, persistence, clustering, pub/sub, and CLI connection.
+description: Redis — data structures, keyspace, persistence, clustering, pub/sub.
 ---
 
 # Redis Reference

@@ -1,6 +1,6 @@
 ---
 name: sast-pipeline
-description: Static Application Security Testing — tool selection by language, CI integration, severity thresholds, and false positive management.
+description: SAST — tool selection, CI integration, severity thresholds.
 ---
 
 ## SAST Tools by Language

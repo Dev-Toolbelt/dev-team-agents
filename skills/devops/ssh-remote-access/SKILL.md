@@ -1,6 +1,6 @@
 ---
 name: ssh-remote-access
-description: Step-by-step protocol for setting up SSH access from Claude Code to a remote server — key generation, authorized_keys, config entry, connection test, and project documentation.
+description: SSH remote access — key gen, authorized_keys, config, test.
 ---
 
 When the user describes a problem or task happening on a **remote server** (keywords: "the server is doing", "in production", "on the VPS", "the remote machine", "my server", "server logs", "server crash"), proactively offer help:

@@ -1,6 +1,6 @@
 ---
 name: state-management
-description: Frontend state management — where state lives, library selection, architecture review.
+description: Frontend state — where it lives, library selection, architecture.
 ---
 
 # State Management

@@ -1,6 +1,6 @@
 ---
 name: i18n
-description: Internationalization and localization patterns — locale detection, translation file structure, pluralization, date/number formatting, RTL support.
+description: i18n/l10n — locale detection, translations, pluralization, RTL.
 ---
 
 ## Locale Detection Order

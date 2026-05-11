@@ -1,6 +1,6 @@
 ---
 name: naming-conventions
-description: Naming and file structure conventions — framework-agnostic with per-framework notes.
+description: Naming and file structure — framework-agnostic with per-framework notes.
 ---
 
 # Naming Conventions

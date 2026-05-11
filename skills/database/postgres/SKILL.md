@@ -1,6 +1,6 @@
 ---
 name: postgres
-description: PostgreSQL-specific patterns: MVCC, index types, partitioning, JSONB, CTEs, and query tuning.
+description: PostgreSQL — MVCC, indexes, partitioning, JSONB, query tuning.
 ---
 
 # PostgreSQL Reference

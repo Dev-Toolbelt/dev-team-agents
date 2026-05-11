@@ -1,6 +1,6 @@
 ---
 name: database-debug
-description: DB debug — slow queries, index inspection, lock detection. PostgreSQL, MySQL, Redis, MongoDB.
+description: DB debug — slow queries, index inspection, lock detection.
 ---
 
 # Database Debug Toolkit

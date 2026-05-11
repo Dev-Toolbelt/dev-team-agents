@@ -1,6 +1,6 @@
 ---
 name: reviewer-mindset
-description: Shared reviewer mindset — production-survival bias, critical review questions for all code reviewers.
+description: Reviewer mindset — production-survival bias and critical questions.
 ---
 
 ## Reviewer Mindset

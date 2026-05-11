@@ -1,6 +1,6 @@
 ---
 name: current-context
-description: Detect the current git branch, worktree session, and staged changes before executing any devteam command.
+description: Detect branch, worktree session, and staged changes for devteam.
 ---
 
 # Current Context Detection

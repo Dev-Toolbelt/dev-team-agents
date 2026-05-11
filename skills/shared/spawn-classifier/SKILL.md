@@ -1,6 +1,6 @@
 ---
 name: spawn-classifier
-description: Conditional agent spawn rules — path patterns and text triggers that determine which agents to invoke for a given task.
+description: Conditional agent spawn — path patterns and text triggers.
 ---
 
 ## File-Path Triggers

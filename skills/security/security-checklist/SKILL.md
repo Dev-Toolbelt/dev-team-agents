@@ -1,6 +1,6 @@
 ---
 name: security-checklist
-description: Security review checklist — OWASP Top 10, LGPD/GDPR, API security, infrastructure.
+description: Security review — OWASP Top 10, LGPD/GDPR, API, infrastructure.
 ---
 
 # Security Checklist

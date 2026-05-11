@@ -1,6 +1,6 @@
 ---
 name: async-jobs
-description: Async job and queue patterns — idempotency, retry strategy, DLQ, and observability.
+description: Async jobs — idempotency, retry strategy, DLQ, observability.
 ---
 
 ## Detection Signals

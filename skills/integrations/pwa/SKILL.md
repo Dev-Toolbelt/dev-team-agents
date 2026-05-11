@@ -1,6 +1,6 @@
 ---
 name: pwa
-description: Progressive Web App — manifest fields, service worker caching strategies, update lifecycle.
+description: PWA — manifest, service worker caching strategies, update lifecycle.
 ---
 
 ## Manifest (`manifest.json` / `manifest.webmanifest`)

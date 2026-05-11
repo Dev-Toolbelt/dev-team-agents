@@ -1,6 +1,6 @@
 ---
 name: chakra-ui
-description: Chakra UI — accessible React components. Critical: v2 and v3 APIs are incompatible.
+description: Chakra UI — accessible React components. v2/v3 APIs incompatible.
 ---
 
 ## Detection Signals

@@ -1,6 +1,6 @@
 ---
 name: db-comparison
-description: Database coverage reference — strengths, watch-outs, and use-case mapping across relational, document, key-value, column-family, vector, and managed cloud databases.
+description: Database selection — strengths and use-case mapping by type.
 ---
 
 ### Relational

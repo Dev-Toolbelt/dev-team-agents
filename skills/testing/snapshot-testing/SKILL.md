@@ -1,6 +1,6 @@
 ---
 name: snapshot-testing
-description: Snapshot testing — when to use, maintaining snapshots, avoiding snapshot sprawl, and integration with CI.
+description: Snapshot testing — when to use, maintenance, CI integration.
 ---
 
 ## When to Use

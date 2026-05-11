@@ -1,6 +1,6 @@
 ---
 name: sonarqube
-description: SonarQube/SonarCloud — static analysis, quality gates, SAST, CI/CD integration.
+description: SonarQube/SonarCloud — quality gates, SAST, CI/CD integration.
 ---
 
 # SonarQube / SonarCloud
