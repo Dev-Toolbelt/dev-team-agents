@@ -65,6 +65,28 @@ For each group, write a commit message following the detected pattern (Step 1).
 
 ---
 
+## Step 4.5 — Pre-commit gate
+
+Before executing any commit, run quick validations on the staged files:
+
+| Project signal | Command |
+|----------------|---------|
+| `package.json` with `lint` script | `npm run lint --silent` |
+| `.eslintrc*` or `eslint.config.*` present | `npx eslint <staged-js-ts-files>` |
+| `.prettierrc*` or `prettier` in devDependencies | `npx prettier --check <staged-files>` |
+| `phpcs.xml` or `phpcs.xml.dist` present | `vendor/bin/phpcs <staged-php-files>` |
+| `pyproject.toml` with `ruff` | `ruff check <staged-py-files>` |
+| `Makefile` with `lint` target | `make lint` |
+
+If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthook `lefthook.yml`, `.pre-commit-config.yaml`), skip this step and let `git commit` trigger the hook naturally.
+
+If any validation returns non-zero:
+- Show the output to the user
+- Ask: (a) fix and re-stage, (b) commit anyway, (c) abort
+- Do NOT auto-fix without explicit user consent
+
+---
+
 ## Step 5 — Execute commits
 
 Present the proposed commit plan to the user:

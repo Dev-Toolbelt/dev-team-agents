@@ -1,11 +1,20 @@
-Identify the current working context by running:
-- `git branch --show-current` — active branch
-- `git log main...HEAD --oneline` — commits introduced in this branch
-- `git diff --name-only main...HEAD` — files changed vs main
-- `git diff main...HEAD --stat` — change summary
-- Check `.claude/.worktree-session` if present — active worktree
+Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
 
-Use only this context to write the PR. Do NOT include changes from other branches or unrelated files.
+---
+
+## Step 0 — Detect PR template
+
+Before drafting the PR body:
+
+1. Check if `.github/PULL_REQUEST_TEMPLATE.md` exists
+2. If it exists:
+   - Read it
+   - Use it as the scaffold for the PR body
+   - Fill each section with content derived from `git diff main...HEAD` and recent commits
+   - Preserve the template structure exactly (checklist items, headers, HTML comments)
+   - Auto-check checklist items that are verifiably true (e.g., "✅ Updated docs" if diff touches `docs/`)
+3. If it does not exist:
+   - Use the default structure (current behavior): Summary, Test plan, and checklist
 
 ---
 
