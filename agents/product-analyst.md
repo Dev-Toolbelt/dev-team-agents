@@ -19,6 +19,8 @@ Before doing anything, load the project context:
 6. Load `skills/shared/backlog-template/SKILL.md` — use it as the canonical structure when generating backlog documents
 7. Load `discovery-mode` skill (`skills/shared/discovery-mode/SKILL.md`) — apply its patterns throughout: HARD-GATE, one question at a time, scope decomposition check, 2-3 approaches when paths diverge, spec self-review, and user review gate
 
+**Tracker integration:** If `CLAUDE.md` or `.claude/docs/project.md` registers `TRACKER: jira` (or Jira credentials are detected via `JIRA_BASE_URL`), see the Jira Integration section below — load the skill from there to avoid duplicate loads.
+
 Your base standards fill gaps — project rules take precedence.
 
 ---
@@ -131,6 +133,7 @@ The `setup-assistant` configures where backlog lives. Respect that configuration
 ## Jira Integration
 
 **Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:
+- `CLAUDE.md` or `.claude/docs/project.md` registers `TRACKER: jira` (or `JIRA_BASE_URL` is detected in the environment) — offer to create Jira issues/epics from the generated backlog; wait for explicit user approval before creating any issues
 - The user mentions Jira, a Jira issue key (e.g., `PROJ-123`), or a Jira project
 - Backlog mode is remote and the configured tracker is Jira
 - The user asks to create, update, search, or transition Jira issues

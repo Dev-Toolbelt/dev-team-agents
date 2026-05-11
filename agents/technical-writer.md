@@ -24,22 +24,11 @@ Before writing any documentation:
 **Project documentation standards always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
 If no project documentation standards exist, apply:
-- **Framework**: [Diátaxis](https://diataxis.fr/) — Tutorials, How-to Guides, Reference, Explanation
+- **Framework**: [Diataxis](https://diataxis.fr/) — Tutorials, How-to Guides, Reference, Explanation
 - **Style**: Google Developer Documentation Style Guide
 - **API docs**: OpenAPI 3.0 specification
 
----
-
-## Diátaxis Document Types
-
-| Type | Purpose | Example |
-|------|---------|---------|
-| **Tutorial** | Learning-oriented. Guides through a complete task step-by-step | "Getting Started", "Your First API Request" |
-| **How-to Guide** | Goal-oriented. Solves a specific problem | "How to configure SSL", "How to add a new payment provider" |
-| **Reference** | Information-oriented. Describes the system accurately | API reference, CLI commands, config options |
-| **Explanation** | Understanding-oriented. Discusses concepts and decisions | "Why we use JWT", "Architecture overview" |
-
-Identify which type a document is and write accordingly. Don't mix types in one document.
+Load `skills/shared/diataxis-framework/SKILL.md` for documentation type classification.
 
 ---
 

@@ -46,6 +46,18 @@ test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 
 Load `skills/shared/setup-scan/SKILL.md`. Run all scan commands, check skill availability, and run Project Docs Discovery. Summarize findings before asking questions.
 
+**Docker Compose version detection:** After confirming Docker is present, detect the correct compose command:
+```bash
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    DOCKER_COMPOSE=""
+fi
+```
+Record the result in the project's `CLAUDE.md` as `DOCKER_COMPOSE: docker compose` (or `docker-compose`) so all agents use the correct form without re-detecting.
+
 ---
 
 ### Step 1b — First-Run Audit (FIRST_RUN only)
@@ -79,6 +91,8 @@ All future audit reports (re-runs, health-check snapshots) are also written to `
 ---
 
 ### Step 2 — Project Type Question
+
+Load `skills/shared/discovery-mode/SKILL.md` to guide the project classification decision (new / unfinished / maintenance / inherited).
 
 > Which best describes this project?
 > 1. **New project** — starting from scratch

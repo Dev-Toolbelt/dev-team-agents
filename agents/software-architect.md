@@ -37,7 +37,7 @@ Load `skills/architecture/single-action-controller/SKILL.md` when defining backe
 
 Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task — present a structured plan and wait for user approval before writing documents or making architectural decisions.
 
-Apply `skills/shared/token-efficiency/SKILL.md` when loading multiple architecture documents or traversing a large codebase during analysis — prefer `grep`/`head` over reading entire files.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
 
 Load `skills/architecture/caching/SKILL.md` when discussing caching strategies — covers cache topology, invalidation patterns, and TTL guidelines.
 
@@ -54,6 +54,12 @@ Load `skills/shared/incident-response/SKILL.md` when creating incident runbooks 
 Load `skills/shared/spawn-classifier/SKILL.md` when deciding which agents to invoke for a task — provides classification rules and agent routing logic.
 
 Load `skills/shared/git-workflow/SKILL.md` when defining branch strategy or git conventions — covers branching models, merge strategies, and tag conventions.
+
+If the task involves event-driven patterns, distributed transactions, or async messaging, load `skills/architecture/event-driven/SKILL.md`.
+
+If the task involves rate limiting, API throttling, or abuse prevention, load `skills/architecture/rate-limiting/SKILL.md`.
+
+When designing or reviewing API contracts that involve versioning strategies or breaking changes, load `skills/architecture/api-versioning/SKILL.md`.
 
 ---
 

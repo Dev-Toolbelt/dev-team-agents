@@ -26,7 +26,7 @@ Before any action, load:
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
-Apply `skills/shared/token-efficiency/SKILL.md` when processing large Docker logs, CI/CD pipeline configs, or Terraform state files — prefer `head`/`grep` over reading entire files.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
 
 Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infrastructure file — present a plan and wait for user approval.
 
