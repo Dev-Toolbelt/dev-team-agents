@@ -110,6 +110,43 @@ CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 [ "$CURRENT" != "unknown" ] && [ "$LATEST" != "unknown" ] || exit 0
 [ "$CURRENT" != "$LATEST" ] || exit 0
 
+# Read preferences
+LANG_PREF="en"
+SUPPRESS="false"
+if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    LANG_PREF=$(python3 -c \
+        "import json; d=json.load(open('$PREFS_FILE')); print(d.get('language','en'))" \
+        2>/dev/null || echo "en")
+    SUPPRESS=$(python3 -c \
+        "import json,sys; d=json.load(open('$PREFS_FILE')); v=d.get('suppress_notifications',False); print('true' if v is True else ('false' if v is False else ','.join(v)))" \
+        2>/dev/null || echo "false")
+fi
+
+_is_suppressed() {
+    local TYPE="$1"
+    [ "$SUPPRESS" = "true" ] && return 0
+    case ",$SUPPRESS," in *,"$TYPE",*) return 0 ;; esac
+    return 1
+}
+
+_notify() {
+    local TYPE="$1"
+    local MSG="$2"
+    _is_suppressed "$TYPE" && return 0
+    local ICON
+    case "$TYPE" in
+        warning)  ICON="⚠️" ;;
+        critical) ICON="🚨" ;;
+        *)        ICON="ℹ️" ;;
+    esac
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " $ICON  DEV TEAM AGENTS  $ICON"
+    echo " $MSG"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
 # Auto-update mode: check preferences.json first, fall back to legacy flag file
 AUTO_UPDATE=false
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
@@ -127,23 +164,37 @@ if [ "$AUTO_UPDATE" = "true" ]; then
     trap 'rm -f "$TMP_INSTALLER"' EXIT
     HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
     bash "$TMP_INSTALLER" latest
-    echo ""
-    echo "┌──────────────────────────────────────────────────────────────┐"
-    echo "│  dev-team-agents updated to $LATEST                         │"
-    echo "│  Run a health check to verify the installation:             │"
-    echo "│    \"Run a health check on this project\"                     │"
-    echo "└──────────────────────────────────────────────────────────────┘"
-    echo ""
+    case "$LANG_PREF" in
+        pt-BR|pt*)
+            MSG="dev-team-agents atualizado para $LATEST. Execute um health check para verificar: \"Faça um health check neste projeto\"."
+            ;;
+        es*)
+            MSG="dev-team-agents actualizado a $LATEST. Ejecuta un health check para verificar: \"Haz un health check en este proyecto\"."
+            ;;
+        *)
+            MSG="dev-team-agents updated to $LATEST. Run a health check to verify: \"Run a health check on this project\"."
+            ;;
+    esac
+    _notify "info" "$MSG"
     exit 0
 fi
 
-# Notify only
-echo ""
-echo "┌──────────────────────────────────────────────────────────────┐"
-echo "│  dev-team-agents update available                            │"
-echo "│  Current: $CURRENT  →  Latest: $LATEST"
-echo "│  Run: .claude/dev-team-agents/scripts/update.sh             │"
-echo "│  See .claude/dev-team-agents/CHANGELOG.md for details.      │"
-echo "│  To auto-update: update.sh --enable-auto                    │"
-echo "└──────────────────────────────────────────────────────────────┘"
-echo ""
+# Notify only — update available
+case "$LANG_PREF" in
+    pt-BR|pt*)
+        MSG="Atualização disponível: $CURRENT → $LATEST
+ Execute: .claude/dev-team-agents/scripts/update.sh
+ Detalhes em: CHANGELOG.md  |  Auto-update: update.sh --enable-auto"
+        ;;
+    es*)
+        MSG="Actualización disponible: $CURRENT → $LATEST
+ Ejecuta: .claude/dev-team-agents/scripts/update.sh
+ Detalles en: CHANGELOG.md  |  Auto-update: update.sh --enable-auto"
+        ;;
+    *)
+        MSG="Update available: $CURRENT → $LATEST
+ Run: .claude/dev-team-agents/scripts/update.sh
+ Details in: CHANGELOG.md  |  Auto-update: update.sh --enable-auto"
+        ;;
+esac
+_notify "warning" "$MSG"
