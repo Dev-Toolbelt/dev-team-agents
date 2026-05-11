@@ -7,13 +7,25 @@ description: Jira via Atlassian MCP — issue ops, JQL, branch naming for tracke
 
 ## MCP Detection
 
-Before any Jira operation, verify the Atlassian MCP is available by attempting a lightweight call:
+Before any Jira operation, verify the Atlassian MCP is available using this two-step check:
+
+**Step 1 — Check for deferred tools.** Atlassian MCP tools may start in a deferred state in new sessions. Always run ToolSearch first:
+
+```
+ToolSearch: query="atlassian", max_results=5
+```
+
+If ToolSearch returns Atlassian tools (e.g., `mcp__atlassian__atlassianUserInfo`), the MCP is installed — load the schema and proceed to Step 2. Do **not** show setup instructions just because the tool wasn't immediately callable.
+
+**Step 2 — Verify connectivity.** After loading the schema, attempt a lightweight call:
 
 ```
 mcp__atlassian__atlassianUserInfo
 ```
 
-If the tool is unavailable or returns a connection error, stop and guide the user through installation (see **MCP Setup** below).
+If this call succeeds, the MCP is fully operational. If it returns a connection or authentication error (not a "tool not found" error), stop and guide the user through re-authentication (see **MCP Setup** below).
+
+Only show setup instructions when **both** steps fail — i.e., ToolSearch returns no Atlassian tools AND the direct call fails.
 
 All MCP calls rely on the credentials registered via `claude mcp add --scope local`. These are stored in the user's local Claude Code settings (typically `~/.claude.json`) and are resolved automatically — never hardcode tokens, override headers, or attempt direct HTTP calls to the Atlassian API. If authentication fails, direct the user to re-run the setup command with a valid token rather than working around it.
 
