@@ -73,17 +73,49 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 .claude/dev-team-agents/scripts/update.sh v1.0.0
 ```
 
+### Idioma de preferência
+
+Durante a instalação, o instalador pergunta em qual idioma os agentes devem conversar com você. Documentos, planos e saídas técnicas permanecem sempre em inglês — apenas o idioma da conversa muda.
+
+Você pode atualizar isso a qualquer momento editando `.claude/user-data/preferences.json`:
+
+```json
+{ "language": "pt-BR" }
+```
+
+Valores comuns: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
+
 ### Habilitar atualizações automáticas (opt-in)
 
 ```bash
 .claude/dev-team-agents/scripts/update.sh --enable-auto
 ```
 
-Quando habilitado, a verificação diária aplica novas versões automaticamente em vez de apenas exibir a notificação. Desabilite a qualquer momento:
+Quando habilitado, a verificação diária aplica novas versões automaticamente em vez de apenas exibir a notificação. Você também pode definir `auto_update: true` em `.claude/user-data/preferences.json`. Desabilite a qualquer momento:
 
 ```bash
 .claude/dev-team-agents/scripts/update.sh --disable-auto
 ```
+
+### Sistema de notificações
+
+Agentes e hooks emitem notificações no formato DEV TEAM AGENTS ao longo das suas sessões:
+
+- **ℹ️ info** — dicas rotativas e boas práticas (uma por sessão)
+- **⚠️ warning** — janela de contexto se aproximando do limite, docs desatualizados, config ausente
+- **🚨 critical** — janela de contexto no limite, instalação com problema
+
+O comportamento das notificações é configurável em `preferences.json`:
+
+```json
+{
+  "context_window_percent_warning": 55,
+  "context_window_percent_limit": 60,
+  "suppress_notifications": false
+}
+```
+
+Defina `suppress_notifications` como `true` para silenciar todas as notificações, ou como `["info"]` para suprimir apenas um tipo específico.
 
 Após a instalação, `.claude/` conterá:
 
@@ -91,11 +123,11 @@ Após a instalação, `.claude/` conterá:
 .claude/
 ├── dev-team-agents/   ← extraído de tarball (sem pasta .git — seguro para commitar)
 ├── user-data/         ← estado e config do usuário (preservados nos updates)
-│   ├── graphify.json  ← criado pelo setup do Graphify (se habilitado) — commitar este
+│   ├── preferences.json    ← idioma, thresholds, configurações de notificação (ignorado)
+│   ├── graphify.json       ← criado pelo setup do Graphify (se habilitado) — commitar este
 │   ├── session-summary.md  ← ignorado (installer adiciona o dir user-data/ inteiro ao .gitignore)
 │   ├── .installed-version  ← ignorado
-│   ├── .last-update-check  ← ignorado
-│   └── .auto-update        ← ignorado
+│   └── .last-update-check  ← ignorado
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/

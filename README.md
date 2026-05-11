@@ -73,17 +73,49 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 .claude/dev-team-agents/scripts/update.sh v1.0.0
 ```
 
+### Language preference
+
+During installation, the installer asks which language agents should use when conversing with you. Documents, plans, and technical output always remain in English — only the conversation language changes.
+
+You can update this at any time by editing `.claude/user-data/preferences.json`:
+
+```json
+{ "language": "pt-BR" }
+```
+
+Common values: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
+
 ### Enable automatic updates (opt-in)
 
 ```bash
 .claude/dev-team-agents/scripts/update.sh --enable-auto
 ```
 
-When enabled, the daily update check will apply new versions automatically instead of just showing a notification. Disable at any time:
+When enabled, the daily update check will apply new versions automatically instead of just showing a notification. You can also set `auto_update: true` in `.claude/user-data/preferences.json`. Disable at any time:
 
 ```bash
 .claude/dev-team-agents/scripts/update.sh --disable-auto
 ```
+
+### Notification system
+
+Agents and hooks emit notifications in the DEV TEAM AGENTS format throughout your sessions:
+
+- **ℹ️ info** — rotating tips and best practices (one per session)
+- **⚠️ warning** — context window approaching limit, stale docs, missing config
+- **🚨 critical** — context window at limit, broken installation
+
+Notification behavior is configurable in `preferences.json`:
+
+```json
+{
+  "context_window_percent_warning": 55,
+  "context_window_percent_limit": 60,
+  "suppress_notifications": false
+}
+```
+
+Set `suppress_notifications` to `true` to silence all notifications, or to `["info"]` to suppress only a specific type.
 
 After installation, `.claude/` will contain:
 
@@ -91,11 +123,11 @@ After installation, `.claude/` will contain:
 .claude/
 ├── dev-team-agents/   ← extracted from tarball (no .git folder — safe to commit)
 ├── user-data/         ← user state and config (preserved across updates)
-│   ├── graphify.json  ← created by Graphify setup (if enabled) — commit this
+│   ├── preferences.json    ← language, thresholds, notification settings (gitignored)
+│   ├── graphify.json       ← created by Graphify setup (if enabled) — commit this
 │   ├── session-summary.md  ← gitignored (entire user-data/ dir is ignored by installer)
 │   ├── .installed-version  ← gitignored
-│   ├── .last-update-check  ← gitignored
-│   └── .auto-update        ← gitignored
+│   └── .last-update-check  ← gitignored
 ├── agents/
 │   └── dev-team/      ← symlink → .claude/dev-team-agents/agents/
 ├── skills/

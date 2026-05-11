@@ -200,6 +200,102 @@ dev-team-agents/
 
 ---
 
+## User Preferences
+
+All user-level preferences are stored in `.claude/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check.
+
+### Schema
+
+```json
+{
+  "language": "en",
+  "context_window_percent_warning": 55,
+  "context_window_percent_limit": 60,
+  "suppress_notifications": false,
+  "session_summary_max_days": 30,
+  "session_summary_max_entries": 30,
+  "docs_stale_after_days": 30,
+  "auto_update": false,
+  "update_check_interval_hours": 24
+}
+```
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `language` | `"en"` | BCP 47 language tag for agent conversation with the user |
+| `context_window_percent_warning` | `55` | % at which agents emit a `warning` notification |
+| `context_window_percent_limit` | `60` | % at which agents emit a `critical` notification |
+| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types |
+| `session_summary_max_days` | `30` | Days before session-summary entries are trimmed |
+| `session_summary_max_entries` | `30` | Maximum number of session-summary entries |
+| `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale |
+| `auto_update` | `false` | Auto-update when a new version is detected |
+| `update_check_interval_hours` | `24` | Hours between update checks |
+
+### Language Rule
+
+| Output | Language |
+|--------|---------|
+| Documents (ADRs, session-summary, plans, changelogs, code comments) | **Always English** |
+| Conversation with the user (responses, questions, notifications) | **`language` field from `preferences.json`** — fallback to English |
+
+### Migration
+
+The legacy `.auto-update` flag file is automatically migrated to `preferences.json → auto_update` by `install.sh` and the health check.
+
+---
+
+## Notification System
+
+Agents and shell hooks emit structured notifications using the DEV TEAM AGENTS format.
+
+### Format
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ {icon}  DEV TEAM AGENTS  {icon}
+ {message in the user's language}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### Types
+
+| Type | Icon | When to use |
+|------|------|-------------|
+| `info` | ℹ️ | Tips, suggestions, best practices |
+| `warning` | ⚠️ | Context approaching limit, stale config, missing prefs |
+| `critical` | 🚨 | Context at or beyond limit, broken installation |
+
+### Channels
+
+| Hook | Notifications |
+|------|--------------|
+| `session-start.sh` | Persistent state: missing `preferences.json`, stale docs |
+| `stop/04-notifier.sh` | Session progress: context heuristic warnings, tip of session |
+
+### Suppression
+
+Set `suppress_notifications` in `preferences.json`:
+- `false` — show all
+- `true` — suppress all
+- `["info"]` — suppress only the listed types
+
+### Tip of Session
+
+`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined in `skills/shared/notifier/SKILL.md`. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
+
+### Stop Sub-script Convention (updated)
+
+| Prefix | Reserved for | Current scripts |
+|--------|-------------|-----------------|
+| `01-` | State detection and collection | `01-session-summary.sh` |
+| `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
+| `03-` | Static validation | `03-agent-lint.sh` |
+| `04-` | User-facing notifications | `04-notifier.sh` |
+| `99-` | Final/cleanup tasks | _(reserved, unused)_ |
+
+---
+
 ## User Data Directory
 
 When installed in a project, the installer creates two sibling directories under `.claude/`:
@@ -210,10 +306,12 @@ When installed in a project, the installer creates two sibling directories under
 | `.claude/user-data/` | User state and config — **never touched by the installer** |
 
 Files in `user-data/`:
+- `preferences.json` — user preferences (language, thresholds, notifications) (**gitignored** by installer)
 - `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
 - `.installed-version` — current installed version tag (**gitignored** by installer)
 - `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
-- `.auto-update` — flag file; present = auto-updates enabled (**gitignored** by installer)
+- `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
+- `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 
 Other directories under `.claude/` created by agents:
@@ -340,6 +438,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh` |
+| `04-` | User-facing notifications | `04-notifier.sh` |
 | `99-` | Final/cleanup tasks | _(reserved, unused)_ |
 
 Each sub-script must:
