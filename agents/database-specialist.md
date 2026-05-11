@@ -22,7 +22,7 @@ Before any recommendation or analysis, load:
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
-Apply `skills/shared/token-efficiency/SKILL.md` when reading many schema files, migrations, or query logs during context loading — prefer `grep`/`head` over reading entire files.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
 
 Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial schema change or query optimization task — present a plan and wait for user approval before creating or modifying files.
 
@@ -47,6 +47,20 @@ When the project shows these signals, load the corresponding skill before advisi
 | Migration tool deps (Flyway, Liquibase, Alembic, golang-migrate) | `skills/integrations/database-production/SKILL.md` |
 | Planning or reviewing database migrations (any migration task) | `skills/database/migration-zero-downtime/SKILL.md` |
 | Supabase project (see backend-developer detection rules) | `skills/integrations/supabase/SKILL.md` |
+| Debugging slow queries or lock contention is involved | `skills/integrations/database-debug/SKILL.md` |
+| Project uses multi-tenant schemas (`tenant_id` columns, RLS, or schema-per-tenant) | `skills/integrations/database-multitenancy/SKILL.md` |
+
+**Per-engine skill load:** After identifying the database engine from project signals (docker-compose.yml, package.json, prisma/schema.prisma, .env, composer.json, etc.), load the matching skill:
+
+| Signal | Engine | Skill |
+|--------|--------|-------|
+| `postgres:`, `pg`, `psycopg2`, `prisma postgresql` | PostgreSQL | `skills/database/postgres/SKILL.md` |
+| `mysql:`, `mysql2`, `mysqlclient`, `laravel mysql` | MySQL/MariaDB | `skills/database/mysql/SKILL.md` |
+| `mongo:`, `mongoose`, `pymongo`, `MONGODB_URI` | MongoDB | `skills/database/mongodb/SKILL.md` |
+| `redis:`, `ioredis`, `redis-py`, `REDIS_URL` | Redis | `skills/database/redis/SKILL.md` |
+| `mssql`, `tedious`, `SQL_SERVER`, `mcr.microsoft.com/mssql` | SQL Server / Azure SQL | `skills/database/sqlserver/SKILL.md` |
+| `cassandra-driver`, `CASSANDRA_HOST`, `datastax-astra` | Cassandra / ScyllaDB | `skills/database/cassandra/SKILL.md` |
+| `sqlite3`, `better-sqlite3`, `sqlite://`, `.sqlite` file | SQLite | `skills/database/sqlite/SKILL.md` |
 
 ---
 
@@ -162,41 +176,7 @@ Check these sources in order:
 
 ### CLI Patterns per Engine
 
-**PostgreSQL**
-```bash
-psql "$DATABASE_URL"
-# or with individual vars:
-PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME"
-```
-
-**Supabase (PostgreSQL)**
-```bash
-supabase db connect            # via Supabase CLI (uses project config)
-psql "$SUPABASE_DB_URL"        # direct connection string
-# local dev stack:
-psql "postgresql://postgres:postgres@localhost:54322/postgres"
-```
-
-**MySQL / MariaDB**
-```bash
-mysql -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
-```
-
-**SQLite**
-```bash
-sqlite3 "$DB_PATH"
-```
-
-**MongoDB**
-```bash
-mongosh "$MONGO_URI"
-# or: mongosh "mongodb://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
-```
-
-**Redis**
-```bash
-redis-cli -h "${REDIS_HOST:-localhost}" -p "${REDIS_PORT:-6379}" -a "$REDIS_PASSWORD"
-```
+See each engine's per-engine skill for the CLI connection commands and key inspection queries. Supabase-hosted PostgreSQL: `supabase db connect` (via CLI) or `psql "$SUPABASE_DB_URL"`.
 
 ### Safety Protocol
 
