@@ -16,7 +16,7 @@ Before any action, load:
 3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 4. `.claude/docs/development/tech-stack.md` — chosen technologies and deployment decisions
 5. `.claude/docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
-6. Run `git log --oneline -20` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
+6. Run `git log --oneline -10` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
 7. Existing Docker files, CI/CD configs, and infrastructure code in the repository
 8. `.claude/docs/devops/` — synthesized infrastructure and deployment context (if present, read before acting)
 9. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions

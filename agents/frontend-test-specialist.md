@@ -38,7 +38,7 @@ Before writing any test:
 4. `.claude/docs/development/` — architecture and code standards
 5. `.claude/docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
 6. `.claude/docs/design/design-system.md` — relevant for visual regression context
-7. Run `git log --oneline -20` — reveals what changed recently and defines the scope of testing work
+7. Run `git log --oneline -10` — reveals what changed recently and defines the scope of testing work
 8. Existing test files — patterns, helpers, setup files already in use
 9. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
 10. The component/page to be tested — read it fully before deciding what to test

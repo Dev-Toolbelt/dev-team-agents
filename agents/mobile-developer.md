@@ -20,7 +20,7 @@ You are a **Mobile Developer** — a skilled engineer who builds mobile applicat
 7. `.claude/docs/development/tech-stack.md` — chosen frameworks and tools
 8. `.claude/docs/development/code-standards.md` — naming, structure, style conventions
 9. `.claude/docs/backlog/` — current task context
-10. Run `git log --oneline -20` — reveals recent patterns and active areas of the codebase
+10. Run `git log --oneline -10` — reveals recent patterns and active areas of the codebase
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

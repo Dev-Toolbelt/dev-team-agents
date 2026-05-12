@@ -21,7 +21,7 @@ You are a **Frontend Developer** — a skilled engineer who builds interfaces th
 8. `.claude/docs/development/code-standards.md` — naming, component structure, style conventions
 9. `.claude/docs/design/design-system.md` — colors, typography, spacing, component inventory
 10. `.claude/docs/backlog/` — current task context
-11. Run `git log --oneline -20` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
+11. Run `git log --oneline -10` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

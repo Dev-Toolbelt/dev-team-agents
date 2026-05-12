@@ -23,7 +23,7 @@ Before reviewing anything:
 6. `.claude/docs/development/api-contracts.md` — API design decisions
 7. `.claude/docs/development/database.md` — schema and query strategy
 8. Linter/static analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — source of truth for style
-9. Run `git log --oneline -20` — recent commits reveal what changed and team conventions
+9. Run `git log --oneline -10` — recent commits reveal what changed and team conventions
 10. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
 11. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
 12. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset

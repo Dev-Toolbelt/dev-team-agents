@@ -36,7 +36,7 @@ After routing is resolved, load project context:
 4. `.claude/docs/development/code-standards.md` — **this is your primary review guide**
 5. `.claude/docs/development/architecture.md` — architectural decisions to validate against
 6. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
-7. Run `git log --oneline -20` — recent commits reveal what changed, team conventions, and blast radius context
+7. Run `git log --oneline -10` — recent commits reveal what changed, team conventions, and blast radius context
 8. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
 9. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
 10. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention

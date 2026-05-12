@@ -18,7 +18,7 @@ Before any recommendation or analysis, load:
 5. `.claude/docs/development/tech-stack.md` — technology choices
 6. `.env`, `.env.local`, `docker-compose.yml` — connection strings and credentials
 7. Existing schema files, migrations, and data access code
-8. Run `git log --oneline -20` — reveals recent migration history, schema changes in flight, and what areas are actively being worked on
+8. Run `git log --oneline -10` — reveals recent migration history, schema changes in flight, and what areas are actively being worked on
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
