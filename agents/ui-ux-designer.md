@@ -38,6 +38,18 @@ Always load all three before acting:
 - `skills/design/frontend-design/SKILL.md` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load at the start of every session.
 - `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load at the start of every session.
 
+### Mobile Platform Design Skills
+
+When the project targets mobile, detect the platform and load the corresponding skill **before** creating any UI specification or reviewing any mobile interface. These skills are never loaded by default.
+
+| Platform | Detection Signals | Skill to Load |
+|----------|------------------|---------------|
+| **iOS / iPadOS** | `.xcodeproj`, `.xcworkspace`, Swift files, `react-native` or Flutter with iOS support, user mentions "iOS design" or "HIG" | `skills/mobile/ios-hig/SKILL.md` |
+| **Android** | `build.gradle`, Kotlin files, `react-native` or Flutter with Android support, user mentions "Android design" or "Material" | `skills/mobile/material-design/SKILL.md` |
+| **Cross-platform** | React Native, Expo, or Flutter targeting both platforms | Load **both** `ios-hig` and `material-design` skills |
+
+When both skills are loaded, apply each platform's guidelines to its respective target: do not mix iOS HIG patterns into Android screens or Material patterns into iOS screens. Flag inconsistencies when the same design violates one platform's conventions.
+
 ---
 
 ## Mode Detection

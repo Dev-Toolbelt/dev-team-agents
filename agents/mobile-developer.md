@@ -44,10 +44,11 @@ Detect the project's mobile stack and load the corresponding skill. **Skills are
 |-------|------------------|---------------|
 | **React Native / Expo** | `react-native` in `package.json`, `metro.config.js`, `app.json` with `"expo"` key, `eas.json`, or `expo-modules-core` dependency | `skills/mobile/react-native/SKILL.md` |
 | **Flutter / Dart** | `pubspec.yaml` with `sdk: flutter`, `lib/main.dart` | `skills/mobile/flutter/SKILL.md` |
-| **iOS Native** | `.xcodeproj` or `.xcworkspace` at root, `Swift` source files without a cross-platform framework | No extra skill — apply Platform Awareness below |
-| **Android Native** | `build.gradle` or `build.gradle.kts` at root, `kotlin` source files without a cross-platform framework | No extra skill — apply Platform Awareness below |
+| **iOS target** | `.xcodeproj`/`.xcworkspace`, Swift files, or any cross-platform project with iOS support | `skills/mobile/ios-hig/SKILL.md` |
+| **Android target** | `build.gradle`/`build.gradle.kts`, Kotlin files, or any cross-platform project with Android support | `skills/mobile/material-design/SKILL.md` |
+| **Cross-platform (both platforms)** | React Native, Flutter, or Expo targeting both iOS and Android | Load **both** `ios-hig` and `material-design` skills |
 
-For projects that mix native and cross-platform (e.g., React Native with native modules), load the cross-platform skill and apply the relevant Platform Awareness sections below.
+For projects that mix native and cross-platform (e.g., React Native with native modules), load the cross-platform skill and the platform design skills for each targeted platform.
 
 ---
 
@@ -56,11 +57,10 @@ For projects that mix native and cross-platform (e.g., React Native with native 
 Apply these rules whenever writing code that runs on iOS, regardless of the framework.
 
 ### Design & UX
-- Follow [Apple Human Interface Guidelines (HIG)](https://developer.apple.com/design/human-interface-guidelines/)
+- Load `skills/mobile/ios-hig/SKILL.md` for the full reference on navigation patterns, controls, typography (Dynamic Type / SF Pro), layout (Safe Area), Dark Mode, and accessibility (VoiceOver, Reduce Motion)
 - Respect the **Safe Area** — never place interactive elements behind notches, home indicators, or Dynamic Island
-- Use native iOS navigation patterns (back swipe, tab bar at bottom, modals from bottom)
 - Support **Dynamic Type** — use semantic text styles (`UIFont.preferredFont`, `Text().font(.body)`) instead of fixed sizes
-- Support both light and dark mode using semantic colors and `@Environment(\.colorScheme)`
+- Support both light and dark mode using semantic system colors only
 
 ### Permissions & Privacy
 - Request permissions only at the moment they are first needed (not at launch)
@@ -88,7 +88,7 @@ Apply these rules whenever writing code that runs on iOS, regardless of the fram
 Apply these rules whenever writing code that runs on Android, regardless of the framework.
 
 ### Design & UX
-- Follow [Material You / Material Design 3](https://m3.material.io/) guidelines
+- Load `skills/mobile/material-design/SKILL.md` for the full reference on color system (Material You tokens), typography scale, components (NavigationBar, FAB, Cards, Bottom Sheet), motion, adaptive layout (Window Size Classes), and accessibility (48dp touch targets, TalkBack)
 - Support **edge-to-edge** layout — use `WindowInsets` to avoid overlap with system bars
 - Use **adaptive icons** (`mipmap-anydpi-v26/`) — required for Android 8.0+
 - Support **back gesture** (predictive back on Android 14+) — register `OnBackPressedCallback` instead of overriding `onBackPressed()`
