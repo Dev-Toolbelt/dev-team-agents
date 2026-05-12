@@ -76,7 +76,7 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 
 ### Idioma de preferência
 
-Durante a instalação, o instalador pergunta em qual idioma os agentes devem conversar com você. Documentos, planos e saídas técnicas permanecem sempre em inglês — apenas o idioma da conversa muda.
+Durante a instalação, o instalador pergunta em qual idioma os agentes devem conversar com você. Documentos e saídas técnicas (ADRs, changelogs, comentários de código) permanecem sempre em inglês. Planos apresentados para sua aprovação e todas as respostas diretas usam o idioma configurado.
 
 Você pode atualizar isso a qualquer momento editando `.claude/user-data/preferences.json`:
 
@@ -112,11 +112,15 @@ O comportamento das notificações é configurável em `preferences.json`:
 {
   "context_window_percent_warning": 55,
   "context_window_percent_limit": 60,
-  "suppress_notifications": false
+  "suppress_notifications": false,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000
 }
 ```
 
 Defina `suppress_notifications` como `true` para silenciar todas as notificações, ou como `["info"]` para suprimir apenas um tipo específico.
+
+Os avisos de janela de contexto usam a contagem de tokens do transcript (do payload do Stop hook) multiplicada por `transcript_multiplier` para estimar o tamanho total do contexto. Ajuste `transcript_multiplier` para cima se os avisos dispararem cedo demais, ou para baixo se dispararem tarde demais. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso use um modelo diferente de 200k.
 
 Após a instalação, `.claude/` conterá:
 

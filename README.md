@@ -76,7 +76,7 @@ curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/sc
 
 ### Language preference
 
-During installation, the installer asks which language agents should use when conversing with you. Documents, plans, and technical output always remain in English — only the conversation language changes.
+During installation, the installer asks which language agents should use when conversing with you. Documents and technical output (ADRs, changelogs, code comments) always remain in English. Plans presented for your approval and all direct responses use the configured language.
 
 You can update this at any time by editing `.claude/user-data/preferences.json`:
 
@@ -112,11 +112,15 @@ Notification behavior is configurable in `preferences.json`:
 {
   "context_window_percent_warning": 55,
   "context_window_percent_limit": 60,
-  "suppress_notifications": false
+  "suppress_notifications": false,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000
 }
 ```
 
 Set `suppress_notifications` to `true` to silence all notifications, or to `["info"]` to suppress only a specific type.
+
+Context window warnings use transcript token counts (from the Stop hook payload) multiplied by `transcript_multiplier` to estimate the full context size. Adjust `transcript_multiplier` up if warnings fire too early, or down if they fire too late for your typical session. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
 
 After installation, `.claude/` will contain:
 

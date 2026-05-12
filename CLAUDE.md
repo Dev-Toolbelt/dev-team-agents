@@ -217,7 +217,9 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
   "session_summary_max_entries": 30,
   "docs_stale_after_days": 30,
   "auto_update": false,
-  "update_check_interval_hours": 24
+  "update_check_interval_hours": 24,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000
 }
 ```
 
@@ -232,12 +234,17 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
 | `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale |
 | `auto_update` | `false` | Auto-update when a new version is detected |
 | `update_check_interval_hours` | `24` | Hours between update checks |
+| `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
+| `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
+
+> **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 
 ### Language Rule
 
 | Output | Language |
 |--------|---------|
-| Documents (ADRs, session-summary, plans, changelogs, code comments) | **Always English** |
+| Documents (ADRs, session-summary, changelogs, code comments) | **Always English** |
+| Plans presented for user approval | **`language` field from `preferences.json`** — plans are conversation items, not documents |
 | Conversation with the user (responses, questions, notifications) | **`language` field from `preferences.json`** — fallback to English |
 
 ### Migration
@@ -272,7 +279,7 @@ Agents and shell hooks emit structured notifications using the DEV TEAM AGENTS f
 | Hook | Notifications |
 |------|--------------|
 | `session-start.sh` | Persistent state: missing `preferences.json`, stale docs |
-| `stop/04-notifier.sh` | Session progress: context heuristic warnings, tip of session |
+| `stop/04-notifier.sh` | Session progress: context window warnings, tip of session |
 
 ### Suppression
 
@@ -281,9 +288,18 @@ Set `suppress_notifications` in `preferences.json`:
 - `true` — suppress all
 - `["info"]` — suppress only the listed types
 
+### Context Window Estimation
+
+`stop/04-notifier.sh` estimates context usage using two strategies (in order of preference):
+
+1. **Transcript-based** (primary): reads `transcript_path` from the Stop hook payload, sums `input_tokens + output_tokens` across all turns, then applies `transcript_multiplier` (default `1.8`) to compensate for system prompt, tools, and memory not stored in the transcript. Result is compared to `model_max_tokens`.
+2. **Turn-count heuristic** (fallback): fires when the transcript path is unavailable. Calibrates `100% ≈ 45 turns` and scales linearly. Less accurate for content-heavy sessions.
+
+> **Limitation**: the actual context percentage (as shown by `/context`) is not accessible from bash hooks. The transcript-based estimate covers the conversation messages portion (~55% of total) and approximates the rest via the multiplier. Adjust `transcript_multiplier` in `preferences.json` if notifications fire too early or too late for your typical session profile.
+
 ### Tip of Session
 
-`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined in `skills/shared/notifier/SKILL.md`. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
+`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined inline in the script. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
 
 ### Stop Sub-script Convention (updated)
 
