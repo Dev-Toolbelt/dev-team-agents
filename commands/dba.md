@@ -7,4 +7,11 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 - `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — schema design, migrations, query optimization, indexing, replication
 - `software-architect` at `.claude/agents/dev-team/software-architect.md` — architectural data modeling implications and cross-service impact
 
+---
+
+**PLAN GATE — mandatory for every spawned agent:**
+1. Read `.claude/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
+3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
+
 Task: $ARGUMENTS
