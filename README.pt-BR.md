@@ -710,14 +710,16 @@ Todo agente é configurado para apresentar um plano antes de agir. Se isso não 
 dev-team-agents/
 ├── agents/          ← definições de agentes (arquivos .md)
 ├── skills/          ← conhecimento modular de skills
-│   ├── shared/      ← usadas por múltiplos agentes (project-context, docs-sync, plan-mode, adr, comments-policy, conventional-commits, pr-review, backlog-template, worktree)
-│   ├── architecture/ ← api-design, async-jobs, design-patterns, graphql, object-calisthenics
-│   ├── testing/     ← test-strategy, test-pyramid
-│   ├── security/    ← security-checklist
-│   ├── design/      ← design-system-audit
-│   ├── devops/      ← docker-dev, docker-prod, vps-linux, cicd-github, cicd-gitlab, cicd-bitbucket, cicd-jenkins, aws, gcp, azure, cloudflare, iac-terraform, monitoring
-│   ├── integrations/ ← supabase, gotrue, jwt, kong, realtime, database-debug, database-multitenancy, database-production, pwa, offline-first
-│   └── ui-libraries/ ← shadcn, mui, antd, bootstrap, chakra-ui, jquery
+│   ├── shared/      ← 25 skills — project-context, docs-sync, plan-mode, adr, comments-policy, conventional-commits, worktree, token-efficiency, current-context, spawn-classifier, reviewer-base, reviewer-mindset, diataxis-framework, discovery-mode, git-workflow, incident-response e mais
+│   ├── architecture/ ← 24 skills — api-design, api-versioning, async-jobs, caching, design-patterns, event-driven, feature-flags, graphql, i18n, monorepo-patterns, object-calisthenics, performance-budgets, rate-limiting, resilience e mais
+│   ├── database/    ← 9 skills — postgres, mysql, mongodb, redis, sqlserver, cassandra, sqlite, db-comparison, migration-zero-downtime
+│   ├── testing/     ← 6 skills — test-strategy, test-pyramid, contract-testing, mutation-testing, snapshot-testing, visual-regression
+│   ├── security/    ← 8 skills — owasp-top-10, security-checklist, dependency-vulnerabilities, idor, iso27001-sgsi, sast-pipeline, secret-management, supply-chain
+│   ├── design/      ← 3 skills — design-system-audit, frontend-design, web-design-guidelines
+│   ├── devops/      ← 19 skills — docker-dev, docker-prod, vps-linux, cicd-base, cicd-github, cicd-gitlab, cicd-bitbucket, cicd-jenkins, aws, gcp, azure, cloudflare, iac-terraform, monitoring, sonarqube, sentry, vercel, ssh-remote-access, graphify-setup
+│   ├── mobile/      ← 4 skills — react-native, flutter, ios-hig, material-design
+│   ├── integrations/ ← 12 skills — supabase, gotrue, jwt, kong, realtime, database-debug, database-multitenancy, database-production, pwa, offline-first, jira, linear
+│   └── ui-libraries/ ← 6 skills — shadcn, mui, antd, bootstrap, chakra-ui, jquery
 ├── workflows/       ← guias passo a passo de workflow
 ├── templates/       ← templates de documentos (plan, backlog, ADR, etc.)
 ├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
