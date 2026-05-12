@@ -34,6 +34,8 @@ When in doubt: **write the plan**.
 
 ## Plan Format
 
+**Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.claude/user-data/preferences.json` → `language` (default: English).
+
 Use this exact structure. Copy it, fill it in, present it.
 
 ```
@@ -129,3 +131,13 @@ If you discover mid-execution that a step cannot be done as planned:
 Every agent in `dev-team-agents` is responsible for applying this protocol independently. The plan-mode rule is not optional and is not enforced by an external system — it is part of each agent's operating discipline.
 
 If a user asks an agent to "just do it" without a plan: explain that the plan takes less than a minute to write, protects against misunderstandings, and produces better results. Then write the plan. Never skip it.
+
+---
+
+## Context Self-Monitoring
+
+After any response that involved reading many large files, producing long outputs, or running multiple tool calls in sequence, add a brief context advisory when appropriate:
+
+> ⚡ **Context advisory**: this session has accumulated significant context. If responses start feeling less precise, run `/compact` or start a fresh session before the next task.
+
+Apply this judgment after: reading 5+ files, producing 3+ large tool outputs, or a long back-and-forth session. You cannot see the exact percentage — err toward mentioning it. This supplements the automated hook-based warning, which fires based on a transcript token estimate.

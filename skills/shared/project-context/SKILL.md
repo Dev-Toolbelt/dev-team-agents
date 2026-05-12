@@ -24,20 +24,19 @@ This means every agent must:
 
 ### Documents — Always English
 
-**All generated documents, plans, code comments, commit messages, and technical output must be written in English.**
+**All generated documents, code comments, commit messages, and technical output must be written in English.**
 
 This applies to:
 - Architecture documents (`.claude/docs/development/`)
 - Backlog items, sprint plans, and estimates (`.claude/docs/backlog/`)
 - API contracts, code standards, design system docs
-- Plans presented in Plan Mode
 - Changelog entries and PR descriptions
 
 **Exception**: if the user explicitly requests a document in another language (e.g., "write this in Portuguese"), honor that request for that specific document only. Default always reverts to English.
 
 ### Conversation — User's Preferred Language
 
-**All responses directed at the user (explanations, questions, confirmations, notifications) must use the language in `.claude/user-data/preferences.json` → `language` field.**
+**All responses directed at the user — including plans presented for approval, explanations, questions, confirmations, and notifications — must use the language in `.claude/user-data/preferences.json` → `language` field.**
 
 Read this value at the start of every session:
 
