@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `skills/shared/diataxis-framework/SKILL.md` — extracted from `technical-writer` agent
 - `skills/database/postgres/SKILL.md`, `mysql/SKILL.md`, `mongodb/SKILL.md` — per-engine reference skills
 - `SessionStart` hook — warns when `project.md` or `session-summary.md` is stale
+- `scripts/hooks/stop/04-notifier.sh` — context-window warnings (⚠️/🚨) and a rotating tip-of-session using the DEV TEAM AGENTS notification format; suppression controlled via `preferences.json`
 
 ### Changed
 - All 21 `/devteam:*` commands now load `skills/shared/current-context/SKILL.md` instead of inlining the git block (~150 lines removed)
