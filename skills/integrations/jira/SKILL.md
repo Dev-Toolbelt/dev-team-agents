@@ -37,7 +37,143 @@ If this call succeeds, the MCP is fully operational. If it returns a connection 
 
 Only show setup instructions when **all three steps fail** — i.e., no `atlassian` entry in `~/.claude.json`, ToolSearch returns no Atlassian tools, AND the direct call fails.
 
-All MCP calls rely on the credentials registered via `claude mcp add --scope local`. These are stored in the user's local Claude Code settings (typically `~/.claude.json`) and are resolved automatically — never hardcode tokens, override headers, or attempt direct HTTP calls to the Atlassian API. If authentication fails, direct the user to re-run the setup command with a valid token rather than working around it.
+All MCP calls rely on the credentials registered via `claude mcp add --scope local`. These are stored in the user's local Claude Code settings (typically `~/.claude.json`) and are resolved automatically. If the MCP is unavailable in the current session, fall back to the **Jira REST API** using credentials extracted from `~/.claude.json` or `.mcp.json` — see **REST API Fallback** below.
+
+---
+
+## REST API Fallback
+
+Use this when all three MCP detection steps fail — the MCP is configured but not loaded in the current session, or the user is in a new session where the MCP cannot be reached.
+
+### Step 1 — Extract credentials
+
+Read `~/.claude.json` first, then fall back to `.mcp.json` in the project root:
+
+```bash
+# Try user-level config
+cat ~/.claude.json 2>/dev/null
+
+# Try project-level config
+cat .mcp.json 2>/dev/null
+```
+
+Look for the `atlassian` entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "type": "sse",
+      "url": "https://mcp.atlassian.com/v1/sse",
+      "headers": {
+        "Authorization": "Basic <base64-encoded-email:token>"
+      }
+    }
+  }
+}
+```
+
+Extract the `Authorization` header value. If neither file has an `atlassian` entry with an `Authorization` header, ask the user to provide their Atlassian email and API token, then compute the Base64 credential:
+
+```bash
+echo -n "{email}:{api_token}" | base64
+```
+
+### Step 2 — Determine the Jira cloud URL
+
+The MCP URL points to `mcp.atlassian.com`, not the user's Jira instance. For REST API calls you need the instance URL. Resolve it in order:
+
+1. Check if the user mentioned a domain in the conversation (e.g., `mycompany.atlassian.net`)
+2. Check `.claude/docs/project.md` or `CLAUDE.md` for a Jira base URL
+3. Ask the user: *"What is your Jira cloud URL? (e.g., `mycompany.atlassian.net`)"*
+
+Store the resolved URL as `JIRA_BASE` for the rest of the session.
+
+### Step 3 — Make REST API calls
+
+Use `curl` via the Bash tool with the extracted Authorization header:
+
+```bash
+AUTH="Basic <extracted-base64-value>"
+JIRA_BASE="https://mycompany.atlassian.net"
+
+# Get an issue
+curl -s -H "Authorization: $AUTH" \
+     -H "Accept: application/json" \
+     "$JIRA_BASE/rest/api/3/issue/PROJ-123"
+
+# Search with JQL
+curl -s -H "Authorization: $AUTH" \
+     -H "Accept: application/json" \
+     "$JIRA_BASE/rest/api/3/issue/search?jql=project%3DPROJ%20AND%20sprint%20in%20openSprints()&fields=summary,status,priority,assignee&maxResults=20"
+
+# Create an issue
+curl -s -X POST \
+     -H "Authorization: $AUTH" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"fields":{"project":{"key":"PROJ"},"summary":"Short description","issuetype":{"name":"Story"}}}' \
+     "$JIRA_BASE/rest/api/3/issue"
+
+# Add a comment
+curl -s -X POST \
+     -H "Authorization: $AUTH" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"Comment text here"}]}]}}' \
+     "$JIRA_BASE/rest/api/3/issue/PROJ-123/comment"
+
+# Transition an issue
+curl -s -X POST \
+     -H "Authorization: $AUTH" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"transition":{"id":"31"}}' \
+     "$JIRA_BASE/rest/api/3/issue/PROJ-123/transitions"
+
+# Get available transitions
+curl -s -H "Authorization: $AUTH" \
+     -H "Accept: application/json" \
+     "$JIRA_BASE/rest/api/3/issue/PROJ-123/transitions"
+```
+
+**REST API parity with MCP operations:**
+
+| MCP tool | REST API equivalent |
+|----------|---------------------|
+| `getJiraIssue` | `GET /rest/api/3/issue/{key}` |
+| `searchJiraIssuesUsingJql` | `GET /rest/api/3/issue/search?jql=...` |
+| `createJiraIssue` | `POST /rest/api/3/issue` |
+| `editJiraIssue` | `PUT /rest/api/3/issue/{key}` |
+| `getTransitionsForJiraIssue` | `GET /rest/api/3/issue/{key}/transitions` |
+| `transitionJiraIssue` | `POST /rest/api/3/issue/{key}/transitions` |
+| `addCommentToJiraIssue` | `POST /rest/api/3/issue/{key}/comment` (ADF body) |
+| `addWorklogToJiraIssue` | `POST /rest/api/3/issue/{key}/worklog` |
+| `lookupJiraAccountId` | `GET /rest/api/3/user/search?query={email}` |
+| `getIssueLinkTypes` | `GET /rest/api/3/issueLinkType` |
+| `createIssueLink` | `POST /rest/api/3/issueLink` |
+
+**ADF (Atlassian Document Format) for comments and descriptions:**
+
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "Your text here" }]
+    }
+  ]
+}
+```
+
+### Fallback behavior rules
+
+- Use the REST API only when MCP detection (all three steps) has failed
+- Apply all the same **Core Operations**, **Comment Style**, **Branch / Worktree Naming**, and **Conventions** rules — behavior must be identical regardless of transport
+- Never store extracted credentials in any file; use them only for the duration of the session
+- If credentials are not found in either config file and the user cannot provide them, guide the user through **MCP Setup** to configure the server before continuing
 
 ---
 

@@ -205,6 +205,7 @@ SESSION_START_HOOK=".claude/dev-team-agents/scripts/hooks/session-start.sh"
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
 {
+  "includeCoAuthoredBy": false,
   "hooks": {
     "PreToolUse": [
       {
@@ -285,6 +286,28 @@ PYEOF
     _inject_hook "PreToolUse"   "$PRE_TOOL_USE_HOOK"   "hooks/pre-tool-use.sh"
     _inject_hook "Stop"         "$STOP_HOOK"           "hooks/stop.sh"
     _inject_hook "SessionStart" "$SESSION_START_HOOK"  "hooks/session-start.sh"
+
+    # Ensure includeCoAuthoredBy is set to false (idempotent)
+    if ! grep -q '"includeCoAuthoredBy"' "$SETTINGS_FILE" 2>/dev/null; then
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$SETTINGS_FILE" <<'PYEOF'
+import sys, json
+
+settings_file = sys.argv[1]
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+
+data['includeCoAuthoredBy'] = False
+
+with open(settings_file, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PYEOF
+            echo "→ Set includeCoAuthoredBy: false in .claude/settings.json"
+        else
+            echo "→ NOTE: python3 not found. Add manually to $SETTINGS_FILE: \"includeCoAuthoredBy\": false"
+        fi
+    fi
 fi
 
 # ── Step 8: Record installed version ─────────────────────────────
