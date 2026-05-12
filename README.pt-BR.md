@@ -18,6 +18,7 @@ Um conjunto de agentes e skills do Claude Code que formam um time completo de de
 | `software-architect` | Decisões de arquitetura, tech stack, padrões | DISCOVERY + QUALITY GATE | Opus |
 | `backend-developer` | Implementação server-side (API + monolith) | DEVELOPMENT | Sonnet |
 | `frontend-developer` | Implementação client-side (SPA + templates) | DEVELOPMENT | Sonnet |
+| `mobile-developer` | Implementação mobile (React Native, Expo, Flutter, iOS/Android nativo) | DEVELOPMENT | Sonnet |
 | `ui-ux-designer` | Design system, consistência visual, UX (modo duplo) | DESIGN + DEVELOPMENT | Sonnet |
 | `database-specialist` | Schema, otimização de queries, seleção de BD | DEVELOPMENT | Sonnet |
 | `devops-specialist` | Docker, CI/CD, VPS, deploy em nuvem | DEVELOPMENT | Sonnet |
@@ -167,13 +168,14 @@ Se preferir que cada desenvolvedor instale localmente (ex.: setup pessoal/experi
 
 ## Slash Commands
 
-Após a instalação, 21 slash commands ficam disponíveis sob o namespace `/devteam:`. Cada command dispara os agentes corretos via Task tool e limita automaticamente sua atuação à branch ou worktree atual do git. Todos os commands devteam ficam agrupados em `.claude/commands/devteam/` — separados dos commands específicos do projeto.
+Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/devteam:`. Cada command dispara os agentes corretos via Task tool e limita automaticamente sua atuação à branch ou worktree atual do git. Todos os commands devteam ficam agrupados em `.claude/commands/devteam/` — separados dos commands específicos do projeto.
 
 | Command | O que faz |
 |---------|-----------|
 | `/devteam:plan` | Fase de planejamento — software-architect + product-analyst + database-specialist (+ backend/frontend/devops quando relevante) |
 | `/devteam:backend` | Implementação backend — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Implementação frontend — frontend-developer + ui-ux-designer → frontend-test-specialist |
+| `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
 | `/devteam:fullstack` | Implementação full-stack — times de backend + frontend em paralelo |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:fix` | Correção de bug — desenvolvedor(es) relevante(s) → test-specialist |
@@ -290,7 +292,7 @@ Se um agente não for reconhecido, verifique se `.claude/agents/dev-team/` exist
 
 ## Isolamento com Worktree
 
-Todos os agentes de codificação (`backend-developer`, `frontend-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) perguntam **uma única vez** antes de editar qualquer arquivo:
+Todos os agentes de codificação (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) perguntam **uma única vez** antes de editar qualquer arquivo:
 
 > "Do you want this task isolated in a git worktree? [y/N]"
 

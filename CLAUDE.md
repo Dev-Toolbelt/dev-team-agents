@@ -64,7 +64,7 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - Max ~200 lines per agent; move reference material to skills
 
-**Coding agents** (`backend-developer`, `frontend-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical session-file pattern:
+**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical session-file pattern:
 
 1. Read `.claude/.worktree-session` — if it exists, follow the stored decision silently (`worktree=no` or `worktree=yes branch=<b>`)
 2. If absent, ask the user once, write the decision to `.claude/.worktree-session`, then act
@@ -129,16 +129,17 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:backend` | backend-developer + database-specialist¹ → backend-test-specialist | Implementing backend changes |
 | `/devteam:frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist | Implementing frontend changes |
 | `/devteam:fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists | Implementing full-stack changes |
+| `/devteam:mobile` | mobile-developer + ui-ux-designer¹ | Implementing mobile features (React Native, Expo, Flutter, native iOS/Android) |
 | `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
-| `/devteam:fix` | backend-developer¹ + frontend-developer¹ → test-specialist¹ | Fixing a bug |
+| `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist¹ | Fixing a bug |
 | `/devteam:refactor` | software-architect → backend/frontend-test-specialist + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring with test-first coverage, dependency mapping, consolidated plan, and ordered commit blocks (tests → refactoring) |
 | `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs |
-| `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ | Code review before merge |
+| `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
 | `/devteam:security` | security-specialist + software-architect | Security audit or vulnerability analysis |
 | `/devteam:dba` | database-specialist + software-architect | Schema design, query optimization, migrations |
 | `/devteam:devops` | devops-specialist | CI/CD, Docker, infra, deploy scripts |
-| `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ | Writing or updating tests only |
+| `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ + mobile-developer¹ | Writing or updating tests only |
 | `/devteam:docs` | technical-writer | Docs, changelogs, runbooks, release notes |
 | `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request |
 | `/devteam:workflow-new` | follows `workflows/new-project.md` | Starting a new project |
