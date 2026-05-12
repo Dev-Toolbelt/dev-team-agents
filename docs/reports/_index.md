@@ -46,8 +46,63 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
   Legenda de status:
     ✅ Executed    — item implementado; o agente de research NÃO precisa repropostar
     ⚠️ Partial     — parcialmente endereçado; repropostar somente para o sub-escopo pendente
+    ↩️ Reverted    — implementado e depois revertido por decisão consciente; NÃO repropostar
+    🟢 Resolved    — resolvido por outra mudança correlata (ex.: extração quebrou a necessidade)
     (sem marker)  — sugestão registrada, ainda não implementada
 -->
+
+### 2026-05-11 — sexta passada — modo Guardian + 50 sugestões originais (foco em verificar Executed de 2026-05-10, drift README, mobile broken refs, foundational rule overhead)
+
+- `docs-sync-readme-massive-skill-list-drift` — README "Repository Structure" lista 5 architecture skills (existem 24), 9 shared (25), 1 security (8); categorias `mobile` (4) e `database` (9) inteiras ausentes — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-orphan-scan-only-checks-agents-not-commands-or-workflows` — `scripts/orphan-skill-scan.sh` varre só `agents/`; skills carregadas exclusivamente por commands/workflows exigem registro manual em CLAUDE.md — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-mobile-workflow-missing-despite-command` — `/devteam:mobile` declarado mas `workflows/mobile.md` não existe; simetria com `/devteam:fullstack`/`refactor`/`review` quebrada — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-installer-strips-strategy-pattern-mismatch-vs-changelog` — tabela "Package exclusions" no CLAUDE.md mistura allowlist (KEEP_ROOT) com explicit strip sem distinguir mecanismo — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-commands-two-without-current-context-undocumented` — `commit.md` e `update.md` não carregam `current-context` por design; exceção não documentada — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-templates-folder-still-single-file-after-three-passes` — `templates/` tem 1 arquivo desde 2026-05-03; ADR/backlog/runbook templates continuam inline em skills — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-claude-md-mentions-agents-creator-as-claude-skills-path` — CLAUDE.md mistura paths repo (`skills/skill-creator/`) e pós-install (`.claude/skills/agent-creator/`) na mesma tabela — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-stop-hook-04-notifier-undocumented-in-changelog-unreleased` — sub-script `04-notifier.sh` e formato DEV TEAM AGENTS não aparecem na seção Unreleased do CHANGELOG — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-database-specialist-still-258-lines-after-engine-split` — apesar de 7 engines extraídas, agente caiu só de 313 → 252 linhas; resta heurística N+1, ER modeling, migration patterns inline — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-no-orphan-template-scan-with-zero-templates-still-pending` — scan condicionado a "3+ arquivos"; será necessário ao migrar templates inline → físicos — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `ref-graphify-setup-skill-referenced-by-name-not-path-blind-spot` — `setup-assistant.md:134` invoca por nome (`graphify-setup`); 99% das skills usam path completo — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `docs-sync-claude-md-package-exclusions-includes-LICENSE-without-marking` — `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md` listados como stripados mas ausentes da seção File Structure — [relatório](2026-05-11/01-referencias-e-consistencia.md)
+- `flow-command-mobile-md-missing-but-claude-md-claims-it` — **HIGH** — `/devteam:mobile` declarado em CLAUDE.md:138 mas `commands/mobile.md` não existe (broken reference pública) — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-no-workflow-command-shortcuts-for-fullstack-refactor-review` — `workflows/fullstack.md|refactor.md|review.md` existem mas não há `/devteam:workflow-fullstack|refactor|review` correspondentes — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-spawn-classifier-only-loaded-by-plan-command` — `/devteam:backend|frontend|fullstack|refactor|fix|review|mobile` têm spawn condicional mas não carregam a skill — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-claude-md-workflows-list-incomplete` — File Structure do CLAUDE.md menciona só 5 workflows; existem 8 (faltam fullstack/refactor/review) — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-no-pre-spawn-installation-freshness-check` — commands não verificam frescor da instalação antes de spawn; PreToolUse TTL de 24h pode estar atrasado — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-commit-command-no-type-check-or-tests-gate` — lint gate existe; falta type-check (`tsc --noEmit`, `mypy`) — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-refactor-workflow-no-rollback-tag-recommendation` — `workflows/refactor.md` sem Step "Tag rollback point" (`pre-refactor-<context>`) — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-security-patch-no-mttr-tracking` — workflow security-patch não captura `started_at`/`deployed_at` para MTTR (SOC2/ISO 27001) — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-no-adr-command-despite-script` — `/devteam:adr` não existe; ADR criação exige `bash scripts/new-adr.sh` literal — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-pr-command-no-draft-mode-flag` — `commands/pr.md` sem flag `draft` para PR como rascunho — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-no-cross-link-between-workflows-still` — 8 workflows sem 1 linha "Next step" cross-link; reformulação de `flow-workflows-no-cross-linking` (2026-05-09) com escopo mínimo — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-stop-hook-04-notifier-no-gate-runs-every-session` — `02/03` gateadas por changes; `04-notifier.sh` roda em toda Stop; usar `.notifier-state` `last_shown_date` — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `flow-discovery-loop-still-no-iteration-cap` — discovery sem teto de iterações; variante mais específica do antigo `flow-discovery-loop-exit-criteria` — [relatório](2026-05-11/02-fluxos-e-workflows.md)
+- `agent-mobile-test-specialist-missing-asymmetric-with-backend-frontend` — backend/frontend têm test-specialist; mobile não; Detox/Maestro/Appium sem owner — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `agent-setup-assistant-still-306-lines-after-multiple-extractions` — caiu de 404 → 306; ainda acima do limite ~200; tracker MCP table (~25l) e update flow inline podem virar skills — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-reviewer-base-foundational-rule-overlap-with-project-context` — `reviewer-base` repete steps 1-3, 5, 7 de `project-context` quando ambas são carregadas pelos 3 reviewers — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `agent-product-analyst-still-no-bash-tool-after-jira-skill-load` — `product-analyst` carrega jira skill mas frontmatter sem `Bash`; impede `gh issue create` fallback — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-release-prep-missing-despite-mentioned-in-changelog-1.2.0` — CHANGELOG menciona "Release preparation skill" em 1.2.0; arquivo `release-prep` não existe em `skills/` — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-discovery-mode-loaded-by-three-agents-without-divergence-check` — `discovery-mode` carregada por setup-assistant/architect/analyst sem persistência; outputs divergem — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-monitoring-444-lines-over-limit-needs-references-extraction` — maior skill do repo (444 linhas); `references/` existe mas vazio; quebrar em logs/metrics/traces sub-skills — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-sonarqube-435-lines-overlap-with-reviewer-base-detection-block` — detection block do reviewer-base replica trigger interno da sonarqube — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `agent-mobile-developer-no-detox-or-maestro-test-routing` — mobile-developer não roteia para Detox/Maestro/Appium; falha cascateia sem `mobile-test-specialist` — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-missing-prompt-engineering-or-llm-integration` — sem skill para integração LLM no produto do usuário (RAG, embeddings, vector DB, prompt versioning) — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `agent-technical-writer-haiku-mismatch-resolved-by-diataxis-extraction` — antigo `agent-technical-writer-haiku-mismatch` (2026-05-08) torna-se decisão consciente após diataxis-framework extract; Haiku adequado — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-current-context-not-loaded-by-fix-or-refactor-workflows` — workflows não carregam `current-context` standalone; usuário que rode workflow sem command wrapper perde detecção — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `skill-graphify-setup-no-conditional-by-project-language` — skill 265 linhas sem gate por linguagem/tamanho; setup pergunta sobre Graphify mesmo em projeto puramente docs — [relatório](2026-05-11/03-agentes-e-skills.md)
+- `token-git-log-window-still-20-after-three-passes` — `git log --oneline -20` em 10 agentes; ~1.000 tokens economizados se for `-10`; variante do antigo `token-git-log-window-overshoot` — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-foundational-rule-424-lines-across-17-agents` — Foundational Rule inline soma 424 linhas; média 24 lines/agente; maior `software-architect` (57); ~1.700 tokens economizados/sessão multi-agente — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-worktree-isolation-block-7-lines-x-8-agents` — bloco Worktree de 7 linhas em 8 agentes = 56 dup; mobile-developer adicionado (era 7×; hoje 8×); variante do antigo `token-worktree-block-inlined-7x` — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-architecture-awareness-block-still-duplicated` — backend/frontend/mobile devs inlineiam Architecture Awareness; ~44 linhas dup; variante de fingerprint anterior — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-changelog-already-growing-and-not-extracted-by-release` — CHANGELOG cresce ~80 linhas/mês sem rotação; archive sugerido a 300 linhas — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-readme-bilingual-dual-source-734-lines-each` — README + README.pt-BR somam 1.474 linhas; CI valida por threshold de 5% (heurística rasa); variante quantificada do antigo `token-readme-bilingual-dual-source` — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-skill-loads-via-table-vs-prose-inconsistent` — alguns agentes usam tabelas de skill loads; outros prosa; `database-specialist` é all-table; padronização economiza parsing — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-claude-md-672-chars-package-exclusions-table-redundant-vs-installer` — tabela de 13 exclusões no CLAUDE.md duplica `KEEP_ROOT` do install.sh; substituir por 1 linha + link — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-plan-mode-skill-131-lines-loaded-by-7-agents-unconditionally` — `plan-mode` skill (131 linhas) carregada por 7 agentes no startup; lazy-load para "quando for gerar plano" economiza ~2.750 tokens — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-orphan-scan-output-format-verbose-when-clean` — `orphan-skill-scan: clean ✓` em modo non-quiet; baixa prioridade — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-three-reviewers-still-share-80-percent-structure` — 3 reviewers somam 624 linhas; mesmo após reviewer-mindset extracted, ainda ~100 linhas duplicadas; variante do antigo `agent-three-reviewers-overlap` — [relatório](2026-05-11/04-economia-tokens.md)
+- `token-changelog-unreleased-section-grows-without-rollover` — Unreleased acumula 25 items sem cross-link aos fingerprints do `_index.md`; HTML comments `<!-- fingerprint: ... -->` sugerido — [relatório](2026-05-11/04-economia-tokens.md)
 
 ### 2026-05-10 — quinta passada (foco em drift declarativo CLAUDE.md↔arquivos, community files, hook events não explorados, skills extraídas com inline mantido)
 
@@ -61,14 +116,14 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
 - `ref-skill-frontmatter-allowed-tools-key-inconsistency` — `worktree/SKILL.md` é única skill com `allowed-tools:` entre 99; padrão não documentado em CLAUDE.md — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
 - `ref-stop-hook-shim-numbering-undocumented` — Sub-scripts `01/02/03` em `hooks/stop/` numerados; convenção não documentada — [relatório](2026-05-10/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-05-11
 - `flow-hook-events-only-pretooluse-and-stop` — Installer registra só 2 de 7+ hook events suportados; `SessionStart`, `UserPromptSubmit`, `SubagentStop`, `Notification`, `PreCompact` inexplorados — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ⚠️ **Partial:** 2026-05-11 (`SessionStart` adicionado; `UserPromptSubmit`, `SubagentStop`, `Notification`, `PreCompact` permanecem para próxima passada)
-- `flow-update-command-no-rollback-path` — `/devteam:update` não tem `--rollback`; `INSTALL_DIR.old.$$` é deletado imediatamente após swap — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
+- `flow-update-command-no-rollback-path` — `/devteam:update` não tem `--rollback`; `INSTALL_DIR.old.$$` é deletado imediatamente após swap — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ↩️ **Reverted:** 2026-05-11 (commit `fc57a86` removeu a feature `.previous/` por causar pasta órfã pós-update; rollback foi avaliado e descartado pelo time. **NÃO repropostar.**)
 - `flow-commit-no-pre-commit-gate` — `/devteam:commit` não roda linters/formatters antes de commitar — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
 - `flow-workflows-no-failure-recovery` — Workflows não definem caminho de falha intermediária (review loop infinito, abort no meio, commit travado) — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
 - `flow-pr-command-no-template-file-link` — `/devteam:pr` produz prosa sem detectar `.github/PULL_REQUEST_TEMPLATE.md` — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
 - `flow-no-stale-branch-detection` — Nenhum workflow detecta branch atrasada de main antes de operar — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
 - `flow-setup-no-docker-compose-version-detection` — `setup-assistant` assume `docker compose` (V2); não testa fallback `docker-compose` (V1) — [relatório](2026-05-10/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-05-11
 - `flow-no-merge-conflict-preflight` — Workflows fix/refactor não rodam `git merge-tree` para detectar conflito potencial com main — [relatório](2026-05-10/02-fluxos-e-workflows.md)
-- `agent-database-specialist-no-per-engine-skills` — `database-specialist` (272 linhas) cobre 6+ engines inline; padrão `cicd-base+variantes` não replicado para database — [relatório](2026-05-10/03-agentes-e-skills.md) — ⚠️ **Partial:** 2026-05-11 (`postgres`, `mysql`, `mongodb` criadas e wired; `redis`, `sqlserver`, `cassandra`, `sqlite` e split do agente permanecem)
+- `agent-database-specialist-no-per-engine-skills` — `database-specialist` (272 linhas) cobre 6+ engines inline; padrão `cicd-base+variantes` não replicado para database — [relatório](2026-05-10/03-agentes-e-skills.md) — ⚠️ **Partial:** 2026-05-11 (todas as 7 engines — `postgres`, `mysql`, `mongodb`, `redis`, `sqlserver`, `cassandra`, `sqlite` — criadas e wireadas em `database-specialist.md:57-63`; somente o **split do agente** continua pendente — vide novo fingerprint `ref-database-specialist-still-258-lines-after-engine-split` em 2026-05-11)
 - `skill-missing-event-driven-architecture` — Sem skill para CQRS/saga/event-sourcing/domain-vs-integration events — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
 - `skill-missing-rate-limiting` — Sem skill dedicada para algoritmos (token bucket, leaky bucket, sliding window) — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
 - `skill-missing-performance-budgets` — Sem skill para Core Web Vitals budgets, bundle size, Lighthouse CI — [relatório](2026-05-10/03-agentes-e-skills.md) — ✅ **Executed:** 2026-05-11
@@ -212,12 +267,20 @@ de auditoria do projeto `dev-team-agents`. Ele garante que cada relatório novo 
 
 ## Estatísticas
 
-| Data | Sugestões publicadas | Originais (acumulado) | Executadas |
-|------|----------------------|-----------------------|------------|
+| Data | Sugestões publicadas | Originais (acumulado) | Executadas / Revertidas |
+|------|----------------------|-----------------------|--------------------------|
 | 2026-05-06 | 22 | 22 | — |
 | 2026-05-07 | 25 | 47 | — |
 | 2026-05-08 | 28 | 75 | — |
 | 2026-05-09 | 35 | 110 | — |
-| 2026-05-10 | 34 | 144 | **31** ✅ + 2 ⚠️ partial (2026-05-11) |
+| 2026-05-10 | 34 | 144 | **30** ✅ + 2 ⚠️ partial + **1 ↩️ reverted** (verificado por Guardian em 2026-05-11) |
+| 2026-05-11 | 50 + auditoria Guardian | 194 | — |
 
-> **Instrução para o agente de research:** Ao ler este índice, **exclua da geração** todos os fingerprints marcados com ✅ **Executed** — eles estão implementados no código. Fingerprints ⚠️ **Partial** podem ser repropostos com escopo **mais específico** cobrindo apenas a parte pendente descrita na nota.
+> **Instrução para o agente de research:** Ao ler este índice, **exclua da geração**:
+> - todos os fingerprints marcados com ✅ **Executed** — estão implementados;
+> - todos os fingerprints marcados com ↩️ **Reverted** — foram implementados e depois removidos por decisão consciente;
+> - todos os fingerprints marcados com 🟢 **Resolved** — foram resolvidos por outra mudança.
+>
+> Fingerprints ⚠️ **Partial** podem ser repropostos com escopo **mais específico** cobrindo apenas a parte pendente descrita na nota.
+>
+> **Modo Guardian (opcional):** ao verificar marcações ✅ Executed, cruzar com `git log --since="<data-da-marcação>"` para detectar reverts no mesmo dia. Marcação pode ser corrigida para ↩️ Reverted se aplicável.
