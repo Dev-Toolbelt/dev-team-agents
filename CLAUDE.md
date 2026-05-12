@@ -134,6 +134,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist¹ | Fixing a bug |
 | `/devteam:refactor` | software-architect → backend/frontend-test-specialist + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring with test-first coverage, dependency mapping, consolidated plan, and ordered commit blocks (tests → refactoring) |
 | `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs |
+| `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
 | `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
 | `/devteam:security` | security-specialist + software-architect | Security audit or vulnerability analysis |
@@ -152,6 +153,8 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 
 ¹ conditional — spawned only when the task context involves that scope.
 
+> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope) and `/devteam:update` (operates on the local installation). Both omit `current-context` by design.
+
 **Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. It reads the diff, classifies the change scope, and delegates to `backend-test-specialist` or `frontend-test-specialist` as needed. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
 
 ### Workflows (`workflows/*.md`)
@@ -161,6 +164,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
   2. What the agent produces
   3. A note that the agent will present a Plan before executing
 - Name files: `<context>.md` (e.g., `new-project.md`, `bug-fix.md`)
+- Existing workflows: `new-project.md`, `bug-fix.md`, `maintenance.md`, `inherited-project.md`, `security-patch.md`, `fullstack.md`, `refactor.md`, `review.md`
 
 ### Templates (`templates/*.md`)
 
@@ -196,6 +200,11 @@ dev-team-agents/
 ├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
 │   └── hooks/       ← pre-tool-use.sh, stop.sh (dispatchers) + pre-tool-use/, stop/ (sub-scripts)
 ├── README.md
+├── README.pt-BR.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── LICENSE
 └── CLAUDE.md        ← this file
 ```
 
@@ -340,22 +349,22 @@ Other directories under `.claude/` created by agents:
 
 **Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
 
-| Stripped path | Reason |
-|---------------|--------|
-| `CLAUDE.md` | Authoring rules for this repo — not for end-users |
-| `README.md` | Replaced by the installed package's own README if present |
-| `README.pt-BR.md` | Same as README.md |
-| `CHANGELOG.md` | Release history for this repo — not for user projects |
-| `CONTRIBUTING.md` | Contribution guide for this repo — not for user projects |
-| `LICENSE` | Repo license file — not for user projects |
-| `SECURITY.md` | Vulnerability disclosure policy — not for user projects |
-| `.gitignore` | Repo-level gitignore — not for user projects |
-| `.claude/` | Repo-level Claude config — not for user projects |
-| `.github/` | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
-| `docs/` | Repository-level reports and internal docs irrelevant to users |
-| `scripts/install.sh` | Accessed exclusively via `curl` — never bundled |
-| `scripts/orphan-skill-scan.sh` | Development tool for this repo — not relevant to user projects |
-| `scripts/agent-lint.sh` | Development tool for this repo — not relevant to user projects |
+| Stripped path | Mechanism | Reason |
+|---------------|-----------|--------|
+| `CLAUDE.md` | allowlist (not in `KEEP_ROOT`) | Authoring rules for this repo — not for end-users |
+| `README.md` | allowlist (not in `KEEP_ROOT`) | Replaced by the installed package's own README if present |
+| `README.pt-BR.md` | allowlist (not in `KEEP_ROOT`) | Same as README.md |
+| `CHANGELOG.md` | allowlist (not in `KEEP_ROOT`) | Release history for this repo — not for user projects |
+| `CONTRIBUTING.md` | allowlist (not in `KEEP_ROOT`) | Contribution guide for this repo — not for user projects |
+| `LICENSE` | allowlist (not in `KEEP_ROOT`) | Repo license file — not for user projects |
+| `SECURITY.md` | allowlist (not in `KEEP_ROOT`) | Vulnerability disclosure policy — not for user projects |
+| `docs/` | allowlist (not in `KEEP_ROOT`) | Repository-level reports and internal docs irrelevant to users |
+| `.gitignore` | explicit `rm -f` (dotfile strip) | Repo-level gitignore — not for user projects |
+| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config — not for user projects |
+| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
+| `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
+| `scripts/orphan-skill-scan.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
+| `scripts/agent-lint.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
 
 ---
 
