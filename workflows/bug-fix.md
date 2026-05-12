@@ -8,6 +8,12 @@ Use for isolated bugs in any project type. Faster than the full workflow — foc
 
 ---
 
+## Step 0: Load Context
+
+Load `skills/shared/current-context/SKILL.md` to detect the active branch, open worktree session (`.claude/.worktree-session`), and scope. If already loaded by a command wrapper, this step is a no-op.
+
+---
+
 ## Step 1: Diagnosis
 
 ```

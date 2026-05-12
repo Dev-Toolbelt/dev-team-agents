@@ -16,6 +16,12 @@ Use when improving the internal structure of existing code without changing its 
 
 ---
 
+## Step 0: Load Context
+
+Load `skills/shared/current-context/SKILL.md` to detect the active branch and scope. If already loaded by a command wrapper, this step is a no-op.
+
+---
+
 ## Phase 0: WORKTREE / BRANCH SETUP
 
 Before any agent is spawned, decide where the work happens.
