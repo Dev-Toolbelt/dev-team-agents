@@ -68,6 +68,19 @@ Verify the following and flag any deviation as FIX (show diff, ask confirmation 
 | `hooks.PreToolUse` has exactly one dev-team entry | command = `…/scripts/hooks/pre-tool-use.sh`, matcher `.*` | Replace old entries (e.g. `update.sh --check`, inline graphify command) with dispatcher |
 | `hooks.Stop` has exactly one dev-team entry | command = `…/scripts/hooks/stop.sh` | Replace old entries (e.g. `session-summary-hook.sh`, `graphify-refresh.sh`) with dispatcher |
 | No stale direct hook paths remain | No `update.sh --check`, `session-summary-hook.sh`, or `graphify-refresh.sh` as direct hook commands | Consolidate into dispatchers |
+| `includeCoAuthoredBy` is `false` | `"includeCoAuthoredBy": false` | Auto-fix: inject via python3 (see snippet below) |
+
+**Auto-fix for `includeCoAuthoredBy`:**
+
+```bash
+python3 - .claude/settings.json <<'PYEOF'
+import sys, json
+f = sys.argv[1]
+with open(f) as fh: data = json.load(fh)
+data['includeCoAuthoredBy'] = False
+with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
+PYEOF
+```
 
 ---
 
