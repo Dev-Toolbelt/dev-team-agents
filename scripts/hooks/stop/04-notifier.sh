@@ -69,6 +69,8 @@ STATE=$(cat "$NOTIFIER_STATE_FILE" 2>/dev/null || echo "")
 STATE_SESSION=$(echo "$STATE" | cut -d: -f1)
 STATE_TURNS=$(echo "$STATE" | cut -d: -f2)
 STATE_TIP=$(echo "$STATE" | cut -d: -f3)
+STATE_DATE=$(echo "$STATE" | cut -d: -f4)
+TODAY=$(date +%Y-%m-%d 2>/dev/null || echo "")
 
 if [ "$STATE_SESSION" = "$SESSION_ID" ]; then
     TURNS=$(( ${STATE_TURNS:-0} + 1 ))
@@ -78,7 +80,7 @@ else
     TIP_SHOWN=0
 fi
 
-printf '%s:%d:%d\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" > "$NOTIFIER_STATE_FILE"
+printf '%s:%d:%d:%s\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" > "$NOTIFIER_STATE_FILE"
 
 # ── Context window estimation ─────────────────────────────────────────────────
 PCT_USED=0
@@ -159,7 +161,7 @@ elif [ "${PCT_USED:-0}" -ge "${WARN_PCT:-55}" ] 2>/dev/null; then
 fi
 
 # ── Tip of session (once per session) ────────────────────────────────────────
-if [ "$TIP_SHOWN" = "0" ] && ! _is_suppressed "info"; then
+if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     DAY=$(date +%-d 2>/dev/null || date +%d | sed 's/^0//')
     TIP_INDEX=$(( (DAY - 1) % 15 ))
 
@@ -225,7 +227,7 @@ if [ "$TIP_SHOWN" = "0" ] && ! _is_suppressed "info"; then
 
     _notify "info" "ℹ️" "$TIP"
 
-    printf '%s:%d:1\n' "$SESSION_ID" "$TURNS" > "$NOTIFIER_STATE_FILE"
+    printf '%s:%d:1:%s\n' "$SESSION_ID" "$TURNS" "$TODAY" > "$NOTIFIER_STATE_FILE"
 fi
 
 exit 0
