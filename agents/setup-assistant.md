@@ -131,7 +131,7 @@ Write or update the field in `preferences.json`. If the file does not exist, cre
 > Graphify builds a knowledge graph of your codebase — typically **60–80% fewer tokens**, faster responses, richer context across sessions.
 > Set up Graphify now? **yes / no**
 
-- **yes** → invoke `graphify-setup` skill immediately
+- **yes** → load `skills/devops/graphify-setup/SKILL.md` and follow its setup steps
 - **no** → reply: *"Whenever you change your mind, say: 'Set up Graphify for this project'."*
 
 Record as `GRAPHIFY: [enabled|disabled]`.
