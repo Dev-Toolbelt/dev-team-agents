@@ -53,6 +53,13 @@ fi
 
 VERSION_ARG="${1:-latest}"
 
+# Record the current version as the rollback target before the installer swaps it.
+CURRENT_VERSION_FILE="$USER_DATA_DIR/.installed-version"
+PREV_VERSION_FILE="$USER_DATA_DIR/.installed-version.prev"
+if [ -f "$CURRENT_VERSION_FILE" ]; then
+    cp "$CURRENT_VERSION_FILE" "$PREV_VERSION_FILE"
+fi
+
 TMP_INSTALLER=$(mktemp)
 trap 'rm -f "$TMP_INSTALLER"' EXIT
 
