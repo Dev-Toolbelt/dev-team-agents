@@ -69,6 +69,26 @@ check_agent() {
       ERRORS+=("  · ${file}: invalid model: ${model} (allowed: ${allowed})")
     fi
   fi
+
+  # Validate tools: Read must be present; all tools must be from the known set
+  KNOWN_TOOLS=(Read Write Edit Bash Glob Grep WebSearch)
+  local tools_line
+  tools_line=$(echo "$frontmatter" | grep -E "^tools:" | sed 's/^tools:[[:space:]]*//' | tr -d '\r')
+  if [ -n "$tools_line" ]; then
+    if ! echo "$tools_line" | grep -qw "Read"; then
+      ERRORS+=("  · ${file}: tools must include 'Read' (every agent needs read access)")
+    fi
+    while IFS= read -r tool; do
+      [ -z "$tool" ] && continue
+      local known=false
+      for k in "${KNOWN_TOOLS[@]}"; do
+        [ "$tool" = "$k" ] && known=true && break
+      done
+      if [ "$known" = false ]; then
+        ERRORS+=("  · ${file}: unknown tool '${tool}' (known: ${KNOWN_TOOLS[*]})")
+      fi
+    done < <(echo "$tools_line" | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+  fi
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
