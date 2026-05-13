@@ -13,283 +13,57 @@ IaC is code. It lives in git, gets reviewed in PRs, runs in CI, and never has se
 
 ---
 
-## Project Structure
+## Detection Signals
 
-```
-infra/
-├── environments/
-│   ├── staging/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── terraform.tfvars      # non-secret values only; in git
-│   └── production/
-│       ├── main.tf
-│       ├── variables.tf
-│       └── terraform.tfvars
-├── modules/
-│   ├── app-service/              # reusable module per component
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   └── database/
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
-└── shared/
-    └── backend.tf                # remote state config (shared across envs)
-```
+| Signal | Location |
+|--------|----------|
+| `*.tf` files | `infra/` or repo root |
+| `terraform.tfvars` | environment directories |
+| `.terraform.lock.hcl` | environment directories |
+| `hashicorp/setup-terraform` | CI/CD pipeline files |
+| `TF_VAR_*` env vars | `.env`, CI secrets |
 
 ---
 
-## Remote State — Never Use Local State in Teams
-
-### AWS S3 + DynamoDB (recommended for AWS projects)
-
-```hcl
-# infra/environments/production/main.tf
-terraform {
-  backend "s3" {
-    bucket         = "my-project-tf-state"
-    key            = "production/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "my-project-tf-lock"
-    encrypt        = true
-  }
-}
-```
-
-Bootstrap the S3 bucket and DynamoDB table once:
+## Core Workflow
 
 ```bash
-aws s3api create-bucket --bucket my-project-tf-state --region us-east-1
-aws s3api put-bucket-versioning --bucket my-project-tf-state \
-  --versioning-configuration Status=Enabled
-aws dynamodb create-table \
-  --table-name my-project-tf-lock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
+terraform init      # initialize backend and download providers
+terraform validate  # check syntax and provider references
+terraform plan      # preview changes — always review before apply
+terraform apply     # apply changes (never skip plan in production)
+terraform destroy   # destroy resources (requires explicit approval)
 ```
 
-### GCP GCS
-
-```hcl
-terraform {
-  backend "gcs" {
-    bucket = "my-project-tf-state"
-    prefix = "production"
-  }
-}
-```
-
-### Azure Blob Storage
-
-```hcl
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "tf-state-rg"
-    storage_account_name = "myprojecttfstate"
-    container_name       = "tfstate"
-    key                  = "production.terraform.tfstate"
-  }
-}
-```
+**Never run `apply` without reviewing `plan` output in production.**
 
 ---
 
-## Secrets — Never in tfvars or State
+## Key Rules (apply always)
 
-Secrets must come from the secret manager of the target cloud, not from Terraform variables.
+| Rule | Detail |
+|------|--------|
+| Remote state | Always use remote backend with locking — never local state in teams |
+| Secrets | Use cloud secret manager data sources — never in `.tfvars` or `-var` flags |
+| Modules | Create when same resources used in 2+ environments |
+| Version pins | Pin module versions via git tags; pin provider versions in `required_providers` |
+| `for_each` over `count` | Use `for_each` with maps for resources that differ significantly |
+| CI apply gates | Manual approval required for production environments |
 
-| Cloud | Pattern |
-|-------|---------|
-| AWS | `data "aws_ssm_parameter"` or `data "aws_secretsmanager_secret_version"` |
-| GCP | `data "google_secret_manager_secret_version"` |
-| Azure | `data "azurerm_key_vault_secret"` |
+Load `references/patterns.md` for: full project structure, remote state backend configs (AWS/GCP/Azure), module patterns, variable validation, secrets data sources, import commands, and anti-patterns.
 
-```hcl
-data "aws_ssm_parameter" "db_password" {
-  name            = "/myapp/production/db_password"
-  with_decryption = true
-}
-
-resource "aws_db_instance" "main" {
-  password = data.aws_ssm_parameter.db_password.value
-}
-```
-
-> Never pass secrets via `-var` flags in CI — they appear in logs. Always use the data source pattern above.
+Load `references/ci-cd.md` for: GitHub Actions plan/apply/drift-detection workflows, GitLab CI plan+apply pipeline, environment promotion pattern.
 
 ---
 
-## Modules — When and How
+## `.gitignore` Requirements
 
-Create a module when the same set of resources is used in more than one environment.
-
-```hcl
-# infra/environments/production/main.tf
-module "app" {
-  source = "../../modules/app-service"
-
-  name        = "myapp"
-  environment = "production"
-  image_tag   = var.image_tag
-  cpu         = 1024
-  memory      = 2048
-}
 ```
-
-Module rules:
-- `variables.tf` declares all inputs with types and descriptions
-- `outputs.tf` exposes only what callers need
-- No hard-coded environment names or region strings inside modules
-- Modules are versioned via git tags when shared across repos
-
----
-
-## CI/CD Integration
-
-### PR Workflow (plan only, never apply on PR)
-
-```yaml
-# .github/workflows/terraform-plan.yml
-name: Terraform Plan
-
-on:
-  pull_request:
-    paths:
-      - "infra/**"
-
-jobs:
-  plan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.8.0"
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: infra/environments/production
-
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: infra/environments/production
-
-      - name: Terraform Plan
-        run: terraform plan -no-color -out=tfplan
-        working-directory: infra/environments/production
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Post plan to PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const output = `#### Terraform Plan 📖
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\``;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfplan
 ```
-
-### Apply Workflow (merge to main only, with manual approval for prod)
-
-```yaml
-# .github/workflows/terraform-apply.yml
-name: Terraform Apply
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - "infra/**"
-
-jobs:
-  apply:
-    runs-on: ubuntu-latest
-    environment: production          # requires manual approval in GitHub Environments
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.8.0"
-      - run: terraform init
-        working-directory: infra/environments/production
-      - run: terraform apply -auto-approve
-        working-directory: infra/environments/production
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-```
-
----
-
-## Drift Detection
-
-Run `terraform plan` in CI on a schedule. Alert if drift is detected.
-
-```yaml
-# .github/workflows/drift-detection.yml
-name: Drift Detection
-
-on:
-  schedule:
-    - cron: "0 8 * * 1-5"    # weekdays at 8am
-
-jobs:
-  detect:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - run: terraform init
-        working-directory: infra/environments/production
-      - name: Plan (detect drift)
-        id: plan
-        run: terraform plan -detailed-exitcode -no-color
-        working-directory: infra/environments/production
-        continue-on-error: true
-      - name: Alert on drift
-        if: steps.plan.outputs.exitcode == '2'
-        run: |
-          echo "::error::Infrastructure drift detected. Review the plan output above."
-          exit 1
-```
-
-Exit codes: `0` = no changes, `1` = error, `2` = changes detected (drift).
-
----
-
-## Importing Existing Resources
-
-When infrastructure already exists and needs to be brought under Terraform management:
-
-```bash
-terraform import aws_s3_bucket.my_bucket my-existing-bucket-name
-terraform import aws_instance.web i-1234567890abcdef0
-```
-
-After import, run `terraform plan` to verify state matches real infrastructure before any changes.
-
----
-
-## Anti-Patterns to Avoid
-
-- `terraform apply` without `terraform plan` review in production
-- Secrets in `terraform.tfvars` — use secret manager data sources
-- Local state file — always use remote backend with locking
-- `count` for resources that differ significantly — use `for_each` with maps instead
-- `latest` as a module version — pin to a specific git tag
-- Running apply directly from a developer machine against production — always use CI
 
 ---
 
@@ -302,5 +76,5 @@ After import, run `terraform plan` to verify state matches real infrastructure b
 - [ ] `terraform plan` output posted to PR for review
 - [ ] `terraform apply` requires manual approval for production environment
 - [ ] Drift detection scheduled (weekly minimum)
-- [ ] `.gitignore` includes: `*.tfstate`, `*.tfstate.backup`, `.terraform/`, `*.tfplan`
+- [ ] `.gitignore` includes `*.tfstate`, `.terraform/`, `*.tfplan`
 - [ ] Modules versioned via git tags if shared across repos
