@@ -191,6 +191,29 @@ Load: `skills/devops/sonarqube/SKILL.md`
 
 ---
 
+## Mobile Testing Routing
+
+Detect the project's testing stack and load the appropriate guidance. **Do not load by default — only when the detection signals are present and a testing task is in scope.**
+
+| Framework | Detection Signals | Test Runner | Notes |
+|-----------|------------------|-------------|-------|
+| **Detox** | `detox` in `package.json`, `.detoxrc.js`/`.detoxrc.json`, `e2e/` folder with Detox config | `detox test` | React Native and Expo projects; requires a running simulator/emulator |
+| **Maestro** | `.maestro/` directory, `maestro` CLI in PATH, `*.yaml` flow files in `e2e/` or `flows/` | `maestro test` | Stack-agnostic; declarative YAML flows; runs on real devices and simulators |
+| **Appium** | `appium` in `package.json` or `requirements.txt`, `wdio.conf.js` with `appium` capability, `appium.config.js` | `appium` + test runner | Multi-platform; used for WebdriverIO, Jest, or Python-based suites |
+| **XCTest (iOS native)** | `.xctest` targets in Xcode project, `XCTestCase` subclasses in Swift/ObjC files | `xcodebuild test` | Unit and UI tests; run in Xcode Simulator or on device via `xcodebuild` |
+| **Espresso (Android native)** | `androidTestImplementation 'androidx.test.espresso'` in `build.gradle`, files in `androidTest/` | `./gradlew connectedAndroidTest` | UI tests; requires a connected device or AVD emulator |
+| **Flutter test** | `flutter_test` in `pubspec.yaml`, `integration_test/` directory | `flutter test` / `flutter drive` | Unit + widget tests via `flutter test`; integration tests via `flutter drive` or `integration_test` package |
+
+### Routing Rules
+
+- If **Detox** signals are present → use `detox test`; check `.detoxrc` for device configurations before running; ensure the Metro bundler is running
+- If **Maestro** signals are present → use `maestro test <flow.yaml>`; flows live in `.maestro/` or `flows/`; use `maestro studio` for interactive authoring
+- If **Appium** signals are present → check `wdio.conf.js` or `appium.config.js` for the desired capabilities and target platform; start the Appium server before running tests
+- If **no E2E framework** is detected → run the project's unit test command (`jest`, `vitest`, `flutter test`, `xcodebuild test`, `./gradlew test`) and note the gap
+- When multiple frameworks coexist → run all applicable test suites; report results per framework
+
+---
+
 ## What to Do Before Declaring Done
 
 - [ ] Project context loaded — rules from `CLAUDE.md` and `architecture.md` respected
