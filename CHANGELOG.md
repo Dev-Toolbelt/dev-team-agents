@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/hooks/stop/04-notifier.sh` — context-window warnings (⚠️/🚨) and a rotating tip-of-session using the DEV TEAM AGENTS notification format; suppression controlled via `preferences.json`
 
 ### Changed
+- `CLAUDE.md` "Package exclusions" table expanded with `Mechanism` column and 6 new entries (LICENSE, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, docs/, .github/); now 14 rows documenting the dual-strategy (KEEP_ROOT allowlist vs. explicit `rm -f`/`rm -rf`)
 - All 21 `/devteam:*` commands now load `skills/shared/current-context/SKILL.md` instead of inlining the git block (~150 lines removed)
 - `commands/plan.md` delegates conditional spawn decisions to `skills/shared/spawn-classifier/SKILL.md`
 - Reviewer agents (`code-reviewer`, `backend-reviewer`, `frontend-reviewer`) reference `reviewer-mindset` skill instead of duplicating the inline block
