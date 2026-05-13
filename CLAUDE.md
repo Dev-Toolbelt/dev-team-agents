@@ -151,12 +151,17 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:workflow-bugfix` | follows `workflows/bug-fix.md` | Full bug-fix workflow |
 | `/devteam:workflow-inherited` | follows `workflows/inherited-project.md` | Taking over an existing project |
 | `/devteam:workflow-security-patch` | follows `workflows/security-patch.md` | Applying a security patch |
+| `/devteam:workflow-fullstack` | follows `workflows/fullstack.md` | Implementing full-stack features end-to-end |
+| `/devteam:workflow-refactor` | follows `workflows/refactor.md` | Structured refactoring workflow |
+| `/devteam:workflow-review` | follows `workflows/review.md` | Full structured code review workflow |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:update` | runs `check-updates.sh` + `update.sh` | Checking for and applying dev-team-agents updates |
 
 ¹ conditional — spawned only when the task context involves that scope.
 
 > **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope) and `/devteam:update` (operates on the local installation). Both omit `current-context` by design.
+
+> **Exception — commands that do NOT require Plan Gate:** `/devteam:review` (read-only by design — reads the diff and delegates, does not modify files).
 
 **Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. It reads the diff, classifies the change scope, and delegates to `backend-test-specialist` or `frontend-test-specialist` as needed. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
 
@@ -167,7 +172,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
   2. What the agent produces
   3. A note that the agent will present a Plan before executing
 - Name files: `<context>.md` (e.g., `new-project.md`, `bug-fix.md`)
-- Existing workflows: `new-project.md`, `bug-fix.md`, `maintenance.md`, `inherited-project.md`, `security-patch.md`, `fullstack.md`, `refactor.md`, `review.md`
+- Existing workflows: `new-project.md`, `bug-fix.md`, `maintenance.md`, `inherited-project.md`, `security-patch.md`, `fullstack.md`, `refactor.md`, `review.md`, `mobile.md`, `design.md`
 
 ### Templates (`templates/*.md`)
 
@@ -200,6 +205,9 @@ dev-team-agents/
 ├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
+│   ├── agents.md        ← canonical agent reference
+│   ├── installation.md  ← installation and advanced options guide
+│   └── reports/         ← audit reports and fingerprint index
 ├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
 │   └── hooks/       ← pre-tool-use.sh, stop.sh (dispatchers) + pre-tool-use/, stop/ (sub-scripts)
 ├── README.md
@@ -382,7 +390,7 @@ Other directories under `.claude/` created by agents:
 
 ## Immutability Contract
 
-These files are installed via symlinks into user projects. Users are warned not to modify them directly. When authoring changes:
+These files are installed at a fixed path (`.claude/dev-team-agents/`) and replaced entirely on every update. Users are warned not to modify them directly. When authoring changes:
 
 - Maintain backward compatibility where possible
 - If a breaking change is unavoidable, document it in the PR description and README release notes
