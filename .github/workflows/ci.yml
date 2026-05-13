@@ -14,11 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate agent frontmatter
+      - name: Validate agent and skill frontmatter
         run: bash scripts/agent-lint.sh
 
       - name: Orphan skill scan
         run: bash scripts/orphan-skill-scan.sh
+
+      - name: Size limits check
+        run: bash scripts/size-limits.sh --warn-only
 
       - name: Shellcheck scripts
         run: find scripts -name '*.sh' -exec shellcheck {} +
@@ -26,14 +29,22 @@ jobs:
       - name: README sync check
         run: |
           # Allow up to 5% line-count difference; larger gaps suggest one file wasn't updated
-          MAIN=$(wc -l < README.md)
-          PTBR=$(wc -l < README.pt-BR.md)
-          DIFF=$(( MAIN - PTBR ))
-          DIFF=${DIFF#-}  # abs value
-          THRESHOLD=$(( MAIN * 5 / 100 + 1 ))
-          if [ "$DIFF" -gt "$THRESHOLD" ]; then
-            echo "README.md ($MAIN lines) and README.pt-BR.md ($PTBR lines) differ by $DIFF lines (threshold: $THRESHOLD)."
-            echo "Update README.pt-BR.md to match README.md changes."
-            exit 1
-          fi
-          echo "README sync OK (diff: $DIFF lines, threshold: $THRESHOLD)"
+          check_pair() {
+            local en="$1" ptbr="$2"
+            EN_LINES=$(wc -l < "$en")
+            PTBR_LINES=$(wc -l < "$ptbr")
+            DIFF=$(( EN_LINES - PTBR_LINES ))
+            DIFF=${DIFF#-}
+            THRESHOLD=$(( EN_LINES * 5 / 100 + 1 ))
+            if [ "$DIFF" -gt "$THRESHOLD" ]; then
+              echo "$en ($EN_LINES lines) and $ptbr ($PTBR_LINES lines) differ by $DIFF lines (threshold: $THRESHOLD)."
+              echo "Update $ptbr to match $en changes."
+              return 1
+            fi
+            echo "Sync OK: $en ↔ $ptbr (diff: $DIFF lines)"
+          }
+          FAIL=0
+          check_pair README.md README.pt-BR.md || FAIL=1
+          check_pair docs/agents.md docs/agents.pt-BR.md || FAIL=1
+          check_pair docs/installation.md docs/installation.pt-BR.md || FAIL=1
+          exit $FAIL
