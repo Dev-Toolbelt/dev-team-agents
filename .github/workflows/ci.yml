@@ -34,12 +34,13 @@ jobs:
             local en="$1" ptbr="$2"
             local fail=0
 
-            # Section-header match (primary check)
-            en_sections=$(grep "^## " "$en" 2>/dev/null | sort)
-            ptbr_sections=$(grep "^## " "$ptbr" 2>/dev/null | sort)
-            if [ "$en_sections" != "$ptbr_sections" ]; then
-              echo "Section mismatch: $en ↔ $ptbr"
-              diff <(echo "$en_sections") <(echo "$ptbr_sections") || true
+            # Section-count match (primary check)
+            # Headers are translated so we compare counts, not text.
+            # A mismatch means a section was added in one file but not the other.
+            en_count=$(grep -c "^## " "$en" 2>/dev/null || echo 0)
+            ptbr_count=$(grep -c "^## " "$ptbr" 2>/dev/null || echo 0)
+            if [ "$en_count" != "$ptbr_count" ]; then
+              echo "Section mismatch: $en ↔ $ptbr ($en_count vs $ptbr_count sections)"
               fail=1
             fi
 
