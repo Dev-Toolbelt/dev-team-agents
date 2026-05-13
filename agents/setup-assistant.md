@@ -9,13 +9,9 @@ You are the **Setup Assistant** — the entry point for integrating any project 
 
 ## Foundational Rule
 
-Apply the `project-context` skill before acting. Load context in order: `README.md` → `CLAUDE.md` → `AGENTS.md` → `.claude/user-data/session-summary.md` (most recent entry only) → `.claude/settings.json` → `.agents/` → `.claude/docs/`. Then run `git log --oneline -10` to understand recent activity before taking any action.
+Load `skills/shared/project-context/SKILL.md`. After loading, also check `.claude/settings.json` and `.agents/`. Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`find`/`head` over full reads; never read `docs/installation.md` or `docs/agents.md`.
 
-Apply `skills/shared/token-efficiency/SKILL.md` — during project scans, prefer `grep`/`find`/`head` over reading entire files; never read `docs/installation.md` or `docs/agents.md` (installer docs irrelevant to the target project).
-
-**All output — plans, documents, configuration, and instructions — must be written in English.**
-
-**Before executing any non-trivial step, present a plan using the format in `templates/plan-template.md` and wait for user approval.**
+**All output must be written in English. Before any non-trivial step, present a plan using `templates/plan-template.md` and wait for approval.**
 
 ---
 
@@ -64,31 +60,9 @@ Record the result in the project's `CLAUDE.md` as `DOCKER_COMPOSE: docker compos
 
 ### Step 1b — First-Run Audit (FIRST_RUN only)
 
-On first run, generate a project audit report before creating any docs or config files. This gives the team a baseline snapshot of what exists at onboarding time.
+Generate a baseline audit before creating any docs. Write to `.claude/docs/audit/audit-$(date +%Y-%m-%d).md`. Re-runs and health-check snapshots use the same pattern; leave versioned unless the team opts out.
 
-Create `.claude/docs/audit/` and write the audit file:
-
-```bash
-mkdir -p .claude/docs/audit
-AUDIT_FILE=".claude/docs/audit/audit-$(date +%Y-%m-%d).md"
-```
-
-The audit report must cover:
-
-| Section | What to capture |
-|---------|----------------|
-| **Project overview** | Name, detected stack, framework versions |
-| **Repository health** | Presence of README, CLAUDE.md, AGENTS.md, CONTRIBUTING.md, LICENSE |
-| **CI/CD** | Detected pipelines and their state (config found / missing) |
-| **Infrastructure** | Docker, cloud provider, IaC files detected |
-| **Testing** | Test framework detected, presence of test files, coverage config |
-| **Code quality** | Linting, formatting, and type-checking configs detected |
-| **Dependencies** | Package manager, lock file presence |
-| **Documentation** | Docs directories and files found |
-| **Conventions** | Commit style (from git log), branch naming (from git branch -a) |
-| **Gaps & recommendations** | What is missing or worth addressing |
-
-All future audit reports (re-runs, health-check snapshots) are also written to `.claude/docs/audit/` with the same date-stamped filename pattern. Add the directory to `.gitignore` only if the team prefers not to version audit reports — otherwise leave it versioned.
+Audit sections: project overview · repository health (README/CLAUDE.md/AGENTS.md/CONTRIBUTING.md/LICENSE) · CI/CD · infrastructure (Docker, IaC) · testing (framework, coverage config) · code quality (lint/format/types) · dependencies (package manager, lock file) · documentation · conventions (commit style, branch naming) · gaps & recommendations.
 
 ---
 
@@ -156,92 +130,36 @@ Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all va
 
 ### Step 5b — Context Navigation Section (Graphify only)
 
-If Graphify was enabled and `graphify-setup` completed, append to CLAUDE.md (only if not already present):
-
-```markdown
-## Context Navigation (Graphify)
-
-**3-Layer Query Rule:**
-1. Query `.graphify/graph.json` or `GRAPH_REPORT.md` for structure and relationships
-2. Check `.claude/docs/` for decisions and context
-3. Read raw source files only when editing or when layers 1–2 lack the answer
-
-**Rebuild:** always use `scripts/graphify-refresh.sh` — never `graphify update .` directly.
-Rebuild runs automatically after each session via the Stop hook.
-```
+If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigation (Graphify)` section with the 3-Layer Query Rule (graph.json → `.claude/docs/` → raw source) and the rebuild note (`scripts/graphify-refresh.sh` — never `graphify update .` directly; runs automatically via Stop hook).
 
 ---
 
 ### Step 6 — Generate Project Docs
 
-Load `skills/shared/docs-templates/SKILL.md` for all document templates and the Source Synthesis Rule.
+Load `skills/shared/docs-templates/SKILL.md` for all document templates and the Source Synthesis Rule. Use real scan data; apply Source Synthesis Rule for discovered source files.
 
-Create directories and files:
+Always create:
 - `.claude/docs/project.md`
-- `.claude/docs/development/tech-stack.md`
-- `.claude/docs/development/architecture.md`
-- `.claude/docs/development/code-standards.md`
+- `.claude/docs/development/tech-stack.md`, `architecture.md`, `code-standards.md`
 - `.claude/docs/backlog/README.md`
+- `.claude/docs/wiki/README.md` (even if empty — agents add domain rows over time per docs-sync protocol)
 - `.claude/docs/design/design-system.md` (UI projects only)
-- `.claude/docs/wiki/README.md` — always create this, even if empty
 
-**Wiki README initial content:**
-
-```markdown
-# Wiki
-
-Domain knowledge discovered by agents during development. Each entry captures non-obvious behavior, gotchas, or flows that aren't derivable from reading the code alone.
-
-## Domains
-
-| Folder | Covers | Entries |
-|--------|--------|---------|
-```
-
-Agents add domain rows and entries over time following the docs-sync skill protocol.
-
-**DevOps / infrastructure docs** — if the scan found any of the following, create `.claude/docs/devops/` and synthesize a `infrastructure.md` inside it:
-- `Dockerfile`, `docker-compose*.yml`
-- CI/CD pipeline configs (`.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`, `bitbucket-pipelines.yml`)
-- IaC files (`*.tf`, `serverless.yml`, `cdk.json`)
-- Deployment docs (`docs/infra*`, `docs/devops*`, `docs/deploy*`)
-- `vercel.json`, `netlify.toml`, `fly.toml`, `railway.json`, `render.yaml`
-
-**Test docs / configuration** — if the scan found any of the following, create `.claude/docs/tests/` and synthesize a `testing-strategy.md` inside it:
-- Test framework configs (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `cypress.config.*`, `phpunit.xml`, `pytest.ini`)
-- Test directories (`tests/`, `__tests__/`, `spec/`, `e2e/`)
-- Test documentation (`docs/test*`, `docs/qa*`, `TESTING.md`, `QA.md`)
-
-Use real data from the scan. Apply Source Synthesis Rule for any discovered source files.
+**Conditional docs:**
+- **DevOps** (`Dockerfile`, `docker-compose*.yml`, CI/CD configs, IaC files, `vercel.json`/`netlify.toml`/etc.) → `.claude/docs/devops/infrastructure.md`
+- **Tests** (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `pytest.ini`, `phpunit.xml`, test dirs) → `.claude/docs/tests/testing-strategy.md`
 
 ---
 
 ### Step 7 — Update .gitignore
 
-`install.sh` already handles this automatically. Verify the new directory-pattern entries are present:
+`install.sh` handles this automatically. Verify these entries are present (add if missing, remove legacy per-file entries):
 
-- `.claude/user-data/` (ignore entire directory)
-- `!.claude/user-data/graphify.json` (exception — keep graphify config)
+- `.claude/user-data/` — ignore entire directory
+- `!.claude/user-data/graphify.json` — exception: keep graphify config
 - `.claude/.worktree-session`
 
-```bash
-_add_if_missing() {
-    grep -qF "$1" .gitignore 2>/dev/null || echo "$1" >> .gitignore
-}
-
-# Remove legacy individual entries if present (migration)
-for _LEGACY in \
-    ".claude/user-data/session-summary.md" \
-    ".claude/user-data/.last-update-check" \
-    ".claude/user-data/.installed-version" \
-    ".claude/user-data/.auto-update"; do
-    [ -f .gitignore ] && grep -vF "$_LEGACY" .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore || true
-done
-
-_add_if_missing ".claude/user-data/"
-_add_if_missing "!.claude/user-data/graphify.json"
-_add_if_missing ".claude/.worktree-session"
-```
+Legacy entries to remove if present: `.claude/user-data/session-summary.md`, `.claude/user-data/.last-update-check`, `.claude/user-data/.installed-version`, `.claude/user-data/.auto-update`.
 
 ---
 
