@@ -2,7 +2,23 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 ---
 
-## Step 0 — Detect PR template
+## Step 0a — Conventional Commits pre-flight
+
+Before drafting the PR body, run a quick sanity check on the branch's commit history:
+
+```bash
+git log main..HEAD --format="%s" 2>/dev/null | head -20
+```
+
+Scan for commit messages that do **not** match the Conventional Commits pattern (`^(feat|fix|docs|refactor|perf|test|ci|build|chore|style)(\(.+\))?: .+`). If any non-conforming messages are found, report them to the user:
+
+> "The following commits don't follow the Conventional Commits format: [list]. Proceed anyway, or would you like to amend them first?"
+
+If the project uses a different commit pattern (detected via `git log --oneline -10` on `main`), validate against that pattern instead. Do not block the PR — this is advisory only.
+
+---
+
+## Step 0b — Detect PR template
 
 Before drafting the PR body:
 

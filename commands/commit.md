@@ -67,7 +67,11 @@ For each group, write a commit message following the detected pattern (Step 1).
 
 ## Step 4.5 — Pre-commit gate
 
-Before executing any commit, run quick validations on the staged files:
+Before executing any commit, run quick validations on the staged files.
+
+If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthook `lefthook.yml`, `.pre-commit-config.yaml`), skip Steps 4.5a–c and let `git commit` trigger the hooks naturally.
+
+### 4.5a — Lint
 
 | Project signal | Command |
 |----------------|---------|
@@ -78,9 +82,26 @@ Before executing any commit, run quick validations on the staged files:
 | `pyproject.toml` with `ruff` | `ruff check <staged-py-files>` |
 | `Makefile` with `lint` target | `make lint` |
 
-If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthook `lefthook.yml`, `.pre-commit-config.yaml`), skip this step and let `git commit` trigger the hook naturally.
+### 4.5b — Type-check
 
-If any validation returns non-zero:
+| Project signal | Command |
+|----------------|---------|
+| `tsconfig.json` present | `npx tsc --noEmit` |
+| `pyproject.toml` with `mypy` dependency | `mypy <staged-py-files>` |
+| `pyrightconfig.json` or `pyright` in devDependencies | `npx pyright` |
+
+### 4.5c — Tests (fast only)
+
+Run only when the test suite is known to be fast (< 60 s). For slow suites, run only the tests covering staged files.
+
+| Project signal | Command |
+|----------------|---------|
+| `package.json` with `test` script | `npm test -- --passWithNoTests` |
+| `pytest` in `pyproject.toml` or `requirements*.txt` | `pytest --tb=short -q` |
+| `go.mod` present | `go test ./...` |
+| `Makefile` with `test` target | `make test` |
+
+If any gate (lint, type-check, or tests) returns non-zero:
 - Show the output to the user
 - Ask: (a) fix and re-stage, (b) commit anyway, (c) abort
 - Do NOT auto-fix without explicit user consent
