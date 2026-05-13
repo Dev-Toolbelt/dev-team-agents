@@ -68,6 +68,14 @@ for consumer_file in "${CONSUMER_FILES[@]}"; do
 done
 
 # ── Phase 2: Detect orphaned skills ──────────────────────────────────────────
+# Pre-build a single combined consumer text so Phase 2 needs only 2 greps per
+# skill instead of 2 × N_consumers greps (O(skills) vs O(skills × consumers)).
+COMBINED_TMP=$(mktemp /tmp/devteam-consumers.XXXXXX)
+trap 'rm -f "$COMBINED_TMP"' EXIT
+if [ ${#CONSUMER_FILES[@]} -gt 0 ]; then
+    cat "${CONSUMER_FILES[@]}" > "$COMBINED_TMP" 2>/dev/null || true
+fi
+
 ORPHAN_MSGS=()
 DUPLICATE_MSGS=()
 
@@ -76,24 +84,20 @@ while IFS= read -r skill_file; do
     skill_dir="$(dirname "$skill_file")"
     skill_name="$(basename "$skill_dir")"
 
-    # Skip entries inside references/ subdirectories
+    # Skip entries inside references/ or sections/ subdirectories
     [[ "$rel_path" == *"/references/"* ]] && continue
+    [[ "$rel_path" == *"/sections/"* ]] && continue
 
     # Skip user-invocable skills
     is_user_invocable "$skill_name" && continue
 
     referenced=false
-    for consumer_file in "${CONSUMER_FILES[@]}"; do
-        if grep -q "$rel_path" "$consumer_file" 2>/dev/null; then
-            referenced=true
-            break
-        fi
-        if grep -qE "\`${skill_name}\`|[^a-zA-Z0-9_-]${skill_name}[[:space:]]+(skill|Skill)|[Ss]kill[[:space:]]+\`?${skill_name}\`?" \
-               "$consumer_file" 2>/dev/null; then
-            referenced=true
-            break
-        fi
-    done
+    if grep -q "$rel_path" "$COMBINED_TMP" 2>/dev/null; then
+        referenced=true
+    elif grep -qE "\`${skill_name}\`|[^a-zA-Z0-9_-]${skill_name}[[:space:]]+(skill|Skill)|[Ss]kill[[:space:]]+\`?${skill_name}\`?" \
+             "$COMBINED_TMP" 2>/dev/null; then
+        referenced=true
+    fi
 
     if [ "$referenced" = false ]; then
         category="$(echo "$rel_path" | cut -d'/' -f2)"
