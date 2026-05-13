@@ -137,13 +137,14 @@ for item in "$EXTRACTED_ROOT"/*; do
     [ "$keep" = false ] && rm -rf "$item"
 done
 
-# Strip dotfiles/dotdirs (not matched by glob above) and repo-only scripts
-rm -rf "$EXTRACTED_ROOT/.claude"
-rm -rf "$EXTRACTED_ROOT/.github"
-rm -f  "$EXTRACTED_ROOT/.gitignore"
-rm -f  "$EXTRACTED_ROOT/scripts/install.sh"
-rm -f  "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh"
-rm -f  "$EXTRACTED_ROOT/scripts/agent-lint.sh"
+# Strip dotfiles/dotdirs (not matched by KEEP_ROOT glob above) and repo-only scripts.
+# See CLAUDE.md "Package exclusions" table for the full rationale per path.
+rm -rf "$EXTRACTED_ROOT/.claude"              # repo-level Claude config — not for user projects
+rm -rf "$EXTRACTED_ROOT/.github"              # repo-level GitHub templates/CODEOWNERS — not for users
+rm -f  "$EXTRACTED_ROOT/.gitignore"           # repo-level gitignore — not for user projects
+rm -f  "$EXTRACTED_ROOT/scripts/install.sh"           # accessed via curl; never bundled in the package
+rm -f  "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh" # dev tool for this repo only
+rm -f  "$EXTRACTED_ROOT/scripts/agent-lint.sh"        # dev tool for this repo only
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
@@ -201,6 +202,7 @@ fi
 PRE_TOOL_USE_HOOK=".claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
 STOP_HOOK=".claude/dev-team-agents/scripts/hooks/stop.sh"
 SESSION_START_HOOK=".claude/dev-team-agents/scripts/hooks/session-start.sh"
+PRE_COMPACT_HOOK=".claude/dev-team-agents/scripts/hooks/pre-compact.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -234,6 +236,16 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           {
             "type": "command",
             "command": "$SESSION_START_HOOK"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PRE_COMPACT_HOOK"
           }
         ]
       }
@@ -286,6 +298,7 @@ PYEOF
     _inject_hook "PreToolUse"   "$PRE_TOOL_USE_HOOK"   "hooks/pre-tool-use.sh"
     _inject_hook "Stop"         "$STOP_HOOK"           "hooks/stop.sh"
     _inject_hook "SessionStart" "$SESSION_START_HOOK"  "hooks/session-start.sh"
+    _inject_hook "PreCompact"   "$PRE_COMPACT_HOOK"    "hooks/pre-compact.sh"
 
     # Ensure includeCoAuthoredBy is set to false (idempotent)
     if ! grep -q '"includeCoAuthoredBy"' "$SETTINGS_FILE" 2>/dev/null; then
