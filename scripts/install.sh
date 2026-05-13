@@ -145,6 +145,7 @@ rm -f  "$EXTRACTED_ROOT/.gitignore"           # repo-level gitignore — not for
 rm -f  "$EXTRACTED_ROOT/scripts/install.sh"           # accessed via curl; never bundled in the package
 rm -f  "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh" # dev tool for this repo only
 rm -f  "$EXTRACTED_ROOT/scripts/agent-lint.sh"        # dev tool for this repo only
+rm -f  "$EXTRACTED_ROOT/scripts/size-limits.sh"       # dev tool for this repo only (validates authoring limits)
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."

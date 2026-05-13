@@ -376,6 +376,7 @@ Other directories under `.claude/` created by agents:
 | `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
 | `scripts/orphan-skill-scan.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
 | `scripts/agent-lint.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
+| `scripts/size-limits.sh` | explicit `rm -f` | Development tool for this repo — validates authoring line limits |
 
 ---
 
