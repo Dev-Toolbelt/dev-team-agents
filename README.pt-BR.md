@@ -10,7 +10,7 @@ Um time global de agentes Claude Code especializados para desenvolvimento de sof
 
 Um conjunto de agentes e skills do Claude Code que formam um time completo de desenvolvimento de software. Cada agente tem um papel definido, expertise e integração com workflows. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
 
-17 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.md) completa.
+17 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.pt-BR.md) completa.
 
 ---
 
@@ -55,7 +55,7 @@ Durante a instalação, o instalador pergunta em qual idioma os agentes devem co
 
 Valores comuns: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
 
-> **Opções avançadas** — versão específica, atualizações, pin de versão, auto-update, notificações e layout de diretórios: [docs/installation.md](docs/installation.md)
+> **Opções avançadas** — versão específica, atualizações, pin de versão, auto-update, notificações e layout de diretórios: [docs/installation.pt-BR.md](docs/installation.pt-BR.md)
 
 ---
 
