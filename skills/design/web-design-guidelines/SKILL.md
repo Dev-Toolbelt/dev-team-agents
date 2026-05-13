@@ -1,10 +1,6 @@
 ---
 name: web-design-guidelines
 description: Web interface review — accessibility, UX, design best practices.
-metadata:
-  author: vercel
-  version: "1.0.0"
-  argument-hint: <file-or-pattern>
 ---
 
 # Web Interface Guidelines
