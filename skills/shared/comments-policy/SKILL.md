@@ -69,6 +69,21 @@ Need to add a comment?
 
 ---
 
+## Language-Specific Style
+
+Detect the project's primary language and load the corresponding section:
+
+| Language | Load |
+|----------|------|
+| JavaScript / TypeScript | `sections/javascript-typescript.md` |
+| Python | `sections/python.md` |
+| Go | `sections/go.md` |
+| PHP, Ruby, Java, C#, Rust, or other | `sections/generic.md` |
+
+If multiple languages are present, load the section for the dominant one (most source files).
+
+---
+
 ## Reference Material (load on demand)
 
 - `references/aaa-pattern.md` — AAA test pattern with examples
