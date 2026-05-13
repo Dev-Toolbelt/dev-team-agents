@@ -66,9 +66,12 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 **Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical session-file pattern:
 
-1. Read `.claude/.worktree-session` — if it exists, follow the stored decision silently (`worktree=no` or `worktree=yes branch=<b>`)
-2. If absent, ask the user once, write the decision to `.claude/.worktree-session`, then act
-3. On "yes": load `skills/shared/worktree/SKILL.md` with the provided branch (default: `main`)
+1. Read `.claude/.worktree-session` — if it exists, follow the stored decision silently:
+   - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
+   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using branch `<b>`
+2. If absent, ask the user once:
+   - **yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>`, load `skills/shared/worktree/SKILL.md`
+   - **no** → get current branch, ask for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <branch-name>`, write `worktree=no branch=<branch-name>`
 
 This ensures multi-agent workflows ask the worktree question exactly once.
 
