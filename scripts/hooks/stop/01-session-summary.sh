@@ -3,6 +3,10 @@
 # Returns exit 2 to surface the warning in the Claude Code UI.
 set -euo pipefail
 
+# Fast-path: dispatcher sets DEVTEAM_NO_CHANGES=1 when there are no staged/unstaged
+# changes and no commits today — nothing to summarise.
+[ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 SUMMARY_FILE=".claude/user-data/session-summary.md"

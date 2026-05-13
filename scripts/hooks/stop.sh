@@ -12,6 +12,20 @@ cat > "$HOOK_TMP" || true
 export DEVTEAM_HOOK_PAYLOAD="$HOOK_TMP"
 trap 'rm -f "$HOOK_TMP"' EXIT
 
+# Fast-path: compute git state once here so sub-scripts 01–03 can skip
+# expensive checks when nothing relevant changed in this session.
+# DEVTEAM_NO_CHANGES=1 means: no staged/unstaged changes AND no commits today.
+DEVTEAM_NO_CHANGES=0
+if git rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+    if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
+        TODAY=$(date +%Y-%m-%d)
+        if ! git log --oneline --since="${TODAY} 00:00:00" --format="%h" 2>/dev/null | grep -q .; then
+            DEVTEAM_NO_CHANGES=1
+        fi
+    fi
+fi
+export DEVTEAM_NO_CHANGES
+
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/stop" && pwd)"
 EXIT_CODE=0
 
