@@ -165,6 +165,11 @@ Before closing out the session, verify:
 - [ ] Commits made and PR opened (if GitHub is configured)
 - [ ] Session summary written to `.claude/user-data/session-summary.md`
 
+**Related workflows:**
+- Project is now stabilized and needs ongoing feature work? → `workflows/maintenance.md`
+- Security vulnerabilities discovered during audit? → `workflows/security-patch.md`
+- Architecture needs significant restructuring? → `workflows/refactor.md`
+
 ---
 
 ## Recovery Paths

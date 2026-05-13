@@ -6,6 +6,19 @@ Use when a security vulnerability is identified — through a CVE, security audi
 
 ---
 
+## Step 0: Record Start Time (MTTR Tracking)
+
+Before any other action, capture the discovery timestamp:
+
+```bash
+echo "started_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .claude/user-data/security-mttr.log
+echo "vulnerability: [brief description]" >> .claude/user-data/security-mttr.log
+```
+
+This file is used at Step 7 (Deploy) to calculate Mean Time To Remediate.
+
+---
+
 ## Step 1: Assess Severity
 
 ```
@@ -101,7 +114,7 @@ Capture the output in `.claude/docs/development/security-incidents.md` or your d
 
 ---
 
-## Step 7: Deploy (devops-specialist)
+## Step 7: Deploy (devops-specialist) — Record Deploy Time
 
 ```
 Prompt: "As the devops-specialist, what's the fastest safe deploy strategy for
@@ -111,6 +124,18 @@ Prompt: "As the devops-specialist, what's the fastest safe deploy strategy for
 The `devops-specialist` presents a deploy plan (steps, rollback procedure, verification commands) and waits for your approval before executing anything.
 
 Security patches often justify faster deploy cycles — coordinate with the team on the timeline.
+
+After deploy is confirmed, record the remediation time:
+
+```bash
+echo "deployed_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .claude/user-data/security-mttr.log
+# Calculate MTTR
+start=$(grep "started_at" .claude/user-data/security-mttr.log | tail -1 | cut -d' ' -f2)
+end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "mttr_note: patch deployed. Review .claude/user-data/security-mttr.log for timestamps." 
+```
+
+Include the MTTR in the incident document (Step 8).
 
 ---
 
@@ -154,6 +179,11 @@ Before closing out the session, verify:
 - [ ] Incident documented in `.claude/docs/development/security-incidents.md`
 - [ ] Commits made and PR opened (if GitHub is configured)
 - [ ] Session summary written to `.claude/user-data/session-summary.md`
+
+**Related workflows:**
+- Patch requires broader code cleanup? → `workflows/refactor.md`
+- Security issue found during a code review? → `workflows/review.md`
+- Inherited a project with unresolved vulnerabilities? → `workflows/inherited-project.md`
 
 ---
 

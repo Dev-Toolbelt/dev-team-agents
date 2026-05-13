@@ -175,6 +175,11 @@ Before closing out the session, verify:
 - [ ] Commits made and PR opened (if GitHub/GitLab is configured)
 - [ ] Session summary written to `.claude/user-data/session-summary.md`
 
+**Related workflows:**
+- Found a bug in production? → `workflows/bug-fix.md`
+- Security issue discovered? → `workflows/security-patch.md`
+- Feature requires significant refactoring before or after? → `workflows/refactor.md`
+
 ---
 
 ## Recovery Paths

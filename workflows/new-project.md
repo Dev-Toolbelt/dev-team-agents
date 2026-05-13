@@ -207,6 +207,11 @@ Before closing out the session, verify:
 
 **After launch**, use `workflows/maintenance.md` for all ongoing feature work and bug fixes.
 
+**Related workflows:**
+- Project is already live and needs ongoing work? → `workflows/maintenance.md`
+- Taking over an existing codebase instead? → `workflows/inherited-project.md`
+- Need a full-stack feature implementation sprint? → `workflows/fullstack.md`
+
 ---
 
 ## Recovery Paths
