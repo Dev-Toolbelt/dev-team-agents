@@ -31,6 +31,8 @@ Load `security-checklist` skill to validate security behavior as part of QA — 
 
 **Git workflow** — load `skills/shared/git-workflow/SKILL.md` when reviewing git commit history or branch conventions as part of QA (e.g., verifying that commit messages, branch names, or merge strategy comply with project standards).
 
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads when scanning large codebases or test suites; summarize diffs instead of dumping them.
+
 **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`. When loaded:
 - Include the quality gate status (`OK` / `ERROR`) in the QA Report **Test Coverage Summary** table
 - Treat a failing quality gate as a `[BLOCKER]` — the product must not ship until the gate passes

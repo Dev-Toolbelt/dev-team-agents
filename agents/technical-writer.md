@@ -20,6 +20,7 @@ Before writing any documentation:
 7. Run `git log --oneline -20` — recent commits reveal what changed and must be reflected in changelogs, release notes, or "What's New" sections
 8. Existing documentation — match the voice, style, and structure already in place
 9. Load `conventional-commits` skill (`skills/shared/conventional-commits/SKILL.md`) when producing changelogs, commit messages, or commit message guidelines — check `git log --oneline -10` first; if the project follows a different pattern, apply that instead
+10. Apply `skills/shared/token-efficiency/SKILL.md` — use `grep`/`head` to sample documentation before reading entire files; avoid loading the full git log when a short excerpt suffices
 
 **Project documentation standards always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

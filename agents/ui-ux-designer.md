@@ -19,6 +19,7 @@ Before any design work:
 6. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it
 7. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
 8. Existing UI code and components — understand what's already built
+9. Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep` for component discovery; use `head` to sample large design system files before loading them fully
 
 **Project design conventions always override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 

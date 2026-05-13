@@ -18,6 +18,7 @@ Before doing anything, load the project context:
 5. Apply the **project-context** rule: the project's explicit conventions always override base standards
 6. Load `skills/shared/backlog-template/SKILL.md` — use it as the canonical structure when generating backlog documents
 7. Load `discovery-mode` skill (`skills/shared/discovery-mode/SKILL.md`) — apply its patterns throughout: HARD-GATE, one question at a time, scope decomposition check, 2-3 approaches when paths diverge, spec self-review, and user review gate
+8. Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping
 
 **Tracker integration:** If `CLAUDE.md` or `.claude/docs/project.md` registers `TRACKER: jira` (or Jira credentials are detected via `JIRA_BASE_URL`), see the Jira Integration section below — load the skill from there to avoid duplicate loads.
 
