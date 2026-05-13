@@ -28,20 +28,34 @@ jobs:
 
       - name: README sync check
         run: |
-          # Allow up to 5% line-count difference; larger gaps suggest one file wasn't updated
+          # Check that all ## sections in the EN file are present in the pt-BR translation.
+          # Also apply a loose 50% line-count sanity check to catch wholesale missing content.
           check_pair() {
             local en="$1" ptbr="$2"
+            local fail=0
+
+            # Section-header match (primary check)
+            en_sections=$(grep "^## " "$en" 2>/dev/null | sort)
+            ptbr_sections=$(grep "^## " "$ptbr" 2>/dev/null | sort)
+            if [ "$en_sections" != "$ptbr_sections" ]; then
+              echo "Section mismatch: $en ↔ $ptbr"
+              diff <(echo "$en_sections") <(echo "$ptbr_sections") || true
+              fail=1
+            fi
+
+            # Loose line-count sanity (50% threshold — catches missing large blocks)
             EN_LINES=$(wc -l < "$en")
             PTBR_LINES=$(wc -l < "$ptbr")
             DIFF=$(( EN_LINES - PTBR_LINES ))
             DIFF=${DIFF#-}
-            THRESHOLD=$(( EN_LINES * 5 / 100 + 1 ))
+            THRESHOLD=$(( EN_LINES / 2 + 1 ))
             if [ "$DIFF" -gt "$THRESHOLD" ]; then
-              echo "$en ($EN_LINES lines) and $ptbr ($PTBR_LINES lines) differ by $DIFF lines (threshold: $THRESHOLD)."
-              echo "Update $ptbr to match $en changes."
-              return 1
+              echo "$en and $ptbr differ by $DIFF lines (>50%). Check for missing content."
+              fail=1
             fi
-            echo "Sync OK: $en ↔ $ptbr (diff: $DIFF lines)"
+
+            [ "$fail" -eq 0 ] && echo "Sync OK: $en ↔ $ptbr"
+            return $fail
           }
           FAIL=0
           check_pair README.md README.pt-BR.md || FAIL=1
