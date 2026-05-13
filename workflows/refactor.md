@@ -39,6 +39,14 @@ The answer is written to `.claude/.worktree-session` so multi-agent sessions do 
 
 ▶ CHECKPOINT — await: worktree or branch ready
 
+**After the branch or worktree is confirmed**, create a safety tag before any changes:
+
+```bash
+git tag pre-refactor-<scope>-$(date +%Y%m%d%H%M%S)
+```
+
+Replace `<scope>` with a short slug of the target routine or module (e.g. `pre-refactor-auth-service-20260115143022`). This tag lets you recover the exact pre-refactoring state if the workflow is abandoned mid-way.
+
 ---
 
 ## Phase 1: ANALYSIS
