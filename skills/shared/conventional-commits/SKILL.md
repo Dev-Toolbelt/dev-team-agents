@@ -112,6 +112,22 @@ operation idempotent under clock drift.
 chore(deps): upgrade Laravel to 11.x
 ```
 
+## Validation Script
+
+A standalone validator lives at `scripts/validate-commit-msg.sh`:
+
+```bash
+# from stdin
+echo "feat(auth): add refresh token" | bash .claude/dev-team-agents/scripts/validate-commit-msg.sh
+
+# or pass the message directly
+bash .claude/dev-team-agents/scripts/validate-commit-msg.sh "feat(auth): add refresh token"
+```
+
+Exits 0 when valid, 1 with a plain-English error message when not. Use in git hooks (`commit-msg`) or CI to enforce the pattern automatically.
+
+---
+
 ## Changelog Generation
 
 Group commits by type for changelog:
