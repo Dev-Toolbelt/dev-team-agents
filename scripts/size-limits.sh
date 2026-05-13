@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Usage: bash scripts/size-limits.sh [--warn-only] [--quiet]
+#
+# Validates line-count limits declared in CLAUDE.md:
+#   agents/    — max ~200 lines each
+#   skills/    — max ~500 lines each (SKILL.md files only; references/ excluded)
+#
+# Exits 0 if all pass (or if --warn-only is set).
+# Exits 1 on violations in strict mode (default).
+#
+# Flags:
+#   --warn-only  print violations but exit 0 (for gradual CI rollout)
+#   --quiet      suppress success output when clean
+
+set -euo pipefail
+
+WARN_ONLY=false
+QUIET=false
+for arg in "$@"; do
+  case "$arg" in
+    --warn-only) WARN_ONLY=true ;;
+    --quiet)     QUIET=true ;;
+  esac
+done
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_DIR="$REPO_ROOT/agents"
+SKILLS_DIR="$REPO_ROOT/skills"
+
+AGENT_LIMIT=200
+SKILL_LIMIT=500
+
+VIOLATIONS=()
+
+# ── Check agents ──────────────────────────────────────────────────────────────
+while IFS= read -r f; do
+  lines=$(wc -l < "$f")
+  if [ "$lines" -gt "$AGENT_LIMIT" ]; then
+    rel="${f#"$REPO_ROOT"/}"
+    VIOLATIONS+=("  · $rel: $lines lines (limit: $AGENT_LIMIT)")
+  fi
+done < <(find "$AGENTS_DIR" -name "*.md" | sort)
+
+# ── Check skills (SKILL.md only; skip references/ subdirs) ───────────────────
+while IFS= read -r f; do
+  rel="${f#"$REPO_ROOT"/}"
+  [[ "$rel" == *"/references/"* ]] && continue
+  lines=$(wc -l < "$f")
+  if [ "$lines" -gt "$SKILL_LIMIT" ]; then
+    VIOLATIONS+=("  · $rel: $lines lines (limit: $SKILL_LIMIT)")
+  fi
+done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
+
+# ── Output ────────────────────────────────────────────────────────────────────
+SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ ${#VIOLATIONS[@]} -eq 0 ]; then
+  [ "$QUIET" = false ] && echo "size-limits: clean ✓"
+  exit 0
+fi
+
+echo ""
+echo "$SEPARATOR"
+echo " SIZE LIMITS"
+echo "$SEPARATOR"
+echo ""
+if [ "$WARN_ONLY" = true ]; then
+  echo " WARN — Files exceeding declared limits (non-blocking):"
+else
+  echo " ERRORS — Files exceeding declared limits:"
+fi
+for v in "${VIOLATIONS[@]}"; do
+  echo "$v"
+done
+echo ""
+echo " Agents: max $AGENT_LIMIT lines | Skills: max $SKILL_LIMIT lines"
+echo " Move long reference material to a references/ subdirectory."
+echo "$SEPARATOR"
+
+[ "$WARN_ONLY" = true ] && exit 0
+exit 1

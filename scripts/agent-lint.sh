@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: bash scripts/agent-lint.sh
-# Validates YAML frontmatter on all agents/*.md files.
-# Checks for required fields and valid model values.
+# Validates YAML frontmatter on all agents/*.md files and skills/**/SKILL.md files.
+# Checks for required fields, valid model values, and canonical skill frontmatter.
 # Exits 0 if all pass, 1 if any errors found.
 # Flags:
 #   --quiet   suppress success output when clean
@@ -71,12 +71,53 @@ check_agent() {
   fi
 }
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# ── Validate skill frontmatter (name + description only) ─────────────────────
+check_skill() {
+  local file="$1"
+
+  local first_line
+  first_line=$(head -1 "$file")
+  if [ "$first_line" != "---" ]; then
+    return  # No frontmatter — acceptable for some skills
+  fi
+
+  local frontmatter
+  frontmatter=$(awk '/^---/{n++; if(n==2) exit} n==1 && !/^---/' "$file")
+  [ -z "$frontmatter" ] && return
+
+  # Check required skill fields
+  for field in name description; do
+    if ! echo "$frontmatter" | grep -qE "^${field}:"; then
+      ERRORS+=("  · ${file}: missing skill field: ${field}")
+    fi
+  done
+
+  # Check for non-canonical keys (only name and description allowed at top level)
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    key=$(echo "$line" | grep -oE '^[a-zA-Z_-]+:' | tr -d ':' || true)
+    [ -z "$key" ] && continue
+    case "$key" in
+      name|description) ;;  # canonical
+      *) ERRORS+=("  · ${file}: non-canonical frontmatter key: ${key} (only name/description allowed)") ;;
+    esac
+  done <<< "$frontmatter"
+}
+
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 for agent_file in agents/*.md; do
   [ -f "$agent_file" ] || continue
   check_agent "$agent_file"
 done
+
+while IFS= read -r skill_file; do
+  # Skip references/ subdirectories
+  [[ "$skill_file" == *"/references/"* ]] && continue
+  check_skill "$skill_file"
+done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 
 if [ ${#ERRORS[@]} -gt 0 ]; then
   echo "$SEPARATOR"
