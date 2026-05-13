@@ -89,6 +89,55 @@ Only flag issues that would cause real problems during implementation planning. 
 
 ---
 
+## Max Iterations
+
+**Never run more than 3 clarification rounds** without producing a spec or document:
+
+| Round | Purpose |
+|-------|---------|
+| 1 | Initial questions — goals, constraints, success criteria |
+| 2 | Clarification of ambiguous answers |
+| 3 | Final confirmation of open items |
+
+After Round 3, produce the best possible spec with **explicit assumptions** noted for every unresolved question. Mark them clearly:
+
+> **Assumption [A1]:** [what was assumed]. Flagged for user confirmation.
+
+Do not ask a 4th round of questions — produce the output and let the user correct the assumptions.
+
+---
+
+## Discovery Lockfile
+
+When multiple agents may run discovery concurrently (e.g., in a parallel spawn), use a lockfile to prevent duplicate discovery sessions from racing:
+
+```bash
+LOCK=".claude/.discovery-lock"
+
+# Acquire lock (fail fast if already held)
+if [ -f "$LOCK" ]; then
+    echo "⚠ Discovery already in progress ($(cat $LOCK)). Waiting for it to complete."
+    exit 0
+fi
+echo "$AGENT_NAME $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
+```
+
+**Rules:**
+- Write `<agent-name> <ISO-timestamp>` to the lock so the owner is identifiable.
+- Remove the lock on EXIT (success or failure) via `trap`.
+- If the lock is stale (older than 30 minutes), remove it and proceed:
+  ```bash
+  if [ -f "$LOCK" ]; then
+      lock_ts=$(date -d "$(awk '{print $2}' "$LOCK")" +%s 2>/dev/null || echo 0)
+      age=$(( $(date +%s) - lock_ts ))
+      [ "$age" -gt 1800 ] && rm -f "$LOCK"
+  fi
+  ```
+- Discovery sessions started by the user directly (not by parallel spawns) do not need the lockfile.
+
+---
+
 ## User Review Gate
 
 After the spec self-review passes, **always** ask the user to review the written document before proceeding:

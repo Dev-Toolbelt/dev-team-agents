@@ -3,6 +3,18 @@ name: graphify-setup
 description: Graphify — autonomous setup: graphify.json, Stop hook, CLAUDE.md.
 ---
 
+## Skip Conditions
+
+Do not run this setup if any of the following are true:
+
+- The project contains **no JavaScript, TypeScript, or Python source files** (check: `find . -name "*.js" -o -name "*.ts" -o -name "*.py" | grep -v node_modules | head -1`)
+- A valid `graphify.json` already exists and the project structure hasn't changed
+- The user explicitly says graphify is not relevant to their stack (pure mobile, database-only, embedded, etc.)
+
+If the project type is ambiguous, ask once: `"Does your project use JavaScript, TypeScript, or Python as its primary language?"` before running Step 1.
+
+---
+
 ## Purpose
 
 Set up Graphify for the project autonomously. Claude handles everything — dependency installation, project structure inference, configuration — and only asks the user when it cannot proceed without their input (permission errors, genuinely ambiguous structure).

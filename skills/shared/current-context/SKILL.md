@@ -55,6 +55,37 @@ If `BEHIND` is greater than 7:
 
 If `git fetch` fails (no network), skip the check silently and proceed.
 
+## Cache
+
+Running 4 git commands on every invocation adds latency. Use a short-lived cache stored at `.claude/.context-cache.json`:
+
+```json
+{ "ts": <unix-epoch-seconds>, "branch": "...", "changed": N, "worktree": "yes|no" }
+```
+
+**Read the cache first:**
+```bash
+CACHE=".claude/.context-cache.json"
+NOW=$(date +%s)
+if [ -f "$CACHE" ]; then
+    cached_ts=$(python3 -c "import json,sys; print(json.load(open('$CACHE'))['ts'])" 2>/dev/null || echo 0)
+    age=$(( NOW - cached_ts ))
+    [ "$age" -lt 300 ] && echo "Context (cached): $(cat $CACHE)" && exit 0
+fi
+```
+
+**Write the cache after detection:**
+```bash
+python3 -c "
+import json, time
+json.dump({'ts': int(time.time()), 'branch': '$BRANCH', 'changed': $CHANGED, 'worktree': '$WORKTREE'}, open('$CACHE','w'))
+" 2>/dev/null || true
+```
+
+Cache TTL is 300 seconds (5 minutes). On cache miss or stale cache, run the full detection flow and write a fresh cache entry. If `python3` is unavailable, skip caching silently and always run the full detection.
+
+---
+
 ## Summary Format
 
 After running the commands, produce a one-line context header before any action:
