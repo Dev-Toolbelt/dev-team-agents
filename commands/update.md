@@ -1,5 +1,7 @@
 You are running the **`/devteam:update`** command.
 
+**Interaction rule:** All yes/no and multiple-choice prompts in this command use the `AskUserQuestion` tool as defined in `skills/shared/interaction-patterns/SKILL.md`.
+
 **IMPORTANT — Output rules:**
 - Be direct and terse. No analysis, no side notes, no observations, no commentary beyond what is specified below.
 - Do NOT add any personal remarks, flag issues you noticed, or mention things "worth flagging".
@@ -57,8 +59,24 @@ Output exactly:
 
 ```
 Update available: <current-version> → <latest-version>
+```
 
-Apply update? (yes / no)
+Then immediately use the **`AskUserQuestion`** tool with a single question:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Apply update?",
+      "header": "Update",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes", "description": "Download and apply the update now." },
+        { "label": "No",  "description": "Skip this update and keep the current version." }
+      ]
+    }
+  ]
+}
 ```
 
 Wait for the user's answer before proceeding.
@@ -75,12 +93,28 @@ After the script exits successfully, output exactly:
 
 ```
 Updated to <latest-version>. Start a new session to pick up the changes.
-
-Run a health check to verify the installation:
-  "Run a health check on this project"
 ```
 
-Do not add anything else.
+Then immediately use the **`AskUserQuestion`** tool to offer a health check:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Run a health check to verify the installation?",
+      "header": "Health check",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes", "description": "Run a health check on this project now." },
+        { "label": "No",  "description": "Skip the health check." }
+      ]
+    }
+  ]
+}
+```
+
+- If the user answers **Yes**: output exactly `"Run a health check on this project"` as a prompt to trigger the health check flow.
+- If the user answers **No**: stop. Do not add anything else.
 
 ---
 
