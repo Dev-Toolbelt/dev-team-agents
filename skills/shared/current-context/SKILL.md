@@ -57,7 +57,7 @@ If `git fetch` fails (no network), skip the check silently and proceed.
 
 ## Cache
 
-Running 4 git commands on every invocation adds latency. Use a short-lived cache stored at `.claude/.context-cache.json`:
+Running 4 git commands on every invocation adds latency. Use a short-lived cache stored at `.claude/user-data/.context-cache.json`:
 
 ```json
 { "ts": <unix-epoch-seconds>, "branch": "...", "changed": N, "worktree": "yes|no" }
@@ -65,7 +65,7 @@ Running 4 git commands on every invocation adds latency. Use a short-lived cache
 
 **Read the cache first:**
 ```bash
-CACHE=".claude/.context-cache.json"
+CACHE=".claude/user-data/.context-cache.json"
 NOW=$(date +%s)
 if [ -f "$CACHE" ]; then
     cached_ts=$(python3 -c "import json,sys; print(json.load(open('$CACHE'))['ts'])" 2>/dev/null || echo 0)

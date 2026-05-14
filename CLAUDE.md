@@ -349,6 +349,7 @@ Files in `user-data/`:
 - `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
 - `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
+- `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
 - `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 
 Other directories under `.claude/` created by agents:

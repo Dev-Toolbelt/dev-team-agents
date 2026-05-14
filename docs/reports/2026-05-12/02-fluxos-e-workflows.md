@@ -107,7 +107,7 @@ Cada sub-script já tem internamente seu próprio gate (ex.: `04-notifier.sh` ag
 
 **Detecção:** 23 de 25 commands carregam `current-context` antes de spawn. Cada agent spawn então tipicamente **re-executa** o mesmo `git branch`, `git diff main…HEAD`, leitura de `.claude/.worktree-session` etc. — overhead de ~5-10s por spawn em projetos grandes.
 
-`current-context/SKILL.md` é mecânica de leitura, mas não tem cache. Não há contrato de "pré-aquecimento" — o command poderia gravar o resultado em `.claude/.context-cache.json` (TTL curto, ex.: 5min) e cada agent spawned ler dali.
+`current-context/SKILL.md` é mecânica de leitura, mas não tem cache. Não há contrato de "pré-aquecimento" — o command poderia gravar o resultado em `.claude/user-data/.context-cache.json` (TTL curto, ex.: 5min) e cada agent spawned ler dali.
 
 **Impacto positivo (se corrigido):** em commands multi-spawn (plan, refactor, fix com 3-5 agents), elimina o re-trabalho. Em projetos grandes (>1GB git), redução estimada de 30-60s wall-clock.
 
