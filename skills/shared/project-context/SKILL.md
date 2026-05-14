@@ -232,6 +232,14 @@ Example: if the project uses PHPDoc for all methods but our base standard says "
 
 ---
 
+## Interaction Patterns — Quiz-first Rule
+
+**Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question.**
+
+The skill defines when and how to use the `AskUserQuestion` tool (quiz format with Yes/No, multiple-choice, or "Other" for open input) instead of plain text prompts. Apply it to every confirmation, choice, and gate in your workflow.
+
+---
+
 ## Quality / Security Scanners
 
 Detect and load the appropriate skill when any scanner config is present:

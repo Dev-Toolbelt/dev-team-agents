@@ -84,6 +84,19 @@ This ensures multi-agent workflows ask the worktree question exactly once.
 - Max ~500 lines; move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
 
+#### Interaction Patterns — Quiz-first Rule
+
+All agents and commands must use the `AskUserQuestion` tool whenever asking the user a question with a finite set of reasonable answers. Plain text prompts like `(yes / no)` or `(a / b / c)` are not allowed.
+
+Rules:
+- **Yes / No questions** → always use `AskUserQuestion` with two options
+- **Multiple-choice** → use `AskUserQuestion` with 2–4 options
+- **Open-ended with common defaults** → add an `"Other"` option so the user can type freely
+- **Strict free-form input** (branch name, ADR title, custom text) → plain text is acceptable
+- Use the user's language from `preferences.json` for all option labels and descriptions
+
+The canonical reference is `skills/shared/interaction-patterns/SKILL.md`. Load it before writing any agent or command that asks user questions.
+
 #### Contradiction Guard
 
 All agents automatically enforce the Contradiction Guard defined in `skills/shared/project-context/SKILL.md`. When a user request conflicts with an established rule (in `CLAUDE.md`, ADRs, architecture docs, or sprint scope), the agent must flag the conflict, cite the source, and ask for explicit confirmation before proceeding.
