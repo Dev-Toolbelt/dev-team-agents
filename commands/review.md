@@ -14,4 +14,7 @@ Always spawn in parallel:
 Also spawn if the task involves database changes:
 - `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — query efficiency, schema correctness, migration safety
 
+Also spawn if the diff includes mobile files (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
+- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — review mobile-specific code quality, platform APIs, memory management, and lifecycle patterns
+
 Task: $ARGUMENTS

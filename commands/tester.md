@@ -10,6 +10,9 @@ Always spawn:
 Also spawn if the context includes frontend changes:
 - `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` — component, E2E, and accessibility tests for frontend changes
 
+Also spawn if the context includes mobile changes (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
+- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — author or update tests for mobile components (Detox, Maestro, Appium, XCTest, Espresso)
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**
