@@ -223,170 +223,25 @@ dev-team-agents/
 
 ## User Preferences
 
-All user-level preferences are stored in `.claude/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check.
-
-### Schema
-
-```json
-{
-  "language": "en",
-  "context_window_percent_warning": 55,
-  "context_window_percent_limit": 60,
-  "suppress_notifications": false,
-  "session_summary_max_days": 30,
-  "session_summary_max_entries": 30,
-  "docs_stale_after_days": 30,
-  "auto_update": false,
-  "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
-  "model_max_tokens": 200000
-}
-```
-
-| Field | Default | Purpose |
-|-------|---------|---------|
-| `language` | `"en"` | BCP 47 language tag for agent conversation with the user |
-| `context_window_percent_warning` | `55` | % at which agents emit a `warning` notification |
-| `context_window_percent_limit` | `60` | % at which agents emit a `critical` notification |
-| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types |
-| `session_summary_max_days` | `30` | Days before session-summary entries are trimmed |
-| `session_summary_max_entries` | `30` | Maximum number of session-summary entries |
-| `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale |
-| `auto_update` | `false` | Auto-update when a new version is detected |
-| `update_check_interval_hours` | `24` | Hours between update checks |
-| `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
-| `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
-
-> **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
-
-### Language Rule
-
-| Output | Language |
-|--------|---------|
-| Documents (ADRs, session-summary, changelogs, code comments) | **Always English** |
-| Plans presented for user approval | **`language` field from `preferences.json`** — plans are conversation items, not documents |
-| Conversation with the user (responses, questions, notifications) | **`language` field from `preferences.json`** — fallback to English |
-
-### Migration
-
-The legacy `.auto-update` flag file is automatically migrated to `preferences.json → auto_update` by `install.sh` and the health check.
+→ See [`CLAUDE-md/preferences.md`](CLAUDE-md/preferences.md) for the preferences.json schema, language rules, and migration notes.
 
 ---
 
 ## Notification System
 
-Agents and shell hooks emit structured notifications using the DEV TEAM AGENTS format.
-
-### Format
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- {icon}  DEV TEAM AGENTS  {icon}
- {message in the user's language}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-### Types
-
-| Type | Icon | When to use |
-|------|------|-------------|
-| `info` | ℹ️ | Tips, suggestions, best practices |
-| `warning` | ⚠️ | Context approaching limit, stale config, missing prefs |
-| `critical` | 🚨 | Context at or beyond limit, broken installation |
-
-### Channels
-
-| Hook | Notifications |
-|------|--------------|
-| `session-start.sh` | Persistent state: missing `preferences.json`, stale docs |
-| `stop/04-notifier.sh` | Session progress: context window warnings, tip of session |
-
-### Suppression
-
-Set `suppress_notifications` in `preferences.json`:
-- `false` — show all
-- `true` — suppress all
-- `["info"]` — suppress only the listed types
-
-### Context Window Estimation
-
-`stop/04-notifier.sh` estimates context usage using two strategies (in order of preference):
-
-1. **Transcript-based** (primary): reads `transcript_path` from the Stop hook payload, sums `input_tokens + output_tokens` across all turns, then applies `transcript_multiplier` (default `1.8`) to compensate for system prompt, tools, and memory not stored in the transcript. Result is compared to `model_max_tokens`.
-2. **Turn-count heuristic** (fallback): fires when the transcript path is unavailable. Calibrates `100% ≈ 45 turns` and scales linearly. Less accurate for content-heavy sessions.
-
-> **Limitation**: the actual context percentage (as shown by `/context`) is not accessible from bash hooks. The transcript-based estimate covers the conversation messages portion (~55% of total) and approximates the rest via the multiplier. Adjust `transcript_multiplier` in `preferences.json` if notifications fire too early or too late for your typical session profile.
-
-### Tip of Session
-
-`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined inline in the script. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
-
-### Stop Sub-script Convention (updated)
-
-| Prefix | Reserved for | Current scripts |
-|--------|-------------|-----------------|
-| `01-` | State detection and collection | `01-session-summary.sh` |
-| `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
-| `03-` | Static validation | `03-agent-lint.sh` |
-| `04-` | User-facing notifications | `04-notifier.sh` |
-| `99-` | Final/cleanup tasks | _(reserved, unused)_ |
+→ See [`CLAUDE-md/notifications.md`](CLAUDE-md/notifications.md) for format, types, channels, suppression, and context window estimation.
 
 ---
 
 ## User Data Directory
 
-When installed in a project, the installer creates two sibling directories under `.claude/`:
-
-| Directory | Purpose |
-|-----------|---------|
-| `.claude/dev-team-agents/` | Package files — replaced entirely on every update |
-| `.claude/user-data/` | User state and config — **never touched by the installer** |
-
-Files in `user-data/`:
-- `preferences.json` — user preferences (language, thresholds, notifications) (**gitignored** by installer)
-- `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
-- `.installed-version` — current installed version tag (**gitignored** by installer)
-- `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
-- `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
-- `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
-- `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
-- `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
-
-Other directories under `.claude/` created by agents:
-- `.claude/docs/audit/` — project audit reports generated by `setup-assistant` on first run and on health checks. Versioned by default; add to `.gitignore` only if the team prefers not to track audit snapshots.
-
-`install.sh` adds `.claude/user-data/` (entire directory) and `!.claude/user-data/graphify.json` (exception) to `.gitignore` — this ignores all user-data files except `graphify.json`. It also adds `.claude/.worktree-session` to `.gitignore`. Projects with the old per-file entries will be migrated automatically by the health check or next installer run.
-
-**Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
-
-**Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
-
-| Stripped path | Mechanism | Reason |
-|---------------|-----------|--------|
-| `CLAUDE.md` | allowlist (not in `KEEP_ROOT`) | Authoring rules for this repo — not for end-users |
-| `README.md` | allowlist (not in `KEEP_ROOT`) | Replaced by the installed package's own README if present |
-| `README.pt-BR.md` | allowlist (not in `KEEP_ROOT`) | Same as README.md |
-| `CHANGELOG.md` | allowlist (not in `KEEP_ROOT`) | Release history for this repo — not for user projects |
-| `CONTRIBUTING.md` | allowlist (not in `KEEP_ROOT`) | Contribution guide for this repo — not for user projects |
-| `LICENSE` | allowlist (not in `KEEP_ROOT`) | Repo license file — not for user projects |
-| `SECURITY.md` | allowlist (not in `KEEP_ROOT`) | Vulnerability disclosure policy — not for user projects |
-| `docs/` | allowlist (not in `KEEP_ROOT`) | Repository-level reports and internal docs irrelevant to users |
-| `.gitignore` | explicit `rm -f` (dotfile strip) | Repo-level gitignore — not for user projects |
-| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config — not for user projects |
-| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
-| `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
-| `scripts/orphan-skill-scan.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
-| `scripts/agent-lint.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
-| `scripts/size-limits.sh` | explicit `rm -f` | Development tool for this repo — validates authoring line limits |
+→ See [`CLAUDE-md/user-data.md`](CLAUDE-md/user-data.md) for directory structure, file purposes, gitignore rules, and package exclusions.
 
 ---
 
 ## Versioning
 
-- Semantic versioning via git tags: `v1.0.0`, `v1.1.0`, `v2.0.0`
-- Breaking changes (agent behavior changes, removed skills) → major version bump
-- New agents/skills → minor version bump
-- Fixes, clarifications → patch bump
+→ See [`CLAUDE-md/versioning.md`](CLAUDE-md/versioning.md) for the semantic versioning policy.
 
 ---
 
