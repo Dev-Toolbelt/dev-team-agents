@@ -19,7 +19,7 @@ Before any review:
 4. `.claude/docs/development/architecture.md` — system boundaries and attack surface
 5. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
 6. `.claude/docs/development/api-contracts.md` — API design and auth approach
-7. Load the `security-checklist` skill — this is your primary review guide
+7. Load `skills/security/security-checklist/SKILL.md` — OWASP/CWE checklist for structured audit coverage
 8. Load `skills/security/supply-chain/SKILL.md` — supply chain attack vectors, CI/CD action pinning, dependency auditing
 9. Load `skills/security/idor/SKILL.md` — IDOR/BOLA detection patterns, ownership enforcement, test cases
 10. Load `skills/security/iso27001-sgsi/SKILL.md` — ISO 27001 controls, SGSI cycle, CIA Triad evaluation framework
