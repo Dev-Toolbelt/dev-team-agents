@@ -2,10 +2,6 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
 
-Load `skills/shared/plan-mode/SKILL.md` to anchor the canonical plan format (STEPS table, Par. column, Definition of Done) for all spawned agents.
-
----
-
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn in parallel:

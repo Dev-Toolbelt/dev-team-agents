@@ -82,6 +82,13 @@ fi
 
 printf '%s:%d:%d:%s\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" > "$NOTIFIER_STATE_FILE"
 
+# ── Fast-path: skip expensive processing in purely conversational sessions ────
+# If no file changes were detected (DEVTEAM_NO_CHANGES=true) AND the tip for
+# today was already shown, there is nothing to emit — exit early.
+if [ "${DEVTEAM_NO_CHANGES:-false}" = "true" ] && [ "${STATE_DATE:-}" = "${TODAY:-}" ]; then
+    exit 0
+fi
+
 # ── Context window estimation ─────────────────────────────────────────────────
 PCT_USED=0
 METHOD="turns"

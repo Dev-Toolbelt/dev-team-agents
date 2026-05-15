@@ -68,9 +68,17 @@ Running 4 git commands on every invocation adds latency. Use a short-lived cache
 CACHE=".claude/user-data/.context-cache.json"
 NOW=$(date +%s)
 if [ -f "$CACHE" ]; then
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+    cached_branch=$(python3 -c "import json,sys; d=json.load(open('$CACHE')); print(d.get('branch',''))" 2>/dev/null || echo "")
+    if [ -n "$CURRENT_BRANCH" ] && [ -n "$cached_branch" ] && [ "$cached_branch" != "$CURRENT_BRANCH" ]; then
+        # Branch changed — invalidate cache
+        rm -f "$CACHE"
+    fi
+fi
+if [ -f "$CACHE" ]; then
     cached_ts=$(python3 -c "import json,sys; print(json.load(open('$CACHE'))['ts'])" 2>/dev/null || echo 0)
     age=$(( NOW - cached_ts ))
-    [ "$age" -lt 300 ] && echo "Context (cached): $(cat $CACHE)" && exit 0
+    [ "$age" -lt 1800 ] && echo "Context (cached): $(cat $CACHE)" && exit 0
 fi
 ```
 
@@ -82,7 +90,7 @@ json.dump({'ts': int(time.time()), 'branch': '$BRANCH', 'changed': $CHANGED, 'wo
 " 2>/dev/null || true
 ```
 
-Cache TTL is 300 seconds (5 minutes). On cache miss or stale cache, run the full detection flow and write a fresh cache entry. If `python3` is unavailable, skip caching silently and always run the full detection.
+Cache TTL is 1800 seconds (30 minutes). On cache miss, branch change, or stale cache, run the full detection flow and write a fresh cache entry. If `python3` is unavailable, skip caching silently and always run the full detection.
 
 ---
 
