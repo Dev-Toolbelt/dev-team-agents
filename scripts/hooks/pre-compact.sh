@@ -6,6 +6,9 @@ set -euo pipefail
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
+# Skip if dev-team-agents user-data directory is not set up yet
+[ -d ".claude/user-data" ] || exit 0
+
 # Only act when there is something to summarise.
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%Y-%m-%d\ %H:%M:%S)
