@@ -195,7 +195,7 @@ server.use(
 
 ## Test Quality Standards
 
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`; in tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 
 ---
 

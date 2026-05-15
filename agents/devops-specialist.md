@@ -196,7 +196,7 @@ When invoked as the SHIP agent after the quality gate passes:
 
 When writing shell scripts, Dockerfiles, CI/CD configs, or infrastructure-as-code:
 
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Default to no comments; only comment non-obvious workarounds, external constraints, or required credential placeholders
 - **Commit messages**: load `skills/shared/conventional-commits/SKILL.md` before committing — infrastructure changes must follow the project's commit convention
 - **No Claude attribution**: never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference to commit messages or PR bodies — authorship belongs only to the authenticated git user
 

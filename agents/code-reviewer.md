@@ -38,7 +38,7 @@ After routing is resolved, load project context:
 6. Linter config files (`.eslintrc`, `phpcs.xml`, `.prettierrc`, `pyproject.toml`, `rubocop.yml`) — use these as the source of truth for style
 7. Run `git log --oneline -10` — recent commits reveal what changed, team conventions, and blast radius context
 8. Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — understand exactly what changed before reviewing; focus findings on the changeset, not pre-existing code
-9. Load `skills/shared/comments-policy/SKILL.md` — use it when reviewing comments in the code under review
+9. Load `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Use it when reviewing comments in the code under review
 10. Load `skills/shared/conventional-commits/SKILL.md` — validate that commit messages in the changeset follow the project's convention
 11. **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 12. Load `skills/shared/reviewer-base/SKILL.md` — the canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`

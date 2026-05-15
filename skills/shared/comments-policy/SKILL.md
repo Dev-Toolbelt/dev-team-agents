@@ -84,6 +84,17 @@ If multiple languages are present, load the section for the dominant one (most s
 
 ---
 
+## Conditional Section Loading
+
+Load relevant sections based on context — don't load all sections eagerly:
+
+| Context | Load |
+|---------|------|
+| Python files in scope | `skills/shared/comments-policy/sections/type-annotations.md` |
+| Test files in scope (`*.test.*`, `*_test.*`, `spec/`) | `skills/shared/comments-policy/sections/aaa-pattern.md` |
+| Legacy code review or refactor task | `skills/shared/comments-policy/sections/anti-patterns.md` |
+| Greenfield development | None — core SKILL.md is sufficient |
+
 ## Reference Material (load on demand)
 
 - `references/aaa-pattern.md` — AAA test pattern with examples
