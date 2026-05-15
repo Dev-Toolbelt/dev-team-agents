@@ -31,11 +31,11 @@ Before editing any file:
 
 1. Check `.claude/.worktree-session`:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
-   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` and follow its protocol using branch `<b>`
+   - `worktree=yes branch=<b>` → follow step 2-yes below using branch `<b>`
 
 2. If the file does not exist, ask the user once:
    > "Should I work in an isolated git worktree for this task? (yes / no)"
-   - **yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>` to `.claude/.worktree-session`, then load `skills/shared/worktree/SKILL.md`
+   - **yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>` to `.claude/.worktree-session`, then load `skills/shared/worktree/SKILL.md` and follow its protocol
    - **no** → get the current branch (`git branch --show-current`), ask for a name for the new branch (suggest `<context>/<brief-title>` format), run `git checkout -b <branch-name>`, write `worktree=no branch=<branch-name>` to `.claude/.worktree-session`, then proceed
 
 The session file persists across agent turns so the question is asked exactly once per task.
