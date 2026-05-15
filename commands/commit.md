@@ -101,7 +101,20 @@ Run only when the test suite is known to be fast (< 60 s). For slow suites, run 
 | `go.mod` present | `go test ./...` |
 | `Makefile` with `test` target | `make test` |
 
-If any gate (lint, type-check, or tests) returns non-zero:
+### 4.5d — Commit message validation
+
+Before executing each commit, validate the message against the project's commit format:
+
+```bash
+# Validate commit message (skipped if project has its own commit-msg hook)
+if [ -f ".claude/dev-team-agents/scripts/validate-commit-msg.sh" ]; then
+    echo "$COMMIT_MSG" | bash .claude/dev-team-agents/scripts/validate-commit-msg.sh
+fi
+```
+
+This runs the `validate-commit-msg.sh` script (if present) to catch format violations before `git commit` is called. Skip if the project already has a `commit-msg` git hook configured.
+
+If any gate (lint, type-check, tests, or commit message validation) returns non-zero:
 - Show the output to the user
 - Ask: (a) fix and re-stage, (b) commit anyway, (c) abort
 - Do NOT auto-fix without explicit user consent
