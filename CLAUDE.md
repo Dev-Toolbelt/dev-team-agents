@@ -155,7 +155,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:workflow-refactor` | follows `workflows/refactor.md` | Structured refactoring workflow |
 | `/devteam:workflow-review` | follows `workflows/review.md` | Full structured code review workflow |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
-| `/devteam:update` | runs `check-updates.sh` + `update.sh` | Checking for and applying dev-team-agents updates |
+| `/devteam:update` | runs `update.sh` (which delegates freshness check to `hooks/pre-tool-use/01-check-updates.sh`) | Checking for and applying dev-team-agents updates |
 
 ¹ conditional — spawned only when the task context involves that scope.
 
