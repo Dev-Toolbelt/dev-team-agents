@@ -67,6 +67,9 @@ echo "→ Downloading latest installer from GitHub..."
 HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
 bash "$TMP_INSTALLER" "$VERSION_ARG"
 
+# Invalidate context cache after version change
+rm -f ".claude/user-data/.context-cache.json" 2>/dev/null || true
+
 echo ""
 echo "┌──────────────────────────────────────────────────────────────────┐"
 echo "│  Installation complete. Run a health check to verify that all   │"

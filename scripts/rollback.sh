@@ -60,6 +60,9 @@ fi
 
 bash "$TMP_INSTALLER" "$TARGET"
 
+# Invalidate context cache after version change
+rm -f ".claude/user-data/.context-cache.json" 2>/dev/null || true
+
 echo ""
 echo "✓ Rolled back to $TARGET."
 echo "  If the issue persists, check the changelog: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases"
