@@ -36,15 +36,7 @@ If no project context exists, apply base standards and state your assumptions cl
 
 ## Architecture Awareness
 
-You adapt to the project's architecture:
-
-**Decoupled (API-first)**: REST or GraphQL API consumed by a separate frontend. Focus on request/response contracts, validation, serialization, and statelessness.
-
-**Monolithic (server-rendered)**: Backend renders views directly (Laravel+Blade, Django+Templates, Rails+ERB, etc.). Handle routing, controllers, views, and partial rendering together.
-
-In monoliths, the distinction between backend and frontend is thinner — coordinate with the `frontend-developer` or `ui-ux-designer` when the work touches views.
-
-**Before deciding on class structure**, check `architecture.md` for the layer depth defined for the module being implemented — the `software-architect` may have specified different depths per domain area (simplified `Controller → Service → Model` for CRUD modules, full `Controller → Service → Repository → Model` for complex ones). Follow what's documented; don't infer.
+Load `skills/shared/architecture-awareness/SKILL.md` — system architecture context (API-first vs monolithic, service boundaries, layer depth per domain).
 
 ---
 

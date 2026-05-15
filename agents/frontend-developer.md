@@ -62,16 +62,7 @@ Before creating any UI, load all three:
 
 ## Architecture Awareness
 
-**Decoupled SPA**: React, Vue, Svelte, Angular consuming an API. Focus on component design, state management, data fetching, routing, and build optimization. When working on a decoupled SPA, suggest or apply:
-- Code splitting: lazy-load routes and heavy components
-- Tree-shaking: avoid barrel imports that defeat it
-- Asset optimization: compress images, use modern formats (WebP/AVIF)
-- Bundle analysis: run `vite-bundle-visualizer`, `webpack-bundle-analyzer`, or equivalent to identify bloat
-- Environment configs: ensure dev and prod builds are clearly separated
-
-**Server-rendered templates**: Blade, Twig, ERB, Jinja, Handlebars — HTML is rendered server-side, JavaScript enhances. Focus on semantic HTML, progressive enhancement, partial rendering, and minimal JS footprint.
-
-In server-rendered contexts: coordinate with the `backend-developer` since routing, data, and views are handled together.
+Load `skills/shared/architecture-awareness/SKILL.md` — system architecture context (SPA vs server-rendered, API boundaries, layer responsibilities).
 
 ---
 
@@ -114,29 +105,7 @@ When the project uses a data-fetching library, detect it before writing any fetc
 
 ## Code Quality Standards (Base Defaults)
 
-These apply unless the project overrides in `code-standards.md`:
-
-- **Component size**: one component does one thing; split when > ~150 lines
-- **State proximity**: keep state as close to where it's used as possible
-- **No business logic in components**: move to hooks, composables, or services
-- **Semantic HTML**: use the right element for the right job (`button`, `nav`, `article`, etc.)
-- **Accessibility**: minimum WCAG 2.1 AA — contrast ratio 4.5:1, keyboard navigable, ARIA where HTML semantics are insufficient
-- **Performance**: optimize for **Largest Contentful Paint (LCP) < 2.5 s** — the threshold Google defines as "good" and the industry benchmark below which bounce rates and conversion losses become significant. Every extra second of load time measurably increases abandonment. Concretely: lazy-load below-the-fold content, don't block rendering, preload critical assets, minimize layout shifts (CLS), and defer non-critical JS
-- **No inline styles** unless the project uses CSS-in-JS as a convention
-- **Loading states**: every API call or async operation must show a loading indicator while in flight — skeleton, spinner, disabled button, or equivalent; the implementation depends on context but user feedback is mandatory
-- **Page metadata**: update `<title>`, meta description, Open Graph tags, and favicon whenever the page or its context changes; use the framework's head manager (React Helmet, VueUse/head, Nuxt `useHead`, Angular `Title`/`Meta`, etc.)
-- **package.json metadata**: keep `name`, `version`, `description`, `author`, and `homepage` accurate and up to date
-- **KISS**: prefer the simplest solution that correctly solves the problem — complexity requires explicit justification
-- **YAGNI**: don't build abstractions, props, or features until they are actually needed
-- **DRY**: every piece of logic has one authoritative source — extract duplicated logic before it spreads to a third place
-- **Type safety** (where the language supports it): avoid untyped escape hatches (`any` or equivalent); declare prop types and return types explicitly; never use forced type assertions without a guard — treat the type system as a first-class quality tool
-- **Prop sprawl**: a component with more than 5–7 props is a design smell — consider decomposing into smaller components, grouping related props into a configuration object, or moving state up or down the tree
-- For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
-- **Component structure** (container/presentational, smart/dumb, prop rules): load `skills/architecture/component-patterns/SKILL.md`
-- **Naming & file structure** (components, hooks, services, folders): load `skills/architecture/naming-conventions/SKILL.md`
-- **CSS & styling quality** (tokens, specificity, responsive, motion): load `skills/architecture/css-quality/SKILL.md`
-- **State management** (decision tree, library rules, server vs. client state): load `skills/architecture/state-management/SKILL.md`
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
+Load `skills/architecture/frontend-code-quality/SKILL.md` — full baseline rules (component size, state proximity, semantic HTML, LCP target, loading states, KISS/YAGNI/DRY, type safety, prop sprawl) plus references to architecture sub-skills for design patterns, component structure, naming, CSS quality, and state management.
 
 ---
 
@@ -158,13 +127,7 @@ Load `skills/architecture/frontend-patterns/SKILL.md` for debounce, double-submi
 
 When the project uses live data push, collaborative features, or event streaming, load `skills/integrations/realtime/SKILL.md`.
 
-**Detection**: `supabase.channel()` in code, `socket.io` / `ably` / `pusher` dependency, `@supabase/supabase-js` with Realtime usage, or `ws://` / `wss://` connections.
-
-Key frontend rules:
-- **Always unsubscribe on teardown** — call `removeChannel` or the equivalent when a component or view is destroyed; leaking subscriptions causes memory growth and stale event handlers
-- **Expose connection state to the user** — a live badge ("● Live" / "⚠ Reconnecting") is mandatory for any UI that shows real-time data; a silent stale UI is a worse experience than showing offline state
-- **One channel per scope** — use a context provider or store to share channel references; never open one channel per component instance for the same logical scope
-- **Never subscribe to unbounded event streams** — use the `filter` option to scope Postgres Changes to the specific rows the user can see; `event: '*'` on a high-traffic table floods the client
+**Detection**: `supabase.channel()`, `socket.io` / `ably` / `pusher` dependency, `@supabase/supabase-js` with Realtime usage, or `ws://` / `wss://` connections.
 
 ---
 
@@ -190,83 +153,33 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 
 ## What to Do Before Declaring Done
 
-- [ ] Matches the design system (colors, spacing, typography, component patterns)
-- [ ] Responsive — tested at 375px (mobile), 768px (tablet), 1280px+ (desktop)
-- [ ] Accessible — keyboard navigable, no missing ARIA labels, sufficient contrast
-- [ ] No console errors or warnings
-- [ ] No hardcoded strings for international projects (use i18n keys)
-- [ ] LCP measured (Lighthouse or DevTools) — target < 2.5 s
-- [ ] Linters pass
-- [ ] No debug artifacts
-- [ ] Browser console: no errors; warnings that require disproportionate effort may be skipped but must be noted
-- [ ] No `dangerouslySetInnerHTML` / `v-html` with unsanitized content
-- [ ] No auth tokens or PII stored in `localStorage` / `sessionStorage`
-- [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
-- [ ] Test suite passes — run the project's test command before declaring done
-- [ ] Bundle impact reviewed — no new dependency added without checking its size and necessity
-- [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
-- [ ] No Claude attribution in commit messages or PR body — never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference; authorship belongs only to the authenticated git user
+Load `skills/shared/frontend-done-checklist/SKILL.md` and run through all items before declaring any task complete.
 
 ---
 
 ## Jira Integration
 
-**Detection**: the user mentions a Jira issue key (e.g., `VHI-450`, `PROJ-123`), references a Jira board or sprint, or asks to start work on a Jira task.
-
-Load: `skills/integrations/jira/SKILL.md`
-
-Critical rules:
-- **Always create the branch using the Jira naming pattern** before writing any code: `{type}/{issueKey}_short-description` — derive `type` from the issue type/intent and `short-description` from the issue summary
-- Add a QA-ready comment (following the Comment Style in the skill) when the task is ready for review — do not change the issue status unless the user explicitly asks
+When the user mentions a Jira issue key or references a Jira board: load `skills/integrations/jira/SKILL.md`. Always create the branch using the Jira naming pattern before writing any code.
 
 ---
 
 ## SonarQube / SonarCloud Integration
 
-**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, `SONAR_TOKEN` in `.env` / `.env.example`, or `sonarqube` service in `docker-compose.yml`.
-
-Load: `skills/devops/sonarqube/SKILL.md`
-
-Critical rules when SonarQube is detected:
-- **Do not introduce new Bugs or Vulnerabilities** — before declaring done, verify the changeset does not add SonarQube issues of type Bug or Vulnerability; treat them as defects
-- **Maintain coverage** — new code must meet the quality gate coverage threshold (default ≥ 80%); if it falls short, flag it to the `frontend-test-specialist`
-- **Security Hotspots**: if your code touches `dangerouslySetInnerHTML`, `v-html`, `eval`, or dynamic script loading, document why it is safe so the reviewer can mark it `Safe` in the dashboard
-- **Code Smells**: address Blocker and Critical code smells before declaring done
+When `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is detected: load `skills/devops/sonarqube/SKILL.md`. No new Bugs or Vulnerabilities; maintain coverage ≥ quality gate threshold; address Blocker/Critical code smells before declaring done.
 
 ---
 
-## Forms
+## Conditional Skill Loading
 
-When the task involves building or modifying a form, load `skills/architecture/form-handling/SKILL.md` for library detection, validation strategy, error feedback patterns, and submit state rules.
+Load these skills **only when the task matches the trigger**:
 
----
-
-## Accessibility
-
-Load `skills/architecture/accessibility-patterns/SKILL.md` **only when**:
-- The project documents WCAG compliance as a requirement (check `CLAUDE.md`, `README.md`, or `.claude/docs/development/`)
-- The user explicitly asks for accessibility work or an a11y audit
-- An automated tool (axe, Lighthouse) flags specific violations that need to be fixed
-
-Do not apply accessibility patterns as a default constraint on every task.
-
----
-
-## Performance Budgets
-
-If the task involves performance optimization, Core Web Vitals, or bundle size, load `skills/architecture/performance-budgets/SKILL.md`.
-
----
-
-## Offline-First Projects
-
-When the project is offline-first (detected via IndexedDB usage, SQLite/OPFS, service worker with background sync, or explicit project description), load `skills/integrations/offline-first/SKILL.md` for storage schema standards, sync queue strategy, conflict resolution policy, and connectivity detection patterns.
-
----
-
-## Progressive Web Apps (PWA)
-
-When the project is a PWA or needs to become one (detected via `manifest.json`, `service-worker.js`, Workbox config, or Vite PWA plugin), load `skills/integrations/pwa/SKILL.md` for manifest required fields, service worker caching strategies, update lifecycle handling, and the full PWA compliance checklist.
+| Trigger | Skill |
+|---------|-------|
+| Building or modifying a form | `skills/architecture/form-handling/SKILL.md` |
+| WCAG compliance required, explicit a11y audit, or axe/Lighthouse violations | `skills/architecture/accessibility-patterns/SKILL.md` |
+| Performance optimization, Core Web Vitals, or bundle size | `skills/architecture/performance-budgets/SKILL.md` |
+| Offline-first (IndexedDB, SQLite/OPFS, service worker background sync) | `skills/integrations/offline-first/SKILL.md` |
+| PWA (`manifest.json`, `service-worker.js`, Workbox, Vite PWA plugin) | `skills/integrations/pwa/SKILL.md` |
 
 ---
 
