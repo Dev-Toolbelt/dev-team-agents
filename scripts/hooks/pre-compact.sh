@@ -7,16 +7,7 @@ set -euo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # Only act when there is something to summarise.
-TODAY=$(date +%Y-%m-%d)
-NOW=$(date +%Y-%m-%d\ %H:%M:%S)
-
-TODAY_COMMITS=$(git log --since="${TODAY} 00:00:00" --oneline 2>/dev/null || true)
-
-HAS_CHANGES=false
-if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || \
-   [ -n "$(git status --porcelain 2>/dev/null)" ] || [ -n "$TODAY_COMMITS" ]; then
-    HAS_CHANGES=true
-fi
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-summary-detect.sh"
 
 [ "$HAS_CHANGES" = false ] && exit 0
 
