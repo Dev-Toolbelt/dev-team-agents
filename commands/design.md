@@ -6,6 +6,12 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 - `ui-ux-designer` at `.claude/agents/dev-team/ui-ux-designer.md` — design system, component design, UX flows, visual decisions
 
+Also spawn if the task includes implementation of design changes (when $ARGUMENTS contains "implement" or "build"):
+- `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` — implement the design changes in code
+
+Also spawn if mobile implementation is needed (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart AND implementation requested):
+- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — implement design changes for mobile platforms
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**
