@@ -51,6 +51,17 @@ while IFS= read -r f; do
   fi
 done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 
+# ── CLAUDE.md size check ──────────────────────────────────────────────────────
+CLAUDE_MD_LINES=$(wc -l < "$REPO_ROOT/CLAUDE.md" 2>/dev/null || echo 0)
+CLAUDE_MD_WARN=600
+CLAUDE_MD_FAIL=700
+
+if [ "$CLAUDE_MD_LINES" -ge "$CLAUDE_MD_FAIL" ]; then
+    VIOLATIONS+=("  · CLAUDE.md: $CLAUDE_MD_LINES lines (limit: $CLAUDE_MD_FAIL)")
+elif [ "$CLAUDE_MD_LINES" -ge "$CLAUDE_MD_WARN" ]; then
+    VIOLATIONS+=("  ⚠ CLAUDE.md: $CLAUDE_MD_LINES lines (warning threshold: $CLAUDE_MD_WARN)")
+fi
+
 # ── Output ────────────────────────────────────────────────────────────────────
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
