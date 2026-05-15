@@ -66,6 +66,13 @@ fi
 TMP_INSTALLER=$(mktemp)
 trap 'rm -f "$TMP_INSTALLER"' EXIT
 
+# ── Safety checkpoint ─────────────────────────────────────────────────────────
+echo "→ Creating safety checkpoint tag..."
+SAFETY_TAG="pre-rollback-${TARGET}-$(date +%Y%m%d%H%M%S)"
+git tag "$SAFETY_TAG" 2>/dev/null || true
+echo "  Tagged current state as: $SAFETY_TAG"
+echo "  To undo: git checkout $SAFETY_TAG && git checkout -b recovery-from-rollback"
+
 echo "→ Downloading installer from GitHub..."
 if ! HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL" 2>/dev/null; then
     echo "✗ Failed to download installer. Check network connectivity." >&2
