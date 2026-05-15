@@ -270,6 +270,28 @@ When the project is a PWA or needs to become one (detected via `manifest.json`, 
 
 ---
 
+## Push Notifications
+
+Load `skills/integrations/push-notifications/SKILL.md` when any of the following are detected:
+
+**Code signals:**
+- `pushManager.subscribe` or `PushManager` in client code
+- `push` event listener in a service worker (`addEventListener('push', ...)`)
+- `notificationclick` event listener in a service worker
+- `Notification.requestPermission` call
+- `web-push`, `pywebpush`, or equivalent push library in backend dependencies
+
+**Config signals:**
+- `push_server_url` field in `manifest.json` (Safari Web Push)
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in `.env` or `.env.example`
+- Firebase dependency (`firebase`, `@firebase/messaging`) — may indicate FCM-based push
+
+**Explicit request:** user mentions "push notifications", "browser notifications", "web push", or "VAPID".
+
+The skill covers: VAPID key setup, service worker `push`/`notificationclick` handlers, permission UX (double opt-in, never on page load), cross-browser compatibility (Chrome, Firefox, Safari macOS 16+, Safari iOS 16.4+ PWA-only, Samsung Internet), subscription management, backend sending, graceful degradation, and the full security checklist.
+
+---
+
 ## Docs Sync
 
 After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
