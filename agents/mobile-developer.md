@@ -51,10 +51,22 @@ The session file persists across agent turns so the question is asked exactly on
 
 Detect the project's mobile stack and load the corresponding skill. **Skills are never loaded by default — only when the detection signals are present.**
 
+### Flutter
+Load `skills/mobile/flutter/SKILL.md` **only** when a Flutter project is detected:
+- `pubspec.yaml` is present in the root **and** contains `sdk: flutter`, OR
+- `*.dart` files are present in `lib/` or the project root
+
+### React Native / Expo
+Load `skills/mobile/react-native/SKILL.md` **only** when a React Native project is detected:
+- `package.json` contains `"react-native"` in `dependencies` or `devDependencies`, OR
+- `app.json` is present with an `"expo"` key, OR
+- `eas.json` is present, OR
+- `index.js` or `App.tsx` in root contains React Native imports
+
+### Platform design skills
+
 | Stack | Detection Signals | Skill to Load |
 |-------|------------------|---------------|
-| **React Native / Expo** | `react-native` in `package.json`, `metro.config.js`, `app.json` with `"expo"` key, `eas.json`, or `expo-modules-core` dependency | `skills/mobile/react-native/SKILL.md` |
-| **Flutter / Dart** | `pubspec.yaml` with `sdk: flutter`, `lib/main.dart` | `skills/mobile/flutter/SKILL.md` |
 | **iOS target** | `.xcodeproj`/`.xcworkspace`, Swift files, or any cross-platform project with iOS support | `skills/mobile/ios-hig/SKILL.md` |
 | **Android target** | `build.gradle`/`build.gradle.kts`, Kotlin files, or any cross-platform project with Android support | `skills/mobile/material-design/SKILL.md` |
 | **Cross-platform (both platforms)** | React Native, Flutter, or Expo targeting both iOS and Android | Load **both** `ios-hig` and `material-design` skills |

@@ -38,29 +38,9 @@ lib/
 
 ---
 
-## State Management — Decision Tree
+## State Management
 
-| Complexity | Recommendation | Package |
-|-----------|---------------|---------|
-| Ephemeral / local UI state | `setState` or `ValueNotifier` | — (built-in) |
-| Feature-scoped, testable | **BLoC / Cubit** | `flutter_bloc` |
-| Compile-safe DI + reactivity | **Riverpod** | `flutter_riverpod` |
-| Simple with DI | **Provider** | `provider` |
-| Simple with routing bundled | **GetX** | `get` |
-
-**Detection**: check `pubspec.yaml` for the package name before choosing patterns.
-
-### BLoC / Cubit Rules
-- **Cubit** for simple state machines (< 5 states, no events); **BLoC** when event-to-state mapping is complex
-- Never put business logic in widgets — emit states from BLoC/Cubit, react in UI
-- `BlocProvider` at the route level, not inside widgets
-- Always close streams: `BlocProvider` handles disposal automatically; for manual streams, use `StreamSubscription` and cancel in `dispose()`
-
-### Riverpod Rules
-- Prefer `AsyncNotifierProvider` over `FutureProvider` for mutable async state
-- Use `ref.invalidate()` to refresh data after mutations — never manually set state to trigger refresh
-- Keep providers small and composable — avoid god providers
-- Use `riverpod_generator` + `@riverpod` annotation for type-safe provider generation
+→ Load `skills/mobile/flutter/references/state-management.md` when choosing or implementing state management (BLoC, Cubit, Riverpod, Provider, GetX).
 
 ---
 
@@ -97,76 +77,19 @@ final parsed = await compute(parseHeavyJson, rawJsonString);
 
 ## Widget Best Practices
 
-### `const` Everywhere
-- Mark every widget `const` when all constructor arguments are compile-time constants — this prevents unnecessary rebuilds
-- Use `const` constructors for padding, text styles, colors, and spacers: `const SizedBox(height: 16)`
-
-### Widget Size and Decomposition
-- A widget file should not exceed ~150 lines — extract into smaller private widgets or dedicated files
-- Avoid deep nesting (> 4–5 levels) — extract to named widgets or use helper methods returning `Widget`
-- Prefer `StatelessWidget` unless local state is truly needed
-
-### Rebuilds
-- Use `RepaintBoundary` around widgets with frequent repaints (animations, live counters) to isolate their paint layer
-- Never call `setState` from a `build()` method
-- Use `const` `Text`, `Icon`, and `SizedBox` to reduce the rebuild scope
-
-### Platform-Adaptive UI
-```dart
-// Use Cupertino widgets on iOS when matching native feel matters
-if (Platform.isIOS) {
-  return CupertinoButton(...);
-} else {
-  return ElevatedButton(...);
-}
-// Or use adaptive constructors: Switch.adaptive(), CircularProgressIndicator.adaptive()
-```
+→ Load `skills/mobile/flutter/references/widgets.md` when working with widget composition, rebuilds, performance, or platform-adaptive UI.
 
 ---
 
 ## Navigation
 
-| Approach | Package | Use when |
-|----------|---------|---------|
-| Declarative + deep links | **go_router** | New projects; web support needed |
-| Imperative (legacy) | `Navigator 1.0` | Simple apps; no deep links |
-| Auto-generated routes | **auto_route** | Large apps; type-safe route arguments |
-
-**go_router rules** (most common):
-- Define all routes in a single `GoRouter` instance, injected via `Provider`/`Riverpod`
-- Use `ShellRoute` for persistent bottom navigation bars
-- Always handle `redirect` for auth guards — never use `Navigator.push` to block access to protected routes
-- Test deep links with `adb shell am start -a android.intent.action.VIEW -d "myapp://path"` (Android) and `xcrun simctl openurl booted "myapp://path"` (iOS)
-
----
-
-## Performance
-
-- **Profile on a physical device in release mode** — debug mode has significant overhead that does not reflect production performance
-- Use Flutter DevTools (Performance tab) to identify expensive builds and repaints
-- **Avoid `Opacity` widget** for animations — use `AnimatedOpacity` or `FadeTransition` (they use the GPU layer, not CPU)
-- Cache network images with `cached_network_image` — never use `Image.network` for frequently displayed images
-- Lazy-load lists with `ListView.builder` — never `ListView` with a fixed `children` list for dynamic data
-- `AutomaticKeepAliveClientMixin` on tab content that should not rebuild on tab switch
+→ Load `skills/mobile/flutter/references/navigation.md` when working with routing, deep links, or navigation guards.
 
 ---
 
 ## Flavors (Multi-Environment)
 
 Flavors allow separate configurations for `dev`, `staging`, and `production` without code changes.
-
-### Flutter Flavor Setup
-```yaml
-# pubspec.yaml — define flavor constants
-flutter:
-  flavors:
-    development:
-      app:
-        name: AppName Dev
-    production:
-      app:
-        name: AppName
-```
 
 ```dart
 // lib/core/config/app_config.dart
@@ -187,16 +110,7 @@ class AppConfig {
 }
 ```
 
-```dart
-// lib/main_development.dart
-void main() {
-  AppConfig.setup(Flavor.development);
-  runApp(const App());
-}
-```
-
-**Run with flavor**: `flutter run --flavor development -t lib/main_development.dart`
-
+- Run with flavor: `flutter run --flavor development -t lib/main_development.dart`
 - Never use `if (kDebugMode)` as a substitute for flavors — debug/release and dev/prod are orthogonal concerns
 - CI must build each flavor separately and run tests against each
 
@@ -207,24 +121,14 @@ void main() {
 Use platform channels only when a Dart/Flutter package does not exist for the required native API.
 
 ```dart
-// Dart side
 const _channel = MethodChannel('com.company.app/biometric');
 
 Future<bool> authenticate() async {
   try {
     return await _channel.invokeMethod<bool>('authenticate') ?? false;
   } on PlatformException catch (e) {
-    // Handle gracefully — never rethrow PlatformException to UI
     return false;
   }
-}
-```
-
-```swift
-// iOS — AppDelegate or FlutterViewController subclass
-let channel = FlutterMethodChannel(name: "com.company.app/biometric", binaryMessenger: controller.binaryMessenger)
-channel.setMethodCallHandler { call, result in
-  if call.method == "authenticate" { /* ... */ }
 }
 ```
 
@@ -254,7 +158,6 @@ channel.setMethodCallHandler { call, result in
 | Golden | `golden_toolkit` | Visual regression — pixel-diff screenshots |
 | Integration | `integration_test` package | Full app flow on simulator / device |
 
-**Rules:**
 - Mock dependencies with `mocktail` — never use real network or file I/O in unit/widget tests
 - Golden tests: generate goldens on CI; fail on diff; regenerate intentionally with `--update-goldens`
 - Integration tests must run on a physical device or a CI device farm (Firebase Test Lab, BrowserStack)
