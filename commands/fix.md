@@ -2,6 +2,9 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
+
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn based on where the bug lives (in parallel if both apply):

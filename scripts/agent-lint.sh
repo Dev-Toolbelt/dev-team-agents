@@ -18,7 +18,7 @@ done
 VALID_MODELS=(
   "claude-opus-4-7"
   "claude-sonnet-4-6"
-  "claude-haiku-4-5-20251001"
+  "claude-haiku-4-5-20251001"  # retained for future micro-agents; no current usage
 )
 REQUIRED_FIELDS=("name" "description" "model" "tools")
 
@@ -71,7 +71,7 @@ check_agent() {
   fi
 
   # Validate tools: Read must be present; all tools must be from the known set
-  KNOWN_TOOLS=(Read Write Edit Bash Glob Grep WebSearch)
+  KNOWN_TOOLS=(Read Write Edit Bash Glob Grep WebSearch WebFetch)
   local tools_line
   tools_line=$(echo "$frontmatter" | grep -E "^tools:" | sed 's/^tools:[[:space:]]*//' | tr -d '\r')
   if [ -n "$tools_line" ]; then
@@ -88,6 +88,33 @@ check_agent() {
         ERRORS+=("  · ${file}: unknown tool '${tool}' (known: ${KNOWN_TOOLS[*]})")
       fi
     done < <(echo "$tools_line" | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+  fi
+
+  # Check canonical tools order
+  if grep -q "^tools:" "$file"; then
+    local tl
+    tl=$(grep "^tools:" "$file" | head -1)
+    # Check if Write/Edit are present (write-capable agent)
+    if echo "$tl" | grep -q "Write\|Edit"; then
+      # Write-capable: Read must come first, then Write, Edit
+      if ! echo "$tl" | grep -qE "^tools: Read, Write, Edit"; then
+        ERRORS+=("  · ${file}: non-canonical tools order (write-capable agents must start with: Read, Write, Edit, Glob, Grep, Bash)")
+      fi
+    else
+      # Read-only: Read must come first
+      if ! echo "$tl" | grep -qE "^tools: Read"; then
+        ERRORS+=("  · ${file}: non-canonical tools order (read-only agents: Read must be first)")
+      fi
+    fi
+  fi
+
+  # Check for quiz-first compliance (AskUserQuestion required for finite-answer prompts)
+  if grep -qE "\([yY]es[/ ][nN]o\)|\(y[/]n\)|\(yes\|no\)|\( yes / no \)" "$file" 2>/dev/null; then
+    local violations
+    violations=$(grep -nE "\([yY]es[/ ][nN]o\)|\(y[/]n\)|\(yes\|no\)|\( yes / no \)" "$file" | grep -v "^\s*\`\`\`" | grep -v "^[0-9]*:.*\`" | wc -l | tr -d ' ')
+    if [ "$violations" -gt 0 ]; then
+      ERRORS+=("  · ${file}: plain-text yes/no prompt found — use AskUserQuestion tool instead (see skills/shared/interaction-patterns/SKILL.md)")
+    fi
   fi
 }
 
