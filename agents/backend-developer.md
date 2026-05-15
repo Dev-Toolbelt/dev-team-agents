@@ -218,7 +218,7 @@ These apply unless the project defines otherwise in `code-standards.md`:
 - **Type safety** (where the language supports it): avoid untyped escape hatches (`any`, `object`, `interface{}`, or equivalent); declare parameter and return types on all public functions; never use forced type assertions without a guard — the type system is a first-class quality tool, not a formality
 - **N+1 prevention**: when writing ORM or query code, actively check for loops that issue a query per iteration; use eager loading, batch queries, or `JOIN`s to load related data in a single round-trip; never leave an N+1 pattern that will be caught only at review time
 - For full reference and violation criteria, load `skills/architecture/design-patterns/SKILL.md`
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Default to no comments; use type annotations and test AAA markers as specified there
 
 ---
 

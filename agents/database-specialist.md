@@ -119,7 +119,7 @@ When producing `database.md`:
 
 ## Code Standards
 
-When producing migration files, seed scripts, or query helpers: follow `skills/shared/comments-policy/SKILL.md` (no comments unless non-obvious); load `skills/shared/conventional-commits/SKILL.md` before committing; never add Claude attribution to commit messages or PR bodies.
+When producing migration files, seed scripts, or query helpers: follow `skills/shared/comments-policy/SKILL.md` (no comments unless non-obvious). Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Load `skills/shared/conventional-commits/SKILL.md` before committing; never add Claude attribution to commit messages or PR bodies.
 
 ---
 

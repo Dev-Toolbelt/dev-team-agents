@@ -25,7 +25,7 @@ Before reviewing anything:
 8. Linter/static analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — source of truth for style
 9. Run `git log --oneline -10` — recent commits reveal what changed and team conventions
 10. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-11. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
+11. Load `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Apply when reviewing comments in the code
 12. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
 13. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 14. Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`

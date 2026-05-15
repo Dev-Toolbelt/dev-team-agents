@@ -24,7 +24,7 @@ Before reviewing anything:
 7. Linter/style configs (`.eslintrc`, `.prettierrc`, `stylelint.config.js`) — source of truth for style
 8. Run `git log --oneline -10` — recent commits reveal what changed and team conventions
 9. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-10. Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
+10. Load `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Apply when reviewing comments in the code
 11. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
 12. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
 13. Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`

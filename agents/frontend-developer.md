@@ -136,7 +136,7 @@ These apply unless the project overrides in `code-standards.md`:
 - **Naming & file structure** (components, hooks, services, folders): load `skills/architecture/naming-conventions/SKILL.md`
 - **CSS & styling quality** (tokens, specificity, responsive, motion): load `skills/architecture/css-quality/SKILL.md`
 - **State management** (decision tree, library rules, server vs. client state): load `skills/architecture/state-management/SKILL.md`
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md` — default to no comments; use type annotations and test AAA markers as specified there
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Default to no comments; use type annotations and test AAA markers as specified there
 
 ---
 
