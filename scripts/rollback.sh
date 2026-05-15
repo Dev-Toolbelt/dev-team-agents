@@ -34,6 +34,20 @@ fi
 CURRENT=""
 [ -f "$CURRENT_VERSION_FILE" ] && CURRENT=$(cat "$CURRENT_VERSION_FILE")
 
+# ── Validate version format ──────────────────────────────────────────────────
+if [[ ! "$TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "✗ Invalid version format: '$TARGET'" >&2
+    echo "  Expected: vX.Y.Z (e.g., v1.2.3)" >&2
+    echo "  See: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases" >&2
+    exit 1
+fi
+
+# ── No-op check ──────────────────────────────────────────────────────────────
+if [ "$CURRENT" = "$TARGET" ]; then
+    echo "→ Already at $TARGET; nothing to do."
+    exit 0
+fi
+
 echo "→ Rolling back from ${CURRENT:-unknown} to $TARGET ..."
 
 # ── HTTP tool detection ────────────────────────────────────────────────────────
