@@ -59,7 +59,9 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 ### Agents (`agents/*.md`)
 
 - Frontmatter: `name`, `description`, `model`, `tools`
-- Model assignment: `claude-opus-4-7` (decision-making), `claude-sonnet-4-6` (execution), `claude-haiku-4-5-20251001` (structured output)
+- Model assignment: `claude-opus-4-7` (decision-making, complex reasoning), `claude-sonnet-4-6` (execution, coding, structured output)
+  > Note: Haiku is available for future micro-agents with strict latency/cost requirements; add it back when a concrete candidate emerges.
+- Tools order: `Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch` (write-capable agents); `Read, Glob, Grep, Bash` (read-only reviewers). Append optional tools (WebSearch, WebFetch) in that order.
 - Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning**
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - Max ~200 lines per agent; move reference material to skills
@@ -492,6 +494,15 @@ Each sub-script must:
 - Exit non-zero only when action is required from the user
 
 Prefix `00-` is reserved for future preconditions. When adding a new sub-script, choose the correct tier and pick a number within that tier (e.g., `02-new-check.sh`).
+
+### Hook Files Map
+
+| Event | File | Dispatcher | Purpose |
+|-------|------|-----------|---------|
+| `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs |
+| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Update checks, context cache |
+| `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
+| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Session summary, orphan scans, notifications |
 
 ---
 

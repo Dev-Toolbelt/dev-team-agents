@@ -4,6 +4,8 @@ Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $A
 
 Load `skills/shared/plan-mode/SKILL.md` to anchor the canonical plan format (STEPS table, Par. column, Definition of Done) for all spawned agents.
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.

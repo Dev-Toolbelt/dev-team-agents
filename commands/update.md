@@ -1,3 +1,7 @@
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
+---
+
 You are running the **`/devteam:update`** command.
 
 **IMPORTANT — Output rules:**

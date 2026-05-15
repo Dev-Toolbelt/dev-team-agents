@@ -1,5 +1,7 @@
 Load the skill at `skills/shared/conventional-commits/SKILL.md` before doing anything.
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
 ---
 
 ## Step 1 — Detect the project's commit pattern

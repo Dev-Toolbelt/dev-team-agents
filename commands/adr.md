@@ -1,5 +1,7 @@
 Load `skills/shared/current-context/SKILL.md` to identify the active branch and project state before acting.
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
 ---
 
 ## Step 1 — Validate title
