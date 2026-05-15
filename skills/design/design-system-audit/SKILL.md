@@ -150,6 +150,44 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ---
 
+## Design System Creation (Design Mode)
+
+When building a design system from scratch, produce `.claude/docs/design/design-system.md` with the following sections:
+
+### Color System
+```
+Primary: [value] — CTAs, interactive elements, brand color
+Secondary: [value] — secondary actions, accents
+Neutral scale: 50–950 — text, borders, backgrounds
+Semantic: success (#...), warning (#...), error (#...), info (#...)
+```
+Ensure minimum contrast ratios: 4.5:1 for text, 3:1 for UI components (WCAG 2.1 AA).
+
+### Typography
+```
+Font: [name] — [why this font]
+Scale: 12/14/16/18/20/24/30/36/48px
+Weights: 400 (body), 500 (labels), 600 (subheadings), 700 (headings)
+Line height: 1.5 (body), 1.2 (headings)
+```
+
+### Spacing System
+```
+Base unit: 4px
+Scale: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96px
+```
+
+### Component Inventory
+Document every reusable component with:
+- Variants (primary, secondary, ghost, danger, etc.)
+- States (default, hover, active, disabled, loading, error)
+- Sizes (sm, md, lg where applicable)
+
+### User Flows
+For each major flow: step-by-step description with screen transitions, decision points, and error paths.
+
+---
+
 ## `anthropic-skills:frontend-design` Integration
 
 This skill is used alongside the `frontend-design` skill (installed automatically by `scripts/install.sh`), which provides component patterns, layout techniques, and visual design guidance. Load it at the start of every design session — it is required, not optional.

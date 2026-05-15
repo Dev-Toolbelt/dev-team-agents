@@ -49,6 +49,8 @@ The session file persists across agent turns so the question is asked exactly on
 
 ## Architecture Awareness & Conditional Skill Loading
 
+Load `skills/shared/architecture-awareness/SKILL.md` — system architecture context (API boundaries, layer responsibilities).
+
 Detect the project's mobile stack and load the corresponding skill. **Skills are never loaded by default — only when the detection signals are present.**
 
 | Stack | Detection Signals | Skill to Load |
