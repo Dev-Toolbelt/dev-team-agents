@@ -154,6 +154,8 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:workflow-fullstack` | follows `workflows/fullstack.md` | Implementing full-stack features end-to-end |
 | `/devteam:workflow-refactor` | follows `workflows/refactor.md` | Structured refactoring workflow |
 | `/devteam:workflow-review` | follows `workflows/review.md` | Full structured code review workflow |
+| `/devteam:workflow-mobile` | follows `workflows/mobile.md` | Full mobile feature workflow |
+| `/devteam:workflow-design` | follows `workflows/design.md` | Full design workflow |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:update` | runs `check-updates.sh` + `update.sh` | Checking for and applying dev-team-agents updates |
 
