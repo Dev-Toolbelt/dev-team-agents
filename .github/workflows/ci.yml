@@ -19,6 +19,10 @@ jobs:
 
       - name: Orphan skill scan
         run: bash scripts/orphan-skill-scan.sh
+        continue-on-error: true
+
+      - name: Check fingerprint uniqueness
+        run: bash scripts/check-fingerprint-uniqueness.sh
 
       - name: Size limits check
         run: bash scripts/size-limits.sh --warn-only

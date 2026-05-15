@@ -8,9 +8,15 @@
 # Orphaned skills produce an ACTION REQUIRED block for Claude to act on.
 #
 # Usage:
-#   bash scripts/orphan-skill-scan.sh          # full scan + auto-fix
-#   bash scripts/orphan-skill-scan.sh --quiet  # suppress output when clean
+#   bash scripts/orphan-skill-scan.sh                # full scan + auto-fix
+#   bash scripts/orphan-skill-scan.sh --quiet        # suppress output when clean
+#   bash scripts/orphan-skill-scan.sh --errors-only  # suppress WARN/ACTION SUGGESTED; show ACTION REQUIRED only
 set -euo pipefail
+
+ERRORS_ONLY=false
+for arg in "$@"; do
+    [ "$arg" = "--errors-only" ] && ERRORS_ONLY=true
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS_DIR="$REPO_ROOT/agents"
@@ -130,8 +136,11 @@ for consumer_file in "${CONSUMER_FILES[@]}"; do
 done
 
 # ── Output ────────────────────────────────────────────────────────────────────
-if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ] && [ ${#DUPLICATE_MSGS[@]} -eq 0 ]; then
-    [ "${1:-}" != "--quiet" ] && echo "orphan-skill-scan: clean ✓"
+EFFECTIVE_DUPLICATE_COUNT=0
+[ "$ERRORS_ONLY" = false ] && EFFECTIVE_DUPLICATE_COUNT=${#DUPLICATE_MSGS[@]}
+
+if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ] && [ "$EFFECTIVE_DUPLICATE_COUNT" -eq 0 ]; then
+    [[ "${1:-}" != "--quiet" && "${1:-}" != "--errors-only" ]] && echo "orphan-skill-scan: clean ✓"
     exit 0
 fi
 
@@ -160,12 +169,14 @@ if [ ${#ORPHAN_MSGS[@]} -gt 0 ]; then
     echo " in that agent's skill-loading section."
 fi
 
-if [ ${#DUPLICATE_MSGS[@]} -gt 0 ]; then
+if [ ${#DUPLICATE_MSGS[@]} -gt 0 ] && [ "$ERRORS_ONLY" = false ]; then
     echo ""
-    echo " WARN — Skills loaded more than once in the same agent:"
+    echo " ACTION SUGGESTED — duplicate skill loads detected:"
     for msg in "${DUPLICATE_MSGS[@]}"; do
         echo "$msg"
     done
+    echo "  Suggested fix: Edit <file>, find the duplicate load reference, and remove"
+    echo "  the redundant occurrence (keep the first/canonical one in the skill gate)."
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
