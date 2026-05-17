@@ -4,7 +4,7 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
-- `software-architect` at `.claude/agents/dev-team/software-architect.md` — architecture decisions, system design, trade-offs, ADR authoring, API contracts, design patterns
+- `software-architect` at `.claude/agents/dev-team/software-architect.md` — architecture decisions, system design, trade-offs, ADR authoring, API contracts, design patterns. The agent will automatically detect the appropriate workflow from the user's request (new project, bug fix, refactor, security patch, design, mobile, fullstack, review, inherited project) and follow it. Falls back to the maintenance workflow when no clear signal is found.
 
 ---
 
