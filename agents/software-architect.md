@@ -27,6 +27,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 | DISCOVERY phase | `skills/shared/discovery-mode/SKILL.md` |
 | Authoring `api-contracts.md` | `skills/architecture/api-design/SKILL.md` |
 | Authoring `code-standards.md` | `skills/architecture/design-patterns/SKILL.md` + `skills/architecture/single-action-controller/SKILL.md` |
+| DI strategy / wiring / IoC container setup | `skills/architecture/design-patterns/SKILL.md` → Composition Root section |
 | Caching strategy | `skills/architecture/caching/SKILL.md` |
 | Fault tolerance / resilience | `skills/architecture/resilience/SKILL.md` |
 | Monorepo project | `skills/architecture/monorepo-patterns/SKILL.md` |

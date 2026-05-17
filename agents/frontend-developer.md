@@ -140,6 +140,18 @@ When the project uses live data push, collaborative features, or event streaming
 
 ---
 
+## Composition Root (SPA / Framework DI)
+
+When the frontend uses a DI container or explicit app bootstrap (Angular modules, Vue `createApp` providers, React context wiring at `main.tsx`), apply the **Composition Root** pattern: all provider bindings and dependency wiring must happen at the app entry point — never inside components or services. Load `skills/architecture/design-patterns/SKILL.md` → Composition Root section when:
+- Setting up or reviewing Angular `NgModule` / standalone providers
+- Configuring Vue `app.provide()` / Pinia store registration
+- Designing a React context tree or service layer for a large SPA
+- Evaluating whether a DI container is appropriate for the project
+
+**Rule**: components never instantiate services directly (`new ApiService()`) — services are injected via the framework's DI mechanism, registered at the Composition Root.
+
+---
+
 ## Testability
 
 Write components that are naturally testable:

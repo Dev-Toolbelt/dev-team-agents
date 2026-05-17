@@ -195,7 +195,7 @@ When the task involves file upload (any file > 5 MB, or when using S3/R2/GCS/Azu
 These apply unless the project defines otherwise in `code-standards.md`:
 
 - **Single Responsibility**: each class/function does one thing
-- **Dependency Injection**: dependencies injected, never instantiated inside classes
+- **Dependency Injection**: dependencies injected, never instantiated inside classes; all wiring happens at the **Composition Root** (entry point) — never inside services, controllers, or domain objects (see Composition Root in the design-patterns skill below)
 - **Interface-based repositories**: data access behind contracts, not concrete classes
 - **Immutable domain objects**: entities and value objects without setters
 - **Explicit validation**: at system boundaries (HTTP input, CLI args, queue payloads)
