@@ -141,11 +141,9 @@ done
 # See CLAUDE.md "Package exclusions" table for the full rationale per path.
 rm -rf "$EXTRACTED_ROOT/.claude"              # repo-level Claude config — not for user projects
 rm -rf "$EXTRACTED_ROOT/.github"              # repo-level GitHub templates/CODEOWNERS — not for users
+rm -rf "$EXTRACTED_ROOT/helpers"              # dev-only authoring tools — not for user projects
 rm -f  "$EXTRACTED_ROOT/.gitignore"           # repo-level gitignore — not for user projects
-rm -f  "$EXTRACTED_ROOT/scripts/install.sh"           # accessed via curl; never bundled in the package
-rm -f  "$EXTRACTED_ROOT/scripts/orphan-skill-scan.sh" # dev tool for this repo only
-rm -f  "$EXTRACTED_ROOT/scripts/agent-lint.sh"        # dev tool for this repo only
-rm -f  "$EXTRACTED_ROOT/scripts/size-limits.sh"       # dev tool for this repo only (validates authoring limits)
+rm -f  "$EXTRACTED_ROOT/scripts/install.sh"   # accessed via curl; never bundled in the package
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # archive-index.sh — Move fingerprint entries older than 90 days from _index.md to quarterly archive files.
-# Usage: bash scripts/archive-index.sh [--dry-run]
+# Usage: bash helpers/archive-index.sh [--dry-run]
 # Exit 0 always (archival is non-destructive; dry-run prints what would move).
 set -euo pipefail
 

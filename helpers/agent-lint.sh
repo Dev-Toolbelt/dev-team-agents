@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: bash scripts/agent-lint.sh
+# Usage: bash helpers/agent-lint.sh
 # Validates YAML frontmatter on all agents/*.md files and skills/**/SKILL.md files.
 # Checks for required fields, valid model values, and canonical skill frontmatter.
 # Exits 0 if all pass, 1 if any errors found.

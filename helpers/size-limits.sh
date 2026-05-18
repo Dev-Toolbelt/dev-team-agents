@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: bash scripts/size-limits.sh [--warn-only] [--quiet]
+# Usage: bash helpers/size-limits.sh [--warn-only] [--quiet]
 #
 # Validates line-count limits declared in CLAUDE.md:
 #   agents/    — max ~200 lines each

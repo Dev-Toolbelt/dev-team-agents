@@ -8,9 +8,9 @@
 # Orphaned skills produce an ACTION REQUIRED block for Claude to act on.
 #
 # Usage:
-#   bash scripts/orphan-skill-scan.sh                # full scan + auto-fix
-#   bash scripts/orphan-skill-scan.sh --quiet        # suppress output when clean
-#   bash scripts/orphan-skill-scan.sh --errors-only  # suppress WARN/ACTION SUGGESTED; show ACTION REQUIRED only
+#   bash helpers/orphan-skill-scan.sh                # full scan + auto-fix
+#   bash helpers/orphan-skill-scan.sh --quiet        # suppress output when clean
+#   bash helpers/orphan-skill-scan.sh --errors-only  # suppress WARN/ACTION SUGGESTED; show ACTION REQUIRED only
 set -euo pipefail
 
 ERRORS_ONLY=false
