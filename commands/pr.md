@@ -4,6 +4,44 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 
 ---
 
+## Step -1 — Uncommitted changes pre-flight
+
+Before any other action, run:
+
+```bash
+git diff --cached --name-only   # staged files
+git diff --name-only            # unstaged modified files
+```
+
+If either command returns output (there are staged or unstaged changes):
+
+1. Inform the user: "There are uncommitted changes in the working tree."
+2. Ask (via `AskUserQuestion`):
+
+   > "There are uncommitted changes. What would you like to do before creating the PR?"
+   - **Commit them now** — run the full commit routine below, then continue to Step 0a
+   - **Skip and continue** — proceed to Step 0a without committing
+   - **Abort** — stop the command entirely
+
+If the user chooses **Commit them now**, execute the following routine inline (same logic as `devteam:commit`):
+
+### Commit routine
+
+1. Load `skills/shared/conventional-commits/SKILL.md`.
+2. Read the target project's `CLAUDE.md` (root or `.claude/CLAUDE.md`) to detect the commit pattern. If a project-specific pattern is documented, follow it; otherwise use Conventional Commits.
+3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage — only commit what is already staged, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).
+4. Group staged files into logical commits by layer (data/schema → domain → persistence → infrastructure → application → interface → tests → config/CI → docs). Skip empty layers. Bundle single-context changes into one commit.
+5. For each group, write a commit message following the detected pattern. Never add `Co-Authored-By:`, AI attribution, or any non-user authorship footer.
+6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured (same gates as in `devteam:commit` Step 4.5). If a gate fails, ask the user: (a) fix and re-stage, (b) commit anyway, (c) abort.
+7. Present the proposed commit plan to the user and execute the commits unless the user says to stop.
+8. After all commits, run `git log --oneline -5` and show the result.
+
+Once the commit routine completes successfully, continue to Step 0a.
+
+If there are **no** staged or unstaged changes, skip directly to Step 0a.
+
+---
+
 ## Step 0a — Conventional Commits pre-flight
 
 Before drafting the PR body, detect the default branch and the project's commit pattern:
