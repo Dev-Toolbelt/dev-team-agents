@@ -9,6 +9,7 @@ set -euo pipefail
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
+# shellcheck source=scripts/hooks/lib/session-summary-detect.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/session-summary-detect.sh"
 
 SUMMARY_FILE=".claude/user-data/session-summary.md"

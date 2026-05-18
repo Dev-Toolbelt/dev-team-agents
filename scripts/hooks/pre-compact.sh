@@ -10,6 +10,7 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 [ -d ".claude/user-data" ] || exit 0
 
 # Only act when there is something to summarise.
+# shellcheck source=scripts/hooks/lib/session-summary-detect.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/session-summary-detect.sh"
 
 [ "$HAS_CHANGES" = false ] && exit 0

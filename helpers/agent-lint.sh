@@ -111,7 +111,7 @@ check_agent() {
   # Check for quiz-first compliance (AskUserQuestion required for finite-answer prompts)
   if grep -qE "\([yY]es[/ ][nN]o\)|\(y[/]n\)|\(yes\|no\)|\( yes / no \)" "$file" 2>/dev/null; then
     local violations
-    violations=$(grep -nE "\([yY]es[/ ][nN]o\)|\(y[/]n\)|\(yes\|no\)|\( yes / no \)" "$file" | grep -v "^\s*\`\`\`" | grep -v "^[0-9]*:.*\`" | wc -l | tr -d ' ')
+    violations=$(grep -nE "\([yY]es[/ ][nN]o\)|\(y[/]n\)|\(yes\|no\)|\( yes / no \)" "$file" | grep -v "^\s*\`\`\`" | grep -cv "^[0-9]*:.*\`" || true)
     if [ "$violations" -gt 0 ]; then
       ERRORS+=("  · ${file}: plain-text yes/no prompt found — use AskUserQuestion tool instead (see skills/shared/interaction-patterns/SKILL.md)")
     fi
