@@ -30,44 +30,19 @@ SLUG=$(echo "$TITLE" \
 FILENAME="$ADR_DIR/adr-${NEXT}-${SLUG}.md"
 TODAY=$(date +%Y-%m-%d)
 
-cat > "$FILENAME" <<EOF
-# $TITLE
+# Locate the template relative to this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE="$SCRIPT_DIR/../templates/adr-template.md"
 
-**Status**: Proposed
-**Date**: $TODAY
-**Deciders**: [names or roles involved]
+if [ ! -f "$TEMPLATE" ]; then
+    echo "Error: ADR template not found at $TEMPLATE" >&2
+    exit 1
+fi
 
-## Context
-
-[Describe the issue motivating this decision and the forces at play:
-technical constraints, team size, performance requirements, etc.]
-
-## Decision
-
-[State the decision in active voice: "We will use X because..."]
-
-## Rationale
-
-[Explain why this option was chosen over the alternatives.
-Link to benchmarks, constraints, or prior art that drove the choice.]
-
-## Alternatives Considered
-
-### Option A — [Name]
-- **Pros**: ...
-- **Cons**: ...
-- **Why rejected**: ...
-
-### Option B — [Name]
-- **Pros**: ...
-- **Cons**: ...
-- **Why rejected**: ...
-
-## Consequences
-
-**Positive**: [What becomes easier or possible]
-**Negative**: [What becomes harder, what debt is accepted]
-**Risks**: [What could go wrong, and how to mitigate]
-EOF
+sed \
+    -e "s/\[NUMBER\]/$NEXT/g" \
+    -e "s|\[Title\]|$TITLE|g" \
+    -e "s/\[YYYY-MM-DD\]/$TODAY/g" \
+    "$TEMPLATE" > "$FILENAME"
 
 echo "Created: $FILENAME"
