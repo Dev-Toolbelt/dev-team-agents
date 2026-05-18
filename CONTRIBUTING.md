@@ -46,8 +46,8 @@ Do **not** include Claude attribution (`Co-Authored-By: Claude`, `🤖 Generated
 
 ## PR Checklist
 
-- [ ] `scripts/agent-lint.sh` passes (no frontmatter errors)
-- [ ] `scripts/orphan-skill-scan.sh` shows no ACTION REQUIRED
+- [ ] `helpers/agent-lint.sh` passes (no frontmatter errors)
+- [ ] `helpers/orphan-skill-scan.sh` shows no ACTION REQUIRED
 - [ ] `README.md` and `README.pt-BR.md` are in sync (if either was changed)
 - [ ] New agent files are ≤ 200 lines; new skill files are ≤ 500 lines
 - [ ] `CLAUDE.md` was **not** modified (it is AI-only; human contribution rules go in this file)

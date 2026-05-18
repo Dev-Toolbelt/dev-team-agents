@@ -20,8 +20,8 @@ Run through every item before creating the tag.
 ### 1. Tests and Linting
 
 ```bash
-bash scripts/agent-lint.sh
-bash scripts/orphan-skill-scan.sh
+bash helpers/agent-lint.sh
+bash helpers/orphan-skill-scan.sh
 ```
 
 Both must exit 0 with no ACTION REQUIRED lines.

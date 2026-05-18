@@ -59,7 +59,7 @@ Calculate the next version and confirm with the user before proceeding.
 ## Step 2 — Orphan Skill Scan
 
 ```bash
-bash scripts/orphan-skill-scan.sh
+bash helpers/orphan-skill-scan.sh
 ```
 
 - **AUTO-FIXED** lines: verify the affected agent still reads correctly
@@ -106,10 +106,10 @@ If `README.md` changed but `README.pt-BR.md` did not (or vice versa), stop and s
 
 ## Step 5 — Verify Package Exclusions
 
-The install script strips `CLAUDE.md`, `scripts/install.sh`, and `scripts/orphan-skill-scan.sh` from the tarball. Confirm all three exclusions are still in place:
+The install script strips `CLAUDE.md`, `scripts/install.sh`, and the entire `helpers/` directory from the tarball. Confirm exclusions are still in place:
 
 ```bash
-grep -n "CLAUDE.md\|orphan-skill-scan\|install.sh" scripts/install.sh
+grep -n "CLAUDE.md\|helpers\|install.sh" scripts/install.sh
 ```
 
 Expected: at least one line per file referencing exclusion from the extracted content.

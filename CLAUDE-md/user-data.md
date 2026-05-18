@@ -39,7 +39,5 @@ Other directories under `.claude/` created by agents:
 | `.gitignore` | explicit `rm -f` (dotfile strip) | Repo-level gitignore — not for user projects |
 | `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config — not for user projects |
 | `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
+| `helpers/` | explicit `rm -rf` | Authoring tools for this repo (linting, scanning, archiving) — not for user projects |
 | `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
-| `scripts/orphan-skill-scan.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
-| `scripts/agent-lint.sh` | explicit `rm -f` | Development tool for this repo — not relevant to user projects |
-| `scripts/size-limits.sh` | explicit `rm -f` | Development tool for this repo — validates authoring line limits |

@@ -118,7 +118,7 @@ Run before finalizing any agent file:
 
 Run after the file is written:
 
-- [ ] Run orphan scan: `bash scripts/orphan-skill-scan.sh` — resolve any ACTION REQUIRED lines before closing
+- [ ] Run orphan scan: `bash helpers/orphan-skill-scan.sh` — resolve any ACTION REQUIRED lines before closing
 - [ ] Auto-Docs Rule: if the new agent changes observable behavior (new capability, renamed agent, changed tools list) → update `README.md` and `README.pt-BR.md` in the same session
 
 ---

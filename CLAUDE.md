@@ -391,7 +391,7 @@ When making a git commit for any task:
 **After any session where files in `agents/` or `skills/` were created or modified**, run:
 
 ```bash
-bash scripts/orphan-skill-scan.sh
+bash helpers/orphan-skill-scan.sh
 ```
 
 Read the output and act on it before considering the task done:

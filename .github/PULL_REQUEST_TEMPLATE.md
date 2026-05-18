@@ -14,8 +14,8 @@
 
 ## Checklist
 
-- [ ] `scripts/agent-lint.sh` passes (no frontmatter errors)
-- [ ] `scripts/orphan-skill-scan.sh` shows no ACTION REQUIRED
+- [ ] `helpers/agent-lint.sh` passes (no frontmatter errors)
+- [ ] `helpers/orphan-skill-scan.sh` shows no ACTION REQUIRED
 - [ ] New agents are ≤ 200 lines; new skills are ≤ 500 lines
 - [ ] `README.md` and `README.pt-BR.md` are in sync (if either was changed)
 - [ ] `CHANGELOG.md` [Unreleased] section updated (if user-visible behavior changed)
