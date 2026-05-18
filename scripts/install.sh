@@ -420,6 +420,8 @@ defaults = {
     "docs_stale_after_days": 30,
     "auto_update": auto_update,
     "update_check_interval_hours": 24,
+    "transcript_multiplier": 1.8,
+    "model_max_tokens": 200000,
 }
 
 existing = {}
@@ -455,7 +457,9 @@ else
   "session_summary_max_entries": 30,
   "docs_stale_after_days": 30,
   "auto_update": $AUTO_UPDATE_VALUE,
-  "update_check_interval_hours": 24
+  "update_check_interval_hours": 24,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000
 }
 EOF
         echo "→ User preferences: .claude/user-data/preferences.json"
