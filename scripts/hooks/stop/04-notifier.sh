@@ -85,7 +85,7 @@ printf '%s:%d:%d:%s\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" > "
 # ── Fast-path: skip expensive processing in purely conversational sessions ────
 # If no file changes were detected (DEVTEAM_NO_CHANGES=true) AND the tip for
 # today was already shown, there is nothing to emit — exit early.
-if [ "${DEVTEAM_NO_CHANGES:-false}" = "true" ] && [ "${STATE_DATE:-}" = "${TODAY:-}" ]; then
+if [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && [ "${STATE_DATE:-}" = "${TODAY:-}" ]; then
     exit 0
 fi
 

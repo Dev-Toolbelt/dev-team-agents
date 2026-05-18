@@ -10,7 +10,7 @@ if [ ! -f "$INDEX_FILE" ]; then
     exit 0
 fi
 
-DUPLICATES=$(grep -oE '\`[a-z][a-z0-9-]+\`' "$INDEX_FILE" 2>/dev/null \
+DUPLICATES=$(grep -oE '`[a-z][a-z0-9-]+`' "$INDEX_FILE" 2>/dev/null \
     | tr -d '`' \
     | sort \
     | uniq -d)
