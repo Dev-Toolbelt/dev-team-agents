@@ -10,4 +10,6 @@ if [ -z "$TOUCHED" ] && [ -z "$TODAY_COMMITS" ]; then
     exit 0
 fi
 
-exec "$(dirname "${BASH_SOURCE[0]}")/../../orphan-skill-scan.sh" --quiet "$@"
+SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../../../helpers/orphan-skill-scan.sh"
+[ -f "$SCRIPT" ] || exit 0
+exec "$SCRIPT" --quiet "$@"

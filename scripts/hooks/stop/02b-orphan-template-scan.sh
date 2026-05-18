@@ -3,7 +3,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-SCRIPT="$REPO_ROOT/scripts/orphan-template-scan.sh"
+SCRIPT="$REPO_ROOT/helpers/orphan-template-scan.sh"
 
 [ -f "$SCRIPT" ] || exit 0
 

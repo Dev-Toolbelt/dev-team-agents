@@ -10,4 +10,6 @@ if [ -z "$TOUCHED" ] && [ -z "$TODAY_COMMITS" ]; then
     exit 0
 fi
 
-exec "$(dirname "${BASH_SOURCE[0]}")/../../agent-lint.sh" --quiet "$@"
+SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../../../helpers/agent-lint.sh"
+[ -f "$SCRIPT" ] || exit 0
+exec "$SCRIPT" --quiet "$@"
