@@ -185,6 +185,22 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
 done
 echo "→ Skills linked: .claude/skills/"
 
+# Prune stale skill symlinks left over from renamed or removed skills.
+# Only removes symlinks that point into dev-team-agents — user-owned skills are untouched.
+_stale_count=0
+for _SKILL_LINK in "$SKILLS_TARGET"/*; do
+    [ -L "$_SKILL_LINK" ] || continue
+    case "$(readlink "$_SKILL_LINK")" in
+        *dev-team-agents/*) ;;
+        *) continue ;;
+    esac
+    if [ ! -e "$_SKILL_LINK" ]; then
+        rm -f "$_SKILL_LINK"
+        _stale_count=$((_stale_count + 1))
+    fi
+done
+[ "$_stale_count" -gt 0 ] && echo "→ Removed $_stale_count stale skill symlink(s)"
+
 # ── Step 6: Link commands ─────────────────────────────────────────
 # Commands are grouped under .claude/commands/devteam/ so they are invoked
 # as /devteam:plan, /devteam:backend, etc. — namespaced and separate from
