@@ -65,79 +65,15 @@ Load `skills/mobile/react-native/SKILL.md` **only** when a React Native project 
 - `eas.json` is present, OR
 - `index.js` or `App.tsx` in root contains React Native imports
 
-### Platform design skills
+### Platform skills
 
-| Stack | Detection Signals | Skill to Load |
-|-------|------------------|---------------|
-| **iOS target** | `.xcodeproj`/`.xcworkspace`, Swift files, or any cross-platform project with iOS support | `skills/mobile/ios-hig/SKILL.md` |
-| **Android target** | `build.gradle`/`build.gradle.kts`, Kotlin files, or any cross-platform project with Android support | `skills/mobile/material-design/SKILL.md` |
-| **Cross-platform (both platforms)** | React Native, Flutter, or Expo targeting both iOS and Android | Load **both** `ios-hig` and `material-design` skills |
+| Stack | Detection Signals | Skills to Load |
+|-------|------------------|----------------|
+| **iOS target** | `.xcodeproj`/`.xcworkspace`, `ios/` directory, or Swift files | `skills/mobile/ios/SKILL.md` + `skills/mobile/ios-hig/SKILL.md` |
+| **Android target** | `android/` directory, `build.gradle`/`build.gradle.kts`, or Kotlin files | `skills/mobile/android/SKILL.md` + `skills/mobile/material-design/SKILL.md` |
+| **Cross-platform (both platforms)** | React Native, Flutter, or Expo targeting both iOS and Android | Load **both** platform skill pairs above |
 
-For projects that mix native and cross-platform (e.g., React Native with native modules), load the cross-platform skill and the platform design skills for each targeted platform.
-
----
-
-## Platform Awareness — iOS
-
-Apply these rules whenever writing code that runs on iOS, regardless of the framework.
-
-### Design & UX
-- Load `skills/mobile/ios-hig/SKILL.md` for the full reference on navigation patterns, controls, typography (Dynamic Type / SF Pro), layout (Safe Area), Dark Mode, and accessibility (VoiceOver, Reduce Motion)
-- Respect the **Safe Area** — never place interactive elements behind notches, home indicators, or Dynamic Island
-- Support **Dynamic Type** — use semantic text styles (`UIFont.preferredFont`, `Text().font(.body)`) instead of fixed sizes
-- Support both light and dark mode using semantic system colors only
-
-### Permissions & Privacy
-- Request permissions only at the moment they are first needed (not at launch)
-- Provide a clear in-app rationale before the OS permission dialog appears
-- Handle all permission states: `notDetermined`, `authorized`, `denied`, `restricted`
-- Populate every required `NSUsageDescription` key in `Info.plist` before submitting to App Store
-- **Privacy Manifest** (`PrivacyInfo.xcprivacy`): required for apps using certain APIs (file timestamps, user defaults, disk space) — add it before App Store submission
-
-### Code Signing & Distribution
-- Always use **Automatic Signing** in Xcode for development; switch to **Manual Signing** for CI/CD
-- Distribution certificate + provisioning profile must match the `bundleIdentifier` exactly
-- Use **TestFlight** for all pre-production builds — never distribute `.ipa` files directly
-- Increment `CFBundleVersion` (build number) for every TestFlight build; increment `CFBundleShortVersionString` only for user-visible releases
-
-### Native Swift / SwiftUI Standards
-- Prefer **SwiftUI** for new screens; use **UIKit** only when SwiftUI cannot achieve the required behavior
-- Use `@StateObject` for objects owned by the view, `@ObservedObject` for injected objects, `@EnvironmentObject` for app-wide state
-- `async/await` over completion handlers for all new async code
-- Never force-unwrap (`!`) without a guard or a comment justifying why it cannot be nil
-
----
-
-## Platform Awareness — Android
-
-Apply these rules whenever writing code that runs on Android, regardless of the framework.
-
-### Design & UX
-- Load `skills/mobile/material-design/SKILL.md` for the full reference on color system (Material You tokens), typography scale, components (NavigationBar, FAB, Cards, Bottom Sheet), motion, adaptive layout (Window Size Classes), and accessibility (48dp touch targets, TalkBack)
-- Support **edge-to-edge** layout — use `WindowInsets` to avoid overlap with system bars
-- Use **adaptive icons** (`mipmap-anydpi-v26/`) — required for Android 8.0+
-- Support **back gesture** (predictive back on Android 14+) — register `OnBackPressedCallback` instead of overriding `onBackPressed()`
-- Test on both small screens (< 5") and large screens / foldables
-
-### Permissions & Privacy
-- Declare only the permissions you actually use in `AndroidManifest.xml`
-- Request runtime permissions with `ActivityResultContracts.RequestPermission`
-- Handle `shouldShowRequestPermissionRationale()` — show an explanation before re-requesting
-- Target the latest stable `targetSdkVersion` required by Google Play
-- Fill the **Data Safety** section in Play Console accurately — it is legally binding
-
-### Code Signing & Release
-- The upload keystore must be stored securely (EAS Credentials, 1Password, or CI secret store) — **never commit it to the repository**
-- Use **Android App Bundle (AAB)** for Play Store submissions — not APK
-- Enable **R8/ProGuard** for release builds; test the release build locally before submitting to catch missing keep rules
-- `versionCode` must be monotonically increasing — Play Store rejects builds with the same or lower version code
-
-### Native Kotlin / Jetpack Compose Standards
-- Prefer **Jetpack Compose** for new screens; use **Views/XML** only when Compose cannot achieve the required behavior or when maintaining existing View-based code
-- Use `ViewModel` + `StateFlow`/`SharedFlow` for UI state — never hold state in Activities or Fragments
-- Use **Room** for local persistence; **DataStore** for preferences (not SharedPreferences for new code)
-- `suspend` functions and `Flow` over callbacks for all new async code
-- Never run network or database operations on the main thread
+For projects that mix native and cross-platform (e.g., React Native with native modules), load the cross-platform skill and the platform skills for each targeted platform.
 
 ---
 

@@ -56,7 +56,7 @@ When the project shows these signals, load the corresponding skill before advisi
 | Supabase project (see backend-developer detection rules) | `skills/integrations/supabase/SKILL.md` |
 | Debugging slow queries or lock contention is involved | `skills/integrations/database-debug/SKILL.md` |
 
-**Per-engine skill load:** After identifying the database engine from project signals (docker-compose.yml, package.json, prisma/schema.prisma, .env, composer.json, etc.), load the matching skill:
+**Per-engine skill load:** Load `skills/shared/stack-detection/SKILL.md` first to identify the primary stack, then identify the database engine from project signals (docker-compose.yml, package.json, prisma/schema.prisma, .env, composer.json, etc.) and load the matching skill:
 
 | Signal | Engine | Skill |
 |--------|--------|-------|

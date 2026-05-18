@@ -14,6 +14,7 @@ Before any action, load:
 1. `skills/shared/project-context/SKILL.md` — project context, ADRs, session history
 2. `.claude/settings.json` and `.agents/` — detect custom agent overrides
 3. Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`find`/`head` over full reads
+4. Load `skills/shared/stack-detection/SKILL.md` — infer the project's primary tech stack from file signals before making setup decisions
 
 **Never read `docs/installation.md` or `docs/agents.md`** — they are large reference files not needed for setup tasks.
 
@@ -82,12 +83,12 @@ Audit sections: project overview · repository health (README/CLAUDE.md/AGENTS.m
 
 Load `skills/shared/discovery-mode/SKILL.md` to guide the project classification decision (new / unfinished / maintenance / inherited).
 
-> Which best describes this project?
-> 1. **New project** — starting from scratch
-> 2. **Unfinished / inherited** — taking over from another team
-> 3. **Maintenance / evolution** — production project, adding features or fixing bugs
->
-> Choose a number and give a brief description.
+Use the `AskUserQuestion` tool with options:
+- **New project** — starting from scratch
+- **Unfinished / inherited** — taking over from another team
+- **Maintenance / evolution** — production project, adding features or fixing bugs
+
+After the user selects, ask a brief follow-up question in plain text for a short description if needed.
 
 Record as `PROJECT_TYPE: [new|inherited|maintenance]` in CLAUDE.md.
 
@@ -115,12 +116,12 @@ Write or update the field in `preferences.json`. If the file does not exist, cre
 
 **Graphify (ask last):**
 
-> 💡 **Want to dramatically reduce token costs?**
-> Graphify builds a knowledge graph of your codebase — typically **60–80% fewer tokens**, faster responses, richer context across sessions.
-> Set up Graphify now? **yes / no**
+Inform the user: "💡 Graphify builds a knowledge graph of your codebase — typically **60–80% fewer tokens**, faster responses, richer context across sessions."
 
-- **yes** → load `skills/devops/graphify-setup/SKILL.md` and follow its setup steps
-- **no** → reply: *"Whenever you change your mind, say: 'Set up Graphify for this project'."*
+Use the `AskUserQuestion` tool with options [Yes, No] to ask: "Set up Graphify now?"
+
+- **Yes** → load `skills/devops/graphify-setup/SKILL.md` and follow its setup steps
+- **No** → reply: *"Whenever you change your mind, say: 'Set up Graphify for this project'."*
 
 Record as `GRAPHIFY: [enabled|disabled]`.
 
