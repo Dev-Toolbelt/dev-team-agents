@@ -151,7 +151,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
 | `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist¹ | Fixing a bug |
 | `/devteam:refactor` | software-architect → backend/frontend-test-specialist + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring with test-first coverage, dependency mapping, consolidated plan, and ordered commit blocks (tests → refactoring) |
-| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs |
+| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; auto-detects workflow from request (new project, bug fix, refactor, security, design, mobile, fullstack, review, inherited — falls back to maintenance) |
 | `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
 | `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |

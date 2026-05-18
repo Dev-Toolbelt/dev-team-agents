@@ -39,31 +39,13 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 | Event-driven patterns / async messaging | `skills/architecture/event-driven/SKILL.md` |
 | Rate limiting / API throttling | `skills/architecture/rate-limiting/SKILL.md` |
 | API versioning / breaking changes | `skills/architecture/api-versioning/SKILL.md` |
+| Detecting project technology stack | `skills/shared/stack-detection/SKILL.md` |
 
 ---
 
 ## Workflow Detection
 
-**Before acting on any request**, classify the user's intent and load the matching workflow file from `.claude/dev-team-agents/workflows/`. Read the detected workflow to understand the expected steps, outputs, and agent collaboration pattern — then follow it.
-
-| Intent signals (keywords / phrases) | Workflow to load |
-|---|---|
-| new project, start from scratch, greenfield, initialize project, create project, bootstrap | `new-project.md` |
-| bug, fix, broken, error, crash, regression, hotfix, not working | `bug-fix.md` |
-| refactor, cleanup, restructure, reorganize, technical debt, improve structure, decouple | `refactor.md` |
-| security, vulnerability, CVE, exploit, breach, patch, pentest, auth flaw | `security-patch.md` |
-| design, UI, UX, interface, wireframe, prototype, visual, component library | `design.md` |
-| mobile, React Native, Expo, Flutter, iOS, Android, native app | `mobile.md` |
-| fullstack, full-stack, frontend + backend, end-to-end feature | `fullstack.md` |
-| review, audit, inspect, code review, analyze PR, quality check | `review.md` |
-| inherited, legacy, existing project, take over, onboard, unfamiliar codebase | `inherited-project.md` |
-| _(no clear signal — fallback)_ | `maintenance.md` |
-
-**Detection rules:**
-1. Match against the user's full request text (case-insensitive).
-2. If multiple signals match, pick the workflow whose signals are most dominant in the request.
-3. If still ambiguous, fall back to `maintenance.md`.
-4. After detecting, briefly state the chosen workflow to the user (one line) before proceeding — e.g., _"Following the **refactor** workflow."_ — so they can correct it if needed.
+Load `skills/shared/workflow-detection/SKILL.md` **before acting on any request**. Classify the user's intent, load the matching workflow file, and follow it. State the chosen workflow in one line before proceeding so the user can correct it if needed.
 
 ---
 
@@ -140,7 +122,7 @@ When recommending a stack, evaluate against:
 - Don't recommend microservices when a monolith will work
 - Don't recommend a message queue when a simple cron job or synchronous call will work
 - Don't recommend distributed caching when database query optimization is needed first
-- Don't recommend Kubernetes when Docker Compose on a VPS will handle the load
+- Right-size infrastructure: don't recommend complex orchestration when a simpler deployment model will handle the load
 
 ---
 
