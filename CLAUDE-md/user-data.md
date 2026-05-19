@@ -15,6 +15,7 @@ Files in `user-data/`:
 - `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
+- `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events (**gitignored** by installer)
 - `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 
 Other directories under `.claude/` created by agents:

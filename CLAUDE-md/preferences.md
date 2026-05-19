@@ -16,7 +16,8 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
   "auto_update": false,
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
-  "model_max_tokens": 200000
+  "model_max_tokens": 200000,
+  "telemetry": true
 }
 ```
 
@@ -33,6 +34,7 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
 | `update_check_interval_hours` | `24` | Hours between update checks |
 | `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
+| `telemetry` | `true` | Anonymous usage telemetry (set to `false` to opt out). No personal data is ever collected — see `PRIVACY.md` |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 

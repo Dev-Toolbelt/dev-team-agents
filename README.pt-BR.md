@@ -214,6 +214,22 @@ CLAUDE.md                             # regras globais para todos os agentes
 
 ---
 
+## Telemetria Anônima
+
+O dev-team-agents coleta **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos.
+
+**O que é coletado:** nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
+
+**Desative a qualquer momento** editando `.claude/user-data/preferences.json`:
+
+```json
+{ "telemetry": false }
+```
+
+Detalhes completos em [PRIVACY.md](PRIVACY.md).
+
+---
+
 ## Contribuindo
 
 1. Faça um fork do repositório

@@ -214,6 +214,22 @@ CLAUDE.md                             # project-wide rules for all agents
 
 ---
 
+## Anonymous Telemetry
+
+dev-team-agents collects **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable.
+
+**What is collected:** agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
+
+**Opt out at any time** by editing `.claude/user-data/preferences.json`:
+
+```json
+{ "telemetry": false }
+```
+
+Full details in [PRIVACY.md](PRIVACY.md).
+
+---
+
 ## Contributing
 
 1. Fork the repository

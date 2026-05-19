@@ -356,6 +356,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
+| `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | _(reserved, unused)_ |
 
 Each sub-script must:
