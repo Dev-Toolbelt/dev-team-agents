@@ -417,12 +417,44 @@ if [ -f "$USER_DATA_DIR/.auto-update" ]; then
     AUTO_UPDATE_VALUE="true"
 fi
 
+# Ask for telemetry preference on first interactive install
+TELEMETRY_VALUE="true"
+IS_FIRST_INSTALL=false
+[ ! -f "$PREFS_FILE" ] && IS_FIRST_INSTALL=true
+
+if [ "$IS_FIRST_INSTALL" = true ] && [ -t 0 ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " ANONYMOUS USAGE TELEMETRY"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " dev-team-agents collects anonymous usage data to help us"
+    echo " understand which agents and commands are most useful."
+    echo ""
+    echo " What is collected: agent/command names, install events,"
+    echo " session counts. No code, file paths, or personal data."
+    echo " Full details: PRIVACY.md in the installed package."
+    echo ""
+    echo " You can opt out at any time by setting"
+    echo "   \"telemetry\": false  in .claude/user-data/preferences.json"
+    echo ""
+    printf " Enable anonymous telemetry? [Y/n]: "
+    read -r _TELEMETRY_INPUT </dev/tty || true
+    case "${_TELEMETRY_INPUT:-y}" in
+        [nN]*) TELEMETRY_VALUE="false" ; echo "→ Telemetry disabled." ;;
+        *)     TELEMETRY_VALUE="true"  ; echo "→ Telemetry enabled (opt out anytime in preferences.json)." ;;
+    esac
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+fi
+
 if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PREFS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" <<'PYEOF'
+    python3 - "$PREFS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" "$TELEMETRY_VALUE" "$IS_FIRST_INSTALL" <<'PYEOF'
 import sys, json, os
 
-prefs_file, language, auto_update_str = sys.argv[1], sys.argv[2], sys.argv[3]
+prefs_file, language, auto_update_str, telemetry_str, is_first_str = \
+    sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 auto_update = (auto_update_str == "true")
+telemetry = (telemetry_str == "true")
+is_first = (is_first_str == "true")
 
 defaults = {
     "language": language,
@@ -436,6 +468,7 @@ defaults = {
     "update_check_interval_hours": 24,
     "transcript_multiplier": 1.8,
     "model_max_tokens": 200000,
+    "telemetry": telemetry,
 }
 
 existing = {}
@@ -448,10 +481,11 @@ if os.path.exists(prefs_file):
 
 # Merge: existing values win; missing keys get defaults
 merged = {**defaults, **existing}
-# On first install (no existing file), apply the prompted language
-if not os.path.exists(prefs_file):
+# On first install (no existing file), apply the prompted preferences
+if is_first:
     merged["language"] = language
     merged["auto_update"] = auto_update
+    merged["telemetry"] = telemetry
 
 with open(prefs_file, 'w') as f:
     json.dump(merged, f, indent=2)
@@ -473,7 +507,8 @@ else
   "auto_update": $AUTO_UPDATE_VALUE,
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
-  "model_max_tokens": 200000
+  "model_max_tokens": 200000,
+  "telemetry": $TELEMETRY_VALUE
 }
 EOF
         echo "→ User preferences: .claude/user-data/preferences.json"
@@ -484,6 +519,16 @@ fi
 if [ -f "$USER_DATA_DIR/.auto-update" ]; then
     rm -f "$USER_DATA_DIR/.auto-update"
     echo "→ Migrated .auto-update flag → preferences.json (auto_update field)"
+fi
+
+# ── Step 12: Send install telemetry event ────────────────────────────────────
+_TELEMETRY_SEND="$INSTALL_DIR/scripts/helpers/telemetry-send.sh"
+if [ -f "$_TELEMETRY_SEND" ]; then
+    _INSTALL_EVENT="install"
+    [ "$IS_FIRST_INSTALL" = true ] && _INSTALL_EVENT="first_install"
+    bash "$_TELEMETRY_SEND" --queue "$_INSTALL_EVENT" \
+        "{\"install_version\": \"$RESOLVED\"}" 2>/dev/null || true
+    bash "$_TELEMETRY_SEND" --flush 2>/dev/null || true
 fi
 
 # ── Done ──────────────────────────────────────────────────────────

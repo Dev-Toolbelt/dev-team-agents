@@ -70,6 +70,17 @@ bash "$TMP_INSTALLER" "$VERSION_ARG"
 # Invalidate context cache after version change
 rm -f ".claude/user-data/.context-cache.json" 2>/dev/null || true
 
+# Send update telemetry event (silent — never blocks the update flow)
+_PREV_VER=$(cat "$PREV_VERSION_FILE" 2>/dev/null || echo "unknown")
+_NEW_VER=$(cat "$CURRENT_VERSION_FILE" 2>/dev/null || echo "unknown")
+_TELEMETRY_SEND="$INSTALL_DIR/scripts/helpers/telemetry-send.sh"
+if [ -f "$_TELEMETRY_SEND" ]; then
+    bash "$_TELEMETRY_SEND" --queue "update" \
+        "{\"from_version\": \"$_PREV_VER\", \"to_version\": \"$_NEW_VER\", \"mode\": \"manual\"}" \
+        2>/dev/null || true
+    bash "$_TELEMETRY_SEND" --flush 2>/dev/null || true
+fi
+
 echo ""
 echo "┌──────────────────────────────────────────────────────────────────┐"
 echo "│  Installation complete. Run a health check to verify that all   │"
