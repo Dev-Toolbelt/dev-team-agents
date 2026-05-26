@@ -56,6 +56,40 @@ New entries to add:
 .claude/.worktree-session
 ```
 
+## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
+
+Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):
+
+```bash
+_DTA_MARKER="<!-- dev-team-agents: pre-compact-auto-summary -->"
+if ! grep -qF "$_DTA_MARKER" CLAUDE.md 2>/dev/null; then
+    cat >> CLAUDE.md <<'CLAUDEEOF'
+
+<!-- dev-team-agents: pre-compact-auto-summary -->
+# Pre-compact Hook — Auto Session Summary
+When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
+
+1. Write the session summary entry at the top of `.claude/user-data/session-summary.md` using the format:
+   ```
+   ## YYYY-MM-DD HH:MM:SS | [brief task title]
+   **Done**: what was implemented or changed
+
+   **Decisions**: key choices made and why
+
+   **Next**: what remains or is recommended next
+
+   ---
+   ```
+   - Use today's date and current time
+   - Base the content on the current conversation context
+   - Always write in English
+2. After writing, tell the user: "Session summary written. Run `/compact` again to proceed."
+
+Do not ask for confirmation. Do not wait for user input. Write and notify immediately.
+CLAUDEEOF
+fi
+```
+
 ## Auto-fix for missing preferences.json fields
 
 Inject missing fields without overwriting existing values:

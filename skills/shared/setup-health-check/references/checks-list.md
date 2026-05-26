@@ -85,11 +85,13 @@ grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo 
 
 ```bash
 grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"
+grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/null && echo "OK: pre-compact-rule" || echo "MISSING: pre-compact-rule"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
 | `## dev-team-agents` section present in `CLAUDE.md` | WARN — re-run setup (Step 5) to append the section |
+| `<!-- dev-team-agents: pre-compact-auto-summary -->` marker present | Auto-fix: append the pre-compact auto-summary rule block (see fix-patterns.md) |
 
 ## Category 7 — .gitignore
 
