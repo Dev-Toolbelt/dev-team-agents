@@ -338,7 +338,41 @@ PYEOF
     fi
 fi
 
-# ── Step 8: Record installed version ─────────────────────────────
+# ── Step 8: Inject pre-compact auto-summary rule into project CLAUDE.md ──────
+_TARGET_CLAUDE_MD="$PROJECT_ROOT/CLAUDE.md"
+_DTA_MARKER="<!-- dev-team-agents: pre-compact-auto-summary -->"
+
+if ! grep -qF "$_DTA_MARKER" "$_TARGET_CLAUDE_MD" 2>/dev/null; then
+    cat >> "$_TARGET_CLAUDE_MD" <<'CLAUDEEOF'
+
+<!-- dev-team-agents: pre-compact-auto-summary -->
+# Pre-compact Hook — Auto Session Summary
+When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
+
+1. Write the session summary entry at the top of `.claude/user-data/session-summary.md` using the format:
+   ```
+   ## YYYY-MM-DD HH:MM:SS | [brief task title]
+   **Done**: what was implemented or changed
+
+   **Decisions**: key choices made and why
+
+   **Next**: what remains or is recommended next
+
+   ---
+   ```
+   - Use today's date and current time
+   - Base the content on the current conversation context
+   - Always write in English
+2. After writing, tell the user: "Session summary written. Run `/compact` again to proceed."
+
+Do not ask for confirmation. Do not wait for user input. Write and notify immediately.
+CLAUDEEOF
+    echo "→ Injected pre-compact auto-summary rule into CLAUDE.md"
+else
+    echo "→ Pre-compact auto-summary rule already present in CLAUDE.md (skipped)"
+fi
+
+# ── Step 9: Record installed version ─────────────────────────────
 mkdir -p "$USER_DATA_DIR"
 echo "$RESOLVED" > "$USER_DATA_DIR/.installed-version"
 if [ -n "$PREV_CHECK" ]; then
@@ -347,7 +381,7 @@ else
     date +%s > "$USER_DATA_DIR/.last-update-check"
 fi
 
-# ── Step 9: Ensure user-data dir and worktree session are gitignored ─────────
+# ── Step 10: Ensure user-data dir and worktree session are gitignored ────────
 _GITIGNORE="$PROJECT_ROOT/.gitignore"
 
 # Remove legacy individual entries if present (migration to directory pattern)
@@ -382,13 +416,13 @@ _add_gitignore ".claude/.worktree-session"
 
 echo "→ .gitignore updated (user-data dir pattern + worktree-session)"
 
-# ── Step 10: Make scripts executable ─────────────────────────────
+# ── Step 11: Make scripts executable ─────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
 chmod +x "$INSTALL_DIR/scripts/hooks/"*.sh 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/hooks/pre-tool-use/"*.sh 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/hooks/stop/"*.sh 2>/dev/null || true
 
-# ── Step 11: Set up user preferences ─────────────────────────────
+# ── Step 12: Set up user preferences ─────────────────────────────
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 PREFS_LANGUAGE="en"
 
@@ -521,7 +555,7 @@ if [ -f "$USER_DATA_DIR/.auto-update" ]; then
     echo "→ Migrated .auto-update flag → preferences.json (auto_update field)"
 fi
 
-# ── Step 12: Send install telemetry event ────────────────────────────────────
+# ── Step 13: Send install telemetry event ────────────────────────────────────
 _TELEMETRY_SEND="$INSTALL_DIR/scripts/helpers/telemetry-send.sh"
 if [ -f "$_TELEMETRY_SEND" ]; then
     _INSTALL_EVENT="install"
