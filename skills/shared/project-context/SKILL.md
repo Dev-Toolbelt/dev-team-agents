@@ -20,6 +20,48 @@ This means every agent must:
 
 ---
 
+## First-Time Setup Guard
+
+**When you see `[DEVTEAM:FIRST_TIME_SETUP]` at the start of a session**, stop immediately and ask the user the following quiz before doing anything else — including loading context or answering their original prompt:
+
+```
+AskUserQuestion:
+  question: "It looks like this is your first time using dev-team-agents on this machine.
+             Would you like to run the onboarding wizard to configure your preferences?"
+  header: "First-time setup"
+  options:
+    - label: "Yes, run onboarding"
+      description: "Run the health check and set up your preferences (language, notifications, etc.)"
+    - label: "No, skip for now"
+      description: "Create a default preferences.json (English) and continue — you can change it anytime"
+```
+
+**If the user chooses "Yes, run onboarding":**
+- Invoke the `setup-assistant` agent in `FIRST_RUN` mode.
+
+**If the user chooses "No, skip for now":**
+1. Create `.claude/user-data/preferences.json` with all defaults from `skills/shared/user-preferences/SKILL.md`:
+   ```json
+   {
+     "language": "en",
+     "context_window_percent_warning": 55,
+     "context_window_percent_limit": 60,
+     "suppress_notifications": false,
+     "session_summary_max_days": 30,
+     "session_summary_max_entries": 30,
+     "docs_stale_after_days": 30,
+     "auto_update": false,
+     "update_check_interval_hours": 24,
+     "transcript_multiplier": 1.8,
+     "model_max_tokens": 200000,
+     "telemetry": true
+   }
+   ```
+2. Notify the user: "Default preferences created (language: English). You can change them anytime by editing `.claude/user-data/preferences.json`."
+3. Continue with their original request.
+
+---
+
 ## Language Policy
 
 ### Documents — Always English
