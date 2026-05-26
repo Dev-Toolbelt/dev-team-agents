@@ -53,7 +53,10 @@ _notify() {
 
 # ── Check: preferences.json ───────────────────────────────────────
 if [ ! -f "$PREFS_FILE" ]; then
-    _notify "warning" "⚠️" "preferences.json not found. Conversation language defaults to English. Run the setup-assistant to configure your preferences."
+    echo ""
+    echo "[DEVTEAM:FIRST_TIME_SETUP]"
+    echo "preferences.json not found — this appears to be your first time using dev-team-agents on this machine."
+    echo ""
 fi
 
 # ── Language banner (always shown when language is non-English) ───
