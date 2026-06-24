@@ -2,6 +2,11 @@
 # Dispatcher for all PreToolUse hooks.
 # Reads stdin once (Claude Code sends hook JSON here) and pipes it to each sub-script.
 # Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated.
+
+# Prevent WSL from loading /etc/bash.bashrc (and its start-systemd-namespace
+# call) for every bash sub-process spawned by this dispatcher.
+unset BASH_ENV ENV
+
 set -euo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/pre-tool-use" && pwd)"

@@ -2,6 +2,11 @@
 # PreCompact hook — flushes session-summary before context is compacted.
 # Mirrors the logic of stop/01-session-summary.sh so that in-progress work
 # is captured even when the conversation is compacted mid-session.
+
+# Prevent WSL from loading /etc/bash.bashrc (and its start-systemd-namespace
+# call) for every bash sub-process spawned by this script.
+unset BASH_ENV ENV
+
 set -euo pipefail
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0

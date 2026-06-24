@@ -4,6 +4,11 @@
 # sub-scripts via the DEVTEAM_HOOK_PAYLOAD env var (path to a temp JSON file).
 # Runs each sub-script in alphabetical order; a non-zero exit from any
 # sub-script is propagated.
+
+# Prevent WSL from loading /etc/bash.bashrc (and its start-systemd-namespace
+# call) for every bash sub-process spawned by this dispatcher.
+unset BASH_ENV ENV
+
 set -euo pipefail
 
 # Capture hook payload from stdin before dispatching to sub-scripts.

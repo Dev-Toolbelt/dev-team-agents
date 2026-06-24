@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # SessionStart hook — surfaces language preference and warns when key project
 # files are stale or user preferences are missing.
+
+# Prevent WSL from loading /etc/bash.bashrc (and its start-systemd-namespace
+# call) for every bash sub-process spawned by this script.
+unset BASH_ENV ENV
+
 set -uo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0

@@ -215,10 +215,13 @@ else
 fi
 
 # ── Step 7: Configure hooks in .claude/settings.json ────────────
-PRE_TOOL_USE_HOOK=".claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
-STOP_HOOK=".claude/dev-team-agents/scripts/hooks/stop.sh"
-SESSION_START_HOOK=".claude/dev-team-agents/scripts/hooks/session-start.sh"
-PRE_COMPACT_HOOK=".claude/dev-team-agents/scripts/hooks/pre-compact.sh"
+# Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
+# which set BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every
+# hook invocation (start-systemd-namespace is not present in all WSL setups).
+PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
+STOP_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/stop.sh"
+SESSION_START_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/session-start.sh"
+PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/pre-compact.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -310,6 +313,35 @@ PYEOF
             echo "  { \"type\": \"command\", \"command\": \"$hook_cmd\" }"
         fi
     }
+
+    # Migrate existing hook commands to use `env -u BASH_ENV -u ENV` wrapper
+    # (fixes WSL /etc/bash.bashrc noise from start-systemd-namespace).
+    if grep -q "hooks/pre-tool-use.sh\|hooks/stop.sh\|hooks/session-start.sh\|hooks/pre-compact.sh" "$SETTINGS_FILE" 2>/dev/null; then
+        if ! grep -q "env -u BASH_ENV" "$SETTINGS_FILE" 2>/dev/null; then
+            if command -v python3 >/dev/null 2>&1; then
+                python3 - "$SETTINGS_FILE" <<'PYEOF'
+import sys, json, re
+
+settings_file = sys.argv[1]
+with open(settings_file, 'r') as f:
+    content = f.read()
+
+# Replace bare hook paths with env-wrapped versions
+hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"]
+for hook in hooks:
+    pattern = r'(\.claude/dev-team-agents/scripts/hooks/' + re.escape(hook) + r')'
+    replacement = r'env -u BASH_ENV -u ENV \1'
+    content = re.sub(pattern, replacement, content)
+
+with open(settings_file, 'w') as f:
+    f.write(content)
+PYEOF
+                echo "→ Migrated hook commands to use env -u BASH_ENV (WSL fix)"
+            fi
+        else
+            echo "→ Hook commands already use env -u BASH_ENV (skipped)"
+        fi
+    fi
 
     _inject_hook "PreToolUse"   "$PRE_TOOL_USE_HOOK"   "hooks/pre-tool-use.sh"
     _inject_hook "Stop"         "$STOP_HOOK"           "hooks/stop.sh"
