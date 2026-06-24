@@ -1,0 +1,22 @@
+# Force LF line endings for all text files.
+# This prevents Windows Git (core.autocrlf=true) from converting shell scripts
+# to CRLF, which causes "bash\r: No such file or directory" errors on WSL/Linux.
+
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.txt  text eol=lf
+
+# Binary files — no line ending conversion
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.zip  binary
+*.tar  binary
+*.gz   binary
