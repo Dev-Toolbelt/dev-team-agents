@@ -15,7 +15,8 @@
 #   3. Symlinks agents/ to .claude/agents/dev-team/
 #   4. Symlinks each skill to .claude/skills/<skill-name>/
 #   5. Configures the update-check hook in .claude/settings.json
-#   6. Records the installed version
+#   6. Ensures .gitattributes enforces LF line endings for shell scripts
+#   7. Records the installed version
 
 set -euo pipefail
 
@@ -415,6 +416,41 @@ _add_gitignore "!.claude/user-data/graphify.json"
 _add_gitignore ".claude/.worktree-session"
 
 echo "→ .gitignore updated (user-data dir pattern + worktree-session)"
+
+# ── Step 10b: Ensure project .gitattributes enforces LF for shell scripts ─────
+# Prevents Windows Git (core.autocrlf=true) from converting hook scripts to
+# CRLF on clone/checkout, which causes `bash\r: No such file or directory`
+# errors on WSL/Linux.
+_GITATTRIBUTES="$PROJECT_ROOT/.gitattributes"
+
+_add_gitattributes() {
+    local _entry="$1"
+    if [ -f "$_GITATTRIBUTES" ]; then
+        grep -qF "$_entry" "$_GITATTRIBUTES" || echo "$_entry" >> "$_GITATTRIBUTES"
+    else
+        echo "$_entry" >> "$_GITATTRIBUTES"
+    fi
+}
+
+_added_gitattributes=false
+
+# Add catch-all rule only if no wildcard text=auto line exists yet
+if ! grep -qF "* text=auto" "$_GITATTRIBUTES" 2>/dev/null; then
+    _add_gitattributes "* text=auto eol=lf"
+    _added_gitattributes=true
+fi
+
+# Always ensure *.sh has an explicit LF rule
+if ! grep -qE '^\*\.sh[[:space:]]' "$_GITATTRIBUTES" 2>/dev/null; then
+    _add_gitattributes "*.sh text eol=lf"
+    _added_gitattributes=true
+fi
+
+if [ "$_added_gitattributes" = true ]; then
+    echo "→ .gitattributes updated (LF enforcement for shell scripts)"
+else
+    echo "→ .gitattributes already has LF enforcement (skipped)"
+fi
 
 # ── Step 11: Make scripts executable ─────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.sh
