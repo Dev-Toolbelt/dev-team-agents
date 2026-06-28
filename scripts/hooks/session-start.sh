@@ -44,17 +44,6 @@ _is_suppressed() {
     esac
 }
 
-# ── Helper: emit a DEV TEAM AGENTS notification ───────────────────
-_notify() {
-    local type="$1" icon="$2" msg="$3"
-    _is_suppressed "$type" && return
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " ${icon}  DEV TEAM AGENTS  ${icon}"
-    echo " ${msg}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-}
 
 # ── Check: preferences.json ───────────────────────────────────────
 if [ ! -f "$PREFS_FILE" ]; then
