@@ -105,6 +105,7 @@ Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:docs` | Documentação — technical-writer |
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
+| `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs |
 | `/devteam:workflow-new` | Workflow completo de novo projeto |
 | `/devteam:workflow-maintenance` | Workflow de manutenção / evolução de feature |
 | `/devteam:workflow-bugfix` | Workflow completo de correção de bug |

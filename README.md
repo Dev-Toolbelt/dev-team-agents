@@ -105,6 +105,7 @@ After installation, 22 slash commands are available under the `/devteam:` namesp
 | `/devteam:docs` | Documentation — technical-writer |
 | `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
+| `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs |
 | `/devteam:workflow-new` | Full new-project workflow |
 | `/devteam:workflow-maintenance` | Maintenance / feature evolution workflow |
 | `/devteam:workflow-bugfix` | Full bug-fix workflow |
