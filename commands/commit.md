@@ -4,6 +4,23 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 
 ---
 
+## Step 0 — Auto knowledge capture
+
+Before inspecting staged changes, run the `/devteam:learn` pass automatically.
+
+**Skip this step only if:**
+- `$ARGUMENTS` contains `--skip-learn`
+- The user explicitly wrote "skip learn", "don't learn", "sem learn", or similar in their prompt
+
+**To execute:**
+1. Read `commands/learn.md` and follow Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents — no user confirmation is needed.
+2. Wait for all learn agents to complete before continuing.
+3. If the learn pass finds nothing to update (output "Nothing to capture"), proceed immediately.
+
+This ensures all session knowledge is captured in the project's knowledge base before changes are committed.
+
+---
+
 ## Step 1 — Detect the project's commit pattern
 
 Read the **target project's `CLAUDE.md`** (the one in the project root or `.claude/CLAUDE.md`, not the dev-team-agents one). Scan it for any explicit commit message rules, format examples, or references to a specific convention (e.g., Conventional Commits, GitHub-style `[type]`, Jira prefix, plain imperative, etc.).
