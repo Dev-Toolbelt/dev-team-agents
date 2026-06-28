@@ -216,8 +216,8 @@ fi
 
 # ── Step 7: Configure hooks in .claude/settings.json ────────────
 # Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
-# which set BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every
-# hook invocation (start-systemd-namespace is not present in all WSL setups).
+# where BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every hook
+# invocation (start-systemd-namespace is absent in many WSL setups).
 PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
 STOP_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/stop.sh"
 SESSION_START_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/session-start.sh"

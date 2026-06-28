@@ -37,7 +37,7 @@ EXIT_CODE=0
 for script in "$HOOKS_DIR"/*.sh; do
     [ -f "$script" ] || continue
     SCRIPT_EXIT=0
-    bash "$script" || SCRIPT_EXIT=$?
+    env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
     if [ "$SCRIPT_EXIT" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
         EXIT_CODE=$SCRIPT_EXIT
     fi
