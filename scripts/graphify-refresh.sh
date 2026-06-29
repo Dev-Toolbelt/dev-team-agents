@@ -12,9 +12,7 @@ fi
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
 if ! command -v graphify >/dev/null 2>&1; then
-  echo "⏭  graphify not installed — skipping." >&2
-  echo "   Tell Claude: 'Set up Graphify for this project' to enable it." >&2
-  exit 2
+  exit 0
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -26,9 +24,7 @@ fi
 # ── Load config ───────────────────────────────────────────────────────────────
 CONFIG_FILE="$PROJECT_ROOT/.claude/user-data/graphify.json"
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo "⏭  graphify.json not found — skipping." >&2
-  echo "   Tell Claude: 'Set up Graphify for this project' to configure it." >&2
-  exit 2
+  exit 0
 fi
 
 OUTPUT_PATH="graphify-out"

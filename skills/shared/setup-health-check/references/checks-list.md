@@ -68,15 +68,18 @@ Detect: `[ -f .claude/user-data/graphify.json ] && echo ENABLED || echo DISABLED
 If ENABLED:
 
 ```bash
-ls .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null || echo "MISSING"
+ls .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
 ls .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
 ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
 grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
+# Also check for legacy sub-script that causes stop-hook loops
+ls .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
-| `stop/02-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
+| `stop/99-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
+| `stop/02-graphify-refresh.sh` exists (legacy) | `rm .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
 | `graphify-out/` directory exists | WARN — run: `bash .claude/dev-team-agents/scripts/graphify-refresh.sh` |
 | `.claude/user-data/.graphify-last-run` in `.gitignore` | `echo '.claude/user-data/.graphify-last-run' >> .gitignore` |

@@ -157,13 +157,18 @@ Omit `manifestPaths` if no manifest files were found. Do not ask the user to con
 Create the graphify-refresh sub-script so the Stop dispatcher runs it automatically after each session:
 
 ```bash
-cat > .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
+# Remove any legacy 02-graphify-refresh.sh created by older versions
+rm -f .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
+
+cat > .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh << 'EOF'
 #!/usr/bin/env bash
 # Stop sub-script: rebuild the Graphify knowledge graph after each session.
+# Uses 99- prefix (cleanup tier) per the Stop hook convention.
+# graphify-refresh.sh exits 0 silently when graphify is not installed or not configured.
 set -euo pipefail
 bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/scripts/graphify-refresh.sh"
 EOF
-chmod +x .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
+chmod +x .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh
 ```
 
 The Stop dispatcher (`.claude/dev-team-agents/scripts/hooks/stop.sh`) picks this up automatically — no changes to `settings.json` are needed.
