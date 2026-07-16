@@ -167,3 +167,21 @@ If you prefer each developer to install locally instead:
 .claude/commands/devteam/
 .claude/.worktree-session
 ```
+
+### Windows: symlinks in a committed installation
+
+`.claude/agents/dev-team`, `.claude/commands/devteam`, and every `.claude/skills/<name>` are **symlinks** (git mode `120000`). When a teammate on Windows clones or checks out a repo that committed them, git only creates real symlinks if native symlink support is available — **Developer Mode on, an elevated process, or `core.symlinks=true`**. Otherwise git/MSYS writes each link's target path into a plain ~62-byte text file.
+
+This failure is easy to miss: `git-bash`'s `ls -la` still renders the fake links as `lrwxrwxrwx` (MSYS emulation), but Windows and Claude Code see plain files — so the entire dev-team silently fails to load (`/devteam:*`, agents, and skills all vanish). Confirm the real state with `test -L` rather than `ls`:
+
+```bash
+test -L .claude/commands/devteam && echo "link" || echo "broken"
+```
+
+Repair it with the bundled helper, which auto-fixes when the OS allows and otherwise prints the three remediation options (Developer Mode, elevated terminal, or running Claude Code as administrator):
+
+```bash
+bash .claude/dev-team-agents/scripts/fix-symlinks.sh
+```
+
+Restart Claude Code after repairing so it re-indexes commands, agents, and skills. Enabling Developer Mode is the durable fix — it also covers future clones of this and other repos without any admin step.

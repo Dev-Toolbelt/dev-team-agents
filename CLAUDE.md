@@ -226,7 +226,7 @@ dev-team-agents/
 │   ├── agents.md        ← canonical agent reference
 │   ├── installation.md  ← installation and advanced options guide
 │   └── reports/         ← audit reports and fingerprint index
-├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh
+├── scripts/         ← install.sh, update.sh, new-adr.sh, graphify-refresh.sh, fix-symlinks.sh
 │   └── hooks/       ← pre-tool-use.sh, stop.sh (dispatchers) + pre-tool-use/, stop/ (sub-scripts)
 ├── README.md
 ├── README.pt-BR.md

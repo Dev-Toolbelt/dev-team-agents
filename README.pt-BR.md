@@ -207,6 +207,8 @@ CLAUDE.md                             # regras globais para todos os agentes
 
 **Skills não são carregadas** — verifique se `.claude/skills/` contém symlinks. Rode o instalador para restaurar links quebrados.
 
+**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .claude/dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
+
 **Hook de verificação de atualização dispara a cada tool call** — verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
