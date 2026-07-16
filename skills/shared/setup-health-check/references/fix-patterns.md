@@ -14,6 +14,9 @@ PYEOF
 
 ## Auto-fix for missing symlinks
 
+Only when the path does **not** exist (MISSING). If the path exists as a plain
+file (MATERIALIZED), `ln -s` fails — use the materialized-link fix below.
+
 ```bash
 # agents symlink
 ln -s ../dev-team-agents/agents .claude/agents/dev-team
@@ -21,6 +24,35 @@ ln -s ../dev-team-agents/agents .claude/agents/dev-team
 # commands symlink
 ln -s ../dev-team-agents/commands .claude/commands/devteam
 ```
+
+## Fix for materialized symlinks (Windows)
+
+When a link exists as a plain text file instead of a symlink (the Windows
+"no native symlink support" condition), run the repair helper — never a raw
+`ln -s`, which fails because the path already exists:
+
+```bash
+bash .claude/dev-team-agents/scripts/fix-symlinks.sh
+```
+
+Behavior:
+- **Auto-repairs** when the OS allows native symlinks (Developer Mode on, or an
+  elevated process): enables `core.symlinks`, re-materializes each broken link
+  (scoped `git checkout` if tracked, else `ln -s`), and re-validates. Exit 0.
+- **Cannot repair** (native symlinks blocked): exits 3 and prints the 3
+  remediation options. Present them to the user with `AskUserQuestion`
+  (quiz-first), then auto-run the safe git steps once the blocker clears:
+
+  1. **Developer Mode** (recommended, no admin) — user enables it in
+     Settings → System → For developers; agent then runs
+     `git config core.symlinks true && git checkout -- .claude` and re-validates.
+  2. **Elevated terminal once** — user runs the two git commands above in an
+     Administrator PowerShell, then restarts Claude Code.
+  3. **Run Claude Code as administrator** — fully close the app (incl. tray and
+     lingering processes), right-click → Run as administrator, re-run the helper.
+
+After any successful repair, tell the user to restart Claude Code so it
+re-indexes commands, agents, and skills.
 
 ## Auto-fix for non-executable scripts
 

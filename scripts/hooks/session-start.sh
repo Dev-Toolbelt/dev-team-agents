@@ -76,6 +76,37 @@ _days_since_date_str() {
 WARN=0
 MESSAGES=()
 
+# ── Check: broken (materialized) dev-team-agents symlinks ─────────
+# On Windows without Developer Mode / core.symlinks=true, git/MSYS writes
+# the .claude/ links as plain text files. git-bash's `ls -la` still shows
+# them as lrwxrwxrwx (MSYS emulation), but Claude Code sees files — so the
+# whole dev-team silently disappears. A link is "materialized" when it
+# exists, is NOT a symlink, and is NOT a directory.
+_is_materialized() { [ -e "$1" ] && [ ! -L "$1" ] && [ ! -d "$1" ]; }
+
+BROKEN_LINKS=0
+_is_materialized "${PROJECT_ROOT}/.claude/agents/dev-team"   && BROKEN_LINKS=$((BROKEN_LINKS + 1))
+_is_materialized "${PROJECT_ROOT}/.claude/commands/devteam"  && BROKEN_LINKS=$((BROKEN_LINKS + 1))
+if [ -d "${PROJECT_ROOT}/.claude/skills" ]; then
+    for _sp in "${PROJECT_ROOT}/.claude/skills"/*; do
+        [ -e "$_sp" ] || continue
+        _is_materialized "$_sp" && BROKEN_LINKS=$((BROKEN_LINKS + 1))
+    done
+fi
+
+if [ "$BROKEN_LINKS" -gt 0 ]; then
+    echo ""
+    echo "[DEVTEAM:SYMLINK_BROKEN] ${BROKEN_LINKS} link(s)"
+    echo "dev-team-agents links were materialized as plain files instead of symlinks"
+    echo "(the Windows 'no native symlink support' condition). The dev-team is not"
+    echo "loaded — /devteam:* commands, agents, and skills are invisible to Claude Code."
+    echo "Fix it now by running:"
+    echo "  bash .claude/dev-team-agents/scripts/fix-symlinks.sh"
+    echo "It auto-repairs when the OS allows, and otherwise prints the 3 remediation"
+    echo "options to offer the user interactively. Restart Claude Code after a fix."
+    echo ""
+fi
+
 # ── Check: project.md freshness ───────────────────────────────────
 PROJECT_MD="${DOCS_DIR}/project.md"
 if [ -f "$PROJECT_MD" ]; then

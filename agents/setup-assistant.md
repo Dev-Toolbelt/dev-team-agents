@@ -202,6 +202,8 @@ Load `skills/shared/setup-health-check/SKILL.md` for the full category checklist
 
 Load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS notification format when emitting system messages (missing preferences, stale config, health check warnings).
 
+**Broken symlinks (Windows).** If Category 1 reports a **MATERIALIZED** link — a `.claude/` link that exists as a plain file instead of a symlink (git/MSYS wrote it that way because native symlinks were unavailable) — do **not** try `ln -s`; the path already exists. Run `bash .claude/dev-team-agents/scripts/fix-symlinks.sh`. It auto-repairs when the OS allows and exits 3 with the 3 remediation options otherwise. Present those options with `AskUserQuestion` (quiz-first), auto-run the safe git steps once the user clears the OS blocker, and tell them to restart Claude Code afterward. Full detail: `skills/shared/setup-health-check/references/fix-patterns.md`.
+
 ---
 
 ## Role 3 — Update Manager

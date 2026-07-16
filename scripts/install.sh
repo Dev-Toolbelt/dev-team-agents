@@ -214,6 +214,40 @@ else
     echo "→ Commands already linked: .claude/commands/devteam/ (skipped)"
 fi
 
+# ── Step 6b: Verify symlinks materialized as real links ──────────
+# On Windows without Developer Mode / core.symlinks=true, `ln -s` and git
+# checkout write the link target into a plain text file instead of a real
+# symlink. git-bash's `ls -la` still shows it as lrwxrwxrwx (MSYS emulation),
+# but Claude Code sees a file — so the dev-team silently disappears. Detect
+# it here so the install does not report false success.
+_is_materialized() { [ -e "$1" ] && [ ! -L "$1" ] && [ ! -d "$1" ]; }
+_broken_links=0
+_is_materialized "$AGENTS_LINK"   && _broken_links=$((_broken_links + 1))
+_is_materialized "$COMMANDS_LINK" && _broken_links=$((_broken_links + 1))
+for _sl in "$SKILLS_TARGET"/*; do
+    [ -e "$_sl" ] || continue
+    _is_materialized "$_sl" && _broken_links=$((_broken_links + 1))
+done
+
+if [ "$_broken_links" -gt 0 ]; then
+    echo ""
+    echo "⚠️  ${_broken_links} link(s) were written as plain files, not symlinks."
+    echo "    This machine cannot create native symlinks (typical on Windows"
+    echo "    without Developer Mode). The dev-team will NOT load until this is"
+    echo "    fixed. Repair options, in order of preference:"
+    echo ""
+    echo "    1. Enable Developer Mode (recommended, no admin):"
+    echo "       Settings → System → For developers → 'Developer Mode' ON,"
+    echo "       then re-run this installer."
+    echo "    2. Run once in an elevated (Administrator) terminal:"
+    echo "       git config core.symlinks true && git checkout -- .claude"
+    echo "    3. After first install, run the repair helper anytime:"
+    echo "       bash .claude/dev-team-agents/scripts/fix-symlinks.sh"
+    echo ""
+    echo "    Restart Claude Code after repairing so it re-indexes the dev-team."
+    echo ""
+fi
+
 # ── Step 7: Configure hooks in .claude/settings.json ────────────
 # Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
 # where BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every hook

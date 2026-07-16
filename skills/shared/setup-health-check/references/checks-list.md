@@ -2,17 +2,35 @@
 
 ## Category 1 — Symlinks
 
+Do NOT trust `ls -la` alone: on Windows (git-bash/MSYS) it prints `lrwxrwxrwx`
+for links that are really plain text files. Test with `-L` (true symlink) to
+tell the three states apart:
+
 ```bash
-ls -la .claude/agents/dev-team 2>/dev/null || echo "MISSING"
-ls -la .claude/commands/devteam 2>/dev/null || echo "MISSING"
-ls .claude/skills/ 2>/dev/null | head -5 || echo "MISSING"
+# For each link path, classify: OK (symlink) / MATERIALIZED (file) / MISSING
+for p in .claude/agents/dev-team .claude/commands/devteam; do
+  if [ -L "$p" ]; then echo "OK: $p"
+  elif [ -e "$p" ]; then echo "MATERIALIZED: $p"   # file/dir where a symlink belongs
+  else echo "MISSING: $p"; fi
+done
+# skills: count any entry that exists but is neither a symlink nor a directory
+find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc -l
 ```
 
 | Check | Expected | Auto-fix |
 |-------|----------|----------|
-| `.claude/agents/dev-team` symlink exists | → `../dev-team-agents/agents` | `ln -s ../dev-team-agents/agents .claude/agents/dev-team` |
-| `.claude/commands/devteam` symlink exists | → `../dev-team-agents/commands` | `ln -s ../dev-team-agents/commands .claude/commands/devteam` |
-| `.claude/skills/` has at least one symlink | Any skill dir linked | Re-run skill linking loop from `install.sh` |
+| `.claude/agents/dev-team` is a symlink | `-L` true → `../dev-team-agents/agents` | If MISSING: `ln -s ../dev-team-agents/agents .claude/agents/dev-team` |
+| `.claude/commands/devteam` is a symlink | `-L` true → `../dev-team-agents/commands` | If MISSING: `ln -s ../dev-team-agents/commands .claude/commands/devteam` |
+| `.claude/skills/` entries are symlinks | Each skill dir linked | If MISSING: re-run skill linking loop from `install.sh` |
+| No link is **MATERIALIZED** (a plain file) | `find … ! -type l ! -type d` returns 0 | If any MATERIALIZED: **do not** `ln -s` (path exists). Run `bash .claude/dev-team-agents/scripts/fix-symlinks.sh` — see fix-patterns.md |
+
+> **MATERIALIZED = the Windows condition.** git/MSYS wrote the link target
+> into a ~62-byte text file because native symlinks were unavailable
+> (Developer Mode off, process not elevated, `core.symlinks=false`). The
+> dev-team is invisible to Claude Code even though git-bash "sees" the links.
+> This is a `🔧 FIX` that cannot be auto-`ln -s`'d — route it through
+> `fix-symlinks.sh`, which repairs when possible and otherwise surfaces the
+> 3 remediation options for the user.
 
 ## Category 2 — Scripts & Executability
 

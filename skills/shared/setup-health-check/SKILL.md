@@ -29,7 +29,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
 
 | # | Category | Key check |
 |---|----------|-----------|
-| 1 | Symlinks | `.claude/agents/dev-team`, `.claude/commands/devteam` |
+| 1 | Symlinks | `.claude/agents/dev-team`, `.claude/commands/devteam` — test with `-L`, not `ls`; catch Windows materialized-file state |
 | 2 | Scripts & Executability | All hook dispatchers and sub-scripts are executable |
 | 3 | User Data | `.claude/user-data/` directory and `.installed-version` |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
