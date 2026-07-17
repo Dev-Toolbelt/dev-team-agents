@@ -36,6 +36,18 @@ COMMANDS_LINK="$CLAUDE_DIR/commands/devteam"
 SKILLS_DIR="$CLAUDE_DIR/skills"
 INSTALL_DIR="$CLAUDE_DIR/dev-team-agents"
 
+# ── Legacy migration: remove the pre-1.9.1 graphify Stop sub-script ─────────
+#    Older setups generated stop/02-graphify-refresh.sh (repo-integrity tier),
+#    which called a graphify-refresh.sh that exited non-zero when graphify was
+#    absent — looping the Stop hook. It was renamed to 99-graphify-refresh.sh
+#    (cleanup tier). A full update wipes the install dir and drops it, but an
+#    in-place symlink repair does not — so remove it here unconditionally.
+_LEGACY_GRAPHIFY="$INSTALL_DIR/scripts/hooks/stop/02-graphify-refresh.sh"
+if [ -f "$_LEGACY_GRAPHIFY" ]; then
+    rm -f "$_LEGACY_GRAPHIFY"
+    echo "→ Removed legacy stop/02-graphify-refresh.sh (Stop-hook loop fix)."
+fi
+
 # ── A link is "materialized" when it exists, is NOT a symlink, and is NOT a
 #    directory — i.e. git/MSYS wrote the target path into a plain file. ──────
 _is_materialized() {

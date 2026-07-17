@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `01-check-updates.sh` uses `If-None-Match` / ETag to avoid redundant GitHub API calls
 - CI shellcheck step uses pre-installed binary instead of `apt-get install`
 
+### Fixed
+- `scripts/fix-symlinks.sh` now removes the legacy `stop/02-graphify-refresh.sh` sub-script during an in-place repair. On stale Windows installs the old sub-script called a `graphify-refresh.sh` that exited non-zero when graphify was absent, looping the Stop hook; a full update already drops it via the install-dir replace, but a symlink-only repair did not
+
 ---
 
 ## [1.4.0] — 2026-05-10
