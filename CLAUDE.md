@@ -174,12 +174,13 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:learn` | technical-writer + software-architect¹ | Consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs |
 | `/devteam:update` | runs `update.sh` (which delegates freshness check to `hooks/pre-tool-use/01-check-updates.sh`) | Checking for and applying dev-team-agents updates |
+| `/devteam:symlinks` | runs `fix-symlinks.sh` (detects OS, repairs materialized `.claude/` links, guides the OS fix on exit 3) | Diagnosing and repairing broken dev-team-agents symlinks (Windows without native symlink support) |
 
 ¹ conditional — spawned only when the task context involves that scope.
 
-> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), and `/devteam:learn` (operates on session evidence, not a branch scope). All three omit `current-context` by design.
+> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:symlinks` (operates on the local installation), and `/devteam:learn` (operates on session evidence, not a branch scope). All omit `current-context` by design.
 
-> **Exception — commands that do NOT require Plan Gate:** `/devteam:review` (read-only by design — reads the diff and delegates, does not modify files).
+> **Exception — commands that do NOT require Plan Gate:** `/devteam:review` (read-only by design — reads the diff and delegates, does not modify files). `/devteam:update` and `/devteam:symlinks` are thin script-runners over `update.sh` / `fix-symlinks.sh` (both with their own interactive guardrails) and likewise run without a Plan Gate.
 
 **Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. It reads the diff, classifies the change scope, and delegates to `backend-test-specialist` or `frontend-test-specialist` as needed. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
 

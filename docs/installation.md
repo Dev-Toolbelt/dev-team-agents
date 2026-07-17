@@ -185,3 +185,5 @@ bash .claude/dev-team-agents/scripts/fix-symlinks.sh
 ```
 
 Restart Claude Code after repairing so it re-indexes commands, agents, and skills. Enabling Developer Mode is the durable fix — it also covers future clones of this and other repos without any admin step.
+
+From inside Claude Code you can run the same repair as a command — `/devteam:symlinks` — which detects the OS, runs the helper, and walks you through the OS fix when native symlinks are blocked. If the links are broken enough that `/devteam:` commands don't load at all, run the `fix-symlinks.sh` script directly as shown above.
