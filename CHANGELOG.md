@@ -22,38 +22,226 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.2] — 2026-07-17
 
 ### Added
-- `scripts/fix-symlinks.sh` — repairs `.claude/` links materialized as plain files instead of symlinks (Windows without Developer Mode / `core.symlinks`); auto-fixes when the OS allows and otherwise prints three remediation options. Detected automatically at session start (`[DEVTEAM:SYMLINK_BROKEN]`) and verified at install time; health-check Category 1 now distinguishes OK / MATERIALIZED / MISSING
-- `SECURITY.md` — vulnerability disclosure policy for `curl | bash` installer
-- `CHANGELOG.md` — this file; human-readable release history
-- `CONTRIBUTING.md` — human-oriented contribution guide
-- `.github/PULL_REQUEST_TEMPLATE.md` and `ISSUE_TEMPLATE/` — structured contribution templates
-- `.github/CODEOWNERS` — path-based ownership declaration
-- `workflows/fullstack.md` — full-stack workflow aligned with `/devteam:fullstack`
-- `skills/architecture/event-driven/SKILL.md` — CQRS, saga, event sourcing, idempotency
-- `skills/architecture/rate-limiting/SKILL.md` — token bucket, sliding window, headers, failure modes
-- `skills/architecture/performance-budgets/SKILL.md` — Core Web Vitals, bundle size, Lighthouse CI
-- `skills/architecture/api-versioning/SKILL.md` — URL/header/content-negotiation strategies, deprecation lifecycle
-- `skills/shared/diataxis-framework/SKILL.md` — extracted from `technical-writer` agent
-- `skills/database/postgres/SKILL.md`, `mysql/SKILL.md`, `mongodb/SKILL.md` — per-engine reference skills
-- `SessionStart` hook — warns when `project.md` or `session-summary.md` is stale
-- `scripts/hooks/stop/04-notifier.sh` — context-window warnings (⚠️/🚨) and a rotating tip-of-session using the DEV TEAM AGENTS notification format; suppression controlled via `preferences.json`
 - `/devteam:symlinks` command — detects the OS, runs `fix-symlinks.sh` to repair materialized `.claude/` links, and walks the user through the OS fix (quiz-first) when native symlinks are blocked
 
-### Changed
-- `CLAUDE.md` "Package exclusions" table expanded with `Mechanism` column and 6 new entries (LICENSE, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, docs/, .github/); now 14 rows documenting the dual-strategy (KEEP_ROOT allowlist vs. explicit `rm -f`/`rm -rf`)
-- All 21 `/devteam:*` commands now load `skills/shared/current-context/SKILL.md` instead of inlining the git block (~150 lines removed)
-- `commands/plan.md` delegates conditional spawn decisions to `skills/shared/spawn-classifier/SKILL.md`
-- Reviewer agents (`code-reviewer`, `backend-reviewer`, `frontend-reviewer`) reference `reviewer-mindset` skill instead of duplicating the inline block
-- `token-efficiency` apply line standardised to one canonical form across 10 agents
-- Stop hooks `02-orphan-skill-scan.sh` and `03-agent-lint.sh` now gate by `agents/`/`skills/` changes
-- `/devteam:commit` runs a pre-commit lint gate before committing
-- All 7 workflows have a Recovery Paths section
-- `/devteam:pr` detects and fills `.github/PULL_REQUEST_TEMPLATE.md` when present
-- `01-check-updates.sh` uses `If-None-Match` / ETag to avoid redundant GitHub API calls
-- CI shellcheck step uses pre-installed binary instead of `apt-get install`
+---
+
+## [1.9.1] — 2026-07-17
 
 ### Fixed
 - `scripts/fix-symlinks.sh` now removes the legacy `stop/02-graphify-refresh.sh` sub-script during an in-place repair. On stale Windows installs the old sub-script called a `graphify-refresh.sh` that exited non-zero when graphify was absent, looping the Stop hook; a full update already drops it via the install-dir replace, but a symlink-only repair did not
+
+---
+
+## [1.9.0] — 2026-07-16
+
+### Added
+- `scripts/fix-symlinks.sh` — repairs `.claude/` links materialized as plain files instead of symlinks (Windows without Developer Mode / `core.symlinks`); auto-fixes when the OS allows and otherwise prints three remediation options. Detected automatically at session start (`[DEVTEAM:SYMLINK_BROKEN]`) and verified at install time; health-check Category 1 now distinguishes OK / MATERIALIZED / MISSING
+
+### Changed
+- Documented the Windows materialized-symlink repair flow across README (EN/pt-BR) and the installation guide
+
+---
+
+## [1.8.2] — 2026-06-29
+
+### Fixed
+- `graphify-refresh.sh` exits `0` on skip instead of non-zero, preventing a Stop-hook loop when graphify is not installed
+
+---
+
+## [1.8.1] — 2026-06-28
+
+### Fixed
+- Removed an unused `_notify` function in `session-start.sh`
+
+---
+
+## [1.8.0] — 2026-06-28
+
+### Added
+- `/devteam:learn` command for consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs
+- Post-execution review step in `software-architect` and auto-learn hand-off in `/devteam:commit`
+
+---
+
+## [1.7.4] — 2026-06-28
+
+### Fixed
+- Suppress WSL `BASH_ENV` bashrc noise on hook invocation (follow-up to 1.7.3)
+
+---
+
+## [1.7.3] — 2026-06-24
+
+### Fixed
+- Suppress WSL `BASH_ENV` bashrc noise on hook invocation
+
+---
+
+## [1.7.2] — 2026-06-24
+
+### Fixed
+- Enforce LF line endings in the target project `.gitattributes` on install
+
+---
+
+## [1.7.1] — 2026-06-24
+
+### Added
+- First-time setup guard with quiz in `project-context`
+- `SessionStart` emits a structured signal when `preferences.json` is missing
+- Installer injects a pre-compact auto-summary rule into the project `CLAUDE.md`; health-check detects and auto-fixes it when missing
+
+### Changed
+- Added `.gitattributes` to enforce LF line endings in the repository
+
+---
+
+## [1.7.0] — 2026-05-18
+
+### Added
+- Anonymous usage telemetry via PostHog, wired into `install.sh` and `update.sh`; `PRIVACY.md` documents what is collected and how to opt out
+
+---
+
+## [1.6.7] — 2026-05-18
+
+### Fixed
+- Prune stale skill symlinks during update
+- Resolve shellcheck warnings in hook and lint scripts
+
+---
+
+## [1.6.6] — 2026-05-18
+
+### Fixed
+- Anchor the fingerprint uniqueness check to registration lines only
+
+---
+
+## [1.6.5] — 2026-05-18
+
+Large refactor/performance release focused on reducing per-session and per-spawn context-budget usage.
+
+### Added
+- `stack-detection` skill wired to agents; iOS and Android platform skills
+- `interaction-patterns` skill (quiz-first rule) and `push-notifications` skill
+- `validate-commit-msg.sh` gate in `/devteam:commit`; `workflow-mobile` and `workflow-design` shortcut commands
+- Fingerprint uniqueness check, orphan-template scanner, and additional CI scans
+
+### Changed
+- Fragmented `CLAUDE.md` into `CLAUDE-md/` sub-files; extracted large inline sections across agents and skills (project-context, mobile, integrations, frontend, ui-ux) to `references/` subdirectories
+- Moved dev-only tools to `helpers/`; moved the context-cache path to `user-data/`; canonicalized tools order; added the Hook Files Map
+- Made agents stack-agnostic — removed Docker-first and stack-prescriptive language
+
+### Fixed
+- Restored the worktree session-file gate across coding agents; hardened `rollback.sh` and `pre-compact.sh` guards; corrected the CI fast-path comparison and fingerprint regex
+
+---
+
+## [1.6.4] — 2026-05-13
+
+### Fixed
+- README sync check compares section counts instead of header text
+
+---
+
+## [1.6.3] — 2026-05-13
+
+### Added
+- `release-prep` skill; ADR, backlog-item, and runbook templates
+- Context cache, discovery lockfile, and graphify skip conditions; PreCompact hook and rollback script
+- `conventional-commits` `validate.sh`; size-limits check; mobile and design workflows
+
+### Changed
+- Reduced file sizes across architect, database, setup, and reviewer agents; extracted large devops and docs skills to `references/`
+- Extended orphan-skill-scan to cover `commands/` and `workflows/`; added Portuguese translations for agents and installation guides
+
+### Fixed
+- Implemented the worktree session-file gate in all coding agents; removed non-canonical frontmatter keys from design skills
+
+---
+
+## [1.6.2] — 2026-05-12
+
+### Changed
+- Restructured README for first-time readability; extracted the agent reference and installation guide to `docs/`
+
+---
+
+## [1.6.1] — 2026-05-12
+
+### Added
+- `/devteam:mobile` and `/devteam:adr` commands
+- Plan-gate enforcement across all implementation commands; context estimation via transcript tokens with a preferences fallback
+
+### Changed
+- Reduced the git-log window from `-20` to `-10` across 10 agents; expanded the preferences schema (`transcript_multiplier`, `model_max_tokens`)
+
+### Fixed
+- Disabled Claude co-authoring in git artifacts and added a Jira REST API fallback; reclassified plans as conversation items using the user's preferred language; added a daily gate to the notifier tip-of-session; fixed the graphify-setup skill path in `setup-assistant`
+
+---
+
+## [1.6.0] — 2026-05-11
+
+### Added
+- `mobile-developer` agent with React Native, Expo, and Flutter skills
+- Material Design 3 and iOS HIG mobile design skills
+
+---
+
+## [1.5.5] — 2026-05-11
+
+### Fixed
+- `check-updates.sh` no longer exits with code 1 when the GitHub API returns an empty response
+
+---
+
+## [1.5.4] — 2026-05-11
+
+### Fixed
+- Exclude repo-only files from the distributed package
+- Remove the rollback feature and `.previous` directory from the installer
+
+---
+
+## [1.5.3] — 2026-05-11
+
+### Changed
+- Trimmed all skill descriptions to reduce context-budget usage
+
+---
+
+## [1.5.2] — 2026-05-11
+
+### Fixed
+- Jira MCP setup checks deferred tools via ToolSearch before showing setup instructions
+
+---
+
+## [1.5.1] — 2026-05-11
+
+### Fixed
+- Skip the Graphify prompt when already configured; strip `agent-lint.sh` from the distributed package
+
+---
+
+## [1.5.0] — 2026-05-11
+
+### Added
+- User preferences system (`preferences.json`) with a language prompt on install; notification system and the `04-notifier.sh` stop sub-script
+- `user-preferences` and `notifier` shared skills; per-engine database skills for all 7 engines
+- Architecture skills (event-driven, rate-limiting, api-versioning); `diataxis-framework`; fullstack workflow; recovery paths in all workflows
+- Community health files and GitHub templates; rollback support in the installer/update script; session-start staleness hook
+
+### Changed
+- Migrated command context detection to the `current-context` skill and `spawn-classifier`; rewrote `/devteam:refactor` with test-first coverage and dependency mapping; expanded database-specialist engine detection
+- Untracked `session-summary.md` and added it to `.gitignore`
+
+### Fixed
+- Removed the manual shellcheck `apt-get install` step in CI
 
 ---
 
@@ -140,7 +328,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.3...HEAD
 [1.9.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.2...v1.9.3
-[1.9.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.4.0...v1.9.2
+[1.9.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.1...v1.9.2
+[1.9.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.0...v1.9.1
+[1.9.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.8.2...v1.9.0
+[1.8.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.8.1...v1.8.2
+[1.8.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.8.0...v1.8.1
+[1.8.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.7.4...v1.8.0
+[1.7.4]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.7.3...v1.7.4
+[1.7.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.7.2...v1.7.3
+[1.7.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.7.1...v1.7.2
+[1.7.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.7...v1.7.0
+[1.6.7]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.6...v1.6.7
+[1.6.6]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.5...v1.6.6
+[1.6.5]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.4...v1.6.5
+[1.6.4]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.3...v1.6.4
+[1.6.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.2...v1.6.3
+[1.6.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.5...v1.6.0
+[1.5.5]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.4...v1.5.5
+[1.5.4]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.3...v1.5.4
+[1.5.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.3.16...v1.4.0
 [1.3.16]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.3.0...v1.3.16
 [1.3.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.2.0...v1.3.0
