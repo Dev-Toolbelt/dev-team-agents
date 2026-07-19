@@ -35,6 +35,11 @@ if [ -f "$LAST_CHECK_FILE" ]; then
 fi
 
 ETAG_FILE="$USER_DATA_DIR/.last-releases-etag"
+# Cached latest-version string, paired with the ETag. On a 304 (release unchanged)
+# we reuse this instead of exiting, so a local install that is behind the still-latest
+# release is not silently treated as up to date.
+VERSION_CACHE_FILE="$USER_DATA_DIR/.last-releases-version"
+LATEST=""
 
 # HTTP tool detection
 if command -v curl >/dev/null 2>&1; then
@@ -73,24 +78,30 @@ if command -v curl >/dev/null 2>&1; then
     HTTP_STATUS=$(curl "${CURL_ARGS[@]}" "${RELEASES_URL}" 2>/dev/null || echo "000")
 
     if [ "$HTTP_STATUS" = "304" ]; then
-        # Not Modified — no new release since last check
-        exit 0
+        # Not Modified — the latest release is unchanged since the cached ETag.
+        # Reuse the cached version and continue to the local-vs-latest comparison
+        # instead of exiting, so an install that is behind the still-latest release
+        # is still detected. (If the cache is empty — an install predating this
+        # field — LATEST stays empty and the tags fallback below repopulates it.)
+        LATEST=$(cat "$VERSION_CACHE_FILE" 2>/dev/null || true)
+    else
+        if [ "$HTTP_STATUS" = "200" ]; then
+            # Save new ETag for next check
+            NEW_ETAG=$(grep -i '^etag:' "$TMP_HEADERS" | head -1 | sed 's/^[Ee][Tt][Aa][Gg]: *//;s/\r//' || true)
+            [ -n "$NEW_ETAG" ] && printf '%s' "$NEW_ETAG" > "$ETAG_FILE"
+        fi
+        API_RESP=$(cat "$TMP_BODY" 2>/dev/null || true)
     fi
-
-    if [ "$HTTP_STATUS" = "200" ]; then
-        # Save new ETag for next check
-        NEW_ETAG=$(grep -i '^etag:' "$TMP_HEADERS" | head -1 | sed 's/^[Ee][Tt][Aa][Gg]: *//;s/\r//' || true)
-        [ -n "$NEW_ETAG" ] && printf '%s' "$NEW_ETAG" > "$ETAG_FILE"
-    fi
-
-    API_RESP=$(cat "$TMP_BODY" 2>/dev/null || true)
 else
     API_RESP=$(HTTP_GET "${RELEASES_URL}" 2>/dev/null || true)
 fi
 
-LATEST=$(printf '%s' "$API_RESP" \
-    | grep '"tag_name"' | head -1 \
-    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
+# Parse the latest tag from the API response — unless a 304 already supplied it from cache
+if [ -z "$LATEST" ]; then
+    LATEST=$(printf '%s' "$API_RESP" \
+        | grep '"tag_name"' | head -1 \
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
+fi
 
 if [ -z "$LATEST" ]; then
     API_RESP=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
@@ -98,6 +109,9 @@ if [ -z "$LATEST" ]; then
         | grep '"name"' | head -1 \
         | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
 fi
+
+# Cache the resolved version alongside the ETag so a future 304 can reuse it
+[ -n "$LATEST" ] && printf '%s' "$LATEST" > "$VERSION_CACHE_FILE"
 
 [ -n "$LATEST" ] || exit 0
 
