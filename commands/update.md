@@ -28,17 +28,45 @@ You are running the **`/devteam:update`** command.
 ## Step 1 — Read current version
 
 ```bash
-cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
+v=$(cat .claude/user-data/.installed-version 2>/dev/null); echo "${v:-unknown}"
 ```
+
+Store the output as `<current-version>`. A missing **or empty** version file both resolve to `unknown`.
 
 ---
 
-## Step 2 — Check for updates
+## Step 2 — Repair path (only when `<current-version>` is exactly `unknown`)
 
-Force a fresh check (bypass the 24h TTL):
+An `unknown` version means `.claude/user-data/.installed-version` is missing or unreadable — the installation metadata is broken. Do **NOT** report "up to date" and do **NOT** run the version check (it cannot compare an unknown version). Force a fresh reinstall of the latest version to repair the metadata:
 
 ```bash
-rm -f .claude/user-data/.last-update-check
+bash .claude/dev-team-agents/scripts/update.sh latest
+rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
+```
+
+Then read the repaired version:
+
+```bash
+cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
+```
+
+Output exactly (substituting the repaired version):
+
+```
+Installed version was missing — reinstalled latest.
+Now on <repaired-version>. Start a new session to pick up the changes.
+```
+
+Then skip Steps 3–5 and stop. Do not add anything else.
+
+---
+
+## Step 3 — Check for updates (only when `<current-version>` is a known version)
+
+Force a fresh check (bypass the 24h TTL **and** the cached ETag, so a `304 Not Modified` cannot mask a version mismatch):
+
+```bash
+rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
 bash .claude/dev-team-agents/scripts/check-updates.sh
 ```
 
@@ -53,11 +81,11 @@ Up to date.
 
 Then stop. Do not add anything else.
 
-**If the script outputs a banner with a new version** → parse current and latest from the output, then continue to Step 3.
+**If the script outputs a banner with a new version** → parse current and latest from the output, then continue to Step 4.
 
 ---
 
-## Step 3 — Offer to update
+## Step 4 — Offer to update
 
 Output exactly:
 
@@ -87,7 +115,7 @@ Wait for the user's answer before proceeding.
 
 ---
 
-## Step 4 — Apply the update (only if user said yes)
+## Step 5 — Apply the update (only if user said yes)
 
 ```bash
 bash .claude/dev-team-agents/scripts/update.sh latest
@@ -129,13 +157,13 @@ Then immediately use the **`AskUserQuestion`** tool to offer a health check:
 | `--enable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
 | `--disable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
 
-If either flag is present, skip Steps 1–4 and handle only the toggle.
+If either flag is present, skip Steps 1–5 and handle only the toggle.
 
 ---
 
 ## Pin to a specific version (only if $ARGUMENTS is a version tag like `v1.2.3`)
 
-Skip Steps 1–3. Run:
+Skip Steps 1–4. Run:
 
 ```bash
 bash .claude/dev-team-agents/scripts/update.sh $ARGUMENTS
