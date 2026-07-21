@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Git worktree per task — .worktrees/<context>/<title>.
+description: Git worktree per task — <worktree_path>/<context>/<title>, default .claude/worktrees.
 ---
 
 # Worktree — Task Isolation Protocol
@@ -9,42 +9,50 @@ Invoke this skill at the **very start** of every task. No code, no file edits, n
 
 ---
 
-## Session File Decision (load first)
+## Decision Cascade (load first)
 
-Read `.claude/.worktree-session`:
+Resolve the worktree decision top-down; stop at the first that applies:
+
+| # | Source | Action |
+|---|--------|--------|
+| 1 | `.claude/.worktree-session` present | Follow the stored per-session decision silently |
+| 2 | `worktree_active` in `preferences.json` | Use it **without asking**; write the session file so the rest of the session is consistent |
+| 3 | key absent (legacy install) | Ask the user once — see below |
 
 ```bash
-cat .claude/.worktree-session 2>/dev/null
+cat .claude/.worktree-session 2>/dev/null   # source 1
 ```
 
-| File content | Action |
+| Session-file content | Action |
 |---|---|
 | `worktree=no branch=<b>` | Operate on branch `<b>`; skip worktree setup |
 | `worktree=yes branch=<b>` | Load `references/branch-flow.md` using `<b>` as base |
-| File absent | Ask the user — see below |
 
-**If file is absent:** Use the `AskUserQuestion` tool with options [Yes, No]:
+**If the session file is absent**, read `worktree_active` from `preferences.json`:
+`true` → set up a worktree without the yes/no prompt; `false` → skip the yes/no prompt and ask only for a new branch name;
+key absent → use the `AskUserQuestion` tool with options [Yes, No]:
 "Should this task use a git worktree (isolated working directory)?"
 
-- **Yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>`, then follow `references/branch-flow.md`
+- **Yes** → resolve the base branch (auto-detect default branch), write `worktree=yes branch=<base>`, follow `references/branch-flow.md`
 - **No** → ask for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <branch-name>`, write `worktree=no branch=<branch-name>`
 
-For full session-file protocol, format rules, and cleanup: load `references/session-protocol.md`.
+For the full cascade, base-branch resolution, format rules, and cleanup: load `references/session-protocol.md`.
 
 ---
 
 ## Worktree Setup (when worktree=yes)
 
+`<wt-path>` = `worktree_path` from `preferences.json` (default `.claude/worktrees`).
 Load `references/branch-flow.md` for the complete step-by-step flow:
 
-1. Load project context (project-config overrides all defaults)
+1. Load project context (project-config → preferences.json → skill defaults)
 2. Derive name: `<context>/<brief-title>` — lowercase, hyphenated, ≤ 5 words
-3. Resolve base branch (`beta` by default if it exists; ask if not found)
+3. Resolve base branch: `worktree_base_branch` → project config → auto-detect default branch → ask
 4. Check for existing worktree → reuse if present
-5. Create: `git worktree add .worktrees/<ctx>/<title> -b <ctx>/<title> <base>`
-6. Work exclusively inside `.worktrees/<ctx>/<title>/`
-7. Commit with `git -C .worktrees/<ctx>/<title> ...`
-8. Cleanup after merge: remove worktree, delete branch, remove session file
+5. Create: `git worktree add <wt-path>/<ctx>/<title> -b <ctx>/<title> <base>`
+6. Work exclusively inside `<wt-path>/<ctx>/<title>/` — when `worktree_docker_isolate` and the project uses Docker, load `references/docker-isolation.md`
+7. Commit with `git -C <wt-path>/<ctx>/<title> ...` (intermediate commits are normal)
+8. Finalize on merge: rebase onto base → resolve → commit → merge → teardown worktree + isolated Docker stack only
 
 ---
 
@@ -63,5 +71,6 @@ For the full naming table, see `references/branch-flow.md` → Naming quick-refe
 ## Key Rules
 
 - **Never** use `git checkout -b` in the main tree — always `git worktree add`
-- **Never** assume `main` or `master` as base — always resolve from project config, `beta`, or the user
+- **Never** hardcode `main`, `master`, or `beta` as base — resolve from `worktree_base_branch`, project config, or the auto-detected default branch
+- **Finalization is mandatory**: on merge, rebase onto the base first, then merge, then tear down **only** the worktree and its isolated Docker stack — never the main infra
 - The session file is ephemeral — remove it on cleanup, keep it gitignored
