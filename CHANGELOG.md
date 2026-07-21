@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.0] — 2026-07-21
+
+### Added
+- Worktree preferences in `preferences.json` — four keys (`worktree_active`, `worktree_base_branch`, `worktree_path`, `worktree_docker_isolate`) let coding agents default to a git worktree per task without asking. `scripts/lib/preferences-defaults.json` is the new canonical default schema, read by both `install.sh` and the session-start health check
+- Health-check backfill — `session-start.sh` fills any missing `preferences.json` key from the canonical schema on every session (idempotent, preserves existing user values), self-healing installs that predate a newly added key
+- Docker isolation per worktree — `skills/shared/worktree/references/docker-isolation.md` describes spinning up an isolated `docker compose -p <project>-wt-<ctx>-<title>` stack (namespaced containers/volumes/networks, host ports not published, teardown scoped to the isolated project only)
+- `/devteam:learn` now declares a commit manifest in its plan (Step 3) and auto-commits the knowledge-base updates after execution (conventional commits, local only, no push). New `--no-commit` argument opts out
+
+### Changed
+- Worktree decision is now a three-level cascade — `.claude/.worktree-session` (per-session override) → `worktree_active` in `preferences.json` (default) → ask once (legacy installs). Propagated to the 8 coding agents, `software-architect` worktree detection, and `CLAUDE.md`
+- Worktree base branch is auto-detected (`origin/HEAD` → current branch) instead of assuming `beta` or `master`; `worktree_path` makes the worktree location configurable (default `.claude/worktrees`)
+- Worktree finalization enforces rebase-onto-base → resolve → merge → teardown of the worktree and its isolated Docker stack only, never the main infrastructure
+- The coding agents' worktree prompt now uses `AskUserQuestion` (quiz-first) instead of a plain `(yes / no)` text prompt
+- Synced the preferences schema across the `user-preferences` skill, `setup-assistant`, installation guides (EN/pt-BR), and both READMEs
+
+---
+
 ## [1.9.3] — 2026-07-19
 
 ### Fixed
