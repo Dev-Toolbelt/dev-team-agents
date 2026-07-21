@@ -94,7 +94,24 @@ Before spawning any agent, present the classified findings as a plan:
 - technical-writer (always) — doc patches, wiki entries, session summary
 - software-architect (if ADR candidates detected) — ADR authoring and decision framing
 
-Awaiting your approval before proceeding.
+### Commit plan (auto-committed after execution)
+
+This command commits the knowledge-base updates automatically once the agents finish.
+Declare the commits up front — group the proposed updates by layer/type so each commit
+is atomic and conventional:
+
+| Commit # | Type & scope | Files | Message |
+|----------|--------------|-------|---------|
+| 1 | `docs(wiki)` | [wiki files] | [imperative summary] |
+| 2 | `docs(adr)` | [adr file] | [imperative summary] |
+| ... | ... | ... | ... |
+
+> **Total: N commits.** Follow the conventional-commits skill (loaded in Step 5) and check the
+> project's existing history (`git log --oneline -10`) before finalizing each message —
+> defer to the project's own pattern if it differs from Conventional Commits. Never add
+> AI attribution. This command commits locally only; it does **not** push.
+
+Awaiting your approval before proceeding. Approving this plan authorizes the listed commits.
 ```
 
 If **nothing to update** was determined: output exactly:
@@ -159,16 +176,35 @@ Do not create ADRs for decisions that are easily reversible or purely implementa
 
 ---
 
-## Step 5 — Confirm
+## Step 5 — Auto-commit
 
-After all agents complete, output a summary of what was captured:
+After all agents complete, execute the **Commit plan** declared in Step 3 — do not wait
+for the user to run `/devteam:commit`; the plan approval already authorized these commits.
+
+1. Load `skills/shared/conventional-commits/SKILL.md`.
+2. Check the project's own history and defer to its pattern:
+   ```bash
+   git log --oneline -10
+   ```
+3. For each commit in the manifest, stage only that commit's files and commit it:
+   ```bash
+   git add <files-for-commit-N>
+   git commit -m "<type(scope): message>"
+   ```
+   - One atomic commit per manifest row; never mix layers.
+   - Never add AI attribution (`Co-Authored-By`, "Generated with…", etc.).
+   - Commit **locally only** — do not push.
+4. If a file in the manifest was not actually created/changed, skip its commit and note it.
+
+Then output a summary:
 
 ```
-## Session knowledge captured
+## Session knowledge captured & committed
 
 [list each file patched/created, one per line]
 
-Run `/devteam:commit` to commit the knowledge base updates.
+Commits created (N):
+[list each commit hash + message, one per line]
 ```
 
 ---
@@ -181,4 +217,5 @@ Run `/devteam:commit` to commit the knowledge base updates.
 | `docs` | Doc patches only — skip wiki and ADRs |
 | `wiki` | Wiki entries only |
 | `adr` | ADR candidates only |
-| `--dry-run` | Show the classified plan only, do not spawn agents |
+| `--dry-run` | Show the classified plan (incl. commit manifest) only, do not spawn agents or commit |
+| `--no-commit` | Run the full learn pass but skip the auto-commit — leave changes staged for manual commit |
