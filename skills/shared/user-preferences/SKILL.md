@@ -17,6 +17,8 @@ This file is gitignored (covered by `.claude/user-data/` in `.gitignore`).
 
 ## Schema and Defaults
 
+> **Canonical source:** `scripts/lib/preferences-defaults.json` is the single source of truth for the default schema. It is read by `install.sh` (on install/update) and by the `session-start.sh` health-check backfill, which fills any missing key on every session. The block below mirrors it — keep them in sync.
+
 ```json
 {
   "language": "en",
@@ -27,7 +29,14 @@ This file is gitignored (covered by `.claude/user-data/` in `.gitignore`).
   "session_summary_max_entries": 30,
   "docs_stale_after_days": 30,
   "auto_update": false,
-  "update_check_interval_hours": 24
+  "update_check_interval_hours": 24,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000,
+  "telemetry": true,
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
 }
 ```
 
@@ -42,6 +51,13 @@ This file is gitignored (covered by `.claude/user-data/` in `.gitignore`).
 | `docs_stale_after_days` | number | `30` | Days before project.md and session-summary.md are considered stale |
 | `auto_update` | bool | `false` | Auto-update dev-team-agents when a new version is detected |
 | `update_check_interval_hours` | number | `24` | Hours between update checks |
+| `transcript_multiplier` | number | `1.8` | Multiplier to estimate full context from transcript tokens |
+| `model_max_tokens` | number | `200000` | Context window for the active model |
+| `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) |
+| `worktree_active` | bool | `false` | Default to a git worktree per task without asking |
+| `worktree_base_branch` | string or null | `null` | Base branch for worktrees (`null` = auto-detect) |
+| `worktree_path` | string | `".claude/worktrees"` | Directory where worktrees are created |
+| `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 
 ---
 

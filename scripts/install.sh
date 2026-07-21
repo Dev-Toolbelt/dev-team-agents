@@ -480,8 +480,9 @@ _add_gitignore() {
 _add_gitignore ".claude/user-data/"
 _add_gitignore "!.claude/user-data/graphify.json"
 _add_gitignore ".claude/.worktree-session"
+_add_gitignore ".claude/worktrees/"
 
-echo "→ .gitignore updated (user-data dir pattern + worktree-session)"
+echo "→ .gitignore updated (user-data dir pattern + worktree-session + worktrees dir)"
 
 # ── Step 10b: Ensure project .gitattributes enforces LF for shell scripts ─────
 # Prevents Windows Git (core.autocrlf=true) from converting hook scripts to
@@ -527,6 +528,9 @@ chmod +x "$INSTALL_DIR/scripts/hooks/stop/"*.sh 2>/dev/null || true
 # ── Step 12: Set up user preferences ─────────────────────────────
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 PREFS_LANGUAGE="en"
+# Canonical default schema — single source of truth, also read by the
+# session-start health-check backfill (scripts/hooks/session-start.sh).
+PREFS_DEFAULTS_FILE="$INSTALL_DIR/scripts/lib/preferences-defaults.json"
 
 # Ask for language preference when running in an interactive terminal
 # and preferences.json does not yet exist
@@ -583,29 +587,27 @@ if [ "$IS_FIRST_INSTALL" = true ] && [ -t 0 ]; then
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PREFS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" "$TELEMETRY_VALUE" "$IS_FIRST_INSTALL" <<'PYEOF'
+    python3 - "$PREFS_FILE" "$PREFS_DEFAULTS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" "$TELEMETRY_VALUE" "$IS_FIRST_INSTALL" <<'PYEOF'
 import sys, json, os
 
-prefs_file, language, auto_update_str, telemetry_str, is_first_str = \
-    sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+prefs_file, defaults_file, language, auto_update_str, telemetry_str, is_first_str = \
+    sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
 auto_update = (auto_update_str == "true")
 telemetry = (telemetry_str == "true")
 is_first = (is_first_str == "true")
 
-defaults = {
-    "language": language,
-    "context_window_percent_warning": 55,
-    "context_window_percent_limit": 60,
-    "suppress_notifications": False,
-    "session_summary_max_days": 30,
-    "session_summary_max_entries": 30,
-    "docs_stale_after_days": 30,
-    "auto_update": auto_update,
-    "update_check_interval_hours": 24,
-    "transcript_multiplier": 1.8,
-    "model_max_tokens": 200000,
-    "telemetry": telemetry,
-}
+# Load the canonical static default schema (single source of truth). If it is
+# unreadable, fall back to a minimal set so the install still produces a file;
+# the session-start backfill will complete any missing keys on next session.
+try:
+    with open(defaults_file) as f:
+        defaults = json.load(f)
+except (json.JSONDecodeError, IOError, FileNotFoundError):
+    defaults = {}
+# Overlay the prompted/dynamic values onto the static defaults
+defaults["language"] = language
+defaults["auto_update"] = auto_update
+defaults["telemetry"] = telemetry
 
 existing = {}
 if os.path.exists(prefs_file):
@@ -644,7 +646,11 @@ else
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
-  "telemetry": $TELEMETRY_VALUE
+  "telemetry": $TELEMETRY_VALUE,
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
 }
 EOF
         echo "→ User preferences: .claude/user-data/preferences.json"

@@ -1,6 +1,6 @@
 ## User Preferences
 
-All user-level preferences are stored in `.claude/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check.
+All user-level preferences are stored in `.claude/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
 
 ### Schema
 
@@ -17,7 +17,11 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
-  "telemetry": true
+  "telemetry": true,
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
 }
 ```
 
@@ -35,8 +39,26 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
 | `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
 | `telemetry` | `true` | Anonymous usage telemetry (set to `false` to opt out). No personal data is ever collected — see `PRIVACY.md` |
+| `worktree_active` | `false` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) |
+| `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides |
+| `worktree_path` | `".claude/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
+| `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
+
+### Worktree defaults
+
+`worktree_*` keys set the **default** worktree behavior; the per-session file `.claude/.worktree-session` overrides them. Coding agents resolve the decision in this order:
+
+| Precedence | Source | Behavior |
+|---|---|---|
+| 1 (highest) | `.claude/.worktree-session` present | Follow the stored per-session decision silently |
+| 2 | `worktree_active` present in `preferences.json` | Use it **without asking**; write the session file so the rest of the session is consistent |
+| 3 (fallback) | key absent (legacy install) | Ask the user once (original behavior) |
+
+### Health-check backfill
+
+On every session start, `scripts/hooks/session-start.sh` compares `preferences.json` against `scripts/lib/preferences-defaults.json` and writes any **missing** key with its default value. Existing user values are never overwritten; the write is a no-op when the file is already complete. This self-heals installs that predate a new key.
 
 ### Language Rule
 

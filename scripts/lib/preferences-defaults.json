@@ -1,0 +1,18 @@
+{
+  "language": "en",
+  "context_window_percent_warning": 55,
+  "context_window_percent_limit": 60,
+  "suppress_notifications": false,
+  "session_summary_max_days": 30,
+  "session_summary_max_entries": 30,
+  "docs_stale_after_days": 30,
+  "auto_update": false,
+  "update_check_interval_hours": 24,
+  "transcript_multiplier": 1.8,
+  "model_max_tokens": 200000,
+  "telemetry": true,
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
+}

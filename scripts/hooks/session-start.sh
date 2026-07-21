@@ -12,6 +12,34 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 USER_DATA_DIR="${PROJECT_ROOT}/.claude/user-data"
 DOCS_DIR="${PROJECT_ROOT}/.claude/docs"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PREFS_DEFAULTS_FILE="${SCRIPT_DIR}/../lib/preferences-defaults.json"
+
+# ── Health-check backfill ─────────────────────────────────────────
+# Ensure preferences.json has every key from the canonical default schema.
+# Missing keys are written with their defaults; existing user values are never
+# overwritten. No-op (no write) when the file is already complete. This
+# self-heals installs that predate a newly added preference key.
+if [ -f "$PREFS_FILE" ] && [ -f "$PREFS_DEFAULTS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    python3 - "$PREFS_FILE" "$PREFS_DEFAULTS_FILE" <<'PYEOF' 2>/dev/null || true
+import sys, json
+prefs_file, defaults_file = sys.argv[1], sys.argv[2]
+try:
+    with open(defaults_file) as f:
+        defaults = json.load(f)
+    with open(prefs_file) as f:
+        prefs = json.load(f)
+except (json.JSONDecodeError, IOError):
+    sys.exit(0)
+missing = {k: v for k, v in defaults.items() if k not in prefs}
+if missing:
+    prefs.update(missing)
+    with open(prefs_file, 'w') as f:
+        json.dump(prefs, f, indent=2)
+        f.write('\n')
+    print("[DEVTEAM:PREFS_BACKFILL] added: " + ", ".join(sorted(missing)))
+PYEOF
+fi
 
 # ── Read preferences ──────────────────────────────────────────────
 STALE_DAYS=30
