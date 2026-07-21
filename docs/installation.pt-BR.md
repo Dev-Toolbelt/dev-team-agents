@@ -110,6 +110,28 @@ Defina `suppress_notifications` como `true` para silenciar todas as notificaçõ
 
 Os warnings de janela de contexto usam contagens de tokens do transcript (do payload do hook Stop) multiplicadas por `transcript_multiplier`. Ajuste `transcript_multiplier` para cima se os warnings dispararem cedo demais, ou para baixo se dispararem tarde demais. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso troque por um modelo não-200k.
 
+### Worktree e isolamento Docker
+
+Controle como os agentes de codificação isolam o trabalho, no mesmo `preferences.json`:
+
+```json
+{
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
+}
+```
+
+| Chave | Padrão | Propósito |
+|-------|--------|-----------|
+| `worktree_active` | `false` | Quando `true`, os agentes criam uma worktree por task **sem perguntar** |
+| `worktree_base_branch` | `null` | Base branch para novas worktrees (`null` = auto-detectar a branch padrão do repo) |
+| `worktree_path` | `".claude/worktrees"` | Onde as worktrees são criadas (`<path>/<contexto>/<título>`) |
+| `worktree_docker_isolate` | `true` | Com `worktree_active` e um projeto Docker Compose, sobe um stack isolado por worktree (containers/volumes/redes namespaceados, portas não publicadas) |
+
+O arquivo de sessão `.claude/.worktree-session` sobrepõe esses defaults para uma única task. No merge, os agentes fazem rebase na base branch, mergeiam e derrubam somente a worktree e seu stack Docker isolado. As quatro chaves são preenchidas automaticamente com esses defaults a cada sessão, se estiverem ausentes.
+
 ---
 
 ## Versionamento

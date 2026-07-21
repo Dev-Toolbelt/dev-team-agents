@@ -110,6 +110,28 @@ Set `suppress_notifications` to `true` to silence all notifications, or to `["in
 
 Context window warnings use transcript token counts (from the Stop hook payload) multiplied by `transcript_multiplier`. Adjust `transcript_multiplier` up if warnings fire too early, or down if they fire too late. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
 
+### Worktree & Docker isolation
+
+Control how coding agents isolate their work, in the same `preferences.json`:
+
+```json
+{
+  "worktree_active": false,
+  "worktree_base_branch": null,
+  "worktree_path": ".claude/worktrees",
+  "worktree_docker_isolate": true
+}
+```
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `worktree_active` | `false` | When `true`, agents create a git worktree per task **without asking** |
+| `worktree_base_branch` | `null` | Base branch for new worktrees (`null` = auto-detect the repo default branch) |
+| `worktree_path` | `".claude/worktrees"` | Where worktrees are created (`<path>/<context>/<title>`) |
+| `worktree_docker_isolate` | `true` | With `worktree_active` and a Docker Compose project, spin up an isolated stack per worktree (namespaced containers/volumes/networks, ports not published) |
+
+The per-session file `.claude/.worktree-session` overrides these defaults for a single task. On merge, agents rebase onto the base branch, merge, and tear down only the worktree and its isolated Docker stack. All four keys are auto-backfilled with these defaults on every session if missing.
+
 ---
 
 ## Versioning

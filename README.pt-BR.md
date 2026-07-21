@@ -105,7 +105,7 @@ Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:docs` | Documentação — technical-writer |
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
-| `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs |
+| `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
 | `/devteam:workflow-new` | Workflow completo de novo projeto |
 | `/devteam:workflow-maintenance` | Workflow de manutenção / evolução de feature |
 | `/devteam:workflow-bugfix` | Workflow completo de correção de bug |
@@ -169,11 +169,22 @@ git commit -m "chore: add dev-team-agents"
 
 ## Isolamento com Worktree
 
-Todos os agentes de codificação perguntam uma única vez antes de editar qualquer arquivo:
+Os agentes de codificação resolvem a decisão de worktree por uma **cascata de três níveis**:
 
-> "Do you want this task isolated in a git worktree? [y/N]"
+1. **`.claude/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
+2. **Defaults do `preferences.json`** — defina `worktree_active: true` para os agentes criarem uma worktree por task **sem perguntar**. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.claude/worktrees/<ctx>/<title>/`).
+3. **Perguntar uma vez** — apenas em instalações legadas onde a chave de preferência não existe.
 
-A resposta é compartilhada entre todos os agentes da mesma task via `.claude/.worktree-session` — workflows com múltiplos agentes perguntam exatamente uma vez. No "sim", o agente cria `.worktrees/<ctx>/<title>/` e todo o trabalho ocorre dentro dele. No "não", os agentes trabalham na branch corrente.
+**Isolamento Docker** — quando `worktree_active` está ligado e o projeto usa Docker Compose, os agentes podem subir um **stack compose isolado por worktree** (`worktree_docker_isolate: true`). Containers, redes e volumes são namespaceados com um nome claro (`<projeto>-wt-<ctx>-<title>`), as portas do host não são publicadas, e nada toca no stack principal.
+
+**Finalização** — quando você pede o merge, o agente faz **rebase na base branch**, resolve conflitos, commita, faz o merge e então derruba **somente** a worktree e seu stack Docker isolado.
+
+| Preferência | Padrão | Propósito |
+|-----------|--------|-----------|
+| `worktree_active` | `false` | Criar uma worktree por task por padrão (sem prompt) |
+| `worktree_base_branch` | `null` | Base branch (`null` = auto-detectar) |
+| `worktree_path` | `.claude/worktrees` | Onde as worktrees são criadas |
+| `worktree_docker_isolate` | `true` | Stack Docker isolado por worktree (quando há Docker) |
 
 ---
 
