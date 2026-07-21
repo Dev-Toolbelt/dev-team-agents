@@ -34,18 +34,19 @@ Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infra
 
 ## Worktree Isolation
 
-Before editing any file:
+Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. Check `.claude/.worktree-session`:
+1. `.claude/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
-   - `worktree=yes branch=<b>` → follow step 2-yes below using branch `<b>`
+   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. If the file does not exist, ask the user once:
-   > "Should I work in an isolated git worktree for this task? (yes / no)"
-   - **yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>` to `.claude/.worktree-session`, then load `skills/shared/worktree/SKILL.md` and follow its protocol
-   - **no** → get the current branch (`git branch --show-current`), ask for a name for the new branch (suggest `<context>/<brief-title>` format), run `git checkout -b <branch-name>`, write `worktree=no branch=<branch-name>` to `.claude/.worktree-session`, then proceed
+2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+   - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
+   - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
-The session file persists across agent turns so the question is asked exactly once per task.
+3. Key absent (legacy install) → use the `AskUserQuestion` tool (options Yes/No): "Should this task use a git worktree (isolated working directory)?" then follow the matching path from step 2.
+
+The session file persists across agent turns so the decision is resolved exactly once per task. On finalization (merge), the worktree skill enforces rebase-onto-base → merge → teardown of the worktree and its isolated Docker stack only.
 
 ---
 

@@ -66,16 +66,17 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - Max ~200 lines per agent; move reference material to skills
 
-**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical session-file pattern:
+**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical **decision cascade** (resolve top-down, stop at the first match):
 
-1. Read `.claude/.worktree-session` — if it exists, follow the stored decision silently:
+1. `.claude/.worktree-session` present → follow the stored decision silently:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
-   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using branch `<b>`
-2. If absent, ask the user once:
-   - **yes** → ask for the base branch (default: current branch), write `worktree=yes branch=<base>`, load `skills/shared/worktree/SKILL.md`
-   - **no** → get current branch, ask for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <branch-name>`, write `worktree=no branch=<branch-name>`
+   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
+2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+   - `true` → set up a worktree **without asking**: resolve base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the skill
+   - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), `git checkout -b <name>`, write `worktree=no branch=<name>`
+3. Key absent (legacy install) → ask the user once with `AskUserQuestion` (Yes/No), then follow the matching path from step 2.
 
-This ensures multi-agent workflows ask the worktree question exactly once.
+`preferences.json` is the persistent default; the session file is the per-session override. The base branch is **never** hardcoded (no `main`/`master`/`beta`) — it is auto-detected. On finalization (merge), the worktree skill enforces **rebase-onto-base → merge → teardown** of the worktree and its **isolated Docker stack only** (see `skills/shared/worktree/references/docker-isolation.md`). This ensures multi-agent workflows resolve the worktree decision exactly once.
 
 ### Skills (`skills/**/*.md`)
 

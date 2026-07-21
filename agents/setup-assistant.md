@@ -112,7 +112,7 @@ Check `.claude/user-data/preferences.json` → `language` field. If missing or t
 > (Documents, plans, and technical output always remain in English.)
 > Examples: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
 
-Write or update the field in `preferences.json`. If the file does not exist, create it with all defaults from `skills/shared/user-preferences/SKILL.md` and the chosen language. If the file exists but is missing fields, inject the missing ones with defaults without overwriting existing values.
+Follow `skills/shared/user-preferences/SKILL.md` for the schema meaning and language policy. Write or update the field in `preferences.json`. If the file does not exist, create it by copying the canonical default schema from `.claude/dev-team-agents/scripts/lib/preferences-defaults.json` (the machine-readable source the skill mirrors) and setting the chosen `language`. If the file exists but is missing fields, inject the missing ones from that canonical file without overwriting existing values. (The `session-start.sh` health-check backfills any missing key automatically on each session, so this is belt-and-suspenders.)
 
 **Graphify (ask last):**
 
