@@ -1,6 +1,29 @@
 Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
 
-Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
+---
+
+## Step 0 — Resolve review target
+
+If `$ARGUMENTS` already names a target (a branch, a PR link/number, a path, or a free-text scope), use it and skip this step.
+
+If `$ARGUMENTS` is **empty**, ask the user with `AskUserQuestion` (single-select) what to review:
+
+> "What should I review?"
+- **Current local branch** — review the diff of the active branch against its base branch (default)
+- **Another local branch** — ask which branch (free-text), then review its diff against the base branch
+- **A pull request link** — ask for the PR URL (GitHub, GitLab, Bitbucket, etc.), then fetch and review that PR's diff
+- **Other** — let the user type a custom scope (specific files, a commit range, a folder)
+
+Act strictly on the chosen target:
+
+- **Current local branch** → proceed with the scope detected by `current-context`.
+- **Another local branch** → `git diff <base>...<branch>` for that branch; restrict the review to those files.
+- **A pull request link** → use the platform CLI/API to fetch the diff (`gh pr diff <url-or-number>` for GitHub; for GitLab/Bitbucket use the available MCP/CLI or fetch the diff). Review the PR changeset. Do not post comments unless the user asks.
+- **Other** → review exactly the scope the user described.
+
+Once the target is resolved, load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to the resolved changeset to determine which conditional agents below to spawn.
 
 ---
 
