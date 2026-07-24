@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Push & GitHub Actions monitoring** — new `skills/shared/github-actions/SKILL.md`. When the user explicitly asks to push and `gh` is configured, agents watch the triggered Actions run and, on failure, run a capped diagnose→fix→re-push loop (max 3 attempts) with a one-line summary each cycle. Wired into `/devteam:pr` and a new **Push & CI Monitoring Rule** in `CLAUDE.md`
+- **README agent list** — both READMEs (EN/pt-BR) now list all 17 agents grouped by role with a one-line summary each
+- **Mandatory post-implementation handoff** — `/devteam:backend`, `/devteam:frontend`, `/devteam:mobile`, and `/devteam:fullstack` now always hand off to `code-reviewer` + `qa-specialist` after implementation, presenting a single consolidated block of critical findings
+- **`qa_browser` preference** — `qa-specialist` prefers the in-app Claude browser for browser testing; in the CLI it asks which browser to use (quiz) and can save the choice as the `qa_browser` default in `preferences.json`
+
+### Changed
+- **`/devteam:plan` reworked** — `product-analyst` is now the protagonist and produces a **business-only** requirements document ready to become sprints; `software-architect` joins only on explicit technical request. The `product-analyst` agent gained a fixed interrogation methodology (7 lenses), an anti-overengineering rule, and a 3-category finding model
+- **Sprints reorganized** — sprint files now live under `.claude/docs/backlog/sprints/` as `sprint-<n>.md`, with a `sprints.md` status index (Planned → In progress → Done) kept current as sprints finalize
+- **Test creation is now gated** — `/devteam:backend|frontend|mobile|fullstack|fix|refactor` create tests only when the project sets `TESTS_REQUIRED=yes` (absent key defaults to running tests); when `TESTS_REQUIRED=no` the test phase is skipped entirely
+- **`/devteam:review` with no arguments** now asks a dynamic quiz — current local branch / another local branch / a PR link (GitHub, GitLab, Bitbucket, …) / other — and acts on the chosen target
+
+### Removed
+- **Lifecycle workflow commands** — `/devteam:workflow-new`, `/devteam:workflow-maintenance`, `/devteam:workflow-bugfix`, `/devteam:workflow-inherited`, and `/devteam:workflow-security-patch`, plus their `workflows/*.md` files. These lifecycle concerns are now encapsulated in the agents (`software-architect` built-in behavior + the direct commands). Scope-specific workflows (design, fullstack, mobile, refactor, review) are retained
+
 ---
 
 ## [1.10.0] — 2026-07-21

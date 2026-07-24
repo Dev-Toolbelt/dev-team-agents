@@ -83,7 +83,7 @@ O setup completo tipicamente leva de 5 a 10 minutos. Rodar novamente em um proje
 
 ## Slash Commands
 
-Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/devteam:`. Cada command dispara os agentes corretos e limita automaticamente sua atuação à branch ou worktree atual do git.
+Após a instalação, os slash commands ficam disponíveis sob o namespace `/devteam:`. Cada command dispara os agentes corretos e limita automaticamente sua atuação à branch ou worktree atual do git.
 
 | Command | O que faz |
 |---------|-----------|
@@ -106,11 +106,6 @@ Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
-| `/devteam:workflow-new` | Workflow completo de novo projeto |
-| `/devteam:workflow-maintenance` | Workflow de manutenção / evolução de feature |
-| `/devteam:workflow-bugfix` | Workflow completo de correção de bug |
-| `/devteam:workflow-inherited` | Workflow de onboarding de projeto herdado |
-| `/devteam:workflow-security-patch` | Workflow de aplicação de patch de segurança |
 
 **Exemplos de uso:**
 
@@ -120,6 +115,49 @@ Após a instalação, 22 slash commands ficam disponíveis sob o namespace `/dev
 /devteam:review
 /devteam:pr draft
 ```
+
+---
+
+## Agentes
+
+O time tem **17 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [Referência de Agentes](docs/agents.md).
+
+**Planejamento & arquitetura**
+
+| Agente | O que faz |
+|--------|-----------|
+| `product-analyst` | Protagonista do planejamento — transforma um pedido em um documento de requisitos **de negócio** fechado, pronto para virar sprints |
+| `software-architect` | Design de sistema, trade-offs, contratos de API, padrões de projeto e ADRs |
+| `database-specialist` | Modelagem de esquema, migrations e otimização de queries |
+
+**Implementação**
+
+| Agente | O que faz |
+|--------|-----------|
+| `backend-developer` | Código server-side — APIs, serviços, regras de negócio |
+| `frontend-developer` | Código client-side — telas, componentes, fluxos de UI |
+| `mobile-developer` | Features mobile — React Native, Expo, Flutter, iOS/Android nativo |
+| `ui-ux-designer` | Design system, fluxos de UX e decisões visuais |
+| `devops-specialist` | CI/CD, Docker, infraestrutura e scripts de deploy |
+
+**Qualidade & revisão**
+
+| Agente | O que faz |
+|--------|-----------|
+| `code-reviewer` | Revisor de entrada — roteia para os revisores de backend/frontend e sintetiza um único veredito |
+| `backend-reviewer` | Revisão estrutural profunda de mudanças no backend |
+| `frontend-reviewer` | Revisão estrutural profunda de mudanças no frontend |
+| `qa-specialist` | Valida comportamento do produto, fluxos de usuário e risco de regressão |
+| `security-specialist` | Auditorias de segurança, análise de vulnerabilidades, questões OWASP |
+| `backend-test-specialist` | Escreve e mantém testes de backend |
+| `frontend-test-specialist` | Escreve e mantém testes de frontend |
+
+**Habilitação**
+
+| Agente | O que faz |
+|--------|-----------|
+| `technical-writer` | Docs, changelogs, runbooks, release notes e descrições de PR |
+| `setup-assistant` | Configura o dev-team-agents para um projeto e roda health checks |
 
 ---
 
@@ -140,19 +178,20 @@ Funciona no CLI do Claude Code (`claude`), app desktop, app web em [claude.ai/co
 
 ---
 
-## Workflows
+## Tarefas Comuns
 
-| Workflow | Command | Use quando |
-|----------|---------|------------|
-| Novo projeto | `/devteam:workflow-new` | Começando do zero |
-| Projeto herdado | `/devteam:workflow-inherited` | Assumindo trabalho inacabado |
-| Manutenção | `/devteam:workflow-maintenance` | Projeto em produção, tarefas contínuas |
-| Correção de bug | `/devteam:workflow-bugfix` | Bug isolado |
-| Patch de segurança | `/devteam:workflow-security-patch` | Vulnerabilidade de segurança |
-| Refatoração | `/devteam:refactor` | Reestruturação planejada de código |
-| Revisão de código | `/devteam:review` | Revisão de PR antes do merge |
+Escolha o command que corresponde ao seu objetivo — o tratamento de ciclo de vida (novo projeto, correção de bug, manutenção, código herdado, patch de segurança) agora está embutido nos agentes, sem necessidade de um command de workflow separado.
 
-Guias passo a passo completos estão no diretório [`workflows/`](workflows/).
+| Objetivo | Command |
+|----------|---------|
+| Planejar uma feature / novo projeto | `/devteam:plan` |
+| Corrigir um bug | `/devteam:fix` |
+| Refatorar | `/devteam:refactor` |
+| Auditoria / patch de segurança | `/devteam:security` |
+| Decisão de arquitetura, mudança em código herdado/manutenção | `/devteam:architect` |
+| Revisão de código antes do merge | `/devteam:review` |
+
+Guias passo a passo específicos de escopo (design, fullstack, mobile, refactor, review) estão no diretório [`workflows/`](workflows/).
 
 ---
 

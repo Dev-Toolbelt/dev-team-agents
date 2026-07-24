@@ -83,7 +83,7 @@ The full setup typically takes 5–10 minutes. Re-running on an existing project
 
 ## Slash Commands
 
-After installation, 22 slash commands are available under the `/devteam:` namespace. Each command spawns the appropriate agents and scopes work to the current git branch or worktree.
+After installation, slash commands are available under the `/devteam:` namespace. Each command spawns the appropriate agents and scopes work to the current git branch or worktree.
 
 | Command | What it does |
 |---------|-------------|
@@ -106,11 +106,6 @@ After installation, 22 slash commands are available under the `/devteam:` namesp
 | `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
-| `/devteam:workflow-new` | Full new-project workflow |
-| `/devteam:workflow-maintenance` | Maintenance / feature evolution workflow |
-| `/devteam:workflow-bugfix` | Full bug-fix workflow |
-| `/devteam:workflow-inherited` | Inherited project onboarding workflow |
-| `/devteam:workflow-security-patch` | Security patch workflow |
 
 **Usage examples:**
 
@@ -120,6 +115,49 @@ After installation, 22 slash commands are available under the `/devteam:` namesp
 /devteam:review
 /devteam:pr draft
 ```
+
+---
+
+## Agents
+
+The team has **17 agents** covering the full lifecycle. Full details in the [Agent Reference](docs/agents.md).
+
+**Planning & architecture**
+
+| Agent | What it does |
+|-------|-------------|
+| `product-analyst` | Lead of planning — turns a request into a closed, **business-level** requirements document ready to become sprints |
+| `software-architect` | System design, trade-offs, API contracts, design patterns, and ADRs |
+| `database-specialist` | Schema design, migrations, and query optimization |
+
+**Implementation**
+
+| Agent | What it does |
+|-------|-------------|
+| `backend-developer` | Server-side code — APIs, services, business logic |
+| `frontend-developer` | Client-side code — screens, components, UI flows |
+| `mobile-developer` | Mobile features — React Native, Expo, Flutter, native iOS/Android |
+| `ui-ux-designer` | Design system, UX flows, and visual decisions |
+| `devops-specialist` | CI/CD, Docker, infrastructure, and deploy scripts |
+
+**Quality & review**
+
+| Agent | What it does |
+|-------|-------------|
+| `code-reviewer` | Entry-point reviewer — routes to the backend/frontend reviewers and synthesizes a single verdict |
+| `backend-reviewer` | Deep structural review of backend changes |
+| `frontend-reviewer` | Deep structural review of frontend changes |
+| `qa-specialist` | Validates product behavior, user flows, and regression risk |
+| `security-specialist` | Security audits, vulnerability analysis, OWASP concerns |
+| `backend-test-specialist` | Writes and maintains backend tests |
+| `frontend-test-specialist` | Writes and maintains frontend tests |
+
+**Enablement**
+
+| Agent | What it does |
+|-------|-------------|
+| `technical-writer` | Docs, changelogs, runbooks, release notes, and PR descriptions |
+| `setup-assistant` | Configures dev-team-agents for a project and runs health checks |
 
 ---
 
@@ -140,19 +178,20 @@ This works in the Claude Code CLI (`claude`), desktop app, web app at [claude.ai
 
 ---
 
-## Workflows
+## Common Tasks
 
-| Workflow | Command | Use when |
-|----------|---------|----------|
-| New project | `/devteam:workflow-new` | Starting from scratch |
-| Inherited project | `/devteam:workflow-inherited` | Taking over unfinished work |
-| Maintenance | `/devteam:workflow-maintenance` | Live project, ongoing tasks |
-| Bug fix | `/devteam:workflow-bugfix` | Isolated bug |
-| Security patch | `/devteam:workflow-security-patch` | Security vulnerability |
-| Refactor | `/devteam:refactor` | Planned code restructuring |
-| Code review | `/devteam:review` | PR review before merge |
+Pick the command that matches your goal — the lifecycle handling (new project, bug fix, maintenance, inherited code, security patch) is now built into the agents, no separate workflow command needed.
 
-Full workflow step-by-step guides live in the [`workflows/`](workflows/) directory.
+| Goal | Command |
+|------|---------|
+| Plan a feature / new project | `/devteam:plan` |
+| Fix a bug | `/devteam:fix` |
+| Refactor | `/devteam:refactor` |
+| Security audit / patch | `/devteam:security` |
+| Architecture decision, inherited/maintenance change | `/devteam:architect` |
+| Code review before merge | `/devteam:review` |
+
+Scope-specific step-by-step guides (design, fullstack, mobile, refactor, review) live in the [`workflows/`](workflows/) directory.
 
 ---
 

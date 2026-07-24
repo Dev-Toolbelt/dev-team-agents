@@ -144,29 +144,24 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 
 | Command | Agents invoked | Use when… |
 |---------|---------------|-----------|
-| `/devteam:plan` | software-architect + product-analyst + database-specialist + backend¹ + frontend¹ + devops¹ | Planning a feature, system, or change |
-| `/devteam:backend` | backend-developer + database-specialist¹ → backend-test-specialist | Implementing backend changes |
-| `/devteam:frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist | Implementing frontend changes |
-| `/devteam:fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists | Implementing full-stack changes |
-| `/devteam:mobile` | mobile-developer + ui-ux-designer¹ | Implementing mobile features (React Native, Expo, Flutter, native iOS/Android) |
+| `/devteam:plan` | **product-analyst (protagonist)** + software-architect¹ | Planning a feature — product-analyst leads, produces a business-only requirements doc ready for sprints; software-architect joins only on explicit technical request |
+| `/devteam:backend` | backend-developer + database-specialist¹ → backend-test-specialist² → code-reviewer + qa-specialist | Implementing backend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
+| `/devteam:frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist² → code-reviewer + qa-specialist | Implementing frontend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
+| `/devteam:fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists² → code-reviewer + qa-specialist | Implementing full-stack changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
+| `/devteam:mobile` | mobile-developer + ui-ux-designer¹ → tests² → code-reviewer + qa-specialist | Implementing mobile features (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
 | `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
-| `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist¹ | Fixing a bug |
-| `/devteam:refactor` | software-architect → backend/frontend-test-specialist + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring with test-first coverage, dependency mapping, consolidated plan, and ordered commit blocks (tests → refactoring) |
-| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; auto-detects workflow from request (new project, bug fix, refactor, security, design, mobile, fullstack, review, inherited — falls back to maintenance) |
+| `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist² | Fixing a bug (tests only if `TESTS_REQUIRED=yes`) |
+| `/devteam:refactor` | software-architect → backend/frontend-test-specialist² + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring; test-first coverage only if `TESTS_REQUIRED=yes` (else refactor without a test net), dependency mapping, consolidated plan, ordered commit blocks |
+| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; follows a scope-specific workflow (refactor, design, mobile, fullstack, review) or its own built-in behavior for everything else (new project, bug fix, security, inherited, maintenance) |
 | `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
-| `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge |
+| `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge; with no args, asks a dynamic quiz (current branch / other local branch / PR link / other) to pick the target |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
 | `/devteam:security` | security-specialist + software-architect | Security audit or vulnerability analysis |
 | `/devteam:dba` | database-specialist + software-architect | Schema design, query optimization, migrations |
 | `/devteam:devops` | devops-specialist | CI/CD, Docker, infra, deploy scripts |
 | `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ + mobile-developer¹ | Writing or updating tests only |
 | `/devteam:docs` | technical-writer | Docs, changelogs, runbooks, release notes |
-| `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request |
-| `/devteam:workflow-new` | follows `workflows/new-project.md` | Starting a new project |
-| `/devteam:workflow-maintenance` | follows `workflows/maintenance.md` | Maintenance / feature evolution |
-| `/devteam:workflow-bugfix` | follows `workflows/bug-fix.md` | Full bug-fix workflow |
-| `/devteam:workflow-inherited` | follows `workflows/inherited-project.md` | Taking over an existing project |
-| `/devteam:workflow-security-patch` | follows `workflows/security-patch.md` | Applying a security patch |
+| `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; after creating (which pushes), loads `skills/shared/github-actions/SKILL.md` to watch Actions and auto-fix failures |
 | `/devteam:workflow-fullstack` | follows `workflows/fullstack.md` | Implementing full-stack features end-to-end |
 | `/devteam:workflow-refactor` | follows `workflows/refactor.md` | Structured refactoring workflow |
 | `/devteam:workflow-review` | follows `workflows/review.md` | Full structured code review workflow |
@@ -178,6 +173,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:symlinks` | runs `fix-symlinks.sh` (detects OS, repairs materialized `.claude/` links, guides the OS fix on exit 3) | Diagnosing and repairing broken dev-team-agents symlinks (Windows without native symlink support) |
 
 ¹ conditional — spawned only when the task context involves that scope.
+² test-gated — spawned only when the project's `CLAUDE.md` `## dev-team-agents` section has `TESTS_REQUIRED=yes` (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, the test phase is skipped entirely.
 
 > **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:symlinks` (operates on the local installation), and `/devteam:learn` (operates on session evidence, not a branch scope). All omit `current-context` by design.
 
@@ -191,8 +187,9 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
   1. The prompt the user gives to Claude
   2. What the agent produces
   3. A note that the agent will present a Plan before executing
-- Name files: `<context>.md` (e.g., `new-project.md`, `bug-fix.md`)
-- Existing workflows: `new-project.md`, `bug-fix.md`, `maintenance.md`, `inherited-project.md`, `security-patch.md`, `fullstack.md`, `refactor.md`, `review.md`, `mobile.md`, `design.md`
+- Name files: `<context>.md` (e.g., `fullstack.md`, `refactor.md`)
+- Existing workflows: `fullstack.md`, `refactor.md`, `review.md`, `mobile.md`, `design.md`
+- Workflows are **scope-specific only**. Lifecycle concerns (new project, bug fix, maintenance, inherited code, security patch) are encapsulated in the agents (`software-architect` built-in behavior + the direct commands), not in workflow files
 
 ### Templates (`templates/*.md`)
 
@@ -387,6 +384,18 @@ When making a git commit for any task:
 1. **Load `skills/shared/conventional-commits/SKILL.md`** before writing the commit message
 2. **Defer to the project's own pattern first**: run `git log --oneline -10` and check whether the existing history follows Conventional Commits or a different format (e.g., GitHub-style `[feature]`, plain imperative, Jira ticket prefix). If a project-specific pattern is clearly in use, follow it instead.
 3. **Never include Claude attribution**: no `Co-Authored-By: Claude`, no `🤖 Generated with Claude Code`, no AI tooling references in commit messages, PR titles, or PR bodies.
+
+---
+
+## Push & CI Monitoring Rule
+
+When the user **explicitly asks to push** (a commit alone does not count) and the GitHub CLI is configured (`gh auth status` succeeds):
+
+1. **Load `skills/shared/github-actions/SKILL.md`** and follow it.
+2. If the repo has workflow files (`.github/workflows/*`), watch the triggered run and, on failure, run the capped **diagnose → fix → re-push** loop (max 3 attempts), reporting a **one-line summary** to the user each cycle.
+3. Stop and hand back to the user when the run is green, the 3-attempt cap is reached, or the failure is not auto-fixable (missing secret, infra, required approval). Never disable/skip a workflow or weaken a test to force green.
+
+If `gh` is not configured or there are no workflow files, push normally and skip the monitoring loop.
 
 ---
 
