@@ -115,6 +115,14 @@ After the technical-writer (and optionally code-reviewer) complete, present the 
 **NEVER run `gh pr create` without explicit user confirmation.**
 Wait for the user to approve the draft before creating the PR.
 
+---
+
+## Post-create — Watch GitHub Actions
+
+Creating a PR pushes the branch, which counts as an explicit push. After `gh pr create` succeeds, load `skills/shared/github-actions/SKILL.md` and follow it: check its preconditions (gh authenticated + `.github/workflows/*` present), watch the triggered run, and on failure run its capped diagnose→fix→re-push loop, reporting a one-line summary each cycle. If the preconditions fail, skip silently.
+
+---
+
 $ARGUMENTS options:
 - `review` — activate code-reviewer before creating
 - `draft` — create as draft PR
