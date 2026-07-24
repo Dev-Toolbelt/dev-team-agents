@@ -135,5 +135,5 @@ Or use `/devteam:pr` directly.
 - `/devteam:fullstack` — command shortcut for this workflow
 - `/devteam:backend` — backend-only changes → `workflows/` (no dedicated file; use agent directly)
 - `/devteam:frontend` — frontend-only changes
-- Need a security review? → `workflows/security-patch.md`
+- Need a security review? → `/devteam:security`
 - Post-merge refactoring? → `workflows/refactor.md`

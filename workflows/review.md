@@ -131,8 +131,8 @@ Prompt: "/devteam:pr"
 ☐ Session summary written
 
 **Related workflows:**
-- For full deployment validation, see `workflows/maintenance.md`
-- Found a security issue during review? → `workflows/security-patch.md`
+- For full deployment validation, run `/devteam:qa`
+- Found a security issue during review? → `/devteam:security`
 - Review revealed need for broader cleanup? → `workflows/refactor.md`
 
 ---

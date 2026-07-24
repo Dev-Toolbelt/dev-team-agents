@@ -182,11 +182,11 @@ Legacy entries to remove if present: `.claude/user-data/session-summary.md`, `.c
 cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
-Output completion summary listing all configured files. Close with the workflow entry point for the project type:
+Output completion summary listing all configured files. Close with the entry point for the project type:
 
-- **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"`
-- **Inherited** → open `workflows/inherited-project.md`
-- **Maintenance** → open `workflows/maintenance.md`
+- **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"` (or run `/devteam:plan <goal>`)
+- **Inherited** → `"As the software-architect, help me onboard this inherited codebase"` (or run `/devteam:architect`)
+- **Maintenance** → run the task-specific command (`/devteam:fix`, `/devteam:backend`, `/devteam:frontend`, `/devteam:fullstack`, …) or `/devteam:architect` for a maintenance change
 
 ---
 

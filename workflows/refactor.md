@@ -273,6 +273,6 @@ If the scope is a single small file with no DB touchpoints and existing tests al
 ---
 
 **Related workflows:**
-- Found a bug during refactoring? → `workflows/bug-fix.md`
+- Found a bug during refactoring? → `/devteam:fix`
 - Refactor involves architectural decisions? → use `/devteam:architect` first
-- Security concerns surfaced? → `workflows/security-patch.md`
+- Security concerns surfaced? → `/devteam:security`

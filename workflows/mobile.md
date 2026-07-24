@@ -126,8 +126,8 @@ Prompt: "As the technical-writer, update the relevant docs for this mobile featu
 
 **Related workflows:**
 - Need backend API for this feature? → `/devteam:backend` + `workflows/fullstack.md`
-- Bug in existing mobile feature? → `workflows/bug-fix.md`
-- Platform security concern? → `workflows/security-patch.md`
+- Bug in existing mobile feature? → `/devteam:fix`
+- Platform security concern? → `/devteam:security`
 
 ---
 
