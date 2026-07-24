@@ -11,8 +11,39 @@ Phase 1 — spawn in parallel:
 - `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` — implement the frontend changes
 - `ui-ux-designer` at `.claude/agents/dev-team/ui-ux-designer.md` — design system adherence and visual decisions (spawn only if the task involves visual design or UX decisions)
 
-Phase 2 — spawn after Phase 1 completes:
+Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
+
+**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
+
 - `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` — write or update tests for the implemented changes
+
+## Phase 3 — Mandatory review handoff (automatic)
+
+After Phase 1 (and Phase 2, if it ran) complete, **always** spawn the following in parallel via the Task tool — no user confirmation, this handoff is mandatory:
+
+- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — scope: all files changed this session (`git diff` against the base branch)
+- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — scope: validate the behavior of the changes against acceptance criteria and regression risk
+
+**After both complete**, synthesize their outputs into a single consolidated block of **critical findings only** and present it to the user:
+
+```
+## Post-implementation review
+
+### Code review (critical only)
+[bullets]
+
+### QA (gaps / risks)
+[bullets]
+
+### Summary
+[1–2 sentences: verdict and recommended next step]
+```
+
+If both agents report no findings, output exactly:
+
+```
+Post-implementation review: no issues found.
+```
 
 ---
 

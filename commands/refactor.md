@@ -30,6 +30,13 @@ Read `.claude/.worktree-session` before asking:
 
 ---
 
+## Test gate (read before Phase 2)
+
+Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+
+- **`TESTS_REQUIRED=yes` or the key is absent (default)** → run the full **test-first** flow below unchanged: the test-specialist coverage plan (Phase 2) and Block 1 test commits (Phase 3) are mandatory.
+- **`TESTS_REQUIRED=no`** → **do not create tests.** Skip the test-specialist in Phase 2 and skip Block 1 in Phase 3; the refactor goes straight to the refactoring commits. Warn the user in one line that the refactor proceeds **without a test safety net** because the project does not require tests, and rely on the Phase 4 quality gate (code-reviewer + qa-specialist) for behavior validation.
+
 ## Phase 0 — Confirmed. Now spawn the phases in order:
 
 ### Phase 1 — Analysis
@@ -55,11 +62,11 @@ Prompt:
 
 ### Phase 2 — Joint Planning
 
-Spawn in parallel after Phase 1 is confirmed:
+Spawn in parallel after Phase 1 is confirmed (test-specialists spawn only when the **Test gate** above resolves to running tests):
 
 - `software-architect` at `.claude/agents/dev-team/software-architect.md`
-- `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` (if backend scope)
-- `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` (if frontend scope)
+- `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` (if backend scope **and** tests are required)
+- `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` (if frontend scope **and** tests are required)
 
 Architect prompt:
 > "Using the approved scope document, produce the architectural refactoring plan:
@@ -101,7 +108,7 @@ Spawn after plan approval:
 - `backend-developer` at `.claude/agents/dev-team/backend-developer.md` (if backend scope)
 - `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` (if frontend scope)
 
-Implementation order is **inviolable**:
+Implementation order is **inviolable** (when tests are required — see the **Test gate**; if `TESTS_REQUIRED=no`, skip Block 1 entirely and start at Block 2):
 
 **Block 1 — Test commits (must be green before Block 2 starts)**
 Write all tests from the coverage plan. Each commit must cover a cohesive unit — one test group, one scenario set, one file — following the project's commit pattern. All tests must pass against the original (unmodified) code before proceeding.

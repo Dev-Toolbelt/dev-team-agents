@@ -14,7 +14,10 @@ Phase 1 — spawn based on where the bug lives (in parallel if both apply):
 Also spawn if the bug is in mobile code (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
 - `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — diagnose and fix bugs in mobile-specific code (React Native, Flutter, native iOS/Android)
 
-Phase 2 — spawn after Phase 1 completes:
+Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
+
+**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist(s) below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely**.
+
 - `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` — add or update tests to cover the fix (spawn if backend was touched)
 - `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` — add or update tests to cover the fix (spawn if frontend was touched)
 
