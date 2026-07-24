@@ -21,7 +21,8 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
   "worktree_active": false,
   "worktree_base_branch": null,
   "worktree_path": ".claude/worktrees",
-  "worktree_docker_isolate": true
+  "worktree_docker_isolate": true,
+  "qa_browser": null
 }
 ```
 
@@ -43,6 +44,7 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
 | `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides |
 | `worktree_path` | `".claude/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
 | `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold |
+| `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 

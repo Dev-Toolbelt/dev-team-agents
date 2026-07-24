@@ -31,6 +31,8 @@ Load `security-checklist` skill to validate security behavior as part of QA — 
 
 **Git workflow** — load `skills/shared/git-workflow/SKILL.md` when reviewing git commit history or branch conventions as part of QA (e.g., verifying that commit messages, branch names, or merge strategy comply with project standards).
 
+**Interaction patterns** — load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers (used by the Browser Testing rule below).
+
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads when scanning large codebases or test suites; summarize diffs instead of dumping them.
 
 **SonarQube / SonarCloud** — if `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`. When loaded:
@@ -86,6 +88,18 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - Are key metrics emitted (counters, durations, error rates) for the new behavior?
 
 ---
+
+## Browser Testing
+
+When validation requires driving a real browser (UI flows, end-to-end paths, visual behavior), choose the browser as follows:
+
+1. **Prefer the Claude app browser.** If the in-app browser tools are available (`mcp__Claude_Browser__*`), use them **by default** — no need to ask. This is the priority option.
+2. **CLI (in-app browser unavailable) → always ask.** If you are running in the Claude CLI and the in-app browser is not available:
+   - First read `.claude/user-data/preferences.json` → `qa_browser`. If it holds a saved choice, use it **without asking**.
+   - If `qa_browser` is `null`/absent, **always ask** the user which browser to use, via `AskUserQuestion`. Offer the browser tools available in the environment (e.g., Playwright, Puppeteer, a system browser, or another driver the project already uses), plus an **"Other"** option for a custom choice.
+   - Include a follow-up option to **set the chosen browser as the default for future activities**. If the user opts in, write the choice to `preferences.json → qa_browser` so you don't ask again.
+
+Never silently pick a CLI browser — outside the in-app browser, the choice is always the user's until a default is saved.
 
 ## Validation Tiers
 

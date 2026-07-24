@@ -14,5 +14,6 @@
   "worktree_active": false,
   "worktree_base_branch": null,
   "worktree_path": ".claude/worktrees",
-  "worktree_docker_isolate": true
+  "worktree_docker_isolate": true,
+  "qa_browser": null
 }
