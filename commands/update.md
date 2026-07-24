@@ -4,7 +4,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 
 You are running the **`/devteam:update`** command.
 
-**Interaction rule:** All yes/no and multiple-choice prompts in this command use the `AskUserQuestion` tool as defined in `skills/shared/interaction-patterns/SKILL.md`.
+**Interaction rule:** All yes/no and multiple-choice prompts in this command use the `AskUserQuestion` tool as defined in the `interaction-patterns` skill (loaded above).
 
 **IMPORTANT — Output rules:**
 - Be direct and terse. No analysis, no side notes, no observations, no commentary beyond what is specified below.

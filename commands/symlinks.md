@@ -6,7 +6,7 @@ You are running the **`/devteam:symlinks`** command.
 
 Its job: detect the operating system, analyze every dev-team-agents symlink, repair anything materialized as a plain file, and — when the OS blocks native symlinks — walk the user through the fix. It wraps `scripts/fix-symlinks.sh`, which does the detection, auto-repair, and re-validation.
 
-**Interaction rule:** All yes/no and multiple-choice prompts in this command use the `AskUserQuestion` tool as defined in `skills/shared/interaction-patterns/SKILL.md`.
+**Interaction rule:** All yes/no and multiple-choice prompts in this command use the `AskUserQuestion` tool as defined in the `interaction-patterns` skill (loaded above).
 
 **IMPORTANT — Output rules:**
 - Be direct and terse. No analysis, no side notes, no commentary beyond what is specified below.

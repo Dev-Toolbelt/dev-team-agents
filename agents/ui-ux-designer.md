@@ -83,7 +83,7 @@ Determine your mode from context:
 
 ## Design Mode
 
-See the **Design System Creation** section in `skills/design/design-system-audit/SKILL.md` (already loaded above) — it provides the full template for producing `.claude/docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
+See the **Design System Creation** section in the `design-system-audit` skill (already loaded above) — it provides the full template for producing `.claude/docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
 
 ---
 
