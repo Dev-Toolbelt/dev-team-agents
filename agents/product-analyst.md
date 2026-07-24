@@ -107,6 +107,33 @@ When the user asks to turn the approved scope into sprints, generate them under 
 - **`sprint-<n>.md`** — one file per sprint (`sprint-1.md`, `sprint-2.md`, …), following the sprint structure in `backlog-template`. Keep task descriptions business-level (goal + acceptance criteria) unless the user asked for technical detail.
 - **`sprints.md`** — an index at `.claude/docs/backlog/sprints/sprints.md` with a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
 
+### Design for Parallel Execution (mandatory)
+
+Sprints must be **structured for maximum parallelism** so tasks can run
+concurrently — each in its own git worktree, and (only when the project uses
+Docker) its own isolated Docker stack. When decomposing scope into tasks:
+
+1. **Minimize dependencies.** Break work so tasks are mutually independent
+   wherever possible. Only chain a task behind another when the dependency is
+   real (needs its output, touches the same schema/file). Splitting to avoid a
+   collision beats serializing.
+2. **Group tasks into waves.** Fill the sprint's **Parallel Execution Plan**
+   table (from `backlog-template`): every task in a wave is independent and runs
+   in parallel; the next wave starts only after the current one finishes. Push
+   as many tasks as possible into the earliest wave.
+3. **Assign a worktree branch per task.** Suggest `<context>/<brief-title>` for
+   each task's `Worktree branch` field — this is a *suggestion* for the coding
+   agent, not a worktree you create. The coding agents own the worktree decision
+   cascade; you only plan the branches and waves.
+4. **Gate isolated infra on Docker.** State the isolation model explicitly:
+   worktree-per-task always; **isolated Docker stack per worktree only when the
+   project uses Docker** (a compose file exists). If the project has no Docker,
+   the plan must say parallelism is achieved by worktree alone — do not imply
+   isolated infra. Detect quickly: `ls docker-compose.yml docker-compose.yaml compose.yml compose.yaml 2>/dev/null | head -1`.
+
+Reference (do not restate the mechanics): `skills/shared/worktree/SKILL.md` and
+`skills/shared/worktree/references/docker-isolation.md`.
+
 `sprints.md` status index format:
 
 ```markdown

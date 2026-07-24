@@ -112,6 +112,27 @@ A task is DONE when ALL of the following are true:
 **Estimated duration**: N weeks
 **Agents**: [list of agents that will act in this sprint — see Agent Assignment table below]
 
+## Parallel Execution Plan
+
+Tasks are grouped into **waves**. Every task in the same wave is mutually
+independent and can be built **in parallel**, each in its own git worktree
+(and its own isolated Docker stack when the project uses Docker — see below).
+A wave starts only after every task in the previous wave is done.
+
+| Wave | Tasks (parallel) | Blocks (why the next wave waits) |
+|------|------------------|----------------------------------|
+| A | TASK-001, TASK-002 | Wave B needs the schema from TASK-001 |
+| B | TASK-003, TASK-004 | — |
+
+**Isolation model:**
+- **Worktree per task** — always. Each task gets its own branch/worktree so
+  parallel tasks never touch the same working tree.
+- **Isolated infra per worktree** — **only when the project uses Docker**
+  (a compose file exists). Then each worktree runs its own namespaced Docker
+  Compose stack (isolated containers, volumes, networks, host ports), so
+  parallel tasks don't collide on services or ports. **No Docker → skip this;
+  parallelism is achieved by worktree alone.**
+
 ## Tasks
 
 ### TASK-001 — [Name]
@@ -119,6 +140,8 @@ A task is DONE when ALL of the following are true:
 **Type**: [Feature | Fix | Chore | Spike]
 **Agent**: [agent name — see Agent Assignment table]
 **Estimate**: [hours or story points]
+**Wave**: A
+**Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
 **Depends on**: [TASK-XXX or "none"]
 **Status**: [ ] Pending
 
@@ -140,6 +163,8 @@ A task is DONE when ALL of the following are true:
 | Feature | N |
 | Fix | N |
 | Chore | N |
+| Waves | N |
+| Max parallelism | N tasks (largest wave) |
 | Estimated total | Nh / N pts |
 ```
 
@@ -203,3 +228,10 @@ In task descriptions, always call out upstream dependencies:
 - `Depends on: TASK-003` — cannot start until TASK-003 is done
 - `Depends on: external API contract` — blocked by third party
 - `Parallel with: TASK-005` — can run concurrently
+
+**Design for parallelism.** Keep the dependency graph as flat as possible so
+each wave holds as many tasks as it can. A task with `Depends on: none` belongs
+to Wave A; a task moves to a later wave only when it truly cannot start before
+another task finishes. When two tasks *would* collide (same file, same schema),
+prefer splitting the work so they land in the same wave over serializing them —
+only serialize when the dependency is real.
