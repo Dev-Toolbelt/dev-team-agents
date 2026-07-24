@@ -7,7 +7,26 @@ description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 
 ## Document Structure
 
-Generate the following files under `.claude/docs/backlog/`:
+Generate under `.claude/docs/backlog/`:
+
+- `overview.md` — business requirements document (the planning deliverable)
+- `epics.md` — epics
+- `dod.md` — Definition of Done
+- `sprints/` — one file per sprint plus a status index (see below)
+
+**Sprint files live in the `sprints/` subfolder**, never at the backlog root:
+
+```
+.claude/docs/backlog/
+├── overview.md
+├── epics.md
+├── dod.md
+└── sprints/
+    ├── sprints.md        ← index: summary + status of every sprint
+    ├── sprint-1.md
+    ├── sprint-2.md
+    └── ...
+```
 
 ### `overview.md`
 ```markdown
@@ -80,12 +99,12 @@ A task is DONE when ALL of the following are true:
 ...
 ```
 
-### `sprint-NN.md`
+### `sprints/sprint-<n>.md`
 
-**One file per sprint.** Each sprint gets its own file: `sprint-01.md`, `sprint-02.md`, etc. Never merge multiple sprints into one file.
+**One file per sprint**, in the `sprints/` subfolder: `sprints/sprint-1.md`, `sprints/sprint-2.md`, etc. Never merge multiple sprints into one file.
 
 ```markdown
-# Sprint NN — [Theme]
+# Sprint <n> — [Theme]
 
 **Goal**: [What should be achievable at the end of this sprint]
 **Start**: YYYY-MM-DD
@@ -123,6 +142,21 @@ A task is DONE when ALL of the following are true:
 | Chore | N |
 | Estimated total | Nh / N pts |
 ```
+
+### `sprints/sprints.md` — status index
+
+A single index at `.claude/docs/backlog/sprints/sprints.md` summarizing **every** sprint and its status. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
+
+```markdown
+# Sprints
+
+| Sprint | Theme | Goal (one line) | Status |
+|--------|-------|-----------------|--------|
+| [sprint-1](sprint-1.md) | [Theme] | [What it delivers] | Planned |
+| [sprint-2](sprint-2.md) | [Theme] | [What it delivers] | Planned |
+```
+
+Status values: **Planned → In progress → Done**.
 
 ### Agent Assignment Table
 
