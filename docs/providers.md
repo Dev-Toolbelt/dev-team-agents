@@ -7,7 +7,7 @@ Supported providers:
 | Provider | CLI | Install script | Agent file form | Command invocation | Hook binding |
 | --- | --- | --- | --- | --- | --- |
 | **claude** | Claude Code | `scripts/install.sh` (existing) | `agents/*.md` symlinked to `.claude/agents/dev-team/` | `/devteam:<name>` (subdir-derived) | `.claude/settings.json` (existing) |
-| **opencode** | opencode TUI/CLI | `scripts/install-opencode.sh` | `.opencode/agents/<name>.md` (mode: subagent) | `/devteam:<name>` (inline in `opencode.json` `command` object — NOT file-based, see note below) | `.opencode/plugins/dev-team-agents.ts` → `scripts/hooks/*.sh` |
+| **opencode** | opencode TUI/CLI | `scripts/install-opencode.sh` | `.opencode/agents/<name>.md` (mode: subagent) | `/devteam:<name>` (inline in `.opencode/opencode.json` `command` object — NOT file-based, see note below) | `.opencode/plugins/dev-team-agents.ts` → `scripts/hooks/*.sh` |
 | **codex** | OpenAI Codex CLI | `scripts/install-codex.sh` | `.codex/agents/<name>.toml` | `/prompts:devteam-<name>` (Codex hardcodes the `/prompts:` namespace — divergent, see note below) | `.codex/hooks.json` → `scripts/hooks/*.sh` |
 
 The slash-command UX is preserved across providers where possible:
@@ -61,7 +61,7 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
                   ▼               ▼             ▼
    .claude/agents/dev-team/  .opencode/agents/   .codex/agents/<name>.toml
    .claude/commands/devteam/ .opencode/opencode.json    .codex/prompts/devteam-*
-   (symlink — install.sh)    (deep-merge into opencode.json)
+   (symlink — install.sh)    (deep-merge into .opencode/opencode.json)
                                                   .codex/hooks.json (4 managed entries)
                               .opencode/plugins/dev-team-agents.ts (event ↔ bash hooks)
 ```
