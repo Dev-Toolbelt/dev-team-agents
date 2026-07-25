@@ -13,7 +13,7 @@
   "telemetry": true,
   "worktree_active": false,
   "worktree_base_branch": null,
-  "worktree_path": ".claude/worktrees",
+  "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null
 }

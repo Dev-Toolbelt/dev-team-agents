@@ -35,7 +35,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
   "telemetry": true,
   "worktree_active": false,
   "worktree_base_branch": null,
-  "worktree_path": ".claude/worktrees",
+  "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true
 }
 ```
@@ -56,7 +56,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) |
 | `worktree_active` | bool | `false` | Default to a git worktree per task without asking |
 | `worktree_base_branch` | string or null | `null` | Base branch for worktrees (`null` = auto-detect) |
-| `worktree_path` | string | `".claude/worktrees"` | Directory where worktrees are created |
+| `worktree_path` | string | `".dev-team-agents/worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 
 ---

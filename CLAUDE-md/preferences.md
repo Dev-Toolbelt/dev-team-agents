@@ -20,7 +20,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
   "telemetry": true,
   "worktree_active": false,
   "worktree_base_branch": null,
-  "worktree_path": ".claude/worktrees",
+  "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null
 }
@@ -42,7 +42,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `telemetry` | `true` | Anonymous usage telemetry (set to `false` to opt out). No personal data is ever collected — see `PRIVACY.md` |
 | `worktree_active` | `false` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) |
 | `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides |
-| `worktree_path` | `".claude/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
+| `worktree_path` | `".dev-team-agents/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
 | `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold |
 | `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here |
 

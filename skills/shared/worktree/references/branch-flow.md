@@ -1,7 +1,7 @@
 # Worktree Branch Flow
 
 Throughout this flow, `<wt-path>` is the configured worktree root — `worktree_path`
-from `.dev-team-agents/user-data/preferences.json` (default `.claude/worktrees`). The full
+from `.dev-team-agents/user-data/preferences.json` (default `.dev-team-agents/worktrees`). The full
 tree location is `<wt-path>/<context>/<brief-title>`.
 
 ## Step 0 — Load project context
@@ -15,7 +15,7 @@ grep -i "worktree\|base.branch\|branch" CLAUDE.md AGENTS.md 2>/dev/null | head -
 Read the worktree preferences:
 
 ```bash
-python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(d.get('worktree_base_branch') or '', d.get('worktree_path','.claude/worktrees'), d.get('worktree_docker_isolate',True))" 2>/dev/null
+python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(d.get('worktree_base_branch') or '', d.get('worktree_path','.dev-team-agents/worktrees'), d.get('worktree_docker_isolate',True))" 2>/dev/null
 ```
 
 Project config (`CLAUDE.md`/`AGENTS.md`) overrides `preferences.json`, which overrides the skill defaults.

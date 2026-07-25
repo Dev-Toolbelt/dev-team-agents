@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Worktree decision is now a three-level cascade — `.dev-team-agents/.worktree-session` (per-session override) → `worktree_active` in `preferences.json` (default) → ask once (legacy installs). Propagated to the 8 coding agents, `software-architect` worktree detection, and `CLAUDE.md`
-- Worktree base branch is auto-detected (`origin/HEAD` → current branch) instead of assuming `beta` or `master`; `worktree_path` makes the worktree location configurable (default `.claude/worktrees`)
+- Worktree base branch is auto-detected (`origin/HEAD` → current branch) instead of assuming `beta` or `master`; `worktree_path` makes the worktree location configurable (default `.dev-team-agents/worktrees`)
 - Worktree finalization enforces rebase-onto-base → resolve → merge → teardown of the worktree and its isolated Docker stack only, never the main infrastructure
 - The coding agents' worktree prompt now uses `AskUserQuestion` (quiz-first) instead of a plain `(yes / no)` text prompt
 - Synced the preferences schema across the `user-preferences` skill, `setup-assistant`, installation guides (EN/pt-BR), and both READMEs

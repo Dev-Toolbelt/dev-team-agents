@@ -118,7 +118,7 @@ Control how coding agents isolate their work, in the same `preferences.json`:
 {
   "worktree_active": false,
   "worktree_base_branch": null,
-  "worktree_path": ".claude/worktrees",
+  "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true
 }
 ```
@@ -127,7 +127,7 @@ Control how coding agents isolate their work, in the same `preferences.json`:
 |-----|---------|---------|
 | `worktree_active` | `false` | When `true`, agents create a git worktree per task **without asking** |
 | `worktree_base_branch` | `null` | Base branch for new worktrees (`null` = auto-detect the repo default branch) |
-| `worktree_path` | `".claude/worktrees"` | Where worktrees are created (`<path>/<context>/<title>`) |
+| `worktree_path` | `".dev-team-agents/worktrees"` | Where worktrees are created (`<path>/<context>/<title>`) |
 | `worktree_docker_isolate` | `true` | With `worktree_active` and a Docker Compose project, spin up an isolated stack per worktree (namespaced containers/volumes/networks, ports not published) |
 
 The per-session file `.dev-team-agents/.worktree-session` overrides these defaults for a single task. On merge, agents rebase onto the base branch, merge, and tear down only the worktree and its isolated Docker stack. All four keys are auto-backfilled with these defaults on every session if missing.

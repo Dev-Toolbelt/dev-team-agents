@@ -242,7 +242,7 @@ git commit -m "chore: add dev-team-agents"
 Os agentes de codificação resolvem a decisão de worktree por uma **cascata de três níveis**:
 
 1. **`.dev-team-agents/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
-2. **Defaults do `preferences.json`** — defina `worktree_active: true` para os agentes criarem uma worktree por task **sem perguntar**. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.claude/worktrees/<ctx>/<title>/`).
+2. **Defaults do `preferences.json`** — defina `worktree_active: true` para os agentes criarem uma worktree por task **sem perguntar**. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.dev-team-agents/worktrees/<ctx>/<title>/`).
 3. **Perguntar uma vez** — apenas em instalações legadas onde a chave de preferência não existe.
 
 **Isolamento Docker** — quando `worktree_active` está ligado e o projeto usa Docker Compose, os agentes podem subir um **stack compose isolado por worktree** (`worktree_docker_isolate: true`). Containers, redes e volumes são namespaceados com um nome claro (`<projeto>-wt-<ctx>-<title>`), as portas do host não são publicadas, e nada toca no stack principal.
@@ -253,7 +253,7 @@ Os agentes de codificação resolvem a decisão de worktree por uma **cascata de
 |-----------|--------|-----------|
 | `worktree_active` | `false` | Criar uma worktree por task por padrão (sem prompt) |
 | `worktree_base_branch` | `null` | Base branch (`null` = auto-detectar) |
-| `worktree_path` | `.claude/worktrees` | Onde as worktrees são criadas |
+| `worktree_path` | `.dev-team-agents/worktrees` | Onde as worktrees são criadas |
 | `worktree_docker_isolate` | `true` | Stack Docker isolado por worktree (quando há Docker) |
 
 ---

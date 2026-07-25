@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Git worktree per task — <worktree_path>/<context>/<title>, default .claude/worktrees.
+description: Git worktree per task — <worktree_path>/<context>/<title>, default .dev-team-agents/worktrees.
 ---
 
 # Worktree — Task Isolation Protocol
@@ -42,7 +42,7 @@ For the full cascade, base-branch resolution, format rules, and cleanup: load `r
 
 ## Worktree Setup (when worktree=yes)
 
-`<wt-path>` = `worktree_path` from `preferences.json` (default `.claude/worktrees`).
+`<wt-path>` = `worktree_path` from `preferences.json` (default `.dev-team-agents/worktrees`).
 Load `references/branch-flow.md` for the complete step-by-step flow:
 
 1. Load project context (project-config → preferences.json → skill defaults)
