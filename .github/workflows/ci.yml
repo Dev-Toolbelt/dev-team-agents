@@ -14,56 +14,71 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate agent and skill frontmatter
-        run: bash helpers/agent-lint.sh
+      - name: Lint, orphan scan, fingerprint uniqueness, size limits, shellcheck
+        run: bash .github/scripts/ci/01-lint.sh
 
-      - name: Orphan skill scan
-        run: bash helpers/orphan-skill-scan.sh
-        continue-on-error: true
+      - name: README / docs sync check (EN ↔ pt-BR)
+        run: bash .github/scripts/ci/02-readme-sync.sh
 
-      - name: Check fingerprint uniqueness
-        run: bash helpers/check-fingerprint-uniqueness.sh
+  provider-contracts:
+    name: Provider contract (${{ matrix.provider }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [claude, opencode, codex]
 
-      - name: Size limits check
-        run: bash helpers/size-limits.sh --warn-only
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Shellcheck scripts
-        run: find scripts helpers -name '*.sh' -exec shellcheck {} +
+      - name: Set up python3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
-      - name: README sync check
+      - name: Set up jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Render ${{ matrix.provider }} into staging
         run: |
-          # Check that all ## sections in the EN file are present in the pt-BR translation.
-          # Also apply a loose 50% line-count sanity check to catch wholesale missing content.
-          check_pair() {
-            local en="$1" ptbr="$2"
-            local fail=0
+          mkdir -p /tmp/staging
+          bash .github/scripts/ci/provider/10-render.sh \
+            "${{ matrix.provider }}" "$GITHUB_WORKSPACE" /tmp/staging
 
-            # Section-count match (primary check)
-            # Headers are translated so we compare counts, not text.
-            # A mismatch means a section was added in one file but not the other.
-            en_count=$(grep -c "^## " "$en" 2>/dev/null || echo 0)
-            ptbr_count=$(grep -c "^## " "$ptbr" 2>/dev/null || echo 0)
-            if [ "$en_count" != "$ptbr_count" ]; then
-              echo "Section mismatch: $en ↔ $ptbr ($en_count vs $ptbr_count sections)"
-              fail=1
-            fi
+      - name: Attendance — counts derived from canonical source
+        run: |
+          bash .github/scripts/ci/provider/20-attendance.sh \
+            "${{ matrix.provider }}" "$GITHUB_WORKSPACE" /tmp/staging
 
-            # Loose line-count sanity (50% threshold — catches missing large blocks)
-            EN_LINES=$(wc -l < "$en")
-            PTBR_LINES=$(wc -l < "$ptbr")
-            DIFF=$(( EN_LINES - PTBR_LINES ))
-            DIFF=${DIFF#-}
-            THRESHOLD=$(( EN_LINES / 2 + 1 ))
-            if [ "$DIFF" -gt "$THRESHOLD" ]; then
-              echo "$en and $ptbr differ by $DIFF lines (>50%). Check for missing content."
-              fail=1
-            fi
+      - name: Schema + cross-ref contract
+        run: |
+          bash .github/scripts/ci/provider/30-contract.sh \
+            "${{ matrix.provider }}" "$GITHUB_WORKSPACE" /tmp/staging
 
-            [ "$fail" -eq 0 ] && echo "Sync OK: $en ↔ $ptbr"
-            return $fail
-          }
-          FAIL=0
-          check_pair README.md README.pt-BR.md || FAIL=1
-          check_pair docs/agents.md docs/agents.pt-BR.md || FAIL=1
-          check_pair docs/installation.md docs/installation.pt-BR.md || FAIL=1
-          exit $FAIL
+      - name: Install into fixture project
+        run: |
+          mkdir -p /tmp/fixture
+          bash .github/scripts/ci/provider/40-install-fixture.sh \
+            "${{ matrix.provider }}" "$GITHUB_WORKSPACE" /tmp/fixture
+
+      - name: Validate installed fixture parses and carries artifacts
+        run: |
+          bash .github/scripts/ci/provider/50-validate-installed.sh \
+            "${{ matrix.provider }}" "$GITHUB_WORKSPACE" /tmp/fixture
+
+  slim-bootstrap:
+    name: Slim install + provider bootstrap
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up python3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Slim tarball strip rules + opencode/codex bootstrap via install-provider.sh
+        run: |
+          mkdir -p /tmp/slim-fixture
+          bash .github/scripts/ci/slim-bootstrap.sh "$GITHUB_WORKSPACE" /tmp/slim-fixture
