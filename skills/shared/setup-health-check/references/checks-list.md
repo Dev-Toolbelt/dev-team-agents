@@ -52,17 +52,23 @@ done
 | All dispatcher and sub-scripts exist | Re-run `chmod +x` |
 | All scripts are executable | `chmod +x <script>` |
 
-## Category 3 — User Data
+## Category 3 — User Data & Legacy Paths
 
 ```bash
 ls -la .dev-team-agents/user-data/ 2>/dev/null || echo "MISSING"
 cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "MISSING"
+
+# Check for legacy paths that should have been migrated
+for _legacy in .claude/user-data .claude/docs .claude/context .claude/tasks .claude/dev-team-agents; do
+  [ -e "$_legacy" ] && echo "LEGACY_DIR: $_legacy"
+done
 ```
 
 | Check | Auto-fix |
 |-------|----------|
 | `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` |
 | `.installed-version` exists | WARN only — re-run installer to populate |
+| Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Offer migration**: move contents to new locations and remove old dirs |
 
 ## Category 4 — settings.json
 
@@ -129,6 +135,23 @@ for _LEGACY in \
   ".dev-team-agents/user-data/.installed-version" \
   ".dev-team-agents/user-data/.auto-update"; do
   grep -qF "$_LEGACY" .gitignore 2>/dev/null && echo "LEGACY: $_LEGACY"
+done
+
+# Detect malformed single-line entries (missing newline separator)
+for _MALFORMED in \
+  "user-data/*!.claude" \
+  "user-data/*!."; do
+  grep -qF "$_MALFORMED" .gitignore 2>/dev/null && echo "MALFORMED: $_MALFORMED"
+done
+
+# Detect legacy .claude/ gitignore entries
+for _LEGACY_CLAUDE in \
+  ".claude/user-data" \
+  ".claude/docs" \
+  ".claude/context" \
+  ".claude/tasks" \
+  ".claude/dev-team-agents"; do
+  grep -qF "$_LEGACY_CLAUDE" .gitignore 2>/dev/null && echo "LEGACY_CLAUDE: $_LEGACY_CLAUDE"
 done
 ```
 

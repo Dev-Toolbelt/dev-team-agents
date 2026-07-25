@@ -88,6 +88,35 @@ New entries to add:
 .dev-team-agents/.worktree-session
 ```
 
+### Malformed single-line entry fix
+
+If a legacy entry like `.claude/user-data/*!.claude/user-data/graphify.json` exists (no newline between the two patterns), separate them:
+
+```bash
+sed -i '' 's|\.claude/user-data/\*!\.claude/user-data/graphify\.json|.claude/user-data/\n!.claude/user-data/graphify.json|' .gitignore
+```
+
+Then update to the new paths:
+
+```bash
+sed -i '' 's|\.claude/user-data|.dev-team-agents/user-data|g' .gitignore
+```
+
+## Legacy directory migration
+
+If legacy `.claude/` directories still exist (user-data, docs, context, tasks, dev-team-agents):
+
+| Legacy path | New path | Action |
+|---|---|---|
+| `.claude/user-data/` | `.dev-team-agents/user-data/` | `mv .claude/user-data .dev-team-agents/user-data` |
+| `.claude/docs/` | `docs/` | `mv .claude/docs docs` (merge if `docs/` exists) |
+| `.claude/context/` | `docs/context/` | `mkdir -p docs/context && mv .claude/context/* docs/context/` |
+| `.claude/tasks/` | `docs/tasks/` | `mkdir -p docs/tasks && mv .claude/tasks/* docs/tasks/` |
+| `.claude/dev-team-agents/` | `.dev-team-agents/` | Run `bash .dev-team-agents/scripts/migrate-to-root.sh` |
+| `.claude/.worktree-session` | `.dev-team-agents/.worktree-session` | `mv .claude/.worktree-session .dev-team-agents/` |
+
+After moving, remove empty legacy dirs: `rmdir .claude/user-data .claude/docs .claude/context .claude/tasks 2>/dev/null; rm -rf .claude/dev-team-agents 2>/dev/null`
+
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
 Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):
