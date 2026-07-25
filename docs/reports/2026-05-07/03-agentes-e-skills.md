@@ -19,7 +19,7 @@ O `setup-assistant` é **o primeiro contato** do projeto com o ecossistema. Ele 
 - Qual o tipo de projeto (`new` / `inherited` / `unfinished` / `maintenance`)
 - Qual issue tracker integrar (`github` / `jira` / `linear` / `clickup` / `trello`)
 - Se Graphify deve ser configurado e com qual granularidade
-- Quais arquivos `.claude/docs/` criar (dependendo do tipo)
+- Quais arquivos `docs/` criar (dependendo do tipo)
 - Que conteúdo deve entrar no `CLAUDE.md` do projeto-alvo
 
 Tudo isso é **decisão estrutural de longo prazo**, não execução. O `software-architect` e o `product-analyst` (também decisores) já estão em Opus. **`setup-assistant` deveria ser Opus** ou o `CLAUDE.md` deveria reformular o critério.

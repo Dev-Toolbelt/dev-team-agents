@@ -48,7 +48,7 @@ Before acting, identify the current working context:
 - Run `git branch --show-current`
 - Run `git diff --name-only HEAD`
 - Run `git diff --name-only main...HEAD`
-- Check `.claude/.worktree-session` if present
+- Check `.dev-team-agents/.worktree-session` if present
 
 Restrict all analysis and actions to files and changes within this context.
 ```
@@ -56,7 +56,7 @@ Restrict all analysis and actions to files and changes within this context.
 O `commit.md` (linhas 1–11) **pula esse bloco** e parte direto para `git status --short` em qualquer escopo. Em teoria não é um erro (commit é um ato local), mas:
 
 - Em workflows multi-agent + worktrees (ver `skills/shared/worktree/SKILL.md`), o `commit.md` pode acabar tentando commitar arquivos **fora** do worktree em curso.
-- Pelo menos a leitura inicial do `.claude/.worktree-session` não custaria nada e tornaria o comando consciente do contexto que os outros já estabeleceram.
+- Pelo menos a leitura inicial do `.dev-team-agents/.worktree-session` não custaria nada e tornaria o comando consciente do contexto que os outros já estabeleceram.
 
 > **Fingerprint:** `ref-commit-no-worktree-context`
 

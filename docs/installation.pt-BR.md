@@ -50,7 +50,7 @@ Desabilite a qualquer momento:
 .dev-team-agents/scripts/update.sh --disable-auto
 ```
 
-Você também pode alternar isso em `.claude/user-data/preferences.json`:
+Você também pode alternar isso em `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "auto_update": true }
@@ -68,7 +68,7 @@ A verificação de atualização executa uma vez por dia. O intervalo é configu
 
 Durante a instalação, o instalador pergunta em qual idioma os agentes devem conversar com você. Planos apresentados para aprovação e todas as respostas diretas usam o idioma configurado. Documentos (ADRs, changelogs, comentários de código) permanecem sempre em inglês.
 
-Atualize a qualquer momento editando `.claude/user-data/preferences.json`:
+Atualize a qualquer momento editando `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "language": "pt-BR" }
@@ -86,7 +86,7 @@ Agentes e hooks emitem notificações no formato DEV TEAM AGENTS ao longo das su
 - **⚠️ warning** — janela de contexto se aproximando do limite, docs desatualizados, config ausente
 - **🚨 critical** — janela de contexto no limite, instalação quebrada
 
-Configure em `.claude/user-data/preferences.json`:
+Configure em `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 {
@@ -130,7 +130,7 @@ Controle como os agentes de codificação isolam o trabalho, no mesmo `preferenc
 | `worktree_path` | `".claude/worktrees"` | Onde as worktrees são criadas (`<path>/<contexto>/<título>`) |
 | `worktree_docker_isolate` | `true` | Com `worktree_active` e um projeto Docker Compose, sobe um stack isolado por worktree (containers/volumes/redes namespaceados, portas não publicadas) |
 
-O arquivo de sessão `.claude/.worktree-session` sobrepõe esses defaults para uma única task. No merge, os agentes fazem rebase na base branch, mergeiam e derrubam somente a worktree e seu stack Docker isolado. As quatro chaves são preenchidas automaticamente com esses defaults a cada sessão, se estiverem ausentes.
+O arquivo de sessão `.dev-team-agents/.worktree-session` sobrepõe esses defaults para uma única task. No merge, os agentes fazem rebase na base branch, mergeiam e derrubam somente a worktree e seu stack Docker isolado. As quatro chaves são preenchidas automaticamente com esses defaults a cada sessão, se estiverem ausentes.
 
 ---
 
@@ -187,5 +187,5 @@ Se preferir que cada desenvolvedor instale localmente:
 .claude/agents/dev-team/
 .claude/skills/
 .claude/commands/devteam/
-.claude/.worktree-session
+.dev-team-agents/.worktree-session
 ```

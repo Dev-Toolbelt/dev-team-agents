@@ -20,11 +20,11 @@ Before spawning any agent, evaluate $ARGUMENTS:
 
 ## Worktree / Branch
 
-Read `.claude/.worktree-session` before asking:
+Read `.dev-team-agents/.worktree-session` before asking:
 - If the file exists and contains a decision (`worktree=no` or `worktree=yes branch=<b>`), follow it silently.
 - If absent, ask the user once:
   > "Should I work in a new worktree or a new branch? (worktree / branch)"
-  Write the answer to `.claude/.worktree-session`, then act.
+  Write the answer to `.dev-team-agents/.worktree-session`, then act.
 
 **If worktree is selected:** load `skills/shared/worktree/SKILL.md` and enforce the project's branch naming pattern before creating anything. Read the last 20 branch names from `git branch -a` to detect the convention in use (e.g. `refactor/`, `feat/`, kebab-case, ticket prefix). Suggest a name that matches and ask the user to confirm before creating.
 
@@ -92,7 +92,7 @@ Consolidate all outputs into a single **Refactoring Plan** containing:
 - Security review findings
 
 **Save the consolidated plan to:**
-`.claude/docs/refactoring/<context>/<name>-<YYYY-MM-DD>.md`
+`docs/refactoring/<context>/<name>-<YYYY-MM-DD>.md`
 
 Where `<context>` is the module/routine slug and `<name>` is a short descriptive slug of the refactoring goal. Create the directory if it does not exist. Display the saved path to the user.
 
@@ -152,7 +152,7 @@ Fast track still requires user approval of the plan before any implementation be
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**
-1. Read `.claude/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 

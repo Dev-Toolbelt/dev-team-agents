@@ -147,7 +147,7 @@ Fingerprint pai `flow-no-validation-of-workflow-keyword-collisions-between-softw
 
 Os hooks de install/update queueam eventos (commit `a4bb102`), mas o **flush** só acontece em `Stop` quando TTL 24h é atingido ou queue cap 100. Cenário comum:
 
-1. Usuário roda `bash install.sh` em CI fresh (sem `.claude/user-data/` pré-existente)
+1. Usuário roda `bash install.sh` em CI fresh (sem `.dev-team-agents/user-data/` pré-existente)
 2. Evento `install` é queueado
 3. Mas não há sessão Claude Code após install → Stop nunca dispara
 4. Evento fica em `telemetry-queue.json` indefinidamente até a próxima sessão real

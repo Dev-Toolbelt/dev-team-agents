@@ -67,7 +67,7 @@ If it succeeds, confirm to the user. If it fails, diagnose: check `authorized_ke
 
 After successful setup, update the target project's context:
 
-1. Add to `.claude/user-data/session-summary.md` a note that SSH access to `<host-name>` is configured
+1. Add to `.dev-team-agents/user-data/session-summary.md` a note that SSH access to `<host-name>` is configured
 2. Append to the project's `CLAUDE.md` (if it exists):
 
 ```markdown

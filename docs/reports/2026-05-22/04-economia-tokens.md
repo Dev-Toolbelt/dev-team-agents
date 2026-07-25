@@ -34,7 +34,7 @@
 E os dois artefatos com o **mesmo nome**, mas conteúdos **diferentes**:
 
 ```
-171 skills/shared/backlog-template/SKILL.md  → estrutura multi-arquivo (.claude/docs/backlog/: overview.md, dod.md, epics.md)
+171 skills/shared/backlog-template/SKILL.md  → estrutura multi-arquivo (docs/backlog/: overview.md, dod.md, epics.md)
  35 templates/backlog-template.md            → item único de backlog (Story, AC, Estimate, DoD)
 ```
 

@@ -106,7 +106,7 @@ Users can bypass classification by passing an explicit argument:
 
 ## Project-Specific Path Overrides
 
-Projects with non-standard directory structures can define custom path mappings in `.claude/docs/development/code-standards.md` or `CLAUDE.md` under a `## Review Router` section:
+Projects with non-standard directory structures can define custom path mappings in `docs/development/code-standards.md` or `CLAUDE.md` under a `## Review Router` section:
 
 ```yaml
 review-router:

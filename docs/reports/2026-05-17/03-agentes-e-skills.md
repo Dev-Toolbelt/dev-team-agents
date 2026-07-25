@@ -183,7 +183,7 @@ Há **dois** pontos de duplicação:
 
 **Recomendação:**
 - Extrair o block inline para `skills/shared/worktree-isolation/SKILL.md` (~25 linhas: cabeçalho + decision tree)
-- A skill main (`skills/shared/worktree/SKILL.md`) é carregada **apenas quando** `worktree=yes` na decision file `.claude/.worktree-session`
+- A skill main (`skills/shared/worktree/SKILL.md`) é carregada **apenas quando** `worktree=yes` na decision file `.dev-team-agents/.worktree-session`
 
 **Impacto positivo:** economy de ~7.000 tokens/sessão multi-agent.
 **Impacto negativo:** custo de migração em 8 agents (mas pode ser sed-driven se ordering das tools for canônica — pendente desde 2026-05-12).

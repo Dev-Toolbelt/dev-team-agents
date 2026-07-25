@@ -68,7 +68,7 @@ HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
 bash "$TMP_INSTALLER" "$VERSION_ARG"
 
 # Invalidate context cache after version change
-rm -f ".claude/user-data/.context-cache.json" 2>/dev/null || true
+rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 
 # Send update telemetry event (silent — never blocks the update flow)
 _PREV_VER=$(cat "$PREV_VERSION_FILE" 2>/dev/null || echo "unknown")

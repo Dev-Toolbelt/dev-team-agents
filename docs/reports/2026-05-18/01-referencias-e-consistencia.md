@@ -224,7 +224,7 @@ Em 90 dias (a partir do oldest entry 2026-05-06), a primeira entrada elegível p
 
 **Impacto positivo:** adicionar `06-archive-index.sh` ao Stop dispatcher com gate de execução (uma vez por dia, somente se passou 90d) materializa a automação prometida.
 
-**Impacto negativo:** ~5ms adicional por Stop em sessões que não precisam disso (mitigável com TTL persistido em `.claude/user-data/.archive-index-lastrun`).
+**Impacto negativo:** ~5ms adicional por Stop em sessões que não precisam disso (mitigável com TTL persistido em `.dev-team-agents/user-data/.archive-index-lastrun`).
 
 ---
 

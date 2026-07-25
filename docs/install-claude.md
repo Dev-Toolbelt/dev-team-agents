@@ -20,7 +20,7 @@ Start the setup flow by typing:
 Help me set up this project with dev-team-agents
 ```
 
-The `setup-assistant` agent scans your project, collects configuration (tests, CI, cloud provider), and generates living context docs in `.claude/docs/`.
+The `setup-assistant` agent scans your project, collects configuration (tests, CI, cloud provider), and generates living context docs in `docs/`.
 
 ## Options
 

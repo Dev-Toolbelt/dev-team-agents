@@ -15,12 +15,12 @@ Resolve the worktree decision top-down; stop at the first that applies:
 
 | # | Source | Action |
 |---|--------|--------|
-| 1 | `.claude/.worktree-session` present | Follow the stored per-session decision silently |
+| 1 | `.dev-team-agents/.worktree-session` present | Follow the stored per-session decision silently |
 | 2 | `worktree_active` in `preferences.json` | Use it **without asking**; write the session file so the rest of the session is consistent |
 | 3 | key absent (legacy install) | Ask the user once — see below |
 
 ```bash
-cat .claude/.worktree-session 2>/dev/null   # source 1
+cat .dev-team-agents/.worktree-session 2>/dev/null   # source 1
 ```
 
 | Session-file content | Action |

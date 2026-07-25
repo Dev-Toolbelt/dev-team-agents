@@ -9,8 +9,8 @@ unset BASH_ENV ENV
 set -uo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-USER_DATA_DIR="${PROJECT_ROOT}/.claude/user-data"
-DOCS_DIR="${PROJECT_ROOT}/.claude/docs"
+USER_DATA_DIR="${PROJECT_ROOT}/.dev-team-agents/user-data"
+DOCS_DIR="${PROJECT_ROOT}/docs"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFS_DEFAULTS_FILE="${SCRIPT_DIR}/../lib/preferences-defaults.json"
@@ -141,7 +141,7 @@ if [ -f "$PROJECT_MD" ]; then
     DAYS_OLD=$(_days_since_modified "$PROJECT_MD")
     if [ "$DAYS_OLD" -gt "$STALE_DAYS" ]; then
         WARN=1
-        MESSAGES+=("⚠️  .claude/docs/project.md is ${DAYS_OLD} days old — consider running /devteam:architect to refresh.")
+        MESSAGES+=("⚠️  docs/project.md is ${DAYS_OLD} days old — consider running /devteam:architect to refresh.")
     fi
 fi
 

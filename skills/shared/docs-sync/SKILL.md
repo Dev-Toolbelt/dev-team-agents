@@ -1,11 +1,11 @@
 ---
 name: docs-sync
-description: Maintains .claude/docs/ — surgical patches, no duplicate content.
+description: Maintains docs/ — surgical patches, no duplicate content.
 ---
 
 # Docs Sync
 
-Agents call this skill after completing any task that changes project state. It patches the affected section in `.claude/docs/` — it never rewrites a whole file.
+Agents call this skill after completing any task that changes project state. It patches the affected section in `docs/` — it never rewrites a whole file.
 
 ---
 
@@ -26,7 +26,7 @@ Agents call this skill after completing any task that changes project state. It 
 
 ## Document Schemas
 
-### `.claude/docs/project.md` — max 80 lines
+### `docs/project.md` — max 80 lines
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->
@@ -39,7 +39,7 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 ## Key Constraints
 ```
 
-### `.claude/docs/development/tech-stack.md` — max 60 lines
+### `docs/development/tech-stack.md` — max 60 lines
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->
@@ -50,7 +50,7 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 ## Source References
 ```
 
-### `.claude/docs/development/architecture.md` — max 100 lines
+### `docs/development/architecture.md` — max 100 lines
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->
@@ -62,7 +62,7 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 ## Source References
 ```
 
-### `.claude/docs/development/code-standards.md` — max 80 lines
+### `docs/development/code-standards.md` — max 80 lines
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->
@@ -74,7 +74,7 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 ## Source References
 ```
 
-### `.claude/docs/backlog/README.md` — max 40 lines
+### `docs/backlog/README.md` — max 40 lines
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->
@@ -83,7 +83,7 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 ## Sprint Files | File | Sprint | Status
 ```
 
-### `.claude/docs/design/design-system.md` — max 80 lines (UI projects only)
+### `docs/design/design-system.md` — max 80 lines (UI projects only)
 
 ```markdown
 <!-- last-updated: YYYY-MM-DD -->

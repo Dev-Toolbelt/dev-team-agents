@@ -121,12 +121,12 @@ c) **Manter monolítico mas marcar seções com tags estruturadas** (HTML commen
 
 ```
 5. AGENTS.md
-6. .claude/docs/development/architecture.md
-7. .claude/docs/development/tech-stack.md
-8. .claude/docs/development/code-standards.md
-9. .claude/docs/development/api-contracts.md   ← backend-specific
-10. .claude/docs/development/database.md       ← backend/database
-11. .claude/docs/backlog/                      ← product/all
+6. docs/development/architecture.md
+7. docs/development/tech-stack.md
+8. docs/development/code-standards.md
+9. docs/development/api-contracts.md   ← backend-specific
+10. docs/development/database.md       ← backend/database
+11. docs/backlog/                      ← product/all
 12. Run `git log --oneline -20`                ← all
 ```
 
@@ -137,8 +137,8 @@ Cada agente repete prosa "Run `git log…` — reveals recent patterns…". Em f
 
 | Path | Why |
 |------|-----|
-| .claude/docs/development/architecture.md | architectural decisions |
-| .claude/docs/development/tech-stack.md   | chosen technologies |
+| docs/development/architecture.md | architectural decisions |
+| docs/development/tech-stack.md   | chosen technologies |
 | ... | ... |
 
 ## Final Step

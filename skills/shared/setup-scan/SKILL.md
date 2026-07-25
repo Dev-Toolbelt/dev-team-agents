@@ -17,7 +17,7 @@ git log --oneline -20
 git status
 
 # Installed version
-cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
+cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
 Read: `README.md`, `CLAUDE.md`, `AGENTS.md`, `.claude/` directory structure.
@@ -41,7 +41,7 @@ Both `frontend-developer` and `ui-ux-designer` depend on these skills.
 
 ## Project Docs Discovery
 
-Run before generating any `.claude/docs/` file:
+Run before generating any `docs/` file:
 
 ```bash
 # Root-level markdown (excluding already-read files)
@@ -78,8 +78,8 @@ find . -maxdepth 2 \( -name ".eslintrc*" -o -name ".prettierrc*" -o -name "phpcs
 | `.cursor/rules/*`, `.cursor/*.md` | `code-standards.md` → Cursor AI conventions |
 | `.agents/*.md` | `project.md` → Agent overrides in effect |
 | `.github/CODEOWNERS`, `.github/CONTRIBUTING.md`, `.github/pull_request_template.md` | `code-standards.md` → Review process, PR standards |
-| `docs/infra*`, `docs/devops*`, `docs/deploy*`, `*.tf`, `docker-compose*` | `.claude/docs/devops/` → Infrastructure and deployment docs |
-| `docs/test*`, `docs/qa*`, `jest.config*`, `vitest.config*`, `playwright.config*` | `.claude/docs/tests/` → Test strategy and configuration |
+| `docs/infra*`, `docs/devops*`, `docs/deploy*`, `*.tf`, `docker-compose*` | `docs/devops/` → Infrastructure and deployment docs |
+| `docs/test*`, `docs/qa*`, `jest.config*`, `vitest.config*`, `playwright.config*` | `docs/tests/` → Test strategy and configuration |
 
 Content is synthesized (not duplicated) into the target doc. Use `<!-- TODO: <agent> to fill -->` only for sections with no data yet.
 

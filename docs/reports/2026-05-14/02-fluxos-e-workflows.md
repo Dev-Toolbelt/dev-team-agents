@@ -26,7 +26,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Fingerprint:** `flow-context-cache-moved-to-user-data-but-no-cleanup-script-for-stale-cache-on-version-bump`
 
-**Evidência:** Commit `ac6af24` (2026-05-13) moveu `.context-cache.json` para `.claude/user-data/` (CLAUDE.md L283 lista o arquivo como gitignored). `scripts/update.sh` (76 linhas) e `scripts/rollback.sh` (65 linhas) não removem o cache pós-update. Versionar muda paths/skills mas o cache pode apontar para arquivos extintos.
+**Evidência:** Commit `ac6af24` (2026-05-13) moveu `.context-cache.json` para `.dev-team-agents/user-data/` (CLAUDE.md L283 lista o arquivo como gitignored). `scripts/update.sh` (76 linhas) e `scripts/rollback.sh` (65 linhas) não removem o cache pós-update. Versionar muda paths/skills mas o cache pode apontar para arquivos extintos.
 
 **Por quê importa:** Após `update.sh` rodar e instalar v1.3 sobre v1.2, cache de current-context (TTL 300s) ainda válido pode referenciar paths obsoletos da v1.2; primeira invocação pós-update pega snapshot inválido.
 
@@ -34,7 +34,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Impacto negativo / risco:** Re-detecção custa ~5-10s mas paga uma vez por update (≈ semanal).
 
-**Sugestão concreta:** Adicionar `rm -f .claude/user-data/.context-cache.json` no final de `update.sh` e `rollback.sh` (após swap de versão); idempotente, custo zero.
+**Sugestão concreta:** Adicionar `rm -f .dev-team-agents/user-data/.context-cache.json` no final de `update.sh` e `rollback.sh` (após swap de versão); idempotente, custo zero.
 
 ---
 
@@ -50,7 +50,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Impacto negativo / risco:** Tag adicional em cada rollback polui `git tag --list`; mitigado por padrão `pre-rollback-*` filtrável.
 
-**Sugestão concreta:** Em `rollback.sh` antes do download/swap: `git tag "pre-rollback-$(cat .claude/user-data/.installed-version 2>/dev/null || echo unknown)" 2>/dev/null || true`.
+**Sugestão concreta:** Em `rollback.sh` antes do download/swap: `git tag "pre-rollback-$(cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo unknown)" 2>/dev/null || true`.
 
 ---
 
@@ -158,7 +158,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Por quê importa:** Trabalho duplicado em multi-agent. Não é crítico mas aumenta latência percebida.
 
-**Impacto positivo da correção:** Cache em `.claude/user-data/.spawn-classifier-cache.json` (TTL 60s ou hash do diff) elimina re-execução.
+**Impacto positivo da correção:** Cache em `.dev-team-agents/user-data/.spawn-classifier-cache.json` (TTL 60s ou hash do diff) elimina re-execução.
 
 **Impacto negativo / risco:** Cache stale entre branches; mitigar com TTL curto + hash do `git rev-parse HEAD`.
 

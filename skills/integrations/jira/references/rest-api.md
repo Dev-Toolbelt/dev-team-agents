@@ -34,7 +34,7 @@ echo -n "{email}:{api_token}" | base64
 ## Step 2 — Determine Jira cloud URL
 
 1. Check conversation for a domain mention (e.g., `mycompany.atlassian.net`)
-2. Check `.claude/docs/project.md` or `CLAUDE.md`
+2. Check `docs/project.md` or `CLAUDE.md`
 3. Ask the user: *"What is your Jira cloud URL?"*
 
 Store as `JIRA_BASE` for the session.

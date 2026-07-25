@@ -36,12 +36,12 @@ $ git log --since="2026-05-23 00:00:00" --oneline
 
 Não há nenhum commit após `9f1826d`. A janela 2026-05-23 → 2026-05-24 tem **0 commits**, confirmando **throughput de 0%** pela sexta janela consecutiva (18→19, 19→20, 20→21, 21→22, 22→23 e 23→24 todas a 0%).
 
-**Nota operacional (recorrente — agora com causa-raiz identificada):** o working tree segue com material **não-commitado** — `docs/reports/_index.md` modificado e os diretórios `docs/reports/2026-05-18/` … `2026-05-23/` ainda como *untracked*, além de `.claude/user-data/`. **A causa de `.claude/user-data/` aparecer como untracked foi finalmente localizada nesta passada:** o `.gitignore` tem uma linha malformada que não casa com o diretório (ver `02/F3`). São agora **seis dias** de relatórios de auditoria produzidos e nunca incorporados ao histórico do git.
+**Nota operacional (recorrente — agora com causa-raiz identificada):** o working tree segue com material **não-commitado** — `docs/reports/_index.md` modificado e os diretórios `docs/reports/2026-05-18/` … `2026-05-23/` ainda como *untracked*, além de `.dev-team-agents/user-data/`. **A causa de `.dev-team-agents/user-data/` aparecer como untracked foi finalmente localizada nesta passada:** o `.gitignore` tem uma linha malformada que não casa com o diretório (ver `02/F3`). São agora **seis dias** de relatórios de auditoria produzidos e nunca incorporados ao histórico do git.
 
 ```
 $ git status --short
  M docs/reports/_index.md
-?? .claude/user-data/
+?? .dev-team-agents/user-data/
 ?? docs/reports/2026-05-18/ … 2026-05-23/
 ```
 
@@ -122,7 +122,7 @@ O fingerprint `auto-docs-rule-violated-changelog-unreleased-missing-7-features-f
 
 ## 6. Causa-raiz encontrada para uma nota operacional antiga
 
-Por **5 passadas** os relatórios anotaram que `.claude/user-data/` aparece como *untracked* no working tree, tratando isso como "material não-commitado". A releitura do `.gitignore` desta passada encontrou a **causa-raiz**: a última linha do arquivo está **malformada** (`.claude/user-data/.notifier-stateuser-data/`), fundindo duas entradas numa só que não casa com nada. `git check-ignore` confirma que `.claude/user-data/` **não está sendo ignorado**. Não é "esqueceram de commitar" — é "o ignore está quebrado". Detalhe em `02/F3`.
+Por **5 passadas** os relatórios anotaram que `.dev-team-agents/user-data/` aparece como *untracked* no working tree, tratando isso como "material não-commitado". A releitura do `.gitignore` desta passada encontrou a **causa-raiz**: a última linha do arquivo está **malformada** (`.dev-team-agents/user-data/.notifier-stateuser-data/`), fundindo duas entradas numa só que não casa com nada. `git check-ignore` confirma que `.dev-team-agents/user-data/` **não está sendo ignorado**. Não é "esqueceram de commitar" — é "o ignore está quebrado". Detalhe em `02/F3`.
 
 ---
 

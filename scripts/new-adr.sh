@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates a numbered ADR file with MADR template in .claude/docs/development/adrs/
+# Creates a numbered ADR file with MADR template in docs/development/adrs/
 # Usage: bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 set -euo pipefail
 
@@ -11,7 +11,7 @@ if [ -z "$TITLE" ]; then
     exit 1
 fi
 
-ADR_DIR=".claude/docs/development/adrs"
+ADR_DIR="docs/development/adrs"
 mkdir -p "$ADR_DIR"
 
 # Find the next sequential number

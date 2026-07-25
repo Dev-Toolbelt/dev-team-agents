@@ -36,7 +36,7 @@
 
 ### Fluxos e Workflows (10)
 
-- `flow-pre-compact-hook-no-graceful-skip-when-claude-dir-absent` — **⚠️ Partial** — Evidência: `scripts/hooks/pre-compact.sh:7` faz `git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0` (skip git absente) e linha 21 `[ "$HAS_CHANGES" = false ] && exit 0`. **Mas** não há guarda explícita `[ -d .claude/user-data ] || exit 0` — projeto recém-clonado fora de git (raro mas possível) ou com `.claude/` ausente após git pode ainda emitir warning do session-summary file. Cobertura ~80%.
+- `flow-pre-compact-hook-no-graceful-skip-when-claude-dir-absent` — **⚠️ Partial** — Evidência: `scripts/hooks/pre-compact.sh:7` faz `git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0` (skip git absente) e linha 21 `[ "$HAS_CHANGES" = false ] && exit 0`. **Mas** não há guarda explícita `[ -d .dev-team-agents/user-data ] || exit 0` — projeto recém-clonado fora de git (raro mas possível) ou com `.claude/` ausente após git pode ainda emitir warning do session-summary file. Cobertura ~80%.
 - `flow-pr-command-no-base-branch-detection-from-repo-config` — **pendente** — Evidência: `commands/pr.md` linhas 10, 17, 29, 40, 52 ainda hardcodam `main` em `git log main..HEAD`, `git diff main...HEAD` etc.; sem fallback para `git config init.defaultBranch` ou `gh repo view`.
 - `flow-current-context-cache-no-invalidation-on-branch-switch-within-ttl-window` — **pendente** — Evidência: `skills/shared/current-context/SKILL.md:73` ainda usa `[ "$age" -lt 300 ] && echo "Context (cached)"` sem comparação `branch_atual == cached_branch`. Apenas timestamp; branch switch dentro da janela 300s não invalida o cache. Commit `ac6af24` apenas moveu o path do cache para `user-data/`, não corrigiu o bug.
 - `flow-design-command-no-frontend-developer-spawn-for-implementation` — **pendente** — Evidência: `grep -n "frontend-developer" commands/design.md` retorna 0 hits. Sem cross-link condicional.
@@ -109,7 +109,7 @@ Dois fatores concorrem:
 ### 4. Endereçamento parcial reconhecido
 
 - `ref-foundational-rule-setup-assistant-shrunk-to-7-lines-after-suggestion-to-grow-it`: a Immutability Warning **está presente** (linha 213 de `setup-assistant.md`); apenas o tamanho da Foundational Rule continua subdimensionado. Sub-escopo "size" pendente, sub-escopo "compliance" resolvido.
-- `flow-pre-compact-hook-no-graceful-skip-when-claude-dir-absent`: `pre-compact.sh:7` adiciona skip para repo não-git e linha 21 para "no changes"; falta apenas o caso específico `[ -d .claude/user-data ]`. Cobertura ~80%.
+- `flow-pre-compact-hook-no-graceful-skip-when-claude-dir-absent`: `pre-compact.sh:7` adiciona skip para repo não-git e linha 21 para "no changes"; falta apenas o caso específico `[ -d .dev-team-agents/user-data ]`. Cobertura ~80%.
 - `skill-graphify-setup-still-no-conditional-skip-3rd-pass-277-lines`: commit `90d2f40` adicionou 12 linhas de skip conditions; a infraestrutura de gating existe mas a propagação para `setup-assistant.md` (consumidor) não foi verificada. Mantido como pendente para conservadorismo.
 
 ### 5. Scripts órfãos seguem padrão recorrente

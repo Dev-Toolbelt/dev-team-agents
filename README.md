@@ -105,7 +105,7 @@ The `setup-assistant` will:
 3. **Ask** which type of project this is: new from scratch, inherited/unfinished, or maintenance on a live system
 4. **Collect** configuration in a single exchange: tests required, CI/CD platform, cloud provider, issue tracker
 5. **Present a plan** for your approval before creating or modifying anything
-6. **Generate** living context docs in `.claude/docs/` (stack, architecture, code standards, backlog index) and append a `## dev-team-agents` section to `CLAUDE.md`
+6. **Generate** living context docs in `docs/` (stack, architecture, code standards, backlog index) and append a `## dev-team-agents` section to `CLAUDE.md`
 7. **Confirm** what was configured and point you to the relevant workflow guide
 
 The full setup typically takes 5–10 minutes. Re-running on an existing project triggers refresh mode — reads git history since the last run and patches only the affected docs.
@@ -241,7 +241,7 @@ git commit -m "chore: add dev-team-agents"
 
 Coding agents resolve the worktree decision from a **three-level cascade**:
 
-1. **`.claude/.worktree-session`** (per-session override) — shared across all agents in the task, so multi-agent workflows resolve it exactly once.
+1. **`.dev-team-agents/.worktree-session`** (per-session override) — shared across all agents in the task, so multi-agent workflows resolve it exactly once.
 2. **`preferences.json` defaults** — set `worktree_active: true` to make agents create a worktree per task **without asking**. The base branch comes from `worktree_base_branch` (or is auto-detected — never hardcoded to `main`/`master`), and worktrees are created under `worktree_path` (default `.claude/worktrees/<ctx>/<title>/`).
 3. **Ask once** — only on legacy installs where the preference key is absent.
 
@@ -262,8 +262,8 @@ Coding agents resolve the worktree decision from a **three-level cascade**:
 
 Agents start each session with no memory of previous ones. Three mechanisms minimize context loss:
 
-- **Session summary** — at the end of any session where files changed, agents write an entry to `.claude/user-data/session-summary.md`. A `Stop` hook enforces this automatically.
-- **ADRs** — significant, hard-to-reverse decisions are recorded as Architecture Decision Records in `.claude/docs/development/adrs/`. Create one with: `bash .dev-team-agents/scripts/new-adr.sh "title"`
+- **Session summary** — at the end of any session where files changed, agents write an entry to `.dev-team-agents/user-data/session-summary.md`. A `Stop` hook enforces this automatically.
+- **ADRs** — significant, hard-to-reverse decisions are recorded as Architecture Decision Records in `docs/development/adrs/`. Create one with: `bash .dev-team-agents/scripts/new-adr.sh "title"`
 - **Project context skill** — defines the context-loading order every agent follows at startup, including the session summary and ADR index.
 
 ---
@@ -277,7 +277,7 @@ Do **not** modify files inside `.dev-team-agents/` — they are overwritten on u
 ```bash
 .agents/backend-developer.md          # per-agent override
 CLAUDE.md                             # project-wide rules for all agents
-.claude/docs/development/code-standards.md  # code standards used by reviewers
+docs/development/code-standards.md  # code standards used by reviewers
 ```
 
 ---
@@ -290,7 +290,7 @@ CLAUDE.md                             # project-wide rules for all agents
 
 **Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes the `.claude/` links as plain ~62-byte text files instead of symlinks. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but Claude Code sees files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Fix it by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **Claude Code as administrator** (fully close it first, including the tray icon). Restart Claude Code after repairing so it re-indexes the dev-team.
 
-**Update check hook fires on every tool call** — check that `.claude/user-data/.last-update-check` is a writable file (not a directory) and that `scripts/hooks/pre-tool-use/01-check-updates.sh` is executable.
+**Update check hook fires on every tool call** — check that `.dev-team-agents/user-data/.last-update-check` is a writable file (not a directory) and that `scripts/hooks/pre-tool-use/01-check-updates.sh` is executable.
 
 **`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell Claude: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
 
@@ -304,7 +304,7 @@ dev-team-agents collects **anonymous, aggregate usage data** to help us understa
 
 **What is collected:** agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
 
-**Opt out at any time** by editing `.claude/user-data/preferences.json`:
+**Opt out at any time** by editing `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "telemetry": false }

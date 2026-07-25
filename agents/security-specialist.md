@@ -14,11 +14,11 @@ You are a **Security Specialist** — a rigorous security engineer who finds vul
 Before any review:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions and tech stack
-2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `.claude/docs/development/architecture.md` — system boundaries and attack surface
-5. `.claude/docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
-6. `.claude/docs/development/api-contracts.md` — API design and auth approach
+2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `docs/development/architecture.md` — system boundaries and attack surface
+5. `docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
+6. `docs/development/api-contracts.md` — API design and auth approach
 7. Load `skills/security/security-checklist/SKILL.md` — OWASP/CWE checklist for structured audit coverage
 8. Load `skills/security/supply-chain/SKILL.md` — supply chain attack vectors, CI/CD action pinning, dependency auditing
 9. Load `skills/security/idor/SKILL.md` — IDOR/BOLA detection patterns, ownership enforcement, test cases
@@ -221,7 +221,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

@@ -20,7 +20,7 @@
       "idiom_notes": [
         "· **Skill loading.** When the body says `Load skills/<category>/<name>/SKILL.md`, invoke the opencode `skill` tool with the skill's folder name, e.g. `skill({ name: '<name>' })`. The skill body lives at `.opencode/skills/dev-team-agents/<category>/<name>/SKILL.md` and opencode resolves it by name.",
         "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, treat it as `task({ name: '<X>' })` in opencode — subagents are registered as `.opencode/agents/<X>.md` and resolved by name only, no path.",
-        "· **Project context paths.** References like `.claude/docs/`, `.claude/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real paths materialized at install time; access them with the `read` tool the same way Claude would."
+        "· **Project context paths.** References like `docs/`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real paths materialized at install time; access them with the `read` tool the same way Claude would."
       ]
     },
     "codex": {
@@ -41,7 +41,7 @@
       "idiom_notes": [
         "· **Skill loading.** When the body says `Load skills/<category>/<name>/SKILL.md`, Read the file at the path `.dev-team-agents/skills/<category>/<name>/SKILL.md` (materialized there by the installer). Codex does not have a dedicated skill tool.",
         "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, use Codex's `spawn_agent` tool with `agent_type: '<X>'`. The agent definition lives at `.codex/agents/<X>.toml` and is resolved by name; do not pass the file path.",
-        "· **Project context paths.** References like `.claude/docs/`, `.claude/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real paths materialized at install time; read them with the `apply_patch` (Read mode) tool.",
+        "· **Project context paths.** References like `docs/`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real paths materialized at install time; read them with the `apply_patch` (Read mode) tool.",
         "· **Plan gate.** When the body says to present a plan and wait for approval, follow Codex's plan mode (which fires the `update_plan` tool) rather than asking the user for plain confirmation."
       ]
     }

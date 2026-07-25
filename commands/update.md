@@ -28,7 +28,7 @@ You are running the **`/devteam:update`** command.
 ## Step 1 — Read current version
 
 ```bash
-v=$(cat .claude/user-data/.installed-version 2>/dev/null); echo "${v:-unknown}"
+v=$(cat .dev-team-agents/user-data/.installed-version 2>/dev/null); echo "${v:-unknown}"
 ```
 
 Store the output as `<current-version>`. A missing **or empty** version file both resolve to `unknown`.
@@ -37,17 +37,17 @@ Store the output as `<current-version>`. A missing **or empty** version file bot
 
 ## Step 2 — Repair path (only when `<current-version>` is exactly `unknown`)
 
-An `unknown` version means `.claude/user-data/.installed-version` is missing or unreadable — the installation metadata is broken. Do **NOT** report "up to date" and do **NOT** run the version check (it cannot compare an unknown version). Force a fresh reinstall of the latest version to repair the metadata:
+An `unknown` version means `.dev-team-agents/user-data/.installed-version` is missing or unreadable — the installation metadata is broken. Do **NOT** report "up to date" and do **NOT** run the version check (it cannot compare an unknown version). Force a fresh reinstall of the latest version to repair the metadata:
 
 ```bash
 bash .dev-team-agents/scripts/update.sh latest
-rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
+rm -f .dev-team-agents/user-data/.last-update-check .dev-team-agents/user-data/.last-releases-etag
 ```
 
 Then read the repaired version:
 
 ```bash
-cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
+cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
 Output exactly (substituting the repaired version):
@@ -66,7 +66,7 @@ Then skip Steps 3–5 and stop. Do not add anything else.
 Force a fresh check (bypass the 24h TTL **and** the cached ETag, so a `304 Not Modified` cannot mask a version mismatch):
 
 ```bash
-rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
+rm -f .dev-team-agents/user-data/.last-update-check .dev-team-agents/user-data/.last-releases-etag
 bash .dev-team-agents/scripts/check-updates.sh
 ```
 

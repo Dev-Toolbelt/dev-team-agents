@@ -34,7 +34,7 @@ Em `bug-fix.md` Step 1 e `security-patch.md` Step 1, mencionar que **diagnoses n
 
 ## 2.2 Nenhum workflow menciona Session Summary
 
-A `CLAUDE.md § Session Summary Rule` define que **toda sessão que cria ou modifica arquivos** precisa de uma entrada em `.claude/user-data/session-summary.md`. Mas:
+A `CLAUDE.md § Session Summary Rule` define que **toda sessão que cria ou modifica arquivos** precisa de uma entrada em `.dev-team-agents/user-data/session-summary.md`. Mas:
 
 ```
 $ grep -i "session.summary\|session summary" workflows/*.md
@@ -59,7 +59,7 @@ A consequência prática: sessões longas que envolvem 3 ou 4 agentes terminam c
 ## Workflow Closure
 
 Antes de fechar a sessão:
-1. Cada agente que tocou em arquivos **anexa** sua contribuição em `.claude/user-data/session-summary.md` no formato multi-agent (ver `CLAUDE.md § Session Summary Rule`).
+1. Cada agente que tocou em arquivos **anexa** sua contribuição em `.dev-team-agents/user-data/session-summary.md` no formato multi-agent (ver `CLAUDE.md § Session Summary Rule`).
 2. Se houve commits hoje, garantir que existe entrada do dia (`## YYYY-MM-DD HH:MM:SS | <título>`).
 ```
 
@@ -175,8 +175,8 @@ Hoje, esse trabalho fica difuso: o `backend-developer` é forçado a tomar essas
 
 ```
 Prompt: "As the database-specialist, define the initial schema for this project
-         based on .claude/docs/development/architecture.md. Produce migrations
-         and document the schema in .claude/docs/development/database.md."
+         based on docs/development/architecture.md. Produce migrations
+         and document the schema in docs/development/database.md."
 ```
 
 Isso reflete o que `commands/plan.md` já faz (que spawn database-specialist em paralelo com architect).

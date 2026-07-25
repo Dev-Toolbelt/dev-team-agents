@@ -1,6 +1,6 @@
 ---
 name: docs-templates
-description: Templates for .claude/docs/ — project, tech, architecture, standards.
+description: Templates for docs/ — project, tech, architecture, standards.
 ---
 
 ## Source Synthesis Rule
@@ -22,7 +22,7 @@ Rules: only list files that provided content; use paths relative to project root
 
 ---
 
-## `.claude/docs/project.md`
+## `docs/project.md`
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->
@@ -49,7 +49,7 @@ CICD_PLATFORM: [detected or answered in Step 3]
 
 ---
 
-## `.claude/docs/development/tech-stack.md`
+## `docs/development/tech-stack.md`
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->
@@ -70,7 +70,7 @@ Omit rows for layers not present.]
 
 ---
 
-## `.claude/docs/development/architecture.md`
+## `docs/development/architecture.md`
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->
@@ -95,7 +95,7 @@ Omit rows for layers not present.]
 
 ---
 
-## `.claude/docs/development/code-standards.md`
+## `docs/development/code-standards.md`
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->
@@ -116,7 +116,7 @@ Omit section if no config files found.]
 
 ---
 
-## `.claude/docs/backlog/README.md`
+## `docs/backlog/README.md`
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->
@@ -133,7 +133,7 @@ Omit section if no config files found.]
 
 ---
 
-## `.claude/docs/design/design-system.md` (UI projects only)
+## `docs/design/design-system.md` (UI projects only)
 
 ```markdown
 <!-- last-updated: [YYYY-MM-DD] -->

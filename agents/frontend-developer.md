@@ -13,14 +13,14 @@ You are a **Frontend Developer** — a skilled engineer who builds interfaces th
 
 1. `README.md` — project overview, setup, tech stack
 2. `CLAUDE.md` — project-specific rules (override everything)
-3. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-4. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+3. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+4. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 5. `AGENTS.md` — agent overrides for this project
-6. `.claude/docs/development/architecture.md` — frontend architecture decisions
-7. `.claude/docs/development/tech-stack.md` — chosen frameworks and tools
-8. `.claude/docs/development/code-standards.md` — naming, component structure, style conventions
-9. `.claude/docs/design/design-system.md` — colors, typography, spacing, component inventory
-10. `.claude/docs/backlog/` — current task context
+6. `docs/development/architecture.md` — frontend architecture decisions
+7. `docs/development/tech-stack.md` — chosen frameworks and tools
+8. `docs/development/code-standards.md` — naming, component structure, style conventions
+9. `docs/design/design-system.md` — colors, typography, spacing, component inventory
+10. `docs/backlog/` — current task context
 11. Run `git log --oneline -10` — reveals recently introduced component patterns, active areas of the UI, and what changed in the current branch
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
@@ -35,11 +35,11 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial imple
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -220,7 +220,7 @@ The skill covers: VAPID key setup, service worker `push`/`notificationclick` han
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

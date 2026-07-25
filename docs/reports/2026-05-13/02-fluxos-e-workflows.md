@@ -11,7 +11,7 @@ Auditoria focada em **gaps de fluxos, comandos novos, hooks e fricção operacio
 **Detecção:** Commit `57dc8ca` criou `scripts/hooks/pre-compact.sh`. Linha 24-28:
 
 ```bash
-SUMMARY_FILE=".claude/user-data/session-summary.md"
+SUMMARY_FILE=".dev-team-agents/user-data/session-summary.md"
 
 if [ ! -f "$SUMMARY_FILE" ] || ! grep -q "^## $TODAY" "$SUMMARY_FILE" 2>/dev/null; then
     cat >&2 <<EOF
@@ -19,11 +19,11 @@ if [ ! -f "$SUMMARY_FILE" ] || ! grep -q "^## $TODAY" "$SUMMARY_FILE" 2>/dev/nul
 ```
 
 Cenários onde isso falha silenciosamente ou ruidosamente:
-1. **Projeto sem `.claude/user-data/`**: o `[ ! -f "$SUMMARY_FILE" ]` é verdadeiro → emite warning incorreto (não há sessão pra resumir).
-2. **Projeto onde `dev-team-agents` foi instalado mas `.gitignore` ainda não tem `.claude/user-data/`**: usuário nunca rodou setup-assistant → `user-data/` não existe.
+1. **Projeto sem `.dev-team-agents/user-data/`**: o `[ ! -f "$SUMMARY_FILE" ]` é verdadeiro → emite warning incorreto (não há sessão pra resumir).
+2. **Projeto onde `dev-team-agents` foi instalado mas `.gitignore` ainda não tem `.dev-team-agents/user-data/`**: usuário nunca rodou setup-assistant → `user-data/` não existe.
 3. **Múltiplos worktrees**: cada worktree tem seu próprio `.claude/`; pre-compact pode rodar em worktree A e procurar `user-data/` que está em worktree B.
 
-A linha 7 já guarda contra non-git: `git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0`. Falta guarda para "git repo válido mas sem `.claude/user-data/`".
+A linha 7 já guarda contra non-git: `git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0`. Falta guarda para "git repo válido mas sem `.dev-team-agents/user-data/`".
 
 **Impacto positivo (se corrigido):** elimina falso-positivo em projetos recém-clonados; pre-compact não emite ruído desnecessário.
 
@@ -32,7 +32,7 @@ A linha 7 já guarda contra non-git: `git rev-parse --is-inside-work-tree >/dev/
 **Sugestão:** adicionar guarda antes da checagem do summary:
 
 ```bash
-[ -d ".claude/user-data" ] || exit 0
+[ -d ".dev-team-agents/user-data" ] || exit 0
 ```
 
 ---
@@ -74,7 +74,7 @@ E usar `$DEFAULT_BRANCH` em vez de `main` no resto do comando.
 
 **Severidade:** 🟠 Alta — cache pode mentir sobre branch ativa
 
-**Detecção:** `skills/shared/current-context/SKILL.md` linhas 60-78 implementam cache TTL 300s em `.claude/user-data/.context-cache.json`. Schema:
+**Detecção:** `skills/shared/current-context/SKILL.md` linhas 60-78 implementam cache TTL 300s em `.dev-team-agents/user-data/.context-cache.json`. Schema:
 
 ```json
 { "ts": <unix-epoch-seconds>, "branch": "...", "changed": N, "worktree": "yes|no" }
@@ -304,6 +304,6 @@ E usar `--errors-only` no Stop hook.
 
 **Padrões emergentes desta passada:**
 
-- **Hooks novos sem validação de ambiente** — `pre-compact.sh` foi adicionado sem guarda para projetos sem `.claude/user-data/`. Padrão repete-se em scripts que assumem layout do projeto destino.
+- **Hooks novos sem validação de ambiente** — `pre-compact.sh` foi adicionado sem guarda para projetos sem `.dev-team-agents/user-data/`. Padrão repete-se em scripts que assumem layout do projeto destino.
 - **Cache sem invalidação semântica** — `.context-cache.json` foi excelente para reduzir overhead de git, mas falta camada de validação cross-attribute (branch, commit hash).
 - **Scripts criados mas não wireados** — terceira passada consecutiva onde um script novo (`validate-commit-msg.sh`) foi criado mas sem pipeline de uso real (CI, hook, command).

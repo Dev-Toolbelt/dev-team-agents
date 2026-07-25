@@ -1,6 +1,6 @@
 ---
 name: setup-assistant
-description: Onboards a project into the dev-team-agents ecosystem. Asks the user what type of project it is (new / unfinished / maintenance), configures CLAUDE.md, creates .claude/docs/ structure, and optionally integrates with issue trackers (GitHub Issues, Jira, Linear, ClickUp, Trello, etc.). Also manages version updates for the dev-team-agents installation. Use at the start of any project or when updates need to be checked.
+description: Onboards a project into the dev-team-agents ecosystem. Asks the user what type of project it is (new / unfinished / maintenance), configures CLAUDE.md, creates docs/ structure, and optionally integrates with issue trackers (GitHub Issues, Jira, Linear, ClickUp, Trello, etc.). Also manages version updates for the dev-team-agents installation. Use at the start of any project or when updates need to be checked.
 model: claude-opus-4-7
 tier: reasoning
 ---
@@ -41,7 +41,7 @@ Before any action, load:
 ### Step 0 — First-Run vs Refresh Detection
 
 ```bash
-test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
+test -f docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 ```
 
 | Result | Mode | Behavior |
@@ -49,7 +49,7 @@ test -f .claude/docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 | `FIRST_RUN` | Full onboarding | Proceed with Steps 1–8 |
 | `REFRESH` | Incremental update | Skip answered questions; patch only what changed |
 
-**Refresh flow:** read `.claude/docs/project.md` → extract `last-updated` date → run `git log --since="<date>" --oneline --name-only` → cross-reference with `skills/shared/docs-sync/SKILL.md` Update Triggers → present patch plan → apply. Ask only for missing CLAUDE.md fields.
+**Refresh flow:** read `docs/project.md` → extract `last-updated` date → run `git log --since="<date>" --oneline --name-only` → cross-reference with `skills/shared/docs-sync/SKILL.md` Update Triggers → present patch plan → apply. Ask only for missing CLAUDE.md fields.
 
 ---
 
@@ -73,7 +73,7 @@ Record the result in the project's `CLAUDE.md` as `DOCKER_COMPOSE: docker compos
 
 ### Step 1b — First-Run Audit (FIRST_RUN only)
 
-Generate a baseline audit before creating any docs. Write to `.claude/docs/audit/audit-$(date +%Y-%m-%d).md`. Re-runs and health-check snapshots use the same pattern; leave versioned unless the team opts out.
+Generate a baseline audit before creating any docs. Write to `docs/audit/audit-$(date +%Y-%m-%d).md`. Re-runs and health-check snapshots use the same pattern; leave versioned unless the team opts out.
 
 Audit sections: project overview · repository health (README/CLAUDE.md/AGENTS.md/CONTRIBUTING.md/LICENSE) · CI/CD · infrastructure (Docker, IaC) · testing (framework, coverage config) · code quality (lint/format/types) · dependencies (package manager, lock file) · documentation · conventions (commit style, branch naming) · gaps & recommendations.
 
@@ -106,7 +106,7 @@ Ask all relevant questions in a single message:
 
 **Language preference (FIRST_RUN only, or REFRESH if field is absent):**
 
-Check `.claude/user-data/preferences.json` → `language` field. If missing or the file does not exist, ask:
+Check `.dev-team-agents/user-data/preferences.json` → `language` field. If missing or the file does not exist, ask:
 
 > In which language should agents converse with you?
 > (Documents, plans, and technical output always remain in English.)
@@ -143,7 +143,7 @@ Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all va
 
 ### Step 5b — Context Navigation Section (Graphify only)
 
-If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigation (Graphify)` section with the 3-Layer Query Rule (graph.json → `.claude/docs/` → raw source) and the rebuild note (`scripts/graphify-refresh.sh` — never `graphify update .` directly; runs automatically via Stop hook).
+If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigation (Graphify)` section with the 3-Layer Query Rule (graph.json → `docs/` → raw source) and the rebuild note (`scripts/graphify-refresh.sh` — never `graphify update .` directly; runs automatically via Stop hook).
 
 ---
 
@@ -152,15 +152,15 @@ If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigati
 Load `skills/shared/docs-templates/SKILL.md` for all document templates and the Source Synthesis Rule. Use real scan data; apply Source Synthesis Rule for discovered source files.
 
 Always create:
-- `.claude/docs/project.md`
-- `.claude/docs/development/tech-stack.md`, `architecture.md`, `code-standards.md`
-- `.claude/docs/backlog/README.md`
-- `.claude/docs/wiki/README.md` (even if empty — agents add domain rows over time per docs-sync protocol)
-- `.claude/docs/design/design-system.md` (UI projects only)
+- `docs/project.md`
+- `docs/development/tech-stack.md`, `architecture.md`, `code-standards.md`
+- `docs/backlog/README.md`
+- `docs/wiki/README.md` (even if empty — agents add domain rows over time per docs-sync protocol)
+- `docs/design/design-system.md` (UI projects only)
 
 **Conditional docs:**
-- **DevOps** (`Dockerfile`, `docker-compose*.yml`, CI/CD configs, IaC files, `vercel.json`/`netlify.toml`/etc.) → `.claude/docs/devops/infrastructure.md`
-- **Tests** (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `pytest.ini`, `phpunit.xml`, test dirs) → `.claude/docs/tests/testing-strategy.md`
+- **DevOps** (`Dockerfile`, `docker-compose*.yml`, CI/CD configs, IaC files, `vercel.json`/`netlify.toml`/etc.) → `docs/devops/infrastructure.md`
+- **Tests** (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `pytest.ini`, `phpunit.xml`, test dirs) → `docs/tests/testing-strategy.md`
 
 ---
 
@@ -168,18 +168,18 @@ Always create:
 
 `install.sh` handles this automatically. Verify these entries are present (add if missing, remove legacy per-file entries):
 
-- `.claude/user-data/` — ignore entire directory
-- `!.claude/user-data/graphify.json` — exception: keep graphify config
-- `.claude/.worktree-session`
+- `.dev-team-agents/user-data/` — ignore entire directory
+- `!.dev-team-agents/user-data/graphify.json` — exception: keep graphify config
+- `.dev-team-agents/.worktree-session`
 
-Legacy entries to remove if present: `.claude/user-data/session-summary.md`, `.claude/user-data/.last-update-check`, `.claude/user-data/.installed-version`, `.claude/user-data/.auto-update`.
+Legacy entries to remove if present: `.dev-team-agents/user-data/session-summary.md`, `.dev-team-agents/user-data/.last-update-check`, `.dev-team-agents/user-data/.installed-version`, `.dev-team-agents/user-data/.auto-update`.
 
 ---
 
 ### Step 8 — Confirm Setup Complete
 
 ```bash
-cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
+cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown"
 ```
 
 Output completion summary listing all configured files. Close with the entry point for the project type:
@@ -211,7 +211,7 @@ Load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS noti
 When the user asks to check for updates or the update hook triggers:
 
 ```bash
-CURRENT=$(cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown")
+CURRENT=$(cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown")
 LATEST=$(curl -fsSL https://api.github.com/repos/Dev-Toolbelt/dev-team-agents/releases/latest | grep tag_name | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 ```
 
@@ -234,8 +234,8 @@ If the user asks to modify, edit, or update any file inside `.dev-team-agents/` 
 > Override at the project level instead:
 > - **Agent behavior** → add rules to `CLAUDE.md` under `## Project Rules`
 > - **Agent override** → create `.agents/<agent-name>.md` (project files always win over base agents)
-> - **Conventions** → add to `.claude/docs/development/code-standards.md`
-> - **DevOps context** → edit `.claude/docs/devops/infrastructure.md`
-> - **Test context** → edit `.claude/docs/tests/testing-strategy.md`
+> - **Conventions** → add to `docs/development/code-standards.md`
+> - **DevOps context** → edit `docs/devops/infrastructure.md`
+> - **Test context** → edit `docs/tests/testing-strategy.md`
 >
 > If the intent is to contribute a fix or improvement back to the dev-team-agents package itself, that must be done in the [dev-team-agents repository](https://github.com/Dev-Toolbelt/dev-team-agents) — not inside the installed copy.

@@ -79,7 +79,7 @@ Valida o comportamento de features contra critérios de aceitação. Identifica 
 Produz documentação de API, READMEs, runbooks, changelogs e release notes. Atribuído ao Haiku para eficiência de custo em tarefas de escrita estruturada e de baixa ambiguidade.
 
 ### `setup-assistant`
-Conduz o fluxo completo de setup e refresh do projeto. Escaneia arquivos existentes, pergunta sobre o tipo de projeto, coleta configuração e gera documentos de contexto vivos em `.claude/docs/`. Rodar novamente em um projeto existente ativa o modo refresh — lê o histórico git desde a última execução e aplica patches apenas nos docs afetados.
+Conduz o fluxo completo de setup e refresh do projeto. Escaneia arquivos existentes, pergunta sobre o tipo de projeto, coleta configuração e gera documentos de contexto vivos em `docs/`. Rodar novamente em um projeto existente ativa o modo refresh — lê o histórico git desde a última execução e aplica patches apenas nos docs afetados.
 
 ---
 

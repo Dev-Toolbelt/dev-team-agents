@@ -26,7 +26,7 @@ description: Dev Team Agents notifications — format, types, conditions, rotati
 
 ## Language
 
-Read the user's preferred language from `.claude/user-data/preferences.json` → `language` field. Emit the notification message in that language. Default to English if the file is absent or unreadable.
+Read the user's preferred language from `.dev-team-agents/user-data/preferences.json` → `language` field. Emit the notification message in that language. Default to English if the file is absent or unreadable.
 
 ---
 
@@ -97,7 +97,7 @@ This is an estimate, not a precise measurement. Be conservative — warn slightl
 
 ## Context Window Heuristic (shell hooks)
 
-The stop hook increments a per-session turn counter stored at `.claude/user-data/.notifier-state`. The session-start hook writes a session ID to `.claude/user-data/.session-id`. When the state's session ID differs from the current session ID, the counter resets.
+The stop hook increments a per-session turn counter stored at `.dev-team-agents/user-data/.notifier-state`. The session-start hook writes a session ID to `.dev-team-agents/user-data/.session-id`. When the state's session ID differs from the current session ID, the counter resets.
 
 Default turn thresholds (conservative mapping — agents should use `preferences.json` values):
 
@@ -118,7 +118,7 @@ Emit one `info` tip per session, on the first stop hook call. Index: `(day_of_mo
 | 1 | Run `/devteam:review` before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist. |
 | 2 | Record hard architectural decisions as ADRs: `bash .dev-team-agents/scripts/new-adr.sh "title"`. This prevents agents from questioning settled choices. |
 | 3 | Use `/devteam:plan` at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed). |
-| 4 | Write non-obvious domain knowledge to the project wiki at `.claude/docs/wiki/` after any revealing task — agents read it on startup. |
+| 4 | Write non-obvious domain knowledge to the project wiki at `docs/wiki/` after any revealing task — agents read it on startup. |
 | 5 | `/devteam:commit` groups your staged changes by layer and generates Conventional Commits automatically. |
 | 6 | Use `/devteam:refactor` for structured refactoring — it runs test-first coverage, maps dependencies, and produces ordered commit blocks. |
 | 7 | Run a health check occasionally: *"Run a health check on this project"* — it auto-fixes stale hooks, broken symlinks, and outdated preferences. |

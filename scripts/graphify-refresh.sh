@@ -22,13 +22,13 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ── Load config ───────────────────────────────────────────────────────────────
-CONFIG_FILE="$PROJECT_ROOT/.claude/user-data/graphify.json"
+CONFIG_FILE="$PROJECT_ROOT/.dev-team-agents/user-data/graphify.json"
 if [ ! -f "$CONFIG_FILE" ]; then
   exit 0
 fi
 
 OUTPUT_PATH="graphify-out"
-USER_DATA_DIR=".claude/user-data"
+USER_DATA_DIR=".dev-team-agents/user-data"
 
 SOURCES=()
 while IFS= read -r line; do

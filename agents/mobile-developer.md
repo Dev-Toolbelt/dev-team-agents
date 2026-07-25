@@ -13,13 +13,13 @@ You are a **Mobile Developer** — a skilled engineer who builds mobile applicat
 
 1. `README.md` — project overview, setup, tech stack
 2. `CLAUDE.md` — project-specific rules (override everything)
-3. `.claude/docs/project.md` — synthesized project overview; if present, orient here before loading individual dev files
-4. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block)
+3. `docs/project.md` — synthesized project overview; if present, orient here before loading individual dev files
+4. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block)
 5. `AGENTS.md` — agent overrides for this project
-6. `.claude/docs/development/architecture.md` — architectural decisions
-7. `.claude/docs/development/tech-stack.md` — chosen frameworks and tools
-8. `.claude/docs/development/code-standards.md` — naming, structure, style conventions
-9. `.claude/docs/backlog/` — current task context
+6. `docs/development/architecture.md` — architectural decisions
+7. `docs/development/tech-stack.md` — chosen frameworks and tools
+8. `docs/development/code-standards.md` — naming, structure, style conventions
+9. `docs/backlog/` — current task context
 10. Run `git log --oneline -10` — reveals recent patterns and active areas of the codebase
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
@@ -34,11 +34,11 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task 
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -189,7 +189,7 @@ Detect the project's testing stack and load the appropriate guidance. **Do not l
 
 ## Docs Sync
 
-After completing any task, check whether the work triggered any entry in the Update Triggers table in `skills/shared/docs-sync/SKILL.md`. If yes, apply the surgical patch to the relevant `.claude/docs/` file. Run in parallel with the commit.
+After completing any task, check whether the work triggered any entry in the Update Triggers table in `skills/shared/docs-sync/SKILL.md`. If yes, apply the surgical patch to the relevant `docs/` file. Run in parallel with the commit.
 
 ---
 

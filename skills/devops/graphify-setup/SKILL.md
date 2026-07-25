@@ -137,9 +137,9 @@ Include all manifest files found in Step 4a that exist at the root. Also include
 
 ---
 
-## Step 5 — Generate .claude/user-data/graphify.json
+## Step 5 — Generate .dev-team-agents/user-data/graphify.json
 
-Create the config file at `.claude/user-data/graphify.json` — this is where `graphify-refresh.sh` reads it from:
+Create the config file at `.dev-team-agents/user-data/graphify.json` — this is where `graphify-refresh.sh` reads it from:
 
 ```json
 {
@@ -173,7 +173,7 @@ Add the following entries to the project's `.gitignore`. Group them under a `# D
 ```bash
 GITIGNORE_ENTRIES=(
   "# Dev Team Agents"
-  ".claude/user-data/.graphify-last-run"
+  ".dev-team-agents/user-data/.graphify-last-run"
   "graphify-out/cache"
   ".claude/worktrees"
 )
@@ -183,7 +183,7 @@ for ENTRY in "${GITIGNORE_ENTRIES[@]}"; do
 done
 ```
 
-- `.claude/user-data/.graphify-last-run` — build marker, project-specific, not shared
+- `.dev-team-agents/user-data/.graphify-last-run` — build marker, project-specific, not shared
 - `graphify-out/cache` — Graphify internal cache, rebuilt automatically
 - `.claude/worktrees` — worktree isolation directories, local only
 
@@ -203,8 +203,8 @@ If it fails, diagnose the error:
 |---------|-----|
 | `graphify not found` | Complete Step 2 |
 | `jq not found` | Complete Step 3 |
-| `graphify.json not found` | Complete Step 5 — file must be at `.claude/user-data/graphify.json` |
-| Source dir not found | Verify path with user and update `.claude/user-data/graphify.json` |
+| `graphify.json not found` | Complete Step 5 — file must be at `.dev-team-agents/user-data/graphify.json` |
+| Source dir not found | Verify path with user and update `.dev-team-agents/user-data/graphify.json` |
 
 ---
 
@@ -217,7 +217,7 @@ Check if the project `CLAUDE.md` already contains a `## Context Navigation (Grap
 
 **3-Layer Query Rule:**
 1. Query `graphify-out/graph.json` or `GRAPH_REPORT.md` for structure and relationships
-2. Check `.claude/docs/` for decisions and context
+2. Check `docs/` for decisions and context
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
 **Rebuild:** always use `.dev-team-agents/scripts/graphify-refresh.sh` — never `graphify update .` directly.
@@ -235,8 +235,8 @@ Report to the user:
 ✅ Graphify is set up for this project.
 
   Knowledge graph : graphify-out/  (versioned)
-  Last-run marker : .claude/user-data/.graphify-last-run  (gitignored)
-  Config          : .claude/user-data/graphify.json
+  Last-run marker : .dev-team-agents/user-data/.graphify-last-run  (gitignored)
+  Config          : .dev-team-agents/user-data/graphify.json
   Auto-rebuild    : Stop hook → .dev-team-agents/scripts/graphify-refresh.sh
 
 Rebuilds happen automatically after each Claude session when new files are

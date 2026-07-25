@@ -16,7 +16,7 @@ Run these commands in order:
 | `git branch --show-current` | Identify the active branch |
 | `git diff --name-only HEAD` | List locally modified files |
 | `git diff --name-only main...HEAD` | List all files changed in this branch vs main |
-| Check `.claude/.worktree-session` (if present) | Identify active worktree and its branch |
+| Check `.dev-team-agents/.worktree-session` (if present) | Identify active worktree and its branch |
 
 ## Scope Rule
 
@@ -24,7 +24,7 @@ Restrict all analysis and actions to files and changes within the detected conte
 
 ## Worktree Session
 
-If `.claude/.worktree-session` exists, read it before proceeding:
+If `.dev-team-agents/.worktree-session` exists, read it before proceeding:
 - `worktree=no` — operating on main working tree; no worktree isolation active
 - `worktree=yes branch=<b>` — operating inside a worktree on branch `<b>`; load `skills/shared/worktree/SKILL.md` and follow its isolation protocol
 
@@ -57,7 +57,7 @@ If `git fetch` fails (no network), skip the check silently and proceed.
 
 ## Cache
 
-Running 4 git commands on every invocation adds latency. Use a short-lived cache stored at `.claude/user-data/.context-cache.json`:
+Running 4 git commands on every invocation adds latency. Use a short-lived cache stored at `.dev-team-agents/user-data/.context-cache.json`:
 
 ```json
 { "ts": <unix-epoch-seconds>, "branch": "...", "changed": N, "worktree": "yes|no" }
@@ -65,7 +65,7 @@ Running 4 git commands on every invocation adds latency. Use a short-lived cache
 
 **Read the cache first:**
 ```bash
-CACHE=".claude/user-data/.context-cache.json"
+CACHE=".dev-team-agents/user-data/.context-cache.json"
 NOW=$(date +%s)
 if [ -f "$CACHE" ]; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")

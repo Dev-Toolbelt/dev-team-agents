@@ -79,14 +79,14 @@ $ grep -c "git log --oneline -20" agents/*.md | grep -v ":0" | wc -l
 **Histórico**:
 - 2026-05-08: `token-worktree-block-inlined-7x` indicou 7 ocorrências; hoje são 8 (mobile-developer adicionado).
 
-**Comparação com extração feita em outros padrões**: a skill `worktree` (`skills/shared/worktree/SKILL.md`) já existe e implementa o protocolo. Os agentes precisam apenas dizer "antes de qualquer task de código, leia `.claude/.worktree-session`; se ausente, carregue `skills/shared/worktree/SKILL.md`".
+**Comparação com extração feita em outros padrões**: a skill `worktree` (`skills/shared/worktree/SKILL.md`) já existe e implementa o protocolo. Os agentes precisam apenas dizer "antes de qualquer task de código, leia `.dev-team-agents/.worktree-session`; se ausente, carregue `skills/shared/worktree/SKILL.md`".
 
 **Impacto positivo**:
-- Bloco vira 2 linhas: `Read .claude/.worktree-session. If absent, load skills/shared/worktree/SKILL.md.` → 16 linhas no total (vs. 56).
+- Bloco vira 2 linhas: `Read .dev-team-agents/.worktree-session. If absent, load skills/shared/worktree/SKILL.md.` → 16 linhas no total (vs. 56).
 - Economia: ~200 tokens em sessão típica.
 
 **Impacto negativo**:
-- Se `.claude/.worktree-session` se corromper, agente perde fluxo. Mitigar com fallback.
+- Se `.dev-team-agents/.worktree-session` se corromper, agente perde fluxo. Mitigar com fallback.
 
 **Fingerprint**: `token-worktree-isolation-block-7-lines-x-8-agents` (variante mais específica do `token-worktree-block-inlined-7x`).
 

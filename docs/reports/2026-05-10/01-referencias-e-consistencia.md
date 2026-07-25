@@ -50,7 +50,7 @@ A skill `skills/shared/current-context/SKILL.md` (29 linhas) define exatamente o
 | `git branch --show-current` | Identify the active branch |
 | `git diff --name-only HEAD` | List locally modified files |
 | `git diff --name-only main...HEAD` | List all files changed in this branch vs main |
-| Check `.claude/.worktree-session` (if present) | Identify active worktree and its branch |
+| Check `.dev-team-agents/.worktree-session` (if present) | Identify active worktree and its branch |
 ```
 
 Os 21 commands (`plan.md`, `backend.md`, `frontend.md`, `fullstack.md`, `fix.md`, `refactor.md`, `qa.md`, etc.) começam com **o mesmo bloco em prosa**, reproduzido literalmente:
@@ -60,7 +60,7 @@ Before acting, identify the current working context:
 - Run `git branch --show-current` — active branch
 - Run `git diff --name-only HEAD` — locally modified files
 - Run `git diff --name-only main...HEAD` — all changes in this branch vs main
-- Check `.claude/.worktree-session` if present — active worktree
+- Check `.dev-team-agents/.worktree-session` if present — active worktree
 ```
 
 Substituí-lo por uma linha — `Load `skills/shared/current-context/SKILL.md` before acting.` — alinha código e documentação, remove ~150 linhas de prosa duplicada (21 × ~7 linhas), e centraliza evolução do protocolo (ex.: adicionar `git status --short` no futuro requer 1 edição, não 21).

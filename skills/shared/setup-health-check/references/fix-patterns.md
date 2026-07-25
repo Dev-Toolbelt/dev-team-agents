@@ -69,23 +69,23 @@ chmod +x .dev-team-agents/scripts/update.sh
 
 When legacy individual entries are detected, offer migration:
 
-> Your `.gitignore` uses the old per-file pattern for `user-data/`. The current version uses a directory-level ignore (`.claude/user-data/`) with a `graphify.json` exception. Migrate automatically?
+> Your `.gitignore` uses the old per-file pattern for `user-data/`. The current version uses a directory-level ignore (`.dev-team-agents/user-data/`) with a `graphify.json` exception. Migrate automatically?
 
 On confirmation: remove the 4 legacy lines, add the 3 new entries.
 
 Legacy entries to remove:
 ```
-.claude/user-data/session-summary.md
-.claude/user-data/.last-update-check
-.claude/user-data/.installed-version
-.claude/user-data/.auto-update
+.dev-team-agents/user-data/session-summary.md
+.dev-team-agents/user-data/.last-update-check
+.dev-team-agents/user-data/.installed-version
+.dev-team-agents/user-data/.auto-update
 ```
 
 New entries to add:
 ```
-.claude/user-data/
-!.claude/user-data/graphify.json
-.claude/.worktree-session
+.dev-team-agents/user-data/
+!.dev-team-agents/user-data/graphify.json
+.dev-team-agents/.worktree-session
 ```
 
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
@@ -101,7 +101,7 @@ if ! grep -qF "$_DTA_MARKER" CLAUDE.md 2>/dev/null; then
 # Pre-compact Hook — Auto Session Summary
 When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
 
-1. Write the session summary entry at the top of `.claude/user-data/session-summary.md` using the format:
+1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
    ```
    ## YYYY-MM-DD HH:MM:SS | [brief task title]
    **Done**: what was implemented or changed
@@ -141,7 +141,7 @@ defaults = {
     "update_check_interval_hours": 24,
 }
 
-path = ".claude/user-data/preferences.json"
+path = ".dev-team-agents/user-data/preferences.json"
 with open(path) as f:
     data = json.load(f)
 
@@ -158,12 +158,12 @@ with open(path, "w") as f:
 
 ```bash
 # Set auto_update: true in preferences.json, then remove flag file
-python3 - .claude/user-data/preferences.json <<'PYEOF'
+python3 - .dev-team-agents/user-data/preferences.json <<'PYEOF'
 import sys, json
 f = sys.argv[1]
 with open(f) as fh: data = json.load(fh)
 data['auto_update'] = True
 with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
 PYEOF
-rm .claude/user-data/.auto-update
+rm .dev-team-agents/user-data/.auto-update
 ```

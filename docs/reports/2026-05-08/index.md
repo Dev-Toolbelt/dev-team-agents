@@ -48,7 +48,7 @@ A descoberta de **maior impacto operacional** é o conjunto worktree-block + RES
 | P2 | Adicionar passo explícito `database-specialist` em `new-project.md` Phase 3 | Baixo | Médio |
 | P3 | Centralizar detecção de SonarQube em `project-context` (manter "When loaded" em cada agente) | Médio | Médio |
 | P3 | Resolver duplicação `templates/plan-template.md` × `skills/shared/plan-mode/SKILL.md` | Baixo | Baixo |
-| P3 | Documentar `.claude/docs/audit/` no `CLAUDE.md` § User Data Directory | Baixo | Baixo |
+| P3 | Documentar `docs/audit/` no `CLAUDE.md` § User Data Directory | Baixo | Baixo |
 | P3 | Adicionar checagens automáticas: unicidade de skill name, unicidade de fingerprint | Baixo | Médio (preventivo) |
 | P3 | Adicionar passo de rollback/deploy-failure em workflows | Baixo | Médio |
 

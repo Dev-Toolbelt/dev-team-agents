@@ -29,7 +29,7 @@ Load for frontend or full-stack projects where user-perceived performance matter
 | Web fonts | ≤ 100 KB | total |
 | Hero image | ≤ 200 KB | per viewport |
 
-Adjust per project; record agreed budgets in `.claude/docs/development/performance-budgets.md`.
+Adjust per project; record agreed budgets in `docs/development/performance-budgets.md`.
 
 ## Lighthouse CI
 

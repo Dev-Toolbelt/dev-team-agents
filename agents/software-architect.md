@@ -14,8 +14,8 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Architect-specific additions after project-context loads:**
 
 - Run `git diff main...HEAD --stat` — scope awareness of what changed since main
-- Read `.claude/docs/development/` for existing ADRs and architecture decisions before proposing anything new; only propose changes if there is a clear problem to solve
-- If worktrees are in use, load `skills/shared/worktree/SKILL.md` — detection (in order): `.claude/.worktree-session` exists, or `worktree_active` is `true` in `.claude/user-data/preferences.json`, or a worktree dir exists at the configured `worktree_path` (default `.claude/worktrees/`, legacy `.worktrees/`), or `CLAUDE.md`/`AGENTS.md` mentions a worktree workflow: `cat .claude/.worktree-session 2>/dev/null; git worktree list 2>/dev/null; grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
+- Read `docs/development/` for existing ADRs and architecture decisions before proposing anything new; only propose changes if there is a clear problem to solve
+- If worktrees are in use, load `skills/shared/worktree/SKILL.md` — detection (in order): `.dev-team-agents/.worktree-session` exists, or `worktree_active` is `true` in `.dev-team-agents/user-data/preferences.json`, or a worktree dir exists at the configured `worktree_path` (default `.claude/worktrees/`, legacy `.worktrees/`), or `CLAUDE.md`/`AGENTS.md` mentions a worktree workflow: `cat .dev-team-agents/.worktree-session 2>/dev/null; git worktree list 2>/dev/null; grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
 - Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial task
 - Apply `skills/shared/token-efficiency/SKILL.md`
 
@@ -71,18 +71,18 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 
 **Step 4 — User review gate** — ask the user to review before proceeding:
 
-> "Architecture documents written to `.claude/docs/development/`. Please review them and let me know if anything needs to change before development starts."
+> "Architecture documents written to `docs/development/`. Please review them and let me know if anything needs to change before development starts."
 
 Wait for explicit approval. Apply changes and re-run self-review if requested.
 
 ### In QUALITY GATE
 
-Validate that what was built conforms to the architectural decisions in `.claude/docs/development/`. Flag deviations with:
+Validate that what was built conforms to the architectural decisions in `docs/development/`. Flag deviations with:
 - `[ARCH-DEVIATION]` — the code does not follow the decided architecture
 - `[TECH-DEBT]` — acceptable shortcut, but must be tracked
 - `[CONFORMANT]` — this is correct
 
-Produce or update `.claude/docs/development/conformance-report.md` after each Quality Gate run:
+Produce or update `docs/development/conformance-report.md` after each Quality Gate run:
 
 ```markdown
 ## Conformance Report — [Sprint / Date]
@@ -177,7 +177,7 @@ When `database-specialist` is involved in technology decisions, their recommenda
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

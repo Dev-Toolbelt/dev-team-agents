@@ -12,11 +12,11 @@ You are a **UI/UX Designer** — a designer who balances aesthetic craft with pr
 Before any design work:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
-2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `.claude/docs/design/design-system.md` — existing design system (if any)
-5. `.claude/docs/development/tech-stack.md` — frontend technology (affects what's feasible)
-6. `.claude/docs/backlog/` — current sprint context; know what is being built before advising on it
+2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `docs/design/design-system.md` — existing design system (if any)
+5. `docs/development/tech-stack.md` — frontend technology (affects what's feasible)
+6. `docs/backlog/` — current sprint context; know what is being built before advising on it
 7. Run `git log --oneline -20` — reveals what UI changed recently, active areas, and where design debt may have accumulated
 8. Existing UI code and components — understand what's already built
 9. Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep` for component discovery; use `head` to sample large design system files before loading them fully
@@ -29,11 +29,11 @@ Before any design work:
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -83,7 +83,7 @@ Determine your mode from context:
 
 ## Design Mode
 
-See the **Design System Creation** section in the `design-system-audit` skill (already loaded above) — it provides the full template for producing `.claude/docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
+See the **Design System Creation** section in the `design-system-audit` skill (already loaded above) — it provides the full template for producing `docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
 
 ---
 
@@ -159,7 +159,7 @@ Load `skills/design/mobile-design/SKILL.md` — **required on every UI task**; p
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

@@ -15,7 +15,7 @@ Collect the raw material before classifying anything.
 ### 1a — Read session summary
 
 ```bash
-head -80 .claude/user-data/session-summary.md 2>/dev/null || echo "(no session summary found)"
+head -80 .dev-team-agents/user-data/session-summary.md 2>/dev/null || echo "(no session summary found)"
 ```
 
 Extract from the most recent entry:
@@ -35,7 +35,7 @@ Identify: which files changed, in which layers, how many commits were made today
 ### 1c — List today's modified docs
 
 ```bash
-find .claude/docs/ -newer .claude/user-data/session-summary.md -type f 2>/dev/null | head -20
+find docs/ -newer .dev-team-agents/user-data/session-summary.md -type f 2>/dev/null | head -20
 ```
 
 This reveals which docs were already updated in the session — skip those when patching.
@@ -43,11 +43,11 @@ This reveals which docs were already updated in the session — skip those when 
 ### 1d — Read current project docs state (surgical — only headers and first lines)
 
 ```bash
-head -5 .claude/docs/project.md 2>/dev/null
-head -5 .claude/docs/development/architecture.md 2>/dev/null
-head -5 .claude/docs/development/code-standards.md 2>/dev/null
-head -5 .claude/docs/development/tech-stack.md 2>/dev/null
-ls .claude/docs/wiki/ 2>/dev/null
+head -5 docs/project.md 2>/dev/null
+head -5 docs/development/architecture.md 2>/dev/null
+head -5 docs/development/code-standards.md 2>/dev/null
+head -5 docs/development/tech-stack.md 2>/dev/null
+ls docs/wiki/ 2>/dev/null
 ```
 
 ---
@@ -58,10 +58,10 @@ Analyze the evidence collected in Step 1. Map each finding to one or more update
 
 | Bucket | Trigger | Target |
 |--------|---------|--------|
-| **Doc patch** | Architecture changed, new layer/module added, stack updated, standards detected or changed | `.claude/docs/development/*.md` or `.claude/docs/project.md` |
-| **Wiki entry** | Non-obvious flow discovered, gotcha hit, behavior that differs from what the name implies, cross-layer invariant | `.claude/docs/wiki/<domain>/` |
-| **ADR candidate** | Decision is hard to reverse, affects multiple components, has non-obvious reasoning | `.claude/docs/development/adrs/` |
-| **Session summary** | Summary missing for today OR decisions were made that aren't captured yet | `.claude/user-data/session-summary.md` |
+| **Doc patch** | Architecture changed, new layer/module added, stack updated, standards detected or changed | `docs/development/*.md` or `docs/project.md` |
+| **Wiki entry** | Non-obvious flow discovered, gotcha hit, behavior that differs from what the name implies, cross-layer invariant | `docs/wiki/<domain>/` |
+| **ADR candidate** | Decision is hard to reverse, affects multiple components, has non-obvious reasoning | `docs/development/adrs/` |
+| **Session summary** | Summary missing for today OR decisions were made that aren't captured yet | `.dev-team-agents/user-data/session-summary.md` |
 | **Nothing to update** | Everything already documented, no decisions, trivial session | — |
 
 **Scoring rules:**
@@ -85,9 +85,9 @@ Before spawning any agent, present the classified findings as a plan:
 
 | # | Bucket | Target file | What changes |
 |---|--------|-------------|--------------|
-| 1 | Doc patch | .claude/docs/development/architecture.md | [describe the patch] |
-| 2 | Wiki entry | .claude/docs/wiki/<domain>/<topic>.md | [describe the entry] |
-| 3 | ADR candidate | .claude/docs/development/adrs/NNNN-*.md | [describe the decision] |
+| 1 | Doc patch | docs/development/architecture.md | [describe the patch] |
+| 2 | Wiki entry | docs/wiki/<domain>/<topic>.md | [describe the entry] |
+| 3 | ADR candidate | docs/development/adrs/NNNN-*.md | [describe the decision] |
 ...
 
 ### Agents to spawn
@@ -147,7 +147,7 @@ Approved updates to execute:
 
 Rules:
 - Doc patches: surgical Edit only — never rewrite a whole file. Update the `<!-- last-updated -->` marker.
-- Wiki entries: create or update `.claude/docs/wiki/<domain>/<topic>.md` using the format in `skills/shared/docs-sync/references/wiki-format.md`.
+- Wiki entries: create or update `docs/wiki/<domain>/<topic>.md` using the format in `skills/shared/docs-sync/references/wiki-format.md`.
 - Session summary: if today's entry is missing or incomplete, write/append it now following the format in CLAUDE.md.
 - Respect all token-economy rules from the docs-sync skill: tables over prose, no duplicates, no history.
 - For each file touched, output exactly one line: "PATCHED <filepath>"

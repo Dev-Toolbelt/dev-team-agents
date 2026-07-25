@@ -128,7 +128,7 @@ $ grep "devteam:mobile" CLAUDE.md
 - Reduz suporte a "isso já não foi corrigido na v1.5?".
 
 **Impacto negativo**:
-- Cada command faz uma comparação leve adicional (`cat .claude/user-data/.installed-version` vs `.latest-known`).
+- Cada command faz uma comparação leve adicional (`cat .dev-team-agents/user-data/.installed-version` vs `.latest-known`).
 - Pode acrescentar ruído ("aviso: você está em vX.Y.Z; latest é vX.Y.Z+1") em commands curtos.
 
 **Mitigação**: gate: avisar somente se versão local for ≥ 2 minor releases atrás.
@@ -193,7 +193,7 @@ $ grep "devteam:mobile" CLAUDE.md
 - Métrica pública (em compliance / SOC2 / ISO 27001) sem trabalho extra.
 
 **Impacto negativo**:
-- 2 linhas a mais no workflow ("registre `started_at` no início; `deployed_at` ao final no `.claude/docs/security/incidents/YYYY-MM-DD.md`").
+- 2 linhas a mais no workflow ("registre `started_at` no início; `deployed_at` ao final no `docs/security/incidents/YYYY-MM-DD.md`").
 - Risco de drift se o usuário esquecer um dos dois timestamps.
 
 **Mitigação**: adicionar script `scripts/security-incident.sh start|deployed` que escreve timestamp automaticamente em `incidents/` dir.
@@ -277,7 +277,7 @@ $ grep "devteam:mobile" CLAUDE.md
 - Tip ganha peso pelo fato de aparecer raramente.
 
 **Impacto negativo**:
-- Usuário pode perder o tip se rodar Claude só uma vez no dia em uma sessão muito curta. _Mitigação_: gate por "rodar se hoje ainda não rodou" via flag em `.claude/user-data/.notifier-state` (já existe!).
+- Usuário pode perder o tip se rodar Claude só uma vez no dia em uma sessão muito curta. _Mitigação_: gate por "rodar se hoje ainda não rodou" via flag em `.dev-team-agents/user-data/.notifier-state` (já existe!).
 
 **Mitigação**: usar `.notifier-state` que já é mantido pelo notifier — comparar `last_shown_date` com `date +%Y-%m-%d` e sair cedo se igual.
 

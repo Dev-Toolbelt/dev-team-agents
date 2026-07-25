@@ -12,7 +12,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 
 ## Step 2 — Create the ADR file
 
-Run the ADR creation script to auto-number the file and place it in `.claude/docs/development/adrs/`:
+Run the ADR creation script to auto-number the file and place it in `docs/development/adrs/`:
 
 ```bash
 bash .dev-team-agents/scripts/new-adr.sh "$ARGUMENTS"
@@ -31,7 +31,7 @@ Show the user the created file path.
 ---
 
 **PLAN GATE — mandatory for the spawned agent:**
-1. Read `.claude/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before writing to the ADR file.
 3. Do not execute and then explain — plan first, execute second.
 

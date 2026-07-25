@@ -79,7 +79,7 @@ Validates feature behavior against acceptance criteria. Identifies regression ri
 Produces API documentation, READMEs, runbooks, changelogs, and release notes. Assigned Haiku for cost efficiency on structured, low-ambiguity writing tasks.
 
 ### `setup-assistant`
-Drives the full project setup and refresh flow. Scans existing files, asks about project type, collects configuration, and generates living context docs in `.claude/docs/`. Re-running on an existing project triggers refresh mode — reads git history since the last run and patches only the affected docs.
+Drives the full project setup and refresh flow. Scans existing files, asks about project type, collects configuration, and generates living context docs in `docs/`. Re-running on an existing project triggers refresh mode — reads git history since the last run and patches only the affected docs.
 
 ---
 

@@ -1,6 +1,6 @@
 ## User Preferences
 
-All user-level preferences are stored in `.claude/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
+All user-level preferences are stored in `.dev-team-agents/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
 
 ### Schema
 
@@ -50,11 +50,11 @@ All user-level preferences are stored in `.claude/user-data/preferences.json` (g
 
 ### Worktree defaults
 
-`worktree_*` keys set the **default** worktree behavior; the per-session file `.claude/.worktree-session` overrides them. Coding agents resolve the decision in this order:
+`worktree_*` keys set the **default** worktree behavior; the per-session file `.dev-team-agents/.worktree-session` overrides them. Coding agents resolve the decision in this order:
 
 | Precedence | Source | Behavior |
 |---|---|---|
-| 1 (highest) | `.claude/.worktree-session` present | Follow the stored per-session decision silently |
+| 1 (highest) | `.dev-team-agents/.worktree-session` present | Follow the stored per-session decision silently |
 | 2 | `worktree_active` present in `preferences.json` | Use it **without asking**; write the session file so the rest of the session is consistent |
 | 3 (fallback) | key absent (legacy install) | Ask the user once (original behavior) |
 

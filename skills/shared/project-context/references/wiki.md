@@ -1,6 +1,6 @@
 # Wiki Knowledge Base
 
-Every project gets a wiki at `.claude/docs/wiki/`. Agents write entries after completing tasks that reveal non-obvious domain knowledge — gotchas, multi-layer flows, behavioral quirks that aren't derivable from reading code.
+Every project gets a wiki at `docs/wiki/`. Agents write entries after completing tasks that reveal non-obvious domain knowledge — gotchas, multi-layer flows, behavioral quirks that aren't derivable from reading code.
 
 The `setup-assistant` creates `wiki/README.md` on FIRST_RUN.
 
@@ -18,7 +18,7 @@ Write a wiki entry when a task reveals:
 ## Directory Structure
 
 ```
-.claude/docs/wiki/
+docs/wiki/
 ├── README.md          ← index of all entries; created by setup-assistant on FIRST_RUN
 ├── backend/           ← backend domain entries
 ├── frontend/          ← frontend domain entries

@@ -26,11 +26,11 @@ If none of these indicate tests are required, respond:
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -45,10 +45,10 @@ The session file persists across agent turns so the decision is resolved exactly
 Before writing any test:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, database setup
-2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `.claude/docs/development/` — architecture, tech stack, code standards
-5. `.claude/docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
+2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `docs/development/` — architecture, tech stack, code standards
+5. `docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
 6. Run `git log --oneline -10` — reveals what changed recently and defines the scope of testing work
 7. Existing test files — understand patterns, base classes, helpers, factories already in use
 8. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
@@ -148,7 +148,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

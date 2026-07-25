@@ -34,7 +34,7 @@ When in doubt: **write the plan**.
 
 ## Plan Format
 
-**Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.claude/user-data/preferences.json` → `language` (default: English).
+**Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.dev-team-agents/user-data/preferences.json` → `language` (default: English).
 
 Use this exact structure. Copy it, fill it in, present it.
 

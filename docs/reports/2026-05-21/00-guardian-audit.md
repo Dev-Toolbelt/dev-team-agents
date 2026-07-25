@@ -31,12 +31,12 @@ $ git log -1 --format="%ci %h %s"
 
 Não há nenhum commit após `9f1826d`. A janela 2026-05-20 → 2026-05-21 tem **0 commits**, confirmando **throughput de 0%** pela terceira janela consecutiva (2026-05-18→19, 2026-05-19→20 e 2026-05-20→21 todas a 0%).
 
-**Nota operacional (recorrente):** o working tree continua com material **não-commitado** — `docs/reports/_index.md` modificado e os diretórios `docs/reports/2026-05-18/`, `2026-05-19/`, `2026-05-20/` e `.claude/user-data/` ainda como *untracked*. Ou seja, três dias de relatórios de auditoria foram produzidos mas nunca entraram no histórico do git. Isso explica por que o CI (`check-fingerprint-uniqueness`, README sync etc.) nunca os validou: eles não existem para o git.
+**Nota operacional (recorrente):** o working tree continua com material **não-commitado** — `docs/reports/_index.md` modificado e os diretórios `docs/reports/2026-05-18/`, `2026-05-19/`, `2026-05-20/` e `.dev-team-agents/user-data/` ainda como *untracked*. Ou seja, três dias de relatórios de auditoria foram produzidos mas nunca entraram no histórico do git. Isso explica por que o CI (`check-fingerprint-uniqueness`, README sync etc.) nunca os validou: eles não existem para o git.
 
 ```
 $ git status --short
  M docs/reports/_index.md
-?? .claude/user-data/
+?? .dev-team-agents/user-data/
 ?? docs/reports/2026-05-18/
 ?? docs/reports/2026-05-19/
 ?? docs/reports/2026-05-20/

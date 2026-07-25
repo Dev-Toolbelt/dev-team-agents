@@ -55,13 +55,13 @@ done
 ## Category 3 — User Data
 
 ```bash
-ls -la .claude/user-data/ 2>/dev/null || echo "MISSING"
-cat .claude/user-data/.installed-version 2>/dev/null || echo "MISSING"
+ls -la .dev-team-agents/user-data/ 2>/dev/null || echo "MISSING"
+cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "MISSING"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
-| `.claude/user-data/` directory exists | `mkdir -p .claude/user-data/` |
+| `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` |
 | `.installed-version` exists | WARN only — re-run installer to populate |
 
 ## Category 4 — settings.json
@@ -81,7 +81,7 @@ Verify the following and flag any deviation as FIX (show diff, ask confirmation 
 
 ## Category 5 — Graphify (skip if not enabled)
 
-Detect: `[ -f .claude/user-data/graphify.json ] && echo ENABLED || echo DISABLED`
+Detect: `[ -f .dev-team-agents/user-data/graphify.json ] && echo ENABLED || echo DISABLED`
 
 If ENABLED:
 
@@ -89,7 +89,7 @@ If ENABLED:
 ls .dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
 ls .dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
 ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
-grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
+grep -qxF '.dev-team-agents/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 # Also check for legacy sub-script that causes stop-hook loops
 ls .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
 ```
@@ -100,7 +100,7 @@ ls .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && ech
 | `stop/02-graphify-refresh.sh` exists (legacy) | `rm .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
 | `graphify-out/` directory exists | WARN — run: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
-| `.claude/user-data/.graphify-last-run` in `.gitignore` | `echo '.claude/user-data/.graphify-last-run' >> .gitignore` |
+| `.dev-team-agents/user-data/.graphify-last-run` in `.gitignore` | `echo '.dev-team-agents/user-data/.graphify-last-run' >> .gitignore` |
 
 ## Category 6 — CLAUDE.md
 
@@ -118,31 +118,31 @@ grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/n
 
 ```bash
 # Check for new directory-pattern entries
-grep -qF ".claude/user-data/" .gitignore 2>/dev/null && echo "OK: user-data dir" || echo "MISSING: .claude/user-data/"
-grep -qF "!.claude/user-data/graphify.json" .gitignore 2>/dev/null && echo "OK: graphify exception" || echo "MISSING: !.claude/user-data/graphify.json"
-grep -qF ".claude/.worktree-session" .gitignore 2>/dev/null && echo "OK: worktree-session" || echo "MISSING: .claude/.worktree-session"
+grep -qF ".dev-team-agents/user-data/" .gitignore 2>/dev/null && echo "OK: user-data dir" || echo "MISSING: .dev-team-agents/user-data/"
+grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && echo "OK: graphify exception" || echo "MISSING: !.dev-team-agents/user-data/graphify.json"
+grep -qF ".dev-team-agents/.worktree-session" .gitignore 2>/dev/null && echo "OK: worktree-session" || echo "MISSING: .dev-team-agents/.worktree-session"
 
 # Detect legacy individual entries (outdated pattern from versions < current)
 for _LEGACY in \
-  ".claude/user-data/session-summary.md" \
-  ".claude/user-data/.last-update-check" \
-  ".claude/user-data/.installed-version" \
-  ".claude/user-data/.auto-update"; do
+  ".dev-team-agents/user-data/session-summary.md" \
+  ".dev-team-agents/user-data/.last-update-check" \
+  ".dev-team-agents/user-data/.installed-version" \
+  ".dev-team-agents/user-data/.auto-update"; do
   grep -qF "$_LEGACY" .gitignore 2>/dev/null && echo "LEGACY: $_LEGACY"
 done
 ```
 
 | Check | Status | Auto-fix |
 |-------|--------|----------|
-| `.claude/user-data/` in `.gitignore` | Required | Append automatically |
-| `!.claude/user-data/graphify.json` in `.gitignore` | Required | Append automatically |
-| `.claude/.worktree-session` in `.gitignore` | Required | Append automatically |
+| `.dev-team-agents/user-data/` in `.gitignore` | Required | Append automatically |
+| `!.dev-team-agents/user-data/graphify.json` in `.gitignore` | Required | Append automatically |
+| `.dev-team-agents/.worktree-session` in `.gitignore` | Required | Append automatically |
 | Legacy individual entries present | Outdated | **Offer migration**: remove individual entries and add directory pattern |
 
 ## Category 8 — User Preferences
 
 ```bash
-cat .claude/user-data/preferences.json 2>/dev/null || echo "MISSING"
+cat .dev-team-agents/user-data/preferences.json 2>/dev/null || echo "MISSING"
 ```
 
 **Step 1 — File existence:**
@@ -168,7 +168,7 @@ required = {
     "update_check_interval_hours": 24,
 }
 try:
-    with open(".claude/user-data/preferences.json") as f:
+    with open(".dev-team-agents/user-data/preferences.json") as f:
         data = json.load(f)
     missing = {k: v for k, v in required.items() if k not in data}
     if missing:
@@ -189,12 +189,12 @@ EOF
 **Step 3 — Legacy migration:**
 
 ```bash
-[ -f .claude/user-data/.auto-update ] && echo "LEGACY_FLAG_PRESENT" || echo "OK"
+[ -f .dev-team-agents/user-data/.auto-update ] && echo "LEGACY_FLAG_PRESENT" || echo "OK"
 ```
 
 | Result | Action |
 |--------|--------|
-| `LEGACY_FLAG_PRESENT` | Auto-fix: set `auto_update: true` in `preferences.json`, then `rm .claude/user-data/.auto-update` |
+| `LEGACY_FLAG_PRESENT` | Auto-fix: set `auto_update: true` in `preferences.json`, then `rm .dev-team-agents/user-data/.auto-update` |
 
 ## Category 9 — Notifier
 
@@ -203,8 +203,8 @@ EOF
 [ -x .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
 echo "OK" || echo "FAIL"
 
-[ -f .claude/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
-[ -f .claude/user-data/.notifier-state ] && echo "notifier-state: OK" || echo "notifier-state: MISSING (will be created on first stop hook)"
+[ -f .dev-team-agents/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
+[ -f .dev-team-agents/user-data/.notifier-state ] && echo "notifier-state: OK" || echo "notifier-state: MISSING (will be created on first stop hook)"
 ```
 
 | Check | Auto-fix |

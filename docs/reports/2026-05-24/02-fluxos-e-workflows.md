@@ -62,7 +62,7 @@ E o default do consumo, `CLAUDE-md/preferences.md:37`:
 
 ---
 
-## F3 — `.gitignore` tem uma **linha malformada** que funde duas entradas num path inexistente — `.claude/user-data/` e `.notifier-state` **não estão sendo ignorados** (causa-raiz da nota recorrente de "user-data não-rastreado")
+## F3 — `.gitignore` tem uma **linha malformada** que funde duas entradas num path inexistente — `.dev-team-agents/user-data/` e `.notifier-state` **não estão sendo ignorados** (causa-raiz da nota recorrente de "user-data não-rastreado")
 
 **Severidade:** MEDIUM
 **Fingerprint:** `gov-gitignore-malformed-line-merges-notifier-state-and-user-data-dir-into-one-nonexistent-path-user-data-untracked-confirmed-by-check-ignore`
@@ -70,18 +70,18 @@ E o default do consumo, `CLAUDE-md/preferences.md:37`:
 **Evidência** — `.gitignore` (última linha, via `cat -A`):
 
 ```
-6  .claude/user-data/session-summary.md
-7  .claude/user-data/.notifier-stateuser-data/$      ← duas entradas coladas
+6  .dev-team-agents/user-data/session-summary.md
+7  .dev-team-agents/user-data/.notifier-stateuser-data/$      ← duas entradas coladas
 
 # Prova:
-$ git check-ignore -v .claude/user-data/        → (sem saída: NÃO ignorado)
-$ git check-ignore -v .claude/user-data/.notifier-state → (sem saída: NÃO ignorado)
+$ git check-ignore -v .dev-team-agents/user-data/        → (sem saída: NÃO ignorado)
+$ git check-ignore -v .dev-team-agents/user-data/.notifier-state → (sem saída: NÃO ignorado)
 ```
 
-A linha 7 deveria ser duas: `.claude/user-data/.notifier-state` **e** `.claude/user-data/` (ou `user-data/`). Coladas, viram um path que não casa com nada.
+A linha 7 deveria ser duas: `.dev-team-agents/user-data/.notifier-state` **e** `.dev-team-agents/user-data/` (ou `user-data/`). Coladas, viram um path que não casa com nada.
 
-**Motivo:** por **5 passadas** os relatórios anotaram `.claude/user-data/` como *untracked* tratando como "esqueceram de commitar". A causa real é este bug de `.gitignore`. Além disso, contradiz o comportamento documentado: `CLAUDE-md/user-data.md:24` diz que o instalador adiciona "`.claude/user-data/` (entire directory)" ao ignore — mas o `.gitignore` **deste repo** só ignora `session-summary.md` e tem a linha quebrada, então o diretório inteiro vaza para o status do git. É um bug isolado (o `.gitignore` é stripado do pacote, então afeta só o repo dev), mas é a causa-raiz de uma nota que reaparece todo dia.
+**Motivo:** por **5 passadas** os relatórios anotaram `.dev-team-agents/user-data/` como *untracked* tratando como "esqueceram de commitar". A causa real é este bug de `.gitignore`. Além disso, contradiz o comportamento documentado: `CLAUDE-md/user-data.md:24` diz que o instalador adiciona "`.dev-team-agents/user-data/` (entire directory)" ao ignore — mas o `.gitignore` **deste repo** só ignora `session-summary.md` e tem a linha quebrada, então o diretório inteiro vaza para o status do git. É um bug isolado (o `.gitignore` é stripado do pacote, então afeta só o repo dev), mas é a causa-raiz de uma nota que reaparece todo dia.
 
-**Impacto positivo da correção:** separar a linha 7 em duas entradas válidas (`.claude/user-data/.notifier-state` + `.claude/user-data/`) faz `git status` parar de mostrar `user-data/` como untracked e **encerra a nota operacional recorrente** das auditorias. Alinha o repo dev ao comportamento que o instalador aplica aos projetos dos usuários.
+**Impacto positivo da correção:** separar a linha 7 em duas entradas válidas (`.dev-team-agents/user-data/.notifier-state` + `.dev-team-agents/user-data/`) faz `git status` parar de mostrar `user-data/` como untracked e **encerra a nota operacional recorrente** das auditorias. Alinha o repo dev ao comportamento que o instalador aplica aos projetos dos usuários.
 
 **Impacto negativo / risco:** mínimo. Atenção única: se algum arquivo de `user-data/` já estiver **rastreado** no índice, será preciso `git rm --cached` antes do ignore valer. Como o `git status` mostra `user-data/` como `??` (untracked), nada está rastreado — o ignore passa a valer imediatamente, sem perda.

@@ -39,7 +39,7 @@ All events also include:
 Each installation generates a one-way **SHA-256 hash** derived from your machine
 hostname and home directory path. This hash:
 
-- Is stored locally in `.claude/user-data/telemetry-queue.json`
+- Is stored locally in `.dev-team-agents/user-data/telemetry-queue.json`
 - Cannot be reversed to recover your hostname or home directory
 - Is used only to deduplicate install events (not to track individuals)
 - Is never transmitted along with any personal data
@@ -48,7 +48,7 @@ hostname and home directory path. This hash:
 
 ## Data storage
 
-Events are buffered locally in `.claude/user-data/telemetry-queue.json`
+Events are buffered locally in `.dev-team-agents/user-data/telemetry-queue.json`
 (gitignored) and sent in batches to **PostHog** (EU region) over HTTPS.
 The queue is flushed at most once every 24 hours or when it reaches 100 events.
 
@@ -59,7 +59,7 @@ are retained for 90 days and then deleted automatically.
 
 ## Opt out
 
-Set `"telemetry": false` in `.claude/user-data/preferences.json`:
+Set `"telemetry": false` in `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 {

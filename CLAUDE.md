@@ -70,10 +70,10 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 **Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical **decision cascade** (resolve top-down, stop at the first match):
 
-1. `.claude/.worktree-session` present → follow the stored decision silently:
+1. `.dev-team-agents/.worktree-session` present → follow the stored decision silently:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), `git checkout -b <name>`, write `worktree=no branch=<name>`
 3. Key absent (legacy install) → ask the user once with `AskUserQuestion` (Yes/No), then follow the matching path from step 2.
@@ -108,7 +108,7 @@ All agents automatically enforce the Contradiction Guard defined in `skills/shar
 
 #### Wiki Knowledge Base
 
-Every project gets a wiki at `.claude/docs/wiki/`. Agents write entries after completing tasks that reveal non-obvious domain knowledge — gotchas, multi-layer flows, behavioral quirks that aren't derivable from reading code. The `setup-assistant` creates `wiki/README.md` on FIRST_RUN. See `skills/shared/docs-sync/SKILL.md` for the wiki entry format, domain folder rules, and update protocol.
+Every project gets a wiki at `docs/wiki/`. Agents write entries after completing tasks that reveal non-obvious domain knowledge — gotchas, multi-layer flows, behavioral quirks that aren't derivable from reading code. The `setup-assistant` creates `wiki/README.md` on FIRST_RUN. See `skills/shared/docs-sync/SKILL.md` for the wiki entry format, domain folder rules, and update protocol.
 
 #### Token Efficiency
 
@@ -264,7 +264,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 
 ### Session Summary Rule
 
-**At the end of any session where files were created or modified**, write a new entry at the top of `.claude/user-data/session-summary.md`:
+**At the end of any session where files were created or modified**, write a new entry at the top of `.dev-team-agents/user-data/session-summary.md`:
 
 ```
 ## YYYY-MM-DD HH:MM:SS | [brief task title]
@@ -320,7 +320,7 @@ Write an ADR when a decision is:
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-The script auto-numbers the file and places it in `.claude/docs/development/adrs/`. Fill in the generated template and change the status from `Proposed` to `Accepted`.
+The script auto-numbers the file and places it in `docs/development/adrs/`. Fill in the generated template and change the status from `Proposed` to `Accepted`.
 
 ### Stop Hook (Automated Enforcement)
 

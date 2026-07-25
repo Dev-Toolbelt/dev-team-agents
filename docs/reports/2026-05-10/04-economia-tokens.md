@@ -53,7 +53,7 @@ Before acting, identify the current working context:
 - Run `git branch --show-current` — active branch
 - Run `git diff --name-only HEAD` — locally modified files
 - Run `git diff --name-only main...HEAD` — all changes in this branch vs main
-- Check `.claude/.worktree-session` if present — active worktree
+- Check `.dev-team-agents/.worktree-session` if present — active worktree
 
 Restrict all analysis and actions to files and changes within this context. Do NOT scan or act on the full codebase unless $ARGUMENTS explicitly requests a broader scope.
 ```

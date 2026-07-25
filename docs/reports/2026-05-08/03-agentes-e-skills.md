@@ -108,7 +108,7 @@ $ grep -i "linear\|clickup\|trello\|github.issues" agents/product-analyst.md
 
 Já o `setup-assistant.md` Step 3 lista trackers configuráveis: **GitHub Issues, Jira, Linear, ClickUp, Trello, etc.**. O usuário pode escolher qualquer um dos 5+ trackers — mas ao invocar o `product-analyst`, **só Jira** ganha tratamento dedicado.
 
-Hoje, se o projeto usa Linear, o `product-analyst` cai no fluxo genérico (markdown local em `.claude/docs/backlog/`) sem aproveitar as tools MCP do tracker remoto. O mesmo skill (`integrations/jira/SKILL.md`) tem irmãos potenciais (`integrations/linear`, `integrations/clickup`) que **não existem**.
+Hoje, se o projeto usa Linear, o `product-analyst` cai no fluxo genérico (markdown local em `docs/backlog/`) sem aproveitar as tools MCP do tracker remoto. O mesmo skill (`integrations/jira/SKILL.md`) tem irmãos potenciais (`integrations/linear`, `integrations/clickup`) que **não existem**.
 
 > **Fingerprint:** `agent-product-analyst-jira-only-tracker`
 

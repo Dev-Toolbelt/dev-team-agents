@@ -62,8 +62,8 @@
 | Step | reviewer-base | project-context |
 |------|---------------|-----------------|
 | 1 | `README.md`, `CLAUDE.md`, `AGENTS.md` | mesma coisa |
-| 2 | `.claude/docs/project.md` | mesma coisa |
-| 3 | `.claude/user-data/session-summary.md` | mesma coisa |
+| 2 | `docs/project.md` | mesma coisa |
+| 3 | `.dev-team-agents/user-data/session-summary.md` | mesma coisa |
 | 4 | `code-standards.md` | sem isso |
 | 5 | `architecture.md` | tem |
 | 6 | Linter configs | sem (genérico) |
@@ -147,7 +147,7 @@ A skill **não existe** no filesystem. Foi mencionada no CHANGELOG mas removida 
 - `setup-assistant` pode reler o output do `software-architect` em vez de re-perguntar.
 
 **Impacto negativo**:
-- Acrescenta arquivo `.claude/user-data/.discovery-current.md` (transitório).
+- Acrescenta arquivo `.dev-team-agents/user-data/.discovery-current.md` (transitório).
 - Risco de stale (discovery antigo confundir agente atual). Mitigar via TTL.
 
 **Mitigação**: skill `discovery-mode` checa `.discovery-current.md` antes de começar; se TTL < 2h, retoma; caso contrário, regrava.
@@ -277,7 +277,7 @@ $ grep -iE "detox|maestro|appium|xcuitest|espresso" agents/mobile-developer.md
 
 **Impacto positivo**:
 - Workflow é auto-suficiente: pode ser executado standalone.
-- Worktree decision file (`.claude/.worktree-session`) é consultado consistentemente.
+- Worktree decision file (`.dev-team-agents/.worktree-session`) é consultado consistentemente.
 
 **Impacto negativo**:
 - Duplicação se o command wrapper já carregou.

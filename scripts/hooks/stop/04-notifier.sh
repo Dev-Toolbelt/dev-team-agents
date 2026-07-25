@@ -12,7 +12,7 @@ set -uo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-USER_DATA_DIR="${PROJECT_ROOT}/.claude/user-data"
+USER_DATA_DIR="${PROJECT_ROOT}/.dev-team-agents/user-data"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SESSION_ID_FILE="${USER_DATA_DIR}/.session-id"
 NOTIFIER_STATE_FILE="${USER_DATA_DIR}/.notifier-state"
@@ -177,7 +177,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
         "Run /devteam:review before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist."
         "Record hard architectural decisions as ADRs: bash .dev-team-agents/scripts/new-adr.sh \"title\". This prevents agents from questioning settled choices."
         "Use /devteam:plan at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed)."
-        "Write non-obvious domain knowledge to the project wiki at .claude/docs/wiki/ after any revealing task — agents read it on startup."
+        "Write non-obvious domain knowledge to the project wiki at docs/wiki/ after any revealing task — agents read it on startup."
         "/devteam:commit groups your staged changes by layer and generates Conventional Commits automatically."
         "Use /devteam:refactor for structured refactoring — it runs test-first coverage, maps dependencies, and produces ordered commit blocks."
         "Run a health check occasionally: 'Run a health check on this project' — it auto-fixes stale hooks, broken symlinks, and outdated preferences."
@@ -195,7 +195,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
         "Execute /devteam:review antes de abrir um PR — ele chama automaticamente code-reviewer, software-architect e security-specialist."
         "Registre decisões arquiteturais difíceis como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Isso evita que agentes questionem escolhas já feitas."
         "Use /devteam:plan no início de qualquer nova funcionalidade — ele executa uma análise multi-agente (architect + product + database + backend/frontend/devops conforme necessário)."
-        "Escreva conhecimento de domínio não óbvio na wiki do projeto em .claude/docs/wiki/ após qualquer tarefa reveladora — agentes leem isso na inicialização."
+        "Escreva conhecimento de domínio não óbvio na wiki do projeto em docs/wiki/ após qualquer tarefa reveladora — agentes leem isso na inicialização."
         "/devteam:commit agrupa suas mudanças por camada e gera Conventional Commits automaticamente."
         "Use /devteam:refactor para refatoração estruturada — ele executa cobertura test-first, mapeia dependências e produz blocos de commit ordenados."
         "Execute um health check ocasionalmente: 'Faça um health check neste projeto' — ele corrige automaticamente hooks desatualizados, symlinks quebrados e preferências desatualizadas."
@@ -213,7 +213,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
         "Ejecuta /devteam:review antes de abrir un PR — llama automáticamente a code-reviewer, software-architect y security-specialist."
         "Registra las decisiones arquitectónicas difíciles como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Esto evita que los agentes cuestionen decisiones ya tomadas."
         "Usa /devteam:plan al inicio de cualquier nueva funcionalidad — ejecuta un análisis multi-agente (architect + product + database + backend/frontend/devops según sea necesario)."
-        "Escribe conocimiento de dominio no obvio en la wiki del proyecto en .claude/docs/wiki/ después de cualquier tarea reveladora — los agentes la leen al inicio."
+        "Escribe conocimiento de dominio no obvio en la wiki del proyecto en docs/wiki/ después de cualquier tarea reveladora — los agentes la leen al inicio."
         "/devteam:commit agrupa tus cambios por capa y genera Conventional Commits automáticamente."
         "Usa /devteam:refactor para refactorización estructurada — ejecuta cobertura test-first, mapea dependencias y produce bloques de commit ordenados."
         "Ejecuta un health check ocasionalmente: 'Haz un health check en este proyecto' — corrige automáticamente hooks obsoletos, symlinks rotos y preferencias desactualizadas."

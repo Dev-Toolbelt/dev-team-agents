@@ -37,7 +37,7 @@ Do **not** add "Other" when:
 
 ## Language Rule
 
-Use the same language as the `language` field in `.claude/user-data/preferences.json` for:
+Use the same language as the `language` field in `.dev-team-agents/user-data/preferences.json` for:
 - The `question` text
 - The `header` label
 - The `label` and `description` of each option

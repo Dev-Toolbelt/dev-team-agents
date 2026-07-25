@@ -29,7 +29,7 @@ INSTALL_DIR="$PROJECT_ROOT/.dev-team-agents"
 AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"
 SKILLS_TARGET="$PROJECT_ROOT/.claude/skills"
 SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
-USER_DATA_DIR="$PROJECT_ROOT/.claude/user-data"
+USER_DATA_DIR="$PROJECT_ROOT/.dev-team-agents/user-data"
 VERSION="${1:-latest}"
 
 echo "dev-team-agents installer (project-level)"
@@ -420,7 +420,7 @@ if ! grep -qF "$_DTA_MARKER" "$_TARGET_CLAUDE_MD" 2>/dev/null; then
 # Pre-compact Hook — Auto Session Summary
 When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
 
-1. Write the session summary entry at the top of `.claude/user-data/session-summary.md` using the format:
+1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
    ```
    ## YYYY-MM-DD HH:MM:SS | [brief task title]
    **Done**: what was implemented or changed
@@ -457,10 +457,10 @@ _GITIGNORE="$PROJECT_ROOT/.gitignore"
 
 # Remove legacy individual entries if present (migration to directory pattern)
 _LEGACY_ENTRIES=(
-    ".claude/user-data/session-summary.md"
-    ".claude/user-data/.last-update-check"
-    ".claude/user-data/.installed-version"
-    ".claude/user-data/.auto-update"
+    ".dev-team-agents/user-data/session-summary.md"
+    ".dev-team-agents/user-data/.last-update-check"
+    ".dev-team-agents/user-data/.installed-version"
+    ".dev-team-agents/user-data/.auto-update"
 )
 if [ -f "$_GITIGNORE" ]; then
     for _LEGACY in "${_LEGACY_ENTRIES[@]}"; do
@@ -481,9 +481,9 @@ _add_gitignore() {
     fi
 }
 
-_add_gitignore ".claude/user-data/"
-_add_gitignore "!.claude/user-data/graphify.json"
-_add_gitignore ".claude/.worktree-session"
+_add_gitignore ".dev-team-agents/user-data/"
+_add_gitignore "!.dev-team-agents/user-data/graphify.json"
+_add_gitignore ".dev-team-agents/.worktree-session"
 _add_gitignore ".claude/worktrees/"
 
 echo "→ .gitignore updated (user-data dir pattern + worktree-session + worktrees dir)"
@@ -552,7 +552,7 @@ if [ -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
     PREFS_LANGUAGE="${PREFS_LANGUAGE:-en}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 elif [ ! -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
-    echo "→ NOTE: Non-interactive install. Setting language to 'en'. Edit .claude/user-data/preferences.json to change."
+    echo "→ NOTE: Non-interactive install. Setting language to 'en'. Edit .dev-team-agents/user-data/preferences.json to change."
 fi
 
 # Migrate legacy .auto-update flag → auto_update field in preferences.json
@@ -579,7 +579,7 @@ if [ "$IS_FIRST_INSTALL" = true ] && [ -t 0 ]; then
     echo " Full details: PRIVACY.md in the installed package."
     echo ""
     echo " You can opt out at any time by setting"
-    echo "   \"telemetry\": false  in .claude/user-data/preferences.json"
+    echo "   \"telemetry\": false  in .dev-team-agents/user-data/preferences.json"
     echo ""
     printf " Enable anonymous telemetry? [Y/n]: "
     read -r _TELEMETRY_INPUT </dev/tty || true
@@ -633,7 +633,7 @@ with open(prefs_file, 'w') as f:
     json.dump(merged, f, indent=2)
     f.write('\n')
 PYEOF
-    echo "→ User preferences: .claude/user-data/preferences.json"
+    echo "→ User preferences: .dev-team-agents/user-data/preferences.json"
 else
     # Fallback: write a plain JSON file without python3
     if [ ! -f "$PREFS_FILE" ]; then
@@ -657,7 +657,7 @@ else
   "worktree_docker_isolate": true
 }
 EOF
-        echo "→ User preferences: .claude/user-data/preferences.json"
+        echo "→ User preferences: .dev-team-agents/user-data/preferences.json"
     fi
 fi
 

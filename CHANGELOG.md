@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`/devteam:plan` reworked** — `product-analyst` is now the protagonist and produces a **business-only** requirements document ready to become sprints; `software-architect` joins only on explicit technical request. The `product-analyst` agent gained a fixed interrogation methodology (7 lenses), an anti-overengineering rule, and a 3-category finding model
-- **Sprints reorganized** — sprint files now live under `.claude/docs/backlog/sprints/` as `sprint-<n>.md`, with a `sprints.md` status index (Planned → In progress → Done) kept current as sprints finalize
+- **Sprints reorganized** — sprint files now live under `docs/backlog/sprints/` as `sprint-<n>.md`, with a `sprints.md` status index (Planned → In progress → Done) kept current as sprints finalize
 - **Test creation is now gated** — `/devteam:backend|frontend|mobile|fullstack|fix|refactor` create tests only when the project sets `TESTS_REQUIRED=yes` (absent key defaults to running tests); when `TESTS_REQUIRED=no` the test phase is skipped entirely
 - **`/devteam:review` with no arguments** now asks a dynamic quiz — current local branch / another local branch / a PR link (GitHub, GitLab, Bitbucket, …) / other — and acts on the chosen target
 - **Sprints designed for parallel execution** — `product-analyst` now decomposes scope for maximum parallelism and fills a **Parallel Execution Plan** (waves of mutually independent tasks). The `backlog-template` sprint file gained per-task `Wave` + `Worktree branch` fields and a waves table. Isolation model is explicit: worktree-per-task always; isolated Docker stack per worktree **only when the project uses Docker** — otherwise parallelism is by worktree alone
@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/devteam:learn` now declares a commit manifest in its plan (Step 3) and auto-commits the knowledge-base updates after execution (conventional commits, local only, no push). New `--no-commit` argument opts out
 
 ### Changed
-- Worktree decision is now a three-level cascade — `.claude/.worktree-session` (per-session override) → `worktree_active` in `preferences.json` (default) → ask once (legacy installs). Propagated to the 8 coding agents, `software-architect` worktree detection, and `CLAUDE.md`
+- Worktree decision is now a three-level cascade — `.dev-team-agents/.worktree-session` (per-session override) → `worktree_active` in `preferences.json` (default) → ask once (legacy installs). Propagated to the 8 coding agents, `software-architect` worktree detection, and `CLAUDE.md`
 - Worktree base branch is auto-detected (`origin/HEAD` → current branch) instead of assuming `beta` or `master`; `worktree_path` makes the worktree location configurable (default `.claude/worktrees`)
 - Worktree finalization enforces rebase-onto-base → resolve → merge → teardown of the worktree and its isolated Docker stack only, never the main infrastructure
 - The coding agents' worktree prompt now uses `AskUserQuestion` (quiz-first) instead of a plain `(yes / no)` text prompt
@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.9.3] — 2026-07-19
 
 ### Fixed
-- `/devteam:update` now repairs a broken installation instead of falsely reporting "Up to date". When `.claude/user-data/.installed-version` is missing or empty (`Installed: unknown`), the version check exited silently and the command reported the install as current; it now force-reinstalls the latest release to rewrite the metadata and clears the cached ETag so a stale `304` cannot mask the mismatch
+- `/devteam:update` now repairs a broken installation instead of falsely reporting "Up to date". When `.dev-team-agents/user-data/.installed-version` is missing or empty (`Installed: unknown`), the version check exited silently and the command reported the install as current; it now force-reinstalls the latest release to rewrite the metadata and clears the cached ETag so a stale `304` cannot mask the mismatch
 - `01-check-updates.sh` no longer treats an install that is behind the still-latest release as up to date. A `304 Not Modified` short-circuited before comparing the local version against the latest release, silencing the "update available" notification after its first fire. The resolved version is now cached alongside the ETag (`.last-releases-version`) and reused on `304` to complete the comparison
 
 ---
@@ -362,7 +362,7 @@ Large refactor/performance release focused on reducing per-session and per-spawn
 ### Added
 - Comprehensive `/devteam:*` slash commands (plan, backend, frontend, fullstack, fix, refactor, architect, review, qa, security, dba, devops, tester, docs, pr, design, commit, update)
 - Graphify integration for visual codebase navigation
-- Wiki knowledge base system (`.claude/docs/wiki/`)
+- Wiki knowledge base system (`docs/wiki/`)
 - Contradiction Guard in `project-context` skill
 
 ### Changed

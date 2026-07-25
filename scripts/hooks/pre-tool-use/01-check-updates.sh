@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse sub-script: silent TTL-based update check.
 # Notifies Claude when a new version of dev-team-agents is available.
-# Auto-updates if .claude/user-data/.auto-update flag exists.
+# Auto-updates if .dev-team-agents/user-data/.auto-update flag exists.
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

@@ -14,7 +14,7 @@ labels: bug
 2. 
 
 **Environment**
-- dev-team-agents version (run `cat .claude/user-data/.installed-version`):
+- dev-team-agents version (run `cat .dev-team-agents/user-data/.installed-version`):
 - Claude Code version:
 - OS:
 

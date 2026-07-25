@@ -154,22 +154,22 @@ A consequência é que **as mesmas regras de "session summary obrigatório quand
 
 ---
 
-## 1.5 `setup-assistant.md` cria pasta `.claude/docs/audit/` que ninguém documenta
+## 1.5 `setup-assistant.md` cria pasta `docs/audit/` que ninguém documenta
 
 `agents/setup-assistant.md` Step 1b (linhas 51–77) instrui:
 
 ```bash
-mkdir -p .claude/docs/audit
-AUDIT_FILE=".claude/docs/audit/audit-$(date +%Y-%m-%d).md"
+mkdir -p docs/audit
+AUDIT_FILE="docs/audit/audit-$(date +%Y-%m-%d).md"
 ```
 
 …e gera um relatório de auditoria estruturado. Mas:
 
-- `CLAUDE.md § User Data Directory` lista apenas `.dev-team-agents/` e `.claude/user-data/`;
+- `CLAUDE.md § User Data Directory` lista apenas `.dev-team-agents/` e `.dev-team-agents/user-data/`;
 - `README.md` e `README.pt-BR.md` não mencionam a pasta `audit/` em lugar algum;
 - Não há orientação sobre se o `audit-YYYY-MM-DD.md` deve ser commitado ou ignorado.
 
-Resultado: usuários veem uma pasta nova surgir em `.claude/docs/audit/` sem entender de onde veio nem pra que serve, e o repositório do projeto pode acumular um arquivo de auditoria por execução do `setup-assistant` em REFRESH (segundo o próprio agente, "All future audit reports… are also written to `.claude/docs/audit/`").
+Resultado: usuários veem uma pasta nova surgir em `docs/audit/` sem entender de onde veio nem pra que serve, e o repositório do projeto pode acumular um arquivo de auditoria por execução do `setup-assistant` em REFRESH (segundo o próprio agente, "All future audit reports… are also written to `docs/audit/`").
 
 > **Fingerprint:** `docs-sync-setup-assistant-audit-folder`
 
@@ -180,7 +180,7 @@ Resultado: usuários veem uma pasta nova surgir em `.claude/docs/audit/` sem ent
 | **Negativo** | Adicionar 5–10 linhas no README; mínimo |
 
 **Recomendação:** adicionar entrada em `CLAUDE.md § User Data Directory` (ou em uma seção `Project Audit Reports`) explicando:
-1. A pasta `.claude/docs/audit/` é criada pelo `setup-assistant` em modo FIRST_RUN e em re-runs de saúde;
+1. A pasta `docs/audit/` é criada pelo `setup-assistant` em modo FIRST_RUN e em re-runs de saúde;
 2. Cada execução produz `audit-YYYY-MM-DD.md`;
 3. Recomendação default: versionar (não gitignorar) — esses relatórios funcionam como diário institucional do projeto.
 
@@ -194,4 +194,4 @@ Resultado: usuários veem uma pasta nova surgir em `.claude/docs/audit/` sem ent
 | `docs-sync-update-flow-claude-md` | `CLAUDE.md` descreve fluxo `/devteam:update` que não existe mais |
 | `ref-templates-folder-underutilized` | `templates/` tem 1 arquivo; outros templates vivem inline em skills |
 | `gov-dev-repo-no-stop-dispatcher` | `dev-team-agents` não consome o próprio dispatcher de hooks |
-| `docs-sync-setup-assistant-audit-folder` | `.claude/docs/audit/` é criada pelo agente mas não está documentada |
+| `docs-sync-setup-assistant-audit-folder` | `docs/audit/` é criada pelo agente mas não está documentada |

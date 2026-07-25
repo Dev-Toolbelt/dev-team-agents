@@ -61,7 +61,7 @@ When a topic spans two domains, place the file in the more specific one and link
 
 ## Wiki Update Protocol
 
-1. **Read** `.claude/docs/wiki/README.md` and the target domain folder before writing
+1. **Read** `docs/wiki/README.md` and the target domain folder before writing
 2. **Decide**: new file or patch an existing one?
    - New concept → new file (`kebab-case.md`, e.g., `order-state-machine.md`)
    - Additional detail to existing concept → Edit the existing file

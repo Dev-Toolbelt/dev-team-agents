@@ -82,7 +82,7 @@ fi
 bash "$TMP_INSTALLER" "$TARGET"
 
 # Invalidate context cache after version change
-rm -f ".claude/user-data/.context-cache.json" 2>/dev/null || true
+rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 
 echo ""
 echo "✓ Rolled back to $TARGET."

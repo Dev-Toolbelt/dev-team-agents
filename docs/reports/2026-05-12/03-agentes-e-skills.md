@@ -226,7 +226,7 @@ Agents subsequentes detectam o lockfile e **passam** discovery (recebem o output
 | Step em reviewer-base | Já está em project-context? |
 |-----------------------|----------------------------|
 | 1. README/CLAUDE/AGENTS | ✅ |
-| 2. .claude/docs/project.md | ✅ |
+| 2. docs/project.md | ✅ |
 | 3. session-summary | ✅ |
 | 4. code-standards.md | ✅ |
 | 5. architecture.md | ✅ |

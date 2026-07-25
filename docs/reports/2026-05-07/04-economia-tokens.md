@@ -15,7 +15,7 @@ Before acting, identify the current working context:
 - Run `git branch --show-current` — active branch
 - Run `git diff --name-only HEAD` — locally modified files
 - Run `git diff --name-only main...HEAD` — all changes in this branch vs main
-- Check `.claude/.worktree-session` if present — active worktree
+- Check `.dev-team-agents/.worktree-session` if present — active worktree
 
 Restrict all analysis and actions to files and changes within this context.
 Do NOT review the full codebase — only what changed in this branch/worktree
@@ -79,7 +79,7 @@ Economia por linha: ~30 caracteres × 40 ocorrências = ~1.2k caracteres / ~300 
 
 ## 4.3 `project-context.md` poderia detectar Graphify e desviar leituras de README
 
-`skills/shared/project-context/SKILL.md` (213 linhas) instrui agentes a **ler integralmente** README.md, CLAUDE.md, AGENTS.md, e arquivos em `.claude/docs/`. Em projetos grandes ou neste próprio repositório (README = 700 linhas, CLAUDE.md = 349 linhas), isso é **~1050 linhas por sessão** apenas em context-loading inicial.
+`skills/shared/project-context/SKILL.md` (213 linhas) instrui agentes a **ler integralmente** README.md, CLAUDE.md, AGENTS.md, e arquivos em `docs/`. Em projetos grandes ou neste próprio repositório (README = 700 linhas, CLAUDE.md = 349 linhas), isso é **~1050 linhas por sessão** apenas em context-loading inicial.
 
 Entretanto, `skills/devops/graphify-setup/SKILL.md` (265 linhas) descreve uma camada de **navegação por knowledge graph** que evita leituras integrais. **Não há instrução** no `project-context.md` para verificar se Graphify está disponível e desviar leituras para queries de grafo.
 
@@ -91,7 +91,7 @@ Entretanto, `skills/devops/graphify-setup/SKILL.md` (265 linhas) descreve uma ca
 ## Pre-flight: Graphify availability
 
 Before reading large files (README.md > 200 lines, codebase scan, etc.),
-check `.claude/user-data/graphify.json`. If present and `enabled: true`:
+check `.dev-team-agents/user-data/graphify.json`. If present and `enabled: true`:
 
 - Replace full README.md read with `graphify query --topic README`
 - Replace full file scans with `graphify query --path <pattern>`

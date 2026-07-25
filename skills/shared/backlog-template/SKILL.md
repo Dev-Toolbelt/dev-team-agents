@@ -7,7 +7,7 @@ description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 
 ## Document Structure
 
-Generate under `.claude/docs/backlog/`:
+Generate under `docs/backlog/`:
 
 - `overview.md` — business requirements document (the planning deliverable)
 - `epics.md` — epics
@@ -17,7 +17,7 @@ Generate under `.claude/docs/backlog/`:
 **Sprint files live in the `sprints/` subfolder**, never at the backlog root:
 
 ```
-.claude/docs/backlog/
+docs/backlog/
 ├── overview.md
 ├── epics.md
 ├── dod.md
@@ -170,7 +170,7 @@ A wave starts only after every task in the previous wave is done.
 
 ### `sprints/sprints.md` — status index
 
-A single index at `.claude/docs/backlog/sprints/sprints.md` summarizing **every** sprint and its status. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
+A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint and its status. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
 
 ```markdown
 # Sprints

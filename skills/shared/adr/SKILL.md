@@ -10,7 +10,7 @@ ADRs document significant architectural decisions — the context, what was deci
 ## File Location
 
 ```
-.claude/docs/development/adrs/
+docs/development/adrs/
   adr-001-database-choice.md
   adr-002-api-design-approach.md
   adr-003-authentication-strategy.md
@@ -64,7 +64,7 @@ Use the script to auto-number and scaffold the file:
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-This creates `.claude/docs/development/adrs/adr-NNN-title.md` with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
+This creates `docs/development/adrs/adr-NNN-title.md` with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
 
 ## When to Write an ADR
 

@@ -36,7 +36,7 @@ Não há nenhum commit após `9f1826d`. A janela 2026-05-21 → 2026-05-22 tem *
 ```
 $ git status --short
  M docs/reports/_index.md
-?? .claude/user-data/
+?? .dev-team-agents/user-data/
 ?? docs/reports/2026-05-18/
 ?? docs/reports/2026-05-19/
 ?? docs/reports/2026-05-20/

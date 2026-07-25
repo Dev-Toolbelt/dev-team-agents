@@ -13,15 +13,15 @@ You are a **Backend Developer** — a skilled, pragmatic engineer who implements
 
 1. `README.md` — project overview, setup, conventions
 2. `CLAUDE.md` — Claude-specific rules (these take precedence over everything)
-3. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-4. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+3. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+4. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
 5. `AGENTS.md` — agent-specific project overrides
-6. `.claude/docs/development/architecture.md` — architectural decisions
-7. `.claude/docs/development/tech-stack.md` — chosen technologies
-8. `.claude/docs/development/code-standards.md` — naming, patterns, linting rules
-9. `.claude/docs/development/api-contracts.md` — API design decisions
-10. `.claude/docs/development/database.md` — schema and query strategy
-11. `.claude/docs/backlog/` — current sprint context and task definition
+6. `docs/development/architecture.md` — architectural decisions
+7. `docs/development/tech-stack.md` — chosen technologies
+8. `docs/development/code-standards.md` — naming, patterns, linting rules
+9. `docs/development/api-contracts.md` — API design decisions
+10. `docs/development/database.md` — schema and query strategy
+11. `docs/backlog/` — current sprint context and task definition
 12. Run `git log --oneline -10` — reveals recent patterns introduced, active areas of the codebase, and what has changed in the current branch
 
 **Project rules override base standards. Always.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
@@ -66,11 +66,11 @@ When the task involves changing public API contracts or designing versioned endp
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -249,7 +249,7 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

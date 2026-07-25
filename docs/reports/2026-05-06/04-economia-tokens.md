@@ -14,8 +14,8 @@ Hoje, **16 agentes** repetem (com mínimas variações) o mesmo bloco numerado:
 
 ```text
 1. README.md, CLAUDE.md, AGENTS.md
-2. .claude/docs/project.md
-3. .claude/user-data/session-summary.md (most recent only)
+2. docs/project.md
+3. .dev-team-agents/user-data/session-summary.md (most recent only)
 ...
 N. Run `git log --oneline -20`
 ```
@@ -34,7 +34,7 @@ Ou seja, a regra está **definida duas vezes**: inline no agente e centralizada 
 
 Apply `skills/shared/project-context/SKILL.md` (loading order canonical).
 Then load these agent-specific files:
-- .claude/docs/development/<arquivo-relevante>.md
+- docs/development/<arquivo-relevante>.md
 - ...
 ```
 

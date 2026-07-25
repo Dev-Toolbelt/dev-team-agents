@@ -8,10 +8,10 @@ description: User preferences — language and settings from preferences.json.
 All user-level preferences for dev-team-agents are stored in a single file:
 
 ```
-.claude/user-data/preferences.json
+.dev-team-agents/user-data/preferences.json
 ```
 
-This file is gitignored (covered by `.claude/user-data/` in `.gitignore`).
+This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore`).
 
 ---
 
@@ -73,7 +73,7 @@ Two distinct rules govern language in dev-team-agents:
 **How agents read the user's language:**
 
 ```bash
-PREFS=".claude/user-data/preferences.json"
+PREFS=".dev-team-agents/user-data/preferences.json"
 USER_LANG="en"
 if [ -f "$PREFS" ] && command -v python3 >/dev/null 2>&1; then
     USER_LANG=$(python3 -c \
@@ -82,7 +82,7 @@ if [ -f "$PREFS" ] && command -v python3 >/dev/null 2>&1; then
 fi
 ```
 
-For agents: read `.claude/user-data/preferences.json` at the start of each session. Use the `language` value when writing any response directed at the user. If the file does not exist, use English.
+For agents: read `.dev-team-agents/user-data/preferences.json` at the start of each session. Use the `language` value when writing any response directed at the user. If the file does not exist, use English.
 
 ---
 
@@ -116,7 +116,7 @@ If a specific field is missing from the file (partial schema), use its default v
 _pref() {
     local field="$1" default="$2"
     python3 -c \
-        "import json,sys; d=json.load(open('.claude/user-data/preferences.json')); \
+        "import json,sys; d=json.load(open('.dev-team-agents/user-data/preferences.json')); \
          print(d.get('$field', $default))" 2>/dev/null || echo "$default"
 }
 

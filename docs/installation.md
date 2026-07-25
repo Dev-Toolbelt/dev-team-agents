@@ -50,7 +50,7 @@ Disable at any time:
 .dev-team-agents/scripts/update.sh --disable-auto
 ```
 
-You can also toggle this in `.claude/user-data/preferences.json`:
+You can also toggle this in `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "auto_update": true }
@@ -68,7 +68,7 @@ The update check runs once per day. The interval is configurable:
 
 During installation the installer asks which language agents should use when talking to you. Plans presented for approval and all direct responses use the configured language. Documents (ADRs, changelogs, code comments) always remain in English.
 
-Update at any time by editing `.claude/user-data/preferences.json`:
+Update at any time by editing `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "language": "pt-BR" }
@@ -86,7 +86,7 @@ Agents and hooks emit notifications in the DEV TEAM AGENTS format throughout you
 - **⚠️ warning** — context window approaching limit, stale docs, missing config
 - **🚨 critical** — context window at limit, broken installation
 
-Configure in `.claude/user-data/preferences.json`:
+Configure in `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 {
@@ -130,7 +130,7 @@ Control how coding agents isolate their work, in the same `preferences.json`:
 | `worktree_path` | `".claude/worktrees"` | Where worktrees are created (`<path>/<context>/<title>`) |
 | `worktree_docker_isolate` | `true` | With `worktree_active` and a Docker Compose project, spin up an isolated stack per worktree (namespaced containers/volumes/networks, ports not published) |
 
-The per-session file `.claude/.worktree-session` overrides these defaults for a single task. On merge, agents rebase onto the base branch, merge, and tear down only the worktree and its isolated Docker stack. All four keys are auto-backfilled with these defaults on every session if missing.
+The per-session file `.dev-team-agents/.worktree-session` overrides these defaults for a single task. On merge, agents rebase onto the base branch, merge, and tear down only the worktree and its isolated Docker stack. All four keys are auto-backfilled with these defaults on every session if missing.
 
 ---
 
@@ -187,7 +187,7 @@ If you prefer each developer to install locally instead:
 .claude/agents/dev-team/
 .claude/skills/
 .claude/commands/devteam/
-.claude/.worktree-session
+.dev-team-agents/.worktree-session
 ```
 
 ### Windows: symlinks in a committed installation

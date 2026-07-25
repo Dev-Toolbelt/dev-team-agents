@@ -27,7 +27,7 @@ WARN — Skills loaded more than once in the same agent:
 8 agents × 2 references each. A skill `worktree` tem 214 linhas; cada referência adiciona ~3 linhas em torno (`Load … if X`). Custo: 16 references × ~3 linhas × 7 tokens = **~340 tokens duplicados em definição**, e potencial **dupla leitura** se Claude interpretar literalmente.
 
 **Investigação root cause:** O bloco "Worktree Isolation" no Foundational Rule de coding agents tem dois pontos onde menciona o skill:
-- Step 1: "Read `.claude/.worktree-session` — if `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md`"
+- Step 1: "Read `.dev-team-agents/.worktree-session` — if `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md`"
 - Step 2 (else branch): "If user answers yes → load `skills/shared/worktree/SKILL.md`"
 
 Ambos são corretos no fluxo, mas o orphan-scan não distingue "load condicional do mesmo skill em branches diferentes do if/else" vs "load duplicado real".
@@ -43,7 +43,7 @@ Ambos são corretos no fluxo, mas o orphan-scan não distingue "load condicional
 **Sugestão:** Opção A: refatorar Worktree Isolation para 1 menção:
 
 ```markdown
-Load `skills/shared/worktree/SKILL.md` and follow its protocol if `.claude/.worktree-session` indicates worktree=yes (or after user opts in for a new session).
+Load `skills/shared/worktree/SKILL.md` and follow its protocol if `.dev-team-agents/.worktree-session` indicates worktree=yes (or after user opts in for a new session).
 ```
 
 ---

@@ -9,7 +9,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 ## Protagonist — product-analyst
 
 Always spawn:
-- `product-analyst` at `.claude/agents/dev-team/product-analyst.md` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`.claude/docs/backlog/overview.md`) ready to become sprints. It stays out of technical design.
+- `product-analyst` at `.claude/agents/dev-team/product-analyst.md` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`docs/backlog/overview.md`) ready to become sprints. It stays out of technical design.
 
 The `product-analyst` owns the conversation and the deliverable. Planning is business-first: the output is *what* and *why*, not *how*.
 
@@ -22,7 +22,7 @@ If the request is purely a feature/business ask (the default), do **not** spawn 
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**
-1. Read `.claude/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 

@@ -62,7 +62,7 @@ NO
 
 **Arquivos relevantes:**
 - `.claude/.discovery-lock` (criado por `skills/shared/discovery-mode/SKILL.md`)
-- `.claude/.worktree-session` (criado por agentes coding e workflows)
+- `.dev-team-agents/.worktree-session` (criado por agentes coding e workflows)
 - `scripts/hooks/stop.sh` (dispatcher)
 
 **Observação:** dois arquivos de estado de sessão são criados durante execução:
@@ -70,7 +70,7 @@ NO
 | Arquivo | Criado por | Propósito |
 |---------|-----------|-----------|
 | `.claude/.discovery-lock` | discovery-mode skill | Lock cooperativo entre 3 agents concorrentes |
-| `.claude/.worktree-session` | coding agents | Decisão "yes/no" para worktree, ler 1× por sessão |
+| `.dev-team-agents/.worktree-session` | coding agents | Decisão "yes/no" para worktree, ler 1× por sessão |
 
 Ambos têm "regra de cleanup" documentada (discovery: > 30min stale; worktree-session: "ler 1× por sessão") mas **nenhum hook executa essa limpeza**.
 
@@ -81,7 +81,7 @@ Sequência típica de bug:
 
 Para `.worktree-session`:
 1. Sessão A: usuário escolhe `worktree=yes branch=main`. Branch é deletada manualmente.
-2. Sessão B: agent lê `.claude/.worktree-session`, segue silenciosamente, tenta criar worktree em branch inexistente → erro tardio.
+2. Sessão B: agent lê `.dev-team-agents/.worktree-session`, segue silenciosamente, tenta criar worktree em branch inexistente → erro tardio.
 
 **Por que importa:**
 - Sintomas atribuídos a "bug do dev-team-agents" quando na verdade são stale state.

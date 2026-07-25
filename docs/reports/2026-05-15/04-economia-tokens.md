@@ -117,7 +117,7 @@ Fingerprint mencionado em 2026-05-11 (`token-changelog-already-growing-and-not-e
 
 **Arquivos:** todos os coding agents (8): `backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`
 
-**Observação:** cada um inline um bloco "Worktree Isolation" de **17 linhas** com instruções idênticas (read `.claude/.worktree-session`, perguntar se necessário, carregar worktree skill etc.).
+**Observação:** cada um inline um bloco "Worktree Isolation" de **17 linhas** com instruções idênticas (read `.dev-team-agents/.worktree-session`, perguntar se necessário, carregar worktree skill etc.).
 
 **Quantificação:**
 - 17 linhas × 8 agents = **136 linhas duplicadas no repo**.

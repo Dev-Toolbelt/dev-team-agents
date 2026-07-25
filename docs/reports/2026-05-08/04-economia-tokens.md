@@ -33,7 +33,7 @@ done
 **Before editing or creating any file**, check for an existing session decision:
 
 ​```bash
-cat .claude/.worktree-session 2>/dev/null
+cat .dev-team-agents/.worktree-session 2>/dev/null
 ​```
 
 | File content | Action |
@@ -47,7 +47,7 @@ cat .claude/.worktree-session 2>/dev/null
 > "Do you want this task isolated in a git worktree? [y/N]"
 
 - **Yes** → Ask: "Which branch should the worktree branch off?..."
-- **No** → Write `worktree=no` to `.claude/.worktree-session`...
+- **No** → Write `worktree=no` to `.dev-team-agents/.worktree-session`...
 
 ---
 ```
@@ -209,8 +209,8 @@ Levantamento parcial: todos os agentes coding e de revisão começam com:
 **Before [acting/writing code/reviewing]**, load the project context in this order:
 1. README.md ...
 2. CLAUDE.md ...
-3. .claude/docs/project.md ...
-4. .claude/user-data/session-summary.md ...
+3. docs/project.md ...
+4. .dev-team-agents/user-data/session-summary.md ...
 5–11. (variações por agente: architecture, code-standards, design-system...)
 12. Run `git log --oneline -20` ...
 ```
@@ -226,8 +226,8 @@ Hipótese:
 
 Load skills/shared/project-context/SKILL.md (handles steps 1–4 + git log).
 Then read these task-specific files:
-- .claude/docs/development/architecture.md
-- .claude/docs/development/code-standards.md
+- docs/development/architecture.md
+- docs/development/code-standards.md
 - (specifics per agent)
 ```
 

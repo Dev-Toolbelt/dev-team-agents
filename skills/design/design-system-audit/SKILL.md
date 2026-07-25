@@ -101,7 +101,7 @@ PROBLEMATIC: [accessibility issues, low contrast, missing focus states]
 
 ## Step 4 — Produce Design Context Document
 
-When in **Design Mode** (pre-build), generate `.claude/docs/design/design-system.md`:
+When in **Design Mode** (pre-build), generate `docs/design/design-system.md`:
 
 ```markdown
 # Design System — [Project Name]
@@ -152,7 +152,7 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ## Design System Creation (Design Mode)
 
-When building a design system from scratch, produce `.claude/docs/design/design-system.md` with the following sections:
+When building a design system from scratch, produce `docs/design/design-system.md` with the following sections:
 
 ### Color System
 ```

@@ -13,7 +13,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 **Database-specific additions after project-context loads:**
 
-- Read `.claude/docs/development/database.md` and `tech-stack.md` for existing decisions
+- Read `docs/development/database.md` and `tech-stack.md` for existing decisions
 - Check `.env`, `.env.local`, `docker-compose.yml` for connection strings and credentials
 - Scan existing schema files and migrations for current state
 - Run `git log --oneline -10` to reveal recent migration history and schema changes in flight
@@ -28,11 +28,11 @@ Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial schema change o
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -126,7 +126,7 @@ When producing migration files, seed scripts, or query helpers: follow `skills/s
 
 ## Database Access
 
-Use the Bash tool to connect directly — never ask for credentials in chat. Discover connections from: `DATABASE_URL`/`SUPABASE_DB_URL`/`MONGO_URI`/`REDIS_URL` env vars → `.env`/`.env.local` → `docker-compose.yml` → `.claude/docs/development/database.md`. CLI patterns are in each engine's per-engine skill. Supabase PostgreSQL: `psql "$SUPABASE_DB_URL"`.
+Use the Bash tool to connect directly — never ask for credentials in chat. Discover connections from: `DATABASE_URL`/`SUPABASE_DB_URL`/`MONGO_URI`/`REDIS_URL` env vars → `.env`/`.env.local` → `docker-compose.yml` → `docs/development/database.md`. CLI patterns are in each engine's per-engine skill. Supabase PostgreSQL: `psql "$SUPABASE_DB_URL"`.
 
 **Safety:** read-only by default (SELECT, EXPLAIN, DESCRIBE freely). Before any mutation: show the exact statement, state affected rows/objects, wait for confirmation. Never run without confirmation: `DROP TABLE/DATABASE`, `TRUNCATE`, `DELETE` without `WHERE`, `ALTER TABLE` on large production tables.
 
@@ -170,7 +170,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

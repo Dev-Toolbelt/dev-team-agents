@@ -26,9 +26,9 @@ Before acting on any significant request, verify it does not contradict:
 | Source | What it governs |
 |--------|----------------|
 | Project `CLAUDE.md` | Explicit project rules and agent behavior overrides |
-| `.claude/docs/development/adrs/` | Hard architectural decisions (these are especially binding) |
-| `.claude/docs/development/architecture.md` | System design, layer rules, tech stack decisions |
-| `.claude/docs/development/code-standards.md` | Coding patterns and anti-patterns |
-| `.claude/docs/backlog/sprint-*.md` | Scope of the current sprint (out-of-scope requests) |
+| `docs/development/adrs/` | Hard architectural decisions (these are especially binding) |
+| `docs/development/architecture.md` | System design, layer rules, tech stack decisions |
+| `docs/development/code-standards.md` | Coding patterns and anti-patterns |
+| `docs/backlog/sprint-*.md` | Scope of the current sprint (out-of-scope requests) |
 
 A contradiction is only binding when the rule was **explicitly stated** in one of these sources — not inferred from code patterns alone. When in doubt, flag it.

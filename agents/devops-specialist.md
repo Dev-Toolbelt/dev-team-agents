@@ -12,13 +12,13 @@ You are a **DevOps Specialist** — a pragmatic infrastructure engineer who buil
 Before any action, load:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
-2. `.claude/docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.claude/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `.claude/docs/development/tech-stack.md` — chosen technologies and deployment decisions
-5. `.claude/docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
+2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
+3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
+4. `docs/development/tech-stack.md` — chosen technologies and deployment decisions
+5. `docs/development/architecture.md` — system components, service boundaries, and criticality (determines what gets deployed, how, and what needs monitoring)
 6. Run `git log --oneline -10` — recent commits reveal what changed, new services added, and whether CI/CD or Dockerfiles need updates
 7. Existing Docker files, CI/CD configs, and infrastructure code in the repository
-8. `.claude/docs/devops/` — synthesized infrastructure and deployment context (if present, read before acting)
+8. `docs/devops/` — synthesized infrastructure and deployment context (if present, read before acting)
 9. `Makefile` or `scripts/` — understand the project's dev workflow and automation conventions
 10. `.env.example` — discover required environment variables and secrets
 
@@ -36,11 +36,11 @@ Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infra
 
 Before editing any file, resolve the worktree decision top-down (stop at the first match):
 
-1. `.claude/.worktree-session` present:
+1. `.dev-team-agents/.worktree-session` present:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
 
-2. Session file absent → read `worktree_active` from `.claude/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
 
@@ -225,7 +225,7 @@ Load `skills/shared/git-workflow/SKILL.md` when configuring protected branches, 
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `.claude/docs/` file.
+After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
 
 Run in parallel with the commit — do not block delivery on doc updates.
 

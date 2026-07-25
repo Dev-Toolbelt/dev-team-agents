@@ -105,7 +105,7 @@ O `setup-assistant` irá:
 3. **Perguntar** qual tipo de projeto é este: novo do zero, herdado/inacabado, ou manutenção de sistema em produção
 4. **Coletar** configuração em uma única troca: testes necessários, plataforma de CI/CD, provedor de nuvem, issue tracker
 5. **Apresentar um plano** para sua aprovação antes de criar ou modificar qualquer coisa
-6. **Gerar** documentos de contexto vivos em `.claude/docs/` (stack, arquitetura, padrões de código, índice de backlog) e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
+6. **Gerar** documentos de contexto vivos em `docs/` (stack, arquitetura, padrões de código, índice de backlog) e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
 7. **Confirmar** o que foi configurado e indicar o guia de workflow relevante
 
 O setup completo tipicamente leva de 5 a 10 minutos. Rodar novamente em um projeto existente ativa o modo refresh — lê o histórico git desde a última execução e aplica patches apenas nos docs afetados.
@@ -241,7 +241,7 @@ git commit -m "chore: add dev-team-agents"
 
 Os agentes de codificação resolvem a decisão de worktree por uma **cascata de três níveis**:
 
-1. **`.claude/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
+1. **`.dev-team-agents/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
 2. **Defaults do `preferences.json`** — defina `worktree_active: true` para os agentes criarem uma worktree por task **sem perguntar**. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.claude/worktrees/<ctx>/<title>/`).
 3. **Perguntar uma vez** — apenas em instalações legadas onde a chave de preferência não existe.
 
@@ -262,8 +262,8 @@ Os agentes de codificação resolvem a decisão de worktree por uma **cascata de
 
 Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos minimizam a perda de contexto:
 
-- **Resumo de sessão** — ao final de qualquer sessão com arquivos alterados, os agentes escrevem uma entrada em `.claude/user-data/session-summary.md`. Um hook `Stop` enforça isso automaticamente.
-- **ADRs** — decisões significativas e difíceis de reverter são registradas como Architecture Decision Records em `.claude/docs/development/adrs/`. Crie um com: `bash .dev-team-agents/scripts/new-adr.sh "título"`
+- **Resumo de sessão** — ao final de qualquer sessão com arquivos alterados, os agentes escrevem uma entrada em `.dev-team-agents/user-data/session-summary.md`. Um hook `Stop` enforça isso automaticamente.
+- **ADRs** — decisões significativas e difíceis de reverter são registradas como Architecture Decision Records em `docs/development/adrs/`. Crie um com: `bash .dev-team-agents/scripts/new-adr.sh "título"`
 - **Project context skill** — define a ordem de carregamento de contexto que todo agente segue no startup, incluindo o resumo de sessão e o índice de ADRs.
 
 ---
@@ -277,7 +277,7 @@ Dev Team Agents é uma **camada base**. As convenções do seu projeto sempre t�
 ```bash
 .agents/backend-developer.md          # override por agente
 CLAUDE.md                             # regras globais para todos os agentes
-.claude/docs/development/code-standards.md  # padrões de código usados pelos reviewers
+docs/development/code-standards.md  # padrões de código usados pelos reviewers
 ```
 
 ---
@@ -290,7 +290,7 @@ CLAUDE.md                             # regras globais para todos os agentes
 
 **Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
 
-**Hook de verificação de atualização dispara a cada tool call** — verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
+**Hook de verificação de atualização dispara a cada tool call** — verifique se `.dev-team-agents/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
 
@@ -304,7 +304,7 @@ O dev-team-agents coleta **dados de uso anônimos e agregados** para nos ajudar 
 
 **O que é coletado:** nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
 
-**Desative a qualquer momento** editando `.claude/user-data/preferences.json`:
+**Desative a qualquer momento** editando `.dev-team-agents/user-data/preferences.json`:
 
 ```json
 { "telemetry": false }

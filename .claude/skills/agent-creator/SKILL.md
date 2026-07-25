@@ -53,10 +53,10 @@ You are a **[Role Name]** — [one sentence defining the role and mindset].
 Before any action, load the project context in this order:
 
 1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
-2. `.claude/docs/project.md` — synthesized project overview
+2. `docs/project.md` — synthesized project overview
 3. `.claude/user-data/session-summary.md` — most recent entry only (topmost ## block)
-4. `.claude/docs/backlog/` — current scope and task definition
-5. `.claude/docs/development/` — architecture, tech stack, code standards
+4. `docs/backlog/` — current scope and task definition
+5. `docs/development/` — architecture, tech stack, code standards
 6. Run `git log --oneline -20` — recent patterns and active areas
 
 **Project rules override base standards. Always.**
@@ -87,7 +87,7 @@ Coding agents — `backend-developer`, `frontend-developer`, `database-specialis
 ```markdown
 ## Worktree Isolation
 
-1. Read `.claude/.worktree-session`:
+1. Read `.dev-team-agents/.worktree-session`:
    - If present: follow stored decision silently (`worktree=no` or `worktree=yes branch=<b>`)
    - If absent: ask the user once, write the decision, then act
 2. On `worktree=yes`: load `skills/shared/worktree/SKILL.md` with the provided branch (default: `main`)

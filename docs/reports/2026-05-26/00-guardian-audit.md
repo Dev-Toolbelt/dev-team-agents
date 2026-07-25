@@ -116,12 +116,12 @@ grep "^## \[" CHANGELOG.md | head -3
 ```bash
 $ cat .gitignore | tail -3
 .claude/settings.local.json
-.claude/user-data/session-summary.md
-.claude/user-data/.notifier-stateuser-data/
+.dev-team-agents/user-data/session-summary.md
+.dev-team-agents/user-data/.notifier-stateuser-data/
 ```
 
 A linha 7 funde `.notifier-state` e `user-data/` numa única entrada inválida.
-`git check-ignore` confirma que `.claude/user-data/` **não é ignorado**.
+`git check-ignore` confirma que `.dev-team-agents/user-data/` **não é ignorado**.
 **Status:** 🔴 — causa-raiz já identificada em 2026-05-24, mas sem fix.
 
 ---

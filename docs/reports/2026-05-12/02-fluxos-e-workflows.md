@@ -105,9 +105,9 @@ Cada sub-script já tem internamente seu próprio gate (ex.: `04-notifier.sh` ag
 
 **Severidade:** 🟡 Média
 
-**Detecção:** 23 de 25 commands carregam `current-context` antes de spawn. Cada agent spawn então tipicamente **re-executa** o mesmo `git branch`, `git diff main…HEAD`, leitura de `.claude/.worktree-session` etc. — overhead de ~5-10s por spawn em projetos grandes.
+**Detecção:** 23 de 25 commands carregam `current-context` antes de spawn. Cada agent spawn então tipicamente **re-executa** o mesmo `git branch`, `git diff main…HEAD`, leitura de `.dev-team-agents/.worktree-session` etc. — overhead de ~5-10s por spawn em projetos grandes.
 
-`current-context/SKILL.md` é mecânica de leitura, mas não tem cache. Não há contrato de "pré-aquecimento" — o command poderia gravar o resultado em `.claude/user-data/.context-cache.json` (TTL curto, ex.: 5min) e cada agent spawned ler dali.
+`current-context/SKILL.md` é mecânica de leitura, mas não tem cache. Não há contrato de "pré-aquecimento" — o command poderia gravar o resultado em `.dev-team-agents/user-data/.context-cache.json` (TTL curto, ex.: 5min) e cada agent spawned ler dali.
 
 **Impacto positivo (se corrigido):** em commands multi-spawn (plan, refactor, fix com 3-5 agents), elimina o re-trabalho. Em projetos grandes (>1GB git), redução estimada de 30-60s wall-clock.
 
@@ -190,7 +190,7 @@ Ambos os commands existem (commits `1c8be69` e anteriores) mas não têm workflo
 
 **Impacto negativo (se mantido):** estratégia atual é "se quebrar, reinstale via curl" — funciona, mas é assustador para usuários novos.
 
-**Sugestão:** `scripts/update.sh` registrar `.claude/user-data/.installed-version` antes do swap; criar `scripts/rollback.sh` que aceita versão e re-baixa via curl (`/v$VERSION/devteam.tar.gz`).
+**Sugestão:** `scripts/update.sh` registrar `.dev-team-agents/user-data/.installed-version` antes do swap; criar `scripts/rollback.sh` que aceita versão e re-baixa via curl (`/v$VERSION/devteam.tar.gz`).
 
 ---
 
