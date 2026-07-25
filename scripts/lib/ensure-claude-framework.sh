@@ -57,5 +57,7 @@ ensure_claude_framework() {
   fi
 
   # VERSION tag if available.
-  [[ -f "$source_dir/VERSION" ]] && cp -f "$source_dir/VERSION" "$framework_dir/VERSION" 2>/dev/null || true
+  if [[ -f "$source_dir/VERSION" ]]; then
+    cp -f "$source_dir/VERSION" "$framework_dir/VERSION" 2>/dev/null || true
+  fi
 }

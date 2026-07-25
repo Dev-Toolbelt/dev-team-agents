@@ -19,6 +19,6 @@ echo "─ size-limits (--warn-only) ──────────────�
 bash helpers/size-limits.sh --warn-only
 
 echo "─ shellcheck scripts + helpers ───────────────────────────"
-find scripts helpers -name '*.sh' -exec shellcheck {} +
+find scripts helpers -name '*.sh' -exec shellcheck -x {} +
 
 echo "lint OK ✓"
