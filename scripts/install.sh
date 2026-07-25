@@ -142,9 +142,12 @@ done
 # scripts, and cross-CLI plumbing. The exact list lives in
 # scripts/lib/strip-tarball.sh so the slim-shape CI contract test
 # (.github/scripts/ci/slim-bootstrap.sh) sources the SAME rules without duplication.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+#
+# Source from the extracted tarball, NOT from BASH_SOURCE[0] — when run via
+# update.sh (or curl | bash) the script lives in a temp file, but the tarball
+# always has strip-tarball.sh at a known path inside EXTRACTED_ROOT.
 # shellcheck source=scripts/lib/strip-tarball.sh
-source "$SCRIPT_DIR/lib/strip-tarball.sh"
+source "$EXTRACTED_ROOT/scripts/lib/strip-tarball.sh"
 apply_strip "$EXTRACTED_ROOT"
 
 if [ -d "$INSTALL_DIR" ]; then
