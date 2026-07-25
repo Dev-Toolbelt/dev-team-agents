@@ -152,55 +152,17 @@ Omit `manifestPaths` if no manifest files were found. Do not ask the user to con
 
 ---
 
-## Step 6 — Register Graphify Stop Sub-script
+## Step 6 — Graphify Hook Sub-scripts
 
-Create the graphify-refresh sub-script so the Stop dispatcher runs it automatically after each session:
+The `99-graphify-refresh.sh` (Stop) and `02-graphify-hint.sh` (PreToolUse) sub-scripts are **built-in** to the dev-team-agents tarball. No manual creation is needed.
+
+Remove any legacy file if present:
 
 ```bash
-# Remove any legacy 02-graphify-refresh.sh created by older versions
 rm -f .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
-
-cat > .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh << 'EOF'
-#!/usr/bin/env bash
-# Stop sub-script: rebuild the Graphify knowledge graph after each session.
-# Uses 99- prefix (cleanup tier) per the Stop hook convention.
-# graphify-refresh.sh exits 0 silently when graphify is not installed or not configured.
-set -euo pipefail
-bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/scripts/graphify-refresh.sh"
-EOF
-chmod +x .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh
 ```
 
-The Stop dispatcher (`.claude/dev-team-agents/scripts/hooks/stop.sh`) picks this up automatically — no changes to `settings.json` are needed.
-
----
-
-## Step 6b — Register Graphify PreToolUse Hint Sub-script
-
-Create the hint sub-script so the PreToolUse dispatcher injects graph context when Claude uses Glob or Grep:
-
-```bash
-cat > .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh << 'EOF'
-#!/usr/bin/env bash
-# PreToolUse sub-script: injects graphify context hint when Claude searches the codebase.
-# Only fires when graph.json exists and the current tool is Glob or Grep.
-set -euo pipefail
-
-GRAPH="graphify-out/graph.json"
-[ -f "$GRAPH" ] || exit 0
-
-INPUT=$(cat)
-TOOL_NAME=$(printf '%s' "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-
-case "$TOOL_NAME" in
-    Glob|Grep) ;;
-    *) exit 0 ;;
-esac
-
-printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify: Knowledge graph exists. First consult graphify-out/GRAPH_REPORT.md and graphify-out/graph.json to understand structure and relationships. Only search raw files if those two layers are insufficient."}}\n'
-EOF
-chmod +x .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh
-```
+The Stop dispatcher and PreToolUse dispatcher pick these up automatically — no changes to `settings.json` are needed.
 
 ---
 
