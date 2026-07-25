@@ -54,7 +54,10 @@ done
 
 ## Category 3 — User Data & Legacy Paths
 
+⚠️ **CRITICAL — do NOT create or write to `.claude/user-data/` or `.claude/dev-team-agents/`.** Those paths are legacy. All operations must use `.dev-team-agents/user-data/`.
+
 ```bash
+# Check new paths
 ls -la .dev-team-agents/user-data/ 2>/dev/null || echo "MISSING"
 cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "MISSING"
 
@@ -66,9 +69,9 @@ done
 
 | Check | Auto-fix |
 |-------|----------|
-| `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` |
+| `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` (never `.claude/user-data/`) |
 | `.installed-version` exists | WARN only — re-run installer to populate |
-| Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Offer migration**: move contents to new locations and remove old dirs |
+| Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration), then remove old dirs. Do NOT skip this step. |
 
 ## Category 4 — settings.json
 
@@ -122,6 +125,8 @@ grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/n
 
 ## Category 7 — .gitignore
 
+⚠️ **CRITICAL — only add `.dev-team-agents/` entries. Never add `.claude/user-data/`, `.claude/dev-team-agents/`, or `.claude/.worktree-session`.**
+
 ```bash
 # Check for new directory-pattern entries
 grep -qF ".dev-team-agents/user-data/" .gitignore 2>/dev/null && echo "OK: user-data dir" || echo "MISSING: .dev-team-agents/user-data/"
@@ -157,10 +162,11 @@ done
 
 | Check | Status | Auto-fix |
 |-------|--------|----------|
-| `.dev-team-agents/user-data/` in `.gitignore` | Required | Append automatically |
+| `.dev-team-agents/user-data/` in `.gitignore` | Required | Append automatically (never `.claude/user-data/`) |
 | `!.dev-team-agents/user-data/graphify.json` in `.gitignore` | Required | Append automatically |
 | `.dev-team-agents/.worktree-session` in `.gitignore` | Required | Append automatically |
 | Legacy individual entries present | Outdated | **Offer migration**: remove individual entries and add directory pattern |
+| `.claude/user-data/` or `.claude/dev-team-agents/` in `.gitignore` | **WRONG** — replace with `.dev-team-agents/` entries immediately | `sed -i '' 's|\.claude/user-data|.dev-team-agents/user-data|g' .gitignore` |
 
 ## Category 8 — User Preferences
 
