@@ -1,7 +1,6 @@
 ---
 name: frontend-developer
 description: Implements frontend features following the project's design system and architecture. Works in both decoupled SPAs (React, Vue, Svelte, Angular) and server-rendered templates (Blade, Twig, ERB, Jinja). Collaborates with ui-ux-designer in consultive mode. Use for any client-side implementation task.
-model: claude-sonnet-4-6
 tier: frontend
 ---
 

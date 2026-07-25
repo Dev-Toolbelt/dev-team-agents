@@ -1,7 +1,6 @@
 ---
 name: code-reviewer
 description: Reviews code for quality, correctness, security, and standards compliance. Covers: design patterns, SOLID, Object Calisthenics, DRY, code repetition, race conditions, silent bugs, linting, readability, and edge cases. Reads the project's code-standards.md before reviewing. Automatically routes to backend-reviewer or frontend-reviewer based on the changeset. Use in the QUALITY GATE phase or when a PR review is needed.
-model: claude-sonnet-4-6
 tier: backend-exec
 ---
 

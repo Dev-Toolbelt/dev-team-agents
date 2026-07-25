@@ -1,7 +1,6 @@
 ---
 name: backend-developer
 description: Implements backend features following the project's architecture and code standards. Works in both decoupled (REST API, GraphQL) and monolithic (MVC, server-rendered templates) architectures. Writes naturally testable code without overengineering. Use for any server-side implementation task.
-model: claude-sonnet-4-6
 tier: backend-exec
 ---
 

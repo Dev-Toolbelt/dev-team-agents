@@ -1,7 +1,6 @@
 ---
 name: software-architect
 description: Makes architectural decisions after scope is closed. Decides technology stack, system design, patterns, and code standards. Avoids overengineering. Also participates in QUALITY GATE to validate conformance. Use after product-analyst closes scope, or when architectural decisions need to be made or reviewed.
-model: claude-opus-4-7
 tier: reasoning
 ---
 

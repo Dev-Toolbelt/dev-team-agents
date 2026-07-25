@@ -1,7 +1,6 @@
 ---
 name: devops-specialist
 description: Infrastructure specialist. Sets up dev and production environments, provisions servers, configures CI/CD pipelines, deploys to cloud or self-hosted infra in a cost-optimized way, and manages monitoring/observability stacks and IaC. Picks the right deployment tool for the project based on scale, team, and existing setup. Always instructs users to pass credentials securely. Use for any infrastructure, deployment, environment configuration, or observability task.
-model: claude-sonnet-4-6
 tier: backend-exec
 ---
 

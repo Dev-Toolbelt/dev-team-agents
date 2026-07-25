@@ -125,7 +125,7 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     desc = fm.get("description", "").strip()
     tools_list = [t.strip() for t in (fm.get("tools", "") or "").split(",") if t.strip()]
     permission = _opencode_permission(tools_list)
-    fm_lines = ["---", f"description: {desc}", "mode: subagent", f"model: {model_id}"]
+    fm_lines = ["---", f"description: {desc}", "mode: subagent"]
     # NOTE: opencode schema has no `effort` field — unknown frontmatter is
     # silently routed into an untyped `options` object, so emitting it was a
     # no-op (see docs/providers.md Known Limitations). Not emitted.
@@ -209,7 +209,6 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
     snippet_entry = {
         "description": meta.get("description", ""),
         "agent": meta.get("agent", ""),
-        "model": model_id,
         "template": tool_conventions_note("opencode", tool_map) + body,
     }
     return {

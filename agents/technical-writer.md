@@ -1,7 +1,6 @@
 ---
 name: technical-writer
 description: Produces technical documentation — API docs, READMEs, runbooks, changelogs, and architecture guides. Follows project documentation standards if defined; defaults to Diátaxis framework and Google Developer Docs Style Guide. Use when documentation needs to be created or updated.
-model: claude-sonnet-4-6
 tier: repetitive
 ---
 

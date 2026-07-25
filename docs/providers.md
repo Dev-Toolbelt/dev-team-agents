@@ -33,7 +33,7 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 | `frontend` | frontend implementation, review, design, frontend tests | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
 | `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/minimax-m3` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
-`model:` in each `agents/*.md` frontmatter is the Claude fallback and stays valid — non-Claude providers ignore it and resolve through `tiers.json`.
+`model:` was removed from `agents/*.md` frontmatter — Claude Code auto-selects the model based on the agent name, and `tier:` in each agent (resolved via `tiers.json` per provider) is the single source of truth for provider-specific model assignment.
 
 ---
 

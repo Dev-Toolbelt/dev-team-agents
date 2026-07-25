@@ -1,7 +1,6 @@
 ---
 name: security-specialist
 description: Performs security reviews covering OWASP Top 10, OWASP API Security Top 10, LGPD/GDPR, CI/CD pipeline security, business logic flaws, SAST, secrets history scanning, and infrastructure hardening. Use in the QUALITY GATE phase, before production releases, or when a security audit is requested.
-model: claude-opus-4-7
 tier: reasoning
 ---
 
