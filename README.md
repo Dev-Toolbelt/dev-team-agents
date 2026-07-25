@@ -68,83 +68,25 @@ A render engine (`scripts/render-provider.sh`, plain Python with stdlib only) re
 
 ---
 
-## How to Install
+## Quick Install
 
-### Prerequisites
+| CLI | One command | Docs |
+|-----|-------------|------|
+| **Claude Code** | `curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh \| bash` | [docs/install-claude.md](docs/install-claude.md) |
+| **opencode** | `bash <(curl -sSL .../scripts/install-provider.sh) opencode` | [docs/install-opencode.md](docs/install-opencode.md) |
+| **Codex CLI** | `bash <(curl -sSL .../scripts/install-provider.sh) codex` | [docs/install-codex.md](docs/install-codex.md) |
 
-- **Claude Code** — CLI, desktop app, or IDE extension. Install at [claude.ai/code](https://claude.ai/code).
-- **Git** — the installer uses `git rev-parse` to verify the project root.
-- **curl** or **wget** — used to download the release tarball.
+Run the command from your **project root**. The Claude installer asks for your preferred conversation language. opencode and Codex CLI are **not bundled** in the Claude slim install — they bootstrap on demand via `install-provider.sh`.
 
-### Install (latest version)
+> Full model-tier map, known limitations, and adding a new provider: [docs/providers.md](docs/providers.md)
 
-Run from your **project root**:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash
-```
-
-Example output:
+After Claude install, start the setup flow by typing:
 
 ```
-[dev-team-agents] Fetching latest release...
-[dev-team-agents] Installing v1.2.0...
-[dev-team-agents] Extracting to .claude/dev-team-agents/
-[dev-team-agents] Creating symlinks...
-[dev-team-agents] Configuring hooks in .claude/settings.json...
-
-? Which language should agents use when talking to you? (BCP 47 tag, e.g. en, pt-BR, es) [en]:
-
-[dev-team-agents] Done. Installed v1.2.0.
-[dev-team-agents] Run: "Help me set up this project with dev-team-agents"
+Help me set up this project with dev-team-agents
 ```
 
-### Language preference
-
-During installation, the installer asks which language agents should use in conversation. Documents (ADRs, changelogs, code comments) always remain in English. Update at any time in `.claude/user-data/preferences.json`:
-
-```json
-{ "language": "pt-BR" }
-```
-
-Common values: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
-
-> **Advanced options** — specific version, updates, version pinning, auto-update, notifications, and directory layout: [docs/installation.md](docs/installation.md)
-
----
-
-## Other providers (opencode, Codex CLI)
-
-The same agent team, skills, and hooks can run from **opencode** or **OpenAI Codex CLI** without reauthoring the framework. The slim Claude install intentionally does NOT bundle the cross-CLI plumbing (the render engine, the installer scripts for other CLIs, the opencode plugin). Instead you bootstrap provider support on demand from GitHub — keeping the default client footprint minimal.
-
-### Install for opencode (from your project root, after `install.sh`)
-
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode
-```
-
-The bootstrap fetches just the cross-CLI files and runs `install-opencode.sh`, which releases agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/`, copies the plugin to `.opencode/plugins/dev-team-agents.ts`, and deep-merges 22 `devteam:<name>` command keys into `.opencode/opencode.json`. After install, the slash UX is identical to Claude Code: `/devteam:plan do a plan`, `/devteam:backend …`, etc.
-
-### Install for Codex CLI
-
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
-```
-
-Releases agents as `.codex/agents/<name>.toml`, prompts as `.codex/prompts/devteam-<name>.md`, and registers 4 managed hooks in `.codex/hooks.json`. Codex exposes custom prompts under a hardcoded `/prompts:` namespace, so commands are surfaced as `/prompts:devteam-<name>` — the only UX divergence, documented in [docs/providers.md](docs/providers.md).
-
-> If you already work from a clone of this repo (or pass `--source <path>`), you can skip the curl-pipe and run `scripts/install-opencode.sh` / `scripts/install-codex.sh` directly with `--source`.
-
-### Tier → model map
-
-| tier | claude | opencode | codex |
-| --- | --- | --- | --- |
-| reasoning (architecture, planning, big refactors) | `claude-opus-4-7` | `opencode-go/glm-5.2` (high) | `openai/gpt-5.6-sol` (high) |
-| backend-exec (day-to-day: backend, dba, devops, qa, mobile, code-review) | `claude-sonnet-4-6` | `opencode-go/deepseek-v4-flash` (default) | `openai/gpt-5.6-terra` (medium) |
-| frontend (frontend, ui/ux, frontend tests) | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (default) | `openai/gpt-5.6-terra` (medium) |
-| repetitive (test scaffolding, docs) | `claude-sonnet-4-6` | `opencode-go/minimax-m3` (low) | `openai/gpt-5.6-luna` (low) |
-
-> Full reference: [docs/providers.md](docs/providers.md)
+> **Advanced Claude options** — specific version, update, version pinning, auto-update, notifications, and directory layout: [docs/installation.md](docs/installation.md)
 
 ---
 

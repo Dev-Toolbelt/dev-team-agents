@@ -133,6 +133,17 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
 fi
 
+# 3.1 — materialize .claude/dev-team-agents/ subset so the plugin's
+# `${directory}/.claude/dev-team-agents/scripts/hooks/...` paths resolve.
+# Sourced helper mirrors the slim Claude install.
+if [[ $DRY_RUN -eq 0 ]]; then
+  SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
+  # shellcheck source=scripts/lib/ensure-claude-framework.sh
+  source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
+  ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
+  echo "  + materialized .claude/dev-team-agents/ runtime subset (hooks/scripts/skills)"
+fi
+
 # 4. merge command snippet into project opencode.json(.jsonc)
 SNIPPET="$STAGING/.opencode/commands.snippet.jsonc"
 if [[ ! -f "$SNIPPET" ]]; then

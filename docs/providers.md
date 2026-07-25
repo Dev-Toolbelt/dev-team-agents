@@ -91,6 +91,12 @@ If your provider can't expose `/devteam:<name>` (e.g., it hardcodes a slash name
 
 ---
 
+## Known limitations
+
+- **opencode `effort` is a no-op.** The opencode agent schema has no `effort` field; unknown frontmatter keys (`options.effort`) are silently stored in an untyped `options` object and have no effect on the model's reasoning effort. The tier map's effort column is documented as the design target but is not enforced by opencode. Contributions welcome if opencode adds a first-class `effort` or `variant` field for per-agent model tuning.
+- **Skill-loading idiom differs per provider.** Agent bodies were authored for Claude Code (e.g., `Load skills/shared/plan-mode/SKILL.md`). In opencode, the model should invoke the `skill` tool with the skill's folder name (e.g., `skill({ name: 'plan-mode' })`). In Codex, the model reads the file at `.claude/dev-team-agents/skills/<category>/<name>/SKILL.md`. The renderer prepends a per-provider preamble that explains this to each provider's agent — no body rewrite occurs.
+- **Codex UX divergence.** Codex's custom-prompt namespace is hardcoded as `/prompts:`. Commands are exposed as `/prompts:devteam-<name>` (e.g., `/prompts:devteam-plan`) rather than `/devteam:<name>`. Claude Code and opencode preserve the canonical `/devteam:<name>` UX.
+
 ## Troubleshooting
 
 **`render-provider: ERROR: tier 'X' has no model id for provider 'Y'`** — add a column `Y` under the missing tier in `scripts/lib/tiers.json`.

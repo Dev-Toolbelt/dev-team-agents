@@ -30,21 +30,50 @@ print(f'opencode fixture: commands={len(d[\"command\"])}')
     n_agents=$(find "$FIXTURE/.opencode/agents" -maxdepth 1 -name '*.md' -type f | wc -l | tr -d ' ')
     echo "opencode fixture: agents=$n_agents"
     [ "$n_agents" -ge 17 ] || { echo "FAIL: <17 opencode agents" >&2; exit 1; }
+    # The plugin references ${directory}/.claude/dev-team-agents/scripts/hooks/<n>.sh
+    # Verify those paths actually exist on disk after the installer ran (catches
+    # the case where ensure-claude-framework.sh was not invoked).
+    for h in stop pre-tool-use session-start pre-compact; do
+      [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
+        echo "FAIL: .claude/dev-team-agents/scripts/hooks/$h.sh not materialized — the opencode plugin will fail to fire $h hooks" >&2; exit 1; }
+    done
     ;;
   codex)
-    # .codex/hooks.json parses and has the 4 managed events
-    python3 -c "
-import json
-d = json.load(open('$FIXTURE/.codex/hooks.json'))
-events = {h['event'] for h in d.get('hooks', [])}
-required = {'SessionStart', 'PreToolUse', 'PreCompact', 'Stop'}
-missing = required - events
-assert not missing, f'codex hooks.json missing events: {sorted(missing)}'
-print(f'codex fixture: hook events={sorted(events)}')
-"
+    # .codex/hooks.json parses, has 4 managed events, each hook command path resolves
+    python3 - <<PY
+import json, os
+fpath = "$FIXTURE/.codex/hooks.json"
+d = json.load(open(fpath))
+hooks_obj = d.get("hooks")
+assert isinstance(hooks_obj, dict), f"codex hooks.json 'hooks' must be an object keyed by event (got {type(hooks_obj).__name__})"
+required = {"SessionStart", "PreToolUse", "PreCompact", "Stop"}
+missing = required - set(hooks_obj.keys())
+assert not missing, f"codex hooks.json missing events: {sorted(missing)}"
+missing_paths = []
+for event, groups in hooks_obj.items():
+    for grp in groups:
+        for hh in grp.get("hooks", []):
+            assert isinstance(hh.get("command"), str), f"{event}: command must be a string"
+            # commands look like 'bash .claude/dev-team-agents/scripts/hooks/<n>.sh'
+            parts = hh["command"].split()
+            if len(parts) < 2:
+                missing_paths.append(f"{event}: malformed command '{hh['command']}'")
+                continue
+            rel = parts[1]
+            full = os.path.join("$FIXTURE", rel)
+            if not os.path.exists(full):
+                missing_paths.append(f"{event}: hook script '{rel}' not on disk at '{full}'")
+assert not missing_paths, f"codex hooks.json references missing scripts: {missing_paths}"
+print(f"codex fixture: hook events={sorted(hooks_obj.keys())} (all 4 paths verified on disk)")
+PY
     n_agents=$(find "$FIXTURE/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
     n_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
     [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || { echo "FAIL: codex skills symlink missing" >&2; exit 1; }
+    # Also assert the Claude framework runtime subset is materialized
+    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/stop.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/stop.sh not materialized (codex hooks would dangle)" >&2; exit 1; }
+    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/pre-tool-use.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh not materialized" >&2; exit 1; }
+    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/session-start.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/session-start.sh not materialized" >&2; exit 1; }
+    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/pre-compact.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/pre-compact.sh not materialized" >&2; exit 1; }
     echo "codex fixture: agents=$n_agents prompts=$n_prompts"
     [ "$n_agents" -ge 17 ] || { echo "FAIL: <17 codex agents" >&2; exit 1; }
     [ "$n_prompts" -ge 22 ] || { echo "FAIL: <22 codex prompts" >&2; exit 1; }

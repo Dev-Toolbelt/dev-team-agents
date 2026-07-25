@@ -259,6 +259,117 @@ def check_codex(staging, source):
     return errs
 
 
+# ─── shared: source-tree idiom + lib integrity ───────────────────────
+CODEX_HOOK_EVENTS = ("SessionStart", "PreToolUse", "PreCompact", "Stop")
+
+
+def check_tool_map_idiom_notes(source):
+    """Every non-claude provider in scripts/lib/tool-map.json MUST carry
+    `idiom_notes` (the skill-loading + subagent-spawn preamble the renderer
+    prepends to every agent body). Catches the case where someone adds a
+    new provider column to tiers.json but forgets the idiom notes — agent
+    bodies would silently break skill loads or subagent spawns."""
+    errs = 0
+    tm = json.load(open(Path(source) / "scripts/lib/tool-map.json"))
+    provs = tm.get("providers", {})
+    tiers = json.load(open(Path(source) / "scripts/lib/tiers.json"))
+    declared_provider_cols = set()
+    for tier_entry in tiers.get("tiers", {}).values():
+        declared_provider_cols |= {k for k in tier_entry.keys() if not k.startswith("_")}
+    for prov in declared_provider_cols:
+        if prov == "claude":
+            continue
+        entry = provs.get(prov)
+        if not entry:
+            continue
+        if not entry.get("idiom_notes"):
+            errs += fail(f"tool-map.json/{prov}: missing `idiom_notes` — agents rendered for this provider will silently break skill loads and subagent spawns")
+    return errs
+
+
+def check_slug_uniqueness_in_tool_map(source):
+    """tool_rewrites must not collide (no `from` mapped by two different
+    keys — covers accidental duplicates)."""
+    errs = 0
+    tm = json.load(open(Path(source) / "scripts/lib/tool-map.json"))
+    for prov, entry in tm.get("providers", {}).items():
+        renames = entry.get("tool_rewrites", {}) or {}
+        seen = {}
+        for src in renames:
+            seen.setdefault(src, 0)
+            seen[src] += 1
+        for src, n in seen.items():
+            if n > 1:
+                errs += fail(f"tool-map.json/{prov}: `tool_rewrites` has {n} entries for `{src}`")
+    return errs
+
+
+# ─── codex hooks.json shape (after install) ──────────────────────────
+def check_codex_hooks_json_shape(hooks_path):
+    """Codex spec: { "hooks": { "<Event>": [ { matcher, hooks: [{type, command, ...}] } ] } }
+    — an OBJECT keyed by event name, each value an array of matcher groups;
+    each hook `command` is a STRING, not an array.
+
+    Catches the regression where install-codex.sh wrote the wrong shape (a
+    previous version emitted an array under `hooks` — Codex silently ignored
+    all four lifecycle dispatchers)."""
+    errs = 0
+    try:
+        d = json.load(open(hooks_path))
+    except Exception as e:
+        return fail(f"codex hooks.json at {hooks_path}: invalid JSON: {e}")
+    hooks_obj = d.get("hooks")
+    if not isinstance(hooks_obj, dict):
+        return fail(f"codex hooks.json: 'hooks' must be an OBJECT keyed by event name (got {type(hooks_obj).__name__}). This breaks ALL codex lifecycle hooks silently.")
+    expected_events = {"SessionStart", "PreToolUse", "PreCompact", "Stop"}
+    present_events = set(hooks_obj.keys())
+    missing = expected_events - present_events
+    if missing:
+        errs += fail(f"codex hooks.json: missing events {sorted(missing)}")
+    for event, groups in hooks_obj.items():
+        if not isinstance(groups, list):
+            errs += fail(f"codex hooks.json/{event}: value must be an ARRAY of matcher groups (got {type(groups).__name__})")
+            continue
+        for grp_idx, grp in enumerate(groups):
+            if not isinstance(grp, dict):
+                errs += fail(f"codex hooks.json/{event}[{grp_idx}]: matcher group must be an OBJECT")
+                continue
+            hooks_list = grp.get("hooks", [])
+            if not isinstance(hooks_list, list):
+                errs += fail(f"codex hooks.json/{event}[{grp_idx}]: 'hooks' must be an ARRAY")
+                continue
+            for hook_idx, hh in enumerate(hooks_list):
+                if not isinstance(hh, dict):
+                    errs += fail(f"codex hooks.json/{event}[{grp_idx}].hooks[{hook_idx}]: must be an OBJECT")
+                    continue
+                if hh.get("type") != "command":
+                    errs += fail(f"codex hooks.json/{event}[{grp_idx}].hooks[{hook_idx}]: 'type' must be 'command' (only command hooks run today)")
+                cmd = hh.get("command")
+                if not isinstance(cmd, str) or not cmd.strip():
+                    errs += fail(f"codex hooks.json/{event}[{grp_idx}].hooks[{hook_idx}]: 'command' must be a non-empty STRING (got {type(cmd).__name__}). The Codex runtime will fail to exec this hook.")
+    return errs
+def check_installer_references(source):
+    """Cross-check that install-opencode.sh / install-codex.sh source
+    helpers that actually exist in scripts/lib/. Catches the case where
+    someone renames a helper script and the installer silently fails."""
+    errs = 0
+    lib = Path(source) / "scripts" / "lib"
+    expected = ("strip-tarball.sh", "ensure-claude-framework.sh")
+    for name in expected:
+        if not (lib / name).exists():
+            errs += fail(f"scripts/lib/{name}: installer-required helper missing")
+    # install-opencode.sh and install-codex.sh both source ensure-claude-framework.sh
+    for inst in ("install-opencode.sh", "install-codex.sh"):
+        p = Path(source) / "scripts" / inst
+        if not p.exists():
+            errs += fail(f"scripts/{inst}: missing")
+            continue
+        text = p.read_text()
+        if "ensure-claude-framework.sh" not in text:
+            errs += fail(f"scripts/{inst}: does not source `ensure-claude-framework.sh` — .claude/dev-team-agents/ will not be materialized and hook paths will be unresolvable")
+    return errs
+
+
 # ─── shared: tier × provider completeness ────────────────────────────
 def check_tiers_completeness(source):
     """Every tier has a column for every provider in tiers.json."""
@@ -317,6 +428,15 @@ def main():
     # Shared contracts (always checked, regardless of provider)
     errs += check_tiers_completeness(source)
     errs += check_commands_json(source)
+    errs += check_tool_map_idiom_notes(source)
+    errs += check_slug_uniqueness_in_tool_map(source)
+    errs += check_installer_references(source)
+
+    # Optional: if a fixture install populated .codex/hooks.json, assert its
+    # shape against the Codex spec (event-keyed object, command as string).
+    codex_hooks = staging / ".codex" / "hooks.json"
+    if codex_hooks.exists():
+        errs += check_codex_hooks_json_shape(codex_hooks)
 
     # Per-provider contract
     if args.provider == "claude":

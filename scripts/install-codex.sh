@@ -97,17 +97,16 @@ bash "$SOURCE_DIR/scripts/render-provider.sh" \
   --provider codex --source-dir "$SOURCE_DIR" --target-dir "$STAGING"
 
 # Ensure project has a stable path to the framework's scripts/hooks/ (the
-# Claude installer normally creates this; we ensure it for codex-only installs).
-CLAUDE_FRAMEWORK="$PROJECT_ROOT/.claude/dev-team-agents"
-mkdir -p "$PROJECT_ROOT/.claude"
-if [[ ! -e "$CLAUDE_FRAMEWORK" ]]; then
-  if [[ $DRY_RUN -eq 0 ]]; then
-    ln -s "$SOURCE_DIR" "$CLAUDE_FRAMEWORK"
-    echo "  + symlinked $CLAUDE_FRAMEWORK -> $SOURCE_DIR"
-  fi
-elif [[ -L "$CLAUDE_FRAMEWORK" ]]; then
-  # Repoint existing symlink to current source.
-  if [[ $DRY_RUN -eq 0 ]]; then ln -sfn "$SOURCE_DIR" "$CLAUDE_FRAMEWORK"; fi
+# Claude installer normally creates this; we materialize it for codex-only
+# installs). Sourced helper copies the slim Claude runtime subset into
+# <project>/.claude/dev-team-agents/ so Codex hooks.json paths resolve.
+SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
+# shellcheck source=scripts/lib/ensure-claude-framework.sh
+source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
+
+if [[ $DRY_RUN -eq 0 ]]; then
+  ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
+  echo "  + materialized .claude/dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
 # ── write into project .codex/ ────────────────────────────────────────
@@ -133,71 +132,86 @@ fi
 # ── hooks.json for Codex (idempotent merge of dev-team-agents-managed entries)
 if [[ $DRY_RUN -eq 0 ]]; then
   HOOKS_FILE="$CODEX_DIR/hooks.json"
-  # Codex runs hook commands from the project root, so project-relative paths
-  # are stable across machines (no baked-in user paths).
+  # Codex runs hook commands from the session cwd (the project root), so
+  # project-relative paths are stable across machines (no baked-in user paths).
   HOOKS_DIR_REL=".claude/dev-team-agents/scripts/hooks"
 
   python3 - "$HOOKS_FILE" "$HOOKS_DIR_REL" <<'PY'
 import json, os, sys
 hooks_file, hooks_dir = sys.argv[1], sys.argv[2]
 
-# The dev-team-agents-managed hooks block. Each entry binds a Codex event
-# to one of the existing shell dispatchers.
-managed = [
-  {
-    "event": "SessionStart",
-    "matcher": "*",
-    "hooks": [{"type": "command",
-               "command": [os.path.join(hooks_dir, "session-start.sh")],
-               "_managed_by": "dev-team-agents"}]
-  },
-  {
-    "event": "PreToolUse",
-    "matcher": "*",
-    "hooks": [{"type": "command",
-               "command": [os.path.join(hooks_dir, "pre-tool-use.sh")],
-               "_managed_by": "dev-team-agents"}]
-  },
-  {
-    "event": "PreCompact",
-    "matcher": "*",
-    "hooks": [{"type": "command",
-               "command": [os.path.join(hooks_dir, "pre-compact.sh")],
-               "_managed_by": "dev-team-agents"}]
-  },
-  {
-    "event": "Stop",
-    "matcher": "*",
-    "hooks": [{"type": "command",
-               "command": [os.path.join(hooks_dir, "stop.sh")],
-               "_managed_by": "dev-team-agents"}]
-  },
-]
+# Per Codex spec (developers.openai.com/codex/hooks), the shape is:
+#   { "hooks": { "<Event>": [ { "matcher": "...", "hooks": [ { type, command, ... } ] } ] } }
+# — an OBJECT keyed by event name, each value an array of matcher groups.
+# Each hook `command` is a STRING, not an array.
+MANAGED_EVENTS = ("SessionStart", "PreToolUse", "PreCompact", "Stop")
+MANAGED_MARKER  = "_dev_team_agents_managed"
 
-existing = {"hooks": []}
+def cmd(script):
+    return f"bash {hooks_dir}/{script}"
+
+# Each managed hook carries a statusMessage with the MANAGED_MARKER so we can
+# idempotently strip our own entries on re-install without touching user hooks.
+# (Codex spec does NOT define a per-hook id field — statusMessage is the
+# documented human-readable surface; we encode our marker there.)
+managed_groups = {
+    event: [
+        {
+            "matcher": "*",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": cmd({
+                        "SessionStart": "session-start.sh",
+                        "PreToolUse":   "pre-tool-use.sh",
+                        "PreCompact":   "pre-compact.sh",
+                        "Stop":         "stop.sh",
+                    }[event]),
+                    "statusMessage": f"dev-team-agents {event.lower()} hook {MANAGED_MARKER}",
+                }
+            ],
+        }
+    ]
+    for event in MANAGED_EVENTS
+}
+
+existing = {"hooks": {}}
 if os.path.exists(hooks_file):
     try:
         existing = json.load(open(hooks_file))
-        if "hooks" not in existing:
-            existing["hooks"] = []
+        if not isinstance(existing.get("hooks"), dict):
+            existing = {"hooks": {}}
     except Exception:
-        existing = {"hooks": []}
+        existing = {"hooks": {}}
 
-# Strip any previously-managed entries (idempotent refresh)
-existing["hooks"] = [h for h in existing.get("hooks", [])
-                     if not any(h.get("hooks", [{}])[0].get("_managed_by") == "dev-team-agents"
-                                for _ in [None])]
-existing["hooks"].extend(managed)
+# Strip any previously-managed entries (idempotent refresh) — detect ours by
+# the encoded marker in statusMessage.
+hooks_obj = existing["hooks"]
+for event in list(hooks_obj.keys()):
+    groups = hooks_obj[event]
+    if not isinstance(groups, list):
+        continue
+    kept = []
+    for grp in groups:
+        hook_list = grp.get("hooks", []) if isinstance(grp, dict) else []
+        is_managed = any(
+            isinstance(h, dict) and MANAGED_MARKER in (h.get("statusMessage", "") or "")
+            for h in hook_list
+        )
+        if not is_managed:
+            kept.append(grp)
+    if kept:
+        hooks_obj[event] = kept
+    else:
+        hooks_obj.pop(event, None)
 
-# Strip the _managed_by field from the output (Codex would reject unknown keys
-# in some versions; keep it as a sibling key on the matcher block instead).
-for h in existing["hooks"]:
-    for hh in h.get("hooks", []):
-        hh.pop("_managed_by", None)
+# Merge managed groups into existing (append into each event's array).
+for event, groups in managed_groups.items():
+    hooks_obj.setdefault(event, []).extend(groups)
 
 with open(hooks_file, "w") as f:
     json.dump(existing, f, indent=2)
-print(f"  + wrote {len(managed)} managed hooks to {os.path.relpath(hooks_file)}")
+print(f"  + wrote {len(MANAGED_EVENTS)} managed hook events to {os.path.relpath(hooks_file)}")
 PY
 fi
 

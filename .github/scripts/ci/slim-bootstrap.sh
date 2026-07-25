@@ -133,13 +133,28 @@ n_openc_agents=$(find "$FIXTURE/.opencode/agents" -maxdepth 1 -name '*.md' -type
 bash "$SOURCE/scripts/install-provider.sh" codex --source "$SOURCE" >/dev/null
 
 python3 - <<PY
-import json
+import json, os
 d = json.load(open("$FIXTURE/.codex/hooks.json"))
-events = {h["event"] for h in d.get("hooks", [])}
+hooks_obj = d.get("hooks")
+assert isinstance(hooks_obj, dict), f"codex hooks.json 'hooks' must be object keyed by event (got {type(hooks_obj).__name__})"
 required = {"SessionStart", "PreToolUse", "PreCompact", "Stop"}
-missing = required - events
+present = set(hooks_obj.keys())
+missing = required - present
 assert not missing, f"codex hooks.json missing events: {sorted(missing)}"
-print(f"codex bootstrap OK ✓  (hook events: {sorted(events)})")
+# Each hook command must be a STRING and its referenced script must exist on disk.
+missing_paths = []
+for event, groups in hooks_obj.items():
+    for grp in groups:
+        for hh in grp.get("hooks", []):
+            assert isinstance(hh.get("command"), str), f"{event}: command must be string"
+            parts = hh["command"].split()
+            assert len(parts) >= 2, f"{event}: malformed command"
+            rel = parts[1]
+            full = os.path.join("$FIXTURE", rel)
+            if not os.path.exists(full):
+                missing_paths.append(f"{event}: {rel}")
+assert not missing_paths, f"codex hooks reference missing scripts: {missing_paths}"
+print(f"codex bootstrap OK ✓  (hooks: {sorted(present)}, all 4 paths verified on disk)")
 PY
 
 n_codex_agents=$(find "$FIXTURE/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
@@ -149,5 +164,16 @@ n_codex_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md
 [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || {
   echo "codex bootstrap FAIL: skills symlink missing" >&2; exit 1
 }
+# Codex hooks.json references bash scripts at .claude/dev-team-agents/scripts/hooks/.
+# Verify they actually exist post-bootstrap (catches broken ensure_claude_framework wiring).
+for h in stop pre-tool-use session-start pre-compact; do
+  [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
+    echo "codex bootstrap FAIL: hooks/$h.sh not materialized at .claude/dev-team-agents/" >&2; exit 1; }
+done
+# Same check for the opencode plugin — verify its referenced hooks exist.
+for h in stop pre-tool-use session-start pre-compact; do
+  [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
+    echo "opencode bootstrap FAIL: hooks/$h.sh not materialized at .claude/dev-team-agents/" >&2; exit 1; }
+done
 
 echo "slim-bootstrap OK ✓  (slim Claude + opencode + codex)"

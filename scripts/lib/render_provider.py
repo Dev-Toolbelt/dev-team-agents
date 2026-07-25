@@ -84,20 +84,30 @@ def parse_frontmatter(text):
 
 # ─── tool-map rendering ────────────────────────────────────────────────
 def tool_conventions_note(provider, tool_map):
-    """Returns a markdown note string explaining how Claude tool names used
-    in the body below map to this provider's native tool names."""
+    """Returns a markdown note string prepended to every rendered agent body.
+
+    Two concerns, kept compact:
+      1. Per-provider native tool name for the Claude Code tool names the body
+         references (tool_rewrites from tool-map.json).
+      2. Idiom translation notes — how "Load skills/X/SKILL.md" and
+         "spawn the agent at .claude/agents/dev-team/X.md" idioms used in the
+         body map to this provider's native mechanism.
+    """
     prov_entry = tool_map.get("providers", {}).get(provider, {})
     renames = prov_entry.get("tool_rewrites", {}) or {}
+    idioms = prov_entry.get("idiom_notes", []) or []
     note_lines = [
     f"> **Provider: {provider}.** The agent body below was authored for Claude Code. "
-    f"Tool-name references it makes map to this provider as follows:"
+    f"Apply the following conventions when interpreting it:"
     ]
-    if not renames:
-        note_lines.append("> (no renames — body's tool references are all native or "
-                          "self-explanatory in this provider; the model resolves them.)")
+    if not renames and not idioms:
+        note_lines.append("> · (no renames — tool references are native or "
+                          "self-explanatory in this provider.)")
     else:
         for src, dst in renames.items():
             note_lines.append(f"> · `{src}` → `{dst}`")
+        for line in idioms:
+            note_lines.append(f"> {line}")
         extra = prov_entry.get("_post_render_note")
         if extra:
             note_lines.append("> " + extra)
@@ -116,9 +126,9 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     tools_list = [t.strip() for t in (fm.get("tools", "") or "").split(",") if t.strip()]
     permission = _opencode_permission(tools_list)
     fm_lines = ["---", f"description: {desc}", "mode: subagent", f"model: {model_id}"]
-    if effort:
-        fm_lines.append("options:")
-        fm_lines.append(f"  effort: {effort}")
+    # NOTE: opencode schema has no `effort` field — unknown frontmatter is
+    # silently routed into an untyped `options` object, so emitting it was a
+    # no-op (see docs/providers.md Known Limitations). Not emitted.
     if permission:
         fm_lines.append("permission:")
         for k, v in permission.items():
@@ -131,8 +141,14 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
 
 
 def _opencode_permission(tools_list):
-    """Maps Claude `tools:` list → opencode `permission:` object."""
-    perm = {}
+    """Maps Claude `tools:` list → opencode `permission:` object.
+
+    Every agent is allowed to spawn subagents via the `task` tool, regardless
+    of whether its Claude `tools:` line lists `Task`. Per the framework's
+    agent design, any agent may delegate. Without this, opencode would
+    prompt before each `task` call.
+    """
+    perm = {"task": "allow"}
     has_bash = False
     for t in tools_list:
         t = t.strip()
@@ -147,8 +163,6 @@ def _opencode_permission(tools_list):
         elif t == "Bash":
             has_bash = True
             perm["bash"] = "ask"
-        elif t == "Task":
-            perm["task"] = "allow"
         elif t == "WebSearch":
             perm["websearch"] = "allow"
         elif t == "WebFetch":
