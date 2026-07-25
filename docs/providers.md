@@ -7,7 +7,7 @@ Supported providers:
 | Provider | CLI | Install script | Agent file form | Command invocation | Hook binding |
 | --- | --- | --- | --- | --- | --- |
 | **claude** | Claude Code | `scripts/install.sh` (existing) | `agents/*.md` symlinked to `.claude/agents/dev-team/` | `/devteam:<name>` (subdir-derived) | `.claude/settings.json` (existing) |
-| **opencode** | opencode TUI/CLI | `scripts/install-opencode.sh` | `.opencode/agents/<name>.md` (mode: subagent) | `/devteam:<name>` (key in `opencode.json` `command` object) | `.opencode/plugins/dev-team-agents.ts` → `scripts/hooks/*.sh` |
+| **opencode** | opencode TUI/CLI | `scripts/install-opencode.sh` | `.opencode/agents/<name>.md` (mode: subagent) | `/devteam:<name>` (inline in `opencode.json` `command` object — NOT file-based, see note below) | `.opencode/plugins/dev-team-agents.ts` → `scripts/hooks/*.sh` |
 | **codex** | OpenAI Codex CLI | `scripts/install-codex.sh` | `.codex/agents/<name>.toml` | `/prompts:devteam-<name>` (Codex hardcodes the `/prompts:` namespace — divergent, see note below) | `.codex/hooks.json` → `scripts/hooks/*.sh` |
 
 The slash-command UX is preserved across providers where possible:
@@ -96,6 +96,7 @@ If your provider can't expose `/devteam:<name>` (e.g., it hardcodes a slash name
 - **opencode `effort` is a no-op.** The opencode agent schema has no `effort` field; unknown frontmatter keys (`options.effort`) are silently stored in an untyped `options` object and have no effect on the model's reasoning effort. The tier map's effort column is documented as the design target but is not enforced by opencode. Contributions welcome if opencode adds a first-class `effort` or `variant` field for per-agent model tuning.
 - **Skill-loading idiom differs per provider.** Agent bodies were authored for Claude Code (e.g., `Load skills/shared/plan-mode/SKILL.md`). In opencode, the model should invoke the `skill` tool with the skill's folder name (e.g., `skill({ name: 'plan-mode' })`). In Codex, the model reads the file at `.claude/dev-team-agents/skills/<category>/<name>/SKILL.md`. The renderer prepends a per-provider preamble that explains this to each provider's agent — no body rewrite occurs.
 - **Codex UX divergence.** Codex's custom-prompt namespace is hardcoded as `/prompts:`. Commands are exposed as `/prompts:devteam-<name>` (e.g., `/prompts:devteam-plan`) rather than `/devteam:<name>`. Claude Code and opencode preserve the canonical `/devteam:<name>` UX.
+- **opencode command registration.** Commands must be declared as **inline entries** in `opencode.json` under the `command` key (e.g., `"devteam:plan": {…}`). File-based `.opencode/commands/` files produce commands without the `devteam:` prefix (e.g., `/backend` instead of `/devteam:backend`). The renderer (`render_provider.py`) emits inline entries automatically; if `.opencode/commands/` files exist from an older install, remove them and re-render, or manually add the `command` block to `opencode.json`.
 
 ## Troubleshooting
 
