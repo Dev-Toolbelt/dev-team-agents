@@ -54,7 +54,7 @@ Auditoria de Guardian dos 50 fingerprints registrados em **2026-05-11** + verifi
 | `flow-commit-command-no-type-check-or-tests-gate` | ⚠️ **Partial** | Commit `dd637ca` adicionou pre-commit gate em `commands/commit.md` (linhas 74-81: ESLint, `npm run lint`, Makefile lint, hooks Husky/Lefthook). **Lint resolvido**; **type-check (`tsc --noEmit`, `mypy`) e tests gate continuam pendentes** |
 | `flow-refactor-workflow-no-rollback-tag-recommendation` | _pendente_ | `workflows/refactor.md` tem CHECKPOINTs mas nenhuma menção a `pre-refactor-<ctx>` git tag para rollback |
 | `flow-security-patch-no-mttr-tracking` | _pendente_ | `workflows/security-patch.md` continua sem captura de `started_at`/`deployed_at` |
-| `flow-no-adr-command-despite-script` | ✅ **Executed** | Commit `1c8be69` cria `commands/adr.md` (1545 bytes); chama `bash .claude/dev-team-agents/scripts/new-adr.sh` e delega preenchimento ao `software-architect` |
+| `flow-no-adr-command-despite-script` | ✅ **Executed** | Commit `1c8be69` cria `commands/adr.md` (1545 bytes); chama `bash .dev-team-agents/scripts/new-adr.sh` e delega preenchimento ao `software-architect` |
 | `flow-pr-command-no-draft-mode-flag` | ✅ **Executed** | `commands/pr.md` linhas 37 e 44 expõem `draft` em `$ARGUMENTS`: "Draft status (default: false, set to true if $ARGUMENTS contains `draft`)" |
 | `flow-no-cross-link-between-workflows-still` | _pendente_ | `grep -n "Next step" workflows/*.md` retorna **vazio** — nenhum workflow contém linha de cross-link |
 | `flow-stop-hook-04-notifier-no-gate-runs-every-session` | ✅ **Executed** | Commit `e59e364` (fix(hooks): add daily gate to notifier tip-of-session) — `04-notifier.sh` agora usa `last_shown_date` em `.notifier-state` |

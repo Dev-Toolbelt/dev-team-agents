@@ -19,10 +19,10 @@ file (MATERIALIZED), `ln -s` fails — use the materialized-link fix below.
 
 ```bash
 # agents symlink
-ln -s ../dev-team-agents/agents .claude/agents/dev-team
+ln -s ../../.dev-team-agents/agents .claude/agents/dev-team
 
 # commands symlink
-ln -s ../dev-team-agents/commands .claude/commands/devteam
+ln -s ../../.dev-team-agents/commands .claude/commands/devteam
 ```
 
 ## Fix for materialized symlinks (Windows)
@@ -32,7 +32,7 @@ When a link exists as a plain text file instead of a symlink (the Windows
 `ln -s`, which fails because the path already exists:
 
 ```bash
-bash .claude/dev-team-agents/scripts/fix-symlinks.sh
+bash .dev-team-agents/scripts/fix-symlinks.sh
 ```
 
 Behavior:
@@ -57,12 +57,12 @@ re-indexes commands, agents, and skills.
 ## Auto-fix for non-executable scripts
 
 ```bash
-chmod +x .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh
-chmod +x .claude/dev-team-agents/scripts/hooks/stop.sh
-chmod +x .claude/dev-team-agents/scripts/hooks/session-start.sh
-chmod +x .claude/dev-team-agents/scripts/hooks/stop/01-session-summary.sh
-chmod +x .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh
-chmod +x .claude/dev-team-agents/scripts/update.sh
+chmod +x .dev-team-agents/scripts/hooks/pre-tool-use.sh
+chmod +x .dev-team-agents/scripts/hooks/stop.sh
+chmod +x .dev-team-agents/scripts/hooks/session-start.sh
+chmod +x .dev-team-agents/scripts/hooks/stop/01-session-summary.sh
+chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh
+chmod +x .dev-team-agents/scripts/update.sh
 ```
 
 ## Auto-fix for .gitignore migration (legacy per-file → directory pattern)

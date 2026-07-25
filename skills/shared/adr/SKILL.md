@@ -61,7 +61,7 @@ ADRs document significant architectural decisions — the context, what was deci
 Use the script to auto-number and scaffold the file:
 
 ```bash
-bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
 This creates `.claude/docs/development/adrs/adr-NNN-title.md` with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.

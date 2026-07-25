@@ -34,7 +34,7 @@ Output exactly one line: `OS: <detected>`
 ## Step 2 — Analyze and repair
 
 ```bash
-bash .claude/dev-team-agents/scripts/fix-symlinks.sh; echo "EXIT:$?"
+bash .dev-team-agents/scripts/fix-symlinks.sh; echo "EXIT:$?"
 ```
 
 Read the final `EXIT:` line and branch on it in Step 3.
@@ -109,7 +109,7 @@ Wait for the answer, then:
 ## Step 5 — Finish the safe git repair (only after Developer Mode is enabled)
 
 ```bash
-git config core.symlinks true && git checkout -- .claude && bash .claude/dev-team-agents/scripts/fix-symlinks.sh; echo "EXIT:$?"
+git config core.symlinks true && git checkout -- .claude && bash .dev-team-agents/scripts/fix-symlinks.sh; echo "EXIT:$?"
 ```
 
 - **`EXIT:0`** → output exactly:

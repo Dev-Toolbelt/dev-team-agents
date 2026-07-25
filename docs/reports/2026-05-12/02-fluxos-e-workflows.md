@@ -176,7 +176,7 @@ Ambos os commands existem (commits `1c8be69` e anteriores) mas não têm workflo
 
 **Severidade:** 🟡 Média — derivado de decisão ↩️ Reverted
 
-**Detecção:** O fingerprint `flow-update-command-no-rollback-path` foi marcado ↩️ Reverted em 2026-05-11 — o time conscientemente removeu `.previous/` (commit `fc57a86`). **Porém, o `update.sh` hoje **não tem backup algum**.** Se uma atualização corrompe `.claude/dev-team-agents/`, o usuário precisa reinstalar do zero.
+**Detecção:** O fingerprint `flow-update-command-no-rollback-path` foi marcado ↩️ Reverted em 2026-05-11 — o time conscientemente removeu `.previous/` (commit `fc57a86`). **Porém, o `update.sh` hoje **não tem backup algum**.** Se uma atualização corrompe `.dev-team-agents/`, o usuário precisa reinstalar do zero.
 
 **Sub-escopo novo (não coberto pelo revert):** alternativas mais leves que `.previous/` não foram exploradas:
 

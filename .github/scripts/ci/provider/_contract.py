@@ -366,7 +366,7 @@ def check_installer_references(source):
             continue
         text = p.read_text()
         if "ensure-claude-framework.sh" not in text:
-            errs += fail(f"scripts/{inst}: does not source `ensure-claude-framework.sh` — .claude/dev-team-agents/ will not be materialized and hook paths will be unresolvable")
+            errs += fail(f"scripts/{inst}: does not source `ensure-claude-framework.sh` — .dev-team-agents/ will not be materialized and hook paths will be unresolvable")
     return errs
 
 

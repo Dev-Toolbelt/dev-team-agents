@@ -133,7 +133,7 @@ grep -nE "rm -f.*helpers" scripts/install.sh
 
 Se o `install.sh` ainda strippa `scripts/agent-lint.sh` (não existe mais), mas **não** strippa `helpers/agent-lint.sh`, o pacote distribuído contém os 6 dev tools = ~700 linhas dispensáveis. Sub-escopo do `flow-install-script-strip-list-stale-misses-new-dev-only-scripts-...` (2026-05-15), com angle pós-refactor.
 
-**Impacto positivo:** strip correto economiza ~700 linhas no pacote do usuário; reduz pull em ~11.200 tokens caso usuário liste `.claude/dev-team-agents/`.
+**Impacto positivo:** strip correto economiza ~700 linhas no pacote do usuário; reduz pull em ~11.200 tokens caso usuário liste `.dev-team-agents/`.
 
 **Impacto negativo:** se um user real usa `helpers/agent-lint.sh` localmente, fica sem. Mitigável: documentar em CONTRIBUTING como rodar local.
 

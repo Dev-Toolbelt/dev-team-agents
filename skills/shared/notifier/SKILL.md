@@ -116,7 +116,7 @@ Emit one `info` tip per session, on the first stop hook call. Index: `(day_of_mo
 |-------|-------------------------------------------------------------|
 | 0 | Use `/compact` regularly or start a new session to keep your context window healthy and avoid hallucinations in long sessions. |
 | 1 | Run `/devteam:review` before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist. |
-| 2 | Record hard architectural decisions as ADRs: `bash .claude/dev-team-agents/scripts/new-adr.sh "title"`. This prevents agents from questioning settled choices. |
+| 2 | Record hard architectural decisions as ADRs: `bash .dev-team-agents/scripts/new-adr.sh "title"`. This prevents agents from questioning settled choices. |
 | 3 | Use `/devteam:plan` at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed). |
 | 4 | Write non-obvious domain knowledge to the project wiki at `.claude/docs/wiki/` after any revealing task — agents read it on startup. |
 | 5 | `/devteam:commit` groups your staged changes by layer and generates Conventional Commits automatically. |

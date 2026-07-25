@@ -7,7 +7,7 @@
 # Usage (from project root):
 #   curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash
 #   bash <(curl -sSL ...) v1.2.0                       # specific version
-#   .claude/dev-team-agents/scripts/install.sh latest  # update after first install
+#   .dev-team-agents/scripts/install.sh latest  # update after first install
 #
 # What it does:
 #   1. Resolves the requested version via the GitHub API
@@ -25,7 +25,7 @@ GITHUB_REPO="dev-team-agents"
 GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
 
 PROJECT_ROOT="$(pwd)"
-INSTALL_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
+INSTALL_DIR="$PROJECT_ROOT/.dev-team-agents"
 AGENTS_TARGET="$PROJECT_ROOT/.claude/agents"
 SKILLS_TARGET="$PROJECT_ROOT/.claude/skills"
 SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
@@ -169,7 +169,7 @@ mkdir -p "$COMMANDS_TARGET"
 # ── Step 4: Link agents ───────────────────────────────────────────
 AGENTS_LINK="$AGENTS_TARGET/dev-team"
 if [ ! -L "$AGENTS_LINK" ] && [ ! -e "$AGENTS_LINK" ]; then
-    ln -s "../dev-team-agents/agents" "$AGENTS_LINK"
+    ln -s "../../.dev-team-agents/agents" "$AGENTS_LINK"
     echo "→ Agents linked: .claude/agents/dev-team/"
 else
     echo "→ Agents already linked: .claude/agents/dev-team/ (skipped)"
@@ -184,7 +184,7 @@ for SKILL_CATEGORY in "$INSTALL_DIR/skills"/*/; do
         if [ ! -L "$SKILL_TARGET_PATH" ] && [ ! -e "$SKILL_TARGET_PATH" ]; then
             REL_SKILL="${SKILL_DIR#"$INSTALL_DIR"/}"
             REL_SKILL="${REL_SKILL%/}"
-            ln -s "../dev-team-agents/${REL_SKILL}" "$SKILL_TARGET_PATH"
+            ln -s "../../.dev-team-agents/${REL_SKILL}" "$SKILL_TARGET_PATH"
         fi
     done
 done
@@ -212,7 +212,7 @@ done
 # any project-specific commands at the .claude/commands/ root.
 COMMANDS_LINK="$COMMANDS_TARGET/devteam"
 if [ ! -L "$COMMANDS_LINK" ] && [ ! -e "$COMMANDS_LINK" ]; then
-    ln -s "../dev-team-agents/commands" "$COMMANDS_LINK"
+    ln -s "../../.dev-team-agents/commands" "$COMMANDS_LINK"
     echo "→ Commands linked: .claude/commands/devteam/ (invoke as /devteam:plan, /devteam:backend, etc.)"
 else
     echo "→ Commands already linked: .claude/commands/devteam/ (skipped)"
@@ -246,7 +246,7 @@ if [ "$_broken_links" -gt 0 ]; then
     echo "    2. Run once in an elevated (Administrator) terminal:"
     echo "       git config core.symlinks true && git checkout -- .claude"
     echo "    3. After first install, run the repair helper anytime:"
-    echo "       bash .claude/dev-team-agents/scripts/fix-symlinks.sh"
+    echo "       bash .dev-team-agents/scripts/fix-symlinks.sh"
     echo ""
     echo "    Restart Claude Code after repairing so it re-indexes the dev-team."
     echo ""
@@ -256,10 +256,10 @@ fi
 # Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
 # where BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every hook
 # invocation (start-systemd-namespace is absent in many WSL setups).
-PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh"
-STOP_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/stop.sh"
-SESSION_START_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/session-start.sh"
-PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .claude/dev-team-agents/scripts/hooks/pre-compact.sh"
+PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-tool-use.sh"
+STOP_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/stop.sh"
+SESSION_START_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-start.sh"
+PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-compact.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -367,7 +367,7 @@ with open(settings_file, 'r') as f:
 # Replace bare hook paths with env-wrapped versions
 hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"]
 for hook in hooks:
-    pattern = r'(\.claude/dev-team-agents/scripts/hooks/' + re.escape(hook) + r')'
+    pattern = r'(\.dev-team-agents/scripts/hooks/' + re.escape(hook) + r')'
     replacement = r'env -u BASH_ENV -u ENV \1'
     content = re.sub(pattern, replacement, content)
 
@@ -693,8 +693,8 @@ echo "  1. Run the setup-assistant in Claude:"
 echo "       \"Help me set up this project with dev-team-agents\""
 echo "  2. Commit the installation to your project:"
 echo "       git add .claude/ && git commit -m \"chore: add dev-team-agents\""
-echo "  3. To update later: .claude/dev-team-agents/scripts/update.sh"
-echo "  4. To pin a version: .claude/dev-team-agents/scripts/update.sh v1.0.0"
+echo "  3. To update later: .dev-team-agents/scripts/update.sh"
+echo "  4. To pin a version: .dev-team-agents/scripts/update.sh v1.0.0"
 echo ""
 echo "Agents available at: .claude/agents/dev-team/"
 echo "Skills available at: .claude/skills/"

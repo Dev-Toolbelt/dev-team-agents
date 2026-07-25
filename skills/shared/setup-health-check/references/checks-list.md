@@ -19,10 +19,10 @@ find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc
 
 | Check | Expected | Auto-fix |
 |-------|----------|----------|
-| `.claude/agents/dev-team` is a symlink | `-L` true → `../dev-team-agents/agents` | If MISSING: `ln -s ../dev-team-agents/agents .claude/agents/dev-team` |
-| `.claude/commands/devteam` is a symlink | `-L` true → `../dev-team-agents/commands` | If MISSING: `ln -s ../dev-team-agents/commands .claude/commands/devteam` |
+| `.claude/agents/dev-team` is a symlink | `-L` true → `../../.dev-team-agents/agents` | If MISSING: `ln -s ../../.dev-team-agents/agents .claude/agents/dev-team` |
+| `.claude/commands/devteam` is a symlink | `-L` true → `../../.dev-team-agents/commands` | If MISSING: `ln -s ../../.dev-team-agents/commands .claude/commands/devteam` |
 | `.claude/skills/` entries are symlinks | Each skill dir linked | If MISSING: re-run skill linking loop from `install.sh` |
-| No link is **MATERIALIZED** (a plain file) | `find … ! -type l ! -type d` returns 0 | If any MATERIALIZED: **do not** `ln -s` (path exists). Run `bash .claude/dev-team-agents/scripts/fix-symlinks.sh` — see fix-patterns.md |
+| No link is **MATERIALIZED** (a plain file) | `find … ! -type l ! -type d` returns 0 | If any MATERIALIZED: **do not** `ln -s` (path exists). Run `bash .dev-team-agents/scripts/fix-symlinks.sh` — see fix-patterns.md |
 
 > **MATERIALIZED = the Windows condition.** git/MSYS wrote the link target
 > into a ~62-byte text file because native symlinks were unavailable
@@ -36,13 +36,13 @@ find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc
 
 ```bash
 for f in \
-  .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh \
-  .claude/dev-team-agents/scripts/hooks/stop.sh \
-  .claude/dev-team-agents/scripts/hooks/session-start.sh \
-  .claude/dev-team-agents/scripts/hooks/pre-tool-use/01-check-updates.sh \
-  .claude/dev-team-agents/scripts/hooks/stop/01-session-summary.sh \
-  .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh \
-  .claude/dev-team-agents/scripts/update.sh; do
+  .dev-team-agents/scripts/hooks/pre-tool-use.sh \
+  .dev-team-agents/scripts/hooks/stop.sh \
+  .dev-team-agents/scripts/hooks/session-start.sh \
+  .dev-team-agents/scripts/hooks/pre-tool-use/01-check-updates.sh \
+  .dev-team-agents/scripts/hooks/stop/01-session-summary.sh \
+  .dev-team-agents/scripts/hooks/stop/04-notifier.sh \
+  .dev-team-agents/scripts/update.sh; do
   [ -f "$f" ] && [ -x "$f" ] && echo "OK: $f" || echo "FAIL: $f"
 done
 ```
@@ -86,20 +86,20 @@ Detect: `[ -f .claude/user-data/graphify.json ] && echo ENABLED || echo DISABLED
 If ENABLED:
 
 ```bash
-ls .claude/dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
-ls .claude/dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
+ls .dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
+ls .dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
 ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
 grep -qxF '.claude/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 # Also check for legacy sub-script that causes stop-hook loops
-ls .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
+ls .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
 | `stop/99-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
-| `stop/02-graphify-refresh.sh` exists (legacy) | `rm .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
+| `stop/02-graphify-refresh.sh` exists (legacy) | `rm .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
-| `graphify-out/` directory exists | WARN — run: `bash .claude/dev-team-agents/scripts/graphify-refresh.sh` |
+| `graphify-out/` directory exists | WARN — run: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
 | `.claude/user-data/.graphify-last-run` in `.gitignore` | `echo '.claude/user-data/.graphify-last-run' >> .gitignore` |
 
 ## Category 6 — CLAUDE.md
@@ -199,8 +199,8 @@ EOF
 ## Category 9 — Notifier
 
 ```bash
-[ -f .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
-[ -x .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
+[ -f .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
+[ -x .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
 echo "OK" || echo "FAIL"
 
 [ -f .claude/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
@@ -209,6 +209,6 @@ echo "OK" || echo "FAIL"
 
 | Check | Auto-fix |
 |-------|----------|
-| `stop/04-notifier.sh` exists and is executable | `chmod +x .claude/dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
+| `stop/04-notifier.sh` exists and is executable | `chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
 | `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
 | `.notifier-state` missing | OK — created automatically by `stop/04-notifier.sh` on first turn |

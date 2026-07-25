@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # strip-tarball.sh — Single source of truth for the slim tarball strip rules
-# applied by scripts/install.sh before placing files at .claude/dev-team-agents/.
+# applied by scripts/install.sh before placing files at .dev-team-agents/.
 #
 # Sourced by:
 #   - scripts/install.sh                    (during normal tarball install)

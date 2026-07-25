@@ -19,7 +19,7 @@ Substitua `v1.0.0` por qualquer tag publicada. As tags disponíveis estão lista
 Após o primeiro install, atualize executando:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh
+.dev-team-agents/scripts/update.sh
 ```
 
 O script baixa o tarball da versão mais recente, substitui o diretório do pacote e recria os symlinks. Seu diretório `user-data/` nunca é tocado durante atualizações.
@@ -29,7 +29,7 @@ O script baixa o tarball da versão mais recente, substitui o diretório do paco
 ## Pin de Versão Específica / Downgrade
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh v1.0.0
+.dev-team-agents/scripts/update.sh v1.0.0
 ```
 
 Passe qualquer tag de versão para instalar exatamente aquela versão, independentemente do que está instalado atualmente.
@@ -41,13 +41,13 @@ Passe qualquer tag de versão para instalar exatamente aquela versão, independe
 Habilite atualizações automáticas para que a verificação diária aplique novas versões em vez de apenas notificar:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh --enable-auto
+.dev-team-agents/scripts/update.sh --enable-auto
 ```
 
 Desabilite a qualquer momento:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh --disable-auto
+.dev-team-agents/scripts/update.sh --disable-auto
 ```
 
 Você também pode alternar isso em `.claude/user-data/preferences.json`:
@@ -161,7 +161,7 @@ Este repositório usa versionamento semântico via git tags (`v1.0.0`, `v1.1.0`,
 │   ├── .installed-version      ← gitignored
 │   └── .last-update-check      ← gitignored
 ├── agents/
-│   └── dev-team/           ← symlink → .claude/dev-team-agents/agents/
+│   └── dev-team/           ← symlink → .dev-team-agents/agents/
 ├── skills/
 │   ├── project-context/    ← symlink → diretório da skill
 │   └── ...                 ← um symlink por skill
@@ -172,10 +172,10 @@ Este repositório usa versionamento semântico via git tags (`v1.0.0`, `v1.1.0`,
 
 ## Commitando a Instalação
 
-Como o `install.sh` baixa um tarball (não faz git clone), `.claude/dev-team-agents/` não tem pasta `.git` aninhada. **Commite diretamente** para que todo o time receba os agentes no `git pull`:
+Como o `install.sh` baixa um tarball (não faz git clone), `.dev-team-agents/` não tem pasta `.git` aninhada. **Commite diretamente** para que todo o time receba os agentes no `git pull`:
 
 ```bash
-git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
+git add .dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
 git commit -m "chore: add dev-team-agents"
 ```
 
@@ -183,7 +183,7 @@ Se preferir que cada desenvolvedor instale localmente:
 
 ```gitignore
 # Opcional: ignorar a instalação (cada desenvolvedor instala localmente)
-.claude/dev-team-agents/
+.dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
 .claude/commands/devteam/

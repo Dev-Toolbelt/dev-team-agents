@@ -129,7 +129,7 @@ if [ "$BROKEN_LINKS" -gt 0 ]; then
     echo "(the Windows 'no native symlink support' condition). The dev-team is not"
     echo "loaded — /devteam:* commands, agents, and skills are invisible to Claude Code."
     echo "Fix it now by running:"
-    echo "  bash .claude/dev-team-agents/scripts/fix-symlinks.sh"
+    echo "  bash .dev-team-agents/scripts/fix-symlinks.sh"
     echo "It auto-repairs when the OS allows, and otherwise prints the 3 remediation"
     echo "options to offer the user interactively. Restart Claude Code after a fix."
     echo ""

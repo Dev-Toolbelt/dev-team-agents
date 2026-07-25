@@ -175,7 +175,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     TIPS_EN=(
         "Use /compact regularly or start a new session to keep your context window healthy and avoid hallucinations in long sessions."
         "Run /devteam:review before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist."
-        "Record hard architectural decisions as ADRs: bash .claude/dev-team-agents/scripts/new-adr.sh \"title\". This prevents agents from questioning settled choices."
+        "Record hard architectural decisions as ADRs: bash .dev-team-agents/scripts/new-adr.sh \"title\". This prevents agents from questioning settled choices."
         "Use /devteam:plan at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed)."
         "Write non-obvious domain knowledge to the project wiki at .claude/docs/wiki/ after any revealing task — agents read it on startup."
         "/devteam:commit groups your staged changes by layer and generates Conventional Commits automatically."
@@ -193,7 +193,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     TIPS_PTBR=(
         "Use /compact regularmente ou inicie uma nova sessão para manter sua janela de contexto saudável e evitar alucinações em sessões longas."
         "Execute /devteam:review antes de abrir um PR — ele chama automaticamente code-reviewer, software-architect e security-specialist."
-        "Registre decisões arquiteturais difíceis como ADRs: bash .claude/dev-team-agents/scripts/new-adr.sh \"título\". Isso evita que agentes questionem escolhas já feitas."
+        "Registre decisões arquiteturais difíceis como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Isso evita que agentes questionem escolhas já feitas."
         "Use /devteam:plan no início de qualquer nova funcionalidade — ele executa uma análise multi-agente (architect + product + database + backend/frontend/devops conforme necessário)."
         "Escreva conhecimento de domínio não óbvio na wiki do projeto em .claude/docs/wiki/ após qualquer tarefa reveladora — agentes leem isso na inicialização."
         "/devteam:commit agrupa suas mudanças por camada e gera Conventional Commits automaticamente."
@@ -211,7 +211,7 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     TIPS_ES=(
         "Usa /compact regularmente o inicia una nueva sesión para mantener tu ventana de contexto saludable y evitar alucinaciones en sesiones largas."
         "Ejecuta /devteam:review antes de abrir un PR — llama automáticamente a code-reviewer, software-architect y security-specialist."
-        "Registra las decisiones arquitectónicas difíciles como ADRs: bash .claude/dev-team-agents/scripts/new-adr.sh \"título\". Esto evita que los agentes cuestionen decisiones ya tomadas."
+        "Registra las decisiones arquitectónicas difíciles como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Esto evita que los agentes cuestionen decisiones ya tomadas."
         "Usa /devteam:plan al inicio de cualquier nueva funcionalidad — ejecuta un análisis multi-agente (architect + product + database + backend/frontend/devops según sea necesario)."
         "Escribe conocimiento de dominio no obvio en la wiki del proyecto en .claude/docs/wiki/ después de cualquier tarea reveladora — los agentes la leen al inicio."
         "/devteam:commit agrupa tus cambios por capa y genera Conventional Commits automáticamente."

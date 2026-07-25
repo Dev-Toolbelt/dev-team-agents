@@ -19,7 +19,7 @@ Replace `v1.0.0` with any published tag. Available tags are listed on the [GitHu
 After the first install, update by running:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh
+.dev-team-agents/scripts/update.sh
 ```
 
 The script downloads the latest release tarball, replaces the package directory, and re-creates symlinks. Your `user-data/` directory is never touched during updates.
@@ -29,7 +29,7 @@ The script downloads the latest release tarball, replaces the package directory,
 ## Pin to a Specific Version / Downgrade
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh v1.0.0
+.dev-team-agents/scripts/update.sh v1.0.0
 ```
 
 Pass any version tag to install that exact version regardless of what is currently installed.
@@ -41,13 +41,13 @@ Pass any version tag to install that exact version regardless of what is current
 Enable automatic updates so the daily check applies new versions instead of just notifying:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh --enable-auto
+.dev-team-agents/scripts/update.sh --enable-auto
 ```
 
 Disable at any time:
 
 ```bash
-.claude/dev-team-agents/scripts/update.sh --disable-auto
+.dev-team-agents/scripts/update.sh --disable-auto
 ```
 
 You can also toggle this in `.claude/user-data/preferences.json`:
@@ -161,7 +161,7 @@ This repository uses semantic versioning via git tags (`v1.0.0`, `v1.1.0`, `v2.0
 │   ├── .installed-version      ← gitignored
 │   └── .last-update-check      ← gitignored
 ├── agents/
-│   └── dev-team/           ← symlink → .claude/dev-team-agents/agents/
+│   └── dev-team/           ← symlink → .dev-team-agents/agents/
 ├── skills/
 │   ├── project-context/    ← symlink → skill directory
 │   └── ...                 ← one symlink per skill
@@ -172,10 +172,10 @@ This repository uses semantic versioning via git tags (`v1.0.0`, `v1.1.0`, `v2.0
 
 ## Committing the Installation
 
-Because `install.sh` downloads a tarball (not a git clone), `.claude/dev-team-agents/` has no nested `.git` folder. **Commit it directly** so your whole team gets the agents and skills on `git pull`:
+Because `install.sh` downloads a tarball (not a git clone), `.dev-team-agents/` has no nested `.git` folder. **Commit it directly** so your whole team gets the agents and skills on `git pull`:
 
 ```bash
-git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
+git add .dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
 git commit -m "chore: add dev-team-agents"
 ```
 
@@ -183,7 +183,7 @@ If you prefer each developer to install locally instead:
 
 ```gitignore
 # Optional: ignore the installation (each developer installs locally)
-.claude/dev-team-agents/
+.dev-team-agents/
 .claude/agents/dev-team/
 .claude/skills/
 .claude/commands/devteam/
@@ -203,7 +203,7 @@ test -L .claude/commands/devteam && echo "link" || echo "broken"
 Repair it with the bundled helper, which auto-fixes when the OS allows and otherwise prints the three remediation options (Developer Mode, elevated terminal, or running Claude Code as administrator):
 
 ```bash
-bash .claude/dev-team-agents/scripts/fix-symlinks.sh
+bash .dev-team-agents/scripts/fix-symlinks.sh
 ```
 
 Restart Claude Code after repairing so it re-indexes commands, agents, and skills. Enabling Developer Mode is the durable fix — it also covers future clones of this and other repos without any admin step.

@@ -62,7 +62,7 @@ rm -f "$INSTALL_DIR/scripts/size-limits.sh"
 - `scripts/validate-commit-msg.sh` (49 linhas — útil, mas vide #5 abaixo)
 
 **Por que importa:**
-- Scripts dev-only (fingerprint-uniqueness, orphan-template-scan) vão para `.claude/dev-team-agents/scripts/` em todas as instalações = **bloat desnecessário**.
+- Scripts dev-only (fingerprint-uniqueness, orphan-template-scan) vão para `.dev-team-agents/scripts/` em todas as instalações = **bloat desnecessário**.
 - Critério "dev tool only" não está documentado em comentário inline na strip list → fica obscuro qual script deve ser adicionado a cada release.
 
 **Impacto positivo:** +2 linhas `rm -f` no install.sh; reduzir footprint do pacote instalado em ~62 linhas.
@@ -107,8 +107,8 @@ TIPS_ES=( ... )
 **Observação:** o command verifica:
 
 ```bash
-if [ -f ".claude/dev-team-agents/scripts/validate-commit-msg.sh" ]; then
-  bash .claude/dev-team-agents/scripts/validate-commit-msg.sh "$MSG"
+if [ -f ".dev-team-agents/scripts/validate-commit-msg.sh" ]; then
+  bash .dev-team-agents/scripts/validate-commit-msg.sh "$MSG"
 fi
 ```
 
@@ -117,7 +117,7 @@ Porém o script `scripts/validate-commit-msg.sh` **existe** no repo (49 linhas) 
 Verificação: `bash scripts/install.sh --dry-run` (se existir) mostra que `scripts/` é copiado integralmente — então o script ESTÁ sendo distribuído. A condicional não é dead, mas o **fingerprint `ref-validate-commit-msg-script-now-distributed-but-still-orphan-from-ci-and-commit-command` (2026-05-14)** marcou Executed sem validar invocação em commit.md.
 
 **Por que importa:**
-- Marca Executed de 2026-05-14 é **falso positivo parcial**: script distribuído sim, mas invocação `commands/commit.md:99-112` usa path absoluto que **não funciona em todos os ambientes** (assume install em `.claude/dev-team-agents/`; ignora override `DEVTEAM_INSTALL_DIR`).
+- Marca Executed de 2026-05-14 é **falso positivo parcial**: script distribuído sim, mas invocação `commands/commit.md:99-112` usa path absoluto que **não funciona em todos os ambientes** (assume install em `.dev-team-agents/`; ignora override `DEVTEAM_INSTALL_DIR`).
 
 **Impacto positivo:** usar `$INSTALL_DIR` exportado pelo session-start hook; ou fallback inline com regex Conventional Commits direto no command.
 

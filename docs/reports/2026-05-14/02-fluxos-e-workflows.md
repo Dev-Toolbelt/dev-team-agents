@@ -42,7 +42,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Fingerprint:** `flow-rollback-sh-no-pre-rollback-tag-creation`
 
-**Evidência:** `scripts/rollback.sh` (65 linhas) imediatamente reinstala versão alvo. Compare com `workflows/refactor.md` (commit `2746c7c`/2026-05-13) que cria `git tag pre-refactor-<scope>` antes de tocar arquivos. Rollback de versão é mudança igualmente arriscada (substitui ~150 arquivos em `.claude/dev-team-agents/`).
+**Evidência:** `scripts/rollback.sh` (65 linhas) imediatamente reinstala versão alvo. Compare com `workflows/refactor.md` (commit `2746c7c`/2026-05-13) que cria `git tag pre-refactor-<scope>` antes de tocar arquivos. Rollback de versão é mudança igualmente arriscada (substitui ~150 arquivos em `.dev-team-agents/`).
 
 **Por quê importa:** Se rollback corromper algo, não há checkpoint físico para `git reset --hard pre-rollback-vX.Y.Z`. Assimetria operacional: refactor lógico tem safety net; rollback de versão não.
 
@@ -98,7 +98,7 @@ Foco do dia: governança de regras novas (quiz-first sem lint), gaps em scripts 
 
 **Impacto negativo / risco:** Adiciona um round-trip; usuários experientes podem achar verboso.
 
-**Sugestão concreta:** Em `commands/update.md` ou wrapper futuro de rollback, AskUserQuestion `"Confirma rollback para v<X>? Mudanças locais em .claude/dev-team-agents/ serão sobrescritas"` com opções [Yes / No / Show diff first].
+**Sugestão concreta:** Em `commands/update.md` ou wrapper futuro de rollback, AskUserQuestion `"Confirma rollback para v<X>? Mudanças locais em .dev-team-agents/ serão sobrescritas"` com opções [Yes / No / Show diff first].
 
 ---
 

@@ -166,7 +166,7 @@ ADR candidates identified this session:
 [paste ADR candidates from Step 3]
 
 For each candidate:
-1. Run `bash .claude/dev-team-agents/scripts/new-adr.sh "<decision title>"` to create the file.
+1. Run `bash .dev-team-agents/scripts/new-adr.sh "<decision title>"` to create the file.
 2. Fill in the template: Context, Decision, Consequences. Keep it factual — record what was actually decided, not what could have been decided.
 3. Set status to `Accepted`.
 4. Output: "ADR created: <filepath>"

@@ -24,7 +24,7 @@ Before any action, load:
 
 ## Immutability Warning
 
-**Never modify files inside `.claude/dev-team-agents/`** — that directory is replaced entirely on every `update.sh` run. Any edits will be silently overwritten. To customize behavior for the target project, modify the project's own `CLAUDE.md` or `.claude/` files instead.
+**Never modify files inside `.dev-team-agents/`** — that directory is replaced entirely on every `update.sh` run. Any edits will be silently overwritten. To customize behavior for the target project, modify the project's own `CLAUDE.md` or `.claude/` files instead.
 
 ---
 
@@ -112,7 +112,7 @@ Check `.claude/user-data/preferences.json` → `language` field. If missing or t
 > (Documents, plans, and technical output always remain in English.)
 > Examples: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
 
-Follow `skills/shared/user-preferences/SKILL.md` for the schema meaning and language policy. Write or update the field in `preferences.json`. If the file does not exist, create it by copying the canonical default schema from `.claude/dev-team-agents/scripts/lib/preferences-defaults.json` (the machine-readable source the skill mirrors) and setting the chosen `language`. If the file exists but is missing fields, inject the missing ones from that canonical file without overwriting existing values. (The `session-start.sh` health-check backfills any missing key automatically on each session, so this is belt-and-suspenders.)
+Follow `skills/shared/user-preferences/SKILL.md` for the schema meaning and language policy. Write or update the field in `preferences.json`. If the file does not exist, create it by copying the canonical default schema from `.dev-team-agents/scripts/lib/preferences-defaults.json` (the machine-readable source the skill mirrors) and setting the chosen `language`. If the file exists but is missing fields, inject the missing ones from that canonical file without overwriting existing values. (The `session-start.sh` health-check backfills any missing key automatically on each session, so this is belt-and-suspenders.)
 
 **Graphify (ask last):**
 
@@ -202,7 +202,7 @@ Load `skills/shared/setup-health-check/SKILL.md` for the full category checklist
 
 Load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS notification format when emitting system messages (missing preferences, stale config, health check warnings).
 
-**Broken symlinks (Windows).** If Category 1 reports a **MATERIALIZED** link — a `.claude/` link that exists as a plain file instead of a symlink (git/MSYS wrote it that way because native symlinks were unavailable) — do **not** try `ln -s`; the path already exists. Run `bash .claude/dev-team-agents/scripts/fix-symlinks.sh`. It auto-repairs when the OS allows and exits 3 with the 3 remediation options otherwise. Present those options with `AskUserQuestion` (quiz-first), auto-run the safe git steps once the user clears the OS blocker, and tell them to restart Claude Code afterward. Full detail: `skills/shared/setup-health-check/references/fix-patterns.md`.
+**Broken symlinks (Windows).** If Category 1 reports a **MATERIALIZED** link — a `.claude/` link that exists as a plain file instead of a symlink (git/MSYS wrote it that way because native symlinks were unavailable) — do **not** try `ln -s`; the path already exists. Run `bash .dev-team-agents/scripts/fix-symlinks.sh`. It auto-repairs when the OS allows and exits 3 with the 3 remediation options otherwise. Present those options with `AskUserQuestion` (quiz-first), auto-run the safe git steps once the user clears the OS blocker, and tell them to restart Claude Code afterward. Full detail: `skills/shared/setup-health-check/references/fix-patterns.md`.
 
 ---
 
@@ -215,21 +215,21 @@ CURRENT=$(cat .claude/user-data/.installed-version 2>/dev/null || echo "unknown"
 LATEST=$(curl -fsSL https://api.github.com/repos/Dev-Toolbelt/dev-team-agents/releases/latest | grep tag_name | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 ```
 
-If `CURRENT != LATEST`: notify the user and offer to run `.claude/dev-team-agents/scripts/install.sh latest`.
+If `CURRENT != LATEST`: notify the user and offer to run `.dev-team-agents/scripts/install.sh latest`.
 
 Version commands:
 ```bash
-.claude/dev-team-agents/scripts/install.sh latest      # update
-.claude/dev-team-agents/scripts/install.sh v1.2.0      # specific version
+.dev-team-agents/scripts/install.sh latest      # update
+.dev-team-agents/scripts/install.sh v1.2.0      # specific version
 ```
 
 ---
 
 ## Immutability Warning
 
-If the user asks to modify, edit, or update any file inside `.claude/dev-team-agents/` — including requests phrased as "update the docs", "change the agent", "edit the skill", or "fix the config" that would target files in that directory:
+If the user asks to modify, edit, or update any file inside `.dev-team-agents/` — including requests phrased as "update the docs", "change the agent", "edit the skill", or "fix the config" that would target files in that directory:
 
-> ⚠️ Files inside `.claude/dev-team-agents/` are overwritten on every update. Any change you make there will be lost the next time the package is updated.
+> ⚠️ Files inside `.dev-team-agents/` are overwritten on every update. Any change you make there will be lost the next time the package is updated.
 >
 > Override at the project level instead:
 > - **Agent behavior** → add rules to `CLAUDE.md` under `## Project Rules`

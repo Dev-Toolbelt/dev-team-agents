@@ -10,7 +10,7 @@ Esta seção mergulha nos arquivos `workflows/*.md` em busca de **lacunas estrut
 
 `CLAUDE.md § Agent Memory System` declara como regra global:
 
-> Write an ADR when a decision is hard to reverse, affects multiple components, or has non-obvious reasoning. **Create an ADR by running `bash .claude/dev-team-agents/scripts/new-adr.sh "title"`**.
+> Write an ADR when a decision is hard to reverse, affects multiple components, or has non-obvious reasoning. **Create an ADR by running `bash .dev-team-agents/scripts/new-adr.sh "title"`**.
 
 Apesar disso, executando `grep -i "adr\|architecture decision record" workflows/*.md` retorna **zero resultados**. Os 5 workflows (`new-project`, `inherited-project`, `maintenance`, `bug-fix`, `security-patch`) descrevem dezenas de momentos onde uma decisão arquitetural é tomada (Phase 1.2 do `new-project`, Phase 3 do `inherited-project`, Step 1 do `bug-fix`), mas **nunca instruem o agente a parar e considerar um ADR**.
 
@@ -26,7 +26,7 @@ Pior: o `new-adr.sh` existe, está em `scripts/`, e funciona — mas o usuário 
 
 **Recomendação:** adicionar, em `new-project.md` Phase 1.2 e em `inherited-project.md` Phase 3, um sub-passo:
 
-> 📝 **ADR check**: ao final desta fase, o `software-architect` deve listar as decisões tomadas e, para cada uma que satisfaça o gatilho da seção `## ADR Trigger Rule` do `CLAUDE.md`, registrar via `bash .claude/dev-team-agents/scripts/new-adr.sh "title"`.
+> 📝 **ADR check**: ao final desta fase, o `software-architect` deve listar as decisões tomadas e, para cada uma que satisfaça o gatilho da seção `## ADR Trigger Rule` do `CLAUDE.md`, registrar via `bash .dev-team-agents/scripts/new-adr.sh "title"`.
 
 Em `bug-fix.md` Step 1 e `security-patch.md` Step 1, mencionar que **diagnoses não-óbvias devem virar ADR** se o root-cause revelar um buraco de design.
 

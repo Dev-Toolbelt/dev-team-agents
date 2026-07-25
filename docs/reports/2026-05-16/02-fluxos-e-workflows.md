@@ -229,8 +229,8 @@ Olhando agora, `PreCompact` está listado, então isto não é problema. **Mas:*
 **Observação:** o gate pre-commit em `commit.md`:
 
 ```bash
-if [ -f ".claude/dev-team-agents/scripts/validate-commit-msg.sh" ]; then
-    echo "$COMMIT_MSG" | bash .claude/dev-team-agents/scripts/validate-commit-msg.sh
+if [ -f ".dev-team-agents/scripts/validate-commit-msg.sh" ]; then
+    echo "$COMMIT_MSG" | bash .dev-team-agents/scripts/validate-commit-msg.sh
 fi
 ```
 
@@ -253,7 +253,7 @@ Casos onde script não existe:
 ```bash
 else
     echo "⚠️  validate-commit-msg.sh not found at expected path; skipping commit-msg validation"
-    echo "    Update dev-team-agents: bash .claude/dev-team-agents/scripts/update.sh latest"
+    echo "    Update dev-team-agents: bash .dev-team-agents/scripts/update.sh latest"
 fi
 ```
 

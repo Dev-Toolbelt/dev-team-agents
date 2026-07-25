@@ -126,8 +126,8 @@ Before executing each commit, validate the message against the project's commit 
 
 ```bash
 # Validate commit message (skipped if project has its own commit-msg hook)
-if [ -f ".claude/dev-team-agents/scripts/validate-commit-msg.sh" ]; then
-    echo "$COMMIT_MSG" | bash .claude/dev-team-agents/scripts/validate-commit-msg.sh
+if [ -f ".dev-team-agents/scripts/validate-commit-msg.sh" ]; then
+    echo "$COMMIT_MSG" | bash .dev-team-agents/scripts/validate-commit-msg.sh
 fi
 ```
 

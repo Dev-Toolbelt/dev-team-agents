@@ -138,7 +138,7 @@ Apenas ~90 linhas são core (decisão worktree/branch + naming basics).
 
 | Localização | Linhas | Conteúdo |
 |-------------|--------|----------|
-| Foundational Rule (top) | 24 | 1 linha resumida: "Never modify files inside `.claude/dev-team-agents/`..." |
+| Foundational Rule (top) | 24 | 1 linha resumida: "Never modify files inside `.dev-team-agents/`..." |
 | Section "Immutability Warning" (bottom) | 220-238 | 19 linhas: descrição completa do warning, exemplos de overrides, link para repo |
 
 **Verificação:**

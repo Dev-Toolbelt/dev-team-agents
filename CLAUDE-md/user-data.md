@@ -4,7 +4,7 @@ When installed in a project, the installer creates two sibling directories under
 
 | Directory | Purpose |
 |-----------|---------|
-| `.claude/dev-team-agents/` | Package files — replaced entirely on every update |
+| `.dev-team-agents/` | Package files — replaced entirely on every update |
 | `.claude/user-data/` | User state and config — **never touched by the installer** |
 
 Files in `user-data/`:
@@ -23,7 +23,7 @@ Other directories under `.claude/` created by agents:
 
 `install.sh` adds `.claude/user-data/` (entire directory) and `!.claude/user-data/graphify.json` (exception) to `.gitignore` — this ignores all user-data files except `graphify.json`. It also adds `.claude/.worktree-session` to `.gitignore`. Projects with the old per-file entries will be migrated automatically by the health check or next installer run.
 
-**Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.claude/dev-team-agents/`. Never store user config or state inside the package directory.
+**Rule:** any file that must survive an update must live in `.claude/user-data/`, not inside `.dev-team-agents/`. Never store user config or state inside the package directory.
 
 **Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
 

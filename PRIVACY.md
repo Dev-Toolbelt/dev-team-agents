@@ -70,7 +70,7 @@ Set `"telemetry": false` in `.claude/user-data/preferences.json`:
 After saving, no events will be queued or sent. You can verify by running:
 
 ```bash
-.claude/dev-team-agents/scripts/helpers/telemetry-send.sh --dry-run
+.dev-team-agents/scripts/helpers/telemetry-send.sh --dry-run
 ```
 
 ---

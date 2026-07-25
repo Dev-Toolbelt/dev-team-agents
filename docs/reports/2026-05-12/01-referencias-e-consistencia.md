@@ -195,7 +195,7 @@ Sem subdivisão. Os dois novos arquivos canônicos (referência de agents + guia
 
 **Severidade:** 🟢 Baixa
 
-**Detecção:** `CLAUDE.md:213-219` ("Immutability Contract") afirma: _"These files are installed via symlinks into user projects."_ Porém o `install.sh` atual **não cria symlinks** — usa `mv` para colocar o tarball extraído em `.claude/dev-team-agents/`. A relação é por caminho fixo, não simbólica.
+**Detecção:** `CLAUDE.md:213-219` ("Immutability Contract") afirma: _"These files are installed via symlinks into user projects."_ Porém o `install.sh` atual **não cria symlinks** — usa `mv` para colocar o tarball extraído em `.dev-team-agents/`. A relação é por caminho fixo, não simbólica.
 
 ```bash
 # scripts/install.sh — fluxo real
@@ -206,7 +206,7 @@ curl … → /tmp/devteam-*.tar.gz → tar -xzf → mv $TMP $INSTALL_DIR
 
 **Impacto negativo (se mantido):** documentação contradiz o código; futuros mantenedores podem fazer pull requests baseados na premissa errada (ex.: "vou usar `readlink` para…").
 
-**Sugestão:** alterar para _"These files are installed at a fixed path (`.claude/dev-team-agents/`) and replaced entirely on every update. Users are warned not to modify them directly."_
+**Sugestão:** alterar para _"These files are installed at a fixed path (`.dev-team-agents/`) and replaced entirely on every update. Users are warned not to modify them directly."_
 
 ---
 

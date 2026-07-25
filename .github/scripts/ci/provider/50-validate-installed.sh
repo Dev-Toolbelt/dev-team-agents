@@ -30,12 +30,12 @@ print(f'opencode fixture: commands={len(d[\"command\"])}')
     n_agents=$(find "$FIXTURE/.opencode/agents" -maxdepth 1 -name '*.md' -type f | wc -l | tr -d ' ')
     echo "opencode fixture: agents=$n_agents"
     [ "$n_agents" -ge 17 ] || { echo "FAIL: <17 opencode agents" >&2; exit 1; }
-    # The plugin references ${directory}/.claude/dev-team-agents/scripts/hooks/<n>.sh
+    # The plugin references ${directory}/.dev-team-agents/scripts/hooks/<n>.sh
     # Verify those paths actually exist on disk after the installer ran (catches
     # the case where ensure-claude-framework.sh was not invoked).
     for h in stop pre-tool-use session-start pre-compact; do
-      [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
-        echo "FAIL: .claude/dev-team-agents/scripts/hooks/$h.sh not materialized — the opencode plugin will fail to fire $h hooks" >&2; exit 1; }
+      [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/$h.sh" ] || {
+        echo "FAIL: .dev-team-agents/scripts/hooks/$h.sh not materialized — the opencode plugin will fail to fire $h hooks" >&2; exit 1; }
     done
     ;;
   codex)
@@ -54,7 +54,7 @@ for event, groups in hooks_obj.items():
     for grp in groups:
         for hh in grp.get("hooks", []):
             assert isinstance(hh.get("command"), str), f"{event}: command must be a string"
-            # commands look like 'bash .claude/dev-team-agents/scripts/hooks/<n>.sh'
+            # commands look like 'bash .dev-team-agents/scripts/hooks/<n>.sh'
             parts = hh["command"].split()
             if len(parts) < 2:
                 missing_paths.append(f"{event}: malformed command '{hh['command']}'")
@@ -70,10 +70,10 @@ PY
     n_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
     [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || { echo "FAIL: codex skills symlink missing" >&2; exit 1; }
     # Also assert the Claude framework runtime subset is materialized
-    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/stop.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/stop.sh not materialized (codex hooks would dangle)" >&2; exit 1; }
-    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/pre-tool-use.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/pre-tool-use.sh not materialized" >&2; exit 1; }
-    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/session-start.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/session-start.sh not materialized" >&2; exit 1; }
-    [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/pre-compact.sh" ] || { echo "FAIL: .claude/dev-team-agents/scripts/hooks/pre-compact.sh not materialized" >&2; exit 1; }
+    [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/stop.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/stop.sh not materialized (codex hooks would dangle)" >&2; exit 1; }
+    [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/pre-tool-use.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/pre-tool-use.sh not materialized" >&2; exit 1; }
+    [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/session-start.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/session-start.sh not materialized" >&2; exit 1; }
+    [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/pre-compact.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/pre-compact.sh not materialized" >&2; exit 1; }
     echo "codex fixture: agents=$n_agents prompts=$n_prompts"
     [ "$n_agents" -ge 17 ] || { echo "FAIL: <17 codex agents" >&2; exit 1; }
     [ "$n_prompts" -ge 22 ] || { echo "FAIL: <22 codex prompts" >&2; exit 1; }

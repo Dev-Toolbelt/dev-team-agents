@@ -12,7 +12,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
 ```
 
-This downloads the latest source, renders 17 agents as `.codex/agents/<name>.toml`, renders 22 prompts as `.codex/prompts/devteam-<name>.md`, symlinks skills into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.claude/dev-team-agents/scripts/hooks/`.
+This downloads the latest source, renders 17 agents as `.codex/agents/<name>.toml`, renders 22 prompts as `.codex/prompts/devteam-<name>.md`, symlinks skills into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`.
 
 ## After install
 
@@ -46,7 +46,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/
 ## Troubleshooting
 
 - **`install-codex.sh: ERROR: source missing cross-CLI plumbing`** — you tried to run `install-codex.sh` from a slim Claude install. Use the curl-pipe above instead.
-- **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.claude/dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
+- **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
 - **Prompts don't appear** — ensure the project's `.codex/` directory is trusted (Codex warns on first open). Run Codex from the project root and accept the trust prompt.
 - **`[features] hooks = false`** — Codex defaults hooks to enabled. If disabled via config, re-enable: `[features] hooks = true`.
 

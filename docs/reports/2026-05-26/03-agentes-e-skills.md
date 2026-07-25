@@ -19,12 +19,12 @@ $ wc -l skills/devops/graphify-setup/SKILL.md
 277  skills/devops/graphify-setup/SKILL.md       ← #1 maior skill do repo
 
 $ sed -n '155,167p' skills/devops/graphify-setup/SKILL.md
-mkdir -p .claude/dev-team-agents/scripts/hooks/stop
-cat > .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
+mkdir -p .dev-team-agents/scripts/hooks/stop
+cat > .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
 #!/bin/bash
 # ... 5 linhas de bash gerando subscript ...
 EOF
-chmod +x .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
+chmod +x .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
 ```
 
 CLAUDE.md:128 estabelece: *"Skills follow [agentskills.io specification] — body is current rules only … max ~500 lines; move long reference material to references/ subdirectory."* — a skill **não viola o cap de 500**, mas viola o **espírito** de "rules only": instala arquivos executáveis no projeto do usuário no momento que é "lida" por um agente.
@@ -53,7 +53,7 @@ Mover o bloco gerador para `scripts/install-graphify-hook.sh` (~50 linhas autôn
 
 ```markdown
 ## Hook Setup
-Run `bash .claude/dev-team-agents/scripts/install-graphify-hook.sh` to install the refresh hook.
+Run `bash .dev-team-agents/scripts/install-graphify-hook.sh` to install the refresh hook.
 ```
 
 Economia: skill cai de 277 → ~155 linhas; remove o tier-conflict (o instalador escolhe o tier correto `99-` automaticamente); reduz token por spawn.

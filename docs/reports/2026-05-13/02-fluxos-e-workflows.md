@@ -146,7 +146,7 @@ E flag `$ARGUMENTS contains "implement"` para ativar.
 
 Porém:
 1. `scripts/install.sh` (503 linhas) usa heredocs e dynamic content — shellcheck não detecta erros nesse padrão.
-2. O **resultado pós-install** (arquivos sob `.claude/dev-team-agents/scripts/`) nunca é validado. Se install.sh introduzir um erro de variável escapada que só aparece após substituição dinâmica, CI passa mas usuários quebram.
+2. O **resultado pós-install** (arquivos sob `.dev-team-agents/scripts/`) nunca é validado. Se install.sh introduzir um erro de variável escapada que só aparece após substituição dinâmica, CI passa mas usuários quebram.
 
 **Impacto positivo (se corrigido):** valida o resultado real (não só o source); detecta regressões em heredoc/sed substitutions.
 
@@ -158,7 +158,7 @@ Porém:
 - name: Validate installed scripts
   run: |
     bash scripts/install.sh --target /tmp/test-install --no-network
-    find /tmp/test-install/.claude/dev-team-agents/scripts -name '*.sh' -exec shellcheck {} +
+    find /tmp/test-install/.dev-team-agents/scripts -name '*.sh' -exec shellcheck {} +
 ```
 
 (Requer suporte a `--target` e `--no-network` no install.sh — pequeno refactor.)
@@ -184,7 +184,7 @@ Resultado: o script só vale se o usuário rodar manualmente. Em projetos com Hu
 > "Detectei [Husky | Lefthook | nenhum hook manager]. Quer que eu registre `validate-commit-msg.sh` como `commit-msg` hook? (yes / no)"
 
 E gerar:
-- Husky: `npx husky add .husky/commit-msg 'bash .claude/dev-team-agents/scripts/validate-commit-msg.sh "$(cat $1)"'`
+- Husky: `npx husky add .husky/commit-msg 'bash .dev-team-agents/scripts/validate-commit-msg.sh "$(cat $1)"'`
 - Lefthook: bloco em `lefthook.yml`.
 - Sem manager: `cp scripts/validate-commit-msg.sh .git/hooks/commit-msg && chmod +x ...`.
 
@@ -212,7 +212,7 @@ Em sessões puramente conversacionais (sem mudanças), `04-notifier.sh` ainda pa
 
 **Detecção:** `scripts/rollback.sh` re-baixa o installer e o executa. Mas não valida:
 1. Se a versão atual já é `$TARGET` (rollback no-op).
-2. Se há mudanças locais não commitadas em `.claude/dev-team-agents/` (que serão sobrescritas).
+2. Se há mudanças locais não commitadas em `.dev-team-agents/` (que serão sobrescritas).
 3. Se o usuário tem rollback _ao mesmo_ tag em curso (race condition).
 
 `scripts/update.sh` tampouco valida (1) e (2). Risco simétrico.

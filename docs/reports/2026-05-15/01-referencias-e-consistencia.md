@@ -54,13 +54,13 @@ grep -oE '`[a-z][a-z0-9-]+`' "$INDEX" | sort | uniq -d
 - `skills/shared/runbook/SKILL.md:8, 17, 28`
 - `CLAUDE.md:38` (mandatory plan-template reference)
 
-**Observação:** ambos os arquivos referenciam `templates/plan-template.md` e `templates/runbook-template.md` como path **relativo**. O `install.sh` faz symlink de `.claude/dev-team-agents/templates/` mas **não cria atalho em `.claude/templates/`**. Agentes lendo a partir de `.claude/agents/dev-team/` resolvem o path para nada.
+**Observação:** ambos os arquivos referenciam `templates/plan-template.md` e `templates/runbook-template.md` como path **relativo**. O `install.sh` faz symlink de `.dev-team-agents/templates/` mas **não cria atalho em `.claude/templates/`**. Agentes lendo a partir de `.claude/agents/dev-team/` resolvem o path para nada.
 
 **Por que importa:**
 - Quando agent é spawneado em projeto instalado, `Read templates/plan-template.md` falha (arquivo não encontrado).
 - Documentação implícita assume path repo-relative; instalação não preserva.
 
-**Impacto positivo:** adicionar 1 linha de symlink em `install.sh` (`ln -sf "$INSTALL_DIR/templates" "$HOME/.claude/templates"`) ou ajustar agents para usar `.claude/dev-team-agents/templates/...` (path absoluto pós-install).
+**Impacto positivo:** adicionar 1 linha de symlink em `install.sh` (`ln -sf "$INSTALL_DIR/templates" "$HOME/.claude/templates"`) ou ajustar agents para usar `.dev-team-agents/templates/...` (path absoluto pós-install).
 
 **Impacto negativo:** decisão de path absoluto fragmenta o padrão usado em outros loads (skills usam relative paths). Discussão de padrão necessária.
 

@@ -56,7 +56,7 @@ A skill apenas **documenta** que o script existe; nenhum fluxo automatizado o in
 
 **Sugestão:**
 1. CI step: `bash scripts/validate-commit-msg.sh "$(git log -1 --format=%B HEAD)"` no PR/push.
-2. `commands/commit.md` Step 4.5: `printf "$MSG" | bash .claude/dev-team-agents/scripts/validate-commit-msg.sh` antes do `git commit`.
+2. `commands/commit.md` Step 4.5: `printf "$MSG" | bash .dev-team-agents/scripts/validate-commit-msg.sh` antes do `git commit`.
 3. `install.sh`: registrar `commit-msg` git hook que invoca o script (opt-in via flag).
 
 ---
@@ -266,9 +266,9 @@ Load `skills/shared/project-context/SKILL.md`. After loading, also check `.claud
 **All output must be written in English. Before any non-trivial step, present a plan using `templates/plan-template.md` and wait for approval.**
 ```
 
-A redução pode ser **proposital** (delegação para `project-context`), mas viola CLAUDE.md linha 122: _"Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning**"_ — pois o **Immutability Warning** (rule sobre `.claude/dev-team-agents/` ser substituído na update) **não está mais presente** na seção Foundational do setup-assistant.
+A redução pode ser **proposital** (delegação para `project-context`), mas viola CLAUDE.md linha 122: _"Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning**"_ — pois o **Immutability Warning** (rule sobre `.dev-team-agents/` ser substituído na update) **não está mais presente** na seção Foundational do setup-assistant.
 
-**Impacto positivo (se corrigido):** restaura paridade com a regra de CLAUDE.md; setup-assistant é o agente mais sensível à modificação de `.claude/dev-team-agents/` (ele é o setup_!_).
+**Impacto positivo (se corrigido):** restaura paridade com a regra de CLAUDE.md; setup-assistant é o agente mais sensível à modificação de `.dev-team-agents/` (ele é o setup_!_).
 
 **Impacto negativo (se mantido):** setup-assistant pode editar arquivos do próprio package sem warning; FIRST_RUN flow pode introduzir mutações que serão sobrescritas no próximo update.
 

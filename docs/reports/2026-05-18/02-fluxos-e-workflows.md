@@ -91,8 +91,8 @@ A convenção de sub-scripts numerados está documentada **apenas** para Stop:
 O commit `19939eb` adicionou pruning de **symlinks órfãos de skills** no `install.sh`, mas o equivalente para **scripts movidos de `scripts/` para `helpers/`** não foi implementado em `update.sh`:
 
 Após update de v1.4.x → v1.5.x (que move dev tools para helpers/):
-- `.claude/dev-team-agents/scripts/agent-lint.sh` (instalado pela v1.4) continua existindo
-- `.claude/dev-team-agents/helpers/agent-lint.sh` (instalado pela v1.5) também
+- `.dev-team-agents/scripts/agent-lint.sh` (instalado pela v1.4) continua existindo
+- `.dev-team-agents/helpers/agent-lint.sh` (instalado pela v1.5) também
 - Resultado: 2 cópias no FS do usuário
 
 **Impacto positivo:** adicionar bloco de pruning em `update.sh` simétrico ao de skills (linhas 188-203 do install) elimina drift.

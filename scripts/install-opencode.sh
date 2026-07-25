@@ -8,7 +8,7 @@
 # Prereqs:
 #   · bash, python3, jq
 #   · either a local clone of dev-team-agents OR a prior install.sh run that
-#     places the framework at <project>/.claude/dev-team-agents/
+#     places the framework at <project>/.dev-team-agents/
 #
 # Usage (from project root):
 #   bash <path-to-dev-team-agents>/scripts/install-opencode.sh
@@ -17,7 +17,7 @@
 #
 # What it does:
 #   1. Resolves source: --source flag, $DEV_TEAM_AGENTS_SOURCE env, or
-#      .claude/dev-team-agents/ (if installed via Claude install), or parent
+#      .dev-team-agents/ (if installed via Claude install), or parent
 #      directory of this script (if running from a clone).
 #   2. Calls scripts/render-provider.sh --provider opencode into a staging dir.
 #   3. Copies staged .opencode/agents/*.md into <project>/.opencode/agents/.
@@ -25,7 +25,7 @@
 #   5. Copies the opencode plugin to <project>/.opencode/plugins/dev-team-agents.ts.
 #   6. Deep-merges the rendered command snippet into <project>/opencode.json
 #      (or opencode.jsonc) under the `command` key. Creates the file if absent.
-#   7. Records the installed version in .claude/dev-team-agents/VERSION (reused
+#   7. Records the installed version in .dev-team-agents/VERSION (reused
 #      by the existing update mechanism).
 
 set -euo pipefail
@@ -47,7 +47,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 candidate_sources=()
 if [[ -n "$SOURCE_ARG" ]]; then candidate_sources+=("$SOURCE_ARG"); fi
 candidate_sources+=("${DEV_TEAM_AGENTS_SOURCE:-}")
-candidate_sources+=("$PROJECT_ROOT/.claude/dev-team-agents")
+candidate_sources+=("$PROJECT_ROOT/.dev-team-agents")
 candidate_sources+=("$SCRIPT_DIR/..")  # if running from a clone's scripts/ dir
 
 SOURCE_DIR=""
@@ -133,15 +133,15 @@ if [[ $DRY_RUN -eq 0 ]]; then
   fi
 fi
 
-# 3.1 — materialize .claude/dev-team-agents/ subset so the plugin's
-# `${directory}/.claude/dev-team-agents/scripts/hooks/...` paths resolve.
+# 3.1 — materialize .dev-team-agents/ subset so the plugin's
+# `${directory}/.dev-team-agents/scripts/hooks/...` paths resolve.
 # Sourced helper mirrors the slim Claude install.
 if [[ $DRY_RUN -eq 0 ]]; then
   SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
   # shellcheck source=scripts/lib/ensure-claude-framework.sh
   source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
   ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
-  echo "  + materialized .claude/dev-team-agents/ runtime subset (hooks/scripts/skills)"
+  echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
 # 4. merge command snippet into project opencode.json(.jsonc)
@@ -196,8 +196,8 @@ fi
 
 # 5. record version (reuse Claude installer's VERSION file if present)
 if [[ $DRY_RUN -eq 0 && -f "$SOURCE_DIR/VERSION" ]]; then
-  mkdir -p "$PROJECT_ROOT/.claude/dev-team-agents"
-  cp -f "$SOURCE_DIR/VERSION" "$PROJECT_ROOT/.claude/dev-team-agents/VERSION" 2>/dev/null || true
+  mkdir -p "$PROJECT_ROOT/.dev-team-agents"
+  cp -f "$SOURCE_DIR/VERSION" "$PROJECT_ROOT/.dev-team-agents/VERSION" 2>/dev/null || true
 fi
 
 echo ""

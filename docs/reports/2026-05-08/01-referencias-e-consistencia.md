@@ -22,7 +22,7 @@ A versão legada **não tem** o bloco de auto-update (linhas 64–79 da versão 
 | Arquivo | Linha | Trecho |
 |---------|-------|--------|
 | `CLAUDE.md` | 134 | `` `/devteam:update` runs `check-updates.sh` + `update.sh` `` |
-| `commands/update.md` | 21 | `bash .claude/dev-team-agents/scripts/check-updates.sh` |
+| `commands/update.md` | 21 | `bash .dev-team-agents/scripts/check-updates.sh` |
 
 Resultado prático: quando o usuário roda `/devteam:update`, ele é levado por um caminho que **diverge** do hook automático. Em uma futura mudança no comportamento de detecção (ex.: novo formato de tag, novo flag), as duas vias precisarão ser atualizadas — e a tendência é só uma ser.
 
@@ -165,7 +165,7 @@ AUDIT_FILE=".claude/docs/audit/audit-$(date +%Y-%m-%d).md"
 
 …e gera um relatório de auditoria estruturado. Mas:
 
-- `CLAUDE.md § User Data Directory` lista apenas `.claude/dev-team-agents/` e `.claude/user-data/`;
+- `CLAUDE.md § User Data Directory` lista apenas `.dev-team-agents/` e `.claude/user-data/`;
 - `README.md` e `README.pt-BR.md` não mencionam a pasta `audit/` em lugar algum;
 - Não há orientação sobre se o `audit-YYYY-MM-DD.md` deve ser commitado ou ignorado.
 

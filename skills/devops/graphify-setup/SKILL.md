@@ -159,7 +159,7 @@ The `99-graphify-refresh.sh` (Stop) and `02-graphify-hint.sh` (PreToolUse) sub-s
 Remove any legacy file if present:
 
 ```bash
-rm -f .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
+rm -f .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
 ```
 
 The Stop dispatcher and PreToolUse dispatcher pick these up automatically — no changes to `settings.json` are needed.
@@ -192,7 +192,7 @@ done
 ## Step 8 — Run First Build
 
 ```bash
-bash .claude/dev-team-agents/scripts/graphify-refresh.sh
+bash .dev-team-agents/scripts/graphify-refresh.sh
 ```
 
 If the build succeeds, `graphify-out/` will be created at the project root.
@@ -220,7 +220,7 @@ Check if the project `CLAUDE.md` already contains a `## Context Navigation (Grap
 2. Check `.claude/docs/` for decisions and context
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
-**Rebuild:** always use `.claude/dev-team-agents/scripts/graphify-refresh.sh` — never `graphify update .` directly.
+**Rebuild:** always use `.dev-team-agents/scripts/graphify-refresh.sh` — never `graphify update .` directly.
 Rebuild runs automatically after each Claude session via the Stop hook.
 Manual rebuild needed after: new modules/services, structural reorganization, or domain flow changes.
 ```
@@ -237,7 +237,7 @@ Report to the user:
   Knowledge graph : graphify-out/  (versioned)
   Last-run marker : .claude/user-data/.graphify-last-run  (gitignored)
   Config          : .claude/user-data/graphify.json
-  Auto-rebuild    : Stop hook → .claude/dev-team-agents/scripts/graphify-refresh.sh
+  Auto-rebuild    : Stop hook → .dev-team-agents/scripts/graphify-refresh.sh
 
 Rebuilds happen automatically after each Claude session when new files are
 added, deleted, or moved inside the tracked directories.

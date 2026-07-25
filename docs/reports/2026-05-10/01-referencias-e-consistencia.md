@@ -238,7 +238,7 @@ v1.2.0
 Mas não há `CHANGELOG.md` no formato [Keep a Changelog](https://keepachangelog.com/). O hook `01-check-updates.sh` referencia o changelog:
 
 ```
-echo "│  See .claude/dev-team-agents/CHANGELOG.md for details.      │"
+echo "│  See .dev-team-agents/CHANGELOG.md for details.      │"
 ```
 
 — mas o arquivo não existe no instalável (e a comparação para `RESOLVED != CURRENT` não tem human-readable diff).

@@ -192,17 +192,17 @@ fi
 case "$LANG_PREF" in
     pt-BR|pt*)
         MSG="Atualização disponível: $CURRENT → $LATEST
- Execute: .claude/dev-team-agents/scripts/update.sh
+ Execute: .dev-team-agents/scripts/update.sh
  Auto-update: update.sh --enable-auto"
         ;;
     es*)
         MSG="Actualización disponible: $CURRENT → $LATEST
- Ejecuta: .claude/dev-team-agents/scripts/update.sh
+ Ejecuta: .dev-team-agents/scripts/update.sh
  Auto-update: update.sh --enable-auto"
         ;;
     *)
         MSG="Update available: $CURRENT → $LATEST
- Run: .claude/dev-team-agents/scripts/update.sh
+ Run: .dev-team-agents/scripts/update.sh
  Auto-update: update.sh --enable-auto"
         ;;
 esac

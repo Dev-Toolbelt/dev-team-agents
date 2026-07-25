@@ -8,7 +8,7 @@ Run from your **project root**. The installer:
 
 1. Detects or asks for your conversation language (BCP 47 tag, default `en`)
 2. Downloads the latest release tarball
-3. Extracts to `.claude/dev-team-agents/` (slim bundle — only Claude-runtime files)
+3. Extracts to `.dev-team-agents/` (slim bundle — only Claude-runtime files)
 4. Symlinks agents → `.claude/agents/dev-team/`, skills → `.claude/skills/`, commands → `.claude/commands/devteam/`
 5. Wires lifecycle hooks in `.claude/settings.json`
 
@@ -32,7 +32,7 @@ The `setup-assistant` agent scans your project, collects configuration (tests, C
 ## Update
 
 ```bash
-bash .claude/dev-team-agents/scripts/update.sh
+bash .dev-team-agents/scripts/update.sh
 ```
 
 ## Advanced

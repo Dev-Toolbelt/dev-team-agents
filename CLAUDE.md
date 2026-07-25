@@ -6,7 +6,7 @@ Instructions for working on this repository. These rules apply to Claude when au
 
 ## What This Repo Is
 
-A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware. Installed at the project level (`.claude/dev-team-agents/`) — not globally.
+A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware. Installed at the project level (`.dev-team-agents/`) — not globally.
 
 The canonical source (`agents/`, `commands/`, `skills/`, `scripts/hooks/`) is **provider-agnostic**. Claude Code is the default provider; opencode and OpenAI Codex CLI are supported via a render engine (`scripts/render-provider.sh`) that emits the provider-specific file tree per target project. See `docs/providers.md` for the tier → model id map and the per-provider install scripts.
 
@@ -250,7 +250,7 @@ dev-team-agents/
 
 ## Immutability Contract
 
-These files are installed at a fixed path (`.claude/dev-team-agents/`) and replaced entirely on every update. Users are warned not to modify them directly. When authoring changes:
+These files are installed at a fixed path (`.dev-team-agents/`) and replaced entirely on every update. Users are warned not to modify them directly. When authoring changes:
 
 - Maintain backward compatibility where possible
 - If a breaking change is unavoidable, document it in the PR description and README release notes
@@ -317,7 +317,7 @@ Write an ADR when a decision is:
 **Create an ADR by running:**
 
 ```bash
-bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
 The script auto-numbers the file and places it in `.claude/docs/development/adrs/`. Fill in the generated template and change the status from `Proposed` to `Accepted`.

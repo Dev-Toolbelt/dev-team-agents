@@ -3,7 +3,7 @@
  *
  * Wires the framework's existing bash hook dispatchers (authored originally
  * for Claude Code, lives at scripts/hooks/*.sh in the framework install at
- * `.claude/dev-team-agents/`) to opencode's plugin hook surface.
+ * `.dev-team-agents/`) to opencode's plugin hook surface.
  *
  * Design: the bash scripts are the SINGLE SOURCE of hook behavior. They own
  * session-summary detection, orphan-skill scans, agent-lint, update checks,
@@ -26,14 +26,14 @@
  *
  * Placement: this file is copied by scripts/install-opencode.sh into
  * <project>/.opencode/plugins/dev-team-agents.ts. The framework install path
- * (.claude/dev-team-agents/) is the project-local reference location for
+ * (.dev-team-agents/) is the project-local reference location for
  * hook scripts.
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
 
 export const DevTeamAgents: Plugin = async ({ client, directory, $ }) => {
-  const HOOKS = `${directory}/.claude/dev-team-agents/scripts/hooks`
+  const HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
 
   const safe = async (label: string, p: Promise<unknown>) => {
     try {

@@ -9,7 +9,7 @@
 # Prereqs:
 #   · bash, python3
 #   · either a local clone of dev-team-agents OR a prior install.sh run that
-#     places the framework at <project>/.claude/dev-team-agents/
+#     places the framework at <project>/.dev-team-agents/
 #
 # Usage (from project root):
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh
@@ -46,7 +46,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 candidate_sources=()
 if [[ -n "$SOURCE_ARG" ]]; then candidate_sources+=("$SOURCE_ARG"); fi
 candidate_sources+=("${DEV_TEAM_AGENTS_SOURCE:-}")
-candidate_sources+=("$PROJECT_ROOT/.claude/dev-team-agents")
+candidate_sources+=("$PROJECT_ROOT/.dev-team-agents")
 candidate_sources+=("$SCRIPT_DIR/..")
 
 SOURCE_DIR=""
@@ -99,14 +99,14 @@ bash "$SOURCE_DIR/scripts/render-provider.sh" \
 # Ensure project has a stable path to the framework's scripts/hooks/ (the
 # Claude installer normally creates this; we materialize it for codex-only
 # installs). Sourced helper copies the slim Claude runtime subset into
-# <project>/.claude/dev-team-agents/ so Codex hooks.json paths resolve.
+# <project>/.dev-team-agents/ so Codex hooks.json paths resolve.
 SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
 # shellcheck source=scripts/lib/ensure-claude-framework.sh
 source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
 
 if [[ $DRY_RUN -eq 0 ]]; then
   ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
-  echo "  + materialized .claude/dev-team-agents/ runtime subset (hooks/scripts/skills)"
+  echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
 # ── write into project .codex/ ────────────────────────────────────────
@@ -134,7 +134,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
   HOOKS_FILE="$CODEX_DIR/hooks.json"
   # Codex runs hook commands from the session cwd (the project root), so
   # project-relative paths are stable across machines (no baked-in user paths).
-  HOOKS_DIR_REL=".claude/dev-team-agents/scripts/hooks"
+  HOOKS_DIR_REL=".dev-team-agents/scripts/hooks"
 
   python3 - "$HOOKS_FILE" "$HOOKS_DIR_REL" <<'PY'
 import json, os, sys

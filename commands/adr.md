@@ -15,7 +15,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 Run the ADR creation script to auto-number the file and place it in `.claude/docs/development/adrs/`:
 
 ```bash
-bash .claude/dev-team-agents/scripts/new-adr.sh "$ARGUMENTS"
+bash .dev-team-agents/scripts/new-adr.sh "$ARGUMENTS"
 ```
 
 Show the user the created file path.

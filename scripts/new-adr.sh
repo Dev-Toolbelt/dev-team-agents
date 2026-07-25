@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates a numbered ADR file with MADR template in .claude/docs/development/adrs/
-# Usage: bash .claude/dev-team-agents/scripts/new-adr.sh "title of the decision"
+# Usage: bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 set -euo pipefail
 
 TITLE="${1:-}"

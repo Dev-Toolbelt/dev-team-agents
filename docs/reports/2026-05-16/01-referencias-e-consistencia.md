@@ -136,7 +136,7 @@ $ grep -rl "templates/backlog-template" agents commands skills workflows
 - Quando `scripts/new-adr.sh` e `templates/adr-template.md` divergirem (heredoc vs arquivo), qual é a fonte? Sem teste, qualquer mudança em um lado dessincroniza silenciosamente.
 - Fingerprint `skill-templates-folder-grew-but-no-template-skill-wraps-them` (2026-05-13, ✅ Executed) considerou o problema resolvido apenas pela existência do `runbook-template.md` + skill. ADR e backlog ficaram fora do escopo.
 
-**Impacto positivo do fix:** modificar `scripts/new-adr.sh` para `cat .claude/dev-team-agents/templates/adr-template.md > "$FILENAME"` + substituir placeholders por sed; modificar `skills/shared/backlog-template/SKILL.md` para carregar `templates/backlog-template.md` em vez de embutir. Elimina divergência potencial. **Bloqueado por** fingerprint #3 da passada de 2026-05-15 (symlink de templates ausente).
+**Impacto positivo do fix:** modificar `scripts/new-adr.sh` para `cat .dev-team-agents/templates/adr-template.md > "$FILENAME"` + substituir placeholders por sed; modificar `skills/shared/backlog-template/SKILL.md` para carregar `templates/backlog-template.md` em vez de embutir. Elimina divergência potencial. **Bloqueado por** fingerprint #3 da passada de 2026-05-15 (symlink de templates ausente).
 
 **Impacto negativo do fix:** dependência runtime de existência do arquivo (mitigável por fallback para heredoc atual).
 
@@ -206,7 +206,7 @@ O agent é spawneado em `.claude/agents/dev-team/`, e o cwd típico no spawn nã
 
 **Por que importa:** templates físicos foram introduzidos para serem **a fonte canônica** (vs. inline). Se nenhuma consumer lê do path correto, voltam ao mesmo problema que o esforço pretendia resolver.
 
-**Impacto positivo:** uma única correção no `install.sh` (adicionar `ln -sf "$INSTALL_DIR/templates" "$HOME/.claude/templates"` na seção "Step 4: Link agents") resolve TODOS os consumers de uma vez. Alternativa: ajustar todos os consumers para usar `.claude/dev-team-agents/templates/...` (path absoluto pós-install) — mais arquivos para tocar.
+**Impacto positivo:** uma única correção no `install.sh` (adicionar `ln -sf "$INSTALL_DIR/templates" "$HOME/.claude/templates"` na seção "Step 4: Link agents") resolve TODOS os consumers de uma vez. Alternativa: ajustar todos os consumers para usar `.dev-team-agents/templates/...` (path absoluto pós-install) — mais arquivos para tocar.
 
 **Impacto negativo:** se o usuário rodar `rm -rf .claude/templates/` deliberadamente, symlink dangling. Mitigável por health-check que recria.
 

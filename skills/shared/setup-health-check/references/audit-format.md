@@ -19,7 +19,7 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  2 items need attention. Proposed changes:
-  🔧 chmod +x .claude/dev-team-agents/scripts/hooks/stop.sh
+  🔧 chmod +x .dev-team-agents/scripts/hooks/stop.sh
   🔧 settings.json — replace stale hooks with dispatcher [diff shown]
   ⚠️ .gitignore — add missing entry (auto-applying)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -72,7 +72,7 @@ source "$REPO_ROOT/scripts/lib/strip-tarball.sh"
 apply_strip "$STAGING"
 
 # ── 2. Assert slim-shape contract ──────────────────────────────────────
-# Note: install.sh bundles everything into <project>/.claude/dev-team-agents/
+# Note: install.sh bundles everything into <project>/.dev-team-agents/
 # so the paths are relative to STAGING which simulates that INSTALLED_DIR root.
 fail=0
 for path in "${SLIM_KEEP_LIST[@]}"; do
@@ -164,16 +164,16 @@ n_codex_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md
 [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || {
   echo "codex bootstrap FAIL: skills symlink missing" >&2; exit 1
 }
-# Codex hooks.json references bash scripts at .claude/dev-team-agents/scripts/hooks/.
+# Codex hooks.json references bash scripts at .dev-team-agents/scripts/hooks/.
 # Verify they actually exist post-bootstrap (catches broken ensure_claude_framework wiring).
 for h in stop pre-tool-use session-start pre-compact; do
-  [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
-    echo "codex bootstrap FAIL: hooks/$h.sh not materialized at .claude/dev-team-agents/" >&2; exit 1; }
+  [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/$h.sh" ] || {
+    echo "codex bootstrap FAIL: hooks/$h.sh not materialized at .dev-team-agents/" >&2; exit 1; }
 done
 # Same check for the opencode plugin — verify its referenced hooks exist.
 for h in stop pre-tool-use session-start pre-compact; do
-  [ -f "$FIXTURE/.claude/dev-team-agents/scripts/hooks/$h.sh" ] || {
-    echo "opencode bootstrap FAIL: hooks/$h.sh not materialized at .claude/dev-team-agents/" >&2; exit 1; }
+  [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/$h.sh" ] || {
+    echo "opencode bootstrap FAIL: hooks/$h.sh not materialized at .dev-team-agents/" >&2; exit 1; }
 done
 
 echo "slim-bootstrap OK ✓  (slim Claude + opencode + codex)"

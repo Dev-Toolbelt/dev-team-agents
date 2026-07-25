@@ -103,14 +103,14 @@ _relink() {
     # 2) Otherwise re-link manually, mirroring install.sh's targets.
     local target=""
     case "$link" in
-        "$AGENTS_LINK")   target="../dev-team-agents/agents" ;;
-        "$COMMANDS_LINK") target="../dev-team-agents/commands" ;;
+        "$AGENTS_LINK")   target="../../.dev-team-agents/agents" ;;
+        "$COMMANDS_LINK") target="../../.dev-team-agents/commands" ;;
         "$SKILLS_DIR"/*)
             local name; name="$(basename "$link")"
             # Find the skill directory under the installed package.
             local found; found="$(cd "$INSTALL_DIR" 2>/dev/null && \
                 find skills -maxdepth 2 -type d -name "$name" 2>/dev/null | head -1)"
-            [ -n "$found" ] && target="../dev-team-agents/${found}"
+            [ -n "$found" ] && target="../../.dev-team-agents/${found}"
             ;;
     esac
     [ -z "$target" ] && return 1

@@ -36,7 +36,7 @@ Um motor de renderização (`scripts/render-provider.sh`, Python puro com só st
   │   scripts/render-provider.sh      │                            │   scripts/install.sh          │
   │   (python3, só stdlib)             │                            │   (instalador do Claude Code) │
   │                                   │                            │   bundle slim para o          │
-  │   --provider claude | opencode |  │                            │   .claude/dev-team-agents/   │
+  │   --provider claude | opencode |  │                            │   .dev-team-agents/   │
   │              codex                 │                            │   do projeto                  │
   └──┬────────────────┬───────────────┘                            └───────────────┬──────────────┘
      │ renderiza      │ renderiza                                                  │ funciona
@@ -228,10 +228,10 @@ Cada preocupação específica de escopo (design, fullstack, mobile, refactor, r
 
 ## Commitando a Instalação
 
-Como o `install.sh` baixa um tarball (não faz git clone), `.claude/dev-team-agents/` não tem pasta `.git` aninhada. **Commite diretamente** para que todo o time receba os agentes no `git pull`:
+Como o `install.sh` baixa um tarball (não faz git clone), `.dev-team-agents/` não tem pasta `.git` aninhada. **Commite diretamente** para que todo o time receba os agentes no `git pull`:
 
 ```bash
-git add .claude/dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
+git add .dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .claude/settings.json
 git commit -m "chore: add dev-team-agents"
 ```
 
@@ -263,7 +263,7 @@ Os agentes de codificação resolvem a decisão de worktree por uma **cascata de
 Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos minimizam a perda de contexto:
 
 - **Resumo de sessão** — ao final de qualquer sessão com arquivos alterados, os agentes escrevem uma entrada em `.claude/user-data/session-summary.md`. Um hook `Stop` enforça isso automaticamente.
-- **ADRs** — decisões significativas e difíceis de reverter são registradas como Architecture Decision Records em `.claude/docs/development/adrs/`. Crie um com: `bash .claude/dev-team-agents/scripts/new-adr.sh "título"`
+- **ADRs** — decisões significativas e difíceis de reverter são registradas como Architecture Decision Records em `.claude/docs/development/adrs/`. Crie um com: `bash .dev-team-agents/scripts/new-adr.sh "título"`
 - **Project context skill** — define a ordem de carregamento de contexto que todo agente segue no startup, incluindo o resumo de sessão e o índice de ADRs.
 
 ---
@@ -272,7 +272,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos minim
 
 Dev Team Agents é uma **camada base**. As convenções do seu projeto sempre têm precedência: `CLAUDE.md` → `AGENTS.md` → `.agents/<agent-name>.md`. Se seu projeto diz usar tabs, os agentes usam tabs.
 
-**Não** modifique arquivos dentro de `.claude/dev-team-agents/` — eles são sobrescritos na atualização. Faça o override no nível do projeto:
+**Não** modifique arquivos dentro de `.dev-team-agents/` — eles são sobrescritos na atualização. Faça o override no nível do projeto:
 
 ```bash
 .agents/backend-developer.md          # override por agente
@@ -288,7 +288,7 @@ CLAUDE.md                             # regras globais para todos os agentes
 
 **Skills não são carregadas** — verifique se `.claude/skills/` contém symlinks. Rode o instalador para restaurar links quebrados.
 
-**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .claude/dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
+**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
 
 **Hook de verificação de atualização dispara a cada tool call** — verifique se `.claude/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 

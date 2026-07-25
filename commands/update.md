@@ -40,7 +40,7 @@ Store the output as `<current-version>`. A missing **or empty** version file bot
 An `unknown` version means `.claude/user-data/.installed-version` is missing or unreadable — the installation metadata is broken. Do **NOT** report "up to date" and do **NOT** run the version check (it cannot compare an unknown version). Force a fresh reinstall of the latest version to repair the metadata:
 
 ```bash
-bash .claude/dev-team-agents/scripts/update.sh latest
+bash .dev-team-agents/scripts/update.sh latest
 rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
 ```
 
@@ -67,7 +67,7 @@ Force a fresh check (bypass the 24h TTL **and** the cached ETag, so a `304 Not M
 
 ```bash
 rm -f .claude/user-data/.last-update-check .claude/user-data/.last-releases-etag
-bash .claude/dev-team-agents/scripts/check-updates.sh
+bash .dev-team-agents/scripts/check-updates.sh
 ```
 
 **If the script produces no output** → already up to date. Output exactly:
@@ -118,7 +118,7 @@ Wait for the user's answer before proceeding.
 ## Step 5 — Apply the update (only if user said yes)
 
 ```bash
-bash .claude/dev-team-agents/scripts/update.sh latest
+bash .dev-team-agents/scripts/update.sh latest
 ```
 
 After the script exits successfully, output exactly:
@@ -154,8 +154,8 @@ Then immediately use the **`AskUserQuestion`** tool to offer a health check:
 
 | Argument | Command | Output |
 |----------|---------|--------|
-| `--enable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
-| `--disable-auto` | `bash .claude/dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
+| `--enable-auto` | `bash .dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
+| `--disable-auto` | `bash .dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
 
 If either flag is present, skip Steps 1–5 and handle only the toggle.
 
@@ -166,7 +166,7 @@ If either flag is present, skip Steps 1–5 and handle only the toggle.
 Skip Steps 1–4. Run:
 
 ```bash
-bash .claude/dev-team-agents/scripts/update.sh $ARGUMENTS
+bash .dev-team-agents/scripts/update.sh $ARGUMENTS
 ```
 
 Output exactly: `Installed <version>.`

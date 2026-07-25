@@ -12,7 +12,7 @@
 **Evidência** — `skills/devops/graphify-setup/SKILL.md:160-166`:
 
 ```bash
-cat > .claude/dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
+cat > .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh << 'EOF'
 #!/usr/bin/env bash
 # Stop sub-script: rebuild the Graphify knowledge graph after each session.
 set -euo pipefail

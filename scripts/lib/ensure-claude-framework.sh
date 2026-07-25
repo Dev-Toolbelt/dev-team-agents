@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# ensure-claude-framework.sh — Materialize a stable `.claude/dev-team-agents/`
+# ensure-claude-framework.sh — Materialize a stable `.dev-team-agents/`
 # tree inside a target project so that bash hook dispatchers (referenced by
 # the opencode plugin and by Codex hooks.json via project-relative paths) are
 # resolvable at runtime.
 #
 # Strategy: copy the framework's runtime subset (agents/, commands/, skills/,
-# scripts/, templates/, VERSION if present) into <project>/.claude/dev-team-agents/.
+# scripts/, templates/, VERSION if present) into <project>/.dev-team-agents/.
 # This mirrors the slim Claude install, and is what the opencode plugin's
-# `${directory}/.claude/dev-team-agents/scripts/hooks/...` path expects.
+# `${directory}/.dev-team-agents/scripts/hooks/...` path expects.
 #
 # Usage (sourced by install-opencode.sh and install-codex.sh):
 #   ensure_claude_framework <project-root> <source-dir>
@@ -41,7 +41,7 @@ ensure_claude_framework() {
   done
 
   # scripts/: copy the Claude-runtime subset only (mirror what install.sh
-  # would put at .claude/dev-team-agents/scripts/). Cross-CLI plumbing is
+  # would put at .dev-team-agents/scripts/). Cross-CLI plumbing is
   # intentionally NOT copied — bootstrap-on-demand took care of it.
   if [[ -d "$source_dir/scripts" ]]; then
     mkdir -p "$framework_dir/scripts/lib" "$framework_dir/scripts/hooks" "$framework_dir/scripts/helpers"

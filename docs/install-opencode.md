@@ -10,7 +10,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode
 ```
 
-This downloads the latest source, renders the 17 agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/dev-team-agents/`, copies the hook adapter plugin to `.opencode/plugins/dev-team-agents.ts`, materialises the hook dispatchers at `.claude/dev-team-agents/scripts/hooks/`, and deep-merges 22 `/devteam:<name>` command keys into `.opencode/opencode.json`.
+This downloads the latest source, renders the 17 agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/dev-team-agents/`, copies the hook adapter plugin to `.opencode/plugins/dev-team-agents.ts`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and deep-merges 22 `/devteam:<name>` command keys into `.opencode/opencode.json`.
 
 ## After install
 
@@ -41,7 +41,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/
 - **`install-opencode.sh: ERROR: source missing cross-CLI plumbing`** — you tried to run `install-opencode.sh` from a slim Claude install that doesn't bundle it. Use the curl-pipe above instead.
 - **`command not found: jq`** — install jq (`brew install jq`, `apt install jq`, or `choco install jq`). The installer needs it to merge `opencode.json`.
 - **Commands aren't appearing in the TUI** — quit and restart opencode. Config is loaded at startup; the running session keeps the old config.
-- **Hooks aren't firing** — verify `.claude/dev-team-agents/scripts/hooks/` contains `stop.sh`, `pre-tool-use.sh`, `session-start.sh`, `pre-compact.sh`. Missing files mean the opencode plugin can't invoke the dispatchers. Re-run the install curl-pipe to restore them.
+- **Hooks aren't firing** — verify `.dev-team-agents/scripts/hooks/` contains `stop.sh`, `pre-tool-use.sh`, `session-start.sh`, `pre-compact.sh`. Missing files mean the opencode plugin can't invoke the dispatchers. Re-run the install curl-pipe to restore them.
 
 ## Model tier → id map
 

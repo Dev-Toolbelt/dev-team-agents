@@ -15,7 +15,7 @@
 ## Workflow Detection
 
 Before acting on any request, classify the user's intent and load the matching
-workflow file from .claude/dev-team-agents/workflows/.
+workflow file from .dev-team-agents/workflows/.
 
 | Intent signals | Workflow to load |
 | new project, ... | new-project.md |
