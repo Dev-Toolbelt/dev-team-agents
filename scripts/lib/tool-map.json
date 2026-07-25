@@ -1,0 +1,37 @@
+{
+  "$schema": "internal://tool-map.json",
+  "_comment": "Per-provider tool-name rewrite rules applied to agent and command bodies at render time. Source bodies use Claude Code tool names (capitalized). The renderer replaces whole-word occurrences of each `from` token with the provider's equivalent.",
+  "providers": {
+    "claude": {
+      "_comment": "Identity — source already uses Claude Code tool names.",
+      "tool_rewrites": {}
+    },
+    "opencode": {
+      "_comment": "opencode exposes lowercase tool names; the `task` tool spawns subagents; `question` is the quiz tool. Read/Write/Edit/Glob/Grep/Bash stay lowercase.",
+      "tool_rewrites": {
+        "AskUserQuestion": "question",
+        "Task": "task",
+        "TodoWrite": "todowrite",
+        "WebSearch": "websearch",
+        "WebFetch": "webfetch"
+      },
+      "_unchanged": ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
+    },
+    "codex": {
+      "_comment": "Codex uses function-calling tool names: apply_patch (file edits, aliases Edit/Write), spawn_agent (subagent invocation, alias Agent), update_plan (plan/todos), WebSearch (hosted web search). Codex has no structured quiz tool — AskUserQuestion falls back to plain-text question.",
+      "tool_rewrites": {
+        "AskUserQuestion": "_plain_text_question_",
+        "Task": "spawn_agent",
+        "TodoWrite": "update_plan",
+        "WebSearch": "WebSearch",
+        "WebFetch": "WebSearch",
+        "Read": "apply_patch",
+        "Write": "apply_patch",
+        "Edit": "apply_patch",
+        "Glob": "Bash",
+        "Grep": "Bash"
+      },
+      "_post_render_note": "Bodies using _plain_text_question_ get a `**NOTE for Codex port**: this question should be asked as plain text; Codex has no structured quiz tool.` appended inline by the renderer."
+    }
+  }
+}

@@ -127,7 +127,7 @@ PREV_CHECK=""
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Allowlist: only these top-level entries are distributed to users
-KEEP_ROOT=(agents scripts skills workflows templates commands)
+KEEP_ROOT=(agents scripts skills templates commands)
 
 for item in "$EXTRACTED_ROOT"/*; do
     name=$(basename "$item")
@@ -138,13 +138,14 @@ for item in "$EXTRACTED_ROOT"/*; do
     [ "$keep" = false ] && rm -rf "$item"
 done
 
-# Strip dotfiles/dotdirs (not matched by KEEP_ROOT glob above) and repo-only scripts.
-# See CLAUDE.md "Package exclusions" table for the full rationale per path.
-rm -rf "$EXTRACTED_ROOT/.claude"              # repo-level Claude config — not for user projects
-rm -rf "$EXTRACTED_ROOT/.github"              # repo-level GitHub templates/CODEOWNERS — not for users
-rm -rf "$EXTRACTED_ROOT/helpers"              # dev-only authoring tools — not for user projects
-rm -f  "$EXTRACTED_ROOT/.gitignore"           # repo-level gitignore — not for user projects
-rm -f  "$EXTRACTED_ROOT/scripts/install.sh"   # accessed via curl; never bundled in the package
+# Strip dotfiles/dotdirs (not matched by KEEP_ROOT glob above), repo-only
+# scripts, and cross-CLI plumbing. The exact list lives in
+# scripts/lib/strip-tarball.sh so the slim-shape CI contract test
+# (.github/scripts/ci/slim-bootstrap.sh) sources the SAME rules without duplication.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/strip-tarball.sh
+source "$SCRIPT_DIR/lib/strip-tarball.sh"
+apply_strip "$EXTRACTED_ROOT"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."

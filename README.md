@@ -14,6 +14,60 @@ A set of Claude Code agents and skills that form a complete software development
 
 ---
 
+## How It Works — Single Source, Multi-CLI
+
+One canonical source of truth lives in this repo: `agents/`, `commands/`, `skills/`, `templates/`, `scripts/hooks/`, plus a small set of JSON metadata files (`scripts/lib/tiers.json`, `tool-map.json`, `command-map.json`, `commands.json`). Nothing provider-specific is checked in for any CLI.
+
+A render engine (`scripts/render-provider.sh`, plain Python with stdlib only) reads the canonical source and emits the file tree each provider's CLI expects. Per-CLI installers translate agent frontmatter, prep a short per-provider "Tool conventions" note that maps Claude Code tool names to that CLI's native tools, and wire lifecycle hooks to the same bash dispatchers in `scripts/hooks/`.
+
+```
+                      ┌─────────────────────────────────────────────────────┐
+                      │              THIS REPO (canonical source)           │
+                      │     agents/  commands/  skills/  templates/         │
+                      │     scripts/hooks/*.sh   (single bash dispatchers) │
+                      │     scripts/lib/{tiers, tool-map, command-map,      │
+                      │                   commands, preferences}.json       │
+                      └──────────────────────────┬──────────────────────────┘
+                                                 │
+            ┌───────────────────────────────────┴────────────────────────────────────┐
+            │                                                                          │
+            ▼                                                                          ▼
+  ┌───────────────────────────────────┐                            ┌──────────────────────────────┐
+  │   scripts/render-provider.sh      │                            │   scripts/install.sh          │
+  │   (python3, stdlib only)          │                            │   (Claude Code installer)     │
+  │                                   │                            │   slim bundle to project's    │
+  │   --provider claude | opencode |  │                            │   .claude/dev-team-agents/    │
+  │              codex                 │                            └───────────────┬──────────────┘
+  └──┬────────────────┬───────────────┘                                            │ works
+     │ renders         │ renders                                                    ▼ directly
+     ▼                ▼                                              ┌──────────────────────────────┐
+  .opencode/          .codex/                                        │  .claude/                    │
+  agents/<n>.md       agents/<n>.toml    ← frontmatter reshape       │  agents/dev-team/<n>.md      │
+  opencode.json       prompts/devteam-*  ← slash command form       │  commands/devteam/<n>.md    │
+  plugins/dev-team-    hooks.json         ← wire bash dispatchers    │  skills/<name>/             │
+  agents.ts            skills/ → symlink                              │  settings.json → hooks/*.sh │
+  skills/ → symlink                                                   └──────────────────────────────┘
+     │                                                                  ▼
+     │ invoked from a Claude-slim project via                          │ handled by existing Claude
+     │                                                                  │ install path — no extra
+     │   bash <(curl -sSL .../install-provider.sh) opencode              │ bootstrap needed
+     │   bash <(curl -sSL .../install-provider.sh) codex
+     ▼
+  /devteam:plan do a plan          ← identical UX across CLIs (Codex → /prompts:devteam-plan)
+```
+
+**Layered model — three concerns, kept separate:**
+
+1. **Knowledge** (skills, agent role prompts, command flow prompts, hook behavior). Authored once, versioned in this repo, identical across providers.
+2. **Adapters** (per-provider frontmatter shape, tool-name mapping table, slash-command output form). Defined once per provider in `scripts/lib/*.json` and rendered at install time. Adding a new provider = one column in `tiers.json` + one row in `tool-map.json` + one row in `command-map.json` + a thin `install-<provider>.sh`.
+3. **Binding** (`.claude/settings.json` for Claude, `.opencode/plugins/dev-team-agents.ts` for opencode, `.codex/hooks.json` for Codex). All three invoke the SAME `scripts/hooks/*.sh` dispatchers — no per-provider hook duplication.
+
+**Per-agent model id is rigid per tier.** Every agent declares one of `reasoning | backend-exec | frontend | repetitive`. Each tier is resolved to a concrete model id through `tiers.json` per provider, so switching providers is a one-column change — no agent body edits.
+
+> Full reference: [docs/providers.md](docs/providers.md)
+
+---
+
 ## How to Install
 
 ### Prerequisites
@@ -56,6 +110,41 @@ During installation, the installer asks which language agents should use in conv
 Common values: `en` · `pt-BR` · `es` · `fr` · `de` · `ja` · `zh-CN`
 
 > **Advanced options** — specific version, updates, version pinning, auto-update, notifications, and directory layout: [docs/installation.md](docs/installation.md)
+
+---
+
+## Other providers (opencode, Codex CLI)
+
+The same agent team, skills, and hooks can run from **opencode** or **OpenAI Codex CLI** without reauthoring the framework. The slim Claude install intentionally does NOT bundle the cross-CLI plumbing (the render engine, the installer scripts for other CLIs, the opencode plugin). Instead you bootstrap provider support on demand from GitHub — keeping the default client footprint minimal.
+
+### Install for opencode (from your project root, after `install.sh`)
+
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode
+```
+
+The bootstrap fetches just the cross-CLI files and runs `install-opencode.sh`, which releases agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/`, copies the plugin to `.opencode/plugins/dev-team-agents.ts`, and deep-merges 22 `devteam:<name>` command keys into `.opencode/opencode.json`. After install, the slash UX is identical to Claude Code: `/devteam:plan do a plan`, `/devteam:backend …`, etc.
+
+### Install for Codex CLI
+
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
+```
+
+Releases agents as `.codex/agents/<name>.toml`, prompts as `.codex/prompts/devteam-<name>.md`, and registers 4 managed hooks in `.codex/hooks.json`. Codex exposes custom prompts under a hardcoded `/prompts:` namespace, so commands are surfaced as `/prompts:devteam-<name>` — the only UX divergence, documented in [docs/providers.md](docs/providers.md).
+
+> If you already work from a clone of this repo (or pass `--source <path>`), you can skip the curl-pipe and run `scripts/install-opencode.sh` / `scripts/install-codex.sh` directly with `--source`.
+
+### Tier → model map
+
+| tier | claude | opencode | codex |
+| --- | --- | --- | --- |
+| reasoning (architecture, planning, big refactors) | `claude-opus-4-7` | `opencode-go/glm-5.2` (high) | `openai/gpt-5.6-sol` (high) |
+| backend-exec (day-to-day: backend, dba, devops, qa, mobile, code-review) | `claude-sonnet-4-6` | `opencode-go/deepseek-v4-flash` (default) | `openai/gpt-5.6-terra` (medium) |
+| frontend (frontend, ui/ux, frontend tests) | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (default) | `openai/gpt-5.6-terra` (medium) |
+| repetitive (test scaffolding, docs) | `claude-sonnet-4-6` | `opencode-go/minimax-m3` (low) | `openai/gpt-5.6-luna` (low) |
+
+> Full reference: [docs/providers.md](docs/providers.md)
 
 ---
 
@@ -191,7 +280,7 @@ Pick the command that matches your goal — the lifecycle handling (new project,
 | Architecture decision, inherited/maintenance change | `/devteam:architect` |
 | Code review before merge | `/devteam:review` |
 
-Scope-specific step-by-step guides (design, fullstack, mobile, refactor, review) live in the [`workflows/`](workflows/) directory.
+Each scope-specific concern (design, fullstack, mobile, refactor, review) is handled by its dedicated `/devteam:<scope>` command, which delegates to the right agent — no separate workflow directory.
 
 ---
 

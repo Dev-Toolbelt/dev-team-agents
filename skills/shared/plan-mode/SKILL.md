@@ -20,7 +20,7 @@ A plan is required whenever a task involves:
 | Architecture or design decisions | Choosing tech stack, defining API contracts, schema design |
 | Document generation | Backlog items, sprint plans, ADRs, code standards |
 | Multi-step implementations | Any task with 2 or more sequential steps |
-| Workflow executions | Any step described in a `workflows/*.md` file |
+| Multi-agent delegations | Any task that spawns one or more subagents |
 
 **A plan is NOT required for:**
 - Answering a question

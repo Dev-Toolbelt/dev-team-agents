@@ -1,0 +1,42 @@
+{
+  "$schema": "internal://command-map.json",
+  "_comment": "Per-provider output form for slash commands. Source commands live at commands/<name>.md (no prefix). The renderer uses this map to decide where to write each command and what name it will be exposed as.",
+  "_ux_target": "`/devteam:<name>` is the canonical user-facing invocation string. Providers that prohibit `:` in command names use the closest legal alternative and are documented in docs/providers.md.",
+  "providers": {
+    "claude": {
+      "_comment": "Claude Code derives the slash name from the subdirectory: .claude/commands/devteam/<name>.md -> /devteam:<name>.",
+      "output_form": "subdir",
+      "target_path_template": ".claude/commands/devteam/{name}.md",
+      "exposed_name_template": "/devteam:{name}",
+      "frontmatter_passthrough": true,
+      "keep_body_verbatim": true
+    },
+    "opencode": {
+      "_comment": "opencode command names accept `:` when declared as a key in the `command` object of opencode.json. Renderer emits each command as an inline JSON entry and merges into the project's opencode.json(c).",
+      "output_form": "inline_config_key",
+      "target_path_template": "opencode.json:command:devteam:{name}",
+      "exposed_name_template": "/devteam:{name}",
+      "frontmatter_passthrough": false,
+      "frontmatter_to_inline": {
+        "description": "description",
+        "agent": "agent",
+        "model": "model",
+        "tier": "_resolved_to_model_via_tiers_json_",
+        "template": "_body_emitted_as_template_string_"
+      }
+    },
+    "codex": {
+      "_comment": "Codex CLI exposes custom prompts as /prompts:<name>. No free `:` namespace is supported. Divergence from the `/devteam:<name>` UX is documented in docs/providers.md.",
+      "output_form": "prompts_dir",
+      "target_path_template": ".codex/prompts/devteam-{name}.md",
+      "exposed_name_template": "/prompts:devteam-{name}",
+      "ux_divergence": "Codex's custom-prompt namespace is hardcoded as /prompts:. The devteam prefix is baked into the prompt file name to preserve discoverability and grouping.",
+      "frontmatter_passthrough": false,
+      "frontmatter_to_inline": {
+        "_comment": "Codex prompts are plain markdown with no frontmatter. Renderer drops agent model/tier (caller agent must be invoked via spawn_agent from a parent context).",
+        "description": "_first_paragraph_of_body_",
+        "body": "_body_emitted_verbatim_"
+      }
+    }
+  }
+}

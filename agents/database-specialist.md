@@ -2,6 +2,7 @@
 name: database-specialist
 description: Expert in database design, query optimization, indexing strategy, and schema decisions across relational, document, key-value, and column-family databases. Covers MySQL, PostgreSQL, SQL Server, MongoDB, Redis, Cassandra, SQLite and managed cloud services (AWS RDS/Aurora/DynamoDB, GCP Cloud SQL/Firestore/Spanner, Azure SQL/Cosmos DB). Use when designing schemas, optimizing queries, choosing a database, or reviewing data access patterns.
 model: claude-sonnet-4-6
+tier: backend-exec
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 

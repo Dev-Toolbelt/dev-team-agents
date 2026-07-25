@@ -1,0 +1,28 @@
+{
+  "$schema": "internal://commands.json",
+  "_comment": "Per-command metadata. The command body lives verbatim at commands/<name>.md. The renderer uses this file to (a) choose the lead agent for opencode/codex, (b) resolve the model id via tiers.json, (c) emit the frontmatter expected by each provider. Add a new row when adding a command; do NOT add frontmatter to commands/*.md directly (Claude Code parses them as body-only).",
+  "commands": {
+    "plan":              { "tier": "reasoning",    "agent": "product-analyst",     "description": "Plan a feature — product-analyst leads, optional software-architect." },
+    "architect":         { "tier": "reasoning",    "agent": "software-architect",  "description": "Architecture decisions, ADRs, trade-offs." },
+    "adr":               { "tier": "reasoning",    "agent": "software-architect",  "description": "Create a new Architecture Decision Record." },
+    "refactor":          { "tier": "reasoning",    "agent": "software-architect",  "description": "Structured refactoring: dependency mapping, ordered commits." },
+    "security":          { "tier": "reasoning",    "agent": "security-specialist",  "description": "Security audit or vulnerability analysis." },
+    "backend":           { "tier": "backend-exec", "agent": "backend-developer",   "description": "Implement backend changes." },
+    "frontend":          { "tier": "frontend",     "agent": "frontend-developer",  "description": "Implement frontend changes." },
+    "fullstack":         { "tier": "backend-exec", "agent": "backend-developer",   "description": "Implement full-stack changes end-to-end." },
+    "mobile":            { "tier": "backend-exec", "agent": "mobile-developer",    "description": "Implement mobile features." },
+    "fix":               { "tier": "backend-exec", "agent": "backend-developer",   "description": "Fix a bug (auto-routes to backend/frontend/mobile developer)." },
+    "dba":               { "tier": "backend-exec", "agent": "database-specialist",  "description": "Schema design, query optimization, migrations." },
+    "devops":            { "tier": "backend-exec", "agent": "devops-specialist",   "description": "CI/CD, Docker, infra, deploy scripts." },
+    "review":            { "tier": "backend-exec", "agent": "code-reviewer",       "description": "Code review before merge." },
+    "qa":                { "tier": "backend-exec", "agent": "qa-specialist",       "description": "Validate feature behavior and acceptance criteria." },
+    "design":            { "tier": "frontend",     "agent": "ui-ux-designer",      "description": "Design system, UX flows, visual decisions." },
+    "tester":            { "tier": "repetitive",  "agent": "backend-test-specialist", "description": "Write or update tests only." },
+    "docs":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Docs, changelogs, runbooks, release notes." },
+    "pr":                { "tier": "repetitive",  "agent": "technical-writer",    "description": "Draft and create a pull request." },
+    "commit":            { "tier": "repetitive",  "agent": "technical-writer",    "description": "Group staged changes by layer and write commits." },
+    "learn":             { "tier": "repetitive",  "agent": "technical-writer",    "description": "Consolidate session decisions into docs, wiki, ADRs." },
+    "update":            { "tier": "repetitive",  "agent": "technical-writer",    "description": "Check for and apply dev-team-agents updates." },
+    "symlinks":          { "tier": "repetitive",  "agent": "technical-writer",    "description": "Diagnose and repair broken dev-team-agents symlinks." }
+  }
+}

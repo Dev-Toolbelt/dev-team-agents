@@ -1,6 +1,6 @@
 # CLAUDE.md — dev-team-agents
 
-Instructions for working on this repository. These rules apply to Claude when authoring or modifying agents, skills, workflows, scripts, and documentation inside `dev-team-agents`.
+Instructions for working on this repository. These rules apply to Claude when authoring or modifying agents, skills, scripts, and documentation inside `dev-team-agents`.
 
 ---
 
@@ -8,16 +8,18 @@ Instructions for working on this repository. These rules apply to Claude when au
 
 A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware. Installed at the project level (`.claude/dev-team-agents/`) — not globally.
 
+The canonical source (`agents/`, `commands/`, `skills/`, `scripts/hooks/`) is **provider-agnostic**. Claude Code is the default provider; opencode and OpenAI Codex CLI are supported via a render engine (`scripts/render-provider.sh`) that emits the provider-specific file tree per target project. See `docs/providers.md` for the tier → model id map and the per-provider install scripts.
+
 ---
 
 ## Language
 
-**All content in this repository must be written in English** — agents, skills, workflows, templates, comments, commit messages, and documentation — unless a specific piece of content is explicitly marked as an exception (e.g., a locale-specific example).
+**All content in this repository must be written in English** — agents, skills, templates, comments, commit messages, and documentation — unless a specific piece of content is explicitly marked as an exception (e.g., a locale-specific example).
 
 This applies to:
 - Agent instructions and behavior descriptions
 - Skill bodies and reference material
-- Workflow steps and prompt examples
+- Prompt and command templates
 - Template files
 - README.md, CLAUDE.md
 
@@ -152,7 +154,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
 | `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist² | Fixing a bug (tests only if `TESTS_REQUIRED=yes`) |
 | `/devteam:refactor` | software-architect → backend/frontend-test-specialist² + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring; test-first coverage only if `TESTS_REQUIRED=yes` (else refactor without a test net), dependency mapping, consolidated plan, ordered commit blocks |
-| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; follows a scope-specific workflow (refactor, design, mobile, fullstack, review) or its own built-in behavior for everything else (new project, bug fix, security, inherited, maintenance) |
+| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; specialized handling for refactor/design/mobile/fullstack/review scope requests routes through the matching `/devteam:<scope>` command, otherwise built-in behavior (new project, bug fix, security, inherited, maintenance) |
 | `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
 | `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge; with no args, asks a dynamic quiz (current branch / other local branch / PR link / other) to pick the target |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
@@ -162,11 +164,6 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ + mobile-developer¹ | Writing or updating tests only |
 | `/devteam:docs` | technical-writer | Docs, changelogs, runbooks, release notes |
 | `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; after creating (which pushes), loads `skills/shared/github-actions/SKILL.md` to watch Actions and auto-fix failures |
-| `/devteam:workflow-fullstack` | follows `workflows/fullstack.md` | Implementing full-stack features end-to-end |
-| `/devteam:workflow-refactor` | follows `workflows/refactor.md` | Structured refactoring workflow |
-| `/devteam:workflow-review` | follows `workflows/review.md` | Full structured code review workflow |
-| `/devteam:workflow-mobile` | follows `workflows/mobile.md` | Full mobile feature workflow |
-| `/devteam:workflow-design` | follows `workflows/design.md` | Full design workflow |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:learn` | technical-writer + software-architect¹ | Consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs |
 | `/devteam:update` | runs `update.sh` (which delegates freshness check to `hooks/pre-tool-use/01-check-updates.sh`) | Checking for and applying dev-team-agents updates |
@@ -180,16 +177,6 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 > **Exception — commands that do NOT require Plan Gate:** `/devteam:review` (read-only by design — reads the diff and delegates, does not modify files). `/devteam:update` and `/devteam:symlinks` are thin script-runners over `update.sh` / `fix-symlinks.sh` (both with their own interactive guardrails) and likewise run without a Plan Gate.
 
 **Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. It reads the diff, classifies the change scope, and delegates to `backend-test-specialist` or `frontend-test-specialist` as needed. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
-
-### Workflows (`workflows/*.md`)
-
-- Each step must include:
-  1. The prompt the user gives to Claude
-  2. What the agent produces
-  3. A note that the agent will present a Plan before executing
-- Name files: `<context>.md` (e.g., `fullstack.md`, `refactor.md`)
-- Existing workflows: `fullstack.md`, `refactor.md`, `review.md`, `mobile.md`, `design.md`
-- Workflows are **scope-specific only**. Lifecycle concerns (new project, bug fix, maintenance, inherited code, security patch) are encapsulated in the agents (`software-architect` built-in behavior + the direct commands), not in workflow files
 
 ### Templates (`templates/*.md`)
 
@@ -219,7 +206,6 @@ dev-team-agents/
 │   ├── integrations/ ← platform/integration-specific reference skills
 │   └── ui-libraries/ ← UI component library reference skills
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
-├── workflows/       ← step-by-step workflow guides
 ├── templates/       ← document templates (plan, backlog, ADR, etc.)
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
 │   ├── agents.md        ← canonical agent reference
@@ -435,4 +421,4 @@ When the user writes any prompt matching the intent of setting up the project wi
 
 `dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task.
 
-This principle must be reinforced in every agent and every workflow.
+This principle must be reinforced in every agent and every command.

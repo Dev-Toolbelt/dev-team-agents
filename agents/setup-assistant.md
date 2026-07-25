@@ -2,6 +2,7 @@
 name: setup-assistant
 description: Onboards a project into the dev-team-agents ecosystem. Asks the user what type of project it is (new / unfinished / maintenance), configures CLAUDE.md, creates .claude/docs/ structure, and optionally integrates with issue trackers (GitHub Issues, Jira, Linear, ClickUp, Trello, etc.). Also manages version updates for the dev-team-agents installation. Use at the start of any project or when updates need to be checked.
 model: claude-opus-4-7
+tier: reasoning
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 

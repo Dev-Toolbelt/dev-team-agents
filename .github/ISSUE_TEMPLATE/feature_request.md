@@ -11,7 +11,7 @@ labels: enhancement
 **Type of change**
 - [ ] New agent
 - [ ] New skill
-- [ ] New workflow / command
+- [ ] New command
 - [ ] Improvement to existing behaviour
 
 **Alternatives considered**

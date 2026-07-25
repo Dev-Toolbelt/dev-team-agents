@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # orphan-template-scan.sh — Detect template files in templates/ that have no
-# reference in agents/, skills/, commands/, or workflows/.
+# reference in agents/, skills/, commands/, or scripts/.
 # Exit 0 always (informational only); use --quiet to suppress clean output.
 set -euo pipefail
 
@@ -8,7 +8,7 @@ QUIET=false
 [[ "${1:-}" == "--quiet" ]] && QUIET=true
 
 TEMPLATES_DIR="templates"
-CONSUMERS="agents skills commands workflows scripts"
+CONSUMERS="agents skills commands scripts"
 FOUND_ORPHANS=false
 
 for template_file in "$TEMPLATES_DIR"/*.md; do

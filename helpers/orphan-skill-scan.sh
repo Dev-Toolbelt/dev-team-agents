@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scans for orphaned skills and broken skill references across agents/, commands/, workflows/.
+# Scans for orphaned skills and broken skill references across agents/, commands/.
 #
 # Orphaned  — skill exists in skills/ but no consumer file loads it (by path or name).
 # Broken    — a consumer file references a skills/.../SKILL.md path that does not exist.
@@ -21,7 +21,6 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS_DIR="$REPO_ROOT/agents"
 COMMANDS_DIR="$REPO_ROOT/commands"
-WORKFLOWS_DIR="$REPO_ROOT/workflows"
 SKILLS_DIR="$REPO_ROOT/skills"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 
@@ -45,11 +44,11 @@ is_user_invocable() {
     return 1
 }
 
-# ── Collect consumer files (agents + commands + workflows) ───────────────────
+# ── Collect consumer files (agents + commands) ──────────────────────────────
 CONSUMER_FILES=()
 while IFS= read -r f; do
     CONSUMER_FILES+=("$f")
-done < <(find "$AGENTS_DIR" "$COMMANDS_DIR" "$WORKFLOWS_DIR" -name "*.md" 2>/dev/null | sort)
+done < <(find "$AGENTS_DIR" "$COMMANDS_DIR" -name "*.md" 2>/dev/null | sort)
 
 # ── Phase 1: Auto-fix broken path references in consumer files ───────────────
 FIXED_MSGS=()

@@ -1,6 +1,6 @@
 # Contributing to dev-team-agents
 
-A global team of specialized Claude Code agents and skills for software development. Contributions are welcome — agents, skills, workflows, scripts, and documentation.
+A global team of specialized Claude Code agents and skills for software development. Contributions are welcome — agents, skills, scripts, and documentation.
 
 ---
 

@@ -2,6 +2,7 @@
 name: qa-specialist
 description: Validates product behavior, user flows, and regression risk from a quality assurance perspective. Focuses on what the product does (not how the code does it). Tests critical paths, edge cases, and integration between components. Use in the QUALITY GATE phase or when behavioral validation is needed.
 model: claude-sonnet-4-6
+tier: backend-exec
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 

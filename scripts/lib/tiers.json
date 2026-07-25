@@ -1,0 +1,49 @@
+{
+  "$schema": "internal://tiers.json",
+  "_comment": "Canonical tier → provider model id map. To add a new provider, add a column to each tier entry (and an effort entry if applicable). Source agents/commands only declare their tier; the renderer looks the model id up here.",
+  "tiers": {
+    "reasoning": {
+      "_roles": "architecture, planning, refactoring, security analysis, onboarding decisions",
+      "claude": "claude-opus-4-7",
+      "codex": "openai/gpt-5.6-sol",
+      "opencode": "opencode-go/glm-5.2"
+    },
+    "backend-exec": {
+      "_roles": "backend implementation, backend review, code review, database, devops, qa, mobile",
+      "claude": "claude-sonnet-4-6",
+      "codex": "openai/gpt-5.6-terra",
+      "opencode": "opencode-go/deepseek-v4-flash"
+    },
+    "frontend": {
+      "_roles": "frontend implementation, frontend review, frontend tests, ui/ux design",
+      "claude": "claude-sonnet-4-6",
+      "codex": "openai/gpt-5.6-terra",
+      "opencode": "opencode-go/kimi-k2.6"
+    },
+    "repetitive": {
+      "_roles": "test scaffolding, doc generation, boilerplate, high-volume low-judgment tasks",
+      "claude": "claude-sonnet-4-6",
+      "codex": "openai/gpt-5.6-luna",
+      "opencode": "opencode-go/minimax-m3"
+    }
+  },
+  "effort": {
+    "_comment": "Per-tier per-provider effort/variant value injected into the provider's native effort field. Omitted for providers without an effort concept (e.g., claude).",
+    "reasoning": {
+      "codex": "high",
+      "opencode": "high"
+    },
+    "backend-exec": {
+      "codex": "medium",
+      "opencode": "default"
+    },
+    "frontend": {
+      "codex": "medium",
+      "opencode": "default"
+    },
+    "repetitive": {
+      "codex": "low",
+      "opencode": "low"
+    }
+  }
+}

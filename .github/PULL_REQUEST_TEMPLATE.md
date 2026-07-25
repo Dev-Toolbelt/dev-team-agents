@@ -6,7 +6,7 @@
 
 - [ ] New agent
 - [ ] New skill
-- [ ] New workflow / command
+- [ ] New command
 - [ ] Bug fix
 - [ ] Refactor
 - [ ] Docs / templates

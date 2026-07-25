@@ -2,6 +2,7 @@
 name: mobile-developer
 description: Implements mobile features for iOS and Android — native (Swift/Kotlin) and cross-platform (React Native, Expo, Flutter). Adapts to the project's stack and platform conventions. Use for any mobile implementation task.
 model: claude-sonnet-4-6
+tier: backend-exec
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 

@@ -20,7 +20,8 @@ VALID_MODELS=(
   "claude-sonnet-4-6"
   "claude-haiku-4-5-20251001"  # retained for future micro-agents; no current usage
 )
-REQUIRED_FIELDS=("name" "description" "model" "tools")
+REQUIRED_FIELDS=("name" "description" "model" "tier" "tools")
+VALID_TIERS=("reasoning" "backend-exec" "frontend" "repetitive")
 
 ERRORS=()
 
@@ -67,6 +68,23 @@ check_agent() {
       local allowed
       allowed=$(IFS=", "; echo "${VALID_MODELS[*]}")
       ERRORS+=("  · ${file}: invalid model: ${model} (allowed: ${allowed})")
+    fi
+  fi
+
+  # Validate tier value (used by render-provider.sh to pick the model per provider)
+  local tier
+  tier=$(echo "$frontmatter" | grep -E "^tier:" | sed 's/^tier:[[:space:]]*//' | tr -d '\r')
+  if [ -z "$tier" ]; then
+    ERRORS+=("  · ${file}: missing field: tier")
+  else
+    local tier_valid=false
+    for t in "${VALID_TIERS[@]}"; do
+      [ "$tier" = "$t" ] && tier_valid=true && break
+    done
+    if [ "$tier_valid" = false ]; then
+      local tier_allowed
+      tier_allowed=$(IFS=", "; echo "${VALID_TIERS[*]}")
+      ERRORS+=("  · ${file}: invalid tier: ${tier} (allowed: ${tier_allowed})")
     fi
   fi
 
