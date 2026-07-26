@@ -68,6 +68,38 @@ For the full naming table, see `references/branch-flow.md` → Naming quick-refe
 
 ---
 
+## Task Completion Summary
+
+When work is declared done (before finalization/teardown), the agent **must** output a summary block showing the current state:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WORKTREE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Worktree:  <wt-path>/<context>/<brief-title>
+  Branch:    <context>/<brief-title>
+  Base:      <base-branch>
+  Docker:    <compose-project-name> (<n> containers: <svc1>, <svc2>, ...)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+To gather the info:
+
+```bash
+# Worktree path and branch
+WT=<wt-path>/<context>/<brief-title>
+BRANCH=<context>/<brief-title>
+BASE=<base-branch>
+
+# Docker containers (if worktree_docker_isolate and compose is up)
+docker compose -p "$COMPOSE_PROJECT_NAME" ps --format "table {{.Name}}\t{{.Status}}" 2>/dev/null
+```
+
+- If there is no Docker isolation (`worktree_docker_isolate` is `false` or compose is down), show `Docker: none`.
+- The summary goes in a text block — present it directly, no quiz, no markdown tables.
+
+---
+
 ## Key Rules
 
 - **Never** use `git checkout -b` in the main tree — always `git worktree add`

@@ -165,6 +165,30 @@ Fall back to English if the file is unreadable.
 }
 ```
 
+### Execution strategy gate (post-approval)
+
+Presented after plan approval, before execution begins:
+
+```json
+{
+  "questions": [
+    {
+      "question": "How should this plan be executed?",
+      "header": "Exec Strategy",
+      "multiSelect": false,
+      "options": [
+        { "label": "Isolated worktree (Recommended)", "description": "Execute in a git worktree isolated from the main development tree, with Docker isolation if enabled in preferences." },
+        { "label": "New branch", "description": "Create a new branch from the current one and execute there." },
+        { "label": "Current branch", "description": "Execute directly on the current branch without any git changes." },
+        { "label": "Other", "description": "Type your own answer." }
+      ]
+    }
+  ]
+}
+```
+
+The first option MUST be the recommended one based on preferences. See `plan-mode/SKILL.md` → Execution Strategy Gate for the full protocol.
+
 ### Plan approval gate
 
 ```json

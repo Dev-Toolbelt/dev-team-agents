@@ -121,6 +121,8 @@ When the user describes a task on a remote server, offer SSH setup. Load `skills
 
 ## Security — Credentials Protocol
 
+Load `skills/shared/credentials/SKILL.md` — remote environment credentials, read-only access enforcement.
+
 **Always** follow this protocol when credentials or secrets are needed:
 
 1. **Never ask for credentials in plain text in the chat** — secrets must not appear in conversation history

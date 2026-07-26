@@ -109,7 +109,63 @@ After presenting the plan:
 
 On **rejection**: acknowledge the feedback, adjust the plan, re-present the full plan. Never partially execute before replanning.
 
-On **approval**: execute steps in order. Report progress after each step. If execution reveals a problem that changes the plan, **stop and replan** before continuing.
+On **approval**: execute steps in order (agents with Execution Strategy Gate enabled MUST present the gate before executing). Report progress after each step. If execution reveals a problem that changes the plan, **stop and replan** before continuing.
+
+---
+
+## Execution Strategy Gate
+
+This optional gate applies between plan approval and execution. When an agent's configuration mandates it, the agent MUST present an interactive quiz after the user approves the plan and before executing any step.
+
+### Trigger
+
+After the user signals approval ("approved", "go ahead", "proceed", "yes", "looks good", "do it"), **before** executing step 1.
+
+### Procedure
+
+1. Read the worktree preferences from `.dev-team-agents/user-data/preferences.json`:
+   ```bash
+   python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
+   ```
+   If the file is unreadable or keys are absent, assume defaults: `worktree_active=true`, `worktree_base_branch` = auto-detected default, `worktree_path=.dev-team-agents/worktrees`, `worktree_docker_isolate=true`.
+
+2. Determine the recommended option:
+   - `worktree_active == true` → recommend **Isolated worktree** (first option)
+   - `worktree_active == false` → recommend **New branch** (second option)
+   - key absent → recommend **Isolated worktree** (first option)
+
+3. Present the quiz using the `AskUserQuestion` tool. Use the user's preferred language from `preferences.json` → `language`. The recommended option MUST be the first option with the label showing it is recommended.
+
+   Quiz structure (pt-BR example):
+   ```json
+   {
+     "questions": [
+       {
+         "question": "Como este plano deve ser executado?",
+         "header": "Estratégia",
+         "multiSelect": false,
+         "options": [
+           { "label": "Worktree isolada (Recomendado)", "description": "Criar uma worktree git isolada com base em <base_branch>, em <worktree_path>, com Docker isolado=<sim/nao>" },
+           { "label": "Nova branch", "description": "Criar uma nova branch a partir da branch atual e executar nela" },
+           { "label": "Branch atual", "description": "Executar diretamente na branch atual, sem alteracoes git" },
+           { "label": "Outro", "description": "Especificar outra abordagem manualmente" }
+         ]
+       }
+     ]
+   }
+   ```
+   Translate to the user's language. Dynamically interpolate the actual `worktree_base_branch`, `worktree_path`, and `worktree_docker_isolate` values into the recommended option's description.
+
+4. Options and corresponding actions:
+
+   | User choice | Action |
+   |---|---|
+   | **Isolated worktree** | Load `skills/shared/worktree/SKILL.md` and follow the full worktree setup flow. Use `worktree_base_branch` as the base, `worktree_path` for the worktree root, and `worktree_docker_isolate` to determine Docker isolation. |
+   | **New branch** | Ask for a branch name (suggest `<context>/<brief-title>`), then run `git checkout -b <name>`. Continue executing steps in the new branch. |
+   | **Current branch** | Proceed executing steps directly on the current branch with no git changes. |
+   | **Other** | Ask the user to describe their desired approach in free text, then adapt accordingly. |
+
+5. Announce the chosen strategy before executing the first step so the user can verify the decision is correct.
 
 ---
 
