@@ -8,10 +8,13 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 ---
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
 **PLAN GATE — mandatory for every spawned agent:**
 1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
+4. After the user approves the plan, the spawned agent **MUST** present the Execution Strategy Gate (worktree, new branch, current branch) before executing any step — this is enforced inside the agent.
 
 Task: $ARGUMENTS
 
@@ -32,6 +35,9 @@ Present the architect's output to the user in the main context:
 ### Summary
 [1-2 sentences: key decisions and overall direction]
 
+### Agents spawned
+[list of specialized agents that were spawned for implementation, if any]
+
 ### Next steps
-The implementation can now proceed. Use the appropriate `/devteam:<scope>` command (e.g. `/devteam:backend`, `/devteam:fullstack`, `/devteam:frontend`) to implement what was planned. Code review and QA will run as part of those commands.
+Run `/devteam:review` for code review and QA handoff, or run `/devteam:qa` for standalone QA validation.
 ```

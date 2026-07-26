@@ -16,7 +16,6 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Read `docs/development/` for existing ADRs and architecture decisions before proposing anything new; only propose changes if there is a clear problem to solve
 - If worktrees are in use, load `skills/shared/worktree/SKILL.md` — detection (in order): `.dev-team-agents/.worktree-session` exists, or `worktree_active` is `true` in `.dev-team-agents/user-data/preferences.json`, or a worktree dir exists at the configured `worktree_path` (default `.dev-team-agents/worktrees/`, legacy `.worktrees/`), or `CLAUDE.md`/`AGENTS.md` mentions a worktree workflow: `cat .dev-team-agents/.worktree-session 2>/dev/null; git worktree list 2>/dev/null; grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
 - Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial task
-- After plan approval, you **MUST apply the Execution Strategy Gate** (see plan-mode → Execution Strategy Gate) before executing any step. Read `preferences.json` to determine the recommended strategy based on `worktree_active`, `worktree_base_branch`, `worktree_docker_isolate`, and `worktree_path`. The recommended option MUST be the first and marked "(Recommended)" in the quiz.
 - Apply `skills/shared/output-format/SKILL.md` — all architecture documents, conformance reports, and reviews use pure markdown; no box-drawing Unicode or decorative symbols
 - Apply `skills/shared/token-efficiency/SKILL.md`
 
@@ -41,6 +40,37 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 | Rate limiting / API throttling | `skills/architecture/rate-limiting/SKILL.md` |
 | API versioning / breaking changes | `skills/architecture/api-versioning/SKILL.md` |
 | Detecting project technology stack | `skills/shared/stack-detection/SKILL.md` |
+
+---
+
+## Execution Strategy Gate (Mandatory)
+
+**This is a mandatory step between plan approval and execution.** After the user approves the plan, you **MUST** present this gate before executing any step.
+
+Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
+
+**Procedure:**
+
+1. Read worktree preferences:
+   ```bash
+   python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
+   ```
+   Defaults if unreadable: `worktree_active=true`, `worktree_base_branch` = auto-detected, `worktree_path=.dev-team-agents/worktrees`, `worktree_docker_isolate=true`.
+
+2. Determine recommendation:
+   - `worktree_active == true` → **Isolated worktree** (first option)
+   - `worktree_active == false` → **New branch** (second option)
+   - key absent → **Isolated worktree**
+
+3. Present quiz via `AskUserQuestion` tool with 4 options: **Isolated worktree (Recommended)**, **New branch**, **Current branch**, **Other**. Translate to the user's language (read `preferences.json` → `language`, default `en`). Interpolate actual `worktree_base_branch`, `worktree_path`, and `worktree_docker_isolate` values into the recommended option's description.
+
+4. Act on the choice:
+   - **Isolated worktree** → execute the full worktree setup flow (loads the worktree skill)
+   - **New branch** → ask for branch name, run `git checkout -b <name>`
+   - **Current branch** → proceed directly
+   - **Other** → ask the user to describe their approach
+
+5. Announce the chosen strategy before executing step 1.
 
 ---
 
@@ -75,6 +105,53 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 > "Architecture documents written to `docs/development/`. Please review them and let me know if anything needs to change before development starts."
 
 Wait for explicit approval. Apply changes and re-run self-review if requested.
+
+**Step 5 — Delegate implementation to specialized agents** (runs after user approves the architecture docs):
+
+5.1 **Classify the scope** based on the architecture decisions:
+   - **Backend only** (API, services, business logic) → spawn `backend-developer`
+   - **Frontend only** (UI, components, pages) → spawn `frontend-developer`
+   - **Fullstack** (backend + frontend) → spawn `backend-developer` + `frontend-developer` in parallel
+   - **Database** (schema, migrations, queries) → spawn `database-specialist` alongside the developer agents
+   - **Mobile** (React Native, Flutter, iOS/Android) → spawn `mobile-developer`
+   - **DevOps** (Docker, CI/CD, deploy) → spawn `devops-specialist`
+   - **Security-sensitive** (auth, encryption, compliance) → spawn `security-specialist`
+   - If the scope is unclear, ask the user: "Which areas should I delegate to specialized agents?"
+
+5.2 **Spawn agents via the Task tool** — do NOT handle implementation yourself. For each agent, include in the prompt:
+   - The task description from the architecture scope
+   - Reference to the architecture docs: `docs/development/architecture.md`, `docs/development/tech-stack.md`, `docs/development/code-standards.md`
+   - Any relevant ADRs from `docs/development/adrs/`
+   - Instruction: "Read the architecture documents before implementing"
+
+   Use the canonical agent paths:
+   - `.claude/agents/dev-team/backend-developer.md`
+   - `.claude/agents/dev-team/frontend-developer.md`
+   - `.claude/agents/dev-team/mobile-developer.md`
+   - `.claude/agents/dev-team/database-specialist.md`
+   - `.claude/agents/dev-team/devops-specialist.md`
+   - `.claude/agents/dev-team/security-specialist.md`
+
+5.3 **Spawning rules:**
+   - Agents that have no dependency on each other can be spawned in **parallel** (e.g., backend + frontent)
+   - If database must happen before backend (schema first), spawn `database-specialist` first, then `backend-developer`
+   - After each agent completes, log what was done
+   - If an agent produces output, capture it and present a summary to the user
+
+5.4 **After all agents complete**, present a consolidated summary:
+
+   ```
+   ## Implementation Complete
+
+   ### Agents spawned
+   [list of agents and what they did]
+
+   ### Documents produced / modified
+   [list]
+
+   ### Next steps
+   Run `/devteam:review` for code review and QA handoff.
+   ```
 
 ### In QUALITY GATE
 
