@@ -45,6 +45,49 @@ If both agents report no findings, output exactly:
 Post-implementation review: no issues found.
 ```
 
+**If findings exist**, use the `question` tool to ask the user what to do:
+
+```json
+{
+  "questions": [{
+    "question": "O que fazer com os findings acima?",
+    "header": "Findings",
+    "options": [
+      { "label": "Resolver Code Review findings", "description": "Re-spawn backend-developer para corrigir os apontamentos de código." },
+      { "label": "Resolver QA findings", "description": "Re-spawn backend-test-specialist para ajustar os testes." },
+      { "label": "Resolver Code Review + QA findings", "description": "Re-spawn ambos os agentes para corrigir tudo." },
+      { "label": "Nenhum agora", "description": "Ignorar os findings por enquanto." }
+    ]
+  }]
+}
+```
+
+Based on the user's choice:
+- **Code Review** → spawn `backend-developer` via Task tool to fix the findings
+- **QA** → spawn `backend-test-specialist` via Task tool to fix the findings
+- **Both** → spawn both agents in parallel
+- **Nenhum agora** → end the review
+
+**After the resolution agent(s) complete**, output clearly:
+
+```
+✅ Code review findings resolvidos
+```
+
+or
+
+```
+✅ QA findings resolvidos
+```
+
+or
+
+```
+✅ Code review e QA findings resolvidos
+```
+
+depending on which were selected.
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**

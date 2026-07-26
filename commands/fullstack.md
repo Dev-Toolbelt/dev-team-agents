@@ -2,6 +2,8 @@ Load `skills/shared/current-context/SKILL.md` to identify the active branch, mod
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
 
+Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn in parallel:
@@ -44,6 +46,49 @@ If both agents report no findings, output exactly:
 ```
 Post-implementation review: no issues found.
 ```
+
+**If findings exist**, use the `question` tool to ask the user what to do:
+
+```json
+{
+  "questions": [{
+    "question": "O que fazer com os findings acima?",
+    "header": "Findings",
+    "options": [
+      { "label": "Resolver Code Review findings", "description": "Re-spawn backend-developer + frontend-developer para corrigir os apontamentos de código." },
+      { "label": "Resolver QA findings", "description": "Re-spawn backend-test-specialist + frontend-test-specialist para ajustar os testes." },
+      { "label": "Resolver Code Review + QA findings", "description": "Re-spawn todos os agentes para corrigir tudo." },
+      { "label": "Nenhum agora", "description": "Ignorar os findings por enquanto." }
+    ]
+  }]
+}
+```
+
+Based on the user's choice:
+- **Code Review** → spawn `backend-developer` + `frontend-developer` in parallel via Task tool
+- **QA** → spawn `backend-test-specialist` + `frontend-test-specialist` in parallel
+- **Both** → spawn all four agents in parallel
+- **Nenhum agora** → end the review
+
+**After the resolution agent(s) complete**, output clearly:
+
+```
+✅ Code review findings resolvidos
+```
+
+or
+
+```
+✅ QA findings resolvidos
+```
+
+or
+
+```
+✅ Code review e QA findings resolvidos
+```
+
+depending on which were selected.
 
 ---
 
