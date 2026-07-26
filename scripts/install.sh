@@ -152,9 +152,19 @@ apply_strip "$EXTRACTED_ROOT"
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
+    # Preserve user data across updates — save before removing the install dir
+    USER_DATA_BACKUP=$(mktemp -d)
+    if [ -d "$USER_DATA_DIR" ]; then
+        cp -r "$USER_DATA_DIR" "$USER_DATA_BACKUP/"
+    fi
     rm -rf "$INSTALL_DIR"
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    rm -rf "$TMP_DIR" || true
+    # Restore user data
+    if [ -d "$USER_DATA_BACKUP/user-data" ]; then
+        rm -rf "$USER_DATA_DIR"
+        mv "$USER_DATA_BACKUP/user-data" "$USER_DATA_DIR"
+    fi
+    rm -rf "$TMP_DIR" "$USER_DATA_BACKUP" || true
 else
     mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
     rm -rf "$TMP_DIR" || true
