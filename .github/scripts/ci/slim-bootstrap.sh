@@ -22,17 +22,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 # Mirrors the explicit rm -f list in scripts/lib/strip-tarball.sh (kept in sync
 # by sourcing the same function below — this list is for documentation only;
 # the authoritative source is strip-tarball.sh's apply_strip).
-SLIM_STRIP_LIST=(
-  "scripts/install-opencode.sh"
-  "scripts/install-codex.sh"
-  "scripts/render-provider.sh"
-  "scripts/lib/render_provider.py"
-  "scripts/lib/tiers.json"
-  "scripts/lib/tool-map.json"
-  "scripts/lib/command-map.json"
-  "scripts/lib/commands.json"
-)
-SLIM_STRIP_DIRS=("opencode")
+#
+# Note: Cross-CLI plumbing (opencode/Codex render engine and installer scripts)
+# is now INCLUDED in the slim Claude install so users can add Codex or opencode
+# support without network access. These are no longer stripped.
+SLIM_STRIP_LIST=()
+SLIM_STRIP_DIRS=()
 
 # Files that MUST still appear in slim scripts/ (Claude runtime essentials).
 # install.sh itself is intentionally NOT in this list — it's stripped by
@@ -82,14 +77,16 @@ for path in "${SLIM_KEEP_LIST[@]}"; do
   fi
 done
 
-for path in "${SLIM_STRIP_LIST[@]}"; do
+for path in "${SLIM_STRIP_LIST[@]+"${SLIM_STRIP_LIST[@]}"}"; do
+  [ -z "$path" ] && continue
   if [ -e "$STAGING/$path" ]; then
     echo "slim: FAIL — forbidden $path present after strip" >&2
     fail=1
   fi
 done
 
-for d in "${SLIM_STRIP_DIRS[@]}"; do
+for d in "${SLIM_STRIP_DIRS[@]+"${SLIM_STRIP_DIRS[@]}"}"; do
+  [ -z "$d" ] && continue
   if [ -e "$STAGING/$d" ]; then
     echo "slim: FAIL — forbidden directory $d/ present after strip" >&2
     fail=1

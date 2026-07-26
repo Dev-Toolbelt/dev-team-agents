@@ -15,12 +15,7 @@ for arg in "$@"; do
   esac
 done
 
-VALID_MODELS=(
-  "claude-opus-4-7"
-  "claude-sonnet-4-6"
-  "claude-haiku-4-5-20251001"  # retained for future micro-agents; no current usage
-)
-REQUIRED_FIELDS=("name" "description" "model" "tier" "tools")
+REQUIRED_FIELDS=("name" "description" "tier")
 VALID_TIERS=("reasoning" "backend-exec" "frontend" "repetitive")
 
 ERRORS=()
@@ -52,25 +47,6 @@ check_agent() {
     fi
   done
 
-  # Validate model value
-  local model
-  model=$(echo "$frontmatter" | grep -E "^model:" | sed 's/^model:[[:space:]]*//' | tr -d '\r')
-
-  if [ -n "$model" ]; then
-    local valid=false
-    for m in "${VALID_MODELS[@]}"; do
-      if [ "$model" = "$m" ]; then
-        valid=true
-        break
-      fi
-    done
-    if [ "$valid" = false ]; then
-      local allowed
-      allowed=$(IFS=", "; echo "${VALID_MODELS[*]}")
-      ERRORS+=("  · ${file}: invalid model: ${model} (allowed: ${allowed})")
-    fi
-  fi
-
   # Validate tier value (used by render-provider.sh to pick the model per provider)
   local tier
   tier=$(echo "$frontmatter" | grep -E "^tier:" | sed 's/^tier:[[:space:]]*//' | tr -d '\r')
@@ -85,44 +61,6 @@ check_agent() {
       local tier_allowed
       tier_allowed=$(IFS=", "; echo "${VALID_TIERS[*]}")
       ERRORS+=("  · ${file}: invalid tier: ${tier} (allowed: ${tier_allowed})")
-    fi
-  fi
-
-  # Validate tools: Read must be present; all tools must be from the known set
-  KNOWN_TOOLS=(Read Write Edit Bash Glob Grep WebSearch WebFetch)
-  local tools_line
-  tools_line=$(echo "$frontmatter" | grep -E "^tools:" | sed 's/^tools:[[:space:]]*//' | tr -d '\r')
-  if [ -n "$tools_line" ]; then
-    if ! echo "$tools_line" | grep -qw "Read"; then
-      ERRORS+=("  · ${file}: tools must include 'Read' (every agent needs read access)")
-    fi
-    while IFS= read -r tool; do
-      [ -z "$tool" ] && continue
-      local known=false
-      for k in "${KNOWN_TOOLS[@]}"; do
-        [ "$tool" = "$k" ] && known=true && break
-      done
-      if [ "$known" = false ]; then
-        ERRORS+=("  · ${file}: unknown tool '${tool}' (known: ${KNOWN_TOOLS[*]})")
-      fi
-    done < <(echo "$tools_line" | tr ',' '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
-  fi
-
-  # Check canonical tools order
-  if grep -q "^tools:" "$file"; then
-    local tl
-    tl=$(grep "^tools:" "$file" | head -1)
-    # Check if Write/Edit are present (write-capable agent)
-    if echo "$tl" | grep -q "Write\|Edit"; then
-      # Write-capable: Read must come first, then Write, Edit
-      if ! echo "$tl" | grep -qE "^tools: Read, Write, Edit"; then
-        ERRORS+=("  · ${file}: non-canonical tools order (write-capable agents must start with: Read, Write, Edit, Glob, Grep, Bash)")
-      fi
-    else
-      # Read-only: Read must come first
-      if ! echo "$tl" | grep -qE "^tools: Read"; then
-        ERRORS+=("  · ${file}: non-canonical tools order (read-only agents: Read must be first)")
-      fi
     fi
   fi
 

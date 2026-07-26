@@ -16,17 +16,8 @@
 ensure_claude_framework() {
   local project_root="$1"
   local source_dir="$2"
-  local claude_dir="$project_root/.claude"
-  local framework_dir="$claude_dir/dev-team-agents"
+  local framework_dir="$project_root/.dev-team-agents"
 
-  mkdir -p "$claude_dir"
-
-  # If a symlink already exists (legacy Claude-only setup pointed at a clone),
-  # replace it with a real directory we control. The slim Claude installer
-  # does the same so opencode/codex bootstrap is consistent.
-  if [[ -L "$framework_dir" ]]; then
-    rm -f "$framework_dir"
-  fi
   mkdir -p "$framework_dir"
 
   # Copy the runtime subset only (no .git, no .github, no .opencode, no .codex,
