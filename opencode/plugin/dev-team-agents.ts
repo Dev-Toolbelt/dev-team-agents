@@ -31,13 +31,29 @@
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
+import { exec } from "node:child_process"
+import { promisify } from "node:util"
 
-export const DevTeamAgents: Plugin = async ({ client, directory, $ }) => {
+const execAsync = promisify(exec)
+
+export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
 
-  const safe = async (label: string, p: Promise<unknown>) => {
+  const runHook = async (script: string, stdin?: string): Promise<string> => {
     try {
-      await p
+      const { stdout } = await execAsync(`bash ${script}`, {
+        input: stdin,
+        maxBuffer: 1024 * 1024,
+      })
+      return stdout
+    } catch (err) {
+      return ""
+    }
+  }
+
+  const safe = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn()
     } catch (err) {
       await client.app.log({
         body: {
@@ -50,34 +66,24 @@ export const DevTeamAgents: Plugin = async ({ client, directory, $ }) => {
   }
 
   return {
-    // SessionStart equivalent — fires when opencode creates a new session.
     event: async ({ event }) => {
       if (event.type === "session.created") {
-        await safe("session-start", $`bash ${HOOKS}/session-start.sh`.quiet())
+        await safe("session-start", () => runHook(`${HOOKS}/session-start.sh`))
       }
-      // Stop equivalent — fires when the session goes idle (turn complete).
       if (event.type === "session.idle") {
-        await safe("stop", $`bash ${HOOKS}/stop.sh`.quiet())
+        await safe("stop", () => runHook(`${HOOKS}/stop.sh`))
       }
     },
 
-    // PreToolUse equivalent — fires before any tool runs.
     "tool.execute.before": async (input, output) => {
       const payload = JSON.stringify({ tool: input.tool, args: output.args })
-      await safe(
-        "pre-tool-use",
-        $`bash ${HOOKS}/pre-tool-use.sh`.stdin(payload).quiet(),
-      )
+      await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload))
     },
 
-    // PreCompact equivalent — fires before the model generates a compaction
-    // continuation summary. May inject additional context into the compaction
-    // prompt via `output.context`.
     "experimental.session.compacting": async (_input, output) => {
-      const r = await $`bash ${HOOKS}/pre-compact.sh`.quiet().text().catch(() => "")
+      const r = await runHook(`${HOOKS}/pre-compact.sh`)
       if (r && r.trim()) {
-        output.context.push(`## dev-team-agents session summary
-${r.trim()}`)
+        output.context.push(`## dev-team-agents session summary\n${r.trim()}`)
       }
     },
   }
