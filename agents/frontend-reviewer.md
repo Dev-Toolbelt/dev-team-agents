@@ -135,6 +135,8 @@ When the SonarQube skill is loaded:
 
 ## Review Output Format
 
+Load `skills/shared/output-format/SKILL.md` — all review output must follow pure markdown format, no box-drawing Unicode or decorative symbols.
+
 Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 
 ```
@@ -144,23 +146,23 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 [2-3 sentences on overall quality and main findings]
 
 ### Blocking Issues
-[BLOCKING] Component.tsx:42 — [problem and fix]
+- **[BLOCKING]** `Component.tsx:42` — [problem and fix]
 
 ### Accessibility Findings
 (omit if none)
-[BLOCKING / SUGGESTION] Form.tsx:88 — [issue]
+- **[BLOCKING / SUGGESTION]** `Form.tsx:88` — [issue]
 
 ### Security Findings
 (omit if none)
-[BLOCKING / SUGGESTION] Page.tsx:33 — [finding]
+- **[BLOCKING / SUGGESTION]** `Page.tsx:33` — [finding]
 
 ### Performance Findings
 (omit if none)
-[BLOCKING / SUGGESTION] List.tsx:67 — [issue]
+- **[BLOCKING / SUGGESTION]** `List.tsx:67` — [issue]
 
 ### Component Design
 (omit if none)
-[SUGGESTION] Modal.tsx:15 — [improvement]
+- **[SUGGESTION]** `Modal.tsx:15` — [improvement]
 
 ### Suggestions
 [SUGGESTION] Button.tsx:101 — [improvement]

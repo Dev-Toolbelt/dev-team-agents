@@ -158,35 +158,38 @@ A secret removed from current code but present in git history is still a live ex
 
 ## Output Format
 
+Load `skills/shared/output-format/SKILL.md` — all security review output must follow pure markdown format, no box-drawing Unicode or decorative symbols.
+
 ```
-## Security Review
+## Security Review — [Brief Title]
 
 ### Executive Summary
-[Overall risk posture — 2-3 sentences]
+[2-3 sentences: overall risk posture]
 
 ### Critical Findings
-**[CRITICAL]** Title
-- Location: file.js:42
-- Description: [what the vulnerability is]
-- Attack scenario: [how an attacker would exploit this]
-- Remediation: [specific fix with code example if helpful]
+- **[CRITICAL]** [Title]
+  - Location: `file.js:42`
+  - Description: [what the vulnerability is]
+  - Attack scenario: [how an attacker would exploit this]
+  - Remediation: [specific fix with code example if helpful]
 
 ### High Findings
-**[HIGH]** ...
+- **[HIGH]** ...
 
 ### Medium / Low / Info
-**[MEDIUM / LOW / INFO]** ...
+- **[MEDIUM / LOW / INFO]** ...
 
 ### Business Logic
-[findings]
+- [findings]
 
 ### CI/CD Pipeline
-[findings]
+- [findings]
 
 ### LGPD / GDPR
-[findings]
+- [findings]
 
 ### Tooling & Dependency Audit
+- [findings]
 [findings from scanner output]
 
 ### Recommendation

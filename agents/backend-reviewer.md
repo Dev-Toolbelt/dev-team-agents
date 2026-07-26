@@ -147,6 +147,8 @@ When the SonarQube skill is loaded:
 
 ## Review Output Format
 
+Load `skills/shared/output-format/SKILL.md` — all review output must follow pure markdown format, no box-drawing Unicode or decorative symbols.
+
 Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 
 ```
@@ -156,23 +158,23 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 [2-3 sentences on overall quality and main findings]
 
 ### Blocking Issues
-[BLOCKING] file.go:42 — [problem and fix]
+- **[BLOCKING]** `file.go:42` — [problem and fix]
 
 ### Data Integrity
 (omit if none)
-[BLOCKING / SUGGESTION] file.php:88 — [issue]
+- **[BLOCKING / SUGGESTION]** `file.php:88` — [issue]
 
 ### Security Findings
 (omit if none — deep analysis belongs to security-specialist)
-[BLOCKING / SUGGESTION] file.py:33 — [finding]
+- **[BLOCKING / SUGGESTION]** `file.py:33` — [finding]
 
 ### Performance Findings
 (omit if none)
-[BLOCKING / SUGGESTION] file.rb:67 — [issue]
+- **[BLOCKING / SUGGESTION]** `file.rb:67` — [issue]
 
 ### Design & Patterns
 (omit if none)
-[SUGGESTION] file.ts:15 — [improvement]
+- **[SUGGESTION]** `file.ts:15` — [improvement]
 
 ### Suggestions
 [SUGGESTION] file.go:101 — [improvement]

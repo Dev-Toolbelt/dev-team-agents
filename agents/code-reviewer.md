@@ -170,6 +170,8 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 
 ## Review Output Format
 
+Load `skills/shared/output-format/SKILL.md` — all review output must follow pure markdown format, no box-drawing Unicode or decorative symbols.
+
 ```
 ## Code Review
 
@@ -177,25 +179,25 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 [2-3 sentences on overall quality and main findings]
 
 ### Blocking Issues
-[BLOCKING] file.js:42 — [problem and fix]
+- **[BLOCKING]** `file.js:42` — [problem and fix]
 
 ### Performance Findings
 (omit section if none)
-[BLOCKING / SUGGESTION] file.js:88 — [issue and recommendation]
+- **[BLOCKING / SUGGESTION]** `file.js:88` — [issue and recommendation]
 
 ### Security Findings (surface-level)
 (omit section if none — deep analysis belongs to the security-specialist)
-[BLOCKING / SUGGESTION] file.js:33 — [finding]
+- **[BLOCKING / SUGGESTION]** `file.js:33` — [finding]
 
 ### Comments
 (omit section if none)
-[BLOCKING / SUGGESTION / NITPICK] file.js:15 — [what violates comments-policy and why]
+- **[BLOCKING / SUGGESTION / NITPICK]** `file.js:15` — [what violates comments-policy and why]
 
 ### Suggestions
-[SUGGESTION] file.js:67 — [improvement]
+- **[SUGGESTION]** `file.js:67` — [improvement]
 
 ### Nitpicks
-[NITPICK] file.js:12 — [minor point]
+- **[NITPICK]** `file.js:12` — [minor point]
 
 ### Architecture Conformance
 [CONFORMANT / ARCH-DEVIATION / TECH-DEBT] — [explanation]

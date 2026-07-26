@@ -16,6 +16,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Read `docs/development/` for existing ADRs and architecture decisions before proposing anything new; only propose changes if there is a clear problem to solve
 - If worktrees are in use, load `skills/shared/worktree/SKILL.md` — detection (in order): `.dev-team-agents/.worktree-session` exists, or `worktree_active` is `true` in `.dev-team-agents/user-data/preferences.json`, or a worktree dir exists at the configured `worktree_path` (default `.dev-team-agents/worktrees/`, legacy `.worktrees/`), or `CLAUDE.md`/`AGENTS.md` mentions a worktree workflow: `cat .dev-team-agents/.worktree-session 2>/dev/null; git worktree list 2>/dev/null; grep -i worktree CLAUDE.md AGENTS.md 2>/dev/null`
 - Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial task
+- Apply `skills/shared/output-format/SKILL.md` — all architecture documents, conformance reports, and reviews use pure markdown; no box-drawing Unicode or decorative symbols
 - Apply `skills/shared/token-efficiency/SKILL.md`
 
 **Conditional skill loads (load when the task matches):**

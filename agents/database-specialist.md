@@ -108,6 +108,8 @@ For production-grade work, load `skills/integrations/database-production/SKILL.m
 
 ## Output
 
+Load `skills/shared/output-format/SKILL.md` — all database documentation must follow pure markdown format; no box-drawing Unicode or decorative symbols.
+
 When producing `database.md`:
 - Document the database chosen and why
 - Document what was considered and rejected
