@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: Foundational rule — context, coexistence, Plan Mode, language.
+description: Foundational rule — context, coexistence, Plan Mode, language, credentials.
 ---
 
 # Project Context Loading — Coexistence & Override Rule
@@ -291,6 +291,19 @@ If the project uses Docker in development, **all commands and scripts must be ex
 - Never install dependencies, run migrations, execute tests, or invoke framework CLIs directly on the host when Docker is the dev environment
 
 **Exception:** if the user explicitly says to run a command outside the container (e.g., "run this on the host", "run locally"), honor that request for that specific command only. Default always reverts to running inside the container.
+
+---
+
+## Remote Environment Credentials
+
+When a task requires accessing a remote environment (staging, production, QA, etc.):
+
+1. **Load** `skills/shared/credentials/SKILL.md` and follow its instructions
+2. **Read** credentials from `.dev-team-agents/user-data/credentials.local.json`
+3. If fields are empty, ask the user for access details
+4. **Read-only by default** — ask permission before any write/execute operation
+
+This applies to SSH, database, HTTP/HTTPS, Docker, Kubernetes, and any other remote access.
 
 ---
 

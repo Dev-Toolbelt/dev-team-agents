@@ -5,7 +5,7 @@ description: Setup health check — categories, commands, auto-fix actions.
 
 # Setup Health Check
 
-Run a structured audit of the dev-team-agents installation in a project. Checks 9 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`.
+Run a structured audit of the dev-team-agents installation in a project. Checks 10 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`.
 
 ## When to Run
 
@@ -38,6 +38,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `04-notifier.sh` executable, state files present |
+| 10 | Credentials | `credentials.local.json` exists with required top-level keys, gitignored |
 
 ## Load on Demand
 

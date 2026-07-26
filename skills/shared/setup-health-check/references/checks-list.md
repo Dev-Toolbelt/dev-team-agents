@@ -241,3 +241,35 @@ echo "OK" || echo "FAIL"
 | `stop/04-notifier.sh` exists and is executable | `chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
 | `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
 | `.notifier-state` missing | OK — created automatically by `stop/04-notifier.sh` on first turn |
+
+## Category 10 — Credentials
+
+⚠️ **CRITICAL — this file contains remote environment credentials. It must NEVER be committed or shared.**
+
+```bash
+# Check file exists
+[ -f .dev-team-agents/user-data/credentials.local.json ] && echo "OK" || echo "MISSING"
+
+# Check required top-level keys exist
+if [ -f .dev-team-agents/user-data/credentials.local.json ]; then
+    python3 -c "
+import json
+with open('.dev-team-agents/user-data/credentials.local.json') as f:
+    d = json.load(f)
+missing = [k for k in ['devops', 'app'] if k not in d]
+if missing:
+    print('MISSING_KEYS: ' + ', '.join(missing))
+else:
+    print('KEYS_OK')
+"
+fi
+
+# Check gitignore entry
+grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/null && echo "GITIGNORE: OK" || echo "GITIGNORE: MISSING"
+```
+
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| `credentials.local.json` exists | Required | Create with default template if missing |
+| Top-level keys (`devops`, `app`) present | Required | Add missing keys with defaults (never remove existing data) |
+| `.gitignore` entry present | Required | Append `.dev-team-agents/user-data/credentials.local.json` with a strong comment |

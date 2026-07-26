@@ -170,6 +170,72 @@ else
     rm -rf "$TMP_DIR" || true
 fi
 
+# ── Step 2b: Create credentials.local.json if missing ─────────────
+CREDENTIALS_FILE="$USER_DATA_DIR/credentials.local.json"
+if [ ! -f "$CREDENTIALS_FILE" ]; then
+    cat > "$CREDENTIALS_FILE" <<'JSONEOF'
+{
+  "devops": {
+    "agents": ["software-architect", "devops-specialist", "security-specialist"],
+    "staging": {
+      "ssh": {
+        "user": "",
+        "host": "",
+        "privateKeyPath": "",
+        "path": ""
+      },
+      "database": [
+        {
+          "type": "",
+          "host": "",
+          "port": "",
+          "database": "",
+          "username": "",
+          "password": ""
+        }
+      ]
+    },
+    "production": {
+      "ssh": {
+        "user": "",
+        "host": "",
+        "privateKeyPath": "",
+        "path": ""
+      },
+      "docker": {},
+      "database": [
+        {
+          "type": "",
+          "host": "",
+          "port": "",
+          "database": "",
+          "username": "",
+          "password": ""
+        }
+      ]
+    }
+  },
+  "app": {
+    "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
+    "staging": {
+      "appUrl": "",
+      "username": "",
+      "password": ""
+    },
+    "production": {
+      "appUrl": "",
+      "username": "",
+      "password": ""
+    }
+  }
+}
+JSONEOF
+    chmod 600 "$CREDENTIALS_FILE"
+    echo "→ Credentials template: $CREDENTIALS_FILE"
+else
+    echo "→ Credentials file exists: $CREDENTIALS_FILE (kept)"
+fi
+
 # ── Step 3: Create target directories ────────────────────────────
 COMMANDS_TARGET="$PROJECT_ROOT/.claude/commands"
 mkdir -p "$AGENTS_TARGET"
@@ -493,10 +559,11 @@ _add_gitignore() {
 
 _add_gitignore ".dev-team-agents/user-data/"
 _add_gitignore "!.dev-team-agents/user-data/graphify.json"
+_add_gitignore ".dev-team-agents/user-data/credentials.local.json"
 _add_gitignore ".dev-team-agents/.worktree-session"
 _add_gitignore ".dev-team-agents/worktrees/"
 
-echo "→ .gitignore updated (user-data dir pattern + worktree-session + worktrees dir)"
+echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + worktrees dir)"
 
 # ── Step 10b: Ensure project .gitattributes enforces LF for shell scripts ─────
 # Prevents Windows Git (core.autocrlf=true) from converting hook scripts to

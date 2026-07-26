@@ -183,6 +183,86 @@ with open(path, "w") as f:
     f.write("\n")
 ```
 
+## Auto-fix for missing credentials.local.json
+
+When the file does not exist, create it with the default template (fields empty):
+
+```bash
+CRED_FILE=".dev-team-agents/user-data/credentials.local.json"
+cat > "$CRED_FILE" << 'JSONEOF'
+{
+  "devops": {
+    "agents": ["software-architect", "devops-specialist", "security-specialist"],
+    "staging": {
+      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
+      "database": [
+        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
+      ]
+    },
+    "production": {
+      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
+      "docker": {},
+      "database": [
+        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
+      ]
+    }
+  },
+  "app": {
+    "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
+    "staging": { "appUrl": "", "username": "", "password": "" },
+    "production": { "appUrl": "", "username": "", "password": "" }
+  }
+}
+JSONEOF
+chmod 600 "$CRED_FILE"
+```
+
+## Auto-fix for missing top-level keys in credentials.local.json
+
+Inject missing keys (`devops`, `app`) with defaults without overwriting existing data:
+
+```python
+import json
+
+path = ".dev-team-agents/user-data/credentials.local.json"
+template = {
+    "devops": {
+        "agents": ["software-architect", "devops-specialist", "security-specialist"],
+        "staging": {"ssh": {"user": "", "host": "", "privateKeyPath": "", "path": ""}, "database": []},
+        "production": {"ssh": {"user": "", "host": "", "privateKeyPath": "", "path": ""}, "docker": {}, "database": []}
+    },
+    "app": {
+        "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
+        "staging": {"appUrl": "", "username": "", "password": ""},
+        "production": {"appUrl": "", "username": "", "password": ""}
+    }
+}
+
+with open(path) as f:
+    data = json.load(f)
+
+changed = False
+for key, val in template.items():
+    if key not in data:
+        data[key] = val
+        changed = True
+
+if changed:
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+```
+
+## Auto-fix for missing gitignore entry
+
+```bash
+_ENTRY=".dev-team-agents/user-data/credentials.local.json"
+grep -qF "$_ENTRY" .gitignore 2>/dev/null || {
+    echo "# NEVER commit credentials — contains remote access secrets" >> .gitignore
+    echo "$_ENTRY" >> .gitignore
+}
+```
+
 ## Auto-fix for legacy .auto-update flag
 
 ```bash
