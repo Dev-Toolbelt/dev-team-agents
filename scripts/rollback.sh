@@ -10,7 +10,7 @@
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
+USER_DATA_DIR="$INSTALL_DIR/user-data"
 PREV_VERSION_FILE="$USER_DATA_DIR/.installed-version.prev"
 CURRENT_VERSION_FILE="$USER_DATA_DIR/.installed-version"
 

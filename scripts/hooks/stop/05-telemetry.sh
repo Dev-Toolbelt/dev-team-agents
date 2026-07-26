@@ -12,7 +12,7 @@ TELEMETRY_SEND="$SCRIPT_DIR/../../helpers/telemetry-send.sh"
 # No-op if helper is missing (e.g., dev worktree without helpers/)
 [ -f "$TELEMETRY_SEND" ] || exit 0
 
-USER_DATA_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)/user-data"
+USER_DATA_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/user-data"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 
 # Opt-out guard

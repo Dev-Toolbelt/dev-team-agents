@@ -10,7 +10,7 @@
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
+USER_DATA_DIR="$INSTALL_DIR/user-data"
 AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
 
 GITHUB_OWNER="Dev-Toolbelt"

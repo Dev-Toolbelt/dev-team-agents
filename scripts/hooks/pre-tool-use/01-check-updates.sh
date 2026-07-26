@@ -5,7 +5,7 @@
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-USER_DATA_DIR="$(dirname "$INSTALL_DIR")/user-data"
+USER_DATA_DIR="$INSTALL_DIR/user-data"
 LAST_CHECK_FILE="$USER_DATA_DIR/.last-update-check"
 VERSION_FILE="$USER_DATA_DIR/.installed-version"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"

@@ -30,7 +30,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Go up two levels: helpers/ -> scripts/ -> dev-team-agents/ (the install root)
 INSTALL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # DEVTEAM_USER_DATA_DIR can be set by tests or CI to override the default path
-USER_DATA_DIR="${DEVTEAM_USER_DATA_DIR:-$(dirname "$INSTALL_DIR")/user-data}"
+USER_DATA_DIR="${DEVTEAM_USER_DATA_DIR:-"$INSTALL_DIR/user-data"}"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 QUEUE_FILE="$USER_DATA_DIR/telemetry-queue.json"
 VERSION_FILE="$USER_DATA_DIR/.installed-version"
