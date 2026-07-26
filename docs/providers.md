@@ -109,3 +109,91 @@ If your provider can't expose `/devteam:<name>` (e.g., it hardcodes a slash name
 **Codex prompts aren't appearing** — Codex must trust the project's `.codex/` directory (it gates per-project config trust). Run `codex` once in the project root and approve the trust prompt, then restart.
 
 **Hooks aren't firing in Codex** — Codex requires non-managed command hooks to be reviewed and trusted per-hash before they run, and `features.hooks` must be `true` (the default). The installer writes hooks with relative paths (`.dev-team-agents/scripts/hooks/…`) so they're stable across machines, but each new contributor still needs to accept the trust prompt on first session.
+
+---
+
+## Model Provider Reference
+
+Below are the top providers and their model IDs (from [models.dev](https://models.dev)) for use in framework decisions. Each model lists attachment (vision), reasoning, and tool-call support.
+
+### Top 7 Model Providers
+
+| # | Provider | models.dev ID | Flagship Model | attach | reason | tools | Use Case |
+|---|----------|---------------|----------------|--------|--------|-------|----------|
+| 1 | **OpenAI** | `openai` | `gpt-5.2`, `gpt-5.1-codex` | ✅ | ✅ | ✅ | General-purpose, coding, reasoning |
+| 2 | **Anthropic** | `anthropic` | `claude-opus-4-7`, `claude-sonnet-4-6` | ✅ | ✅ | ✅ | Architecture, complex reasoning, safe coding |
+| 3 | **Google** | `google` | `gemini-3.1-flash`, `gemini-3.1-pro` | ✅ | ✅ | ✅ | Multimodal, flash tasks, vision |
+| 4 | **DeepSeek** | `deepseek` | `deepseek-v4-flash`, `deepseek-v4-pro` | ✅ | ✅ | ✅ | Open-source coding, cost-effective |
+| 5 | **Alibaba (Qwen)** | `alibaba` | `qwen3.7-plus`, `qwen3.7-max` | ✅ | ✅ | ✅ | Multimodal reasoning, open-source |
+| 6 | **Moonshot AI (Kimi)** | `moonshotai` | `kimi-k2.7-code`, `kimi-k3` | ✅ | ✅ | ✅ | Long-context coding, best-in-class code |
+| 7 | **Meta** | `meta` | `llama-4-maverick-17b`, `llama-4-scout-17b` | ✅ | ✅ | ✅ | Open-source foundation, fine-tuning |
+
+### OpenCode Access Tiers
+
+These are the two tiers available through the OpenCode CLI, both accessed via your `opencode-go` or `opencode` connection:
+
+| Tier | Provider ID | API | Best For |
+|------|-------------|-----|----------|
+| **OpenCode Go** | `opencode-go` | `https://opencode.ai/zen/go/v1` | Cost-effective coding, everyday use |
+| **OpenCode Zen** | `opencode` | `https://opencode.ai/zen/v1` | Premium models, full catalog |
+
+### Model ID Format
+
+When configuring opencode (in `opencode.jsonc` or agent frontmatter), use:
+
+```
+<provider-id>/<model-id>
+```
+
+Examples from the currently configured models:
+
+```
+# OpenCode Go (default for this project)
+opencode-go/qwen3.7-plus         → Qwen3.7 Plus (vision, reasoning)
+opencode-go/kimi-k2.7-code       → Kimi K2.7 Code (vision, reasoning, code)
+opencode-go/deepseek-v4-flash    → DeepSeek V4 Flash (reasoning, no vision)
+opencode-go/glm-5.2              → GLM-5.2 (reasoning, no vision)
+
+# OpenCode Zen (premium tier)
+opencode/gpt-5.1-codex           → GPT-5.1 Codex
+opencode/claude-sonnet-4-6       → Claude Sonnet 4.6
+opencode/kimi-k2.7-code          → Kimi K2.7 Code
+```
+
+### Tier → Model Mapping in This Framework
+
+`scripts/lib/tiers.json` is the canonical source. Current mapping (using `opencode-go` models):
+
+| Tier | opencode-go (default) | opencode-zen (premium) |
+|------|----------------------|----------------------|
+| `reasoning` | `opencode-go/glm-5.2` | `opencode/claude-opus-4-7` |
+| `backend-exec` | `opencode-go/deepseek-v4-flash` | `opencode/gpt-5.6-terra` |
+| `frontend` | `opencode-go/kimi-k2.6` | `opencode/gpt-5.6-terra` |
+| `repetitive` | `opencode-go/minimax-m3` | `opencode/gpt-5.6-luna` |
+
+### All opencode-go Models (alphabetical)
+
+| Model ID | Name | attach | reason | tools |
+|----------|------|--------|--------|-------|
+| `deepseek-v4-flash` | DeepSeek V4 Flash | ❌ | ✅ | ✅ |
+| `deepseek-v4-pro` | DeepSeek V4 Pro | ❌ | ✅ | ✅ |
+| `glm-5` | GLM-5 | ❌ | ✅ | ✅ |
+| `glm-5.1` | GLM-5.1 | ❌ | ✅ | ✅ |
+| `glm-5.2` | GLM-5.2 | ❌ | ✅ | ✅ |
+| `grok-4.5` | Grok 4.5 | ✅ | ✅ | ✅ |
+| `hy3` | Hy3 | ❌ | ✅ | ✅ |
+| `kimi-k2.5` | Kimi K2.5 | ✅ | ✅ | ✅ |
+| `kimi-k2.6` | Kimi K2.6 | ✅ | ✅ | ✅ |
+| `kimi-k2.7-code` | Kimi K2.7 Code | ✅ | ✅ | ✅ |
+| `kimi-k3` | Kimi K3 (2x usage) | ✅ | ✅ | ✅ |
+| `minimax-m2.5` | MiniMax-M2.5 | ❌ | ✅ | ✅ |
+| `minimax-m2.7` | MiniMax-M2.7 | ❌ | ✅ | ✅ |
+| `minimax-m3` | MiniMax-M3 | ❌ | ✅ | ✅ |
+| `mimo-v2-omni` | MiMo V2 Omni | ✅ | ✅ | ✅ |
+| `mimo-v2-pro` | MiMo V2 Pro | ✅ | ✅ | ✅ |
+| `mimo-v2.5` | MiMo V2.5 | ✅ | ✅ | ✅ |
+| `mimo-v2.5-pro` | MiMo V2.5 Pro | ✅ | ✅ | ✅ |
+| `qwen3.5-plus` | Qwen3.5 Plus | ✅ | ✅ | ✅ |
+| `qwen3.6-plus` | Qwen3.6 Plus | ✅ | ✅ | ✅ |
+| `qwen3.7-max` | Qwen3.7 Max | ❌ | ✅ | ✅ |
+| `qwen3.7-plus` | Qwen3.7 Plus | ✅ | ✅ | ✅ |
