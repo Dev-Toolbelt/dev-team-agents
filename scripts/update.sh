@@ -82,9 +82,10 @@ if [ -f "$_TELEMETRY_SEND" ]; then
 fi
 
 echo ""
-echo "┌──────────────────────────────────────────────────────────────────┐"
-echo "│  Installation complete. Run a health check to verify that all   │"
-echo "│  project configuration is up to date with this version:         │"
-echo "│    \"Run a health check on this project\"                         │"
-echo "└──────────────────────────────────────────────────────────────────┘"
+echo "---"
+echo "Installation complete. Run a health check to verify that all"
+echo "project configuration is up to date with this version:"
+echo "  /devteam:health-check"
+echo "  (or say: \"Run a health check on this project\")"
+echo "---"
 echo ""

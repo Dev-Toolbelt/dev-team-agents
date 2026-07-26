@@ -25,17 +25,12 @@ apply_strip() {
   rm -f  "$extracted/.gitignore"            # repo-level gitignore — not for user projects
   rm -f  "$extracted/scripts/install.sh"    # accessed via curl; never bundled in the package
 
-  # Slim Claude-runtime distribution: cross-CLI plumbing (opencode/Codex
-  # render engine and their installer scripts) is NOT bundled in the Claude
-  # install. Users who want opencode or Codex CLI support curl-pipe
-  # install-provider.sh on demand, which fetches just these files fresh from
-  # GitHub and runs the matching installer. See docs/providers.md.
-  rm -f  "$extracted/scripts/install-opencode.sh"
-  rm -f  "$extracted/scripts/install-codex.sh"
-  rm -f  "$extracted/scripts/render-provider.sh"
-  rm -f  "$extracted/scripts/lib/render_provider.py"
-  rm -f  "$extracted/scripts/lib/tiers.json"
-  rm -f  "$extracted/scripts/lib/tool-map.json"
-  rm -f  "$extracted/scripts/lib/command-map.json"
-  rm -f  "$extracted/scripts/lib/commands.json"
+  # Cross-CLI plumbing (opencode/Codex render engine and installer scripts)
+  # is now INCLUDED in the slim Claude install so users can add Codex or
+  # opencode support without network access. Run:
+  #   .dev-team-agents/scripts/install-codex.sh    # add Codex CLI support
+  #   .dev-team-agents/scripts/install-opencode.sh # add opencode support
+  # These scripts are kept bundled despite being unused by Claude users
+  # because the convenience of local (offline) provider install outweighs
+  # the slimness gain from stripping them."
 }
