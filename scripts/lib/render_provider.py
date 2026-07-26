@@ -82,6 +82,65 @@ def parse_frontmatter(text):
     return fm, body
 
 
+# ─── path rewriting ──────────────────────────────────────────────────
+def apply_path_rewrites(body, provider, tool_map):
+    """Rewrite path references in body text per provider's path_rewrites map.
+    
+    Replaces prefix patterns like 'docs/development/' with provider-specific
+    alternatives like 'docs/' (for codex/opencode). Applied to the body text
+    before output.
+    """
+    prov_entry = tool_map.get("providers", {}).get(provider, {})
+    rewrites = prov_entry.get("path_rewrites", {}) or {}
+    if not rewrites:
+        return body
+    result = body
+    for old_prefix, new_prefix in rewrites.items():
+        result = result.replace(old_prefix, new_prefix)
+    return result
+
+
+# ─── plan gate softening ─────────────────────────────────────────────
+def soften_plan_gate(body, provider, plan_gate_setting):
+    """Remove or soften the mandatory PLAN GATE section for non-Claude providers.
+    
+    - Claude: keep verbatim
+    - codex/opencode with plan_gate="conditional": strip the mandatory gate,
+      replace with a lighter note
+    - codex/opencode with plan_gate="opt_out": strip entirely
+    - codex/opencode with plan_gate="required": keep verbatim
+    """
+    if provider == "claude":
+        return body
+    
+    if plan_gate_setting == "required":
+        return body
+    
+    # Pattern: the PLAN GATE section starts with "---" (optional blank line after)
+    # followed by "**PLAN GATE" and ends at the next "---" or "Task: $ARGUMENTS".
+    plan_gate_pattern = re.compile(
+        r"\n---\s*\n\*\*PLAN GATE.*?(?=\n---|\nTask: \$ARGUMENTS)",
+        re.DOTALL
+    )
+    
+    if plan_gate_setting == "opt_out":
+        result = plan_gate_pattern.sub("", body)
+        # Also remove the "Task: $ARGUMENTS" line if it's leftover stand-alone
+        result = re.sub(r"\n+Task: \$ARGUMENTS", "", result)
+        return result
+    
+    # plan_gate_setting == "conditional" — soften
+    soft_note = (
+        "\n\n**Plan mode.** For complex or architecturally significant tasks, "
+        "present a brief plan before executing and wait for user approval. "
+        "For simple tasks (one-liner fixes, straightforward changes), "
+        "execute directly.\n"
+    )
+    result = plan_gate_pattern.sub(soft_note, body)
+    # Keep Task: $ARGUMENTS reference
+    return result
+
+
 # ─── tool-map rendering ────────────────────────────────────────────────
 def tool_conventions_note(provider, tool_map):
     """Returns a markdown note string prepended to every rendered agent body.
@@ -135,6 +194,8 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
             fm_lines.append(f"  {k}: {v}")
     fm_lines.append("---")
     fm_text = "\n".join(fm_lines) + "\n"
+    # Apply path rewrites to agent body
+    body = apply_path_rewrites(body, "opencode", tool_map)
     note = tool_conventions_note("opencode", tool_map)
     content = fm_text + "\n" + note + body
     return {"path": f".opencode/agents/{name}.md", "content": content}
@@ -183,6 +244,8 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
         model_id_short = model_id.split("/", 1)[1]
     else:
         model_id_short = model_id
+    # Apply path rewrites to agent body
+    body = apply_path_rewrites(body, "codex", tool_map)
     note = tool_conventions_note("codex", tool_map)
     instructions = note + body
     # TOML literal block string (triple-quoted).
@@ -206,6 +269,8 @@ def render_command_claude(name, body, src_path):
 
 
 def render_command_opencode(name, meta, body, model_id, effort, tool_map):
+    body = apply_path_rewrites(body, "opencode", tool_map)
+    body = soften_plan_gate(body, "opencode", meta.get("plan_gate", "conditional"))
     snippet_entry = {
         "description": meta.get("description", ""),
         "agent": meta.get("agent", ""),
@@ -219,6 +284,9 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
 
 def render_command_codex(name, meta, body, model_id, effort, tool_map):
     note = tool_conventions_note("codex", tool_map)
+    # Apply path rewrites and plan gate softening
+    body = apply_path_rewrites(body, "codex", tool_map)
+    body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     # First paragraph becomes description in a comment header, then body.
     desc = meta.get("description", "")
     content = f"<!-- description: {desc} -->\n<!-- model: {model_id} | agent: {meta.get('agent','')} -->\n\n" + note + body
