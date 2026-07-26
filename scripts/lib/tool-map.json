@@ -40,18 +40,12 @@
       },
       "_unchanged": ["Read", "Write", "Edit", "Bash"],
       "idiom_notes": [
-        "· **Tool names.** Claude Code tool names are used in this body. Their Codex equivalents:",
-        "  · `spawn_agent` — spawn subagents (replaces `Task`)",
-        "  · `update_plan` — plan/todo tracking (replaces `TodoWrite`)",
-        "  · `Read` / `Write` / `Edit` — file operations (same names)",
-        "  · `Bash` — shell commands (replaces `Glob` and `Grep` for file search)",
-        "  · `WebSearch` — web search (replaces `WebSearch` and `WebFetch`)",
-        "  · Plain text — ask the user questions (replaces `AskUserQuestion`; Codex has no quiz tool)",
-        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read the file `.dev-team-agents/skills/<name>/SKILL.md` with `Read`. Codex has no dedicated skill tool.",
-        "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, use `spawn_agent({ agent_type: '<X>' })`. The agent definition is at `.codex/agents/<X>.toml` — resolved by name, not path.",
+        "· **Available tools:** `Read`, `Write`, `Edit` (file ops), `Bash` (shell, also for file search), `spawn_agent` (subagents), `update_plan` (plan/todos), `WebSearch` (web). Ask user questions as plain text — no quiz/selection tool is available.",
+        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read the file `.dev-team-agents/skills/<name>/SKILL.md` with `Read`.",
+        "· **Subagent spawn.** When the body directs you to spawn an agent, use `spawn_agent({ agent_type: '<name>' })`. Agent definitions are at `.codex/agents/<name>.toml` — resolved by name, not path.",
         "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real files. Read them with `Read`.",
-        "· **Plan gate.** Commands with a plan gate: use Codex's native plan mode for complex tasks. For simple tasks, execute directly. Use `update_plan` to present a plan.",
-        "· **Task arguments.** `$ARGUMENTS` in command bodies = the user's free-form input after the slash command. Use it as the task description."
+        "· **Plan gate.** For complex or architectural tasks, use Codex's plan mode. For simple tasks, execute directly. Use `update_plan` to present a plan.",
+        "· **Task arguments.** `$ARGUMENTS` in this prompt = the user's free-form input after the slash command. Use it as the task description."
       ],
       "path_rewrites": {
         "docs/development/": "docs/",

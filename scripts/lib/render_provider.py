@@ -141,25 +141,44 @@ def soften_plan_gate(body, provider, plan_gate_setting):
     return result
 
 
-# ─── plain-text question replacement ──────────────────────────────────
-_RE_ASK_QUESTION = re.compile(
-    r'AskUserQuestion\b'
-)
+# ─── body text replacements for Codex ────────────────────────────────
+# Patterns found in agent/command bodies that reference Claude-specific
+# tools or idioms. Each is replaced with the Codex equivalent.
 
-def replace_ask_user_question(body, provider):
-    """Replace AskUserQuestion usage in body text for providers without a quiz tool.
+_CODEX_BODY_REPLACEMENTS = [
+    # Tool name references in running text
+    (r'\bAskUserQuestion\b', 'a plain text question'),
+    (r'\bTodoWrite\b', 'update_plan'),
+    (r'\bthe Task tool\b', 'spawn_agent'),
+    (r'\bthe `Task` tool\b', 'spawn_agent'),
+    (r'\bvia the Task tool\b', 'via spawn_agent'),
+    (r'\bUse the Task tool\b', 'Use spawn_agent'),
+    (r'\bTask tool\b', 'spawn_agent'),
+    (r'\b`Task` tool\b', 'spawn_agent'),
+    # question tool (opencode-specific quiz tool — Codex has none)
+    (r'\bthe `question` tool\b', 'a direct question'),
+    (r'\b`question` tool\b', 'a direct question'),
+    (r'\bquestion tool\b', 'a direct question'),
+    # Hook references that are Claude-specific
+    (r'\.claude/settings\.json', '.codex/hooks.json'),
+    # JSON quiz blocks (Codex has no quiz tool — replace with plain text)
+    (r'\n\s*```json\s*\n\{\s*\n\s+"questions":\s*\[.*?\]\s*\}\s*\n\s*```',
+     '\n\nAsk the user directly what they want to do. Present the options as plain text.\n'),
+]
+
+def apply_codex_body_rewrites(body):
+    """Apply all Codex-specific text replacements to the body.
     
-    For codex, replaces AskUserQuestion tool invocations with instructions to
-    ask the user as plain text. This is done BEFORE the preamble is prepended,
-    so the body itself is self-contained.
+    Runs BEFORE the preamble is prepended, so the body is self-contained
+    and references only Codex-native tools and paths.
     """
-    if provider == "claude":
-        return body
-    if _RE_ASK_QUESTION.search(body):
-        # Add a brief note at the point of use
-        result = _RE_ASK_QUESTION.sub("a plain text question", body)
-        return result
-    return body
+    result = body
+    for pattern, replacement in _CODEX_BODY_REPLACEMENTS:
+        flags = re.IGNORECASE
+        if r'\n' in pattern:
+            flags |= re.DOTALL
+        result = re.sub(pattern, replacement, result, flags=flags)
+    return result
 
 
 # ─── tool-map rendering ────────────────────────────────────────────────
@@ -210,8 +229,9 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
             fm_lines.append(f"  {k}: {v}")
     fm_lines.append("---")
     fm_text = "\n".join(fm_lines) + "\n"
-    # Apply path rewrites to agent body
+    # Apply path rewrites and body rewrites to agent body
     body = apply_path_rewrites(body, "opencode", tool_map)
+    body = apply_codex_body_rewrites(body)
     note = tool_conventions_note("opencode", tool_map)
     content = fm_text + "\n" + note + body
     return {"path": f".opencode/agents/{name}.md", "content": content}
@@ -260,9 +280,9 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
         model_id_short = model_id.split("/", 1)[1]
     else:
         model_id_short = model_id
-    # Apply path rewrites and plain-text question replacement
+    # Apply path rewrites and Codex body rewrites
     body = apply_path_rewrites(body, "codex", tool_map)
-    body = replace_ask_user_question(body, "codex")
+    body = apply_codex_body_rewrites(body)
     note = tool_conventions_note("codex", tool_map)
     instructions = note + body
     # TOML literal block string (triple-quoted).
@@ -301,9 +321,9 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
 
 def render_command_codex(name, meta, body, model_id, effort, tool_map):
     note = tool_conventions_note("codex", tool_map)
-    # Apply path rewrites, plain-text question replacement, and plan gate softening
+    # Apply path rewrites, Codex body rewrites, and plan gate softening
     body = apply_path_rewrites(body, "codex", tool_map)
-    body = replace_ask_user_question(body, "codex")
+    body = apply_codex_body_rewrites(body)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     # First paragraph becomes description in a comment header, then body.
     desc = meta.get("description", "")
