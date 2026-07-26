@@ -6,13 +6,13 @@
       "_roles": "architecture, planning, refactoring, security analysis, onboarding decisions",
       "claude": "claude-opus-4-7",
       "codex": "openai/gpt-5.6-sol",
-      "opencode": "opencode-go/glm-5.2"
+      "opencode": "opencode-go/qwen3.7-plus"
     },
     "backend-exec": {
       "_roles": "backend implementation, backend review, code review, database, devops, qa, mobile",
       "claude": "claude-sonnet-4-6",
       "codex": "openai/gpt-5.6-terra",
-      "opencode": "opencode-go/deepseek-v4-flash"
+      "opencode": "opencode-go/kimi-k2.7-code"
     },
     "frontend": {
       "_roles": "frontend implementation, frontend review, frontend tests, ui/ux design",
@@ -24,7 +24,7 @@
       "_roles": "test scaffolding, doc generation, boilerplate, high-volume low-judgment tasks",
       "claude": "claude-sonnet-4-6",
       "codex": "openai/gpt-5.6-luna",
-      "opencode": "opencode-go/minimax-m3"
+      "opencode": "opencode-go/kimi-k2.5"
     }
   },
   "effort": {
