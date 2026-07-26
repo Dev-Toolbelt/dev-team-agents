@@ -28,36 +28,34 @@
       }
     },
     "codex": {
-      "_comment": "Codex uses function-calling tool names: apply_patch (file edits, aliases Edit/Write), spawn_agent (subagent invocation, alias Agent), update_plan (plan/todos), WebSearch (hosted web search). Codex has no structured quiz tool — AskUserQuestion falls back to plain-text question. Skills load is done via `apply_patch` to Read the SKILL.md path; subagent spawn via `spawn_agent({ agent_type: '<name>' })`.",
+      "_comment": "Codex uses function-calling tools: apply_patch (file edits), spawn_agent (subagent), update_plan (plan/todos), Read (files), Bash (shell), Glob/Grep (search), WebSearch (web). Codex has no structured quiz tool — AskUserQuestion falls back to plain text. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
       "tool_rewrites": {
-        "AskUserQuestion": "_plain_text_question_",
+        "AskUserQuestion": "_plain_text_",
         "Task": "spawn_agent",
         "TodoWrite": "update_plan",
         "WebSearch": "WebSearch",
         "WebFetch": "WebSearch",
-        "Read": "apply_patch",
-        "Write": "apply_patch",
-        "Edit": "apply_patch",
         "Glob": "Bash",
         "Grep": "Bash"
       },
-      "_post_render_note": "Bodies using _plain_text_question_ get a `**NOTE for Codex port**: this question should be asked as plain text; Codex has no structured quiz tool.` appended inline by the renderer.",
+      "_unchanged": ["Read", "Write", "Edit", "Bash"],
       "idiom_notes": [
-        "· **Tool names.** Throughout this body, Claude Code tool names are used. Replace them:",
-        "  · `Task` → `spawn_agent` (spawn subagents)",
-        "  · `AskUserQuestion` → plain text question (Codex has no quiz tool)",
-        "  · `TodoWrite` → `update_plan` (todos and plan tracking)",
-        "  · `Read` / `Write` / `Edit` → `apply_patch` (file operations)",
-        "  · `Glob` / `Grep` → `Bash` (Codex has no dedicated search tools); use shell commands instead.",
-        "  · `WebSearch` / `WebFetch` → `WebSearch` (Codex's hosted web search)",
-        "· **Skill loading.** When the body says `Load skills/<category>/<name>/SKILL.md`, Read the file at path `.dev-team-agents/skills/<category>/<name>/SKILL.md` using `apply_patch` in Read mode. Codex has no dedicated skill tool.",
-        "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, use `spawn_agent({ agent_type: '<X>' })`. The agent definition lives at `.codex/agents/<X>.toml` — resolved by name, not path.",
-        "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real files in this project. Read them with `apply_patch` (Read mode).",
-        "· **Plan gate.** Commands marked with a plan gate: use Codex's native plan mode when the task is complex or architectural. For simple tasks, execute directly. The `update_plan` tool is Codex's equivalent of presenting a plan.",
-        "· **Task arguments.** `$ARGUMENTS` in command bodies represents the user's free-form input after the slash command. Use it as the task description."
+        "· **Tool names.** Claude Code tool names are used in this body. Their Codex equivalents:",
+        "  · `spawn_agent` — spawn subagents (replaces `Task`)",
+        "  · `update_plan` — plan/todo tracking (replaces `TodoWrite`)",
+        "  · `Read` / `Write` / `Edit` — file operations (same names)",
+        "  · `Bash` — shell commands (replaces `Glob` and `Grep` for file search)",
+        "  · `WebSearch` — web search (replaces `WebSearch` and `WebFetch`)",
+        "  · Plain text — ask the user questions (replaces `AskUserQuestion`; Codex has no quiz tool)",
+        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read the file `.dev-team-agents/skills/<name>/SKILL.md` with `Read`. Codex has no dedicated skill tool.",
+        "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, use `spawn_agent({ agent_type: '<X>' })`. The agent definition is at `.codex/agents/<X>.toml` — resolved by name, not path.",
+        "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real files. Read them with `Read`.",
+        "· **Plan gate.** Commands with a plan gate: use Codex's native plan mode for complex tasks. For simple tasks, execute directly. Use `update_plan` to present a plan.",
+        "· **Task arguments.** `$ARGUMENTS` in command bodies = the user's free-form input after the slash command. Use it as the task description."
       ],
       "path_rewrites": {
-        "docs/development/": "docs/"
+        "docs/development/": "docs/",
+        ".claude/agents/dev-team/": ".codex/agents/"
       }
     }
   }

@@ -141,6 +141,27 @@ def soften_plan_gate(body, provider, plan_gate_setting):
     return result
 
 
+# ─── plain-text question replacement ──────────────────────────────────
+_RE_ASK_QUESTION = re.compile(
+    r'AskUserQuestion\b'
+)
+
+def replace_ask_user_question(body, provider):
+    """Replace AskUserQuestion usage in body text for providers without a quiz tool.
+    
+    For codex, replaces AskUserQuestion tool invocations with instructions to
+    ask the user as plain text. This is done BEFORE the preamble is prepended,
+    so the body itself is self-contained.
+    """
+    if provider == "claude":
+        return body
+    if _RE_ASK_QUESTION.search(body):
+        # Add a brief note at the point of use
+        result = _RE_ASK_QUESTION.sub("a plain text question", body)
+        return result
+    return body
+
+
 # ─── tool-map rendering ────────────────────────────────────────────────
 def tool_conventions_note(provider, tool_map):
     """Returns a markdown note string prepended to every rendered agent body.
@@ -156,20 +177,15 @@ def tool_conventions_note(provider, tool_map):
     renames = prov_entry.get("tool_rewrites", {}) or {}
     idioms = prov_entry.get("idiom_notes", []) or []
     note_lines = [
-    f"> **Provider: {provider}.** The agent body below was authored for Claude Code. "
-    f"Apply the following conventions when interpreting it:"
+    f"> **Provider: {provider}.** This body uses Claude Code idioms. "
+    f"Apply these conventions when interpreting it:"
     ]
     if not renames and not idioms:
         note_lines.append("> · (no renames — tool references are native or "
                           "self-explanatory in this provider.)")
     else:
-        for src, dst in renames.items():
-            note_lines.append(f"> · `{src}` → `{dst}`")
         for line in idioms:
             note_lines.append(f"> {line}")
-        extra = prov_entry.get("_post_render_note")
-        if extra:
-            note_lines.append("> " + extra)
     note_lines.append("")
     return "\n".join(note_lines)
 
@@ -244,8 +260,9 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
         model_id_short = model_id.split("/", 1)[1]
     else:
         model_id_short = model_id
-    # Apply path rewrites to agent body
+    # Apply path rewrites and plain-text question replacement
     body = apply_path_rewrites(body, "codex", tool_map)
+    body = replace_ask_user_question(body, "codex")
     note = tool_conventions_note("codex", tool_map)
     instructions = note + body
     # TOML literal block string (triple-quoted).
@@ -284,8 +301,9 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
 
 def render_command_codex(name, meta, body, model_id, effort, tool_map):
     note = tool_conventions_note("codex", tool_map)
-    # Apply path rewrites and plan gate softening
+    # Apply path rewrites, plain-text question replacement, and plan gate softening
     body = apply_path_rewrites(body, "codex", tool_map)
+    body = replace_ask_user_question(body, "codex")
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     # First paragraph becomes description in a comment header, then body.
     desc = meta.get("description", "")
