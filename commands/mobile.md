@@ -45,30 +45,32 @@ If both agents report no findings, output exactly:
 Post-implementation review: no issues found.
 ```
 
-**If findings exist**, use the `question` tool to ask the user what to do:
+**If findings exist**, use the `question` tool to ask the user what to do. Read `.dev-team-agents/user-data/preferences.json` → `language` (default: `en`) and present the quiz in that language:
 
 ```json
 {
   "questions": [{
-    "question": "O que fazer com os findings acima?",
+    "question": "Aplicar findings?",
     "header": "Findings",
     "options": [
-      { "label": "Resolver Code Review findings", "description": "Re-spawn mobile-developer para corrigir os apontamentos de código." },
-      { "label": "Resolver QA findings", "description": "Re-spawn o test-specialist apropriado para ajustar os testes." },
-      { "label": "Resolver Code Review + QA findings", "description": "Re-spawn ambos os agentes para corrigir tudo." },
-      { "label": "Nenhum agora", "description": "Ignorar os findings por enquanto." }
+      { "label": "Aplicar todos os findings (Recomendado)", "description": "Re-spawn mobile-developer + test-specialist para corrigir tudo." },
+      { "label": "Aplicar somente findings do Code Review", "description": "Re-spawn apenas mobile-developer para corrigir os apontamentos de código." },
+      { "label": "Aplicar somente findings do QA", "description": "Re-spawn apenas o test-specialist apropriado para ajustar os testes." },
+      { "label": "Não aplicar nada agora", "description": "Ignorar os findings por enquanto." },
+      { "label": "Outro", "description": "Especificar outra abordagem manualmente." }
     ]
   }]
 }
 ```
 
 Based on the user's choice:
+- **Aplicar todos** → spawn `mobile-developer` + the appropriate `test-specialist` in parallel via Task tool
 - **Code Review** → spawn `mobile-developer` via Task tool to fix the findings
-- **QA** → spawn the appropriate test-specialist via Task tool to fix the findings
-- **Both** → spawn both agents in parallel
-- **Nenhum agora** → end the review
+- **QA** → spawn the appropriate `test-specialist` via Task tool to fix the findings
+- **Não aplicar nada agora** → end the review
+- **Outro** → ask the user to describe their desired approach, then adapt accordingly
 
-**After the resolution agent(s) complete**, output clearly:
+**After the resolution agent(s) complete**, output a clear message indicating what was resolved:
 
 ```
 ✅ Code review findings resolvidos
