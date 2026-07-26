@@ -73,13 +73,14 @@ done
 | `.installed-version` exists | WARN only — re-run installer to populate |
 | Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration), then remove old dirs. Do NOT skip this step. |
 
-## Category 4 — settings.json
+## Category 4 — settings.json / Provider Config
 
 ```bash
-cat .claude/settings.json 2>/dev/null || echo "MISSING"
+cat .claude/settings.json 2>/dev/null || echo "MISSING_CLAUDE"
+cat .opencode/opencode.json 2>/dev/null || echo "MISSING_OPENCODE"
 ```
 
-Verify the following and flag any deviation as FIX (show diff, ask confirmation before applying):
+### For Claude provider
 
 | Check | Expected value | Fix action |
 |-------|---------------|------------|
@@ -87,6 +88,31 @@ Verify the following and flag any deviation as FIX (show diff, ask confirmation 
 | `hooks.Stop` has exactly one dev-team entry | command = `…/scripts/hooks/stop.sh` | Replace old entries (e.g. `session-summary-hook.sh`, `graphify-refresh.sh`) with dispatcher |
 | No stale direct hook paths remain | No `update.sh --check`, `session-summary-hook.sh`, or `graphify-refresh.sh` as direct hook commands | Consolidate into dispatchers |
 | `includeCoAuthoredBy` is `false` | `"includeCoAuthoredBy": false` | Auto-fix: inject via python3 (see fix-patterns.md) |
+
+### For opencode provider
+
+```bash
+# Check that every agent file has model + variant in frontmatter
+for f in .opencode/agents/*.md; do
+  [ -f "$f" ] || continue
+  has_model=$(grep -c '^model: ' "$f" || true)
+  has_variant=$(grep -c '^variant: ' "$f" || true)
+  name=$(basename "$f" .md)
+  if [ "$has_model" -eq 0 ] || [ "$has_variant" -eq 0 ]; then
+    echo "MISSING_CONFIG: $name"
+  fi
+done
+```
+
+| Check | Expected | Fix action |
+|-------|----------|------------|
+| `.opencode/agents/*.md` have `model:` and `variant:` in frontmatter | Every agent file has both fields | Re-run `bash .dev-team-agents/scripts/install-opencode.sh` |
+| `.opencode/opencode.json` `command` entries have `model:` | Each `devteam:*` command entry has `model` key | Re-run `bash .dev-team-agents/scripts/install-opencode.sh` |
+| Plugin exists | `.opencode/plugins/dev-team-agents.ts` | Re-run `bash .dev-team-agents/scripts/install-opencode.sh` |
+
+### For Codex provider
+
+Check `.codex/hooks.json` — the 4 managed hook entries (SessionStart, PreToolUse, Stop, PreCompact) are present and point to valid script paths; check `prompts/` dir for `devteam-*.md` files.
 
 ## Category 5 — Graphify (skip if not enabled)
 

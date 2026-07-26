@@ -263,6 +263,32 @@ grep -qF "$_ENTRY" .gitignore 2>/dev/null || {
 }
 ```
 
+## Auto-fix for opencode agent model/variant config
+
+When opencode agent files are missing `model:` or `variant:` in frontmatter, or the command snippets lack these fields, re-run the opencode installer:
+
+```bash
+bash .dev-team-agents/scripts/install-opencode.sh
+```
+
+This re-renders all agent files, command snippets, and plugin from the canonical source (`scripts/lib/tiers.json`), ensuring every agent has the correct model and variant per its tier.
+
+After re-rendering, verify the fix:
+
+```bash
+missing=0
+for f in .opencode/agents/*.md; do
+  [ -f "$f" ] || continue
+  has_model=$(grep -c '^model: ' "$f" || true)
+  has_variant=$(grep -c '^variant: ' "$f" || true)
+  if [ "$has_model" -eq 0 ] || [ "$has_variant" -eq 0 ]; then
+    echo "STILL_MISSING: $(basename "$f" .md)"
+    missing=$((missing + 1))
+  fi
+done
+[ "$missing" -eq 0 ] && echo "OK: all agents have model+variant"
+```
+
 ## Auto-fix for legacy .auto-update flag
 
 ```bash

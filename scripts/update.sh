@@ -67,6 +67,12 @@ echo "→ Downloading latest installer from GitHub..."
 HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
 bash "$TMP_INSTALLER" "$VERSION_ARG"
 
+# For opencode projects, re-render agents and merge command snippets
+if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
+    echo "→ opencode config detected, re-running install-opencode.sh..."
+    bash .dev-team-agents/scripts/install-opencode.sh
+fi
+
 # Invalidate context cache after version change
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 

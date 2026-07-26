@@ -43,8 +43,8 @@ Run the 9 health check categories from `setup-health-check/references/checks-lis
 
 For **Category 4**, adapt the check to the detected provider:
 
-- **claude**: check `.claude/settings.json` as documented in `checks-list.md` — hook dispatchers, `includeCoAuthoredBy`, no stale direct hooks
-- **opencode**: check `.opencode/opencode.json` — the `devteam:*` command entries are present under the `command` key, the plugin is at `.opencode/plugins/dev-team-agents.ts`
+- **claude**: check `.claude/settings.json` as documented in `checks-list.md` — hook dispatchers, `includeCoAuthoredBy`, no stale direct hook paths
+- **opencode**: check `.opencode/opencode.json` — the `devteam:*` command entries are present under the `command` key, the plugin is at `.opencode/plugins/dev-team-agents.ts`. **Also verify agent model/variant mapping**: each `.opencode/agents/*.md` file must have `model:` and `variant:` in its frontmatter matching the tier-based resolution from `.dev-team-agents/scripts/lib/tiers.json`. If any agent is missing these fields, re-render by running `bash .dev-team-agents/scripts/install-opencode.sh` as auto-fix.
 - **codex**: check `.codex/hooks.json` — the 4 managed hook entries (SessionStart, PreToolUse, Stop, PreCompact) are present and point to valid script paths; check `prompts/` dir for `devteam-*.md` files
 
 ---
