@@ -17,37 +17,21 @@ Task: $ARGUMENTS
 
 ---
 
-## Post-execution — Automatic review pass
+## Post-execution — Present plan to user
 
 **Trigger:** runs automatically after the `software-architect` finishes executing the approved plan. Do NOT run during the planning phase. Do NOT ask the user for confirmation.
 
-Spawn the following agents **in parallel** using the Task tool:
-
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md`
-  Scope: review all files changed in this session (`git diff` against the base branch). Focus on: structural correctness of the architectural decisions, missing contracts or interfaces, coupling violations, security surface introduced.
-
-- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md`
-  Scope: validate that the architectural output is testable. Check: acceptance criteria are defined, testable boundaries are clear, no obvious coverage gaps, edge cases considered.
-
-Both agents run independently and produce their own reports. Do not wait for one to finish before spawning the other.
-
-**After both complete**, synthesize their findings into a single block and present it to the user:
+Present the architect's output to the user in the main context:
 
 ```
-## Post-architecture review
+## Architecture Analysis Complete
 
-### Code review findings
-[code-reviewer output — critical findings only, bullets]
-
-### QA findings
-[qa-specialist output — gaps or risks, bullets]
+### Documents produced
+[list of files created/modified]
 
 ### Summary
-[1–2 sentences: overall verdict and recommended next step]
-```
+[1-2 sentences: key decisions and overall direction]
 
-If both agents report no findings, output exactly:
-
-```
-Post-architecture review: no issues found.
+### Next steps
+The implementation can now proceed. Use the appropriate `/devteam:<scope>` command (e.g. `/devteam:backend`, `/devteam:fullstack`, `/devteam:frontend`) to implement what was planned. Code review and QA will run as part of those commands.
 ```
