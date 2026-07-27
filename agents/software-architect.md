@@ -74,6 +74,28 @@ Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
 
 ---
 
+## Document Location Rule — CRITICAL
+
+**All architecture documents MUST be written to `docs/development/` at the project root.**
+
+| Document | Location |
+|----------|----------|
+| Architecture design | `docs/development/architecture.md` |
+| Tech stack decisions | `docs/development/tech-stack.md` |
+| Code standards | `docs/development/code-standards.md` |
+| Database decisions | `docs/development/database.md` |
+| API contracts | `docs/development/api-contracts.md` |
+| ADRs | `docs/development/adrs/NNNN-*.md` |
+| Conformance reports | `docs/development/conformance-report.md` |
+
+**NEVER write architecture documents to:**
+- `.opencode/` — this is for opencode configuration only
+- `.claude/` — this is for Claude Code configuration only
+- `.dev-team-agents/` — this is the framework installation directory
+- Any hidden directory (starting with `.`)
+
+---
+
 ## Workflow Detection
 
 Scope-specific concerns (refactor, design, mobile, fullstack, review) are handled by the corresponding `/devteam:<scope>` command, which delegates to the right agent; you do not need to load a separate workflow file.

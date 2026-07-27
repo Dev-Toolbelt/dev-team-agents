@@ -145,6 +145,14 @@ Session evidence:
 Approved updates to execute:
 [paste the approved table from Step 3]
 
+**CRITICAL: Document Location Rule**
+ALL documentation files MUST be written to the `docs/` directory at the project root.
+- Wiki entries: `docs/wiki/<domain>/<topic>.md`
+- Doc patches: `docs/development/*.md` or `docs/project.md`
+- Session summary: `.dev-team-agents/user-data/session-summary.md` (exception — this is framework data)
+
+NEVER write documentation to `.opencode/`, `.claude/`, `.dev-team-agents/`, or any hidden directory.
+
 Rules:
 - Doc patches: surgical Edit only — never rewrite a whole file. Update the `<!-- last-updated -->` marker.
 - Wiki entries: create or update `docs/wiki/<domain>/<topic>.md` using the format in `skills/shared/docs-sync/references/wiki-format.md`.

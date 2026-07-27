@@ -25,6 +25,33 @@ Before writing any documentation:
 
 **Project documentation standards always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
 
+---
+
+## Document Location Rule — CRITICAL
+
+**All project documentation files MUST be written to the `docs/` directory at the project root.**
+
+| Document Type | Location |
+|---------------|----------|
+| Architecture docs | `docs/development/architecture.md` |
+| Tech stack | `docs/development/tech-stack.md` |
+| Code standards | `docs/development/code-standards.md` |
+| Database docs | `docs/development/database.md` |
+| API contracts | `docs/development/api-contracts.md` |
+| ADRs | `docs/development/adrs/NNNN-*.md` |
+| Wiki entries | `docs/wiki/<domain>/<topic>.md` |
+| Runbooks | `docs/runbooks/<topic>.md` |
+| Project overview | `docs/project.md` |
+| Backlog | `docs/backlog/` |
+
+**NEVER write documentation to:**
+- `.opencode/` — this is for opencode configuration only
+- `.claude/` — this is for Claude Code configuration only
+- `.dev-team-agents/` — this is the framework installation directory
+- Any hidden directory (starting with `.`)
+
+If a document already exists in the wrong location, move it to `docs/` and update any references.
+
 If no project documentation standards exist, apply:
 - **Framework**: [Diataxis](https://diataxis.fr/) — Tutorials, How-to Guides, Reference, Explanation
 - **Style**: Google Developer Documentation Style Guide
