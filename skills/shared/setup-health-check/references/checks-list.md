@@ -290,6 +290,9 @@ else:
 "
 fi
 
+# Check for legacy root-level file
+[ -f credentials.local.json ] && echo "LEGACY_ROOT: credentials.local.json found at project root" || echo "ROOT_OK"
+
 # Check gitignore entry
 grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/null && echo "GITIGNORE: OK" || echo "GITIGNORE: MISSING"
 ```
@@ -298,4 +301,5 @@ grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/n
 |-------|--------|----------|
 | `credentials.local.json` exists | Required | Create with default template if missing |
 | Top-level keys (`devops`, `app`) present | Required | Add missing keys with defaults (never remove existing data) |
+| No root-level `credentials.local.json` | Required (migrate) | Move to `.dev-team-agents/user-data/credentials.local.json` (see fix-patterns.md) |
 | `.gitignore` entry present | Required | Append `.dev-team-agents/user-data/credentials.local.json` with a strong comment |

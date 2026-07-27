@@ -236,6 +236,18 @@ else
     echo "→ Credentials file exists: $CREDENTIALS_FILE (kept)"
 fi
 
+# ── Step 2c: Migrate root-level credentials.local.json if present ──
+if [ -f "$PROJECT_ROOT/credentials.local.json" ]; then
+    if [ ! -f "$CREDENTIALS_FILE" ]; then
+        mv "$PROJECT_ROOT/credentials.local.json" "$CREDENTIALS_FILE"
+        chmod 600 "$CREDENTIALS_FILE"
+        echo "→ Migrated credentials.local.json from project root to $CREDENTIALS_FILE"
+    else
+        echo "→ WARNING: credentials.local.json found at project root AND at $CREDENTIALS_FILE"
+        echo "  The root file will be ignored. Delete it: rm $PROJECT_ROOT/credentials.local.json"
+    fi
+fi
+
 # ── Step 3: Create target directories ────────────────────────────
 COMMANDS_TARGET="$PROJECT_ROOT/.claude/commands"
 mkdir -p "$AGENTS_TARGET"

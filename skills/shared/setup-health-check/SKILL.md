@@ -38,7 +38,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `04-notifier.sh` executable, state files present |
-| 10 | Credentials | `credentials.local.json` exists with required top-level keys, gitignored |
+| 10 | Credentials | `credentials.local.json` at correct path, no legacy root file, required top-level keys, gitignored |
 
 ## Load on Demand
 

@@ -253,6 +253,20 @@ if changed:
         f.write("\n")
 ```
 
+## Auto-fix for root-level credentials.local.json
+
+When `credentials.local.json` exists at the project root instead of the correct location:
+
+```bash
+if [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ ! -f ".dev-team-agents/user-data/credentials.local.json" ]; then
+    mv "$PROJECT_ROOT/credentials.local.json" ".dev-team-agents/user-data/credentials.local.json"
+    chmod 600 ".dev-team-agents/user-data/credentials.local.json"
+    echo "→ Migrated credentials.local.json from project root to .dev-team-agents/user-data/"
+elif [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ -f ".dev-team-agents/user-data/credentials.local.json" ]; then
+    echo "→ WARNING: credentials.local.json exists at both locations. Remove the root-level file: rm credentials.local.json"
+fi
+```
+
 ## Auto-fix for missing gitignore entry
 
 ```bash
