@@ -36,6 +36,9 @@ import { promisify } from "node:util"
 
 const execAsync = promisify(exec)
 
+// Hook timeout: 5 seconds max. Prevents slow/broken hooks from freezing opencode.
+const HOOK_TIMEOUT_MS = 5000
+
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
 
@@ -44,9 +47,18 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       const { stdout } = await execAsync(`bash ${script}`, {
         input: stdin,
         maxBuffer: 1024 * 1024,
+        timeout: HOOK_TIMEOUT_MS,
       })
       return stdout
     } catch (err) {
+      // Timeout or error — log but don't block
+      await client.app.log({
+        body: {
+          service: "dev-team-agents",
+          level: "warn",
+          message: `hook timeout/error: ${script} — ${String(err)}`,
+        },
+      })
       return ""
     }
   }
