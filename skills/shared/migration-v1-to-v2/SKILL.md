@@ -21,6 +21,30 @@ Load this skill when a project shows signs of v1 installation. Detect, then exec
 | Symlink materialization | N/A (copied files) | Real symlinks on macOS/Linux; may be plain copies on Windows (Git Bash) |
 | Updates | Manual re-copy | `git pull` or `/devteam:update` — symlinks pick up changes automatically |
 
+## Pre-Migration Checklist
+
+> **Split-brain warning:** Running `/devteam:update` or the v2 installer on a v1 project does NOT repoint existing v1 symlinks or hook paths. The installer drops v2 files but logs "already linked / already present (skipped)", leaving the project running v1 with an unused v2 tree beside it. **Do NOT rely on the installer alone — manual migration is required.** Follow the steps below.
+
+Before starting, confirm the project is on v1 and gather context:
+
+```bash
+# Confirm v1 layout
+[ -d .claude/dev-team-agents ] && echo "v1 source tree found"
+[ -d .claude/agents ] && ls .claude/agents/*.md >/dev/null 2>&1 && echo "v1 agents (materialized copies)"
+
+# Check for project-specific commands that must be preserved
+ls .claude/commands/*.md 2>/dev/null | grep -v devteam || true
+
+# Check for cross-repo doc references (e.g., ../other-repo/.claude/docs/)
+grep -rn '\.\./[^/]*/\.claude/' .claude/docs/ 2>/dev/null || echo "No cross-repo refs found"
+
+# Backup personal settings
+cp .claude/settings.local.json /tmp/settings.local.json.bak 2>/dev/null || true
+
+# Note any project-owned hooks in .claude/hooks/ (will become dead code after migration)
+ls .claude/hooks/*/*.sh 2>/dev/null && echo "WARN: project-owned hooks found — safe to git rm after migration"
+```
+
 ## Migration Steps
 
 ### 0. Ensure `.dev-team-agents/` exists at project root
@@ -40,7 +64,18 @@ fi
 if [ ! -f .dev-team-agents/VERSION ]; then
   echo "v2.0.0" > .dev-team-agents/VERSION
 fi
+
+# Bug: v2 installer writes .dev-team-agents/user-data/credentials.local.json
+# without creating user-data/ first. Pre-create to avoid installer abort:
+mkdir -p .dev-team-agents/user-data
 ```
+
+> **Tip:** v2 ships official migration scripts in `.dev-team-agents/scripts/` — prefer these over manual steps next time:
+> - `migrate-to-root.sh` — moves v1 `.claude/dev-team-agents/` layout to the v2 root layout
+> - `fix-symlinks.sh` — repoints/repairs the agent/command/skill symlinks
+> - `rollback.sh` — reverts to the previous install
+>
+> Commands `/devteam:update`, `/devteam:symlinks`, and `/devteam:health-check` are also available.
 
 ### 1. Move project docs to root
 
@@ -303,26 +338,75 @@ ISSUE_TRACKER_ACCESS: [read-only | read-write]
 
 Replace keyword-based auto-routing sections with the v2 command table.
 
-## Post-Migration Verification
+### 8. Sweep stale cross-references
+
+After moving `.claude/docs/ → docs/` and `.claude/dev-team-agents/ → .dev-team-agents/`, update internal links across all tracked files:
 
 ```bash
-# Confirm agents and commands are accessible
-ls .dev-team-agents/agents/          # 17+ agent files
-ls .dev-team-agents/commands/        # 21+ command files
+# Check which tracked files still reference v1 paths (exclude node_modules, session-summary, and any cross-repo refs)
+git grep -l '\.claude/docs/' -- ':(exclude)node_modules' ':(exclude)*session-summary*' || echo "No stale doc refs"
+git grep -l '\.claude/dev-team-agents/' -- ':(exclude)node_modules' ':(exclude)*session-summary*' || echo "No stale source refs"
+```
 
-# Confirm symlinks or copies are in place
-ls .claude/agents/dev-team/          # should list agents
-ls .claude/commands/devteam/         # should list commands
-ls .claude/skills/ | wc -l          # 130+ skills
+> **Cross-repo refs:** do NOT rewrite references to `../other-repo/.claude/docs/` — those repos are still on v1 and their paths are correct.
 
-# On macOS/Linux — verify real symlinks
-file .claude/agents/dev-team | grep -q "symbolic link" && echo "OK: symlink"
+### 9. Clean up `.gitignore`
 
-# On Windows — verify content was copied
+```bash
+# Remove stale v1 entries
+git config --local core.excludesFile /dev/null 2>/dev/null || true
+
+# Remove these lines if present:
+#   .claude/worktrees
+#   .claude/user-data/*
+#   !.claude/user-data/graphify.json
+#   .claude/user-data/.graphify-last-run
+#   .claude/.worktree-session
+#
+# Keep the root credentials.local.json ignore line (it's project secrets, unrelated to v2)
+
+# The v2 installer adds the .dev-team-agents/ equivalents automatically
+```
+
+### 10. Remove legacy project-owned hooks (if any)
+
+```bash
+# v1 workaround hooks — v2 dispatcher never invokes .claude/hooks/
+# Safe to delete:
+git rm -r .claude/hooks/ 2>/dev/null || echo "No legacy hooks found"
+```
+
+## After Migration — `.claude/` contents
+
+After a clean migration, `.claude/` holds only:
+- `agents/dev-team` — symlink → `.dev-team-agents/agents`
+- `commands/devteam` — symlink → `.dev-team-agents/commands`
+- `skills/*` — individual skill symlinks → `.dev-team-agents/skills/<cat>/<name>/`
+- `settings.json` — hook registration
+- `settings.local.json` — personal overrides (untracked, may carry stale v1 paths — harmless)
+
+**Start a new Claude Code session** to load the v2 agents and skills. The diff (tree move + docs move) lands on every teammate's checkout on merge.
+
+## Post-Migration Verification Checklist
+
+```bash
+cat .dev-team-agents/user-data/.installed-version          # v2.x.y
+python3 -c "import json;json.load(open('.claude/settings.json'))"   # valid JSON
+grep -o '\.dev-team-agents/scripts/hooks/[a-z-]*\.sh' .claude/settings.json | sort -u   # 4 hooks → v2
+
+# Symlinks resolve (0 broken):
+for l in .claude/agents/dev-team .claude/commands/devteam .claude/skills/*; do
+  [ -L "$l" ] && [ ! -e "$l" ] && echo "BROKEN $l"
+done
+
+# On Windows — verify content was copied instead
 [ "$(uname)" = "MINGW"* ] && ls .claude/agents/dev-team/*.md > /dev/null && echo "OK: copied"
 
-# Confirm hooks are wired
-grep "dev-team-agents/scripts/hooks" .claude/settings.json
+# Hooks run clean:
+echo '{}' | bash .dev-team-agents/scripts/hooks/session-start.sh; echo "exit $?"
+
+# Confirm no v1 materialized copies remain (only symlinks in .claude/):
+[ -d .claude/agents/dev-team ] && [ ! -L .claude/agents/dev-team ] && echo "WARN: agents dir is a real copy, not a symlink"
 
 # OpenCode-specific
 file .opencode/opencode.json 2>/dev/null && echo "OK: opencode config"
