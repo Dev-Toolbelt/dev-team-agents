@@ -33,6 +33,7 @@ Always spawn in parallel:
 - `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — overall code quality, routes internally to backend-reviewer and/or frontend-reviewer based on what changed
 - `software-architect` at `.claude/agents/dev-team/software-architect.md` — architectural consistency and design decisions
 - `security-specialist` at `.claude/agents/dev-team/security-specialist.md` — security vulnerabilities and OWASP concerns
+- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — validate behavior against acceptance criteria and assess regression risk
 
 Also spawn if the task involves database changes:
 - `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — query efficiency, schema correctness, migration safety
@@ -41,3 +42,20 @@ Also spawn if the diff includes mobile files (ios/, android/, *.swift, *.kt, App
 - `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — review mobile-specific code quality, platform APIs, memory management, and lifecycle patterns
 
 Task: $ARGUMENTS
+
+---
+
+## Step 9 — Apply findings (mandatory)
+
+After all spawned agents complete and return their findings, present a synthesized summary of all findings (grouped by agent) to the user.
+
+Then use `AskUserQuestion` (single-select) to ask:
+
+> "Apply the review findings?"
+- **Apply all findings** — automatically apply every suggested change to the codebase
+- **Apply selected findings** — ask which findings to apply and apply only those
+- **Skip, just show the summary** — do not modify any files; print the full review report
+
+If the user chooses to apply, execute the changes directly (edit files, create commits if files were modified). Do not delegate back to agents — apply the changes yourself based on the findings already collected.
+
+If the user chooses to skip, print a one-line confirmation: "Findings noted. No files were modified."

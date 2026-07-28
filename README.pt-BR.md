@@ -128,7 +128,7 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:refactor` | Refatoração — software-architect planeja, desenvolvedor(es) executam |
 | `/devteam:architect` | Decisões de arquitetura e ADRs — software-architect |
 | `/devteam:audit` | Análise profunda de módulo/área — backend-developer + frontend-developer + security-specialist + devops-specialist; salva relatório em `docs/audit/` |
-| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist |
 | `/devteam:qa` | Garantia de qualidade — qa-specialist |
 | `/devteam:security` | Auditoria de segurança — security-specialist + software-architect |
 | `/devteam:dba` | Trabalho de banco de dados — database-specialist + software-architect |

@@ -157,7 +157,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 | `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; specialized handling for refactor/design/mobile/fullstack/review scope requests routes through the matching `/devteam:<scope>` command, otherwise built-in behavior (new project, bug fix, security, inherited, maintenance) |
 | `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
 | `/devteam:audit` | explore → backend-developer + frontend-developer + security-specialist + devops-specialist → backend-test-specialist² + frontend-test-specialist² | Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan; saves report to `docs/audit/` |
-| `/devteam:review` | code-reviewer + software-architect + security-specialist + database¹ + mobile-developer¹ | Code review before merge; with no args, asks a dynamic quiz (current branch / other local branch / PR link / other) to pick the target |
+| `/devteam:review` | code-reviewer + software-architect + security-specialist + qa-specialist + database¹ + mobile-developer¹ | Code review before merge; with no args, asks a dynamic quiz (current branch / other local branch / PR link / other) to pick the target |
 | `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
 | `/devteam:security` | security-specialist + software-architect | Security audit or vulnerability analysis |
 | `/devteam:dba` | database-specialist + software-architect | Schema design, query optimization, migrations |

@@ -127,7 +127,7 @@ After installation, slash commands are available under the `/devteam:` namespace
 | `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
 | `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
-| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist |
 | `/devteam:qa` | Quality assurance — qa-specialist |
 | `/devteam:audit` | Deep module/area analysis — backend-developer + frontend-developer + security-specialist + devops-specialist; saves report to `docs/audit/` |
 | `/devteam:security` | Security audit — security-specialist + software-architect |
