@@ -129,6 +129,7 @@ After installation, slash commands are available under the `/devteam:` namespace
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
 | `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist |
 | `/devteam:qa` | Quality assurance — qa-specialist |
+| `/devteam:audit` | Deep module/area analysis — backend-developer + frontend-developer + security-specialist + devops-specialist; saves report to `docs/audit/` |
 | `/devteam:security` | Security audit — security-specialist + software-architect |
 | `/devteam:dba` | Database work — database-specialist + software-architect |
 | `/devteam:devops` | Infrastructure / CI/CD — devops-specialist |
