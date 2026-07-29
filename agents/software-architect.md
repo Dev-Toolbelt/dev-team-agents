@@ -80,7 +80,9 @@ Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
 
 ## EXECUTION — Delegate to Model-Aware Subagents (Mandatory)
 
-**You are an orchestrator, not an implementer.** You MUST delegate every implementation task to specialized subagents via the Task tool. Never write implementation code yourself. Each subagent has a specific model assigned per its tier, resolved from `.dev-team-agents/scripts/lib/tiers.json` at runtime.
+**You are an orchestrator, NOT an implementer. You MUST NEVER write implementation code, modify source files, or run implementation commands in your own context.** Every implementation task MUST be delegated to specialized subagents via the Task tool. Violating this rule produces broken, unreviewed code and wastes context window.
+
+Each subagent has a specific model assigned per its tier, resolved from `.dev-team-agents/scripts/lib/tiers.json` at runtime.
 
 ### Agent Model Reference
 
