@@ -10,6 +10,8 @@ You are running the **`/devteam:audit`** command.
 
 **Purpose:** Deep analysis of a specific module/area across the entire codebase (frontend, backend, infrastructure). Finds silent bugs, critical routines needing test coverage, edge cases, high-value fixes (no overengineering), security issues, and infra improvements. Produces a consolidated improvement plan saved to `docs/audit/`.
 
+**Observational Analysis Principle:** The audit is a diagnostic — it analyzes the software as it currently behaves. Agents must NOT propose changes that alter existing business logic, introduce new business rules, or modify the intended behavior of the system. Findings must be grounded in the current codebase context: bugs, missing guards, security gaps, and quality issues that exist today. If a finding requires inventing a new business rule or changing what the software is supposed to do, it is out of scope.
+
 ---
 
 ## Step 0 — Resolve audit target
@@ -123,6 +125,8 @@ Wait for the exploration result before proceeding.
 
 > **Relevance rule (applies to all agents above):** Report ONLY findings that would realistically cause production issues, user-facing bugs, data loss, security breaches, or significant maintenance pain. Exclude cosmetic issues, theoretical edge cases requiring impossible preconditions, minor style deviations, and items that "could be improved" without concrete impact. For each finding, state in one sentence why it matters. If you can't articulate real impact — omit it.
 
+> **Observational constraint (applies to all agents above):** Analyze the module based strictly on its current behavior and context. Do NOT propose fixes that introduce new business rules, change existing business logic, or alter the intended behavior of the system. Fixes must address bugs, missing guards, security gaps, or quality issues — not redesign what the software does. If a fix would require deciding what the software "should" do beyond what it currently does, flag it as out of scope instead.
+
 Each agent receives the exploration results from Step 3 as context.
 
 ### Phase 4b — Test coverage (conditional)
@@ -137,7 +141,7 @@ Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUI
 
 ## Step 5 — Synthesize improvement plan
 
-Once all agents from Phase 4 complete, synthesize their findings into a single curated improvement plan. De-duplicate related issues, merge items that describe the same root cause, and discard any finding that doesn't meet the relevance bar from Phase 4a. The final report should be shorter than the sum of its parts — every item must justify its inclusion.
+Once all agents from Phase 4 complete, synthesize their findings into a single curated improvement plan. De-duplicate related issues, merge items that describe the same root cause, and discard any finding that doesn't meet the relevance bar from Phase 4a. Discard any finding that proposes new business rules or changes to existing business logic — the audit is observational, not prescriptive. The final report should be shorter than the sum of its parts — every item must justify its inclusion.
 
 Output format (pure markdown, no box-drawing Unicode, no decorative symbols):
 
