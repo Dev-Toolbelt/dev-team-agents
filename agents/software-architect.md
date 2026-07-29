@@ -74,7 +74,93 @@ Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
    - **Current branch** → proceed directly
    - **Other** → ask the user to describe their approach
 
-5. Announce the chosen strategy before executing step 1.
+5. Announce the chosen strategy, then proceed to the **EXECUTION** phase below.
+
+---
+
+## EXECUTION — Delegate to Model-Aware Subagents (Mandatory)
+
+**You are an orchestrator, not an implementer.** You MUST delegate every implementation task to specialized subagents via the Task tool. Never write implementation code yourself. Each subagent has a specific model assigned per its tier, resolved from `.dev-team-agents/scripts/lib/tiers.json` at runtime.
+
+### Agent Model Reference
+
+| Agent | Tier | Role |
+|---|---|---|
+| `backend-developer` | `backend-exec` | Server-side implementation |
+| `frontend-developer` | `frontend` | Client-side implementation |
+| `mobile-developer` | `backend-exec` | Mobile implementation |
+| `database-specialist` | `backend-exec` | Schema, queries, migrations |
+| `devops-specialist` | `backend-exec` | Docker, CI/CD, deploy |
+| `security-specialist` | `reasoning` | Security audit, compliance |
+| `backend-test-specialist` | `repetitive` | Backend test coverage |
+| `frontend-test-specialist` | `frontend` | Frontend test coverage |
+| `code-reviewer` | `backend-exec` | Code review routing |
+| `backend-reviewer` | `backend-exec` | Backend PR review |
+| `frontend-reviewer` | `frontend` | Frontend PR review |
+| `qa-specialist` | `backend-exec` | Behavioral validation |
+| `technical-writer` | `repetitive` | Documentation |
+| `product-analyst` | `reasoning` | Business requirements |
+| `ui-ux-designer` | `frontend` | Design system, UX |
+
+The model for each agent is determined by its tier + active provider at runtime. The subagent will auto-announce its model via the model-identity skill.
+
+### Orchestration Flow
+
+1. **Classify the scope** based on the architecture decisions:
+   - **Backend only** (API, services, business logic) → `backend-developer`
+   - **Frontend only** (UI, components, pages) → `frontend-developer`
+   - **Fullstack** (backend + frontend) → `backend-developer` + `frontend-developer`
+   - **Database** (schema, migrations, queries) → `database-specialist`
+   - **Mobile** (React Native, Flutter, iOS/Android) → `mobile-developer`
+   - **DevOps** (Docker, CI/CD, deploy) → `devops-specialist`
+   - **Security-sensitive** (auth, encryption, compliance) → `security-specialist`
+   - **Tests** (after implementation) → `backend-test-specialist` / `frontend-test-specialist`
+   - If the scope is unclear, ask the user: "Which areas should I delegate to specialized agents?"
+
+2. **Spawn agents via the Task tool** — delegate each scope to the specialized agent. For each agent, include in the prompt:
+   - The task description from the architecture scope
+   - Reference to the architecture docs: `docs/development/architecture.md`, `docs/development/tech-stack.md`, `docs/development/code-standards.md`
+   - Any relevant ADRs from `docs/development/adrs/`
+   - Instruction: "Read the architecture documents before implementing, then load `skills/shared/model-identity/SKILL.md` and announce your model at the start"
+
+   Use the canonical agent paths:
+   - `.claude/agents/dev-team/backend-developer.md`
+   - `.claude/agents/dev-team/frontend-developer.md`
+   - `.claude/agents/dev-team/mobile-developer.md`
+   - `.claude/agents/dev-team/database-specialist.md`
+   - `.claude/agents/dev-team/devops-specialist.md`
+   - `.claude/agents/dev-team/security-specialist.md`
+   - `.claude/agents/dev-team/backend-test-specialist.md`
+   - `.claude/agents/dev-team/frontend-test-specialist.md`
+   - `.claude/agents/dev-team/code-reviewer.md`
+   - `.claude/agents/dev-team/backend-reviewer.md`
+   - `.claude/agents/dev-team/frontend-reviewer.md`
+   - `.claude/agents/dev-team/qa-specialist.md`
+   - `.claude/agents/dev-team/technical-writer.md`
+   - `.claude/agents/dev-team/product-analyst.md`
+   - `.claude/agents/dev-team/ui-ux-designer.md`
+
+3. **Spawning rules:**
+   - Agents with no dependency on each other MUST be spawned in **parallel** to minimize wall-clock time
+   - If database must happen before backend (schema first), spawn `database-specialist` first, then `backend-developer`
+   - Tests run after the implementation agent completes
+   - After each agent completes, log what was done
+   - Capture subagent output and present a summary to the user
+
+4. **After all agents complete**, present a consolidated summary:
+
+   ```
+   ## Implementation Complete
+
+   ### Agents spawned
+   [list of agents and what they did]
+
+   ### Documents produced / modified
+   [list]
+
+   ### Next steps
+   Run `/devteam:review` for code review and QA handoff.
+   ```
 
 ---
 
@@ -131,90 +217,6 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 > "Architecture documents written to `docs/development/`. Please review them and let me know if anything needs to change before development starts."
 
 Wait for explicit approval. Apply changes and re-run self-review if requested.
-
-**Step 5 — Delegate to model-aware subagents (Mandatory — you MUST NOT implement directly)**
-
-**You are an orchestrator, not an implementer.** You MUST delegate every implementation task to specialized subagents via the Task tool. Never write implementation code yourself. Each subagent has a specific model assigned per its tier, resolved from `.dev-team-agents/scripts/lib/tiers.json` at runtime.
-
-### Agent Model Reference
-
-| Agent | Tier | Role |
-|---|---|---|
-| `backend-developer` | `backend-exec` | Server-side implementation |
-| `frontend-developer` | `frontend` | Client-side implementation |
-| `mobile-developer` | `backend-exec` | Mobile implementation |
-| `database-specialist` | `backend-exec` | Schema, queries, migrations |
-| `devops-specialist` | `backend-exec` | Docker, CI/CD, deploy |
-| `security-specialist` | `reasoning` | Security audit, compliance |
-| `backend-test-specialist` | `repetitive` | Backend test coverage |
-| `frontend-test-specialist` | `frontend` | Frontend test coverage |
-| `code-reviewer` | `backend-exec` | Code review routing |
-| `backend-reviewer` | `backend-exec` | Backend PR review |
-| `frontend-reviewer` | `frontend` | Frontend PR review |
-| `qa-specialist` | `backend-exec` | Behavioral validation |
-| `technical-writer` | `repetitive` | Documentation |
-| `product-analyst` | `reasoning` | Business requirements |
-| `ui-ux-designer` | `frontend` | Design system, UX |
-
-The model for each agent is determined by its tier + active provider at runtime. The subagent will auto-announce its model via the model-identity skill.
-
-### Orchestration Flow
-
-5.1 **Classify the scope** based on the architecture decisions:
-   - **Backend only** (API, services, business logic) → `backend-developer`
-   - **Frontend only** (UI, components, pages) → `frontend-developer`
-   - **Fullstack** (backend + frontend) → `backend-developer` + `frontend-developer`
-   - **Database** (schema, migrations, queries) → `database-specialist`
-   - **Mobile** (React Native, Flutter, iOS/Android) → `mobile-developer`
-   - **DevOps** (Docker, CI/CD, deploy) → `devops-specialist`
-   - **Security-sensitive** (auth, encryption, compliance) → `security-specialist`
-   - **Tests** (after implementation) → `backend-test-specialist` / `frontend-test-specialist`
-   - If the scope is unclear, ask the user: "Which areas should I delegate to specialized agents?"
-
-5.2 **Spawn agents via the Task tool** — delegate each scope to the specialized agent. For each agent, include in the prompt:
-   - The task description from the architecture scope
-   - Reference to the architecture docs: `docs/development/architecture.md`, `docs/development/tech-stack.md`, `docs/development/code-standards.md`
-   - Any relevant ADRs from `docs/development/adrs/`
-   - Instruction: "Read the architecture documents before implementing, then load `skills/shared/model-identity/SKILL.md` and announce your model at the start"
-
-   Use the canonical agent paths:
-   - `.claude/agents/dev-team/backend-developer.md`
-   - `.claude/agents/dev-team/frontend-developer.md`
-   - `.claude/agents/dev-team/mobile-developer.md`
-   - `.claude/agents/dev-team/database-specialist.md`
-   - `.claude/agents/dev-team/devops-specialist.md`
-   - `.claude/agents/dev-team/security-specialist.md`
-   - `.claude/agents/dev-team/backend-test-specialist.md`
-   - `.claude/agents/dev-team/frontend-test-specialist.md`
-   - `.claude/agents/dev-team/code-reviewer.md`
-   - `.claude/agents/dev-team/backend-reviewer.md`
-   - `.claude/agents/dev-team/frontend-reviewer.md`
-   - `.claude/agents/dev-team/qa-specialist.md`
-   - `.claude/agents/dev-team/technical-writer.md`
-   - `.claude/agents/dev-team/product-analyst.md`
-   - `.claude/agents/dev-team/ui-ux-designer.md`
-
-5.3 **Spawning rules:**
-   - Agents with no dependency on each other MUST be spawned in **parallel** to minimize wall-clock time
-   - If database must happen before backend (schema first), spawn `database-specialist` first, then `backend-developer`
-   - Tests run after the implementation agent completes
-   - After each agent completes, log what was done
-   - Capture subagent output and present a summary to the user
-
-5.4 **After all agents complete**, present a consolidated summary:
-
-   ```
-   ## Implementation Complete
-
-   ### Agents spawned
-   [list of agents and what they did]
-
-   ### Documents produced / modified
-   [list]
-
-   ### Next steps
-   Run `/devteam:review` for code review and QA handoff.
-   ```
 
 ### In QUALITY GATE
 
