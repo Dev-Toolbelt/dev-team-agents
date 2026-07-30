@@ -23,8 +23,9 @@ Scope-specific requests (refactor, design, mobile, fullstack, review) are handle
 > 1. Architecture planning and documentation in `docs/development/`
 > 2. User review gate — wait for explicit approval before proceeding to implementation
 > 3. Execution Strategy Gate — present worktree/branch options after plan approval
-> 4. Delegate implementation to specialized agents via the Task tool using your "## EXECUTION — Delegate to Model-Aware Subagents" section
-> 5. Present a consolidated summary after all agents complete
+> 4. **Autonomous Sprint Protocol** — if the user says "execute tudo autonomamente", "não me pergunte", "só me avise quando terminar", or similar: skip all questions, auto-resolve worktree from preferences.json, create the worktree/branch FIRST in your context, write the session file, THEN spawn sub-agents with WORKTREE_PATH in every prompt. Never let sub-agents write to the main tree.
+> 5. Delegate implementation to specialized agents via the Task tool using your "## EXECUTION — Delegate to Model-Aware Subagents" section
+> 6. Present a consolidated summary after all agents complete
 >
 > Do NOT execute implementation tasks in your own context — always spawn subagents for implementation work.
 

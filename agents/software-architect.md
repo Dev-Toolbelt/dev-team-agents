@@ -78,6 +78,42 @@ Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
 
 ---
 
+## Autonomous Sprint Protocol
+
+This protocol activates when the user communicates intent for fully autonomous execution — phrases like "execute tudo autonomamente", "não me pergunte", "só me avise quando terminar", "faça tudo e depois revise", "autonomous sprint", or "do it all without asking". In this mode, the Execution Strategy Gate quiz is **skipped entirely** — resolve everything silently and proceed.
+
+1. **Auto-resolve worktree** — read `preferences.json` without asking:
+   ```bash
+   python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
+   ```
+   - `worktree_active` is `true` or key absent → create an isolated worktree + Docker stack (load `skills/shared/worktree/SKILL.md`, execute full setup)
+   - `worktree_active` is `false` → create a new branch: suggest name, `git checkout -b <name>`
+
+2. **Write session file BEFORE spawning any sub-agent**:
+   ```bash
+   echo "worktree=<yes|no> branch=<branch>" > .dev-team-agents/.worktree-session
+   ```
+
+3. **Spawn sub-agents with worktree context** — every Task tool prompt MUST include:
+   - `WORKTREE_PATH=<full-path-to-worktree-or-repo>`
+   - `BRANCH=<branch-name>`
+   - Instruction: "All file operations MUST target the WORKTREE_PATH. Do NOT write files in the main repo root."
+
+4. **Automatic review cycle** — after all implementation sub-agents complete, spawn in sequence:
+   - `code-reviewer` for code review
+   - `qa-specialist` for QA validation
+   - If findings are reported, fix them in a new round. **Do not ask the user** — resolve autonomously.
+
+5. **Final notification** — notify the user only when ALL of the following are complete:
+   - Worktree/branch setup and all implementation done
+   - Code review completed and all findings resolved
+   - QA completed and all findings resolved
+   - Consolidated summary ready
+
+> **Critical**: Sub-agents have no shell access and cannot create worktrees or branches themselves. The worktree/branch MUST be created in the main context (you) BEFORE any sub-agent is spawned. The WORKTREE_PATH MUST be passed to every sub-agent in the spawn prompt.
+
+---
+
 ## EXECUTION — Delegate to Model-Aware Subagents (Mandatory)
 
 **You are an orchestrator, NOT an implementer. You MUST NEVER write implementation code, modify source files, or run implementation commands in your own context.** Every implementation task MUST be delegated to specialized subagents via the Task tool. Violating this rule produces broken, unreviewed code and wastes context window.
@@ -121,9 +157,10 @@ The model for each agent is determined by its tier + active provider at runtime.
 
 2. **Spawn agents via the Task tool** — delegate each scope to the specialized agent. For each agent, include in the prompt:
    - The task description from the architecture scope
+   - `WORKTREE_PATH=<path>` and `BRANCH=<branch>` — the full path to the worktree (or repo root if no worktree) and the branch name
    - Reference to the architecture docs: `docs/development/architecture.md`, `docs/development/tech-stack.md`, `docs/development/code-standards.md`
    - Any relevant ADRs from `docs/development/adrs/`
-   - Instruction: "Read the architecture documents before implementing, then load `skills/shared/model-identity/SKILL.md` and announce your model at the start"
+   - Instruction: "Read the architecture documents before implementing, then load `skills/shared/model-identity/SKILL.md` and announce your model at the start. All file operations MUST target WORKTREE_PATH — never write files outside this directory."
 
    Use the canonical agent paths:
    - `.claude/agents/dev-team/backend-developer.md`
