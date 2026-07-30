@@ -29,6 +29,7 @@
     "learn":             { "tier": "repetitive",  "agent": "technical-writer",    "description": "Consolidate session decisions into docs, wiki, ADRs.",                              "plan_gate": "conditional" },
     "update":            { "tier": "repetitive",  "agent": "technical-writer",    "description": "Check for and apply dev-team-agents updates.",                                      "plan_gate": "opt_out" },
     "symlinks":          { "tier": "repetitive",  "agent": "technical-writer",    "description": "Diagnose and repair broken dev-team-agents symlinks.",                              "plan_gate": "opt_out" },
-    "health-check":      { "tier": "backend-exec", "agent": "setup-assistant",    "description": "Health check — validate and repair dev-team-agents installation.",                  "plan_gate": "opt_out" }
+    "health-check":      { "tier": "backend-exec", "agent": "setup-assistant",    "description": "Health check — validate and repair dev-team-agents installation.",                  "plan_gate": "opt_out" },
+    "audit":             { "tier": "backend-exec", "agent": "code-reviewer",     "description": "Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan.", "plan_gate": "conditional" }
   }
 }
