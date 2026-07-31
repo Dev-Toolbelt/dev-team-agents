@@ -50,9 +50,28 @@ with open(sys.argv[1]) as fh:
   fi
 fi
 
+# "<tier><TAB><claude effort>" for tiers that set one. Claude Code supports a
+# per-subagent `effort:` key; a tier that omits it inherits the session level,
+# which is deliberate — see the _claude_note in tiers.json.
+TIER_EFFORT_MAP=""
+if [ "$TIER_MAP_BROKEN" = false ] && [ -f "$TIERS_JSON" ] && command -v python3 >/dev/null 2>&1; then
+  TIER_EFFORT_MAP=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as fh:
+    for tier, entry in json.load(fh).get("effort", {}).items():
+        if isinstance(entry, dict) and entry.get("claude"):
+            print(tier + "\t" + entry["claude"])
+' "$TIERS_JSON" 2>/dev/null || true)
+fi
+
 claude_model_for_tier() {
   [ -z "$TIER_MODEL_MAP" ] && return 0
   printf '%s\n' "$TIER_MODEL_MAP" | awk -F'\t' -v t="$1" '$1 == t { print $2; exit }'
+}
+
+claude_effort_for_tier() {
+  [ -z "$TIER_EFFORT_MAP" ] && return 0
+  printf '%s\n' "$TIER_EFFORT_MAP" | awk -F'\t' -v t="$1" '$1 == t { print $2; exit }'
 }
 
 # Skill `description` feeds the always-loaded skill index across every skill in
@@ -134,26 +153,54 @@ check_agent() {
     ERRORS+=("  · ${file}: model '${model}' does not match tiers.json for tier '${tier}' (expected '${expected}')")
   fi
 
+  # ── effort: present iff tiers.json defines one for the tier ────────────────
+  # Setting it overrides the session's effort level, so a tier that omits it
+  # must not carry the key — that is what keeps a user's lowered session
+  # effort from being silently undone.
+  local effort_fm expected_effort
+  # `|| true` is load-bearing: effort is absent on most agents, and under
+  # `set -o pipefail` a non-matching grep fails the whole substitution and
+  # kills the script before a single finding is printed.
+  effort_fm=$(echo "$frontmatter" | grep -E "^effort:" | head -1 | sed 's/^effort:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//' || true)
+  expected_effort=$(claude_effort_for_tier "$tier")
+  if [ -n "$expected_effort" ] && [ "$effort_fm" != "$expected_effort" ]; then
+    ERRORS+=("  · ${file}: effort '${effort_fm:-<missing>}' does not match tiers.json for tier '${tier}' (expected '${expected_effort}')")
+  elif [ -z "$expected_effort" ] && [ -n "$effort_fm" ]; then
+    ERRORS+=("  · ${file}: effort '${effort_fm}' set, but tier '${tier}' defines no claude effort in tiers.json (omit it to inherit the session)")
+  fi
+
   # ── run-banner row must agree with the frontmatter ─────────────────────────
   # The row is `| \`agent\` | \`tier\` | \`model\` | \`effort\` |` on the third
   # line of the block. Claude is the identity case, so the source copy carries
   # Claude's values; the renderer rewrites Model/Effort for other providers.
   local name_fm banner
   name_fm=$(echo "$frontmatter" | grep -E "^name:" | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
-  banner=$(grep -A 3 '^<!-- run-banner -->$' "$file" | tail -1)
+  # Same `|| true` reason: without it, an agent missing the banner exits the
+  # script instead of reporting the very thing this check looks for.
+  banner=$(grep -A 3 '^<!-- run-banner -->$' "$file" | tail -1 || true)
   if [ -z "$banner" ]; then
     ERRORS+=("  · ${file}: missing <!-- run-banner --> block (see skills/shared/model-identity/SKILL.md)")
   else
-    local b_agent b_tier b_model
+    local b_agent b_tier b_model b_effort
     b_agent=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $2); print $2}')
     b_tier=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $3); print $3}')
     b_model=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $4); print $4}')
+    b_effort=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $5); print $5}')
     [ -n "$name_fm" ] && [ "$b_agent" != "$name_fm" ] && \
       ERRORS+=("  · ${file}: run-banner agent '${b_agent}' does not match frontmatter name '${name_fm}'")
     [ -n "$tier" ] && [ "$b_tier" != "$tier" ] && \
       ERRORS+=("  · ${file}: run-banner tier '${b_tier}' does not match frontmatter tier '${tier}'")
     [ -n "$model" ] && [ "$b_model" != "$model" ] && \
       ERRORS+=("  · ${file}: run-banner model '${b_model}' does not match frontmatter model '${model}'")
+    # Effort: the banner shows the tier's value, or `inherit` when the tier
+    # sets none — which is what the agent actually runs at without the key.
+    if [ -n "$expected_effort" ]; then
+      [ "$b_effort" != "$expected_effort" ] && \
+        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' does not match tiers.json for tier '${tier}' (expected '${expected_effort}')")
+    elif [ -n "$TIER_EFFORT_MAP" ] || [ "$TIER_MAP_BROKEN" = false ]; then
+      [ "$b_effort" != "inherit" ] && \
+        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' should be 'inherit' — tier '${tier}' sets no claude effort in tiers.json")
+    fi
   fi
 
   # Check for quiz-first compliance (AskUserQuestion required for finite-answer prompts)
