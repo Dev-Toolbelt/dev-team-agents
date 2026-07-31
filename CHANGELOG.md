@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-07-31
+
+> **Action required if you maintain a custom agent.** The authoring rule was "**No `model:` key**"; `model:` is now required and must equal `tiers.json[<tier>].claude`. Any agent authored against the old rule fails `helpers/agent-lint.sh` on the next run — including from the `Stop` hook. Add the key (`reasoning` → `opus`, `backend-exec` / `frontend` → `sonnet`, `repetitive` → `haiku`) plus the `<!-- run-banner -->` block; the lint message names the expected value. Released as a minor rather than a major despite the agent-behavior change, so this note is the migration signal.
+
 ### Added — subagents now actually switch models on Claude Code (behavior change)
 - **The tier system was inert on Claude Code.** `render_agent_claude()` is the identity case and `install.sh` symlinks `agents/` into `.claude/agents/dev-team/` without ever invoking the renderer, so the resolved model was computed and then discarded. Every subagent ran on the session's model — `software-architect` (`reasoning`) and `technical-writer` (`repetitive`) were indistinguishable. Only opencode and Codex had per-tier model selection
 - **Agents now carry a `model:` frontmatter key** alongside `tier:`. It is a *checked mirror* of `tiers.json[<tier>].claude`, not an independent value — Claude Code reads it directly from the symlinked source, which is the only channel available when nothing is rendered at install time

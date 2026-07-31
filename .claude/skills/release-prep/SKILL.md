@@ -69,24 +69,25 @@ bash helpers/orphan-skill-scan.sh
 
 ## Step 3 — Agent Compliance Check
 
-For each file in `agents/`, verify:
-
-- [ ] Has `name`, `description`, `model`, `tools` in frontmatter
-- [ ] Has `## Foundational Rule` section
-- [ ] Has `## Immutability Warning` section
-- [ ] Coding agents have `## Worktree Isolation` section
-- [ ] File is ≤ 200 lines
-
-Run a quick scan:
+Run the linter — it enforces the frontmatter contract (`name`, `description`, `tier`, `model`), the skill identity rules, the quiz-first rule, and the model↔`tiers.json`↔run-banner drift guard:
 
 ```bash
-for f in agents/*.md; do
-  lines=$(wc -l < "$f")
-  echo "$lines $f"
-done | sort -rn | head -10
+bash helpers/agent-lint.sh
 ```
 
-Flag any agent over 200 lines for review.
+Then verify by hand what the linter does not cover:
+
+- [ ] Has `## Foundational Rule` section
+- [ ] Has `## Model Identity` section carrying the `<!-- run-banner -->` block
+- [ ] Has `## Immutability Warning` section
+- [ ] Coding agents have `## Worktree Isolation` section
+- [ ] File is within the ceiling enforced by `helpers/size-limits.sh`
+
+```bash
+bash helpers/size-limits.sh
+```
+
+The agent ceiling is 205: 200 lines of content plus the fixed 5-line run-banner block. Anything approaching it should move reference material into a skill — do not raise the ceiling to make an agent fit.
 
 ---
 
