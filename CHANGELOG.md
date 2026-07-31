@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — the shellcheck gate now passes on the tree it was promoted against
+- **`helpers/orphan-skill-scan.sh` had `2>/dev/null` in the middle of a `find` expression**, before `-exec … -print`. It worked — the shell strips the redirect and applies it to `find` — but it read as a per-action redirect and was one edit away from becoming one. Moved to the end
+- **Three `# shellcheck source=` directives used script-relative paths**, which resolve to nothing when CI runs `shellcheck -x` from the repo root. The unresolved source hid the guard's use of `PREFS_FILE`, so each `SC1091` also produced a bogus `SC2034` — nine findings from one cause. The paths are now repo-root-relative, the form `scripts/update.sh` already used, and in two of the three the directive moved below the `[ -f … ] || exit 0` guard, since a directive separated from its `.` line is not attached to it
+- **`_telemetry_enabled` is now called with `"$PREFS_FILE"` at all four call sites.** Behaviourally identical (`${1:-${PREFS_FILE:-}}`), but it turns an implicit dependency on a global into an argument, which is what keeps the `SC2034` class from returning if a source path ever breaks again
+- **`SC2317` and `SC2329` are both disabled on `uc_setup_http`** — the unreachable-function check was renumbered between shellcheck releases, and CI runs an older build than a current local install
+- **Note for whoever promotes the next advisory check:** this gate was flipped to blocking in `c7535b7` with the note "the tree is clean". It was not, and `main` stayed red until this fix. Run `bash .github/scripts/ci/01-lint.sh` — not the individual helpers — before promoting
+
 ## [2.19.0] - 2026-07-31
 
 ### Changed — agents run scoped tests, never the full suite (behavior change)
