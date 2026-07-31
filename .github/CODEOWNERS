@@ -1,25 +1,65 @@
 # CODEOWNERS — path-based ownership for dev-team-agents
 # GitHub auto-requests review from these owners when files are changed.
 # Syntax: <path-pattern> <owner>...
+#
+# ORDERING MATTERS: the LAST matching rule wins. The catch-all comes first so
+# that no path can ever be silently unowned; specific rules below refine it, and
+# the deliberate no-reviewer exceptions come last.
 
-# Core package files — maintainer review required
+# ── Default ─────────────────────────────────────────────────────────────────
+# Everything is maintainer-owned unless a later rule says otherwise. This is
+# what prevents new top-level directories from landing with no required
+# reviewer, which is how the previous coverage gaps appeared.
+*                         @Dev-Toolbelt/maintainers
+
+# ── Core package files ──────────────────────────────────────────────────────
 agents/                   @Dev-Toolbelt/maintainers
+skills/                   @Dev-Toolbelt/maintainers
 skills/shared/            @Dev-Toolbelt/maintainers
 commands/                 @Dev-Toolbelt/maintainers
-workflows/                @Dev-Toolbelt/maintainers
 scripts/                  @Dev-Toolbelt/maintainers
+templates/                @Dev-Toolbelt/maintainers
 CLAUDE.md                 @Dev-Toolbelt/maintainers
+CLAUDE-md/                @Dev-Toolbelt/maintainers
 CHANGELOG.md              @Dev-Toolbelt/maintainers
 
-# Domain-specific skills — open to domain leads
+# helpers/ is runtime + telemetry code executed on every user machine by the
+# hook dispatchers. It previously merged with no required reviewer.
+helpers/                  @Dev-Toolbelt/maintainers
+
+# ── Domain-specific skills ──────────────────────────────────────────────────
 skills/architecture/      @Dev-Toolbelt/maintainers
 skills/security/          @Dev-Toolbelt/maintainers
 skills/devops/            @Dev-Toolbelt/maintainers
 skills/database/          @Dev-Toolbelt/maintainers
 skills/testing/           @Dev-Toolbelt/maintainers
+skills/design/            @Dev-Toolbelt/maintainers
+skills/mobile/            @Dev-Toolbelt/maintainers
+skills/integrations/      @Dev-Toolbelt/maintainers
+skills/ui-libraries/      @Dev-Toolbelt/maintainers
+skills/skill-creator/     @Dev-Toolbelt/maintainers
 
-# Auto-generated / low-risk — no required reviewer
+# ── CI and repository automation ────────────────────────────────────────────
+# (the old `workflows/` rule pointed at a directory the provider port deleted
+#  and matched nothing; the real paths are below)
+.github/                  @Dev-Toolbelt/maintainers
+.github/workflows/        @Dev-Toolbelt/maintainers
+.github/scripts/ci/       @Dev-Toolbelt/maintainers
+.github/CODEOWNERS        @Dev-Toolbelt/maintainers
+
+# ── Documentation ───────────────────────────────────────────────────────────
+docs/                     @Dev-Toolbelt/maintainers
+
+# README.md ↔ README.pt-BR.md and the docs/*.pt-BR.md mirrors are governed by
+# the strict sync rule in CLAUDE.md and enforced by
+# .github/scripts/ci/02-readme-sync.sh. A change to one side without the other
+# is a defect, so both sides require a reviewer.
+README.md                 @Dev-Toolbelt/maintainers
+README.pt-BR.md           @Dev-Toolbelt/maintainers
+docs/agents.md            @Dev-Toolbelt/maintainers
+docs/agents.pt-BR.md      @Dev-Toolbelt/maintainers
+docs/installation.md      @Dev-Toolbelt/maintainers
+docs/installation.pt-BR.md @Dev-Toolbelt/maintainers
+
+# ── Deliberate no-reviewer exceptions (must stay last) ──────────────────────
 docs/reports/             # auto-generated; no required reviewer
-
-# Templates
-templates/                @Dev-Toolbelt/maintainers

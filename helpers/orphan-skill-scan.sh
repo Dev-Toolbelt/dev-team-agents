@@ -122,14 +122,41 @@ while IFS= read -r skill_file; do
 done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 
 # ── Phase 3: Detect duplicate skill loads in same consumer file ──────────────
+# A bare path regex cannot tell a load directive from a narrative mention, so it
+# reports prose ("… via the model-identity skill") as a second load. The awk
+# program below extracts only paths that appear as an actual load directive:
+#
+#   counted   Load `path` · Apply `path` · Follow `path` · When X, load `path`
+#             - `path` — description   (top-level skill-load bullet list)
+#   ignored   | trigger | `path` |     (conditional load tables — one row per
+#                                       trigger is legitimate, not a duplicate)
+#             nested/indented list items (branches of one decision cascade, and
+#                                       instruction blocks aimed at sub-agents)
+#             "… load `path` …"        (quoted prompts passed to another agent)
+#             prose connectors: "defined in `path`", "table in `path`",
+#                               "the `x` skill (`path`)", "format from `path`"
+LOAD_DIRECTIVE_AWK='
+{
+  line = $0
+  if (line ~ /^[[:space:]]*\|/) next            # table row
+  if (line ~ /^[[:space:]][[:space:]]+/) next   # nested list item / continuation
+  gsub(/"[^"]*"/, " ", line)                    # drop quoted sub-agent instructions
+  while (match(line, /skills\/[a-zA-Z0-9\/_-]+\/SKILL\.md/)) {
+    before = substr(line, 1, RSTART - 1)
+    path   = substr(line, RSTART, RLENGTH)
+    if (before !~ /(defined in|described in|documented in|table in|format from|listed in|see|skill) *\(?`?$/)
+      print path
+    line = substr(line, RSTART + RLENGTH)
+  }
+}'
+
 for consumer_file in "${CONSUMER_FILES[@]}"; do
     rel_consumer="${consumer_file#"$REPO_ROOT"/}"
     while IFS= read -r dup_path; do
         [ -z "$dup_path" ] && continue
         DUPLICATE_MSGS+=("  · $rel_consumer loads $dup_path more than once")
     done < <(
-        grep -v '^\s*|' "$consumer_file" 2>/dev/null \
-          | grep -oE 'skills/[a-zA-Z0-9/_-]+/SKILL\.md' \
+        awk "$LOAD_DIRECTIVE_AWK" "$consumer_file" 2>/dev/null \
           | sort | uniq -d || true
     )
 done

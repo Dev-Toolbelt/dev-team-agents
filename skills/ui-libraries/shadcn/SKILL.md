@@ -1,5 +1,5 @@
 ---
-name: shadcn-ui
+name: shadcn
 description: shadcn/ui — Radix UI + Tailwind copy-paste; MCP for component install.
 ---
 
