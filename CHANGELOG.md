@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-07-31
+
 ### Changed — agents run scoped tests, never the full suite (behavior change)
 - **New canonical skill `skills/shared/scoped-test-execution/SKILL.md`.** When finishing a task, an agent now runs only the tests covering the code it touched plus that code's direct dependents. The project's full suite is left to CI, or to the user running it manually
 - **One exception, and only one:** an explicit user request in the session ("run the whole suite"). Suite speed, refactor width, changes to shared code, a failing scoped test, a release or a merge do **not** authorize a full run. An ambiguous request ("make sure nothing broke") resolves to the scoped run plus an offer, never to escalation
