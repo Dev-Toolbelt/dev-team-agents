@@ -9,7 +9,7 @@ description: Jira via Atlassian MCP — issue ops, JQL, branch naming, PR commen
 
 Before any operation, verify the Atlassian MCP is available using this three-step check. **Do not show setup instructions until all three steps fail.**
 
-1. **Check `~/.claude.json`** for an entry under `mcpServers` with key `atlassian` pointing to `mcp.atlassian.com`. If found, proceed to Step 2. If present but not loaded in this session, tell the user to restart Claude Code.
+1. **Check the CLI's MCP config** (`~/.claude.json` for Claude Code; `opencode.json` / Codex's MCP config otherwise) for an entry under `mcpServers` with key `atlassian` pointing to `mcp.atlassian.com`. If found, proceed to Step 2. If present but not loaded in this session, tell the user to restart their CLI.
 2. **Run ToolSearch** with `query="atlassian", max_results=5`. If Atlassian tools appear, load the schema and proceed to Step 3.
 3. **Verify connectivity** via `mcp__atlassian__atlassianUserInfo`. Success = fully operational. Auth error = guide re-authentication.
 

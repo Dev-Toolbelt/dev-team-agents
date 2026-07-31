@@ -2,6 +2,8 @@
 
 Este documento cobre pin de versão, atualizações, configuração de idioma, atualizações automáticas e ajuste de notificações. Para o install de uma linha, veja o [README](../README.pt-BR.md#como-instalar).
 
+> **Escopo — a instalação do Claude Code** (`scripts/install.sh`). Caminhos específicos do Claude como `.claude/` e `.claude/settings.json` estão corretos aqui e não são o único caminho de instalação. Para os demais CLIs suportados, veja [install-opencode.md](install-opencode.md) e [install-codex.md](install-codex.md).
+
 ---
 
 ## Instalar uma Versão Específica

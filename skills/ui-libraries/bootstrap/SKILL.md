@@ -15,7 +15,7 @@ description: Bootstrap — responsive grid for legacy, server-rendered, WordPres
 
 No official MCP server is available for Bootstrap.
 
-> Reference the Bootstrap 5 docs at [getbootstrap.com/docs](https://getbootstrap.com/docs/5.3/). Configure a documentation search MCP in Claude Code settings if available in your setup.
+> Reference the Bootstrap 5 docs at [getbootstrap.com/docs](https://getbootstrap.com/docs/5.3/). Configure a documentation search MCP in your CLI's settings if one is available.
 
 ## Core Concepts
 

@@ -94,7 +94,7 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ## Primeiros Passos
 
-Após instalar, inicie o fluxo de setup dizendo ao Claude:
+Após instalar, inicie o fluxo de setup dizendo ao seu CLI:
 
 ```
 "Ajude-me a configurar este projeto com dev-team-agents"
@@ -202,7 +202,7 @@ O time tem **17 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 
 ## Como Usar os Agentes
 
-Os agentes são invocados pelo papel no seu prompt para o Claude:
+Os agentes são invocados pelo papel no seu prompt:
 
 ```
 "Como o product-analyst, analise este PRD: [documento]"
@@ -211,7 +211,7 @@ Os agentes são invocados pelo papel no seu prompt para o Claude:
 "Como o code-reviewer, revise as mudanças em [arquivos]."
 ```
 
-Funciona no CLI do Claude Code (`claude`), app desktop, app web em [claude.ai/code](https://claude.ai/code) e extensões de IDE (VS Code, JetBrains).
+Nomear o papel funciona em todos os CLIs suportados — Claude Code (o CLI `claude`, app desktop, app web em [claude.ai/code](https://claude.ai/code), extensões de IDE), opencode e Codex CLI — porque os agentes são renderizados a partir de uma única fonte canônica por provedor.
 
 **Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa.
 
@@ -292,15 +292,15 @@ docs/development/code-standards.md  # padrões de código usados pelos reviewers
 
 ## Solução de Problemas
 
-**Agentes não são reconhecidos pelo Claude** — verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se faltando, rode o instalador novamente a partir da raiz do projeto.
+**Agentes não são reconhecidos pelo CLI** — verifique se o symlink existe: `ls .claude/agents/dev-team/` (Claude Code), `ls .opencode/agents/` (opencode), `ls .codex/agents/` (Codex CLI). Se faltando, rode o instalador daquele provedor novamente a partir da raiz do projeto.
 
-**Skills não são carregadas** — verifique se `.claude/skills/` contém symlinks. Rode o instalador para restaurar links quebrados.
+**Skills não são carregadas** — verifique se `.claude/skills/` (ou `.opencode/skills/`, `.codex/skills/`) contém symlinks. Rode o instalador para restaurar links quebrados.
 
-**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
+**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os symlinks como arquivos-texto de ~62 bytes: os links de `.claude/` na instalação do Claude Code e o link de `skills/` dentro de `.opencode/` ou `.codex/` nos demais provedores. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o CLI enxerga arquivos comuns, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Repare a árvore do Claude rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **seu CLI como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Para opencode e Codex, rode novamente o instalador daquele provedor assim que os symlinks nativos estiverem habilitados. Reinicie o seu CLI após reparar para ele reindexar o dev-team.
 
 **Hook de verificação de atualização dispara a cada tool call** — verifique se `.dev-team-agents/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 
-**O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
+**O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao seu CLI: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
 
 **Um agente executou sem apresentar um plano primeiro** — verifique seu CLAUDE.md de projeto por alguma instrução que conflita com o plan mode.
 

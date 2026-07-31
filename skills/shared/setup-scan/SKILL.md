@@ -32,7 +32,7 @@ Run when the project has UI or frontend work:
 
 | Skill | Check | If missing |
 |-------|-------|-----------|
-| `frontend-design` | `test -d .claude/skills/frontend-design` | Open Claude Code → `/plugins` → search `frontend-design` → install → re-run installer |
+| `frontend-design` | `test -d .claude/skills/frontend-design` | **Claude Code:** `/plugins` → search `frontend-design` → install → re-run installer. Other CLIs: install the skill through that CLI's own mechanism, then re-run the installer |
 | `web-design-guidelines` | `test -d .claude/skills/web-design-guidelines` | `npx skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines` → re-run installer |
 
 Both `frontend-developer` and `ui-ux-designer` depend on these skills.
@@ -98,4 +98,4 @@ Content is synthesized (not duplicated) into the target doc. Use `<!-- TODO: <ag
 
 **Supported trackers:** GitHub Projects, GitLab Issues, Jira, Linear, ClickUp, Trello, Asana, Monday.com, Notion, Azure DevOps Boards, Shortcut.
 
-Configure tokens in Claude Code MCP settings (`~/.claude/settings.json` or via `/mcp`). Never store credentials in project files. Agents read tasks but only write with explicit user consent.
+Configure tokens in the active CLI's MCP settings — Claude Code: `~/.claude/settings.json` or `/mcp`; opencode: the `mcp` block of `opencode.json`; Codex CLI: its own MCP config. Never store credentials in project files. Agents read tasks but only write with explicit user consent.

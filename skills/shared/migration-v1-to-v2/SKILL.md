@@ -385,7 +385,7 @@ After a clean migration, `.claude/` holds only:
 - `settings.json` — hook registration
 - `settings.local.json` — personal overrides (untracked, may carry stale v1 paths — harmless)
 
-**Start a new Claude Code session** to load the v2 agents and skills. The diff (tree move + docs move) lands on every teammate's checkout on merge.
+**Start a new session in your CLI** (Claude Code, opencode, or Codex CLI) to load the v2 agents and skills. The diff (tree move + docs move) lands on every teammate's checkout on merge.
 
 ## Post-Migration Verification Checklist
 

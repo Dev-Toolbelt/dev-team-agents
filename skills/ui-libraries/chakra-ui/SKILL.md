@@ -19,7 +19,7 @@ No official MCP server is available for Chakra UI.
 > - v2: [v2.chakra-ui.com](https://v2.chakra-ui.com)
 > - v3: [chakra-ui.com](https://www.chakra-ui.com)
 >
-> Configure a documentation search MCP if available in your Claude Code setup.
+> Configure a documentation search MCP if your CLI supports one.
 
 ## Version Detection — Do This First
 

@@ -2,6 +2,8 @@
 
 This document covers version pinning, updates, language configuration, automatic updates, and notification tuning. For the one-line install, see the [README](../README.md#how-to-install).
 
+> **Scope — the Claude Code install** (`scripts/install.sh`). Claude-specific paths such as `.claude/` and `.claude/settings.json` are correct here and are not the only installation path. For the other supported CLIs see [install-opencode.md](install-opencode.md) and [install-codex.md](install-codex.md).
+
 ---
 
 ## Install a Specific Version

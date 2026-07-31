@@ -94,7 +94,7 @@ Help me set up this project with dev-team-agents
 
 ## Getting Started
 
-After installing, start the setup flow by telling Claude:
+After installing, start the setup flow by telling your CLI:
 
 ```
 "Help me set up this project with dev-team-agents"
@@ -202,7 +202,7 @@ The team has **17 agents** covering the full lifecycle. Full details in the [Age
 
 ## How to Use Agents
 
-Agents are invoked by naming the role in your message to Claude:
+Agents are invoked by naming the role in your message:
 
 ```
 "As the product-analyst, analyze this PRD: [document]"
@@ -211,7 +211,7 @@ Agents are invoked by naming the role in your message to Claude:
 "As the code-reviewer, review the changes in [files]."
 ```
 
-This works in the Claude Code CLI (`claude`), desktop app, web app at [claude.ai/code](https://claude.ai/code), and IDE extensions (VS Code, JetBrains).
+Role-naming works in every supported CLI — Claude Code (the `claude` CLI, desktop app, web app at [claude.ai/code](https://claude.ai/code), IDE extensions), opencode, and Codex CLI — because the agents are rendered from one canonical source per provider.
 
 **Every agent presents a plan for approval before executing anything.** You review, adjust, and approve — then execution begins.
 
@@ -292,15 +292,15 @@ docs/development/code-standards.md  # code standards used by reviewers
 
 ## Troubleshooting
 
-**Agents are not recognized by Claude** — verify the symlink exists: `ls .claude/agents/dev-team/`. If missing, re-run the installer from your project root.
+**Agents are not recognized by the CLI** — verify the symlink exists: `ls .claude/agents/dev-team/` (Claude Code), `ls .opencode/agents/` (opencode), `ls .codex/agents/` (Codex CLI). If missing, re-run that provider's installer from your project root.
 
-**Skills are not loaded** — check that `.claude/skills/` contains symlinks. Re-run the installer to restore broken links.
+**Skills are not loaded** — check that `.claude/skills/` (or `.opencode/skills/`, `.codex/skills/`) contains symlinks. Re-run the installer to restore broken links.
 
-**Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes the `.claude/` links as plain ~62-byte text files instead of symlinks. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but Claude Code sees files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Fix it by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **Claude Code as administrator** (fully close it first, including the tray icon). Restart Claude Code after repairing so it re-indexes the dev-team.
+**Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes symlinks as plain ~62-byte text files: the `.claude/` links for the Claude Code install, and the `skills/` link under `.opencode/` or `.codex/` for the other providers. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but the CLI sees plain files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Repair the Claude tree by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **your CLI as administrator** (fully close it first, including the tray icon). For opencode and Codex, re-run that provider's installer once native symlinks are enabled. Restart your CLI after repairing so it re-indexes the dev-team.
 
 **Update check hook fires on every tool call** — check that `.dev-team-agents/user-data/.last-update-check` is a writable file (not a directory) and that `scripts/hooks/pre-tool-use/01-check-updates.sh` is executable.
 
-**`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell Claude: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
+**`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell your CLI: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
 
 **An agent executed without showing a plan first** — check your project CLAUDE.md for any instruction that conflicts with plan mode.
 

@@ -28,12 +28,17 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 | tier | role | claude | opencode | codex |
 | --- | --- | --- | --- | --- |
-| `reasoning` | architecture, planning, big refactors | `claude-opus-4-7` | `opencode-go/glm-5.2` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
-| `backend-exec` | backend implementation, review, database, devops, qa, mobile | `claude-sonnet-4-6` | `opencode-go/deepseek-v4-flash` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `reasoning` | architecture, planning, big refactors | `claude-opus-4-7` | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
+| `backend-exec` | backend implementation, review, database, devops, qa, mobile | `claude-sonnet-4-6` | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
 | `frontend` | frontend implementation, review, design, frontend tests | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/minimax-m3` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
+| `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
-`model:` was removed from `agents/*.md` frontmatter — Claude Code auto-selects the model based on the agent name, and `tier:` in each agent (resolved via `tiers.json` per provider) is the single source of truth for provider-specific model assignment.
+`model:` was removed from `agents/*.md` frontmatter. **`tier:` is the single source of truth** — the renderer reads it and resolves it through `scripts/lib/tiers.json` into a provider-specific model id. No agent ever names a model; to change one, edit `tiers.json`.
+
+How that resolved id reaches the CLI differs by provider:
+
+- **opencode / codex** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
+- **claude** — the render is the identity case: `agents/*.md` is emitted byte-identical to source, so the rendered file carries no `model:` key and Claude Code applies its own default subagent model. The `claude` column in `tiers.json` documents the intended mapping (and satisfies the provider-column completeness check in `.github/scripts/ci/provider/_contract.py`), but it is not injected into the output.
 
 ---
 
@@ -166,12 +171,15 @@ opencode/kimi-k2.7-code          → Kimi K2.7 Code
 
 `scripts/lib/tiers.json` is the canonical source. Current mapping (using `opencode-go` models):
 
-| Tier | opencode-go (default) | opencode-zen (premium) |
+| Tier | opencode-go (default, from `tiers.json`) | opencode-zen (premium alternative) |
 |------|----------------------|----------------------|
-| `reasoning` | `opencode-go/glm-5.2` | `opencode/claude-opus-4-7` |
-| `backend-exec` | `opencode-go/deepseek-v4-flash` | `opencode/gpt-5.6-terra` |
+| `reasoning` | `opencode-go/qwen3.7-plus` | `opencode/claude-opus-4-7` |
+| `backend-exec` | `opencode-go/kimi-k2.7-code` | `opencode/gpt-5.6-terra` |
 | `frontend` | `opencode-go/kimi-k2.6` | `opencode/gpt-5.6-terra` |
-| `repetitive` | `opencode-go/minimax-m3` | `opencode/gpt-5.6-luna` |
+| `repetitive` | `opencode-go/kimi-k2.5` | `opencode/gpt-5.6-luna` |
+
+Only the first column is read by the renderer. The premium column is a suggested
+substitution — changing it here changes nothing; edit `tiers.json` to change what ships.
 
 ### All opencode-go Models (alphabetical)
 

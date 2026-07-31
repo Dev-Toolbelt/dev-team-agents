@@ -44,7 +44,7 @@ Only when telemetry is enabled:
 | `update` | Manual update via `update.sh` | Previous version, new version, mode (`manual`) |
 | `agent_spawned` | Any time an agent is started via the `Task` tool | OS, installed version |
 | `command_invoked` | Any `/devteam:*` slash command executed | Command name (e.g. `plan`, `backend`), OS, version |
-| `session_end` | End of each Claude Code session | Whether the stop hook was active, OS, version |
+| `session_end` | End of each CLI session (any supported provider) | Whether the stop hook was active, OS, version |
 
 All events also include:
 - **`$lib`**: always `"dev-team-agents"` (identifies the source)

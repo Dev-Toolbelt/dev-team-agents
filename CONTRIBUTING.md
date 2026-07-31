@@ -7,7 +7,7 @@
 ## Prerequisites
 
 - Git
-- Familiarity with [Claude Code](https://claude.ai/code) and how agents/skills work
+- Familiarity with at least one supported CLI — [Claude Code](https://claude.ai/code) (the default and reference implementation), [opencode](docs/install-opencode.md), or [OpenAI Codex CLI](docs/install-codex.md) — and how agents/skills work
 - A project where you can test installations locally
 
 ---
@@ -18,8 +18,13 @@
 git clone https://github.com/dersonsena/dev-team-agents.git
 cd dev-team-agents
 
-# Test by installing into a local project
+# Test by installing into a local project (Claude Code — the default provider)
 bash scripts/install.sh /path/to/your/test-project
+
+# Or install for another provider — run these from the test project root
+cd /path/to/your/test-project
+bash /path/to/dev-team-agents/scripts/install-opencode.sh --source /path/to/dev-team-agents
+bash /path/to/dev-team-agents/scripts/install-codex.sh    --source /path/to/dev-team-agents
 ```
 
 ---
@@ -58,8 +63,8 @@ Do **not** include Claude attribution (`Co-Authored-By: Claude`, `🤖 Generated
 
 Rules for agents and skills live in `CLAUDE.md` under the **Authoring Standards** section. Key points:
 
-- Every agent needs: `name`, `description`, `model`, `tools` frontmatter + Foundational Rule + Immutability Warning
-- Model assignments: `claude-opus-4-7` (decisions), `claude-sonnet-4-6` (execution), `claude-haiku-4-5` (structured output)
+- Every agent needs: `name`, `description`, `tier` frontmatter + Foundational Rule + Immutability Warning
+- Agents never name a model. They declare a `tier` (`reasoning`, `backend-exec`, `frontend`, `repetitive`), which the render engine resolves to a per-provider model id via `scripts/lib/tiers.json` — edit that file to change a model, never the agent
 - Coding agents need a `## Worktree Isolation` section
 - Skills follow the [agentskills.io spec](https://agentskills.io/specification)
 
@@ -67,9 +72,10 @@ Rules for agents and skills live in `CLAUDE.md` under the **Authoring Standards*
 
 ## Testing Locally
 
-1. Install into a throwaway test project: `bash scripts/install.sh /path/to/test-project`
-2. Open that project in Claude Code
-3. Run the agent or command you changed and verify behavior
+1. Install into a throwaway test project: `bash scripts/install.sh /path/to/test-project` (Claude Code — the default provider; use `install-opencode.sh` / `install-codex.sh` to test the other CLIs)
+2. Open that project in the CLI you installed for
+3. Run the agent or command you changed and verify behavior — commands are `/devteam:<name>` in Claude Code and opencode, `/prompts:devteam-<name>` in Codex CLI
+4. Changes to `agents/`, `commands/`, or `scripts/lib/*.json` affect all three providers — re-render and re-check each one before opening the PR
 
 ---
 

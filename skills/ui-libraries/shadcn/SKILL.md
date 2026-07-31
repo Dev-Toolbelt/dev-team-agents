@@ -28,7 +28,7 @@ shadcn/ui has an official MCP that enables component browsing, searching, and in
 }
 ```
 
-> If auto-configuration fails, ask the user to open **Claude Code → Settings → MCP Servers** and add the entry manually. Once active, components can be requested by description and the MCP handles installation.
+> If auto-configuration fails, ask the user to add the entry manually in their CLI's MCP settings (**Claude Code → Settings → MCP Servers**; the `mcp` block of `opencode.json`; Codex CLI's MCP config). Once active, components can be requested by description and the MCP handles installation.
 
 ## Core Concepts
 

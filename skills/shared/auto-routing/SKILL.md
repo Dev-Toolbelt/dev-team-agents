@@ -30,7 +30,7 @@ ISSUE_TRACKER_ACCESS: read-only
 ### Agent Opt-Out
 
 To skip automatic routing for a single request, prefix the message with:
-- `Without agents:` — Claude Code handles directly, no sub-agents invoked
+- `Without agents:` — the CLI's main agent handles the request directly, no sub-agents invoked
 - `Skip routing:` — same effect
 - `No agents:` — same effect
 
