@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.1] - 2026-07-31
+
+### Fixed — the closing run banner from v2.20.2 was never actually emitted
+- **Measured against live sessions, not assumed.** Across `navicms` and `site-prefeituras` on v2.22.0: the opening banner appeared in **13 of 13** dev-team agent runs, and the closing one in **0 of 6** runs that produced more than one message. Runs of 2, 3, 4, 6, 13 and 22 messages all opened with the banner and none closed with it; `Ran on:` appeared nowhere
+- **The v2.20.2 wording was not the problem — its position was.** Stating the requirement in `## Model Identity` at the top of the body means it has to survive the entire task; after a 22-message run it is long gone. Agents now carry a **`## Before You Finish`** section as the last thing in the body, so the requirement is the last instruction read before the summary is composed
+- **`agent-lint.sh` enforces both presence and position**, because a section that works by recency stops working the moment someone appends another one below it. Adding a section to an agent now means adding it *above* that one
+- **Earlier "success" readings were false positives.** Three runs looked compliant because the banner appeared in both the first and last message — they were single-message runs where those are the same text. Only runs with a genuinely separate summary test this
+- **`helpers/size-limits.sh`: agent ceiling 205 → 211**, the exact size of the now-11-line mandatory model-identity boilerplate. The comment states the rule that survives this: raise it only for a new block required of every agent, by exactly that block's size, and never to make one long agent fit
+
 ## [2.22.0] - 2026-07-31
 
 ### Changed — the five specialists now run at low effort on opencode and Codex too
