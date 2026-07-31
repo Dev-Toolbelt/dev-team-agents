@@ -14,7 +14,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `frontend-test-specialist` | `frontend` | `sonnet` | `—` |
+| `frontend-test-specialist` | `frontend` | `sonnet` | `inherit` |
 
 ## Activation Check
 

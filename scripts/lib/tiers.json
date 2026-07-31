@@ -30,7 +30,8 @@
     }
   },
   "effort": {
-    "_comment": "Per-tier per-provider effort/variant value injected into the provider's native effort field. Omitted for providers without an effort concept (e.g., claude).",
+    "_comment": "Per-tier per-provider effort/variant value injected into the provider's native effort field. An omitted provider key means that tier does not set effort for that provider.",
+    "_claude_note": "Claude Code DOES support a per-subagent `effort:` frontmatter key (low/medium/high/xhigh/max) — an earlier revision of this file wrongly claimed it had no effort concept. It is set deliberately for `repetitive` only: that tier is bounded, low-judgment work where `low` is a clear win. The other tiers omit it on purpose, because the key OVERRIDES the session's effort level — setting it everywhere would silently undo a user who lowered effort for cost or latency. Omitted = inherits the session, which is the right default.",
     "reasoning": {
       "codex": "high",
       "opencode": "high"
@@ -44,6 +45,7 @@
       "opencode": "default"
     },
     "repetitive": {
+      "claude": "low",
       "codex": "low",
       "opencode": "low"
     }

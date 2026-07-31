@@ -14,7 +14,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `database-specialist` | `backend-exec` | `sonnet` | `—` |
+| `database-specialist` | `backend-exec` | `sonnet` | `inherit` |
 
 ## Foundational Rule — Load Context First
 
