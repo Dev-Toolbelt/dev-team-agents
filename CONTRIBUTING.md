@@ -1,6 +1,6 @@
 # Contributing to dev-team-agents
 
-A global team of specialized Claude Code agents and skills for software development. Contributions are welcome — agents, skills, scripts, and documentation.
+**Multi-agent development harness** — a harness for organizing AI agents in software development. Not just a bundle of agents: it is the layer that governs how those agents plan, execute, test, review, and record their work. Contributions are welcome — agents, skills, scripts, and documentation.
 
 ---
 
