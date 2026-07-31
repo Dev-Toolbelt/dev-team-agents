@@ -37,9 +37,14 @@ Other directories under `.claude/` created by agents:
 | `CONTRIBUTING.md` | allowlist (not in `KEEP_ROOT`) | Contribution guide for this repo — not for user projects |
 | `LICENSE` | allowlist (not in `KEEP_ROOT`) | Repo license file — not for user projects |
 | `SECURITY.md` | allowlist (not in `KEEP_ROOT`) | Vulnerability disclosure policy — not for user projects |
+| `PRIVACY.md` | allowlist (not in `KEEP_ROOT`) | Telemetry/privacy policy for this repo — not for user projects |
 | `docs/` | allowlist (not in `KEEP_ROOT`) | Repository-level reports and internal docs irrelevant to users |
+| `CLAUDE-md/` | allowlist (not in `KEEP_ROOT`) | Companion sections of this repo's `CLAUDE.md` — authoring rules, not for end-users |
 | `.gitignore` | explicit `rm -f` (dotfile strip) | Repo-level gitignore — not for user projects |
-| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config — not for user projects |
-| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
-| `helpers/` | explicit `rm -rf` | Authoring tools for this repo (linting, scanning, archiving) — not for user projects |
+| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config, including the `agent-creator` and `release-prep` skills — not for user projects |
+| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS, CI scripts) — not for user projects |
+| `helpers/` | explicit `rm -rf` | Root-level authoring tools for this repo (linting, scanning, archiving) — not for user projects. **Not** `scripts/helpers/`, which ships. |
+| `opencode/` | explicit `rm -rf` | opencode provider-plugin source — fetched on demand by `install-opencode.sh` / `install-provider.sh` |
 | `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
+
+`KEEP_ROOT` (in `scripts/install.sh`) is `agents scripts skills templates commands`; everything else at the repo root is removed by the allowlist pass before `apply_strip` runs. The cross-CLI plumbing (`render-provider.sh`, `install-opencode.sh`, `install-codex.sh`, `install-provider.sh`, `scripts/lib/`) is deliberately **kept** so providers can be added offline.

@@ -138,6 +138,10 @@ After installation, slash commands are available under the `/devteam:` namespace
 | `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
+| `/devteam:health-check` | Installation diagnostics — detects the active provider (Claude / opencode / Codex), runs 9 checks (symlinks, scripts, user data, provider config, graphify, CLAUDE.md, .gitignore, preferences, notifier) and applies safe auto-fixes |
+| `/devteam:adr` | Architecture Decision Record — runs `scripts/new-adr.sh` to scaffold a numbered ADR, then software-architect fills the template |
+| `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
+| `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
 
 **Usage examples:**
 

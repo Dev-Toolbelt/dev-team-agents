@@ -46,12 +46,15 @@ Set `suppress_notifications` in `preferences.json`:
 
 `stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined inline in the script. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
 
-### Stop Sub-script Convention (updated)
+### Stop Sub-script Convention
+
+Canonical version of this table lives in `CLAUDE.md` → "Stop Hook Sub-script Convention". Reproduced here for the notification tier (`04-`):
 
 | Prefix | Reserved for | Current scripts |
 |--------|-------------|-----------------|
 | `01-` | State detection and collection | `01-session-summary.sh` |
-| `02-` | Repository integrity checks | `02-orphan-skill-scan.sh` |
+| `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
-| `99-` | Final/cleanup tasks | _(reserved, unused)_ |
+| `05-` | External reporting (telemetry) | `05-telemetry.sh` |
+| `99-` | Final/cleanup tasks | `99-graphify-refresh.sh` |

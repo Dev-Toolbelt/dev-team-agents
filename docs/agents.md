@@ -1,30 +1,32 @@
 # Agent Reference
 
-Full list of agents included in Dev Team Agents, their roles, development phases, and assigned models.
+Full list of agents included in Dev Team Agents, their roles, development phases, and assigned tiers.
 
 ---
 
 ## Team
 
-| Agent | Role | Phase | Model |
-|-------|------|-------|-------|
-| `product-analyst` | Closes scope, generates backlog with estimates | DISCOVERY | Opus |
-| `software-architect` | Architecture decisions, tech stack, code standards | DISCOVERY + QUALITY GATE | Opus |
-| `backend-developer` | Server-side implementation (API + monolith) | DEVELOPMENT | Sonnet |
-| `frontend-developer` | Client-side implementation (SPA + templates) | DEVELOPMENT | Sonnet |
-| `mobile-developer` | Mobile implementation (React Native, Expo, Flutter, native iOS/Android) | DEVELOPMENT | Sonnet |
-| `ui-ux-designer` | Design system, visual consistency, UX (dual mode) | DESIGN + DEVELOPMENT | Sonnet |
-| `database-specialist` | Schema design, query optimization, DB selection | DEVELOPMENT | Sonnet |
-| `devops-specialist` | Docker, CI/CD, VPS, cloud deployment | DEVELOPMENT | Sonnet |
-| `backend-test-specialist` | Backend test coverage (conditional) | DEVELOPMENT | Sonnet |
-| `frontend-test-specialist` | Frontend test coverage (conditional) | DEVELOPMENT | Sonnet |
-| `code-reviewer` | Routes to specialist reviewer based on diff (backend / frontend / both) | QUALITY GATE | Sonnet |
-| `backend-reviewer` | Backend review: API contracts, transactions, N+1, auth, jobs, SOLID | QUALITY GATE | Sonnet |
-| `frontend-reviewer` | Frontend review: components, re-renders, a11y, bundle, state, XSS | QUALITY GATE | Sonnet |
-| `security-specialist` | OWASP, LGPD/GDPR, dependency CVEs | QUALITY GATE | Opus |
-| `qa-specialist` | Behavioral validation, regression risk | QUALITY GATE | Sonnet |
-| `technical-writer` | API docs, READMEs, runbooks, changelogs | SUPPORT | Haiku |
-| `setup-assistant` | Project setup + version management | SETUP | Sonnet |
+| Agent | Role | Phase | Tier |
+|-------|------|-------|------|
+| `product-analyst` | Closes scope, generates backlog with estimates | DISCOVERY | `reasoning` |
+| `software-architect` | Architecture decisions, tech stack, code standards | DISCOVERY + QUALITY GATE | `reasoning` |
+| `backend-developer` | Server-side implementation (API + monolith) | DEVELOPMENT | `backend-exec` |
+| `frontend-developer` | Client-side implementation (SPA + templates) | DEVELOPMENT | `frontend` |
+| `mobile-developer` | Mobile implementation (React Native, Expo, Flutter, native iOS/Android) | DEVELOPMENT | `backend-exec` |
+| `ui-ux-designer` | Design system, visual consistency, UX (dual mode) | DESIGN + DEVELOPMENT | `frontend` |
+| `database-specialist` | Schema design, query optimization, DB selection | DEVELOPMENT | `backend-exec` |
+| `devops-specialist` | Docker, CI/CD, VPS, cloud deployment | DEVELOPMENT | `backend-exec` |
+| `backend-test-specialist` | Backend test coverage (conditional) | DEVELOPMENT | `repetitive` |
+| `frontend-test-specialist` | Frontend test coverage (conditional) | DEVELOPMENT | `frontend` |
+| `code-reviewer` | Routes to specialist reviewer based on diff (backend / frontend / both) | QUALITY GATE | `backend-exec` |
+| `backend-reviewer` | Backend review: API contracts, transactions, N+1, auth, jobs, SOLID | QUALITY GATE | `backend-exec` |
+| `frontend-reviewer` | Frontend review: components, re-renders, a11y, bundle, state, XSS | QUALITY GATE | `frontend` |
+| `security-specialist` | OWASP, LGPD/GDPR, dependency CVEs | QUALITY GATE | `reasoning` |
+| `qa-specialist` | Behavioral validation, regression risk | QUALITY GATE | `backend-exec` |
+| `technical-writer` | API docs, READMEs, runbooks, changelogs | SUPPORT | `repetitive` |
+| `setup-assistant` | Project setup + version management | SETUP | `reasoning` |
+
+**Tier is the source of truth, not the model name.** Each agent declares only a `tier:` in its frontmatter; the concrete model id is resolved per provider from `scripts/lib/tiers.json` at render time. For the Claude provider the current mapping is `reasoning` → `claude-opus-4-7`, and `backend-exec` / `frontend` / `repetitive` → `claude-sonnet-4-6`. Other providers (opencode, Codex) map the same tiers to their own model ids in that same file.
 
 ---
 
@@ -76,7 +78,7 @@ Security-focused audit: OWASP Top 10, LGPD/GDPR compliance, dependency CVE scann
 Validates feature behavior against acceptance criteria. Identifies regression risk, missing edge cases, and behavioral gaps. Does not write code — produces a behavioral validation report.
 
 ### `technical-writer`
-Produces API documentation, READMEs, runbooks, changelogs, and release notes. Assigned Haiku for cost efficiency on structured, low-ambiguity writing tasks.
+Produces API documentation, READMEs, runbooks, changelogs, and release notes. Runs on the `repetitive` tier — structured, low-ambiguity writing at high volume.
 
 ### `setup-assistant`
 Drives the full project setup and refresh flow. Scans existing files, asks about project type, collects configuration, and generates living context docs in `docs/`. Re-running on an existing project triggers refresh mode — reads git history since the last run and patches only the affected docs.
