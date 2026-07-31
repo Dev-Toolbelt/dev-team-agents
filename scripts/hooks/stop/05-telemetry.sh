@@ -28,6 +28,17 @@ _telemetry_enabled() {
 
 _telemetry_enabled || exit 0
 
+# Fast-path: the dispatcher reports a purely conversational Stop (no staged or
+# unstaged change, no commit today). Do not record a session_end for a session
+# that produced nothing — the Stop hook fires on every assistant turn, so those
+# events are pure noise and cost two python3 forks each. The flush still runs:
+# it is internally TTL-gated (24h) and is the only delivery path for events
+# queued by the PreToolUse hooks, which must not stall in read-only sessions.
+if [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ]; then
+    bash "$TELEMETRY_SEND" --flush 2>/dev/null || true
+    exit 0
+fi
+
 # Extract session metadata from the Stop hook payload (DEVTEAM_HOOK_PAYLOAD)
 STOP_REASON=""
 if [ -f "${DEVTEAM_HOOK_PAYLOAD:-}" ] && command -v python3 >/dev/null 2>&1; then

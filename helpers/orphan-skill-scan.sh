@@ -50,8 +50,17 @@ while IFS= read -r f; do
     CONSUMER_FILES+=("$f")
 done < <(find "$AGENTS_DIR" "$COMMANDS_DIR" -name "*.md" 2>/dev/null | sort)
 
-# ── Phase 1: Auto-fix broken path references in consumer files ───────────────
+# ── Phase 1: Repair broken path references in consumer files ─────────────────
+# This phase runs UNATTENDED from the Stop hook, so it must never destroy
+# content. A broken reference is repaired only when the skill can be located
+# unambiguously by its directory basename (the moved-skill case). Anything else
+# is reported for a human to resolve.
+#
+# It previously ran `sed "/$ref/d"`, deleting the whole line. On a routing-table
+# row that took the detection signals with it — silently, on every Stop. Do not
+# reintroduce a delete here.
 FIXED_MSGS=()
+UNRESOLVED_MSGS=()
 
 for consumer_file in "${CONSUMER_FILES[@]}"; do
     broken_refs=()
@@ -62,12 +71,26 @@ for consumer_file in "${CONSUMER_FILES[@]}"; do
 
     for ref in "${broken_refs[@]:-}"; do
         [ -z "$ref" ] && continue
-        # shellcheck disable=SC2016
-        escaped_ref=$(printf '%s\n' "$ref" | sed 's/[[\.*^$()+?{|]/\\&/g; s/\//\\\//g')
-        if sed -i.bak "/$escaped_ref/d" "$consumer_file" 2>/dev/null; then
-            rm -f "${consumer_file}.bak"
-            rel_consumer="${consumer_file#"$REPO_ROOT"/}"
-            FIXED_MSGS+=("  · $rel_consumer: removed broken ref → $ref")
+        rel_consumer="${consumer_file#"$REPO_ROOT"/}"
+
+        # Locate the skill by directory basename: skills/<cat>/<name>/SKILL.md
+        skill_name=$(basename "$(dirname "$ref")")
+        matches=()
+        while IFS= read -r m; do
+            [ -n "$m" ] && matches+=("${m#"$REPO_ROOT"/}")
+        done < <(find "$SKILLS_DIR" -type d -name "$skill_name" 2>/dev/null \
+                 -exec test -f '{}/SKILL.md' \; -print | sort)
+
+        if [ "${#matches[@]}" -eq 1 ]; then
+            new_ref="${matches[0]}/SKILL.md"
+            old_e=$(printf '%s\n' "$ref"     | sed 's/[[\.*^$()+?{|/]/\\&/g')
+            new_e=$(printf '%s\n' "$new_ref" | sed 's/[[\.*^$&/]/\\&/g')
+            if sed -i.bak "s/$old_e/$new_e/g" "$consumer_file" 2>/dev/null; then
+                rm -f "${consumer_file}.bak"
+                FIXED_MSGS+=("  · $rel_consumer: repaired path → $new_ref")
+            fi
+        else
+            UNRESOLVED_MSGS+=("  · $rel_consumer: broken ref → $ref")
         fi
     done
 done
@@ -165,7 +188,7 @@ done
 EFFECTIVE_DUPLICATE_COUNT=0
 [ "$ERRORS_ONLY" = false ] && EFFECTIVE_DUPLICATE_COUNT=${#DUPLICATE_MSGS[@]}
 
-if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ] && [ "$EFFECTIVE_DUPLICATE_COUNT" -eq 0 ]; then
+if [ ${#FIXED_MSGS[@]} -eq 0 ] && [ ${#ORPHAN_MSGS[@]} -eq 0 ] && [ ${#UNRESOLVED_MSGS[@]} -eq 0 ] && [ "$EFFECTIVE_DUPLICATE_COUNT" -eq 0 ]; then
     [[ "${1:-}" != "--quiet" && "${1:-}" != "--errors-only" ]] && echo "orphan-skill-scan: clean ✓"
     exit 0
 fi
@@ -177,10 +200,21 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 if [ ${#FIXED_MSGS[@]} -gt 0 ]; then
     echo ""
-    echo " AUTO-FIXED — Broken references removed from agents:"
+    echo " AUTO-FIXED — Broken references repointed to the skill's new location:"
     for msg in "${FIXED_MSGS[@]}"; do
         echo "$msg"
     done
+    echo "   → Verify the surrounding text still reads correctly after the move."
+fi
+
+if [ ${#UNRESOLVED_MSGS[@]} -gt 0 ]; then
+    echo ""
+    echo " ACTION REQUIRED — Broken references that could not be resolved:"
+    for msg in "${UNRESOLVED_MSGS[@]}"; do
+        echo "$msg"
+    done
+    echo "   → The skill was deleted, or its basename is ambiguous across categories."
+    echo "   → Repoint the reference by hand, or remove it if the skill is gone."
 fi
 
 if [ ${#ORPHAN_MSGS[@]} -gt 0 ]; then
