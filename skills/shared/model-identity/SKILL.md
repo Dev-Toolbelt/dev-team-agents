@@ -1,45 +1,51 @@
 ---
 name: model-identity
-description: Announce the agent's tier, model, and effort at startup. Every agent loads this first.
+description: Emit the agent's tier, model, and effort as a table before any other action.
 ---
 
-## Model Identity Banner
+# Model Identity
 
-**Before any other action**, announce your model identity so the user sees which model is active:
+**Before any other action** — before reading a file, running a command, or answering — emit your run banner so the user sees which model is doing the work.
 
-> **`[agent name]`** — Tier: `[tier]` | Model: `[model]` | Effort: `[effort]`
+## Procedure
 
-Where:
-- `[agent name]` is your agent's name (from the `name:` frontmatter field)
-- `[tier]` is your agent's tier (from the `tier:` frontmatter field)
-- `[model]` and `[effort]` are resolved from `scripts/lib/tiers.json` based on your tier and the active provider
+1. Find the block marked `<!-- run-banner -->` in your own agent definition (inside the `## Model Identity` section).
+2. Emit that markdown table verbatim, minus the `<!-- run-banner -->` comment line, as the first thing in your first response.
+3. Emit nothing before it — no preamble, no "let me start by".
 
-### Resolution Procedure
+That block is generated at render time from `scripts/lib/tiers.json` for the provider you are running under, so its values are already correct. **Do not resolve the model yourself**: do not read `tiers.json`, do not detect the provider, do not infer a model from what you believe you are running on. Any of those produces a wrong or unverifiable banner, and all three cost a tool call the render already paid for.
 
-1. **Read your tier** from the `tier:` field in your own frontmatter (the `---` block at the top of this file)
+If your definition has no `<!-- run-banner -->` block, emit the table with `` `unknown` `` in the Model and Effort cells and continue with the task — never block on a missing banner, and never substitute a guess.
 
-2. **Detect the active provider** by checking for provider-specific directories (check in this order, stop at the first match):
-   - `.opencode/` exists → provider = `opencode`
-   - `.claude/` exists → provider = `claude`
-   - `.codex/` exists → provider = `codex`
-   - If none detected → default to `claude`
+## Format
 
-3. **Resolve model and effort** from `scripts/lib/tiers.json`:
-   - Read the JSON file at `.dev-team-agents/scripts/lib/tiers.json`
-   - Model: `tiers.<tier>.<provider>` (e.g., `tiers.reasoning.opencode`)
-   - Effort: `effort.<tier>.<provider>` (e.g., `effort.reasoning.opencode`)
-   - If the provider has no effort entry, omit effort from the banner
+| Agent | Tier | Model | Effort |
+|---|---|---|---|
+| `agent-name` | `tier` | `model-id` | `effort` |
 
-4. **Print the banner** using the format above as a single line at the very start of your first response
+- **Agent** — your `name:` frontmatter value
+- **Tier** — one of `reasoning`, `backend-exec`, `frontend`, `repetitive`
+- **Model** — the provider-native model id or alias
+- **Effort** — the provider's effort/variant value, or `—` on providers that have no effort concept (Claude Code)
 
-### Example Banners
+Emit exactly one banner per invocation, at the top. Do not repeat it after tool calls or between phases of a long task.
 
-```
-**software-architect** — Tier: `reasoning` | Model: `opencode-go/qwen3.7-plus` | Effort: `high`
-```
-```
-**backend-developer** — Tier: `backend-exec` | Model: `claude-sonnet-4-6` | Effort: `—`
-```
-```
-**technical-writer** — Tier: `repetitive` | Model: `opencode-go/kimi-k2.5` | Effort: `low`
-```
+## Examples
+
+Claude Code — no effort concept, so the cell is `—`:
+
+| Agent | Tier | Model | Effort |
+|---|---|---|---|
+| `backend-developer` | `backend-exec` | `sonnet` | `—` |
+
+opencode:
+
+| Agent | Tier | Model | Effort |
+|---|---|---|---|
+| `software-architect` | `reasoning` | `opencode-go/qwen3.7-plus` | `high` |
+
+Codex CLI:
+
+| Agent | Tier | Model | Effort |
+|---|---|---|---|
+| `technical-writer` | `repetitive` | `gpt-5.6-luna` | `low` |
