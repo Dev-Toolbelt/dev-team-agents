@@ -209,6 +209,45 @@ def tool_conventions_note(provider, tool_map):
     return "\n".join(note_lines)
 
 
+# ─── run banner ────────────────────────────────────────────────────────
+# The `<!-- run-banner -->` block in an agent body carries the model identity
+# table the agent emits before doing anything else (see
+# skills/shared/model-identity/SKILL.md). The source copy holds Claude's values
+# because Claude is the identity case; every other provider gets its Model and
+# Effort cells rewritten here, so the agent never has to resolve them at runtime.
+_RUN_BANNER_RE = re.compile(
+    r"(<!-- run-banner -->\n"          # anchor comment
+    r"\|[^\n]*\|\n"                    # header row
+    r"\|[^\n]*\|\n)"                   # separator row
+    r"\|([^|\n]*)\|([^|\n]*)\|[^|\n]*\|[^|\n]*\|",  # data row: agent | tier | model | effort
+)
+
+
+def render_run_banner(body, model_id, effort, provider):
+    """Rewrite the run-banner data row's Model and Effort cells for `provider`.
+
+    Agent and Tier cells are provider-agnostic and pass through untouched.
+    Returns the body unchanged when the agent carries no banner block — a
+    missing banner is handled by the agent (per the model-identity skill), not
+    by failing the render.
+    """
+    if provider == "claude":
+        return body  # identity case — the source already holds Claude's values
+
+    model_cell = model_id
+    if provider == "codex" and model_id.startswith("openai/"):
+        # Match what the rendered TOML frontmatter actually declares.
+        model_cell = model_id.split("/", 1)[1]
+
+    def _sub(m):
+        return (
+            f"{m.group(1)}"
+            f"|{m.group(2)}|{m.group(3)}| `{model_cell}` | `{effort or '—'}` |"
+        )
+
+    return _RUN_BANNER_RE.sub(_sub, body, count=1)
+
+
 # ─── agent rendering per provider ─────────────────────────────────────
 def render_agent_claude(name, fm, body, src_path):
     # Claude is the identity case — return source verbatim.
@@ -233,6 +272,8 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     # Apply path rewrites and body rewrites to agent body
     body = apply_path_rewrites(body, "opencode", tool_map)
     body = apply_codex_body_rewrites(body)
+    # Last, so the banner's resolved values are authoritative over any rewrite.
+    body = render_run_banner(body, model_id, effort, "opencode")
     note = tool_conventions_note("opencode", tool_map)
     content = fm_text + "\n" + note + body
     return {"path": f".opencode/agents/{name}.md", "content": content}
@@ -284,6 +325,8 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
     # Apply path rewrites and Codex body rewrites
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_body_rewrites(body)
+    # Last, so the banner's resolved values are authoritative over any rewrite.
+    body = render_run_banner(body, model_id, effort, "codex")
     note = tool_conventions_note("codex", tool_map)
     instructions = note + body
     # TOML literal block string (triple-quoted).
