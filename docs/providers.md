@@ -46,7 +46,9 @@ How the resolved id reaches the CLI differs by provider:
 
 ### Run banner
 
-Every agent prints an agent/tier/model/effort table as the first thing in its first response, on all three providers. The format lives in `skills/shared/model-identity/SKILL.md`; the per-agent values live in a `<!-- run-banner -->` block in the agent body. The source copy carries Claude's values (identity case), and `render_run_banner()` rewrites the **Model** and **Effort** cells for opencode and Codex — the Agent and Tier cells are provider-agnostic and pass through untouched.
+Every agent prints an agent/tier/model/effort table twice — opening its first response and closing its final summary — on all three providers. The format lives in `skills/shared/model-identity/SKILL.md`; the per-agent values live in a `<!-- run-banner -->` block in the agent body.
+
+The repeat is deliberate. A subagent works in its own context and returns only its summary, so the opening banner reaches the main conversation only while the agent runs in the foreground. Claude Code runs subagents in the background by default from v2.1.198 on, which turns the opening banner into something visible only inside the agent's transcript (`/tasks`, or `~/.claude/projects/{project}/{sessionId}/subagents/`). Emitting it again in the summary is what keeps the model visible where the user is reading. The source copy carries Claude's values (identity case), and `render_run_banner()` rewrites the **Model** and **Effort** cells for opencode and Codex — the Agent and Tier cells are provider-agnostic and pass through untouched.
 
 Resolving this at render time is deliberate. The alternative — having each agent read `tiers.json` and detect the active provider at runtime — costs a tool call on every invocation and misreports the model in any project with more than one provider installed, which `install-codex.sh` / `install-opencode.sh` explicitly support.
 

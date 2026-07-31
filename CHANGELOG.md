@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.2] - 2026-07-31
+
+### Fixed — the run banner never reached the main conversation from a background subagent
+- **A subagent returns only its summary; everything before that stays in its own context.** The banner was emitted once, opening the agent's first response, so it reached the user only while the agent ran in the *foreground*. Claude Code runs subagents in the **background by default from v2.1.198**, which turned the banner into something visible only by opening the agent's transcript via `/tasks` — defeating the point of having one
+- **Agents now emit the banner twice**: opening the first response, and closing the summary they hand back, under a `**Ran on:**` heading. The second emission is the load-bearing one — it is the only one that lands where the user is actually reading
+- **Still exactly twice.** Not after every tool call and not between phases: those intermediate messages never leave the agent's context, so a banner there is pure noise
+- This was a design gap in v2.20.0, not a regression. On Claude Code 2.1.140 and earlier the foreground default masked it; the failure would have appeared silently on upgrade
+
 ## [2.20.1] - 2026-07-31
 
 ### Fixed — Claude Code does support per-subagent effort; v2.20.0 said it did not

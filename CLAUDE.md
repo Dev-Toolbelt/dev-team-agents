@@ -84,7 +84,7 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - No plain-text `(yes/no)` prompts in the body — `agent-lint.sh` fails on them; use `AskUserQuestion` (see the Quiz-first Rule below)
 - Max ~200 lines of content per agent; move reference material to skills. `helpers/size-limits.sh` enforces 205 — the extra 5 lines are the fixed-size run-banner block every agent carries, not content budget. Do not raise that ceiling again to make a long agent fit.
 
-**Run Banner Rule.** Every agent prints a model-identity table — agent, tier, model, effort — as the first thing in its first response, on every provider. The rule and the table format live in `skills/shared/model-identity/SKILL.md`; each agent body carries only its own values, in a `<!-- run-banner -->` block inside `## Model Identity`:
+**Run Banner Rule.** Every agent prints a model-identity table — agent, tier, model, effort — twice: opening its first response, and closing the summary it hands back. On every provider. The second emission is the load-bearing one: only an agent's **final** message reaches the main conversation, so a subagent running in the background would otherwise show its banner to nobody. The rule and the table format live in `skills/shared/model-identity/SKILL.md`; each agent body carries only its own values, in a `<!-- run-banner -->` block inside `## Model Identity`:
 
 ```markdown
 <!-- run-banner -->
