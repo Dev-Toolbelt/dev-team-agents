@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — agents run scoped tests, never the full suite (behavior change)
+- **New canonical skill `skills/shared/scoped-test-execution/SKILL.md`.** When finishing a task, an agent now runs only the tests covering the code it touched plus that code's direct dependents. The project's full suite is left to CI, or to the user running it manually
+- **One exception, and only one:** an explicit user request in the session ("run the whole suite"). Suite speed, refactor width, changes to shared code, a failing scoped test, a release or a merge do **not** authorize a full run. An ambiguous request ("make sure nothing broke") resolves to the scoped run plus an offer, never to escalation
+- **The `< 60 s` fast-suite criterion in `/devteam:commit` is gone.** Step 4.5c used to run `npm test` / `pytest` / `go test ./...` / `make test` whenever the suite was believed to be fast; it now delegates to the skill and runs only what covers the staged files
+- **`/devteam:refactor` no longer tells `qa-specialist` to run the full suite** during the quality gate
+- **Definition-of-Done lines updated** in `backend-developer`, `mobile-developer` and `skills/shared/frontend-done-checklist` — "Test suite passes" became "Tests covering the change pass". `backend-test-specialist`, `frontend-test-specialist` and `qa-specialist` load the skill before executing any test command
+- **No gate was weakened:** a failing scoped test still blocks the task, CI pipelines still execute 100% of the suite, and what agents *write* is still governed by `skills/testing/test-strategy/SKILL.md`
+
 ### Changed — telemetry now requires explicit consent (behavior change, action may be required)
 - **Anonymous telemetry defaults to DISABLED.** It is enabled only when the installer could reach a terminal *and* the user actively accepted the prompt. Previously the value was pre-set to `"telemetry": true` and the consent prompt was gated behind `[ -t 0 ]` — which is false under the documented `curl … | bash` install, because stdin is a pipe. The prompt therefore never appeared on the primary install path while telemetry was already on, contradicting the opt-out consent both READMEs advertised
 - **The interactivity test is now "can we open `/dev/tty`"**, not `[ -t 0 ]`, so the prompt is actually shown on the `curl … | bash` path. Pressing Enter still accepts — the opt-out model survives wherever the prompt is genuinely reachable

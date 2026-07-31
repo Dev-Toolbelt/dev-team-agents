@@ -135,6 +135,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Worktree decision cascade | `CLAUDE.md` → *Canonical worktree decision cascade* + `skills/shared/worktree/SKILL.md` | Delegate from `## Worktree Isolation` (see Agents above) |
 | Layered-commit table and commit message format | `skills/shared/conventional-commits/SKILL.md` | Load it; commands must not carry a second copy of the table |
 | Plan document format | `templates/plan-template.md`, loaded via `skills/shared/plan-mode/SKILL.md` | Load the template; never ship a second rendering of the format |
+| Which tests to execute when finishing a task — scoped to the touched code, full suite only on explicit user request | `skills/shared/scoped-test-execution/SKILL.md` | Load it and delegate; never restate the exception, and never add a second escalation criterion (suite speed, refactor width, shared code) |
 
 When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
