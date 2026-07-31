@@ -39,10 +39,14 @@ Two levels resolve it, most specific first:
 
 | Source | Key | Today |
 |---|---|---|
-| `agent_effort` | agent name → provider | `low` on `backend-test-specialist`, `frontend-test-specialist`, `database-specialist`, `devops-specialist`, `qa-specialist` (claude only) |
+| `agent_effort` | agent name → provider | `low` on `backend-test-specialist`, `frontend-test-specialist`, `database-specialist`, `devops-specialist`, `qa-specialist` — on all three providers |
 | `effort` | tier → provider | `low` on `repetitive`; the other three tiers set none for claude |
 
-The per-agent level exists because effort tracks how much a role needs to *reason*, which does not always follow the tier that picks its model: the five agents above run on Sonnet, but their work is directed enough by spec that the extra exploration does not pay for itself. `security-specialist` is deliberately excluded — see the note in `tiers.json`.
+A provider omitted from an `agent_effort` entry falls back to its tier level, so the map can be rolled out one provider at a time.
+
+The per-agent level exists because effort tracks how much a role needs to *reason*, which does not always follow the tier that picks its model: the five agents above carry detailed instructions and work largely to spec, so the extra exploration a higher level buys does not pay for itself. Concretely, `qa-specialist` renders `variant: low` on opencode and `model_reasoning_effort = "low"` on Codex, against its tier defaults of `default` and `medium`.
+
+`security-specialist` is deliberately excluded and keeps its `reasoning` tier level — `high` on both opencode and Codex. See the note in `tiers.json` for why.
 
 The `claude` column holds **aliases**, not pinned model ids: Claude Code resolves `opus` / `sonnet` / `haiku` to the current model of that family, so the column does not go stale when a new model ships. It previously held pinned ids (`claude-opus-4-7`, `claude-sonnet-4-6`) and had drifted a generation behind. As of 2026-07-31 the aliases resolve to Claude Opus 5 ($5/$25 per MTok), Claude Sonnet 5 ($3/$15, introductory $2/$10 through 2026-08-31), and Claude Haiku 4.5 ($1/$5, 200K context against 1M on the others).
 

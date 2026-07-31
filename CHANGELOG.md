@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-07-31
+
+### Changed — the five specialists now run at low effort on opencode and Codex too
+- **`agent_effort` entries gained `codex` and `opencode` keys.** v2.21.0 scoped the override to `claude`, leaving the same five agents on their tier defaults elsewhere; they now drop to `low` on all three providers. `qa-specialist` renders `variant: low` on opencode and `model_reasoning_effort = "low"` on Codex, against tier defaults of `default` and `medium`
+- **A provider omitted from an entry still falls back to its tier level**, so the map can be rolled out one provider at a time — that is what made this a two-step change rather than a rewrite
+- **`security-specialist` remains excluded** and keeps its `reasoning` tier level: `high` on both opencode and Codex
+- Both values were checked against the contract's allowed sets before landing — `low` is in `CODEX_EFFORTS` and in the opencode effort set, and `check_tiers_completeness` validates column presence per tier rather than the rendered effort, so a per-agent override does not conflict with it
+
 ## [2.21.0] - 2026-07-31
 
 ### Added — per-agent effort overrides, and `low` on five specialists
