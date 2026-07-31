@@ -62,22 +62,36 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 ### Agents (`agents/*.md`)
 
-- Frontmatter: exactly `name`, `description`, `tier` — all three are required and enforced by `helpers/agent-lint.sh` (`REQUIRED_FIELDS`), which runs in CI and from the `Stop` hook (`scripts/hooks/stop/03-agent-lint.sh`)
-- **No `model:` key.** Agents never name a model. They declare a `tier:`, and the render engine resolves the tier to a provider-specific model id at render time using `scripts/lib/tiers.json` — the canonical tier → model id map (it also carries the per-provider `effort` value where the provider has one). Never hardcode a model id in an agent file; to change a model, edit `tiers.json`.
+- Frontmatter: exactly `name`, `description`, `tier`, `model` — all four are required and enforced by `helpers/agent-lint.sh` (`REQUIRED_FIELDS`), which runs in CI and from the `Stop` hook (`scripts/hooks/stop/03-agent-lint.sh`)
+- **`tier:` is the source of truth; `model:` is a checked mirror of it.** `scripts/lib/tiers.json` is the canonical tier → model map (it also carries the per-provider `effort` value where the provider has one). The render engine resolves the tier to a provider-specific model id for opencode and Codex. Claude Code is the identity case — its agents are symlinked from source and never pass through the renderer, so it cannot be handed a resolved model at install time; it reads `model:` from the frontmatter instead. That key therefore holds **exactly** `tiers.json[<tier>].claude` and nothing else. To change a model, edit `tiers.json` and re-run the mirror; never hand-edit `model:` to a different value — `agent-lint.sh` fails on any divergence between `tiers.json`, `model:`, and the run-banner row.
+- **The `claude` column holds aliases** (`opus` / `sonnet` / `haiku`), not pinned model ids. Claude Code resolves an alias to the current model of that family, so the column does not go stale on a model launch. Pinned ids did exactly that, which is why they were replaced.
 - **No `tools:` key**, and therefore no tools-order rule. Tool availability is provider-native; the renderer rewrites tool names per provider from `scripts/lib/tool-map.json`.
 - Valid `tier:` values — any other value fails the lint:
 
-| Tier | Use for |
-|------|---------|
-| `reasoning` | architecture, planning, refactoring, security analysis, onboarding decisions |
-| `backend-exec` | backend implementation, backend review, code review, database, devops, qa, mobile |
-| `frontend` | frontend implementation, frontend review, frontend tests, ui/ux design |
-| `repetitive` | test scaffolding, doc generation, boilerplate, high-volume low-judgment tasks |
+| Tier | `claude` model | Use for |
+|------|----------------|---------|
+| `reasoning` | `opus` | architecture, planning, refactoring, security analysis, onboarding decisions |
+| `backend-exec` | `sonnet` | backend implementation, backend review, code review, database, devops, qa, mobile, backend tests |
+| `frontend` | `sonnet` | frontend implementation, frontend review, frontend tests, ui/ux design |
+| `repetitive` | `haiku` | doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks |
 
-- Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning**
+> `repetitive` is the only tier on Haiku, and Haiku's context window is 200K against 1M on the others. Keep that tier for work that is genuinely low-judgment and bounded — it currently holds `technical-writer` alone. Test authoring is **not** low-judgment: `backend-test-specialist` sits in `backend-exec`, matching `frontend-test-specialist` in `frontend`. Do not move a test agent to `repetitive`.
+
+- Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning** + a **`## Model Identity`** section carrying the `<!-- run-banner -->` block (see the Run Banner rule below)
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - No plain-text `(yes/no)` prompts in the body — `agent-lint.sh` fails on them; use `AskUserQuestion` (see the Quiz-first Rule below)
-- Max ~200 lines per agent; move reference material to skills
+- Max ~200 lines of content per agent; move reference material to skills. `helpers/size-limits.sh` enforces 205 — the extra 5 lines are the fixed-size run-banner block every agent carries, not content budget. Do not raise that ceiling again to make a long agent fit.
+
+**Run Banner Rule.** Every agent prints a model-identity table — agent, tier, model, effort — as the first thing in its first response, on every provider. The rule and the table format live in `skills/shared/model-identity/SKILL.md`; each agent body carries only its own values, in a `<!-- run-banner -->` block inside `## Model Identity`:
+
+```markdown
+<!-- run-banner -->
+| Agent | Tier | Model | Effort |
+|---|---|---|---|
+| `backend-developer` | `backend-exec` | `sonnet` | `—` |
+```
+
+The source copy holds Claude's values because Claude is the identity case; `render_run_banner()` in `scripts/lib/render_provider.py` rewrites the **Model** and **Effort** cells for opencode and Codex (Agent and Tier are provider-agnostic and pass through). Resolving the banner at render time — rather than having the agent read `tiers.json` and sniff the provider at runtime — is deliberate: it costs no tool call per invocation, and it cannot report the wrong provider in a project that has more than one installed.
 
 **Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section. That section **delegates** — it points at the canonical cascade below and at `skills/shared/worktree/SKILL.md` for the `worktree=yes` path, in two or three lines. **Do not restate the cascade in an agent body.** It used to be inlined in all eight agents (~15 lines each) and drifted between them; the cascade has exactly one copy, and it is here.
 
@@ -259,9 +273,10 @@ dev-team-agents/
 │   ├── providers.md     ← provider matrix and tier → model id map
 │   └── reports/         ← audit reports and fingerprint index
 ├── helpers/         ← DEV-ONLY authoring tools, never shipped (see "Two helpers directories" below)
-│   ├── agent-lint.sh              ← agent frontmatter (name/description/tier) + skill
+│   ├── agent-lint.sh              ← agent frontmatter (name/description/tier/model) +
+│   │                                model↔tiers.json↔run-banner drift + skill
 │   │                                identity (name == dir, unique) + quiz-first
-│   ├── size-limits.sh             ← agents 200 · commands 200 · skills 500
+│   ├── size-limits.sh             ← agents 205 (200 content + 5 run-banner) · commands 200 · skills 500
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
 │   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and

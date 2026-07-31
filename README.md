@@ -64,7 +64,9 @@ A render engine (`scripts/render-provider.sh`, plain Python with stdlib only) re
 2. **Adapters** (per-provider frontmatter shape, tool-name mapping table, slash-command output form). Defined once per provider in `scripts/lib/*.json` and rendered at install time. Adding a new provider = one column in `tiers.json` + one row in `tool-map.json` + one row in `command-map.json` + a thin `install-<provider>.sh`.
 3. **Binding** (`.claude/settings.json` for Claude, `.opencode/plugins/dev-team-agents.ts` for opencode, `.codex/hooks.json` for Codex). All three invoke the SAME `scripts/hooks/*.sh` dispatchers — no per-provider hook duplication.
 
-**Per-agent model id is rigid per tier.** Every agent declares one of `reasoning | backend-exec | frontend | repetitive`. Each tier is resolved to a concrete model id through `tiers.json` per provider, so switching providers is a one-column change — no agent body edits.
+**Per-agent model id is rigid per tier.** Every agent declares one of `reasoning | backend-exec | frontend | repetitive`. Each tier is resolved to a concrete model id through `tiers.json` per provider, so switching providers is a one-column change — no agent body edits. On Claude Code that means architecture and security work runs on Opus, implementation and review on Sonnet, and doc generation on Haiku, instead of every subagent sharing the session's model.
+
+**Every agent opens with a run banner** — an agent/tier/model/effort table printed before it does anything else, on all three providers, so you can always see which model is doing the work.
 
 > Full reference: [docs/providers.md](docs/providers.md)
 

@@ -26,7 +26,11 @@ Lista completa dos agentes incluídos no Dev Team Agents, seus papéis, fases do
 | `technical-writer` | Docs de API, READMEs, runbooks, changelogs | SUPPORT | `repetitive` |
 | `setup-assistant` | Setup do projeto + gerenciamento de versão | SETUP | `reasoning` |
 
-**O tier é a fonte da verdade, não o nome do modelo.** Cada agente declara apenas um `tier:` no frontmatter; o model id concreto é resolvido por provedor a partir de `scripts/lib/tiers.json` no momento da renderização. Para o provedor Claude, o mapeamento atual é `reasoning` → `claude-opus-4-7` e `backend-exec` / `frontend` / `repetitive` → `claude-sonnet-4-6`. Outros provedores (opencode, Codex) mapeiam os mesmos tiers para seus próprios model ids nesse mesmo arquivo.
+**O tier é a fonte da verdade, não o nome do modelo.** Cada agente declara um `tier:` no frontmatter, e `scripts/lib/tiers.json` mapeia esse tier para um modelo por provedor. Os agentes também carregam uma chave `model:`, mas ela é um espelho verificado de `tiers.json[<tier>].claude` — os agentes do Claude Code são symlinkados a partir do fonte, não renderizados, então o modelo precisa estar no próprio arquivo. O `helpers/agent-lint.sh` falha em qualquer divergência.
+
+Para o provedor Claude, o mapeamento é `reasoning` → `opus`, `backend-exec` / `frontend` → `sonnet`, `repetitive` → `haiku`. São aliases, portanto acompanham o modelo atual de cada família (em 2026-07-31: Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5). Outros provedores (opencode, Codex) mapeiam os mesmos tiers para seus próprios model ids nesse mesmo arquivo.
+
+**Todo agente abre com um run banner** — uma tabela agente/tier/modelo/effort impressa antes de qualquer outra saída, nos três provedores. Veja `skills/shared/model-identity/SKILL.md`.
 
 ---
 

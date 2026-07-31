@@ -64,7 +64,9 @@ Um motor de renderização (`scripts/render-provider.sh`, Python puro com só st
 2. **Adaptadores** (formato de frontmatter por provedor, tabela de mapeamento de nomes de ferramenta, formato de saída do slash command). Definidos uma vez por provedor em `scripts/lib/*.json` e renderizados no install time. Adicionar um provedor novo = uma coluna em `tiers.json` + uma linha em `tool-map.json` + uma linha em `command-map.json` + um `install-<provider>.sh` enxuto.
 3. **Ligação** (`.claude/settings.json` para Claude, `.opencode/plugins/dev-team-agents.ts` para opencode, `.codex/hooks.json` para Codex). Os três invocam os MESMOS dispatchers em `scripts/hooks/*.sh` — sem duplicação de hooks por provedor.
 
-**Model id por agente é rígido por tier.** Cada agente declara um de `reasoning | backend-exec | frontend | repetitive`. Cada tier é resolvido para um model id concreto via `tiers.json` por provedor, então trocar de provedor é uma mudança de uma coluna — sem editar o corpo de qualquer agente.
+**Model id por agente é rígido por tier.** Cada agente declara um de `reasoning | backend-exec | frontend | repetitive`. Cada tier é resolvido para um model id concreto via `tiers.json` por provedor, então trocar de provedor é uma mudança de uma coluna — sem editar o corpo de qualquer agente. No Claude Code isso significa que arquitetura e segurança rodam em Opus, implementação e review em Sonnet, e geração de docs em Haiku, em vez de todo subagente compartilhar o modelo da sessão.
+
+**Todo agente abre com um run banner** — uma tabela agente/tier/modelo/effort impressa antes de qualquer outra coisa, nos três provedores, para você sempre ver qual modelo está fazendo o trabalho.
 
 > Referência completa: [docs/providers.md](docs/providers.md)
 

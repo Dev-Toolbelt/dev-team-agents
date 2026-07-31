@@ -28,17 +28,25 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 | tier | role | claude | opencode | codex |
 | --- | --- | --- | --- | --- |
-| `reasoning` | architecture, planning, big refactors | `claude-opus-4-7` | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
-| `backend-exec` | backend implementation, review, database, devops, qa, mobile | `claude-sonnet-4-6` | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `frontend` | frontend implementation, review, design, frontend tests | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
+| `reasoning` | architecture, planning, big refactors | `opus` | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
+| `backend-exec` | backend implementation, review, database, devops, qa, mobile, backend tests | `sonnet` | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `frontend` | frontend implementation, review, design, frontend tests | `sonnet` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `repetitive` | docs, changelogs, release notes, high-volume low-judgment | `haiku` | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
-`model:` was removed from `agents/*.md` frontmatter. **`tier:` is the single source of truth** — the renderer reads it and resolves it through `scripts/lib/tiers.json` into a provider-specific model id. No agent ever names a model; to change one, edit `tiers.json`.
+The `claude` column holds **aliases**, not pinned model ids: Claude Code resolves `opus` / `sonnet` / `haiku` to the current model of that family, so the column does not go stale when a new model ships. It previously held pinned ids (`claude-opus-4-7`, `claude-sonnet-4-6`) and had drifted a generation behind. As of 2026-07-31 the aliases resolve to Claude Opus 5 ($5/$25 per MTok), Claude Sonnet 5 ($3/$15, introductory $2/$10 through 2026-08-31), and Claude Haiku 4.5 ($1/$5, 200K context against 1M on the others).
 
-How that resolved id reaches the CLI differs by provider:
+**`tier:` is the single source of truth.** `scripts/lib/tiers.json` maps it to a model per provider. Agents also carry a `model:` frontmatter key, but it is a *checked mirror* of `tiers.json[<tier>].claude`, not an independent value — see the claude row below for why it has to exist. To change a model, edit `tiers.json` and update the mirror; `helpers/agent-lint.sh` fails on any divergence between the three copies (`tiers.json`, `model:`, run-banner row).
 
-- **opencode / codex** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
-- **claude** — the render is the identity case: `agents/*.md` is emitted byte-identical to source, so the rendered file carries no `model:` key and Claude Code applies its own default subagent model. The `claude` column in `tiers.json` documents the intended mapping (and satisfies the provider-column completeness check in `.github/scripts/ci/provider/_contract.py`), but it is not injected into the output.
+How the resolved id reaches the CLI differs by provider:
+
+- **opencode / codex** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file by the renderer: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
+- **claude** — the render is the identity case: `agents/*.md` is emitted byte-identical to source, and `install.sh` symlinks `agents/` into `.claude/agents/dev-team/` rather than rendering into it. Nothing can be injected at install time, so the model has to already be in the source file — hence the `model:` key. Claude Code reads it and runs the subagent on that model; without it, every subagent would silently fall back to the session's default model and the whole tier system would be inert on Claude Code, which is what happened before this was wired up.
+
+### Run banner
+
+Every agent prints an agent/tier/model/effort table as the first thing in its first response, on all three providers. The format lives in `skills/shared/model-identity/SKILL.md`; the per-agent values live in a `<!-- run-banner -->` block in the agent body. The source copy carries Claude's values (identity case), and `render_run_banner()` rewrites the **Model** and **Effort** cells for opencode and Codex — the Agent and Tier cells are provider-agnostic and pass through untouched.
+
+Resolving this at render time is deliberate. The alternative — having each agent read `tiers.json` and detect the active provider at runtime — costs a tool call on every invocation and misreports the model in any project with more than one provider installed, which `install-codex.sh` / `install-opencode.sh` explicitly support.
 
 ---
 
