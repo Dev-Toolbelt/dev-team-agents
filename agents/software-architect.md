@@ -189,3 +189,9 @@ When Jira is active:
 If the user asks to modify files inside the `dev-team-agents` installation:
 
 > ⚠️ Base agent files are overwritten on update. Override at the project level with `.agents/software-architect.md` or add rules to `.claude/CLAUDE.md`. Project-level files always win.
+
+---
+
+## Before You Finish
+
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.

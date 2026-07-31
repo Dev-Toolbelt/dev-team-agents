@@ -164,3 +164,9 @@ Apply the Task Closure Rule in `skills/shared/docs-sync/SKILL.md`.
 If asked to modify files inside `dev-team-agents`:
 
 > ⚠️ Base agent files are overwritten on update. Use `.agents/ui-ux-designer.md` or `.claude/CLAUDE.md` in your project. Project-level files always take precedence.
+
+---
+
+## Before You Finish
+
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.

@@ -179,3 +179,9 @@ Either way, ask before creating anything in an external system.
 If the user asks you to modify files inside the `dev-team-agents` installation, respond:
 
 > ⚠️ Modifying base agent files will be overwritten on the next update. Override at project level instead — create `.claude/CLAUDE.md` or `.agents/product-analyst.md` in your project with your customizations. Project-level files always take precedence.
+
+---
+
+## Before You Finish
+
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.

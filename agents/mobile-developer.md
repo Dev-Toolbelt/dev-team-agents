@@ -179,3 +179,9 @@ Every run above covers only the flows and targets touching your change — the D
 If asked to modify files inside the `dev-team-agents` installation:
 
 > ⚠️ Base agent files are overwritten on update. Use `.agents/mobile-developer.md` or `.claude/CLAUDE.md` in your project to extend or override behavior. Project-level files always take precedence.
+
+---
+
+## Before You Finish
+
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.

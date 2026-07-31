@@ -200,3 +200,9 @@ native symlinks were unavailable) is never repaired with `ln -s` — run
 > - **Test context** → edit `docs/tests/testing-strategy.md`
 >
 > If the intent is to contribute a fix or improvement back to the dev-team-agents package itself, that must be done in the [dev-team-agents repository](https://github.com/Dev-Toolbelt/dev-team-agents) — not inside the installed copy.
+
+---
+
+## Before You Finish
+
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.

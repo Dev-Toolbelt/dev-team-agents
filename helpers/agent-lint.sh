@@ -191,6 +191,16 @@ check_agent() {
   # Claude's values; the renderer rewrites Model/Effort for other providers.
   local name_fm banner
   name_fm=$(echo "$frontmatter" | grep -E "^name:" | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
+  # The closing-banner section must sit at the END of the body: it exists
+  # purely for recency, so that the requirement is the last thing the agent
+  # reads before it composes the summary it hands back. Observed compliance
+  # with the top-of-file instruction alone was 0 of 6 multi-message runs.
+  if ! grep -q '^## Before You Finish$' "$file"; then
+    ERRORS+=("  · ${file}: missing '## Before You Finish' section (closing run banner — see skills/shared/model-identity/SKILL.md)")
+  elif [ "$(grep -c '^## ' "$file")" -gt 0 ] && [ "$(grep -n '^## ' "$file" | tail -1 | cut -d: -f2-)" != "## Before You Finish" ]; then
+    ERRORS+=("  · ${file}: '## Before You Finish' must be the last section — it works by recency")
+  fi
+
   # Same `|| true` reason: without it, an agent missing the banner exits the
   # script instead of reporting the very thing this check looks for.
   banner=$(grep -A 3 '^<!-- run-banner -->$' "$file" | tail -1 || true)
