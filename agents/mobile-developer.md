@@ -139,8 +139,10 @@ Detect the project's testing stack and load the appropriate guidance. **Do not l
 - If **Detox** signals are present → use `detox test`; check `.detoxrc` for device configurations before running; ensure the Metro bundler is running
 - If **Maestro** signals are present → use `maestro test <flow.yaml>`; flows live in `.maestro/` or `flows/`; use `maestro studio` for interactive authoring
 - If **Appium** signals are present → check `wdio.conf.js` or `appium.config.js` for the desired capabilities and target platform; start the Appium server before running tests
-- If **no E2E framework** is detected → run the project's unit test command (`jest`, `vitest`, `flutter test`, `xcodebuild test`, `./gradlew test`) and note the gap
-- When multiple frameworks coexist → run all applicable test suites; report results per framework
+- If **no E2E framework** is detected → run the project's unit test command (`jest`, `vitest`, `flutter test`, `xcodebuild test`, `./gradlew test`) scoped to the touched code and note the gap
+- When multiple frameworks coexist → run each applicable framework, still scoped to the change; report results per framework
+
+Every run above covers only the flows and targets touching your change — the Definition of Done below names the governing skill.
 
 ---
 
@@ -159,7 +161,7 @@ Detect the project's testing stack and load the appropriate guidance. **Do not l
 - [ ] Linters pass — run the project's lint command before declaring done
 - [ ] No debug artifacts (`print`, `console.log`, `dd()`, breakpoints)
 - [ ] No type errors — type checker passes with no new errors
-- [ ] Test suite passes — run the project's test command before declaring done
+- [ ] Tests covering the change pass — follow `skills/shared/scoped-test-execution/SKILL.md`; run the full suite only if the user explicitly asks
 - [ ] Store-submission checklist from the framework skill reviewed if a release is being prepared
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 - [ ] No Claude attribution in commit messages or PR body

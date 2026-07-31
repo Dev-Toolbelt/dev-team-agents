@@ -63,6 +63,8 @@ For each UI element, ask:
 
 Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-pyramid/SKILL.md`.
 
+Load `skills/shared/scoped-test-execution/SKILL.md` before executing any test command — it governs which tests you run (those covering the touched code) and the single exception that allows a full-suite run.
+
 Load contextually based on the task:
 - `skills/testing/snapshot-testing/SKILL.md` — when writing or reviewing component snapshot tests
 - `skills/testing/visual-regression/SKILL.md` — when setting up or running visual regression tests (Playwright screenshot diffing, Chromatic)

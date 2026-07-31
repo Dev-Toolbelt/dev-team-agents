@@ -127,10 +127,10 @@ Spawn in parallel:
 - `qa-specialist`
 
 Code-reviewer prompt:
-> "Review the refactoring. Confirm external behavior is preserved, code quality improved, and no new issues introduced. All tests must still pass."
+> "Review the refactoring. Confirm external behavior is preserved, code quality improved, and no new issues introduced. The tests covering the refactored code must still pass."
 
 QA-specialist prompt:
-> "Validate that the refactored code behaves identically to the original. Run the full test suite, check edge cases from the coverage plan, and flag any regressions."
+> "Validate that the refactored code behaves identically to the original. Run the tests covering the refactored code and its direct dependents — per `skills/shared/scoped-test-execution/SKILL.md`, not the full suite — check edge cases from the coverage plan, and flag any regressions."
 
 Any `[BLOCKING]` finding from either agent must be resolved before a PR is created.
 

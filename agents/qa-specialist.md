@@ -30,6 +30,8 @@ Load `skills/shared/output-format/SKILL.md` — all QA report output must follow
 
 Load `test-strategy` skill before planning validation — use it to decide what to prioritize and how to structure the QA report coverage.
 
+Load `skills/shared/scoped-test-execution/SKILL.md` before running any automated test — validation runs cover the changeset's blast radius, never the full suite unless the user explicitly asks.
+
 **Conditional loads** — load only when the trigger applies:
 
 | Trigger | Skill |

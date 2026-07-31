@@ -64,6 +64,8 @@ For each piece of code, ask:
 
 Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-pyramid/SKILL.md`.
 
+Load `skills/shared/scoped-test-execution/SKILL.md` before executing any test command — it governs which tests you run (those covering the touched code) and the single exception that allows a full-suite run.
+
 Load contextually based on the task:
 - `skills/testing/contract-testing/SKILL.md` — when testing API contracts between services (consumer-driven contracts, provider verification)
 - `skills/testing/mutation-testing/SKILL.md` — when assessing test suite quality or coverage confidence

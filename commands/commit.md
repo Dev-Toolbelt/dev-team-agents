@@ -97,16 +97,9 @@ If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthoo
 | `pyproject.toml` with `mypy` dependency | `mypy <staged-py-files>` |
 | `pyrightconfig.json` or `pyright` in devDependencies | `npx pyright` |
 
-### 4.5c — Tests (fast only)
+### 4.5c — Tests (scoped to the staged files)
 
-Run only when the test suite is known to be fast (< 60 s). For slow suites, run only the tests covering staged files.
-
-| Project signal | Command |
-|----------------|---------|
-| `package.json` with `test` script | `npm test -- --passWithNoTests` |
-| `pytest` in `pyproject.toml` or `requirements*.txt` | `pytest --tb=short -q` |
-| `go.mod` present | `go test ./...` |
-| `Makefile` with `test` target | `make test` |
+Load `skills/shared/scoped-test-execution/SKILL.md` and run only the tests covering the staged files and their direct dependents. Do not run the project's full suite here — CI owns that, and the skill's single exception (an explicit user request) does not fire from a `/devteam:commit` invocation.
 
 ### 4.5d — Commit message validation
 
