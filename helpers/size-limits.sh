@@ -29,7 +29,14 @@ AGENTS_DIR="$REPO_ROOT/agents"
 SKILLS_DIR="$REPO_ROOT/skills"
 COMMANDS_DIR="$REPO_ROOT/commands"
 
-AGENT_LIMIT=200
+# 200 lines of agent CONTENT, plus the 5-line run-banner block every agent now
+# carries (`model:` frontmatter key + the `<!-- run-banner -->` table — see
+# skills/shared/model-identity/SKILL.md). That block is fixed-size boilerplate
+# the renderer rewrites per provider, not authored content, so it is excluded
+# from the budget by raising the ceiling once rather than by charging six
+# agents for it. The content budget is still 200 — do not raise this again to
+# make a long agent fit; move its reference material to a skill instead.
+AGENT_LIMIT=205
 SKILL_LIMIT=500
 # Commands are thin orchestration wrappers that spawn agents — they should never
 # be longer than the richest content type in the repo. 200 is the ceiling already
