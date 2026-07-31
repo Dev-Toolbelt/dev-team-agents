@@ -61,10 +61,9 @@ advisory() {
 
 # Frontmatter/schema validation. Blocking: the tree is clean and a malformed
 # agent or skill header breaks loading at runtime.
-# NOTE: agent-lint carries one internal ADVISORY sub-check — the 95-char skill
-# `description` budget, gated by `SKILL_DESC_STRICT` in helpers/agent-lint.sh.
-# PROMOTE WHEN: all skill descriptions are within the 95-char budget
-# (20 are over today). Flip `SKILL_DESC_STRICT=false` → `true` in that helper.
+# agent-lint is fully blocking as of 2026-07-31 — the 95-char skill `description`
+# budget was its last advisory sub-check, and every violator has been trimmed
+# (`SKILL_DESC_STRICT=true` in helpers/agent-lint.sh).
 blocking "agent-lint" bash helpers/agent-lint.sh
 
 # A skill with no agent referencing it is dead weight, not a broken build, and
@@ -82,9 +81,11 @@ blocking "check-fingerprint-uniqueness" bash helpers/check-fingerprint-uniquenes
 # 200-line agent cap. Enforcing now would fail every PR regardless of content.
 # The helper's own `--warn-only` flag is deliberately NOT passed — the wrapper
 # owns the blocking decision, so promotion stays a one-line change here.
-# PROMOTE WHEN: every agent, skill and command is under its declared cap
-# (i.e. `bash helpers/size-limits.sh` exits 0 on a clean tree).
-advisory "size-limits" bash helpers/size-limits.sh
+# PROMOTED 2026-07-31: every agent, skill and command is now under its declared
+# cap (17/17 agents, 25/25 commands, 138/138 skills). The condition below held,
+# so this is blocking. Do not demote it to buy room for one oversized file —
+# extract to a skill, which is what the cap exists to force.
+blocking "size-limits" bash helpers/size-limits.sh
 
 # Shell correctness across shipped scripts. Blocking: the tree is clean and a
 # shellcheck finding in an installer or hook is a real runtime hazard.

@@ -1,6 +1,6 @@
 ---
 name: flutter
-description: Essential rules, patterns, and checklists for Flutter/Dart projects. Load only when Flutter is detected in the project.
+description: Flutter/Dart rules, patterns, and checklists. Load when Flutter is detected.
 ---
 
 ## Detection Signals

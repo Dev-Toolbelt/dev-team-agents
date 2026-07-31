@@ -10,7 +10,7 @@
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
-  "telemetry": true,
+  "telemetry": false,
   "worktree_active": false,
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",

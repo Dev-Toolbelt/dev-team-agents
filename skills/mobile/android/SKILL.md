@@ -1,6 +1,6 @@
 ---
 name: android
-description: Android-specific development guidelines — design, permissions, release signing, and native Kotlin/Jetpack Compose standards. Load when the project targets Android.
+description: Android engineering rules — permissions, release signing, Kotlin/Compose. Load for Android.
 ---
 
 ## Scope

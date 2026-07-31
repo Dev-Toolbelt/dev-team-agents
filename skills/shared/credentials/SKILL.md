@@ -1,6 +1,6 @@
 ---
 name: credentials
-description: Remote environment credentials — read, use, enforce read-only access to staging/production environments.
+description: Remote environment credentials (staging, production) — access and read-only enforcement.
 ---
 
 # Credentials — Remote Environment Access

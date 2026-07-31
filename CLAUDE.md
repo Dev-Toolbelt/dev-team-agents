@@ -6,7 +6,9 @@ Instructions for working on this repository. These rules apply to Claude when au
 
 ## What This Repo Is
 
-A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware. Installed at the project level (`.dev-team-agents/`) — not globally.
+**Multi-agent development harness** — a harness for organizing AI agents in software development. Not just a bundle of agents: it is the layer that governs how those agents plan, execute, test, review, and record their work.
+
+Stack-agnostic, project-aware. Installed at the project level (`.dev-team-agents/`) — not globally.
 
 The canonical source (`agents/`, `commands/`, `skills/`, `scripts/hooks/`) is **provider-agnostic**. Claude Code is the default provider; opencode and OpenAI Codex CLI are supported via a render engine (`scripts/render-provider.sh`) that emits the provider-specific file tree per target project. See `docs/providers.md` for the tier → model id map and the per-provider install scripts.
 
@@ -77,7 +79,9 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - No plain-text `(yes/no)` prompts in the body — `agent-lint.sh` fails on them; use `AskUserQuestion` (see the Quiz-first Rule below)
 - Max ~200 lines per agent; move reference material to skills
 
-**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section using the canonical **decision cascade** (resolve top-down, stop at the first match):
+**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section. That section **delegates** — it points at the canonical cascade below and at `skills/shared/worktree/SKILL.md` for the `worktree=yes` path, in two or three lines. **Do not restate the cascade in an agent body.** It used to be inlined in all eight agents (~15 lines each) and drifted between them; the cascade has exactly one copy, and it is here.
+
+**Canonical worktree decision cascade** (resolve top-down, stop at the first match):
 
 1. `.dev-team-agents/.worktree-session` present → follow the stored decision silently:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
@@ -94,8 +98,10 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 - Follow [agentskills.io specification](https://agentskills.io/specification)
 - Frontmatter: `name`, `description`
   > Note: `allowed-tools:` is **not** a standard frontmatter key for skills in this repo. Use only `name` and `description`. The `allowed-tools:` key in `skills/shared/worktree/SKILL.md` was an experiment and has been removed.
+- **`name` must equal the skill's directory basename** (`skills/testing/load-testing/SKILL.md` → `name: load-testing`), and must be **unique across all categories**. Both are enforced by `helpers/agent-lint.sh`. The divergence is load-bearing: the render engine resolves opencode skills by frontmatter `name` while the installers symlink by directory, and agent bodies plus `helpers/orphan-skill-scan.sh` reference skills by bare name
+- Keep `description` within **95 characters** — it feeds the always-loaded skill index. `agent-lint.sh` reports over-budget descriptions as a non-blocking warning today (`SKILL_DESC_STRICT=false`)
 - Body is current rules only — no change history, no "was removed / replaced by" narratives
-- Max ~500 lines; move long reference material to `references/` subdirectory
+- Max ~500 lines (SKILL.md only; `references/` is exempt); move long reference material to `references/` subdirectory
 - Prefer tables and bullets over prose
 
 #### Interaction Patterns — Quiz-first Rule
@@ -114,6 +120,23 @@ The canonical reference is `skills/shared/interaction-patterns/SKILL.md`. Load i
 #### Contradiction Guard
 
 All agents automatically enforce the Contradiction Guard defined in `skills/shared/project-context/SKILL.md`. When a user request conflicts with an established rule (in `CLAUDE.md`, ADRs, architecture docs, or sprint scope), the agent must flag the conflict, cite the source, and ask for explicit confirmation before proceeding.
+
+#### Canonical Rule Homes — Delegate, Never Restate
+
+A rule that applies to more than one agent lives in exactly **one** skill. Agents load that skill and reference the rule by name; they must not paraphrase or inline it. Every entry below was previously duplicated across agent bodies and had already drifted into divergent variants before it was consolidated.
+
+| Rule | Canonical home | Agents must |
+|------|---------------|-------------|
+| Task Closure Rule — after finishing a task, patch the docs the work triggers, in parallel with the commit | `skills/shared/docs-sync/SKILL.md` § Task Closure Rule | Load docs-sync and reference the rule; write no closing directive of their own |
+| Foundational Rule context list (12 items) | `skills/shared/project-context/SKILL.md` | Delegate in one line, then add only genuinely role-specific loads |
+| Project rules override these base standards | `skills/shared/project-context/SKILL.md` | Say nothing — loading the skill is the enforcement |
+| SonarQube detection signals | `skills/devops/sonarqube/SKILL.md` (detection table) | Route to the table; never restate a subset of the signals |
+| Comments policy, including TODO/FIXME handling | `skills/shared/comments-policy/SKILL.md` (Conditional Section Loading table) | Load it; the routing parenthetical belongs to the skill |
+| Worktree decision cascade | `CLAUDE.md` → *Canonical worktree decision cascade* + `skills/shared/worktree/SKILL.md` | Delegate from `## Worktree Isolation` (see Agents above) |
+| Layered-commit table and commit message format | `skills/shared/conventional-commits/SKILL.md` | Load it; commands must not carry a second copy of the table |
+| Plan document format | `templates/plan-template.md`, loaded via `skills/shared/plan-mode/SKILL.md` | Load the template; never ship a second rendering of the format |
+
+When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
 #### Wiki Knowledge Base
 
@@ -153,8 +176,11 @@ Skills that users trigger directly via slash command must be registered here:
 
 Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam:<name>` (e.g. `/devteam:plan`). This keeps all devteam commands namespaced and separate from any project-specific commands. Each command spawns agents via the Task tool and restricts scope to the current git branch/worktree unless overridden by the user.
 
+Commands are subject to the same authoring discipline as agents: **max ~200 lines each**, enforced by `helpers/size-limits.sh`, and the **Quiz-first Rule** below, enforced by `helpers/agent-lint.sh`. A command is a thin orchestration wrapper — it must never restate a skill it already loads.
+
 | Command | Agents invoked | Use when… |
 |---------|---------------|-----------|
+| `/devteam:setup` | setup-assistant | Onboarding a project into dev-team-agents — detects `FIRST_RUN` vs `REFRESH` (`docs/project.md` present), then delegates the full setup flow |
 | `/devteam:plan` | **product-analyst (protagonist)** + software-architect¹ | Planning a feature — product-analyst leads, produces a business-only requirements doc ready for sprints; software-architect joins only on explicit technical request |
 | `/devteam:backend` | backend-developer + database-specialist¹ → backend-test-specialist² → code-reviewer + qa-specialist | Implementing backend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
 | `/devteam:frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist² → code-reviewer + qa-specialist | Implementing frontend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
@@ -193,6 +219,8 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 
 - Standalone, copy-paste ready
 - No hardcoded project-specific values — use `[placeholders]`
+- **Reference templates by their installed path** — `.dev-team-agents/templates/<name>.md`, the form `scripts/new-adr.sh` already uses. A bare `templates/<name>.md` resolves only inside this repository, not from the project root an agent actually runs in. `helpers/orphan-template-scan.sh` checks that references **resolve**, not merely that the filename is mentioned
+- A skill named after a template does not make the two a pair. Wire a skill to a template only when the skill emits that exact document shape
 
 ### Scripts (`scripts/*.sh`)
 
@@ -214,13 +242,14 @@ dev-team-agents/
 │   ├── design/
 │   ├── devops/      ← one skill per platform
 │   ├── integrations/ ← platform/integration-specific reference skills
+│   ├── legacy/      ← survival guides for legacy codebases (jquery)
 │   ├── mobile/
 │   ├── security/
 │   ├── skill-creator/ ← user-invocable skill-authoring skill
 │   ├── testing/
 │   └── ui-libraries/ ← UI component library reference skills
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
-├── templates/       ← document templates (plan, backlog, ADR, etc.)
+├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
 ├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data, versioning)
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
 │   ├── agents.md · agents.pt-BR.md            ← canonical agent reference
@@ -229,9 +258,13 @@ dev-team-agents/
 │   ├── providers.md     ← provider matrix and tier → model id map
 │   └── reports/         ← audit reports and fingerprint index
 ├── helpers/         ← DEV-ONLY authoring tools, never shipped (see "Two helpers directories" below)
-│   ├── agent-lint.sh              ← frontmatter validation (name/description/tier)
-│   ├── orphan-skill-scan.sh · orphan-template-scan.sh
-│   └── size-limits.sh · archive-index.sh · check-fingerprint-uniqueness.sh
+│   ├── agent-lint.sh              ← agent frontmatter (name/description/tier) + skill
+│   │                                identity (name == dir, unique) + quiz-first
+│   ├── size-limits.sh             ← agents 200 · commands 200 · skills 500
+│   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
+│   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
+│   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
+│                                    global fingerprint uniqueness across live + archives
 ├── opencode/        ← opencode provider plugin source (plugin/dev-team-agents.ts); stripped at install,
 │                      fetched on demand by install-opencode.sh / install-provider.sh
 ├── scripts/
@@ -248,12 +281,20 @@ dev-team-agents/
 │   │   ├── preferences-defaults.json ← defaults written into user-data/preferences.json
 │   │   ├── render_provider.py     ← render engine
 │   │   ├── strip-tarball.sh       ← single source of truth for the package strip rules
+│   │   ├── installer-fetch.sh     ← shared ref-pinned download + payload verification
+│   │   │                            (update.sh, rollback.sh, the auto-update hook path)
+│   │   ├── telemetry-guard.sh     ← single fail-closed definition of _telemetry_enabled
 │   │   └── ensure-claude-framework.sh
 │   ├── helpers/     ← SHIPS and runs in user projects — telemetry-send.sh (called by install.sh, update.sh)
 │   └── hooks/       ← session-start.sh, pre-compact.sh + pre-tool-use.sh, stop.sh (dispatchers)
 │       ├── pre-tool-use/  ← PreToolUse sub-scripts
 │       ├── stop/          ← Stop sub-scripts
-│       └── lib/           ← shared hook logic (session-summary-detect.sh)
+│       │   └── tips/      ← notifier tip data, one file per locale
+│       │                    (tips.en.txt · tips.pt-BR.txt · tips.es.txt)
+│       └── lib/           ← shared hook logic, sourced not dispatched
+│           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
+│           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
+│           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
 ├── .github/         ← CI workflows, issue/PR templates, CODEOWNERS, scripts/ci/ — stripped at install
 ├── user-data/       ← runtime state of this repo's own self-install; gitignored and untracked
 ├── README.md
@@ -377,7 +418,7 @@ The script auto-numbers the file and places it in `docs/development/adrs/`. Fill
 
 ### Stop Hook (Automated Enforcement)
 
-`install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`. This dispatcher runs all sub-scripts in `scripts/hooks/stop/` in order, including `01-session-summary.sh`, which:
+`install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`. This dispatcher runs every sub-script in `scripts/hooks/stop/` whose filename matches the naming convention, in order, including `01-session-summary.sh`, which:
 
 - Runs automatically each time Claude finishes responding
 - Detects uncommitted changes **or commits made today** without a session-summary entry for today
@@ -393,17 +434,24 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 |--------|-------------|-----------------|
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
-| `03-` | Static validation | `03-agent-lint.sh` |
+| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
-| `99-` | Final/cleanup tasks | `99-graphify-refresh.sh` |
+| `99-` | Final/cleanup tasks | `99-graphify-refresh.sh`, `99b-archive-index.sh` |
 
 Each sub-script must:
+- **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — regex `^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$`. The dispatcher **skips any file that does not match**, so a draft, a `.sh.bak`, or a `notes.sh` left in the directory is ignored instead of being auto-run on every Stop. Set `DEVTEAM_HOOK_DEBUG=1` to see what was run and what was skipped
 - Accept `--quiet` flag and suppress output when OK
+- Honour the dispatcher's `DEVTEAM_NO_CHANGES=1` fast path — a Stop with no staged/unstaged changes and no commits today must not trigger a full scan
+- Reuse `DEVTEAM_TOUCHED_PATHS` / `DEVTEAM_TOUCHED_COMPUTED` (exported by `stop.sh` via `scripts/hooks/lib/touched-paths.sh`) instead of re-running `git status`/`git log`, while still working standalone when they are unset
 - Exit with code `0` when nothing is wrong
 - Exit non-zero only when action is required from the user
 
 Prefix `00-` is reserved for future preconditions. When adding a new sub-script, choose the correct tier and pick a number within that tier (e.g. `02-new-check.sh`). When the tier's number is already taken and the new script must run adjacent to the existing one, append a **lowercase letter suffix** instead of claiming a new number — `02b-`, `02c-`, … — which sorts immediately after `02-` and keeps the tier boundaries intact.
+
+Sub-scripts that call a `helpers/` tool (`03b-fingerprint-uniqueness.sh`, `99b-archive-index.sh`) must degrade silently when `helpers/` is absent — it is stripped from every installed project.
+
+Data files may live under `scripts/hooks/stop/`: `tips/` holds the notifier's rotating tips as one file per locale (`tips.en.txt`, `tips.pt-BR.txt`, `tips.es.txt`, 15 lines each). Only the selected locale's file is read, and only after the once-per-day gate opens. They are not `.sh` and are never dispatched.
 
 ### PreToolUse Hook Sub-script Convention
 
@@ -411,12 +459,15 @@ Sub-scripts in `scripts/hooks/pre-tool-use/` are run by `scripts/hooks/pre-tool-
 
 | Prefix | Reserved for | Current scripts |
 |--------|-------------|-----------------|
-| `01-` | Installation freshness | `01-check-updates.sh` — TTL-based update check; auto-updates when the `.auto-update` flag exists |
-| `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02-telemetry.sh` — queues agent-spawn and `/devteam:*` command events |
+| `01-` | Installation freshness | `01-check-updates.sh` — thin orchestrator over `scripts/hooks/lib/update-check.sh`; TTL-based update check, auto-updates when the `.auto-update` flag exists |
+| `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02b-telemetry.sh` — queues agent-spawn and `/devteam:*` command events |
 
-> Both current `02-` scripts share the same prefix, so their relative order is decided by the rest of the filename (`02-graphify-hint.sh` before `02-telemetry.sh`). Neither depends on the other. When adding a third script to this tier, use a letter suffix (`02b-`) rather than a bare duplicate prefix.
+> One script per bare number. `02-graphify-hint.sh` keeps `02-` because it is referenced externally; the telemetry script is `02b-telemetry.sh`. Two files sharing a bare prefix leaves execution order to an alphabetical tiebreak on the rest of the filename — never rely on that. Add a **lowercase letter suffix** (`02b-`, `02c-`, …) instead.
 
-Each sub-script must exit `0` in all normal paths — a PreToolUse sub-script must never block a tool call.
+Each sub-script must:
+- **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — the same regex the Stop dispatcher uses. Non-matching files are skipped, not run; `DEVTEAM_HOOK_DEBUG=1` traces both
+- Exit `0` in all normal paths — a PreToolUse sub-script runs on **every tool call** and must never block one
+- Stay off the hot path: return from the TTL/cache check before forking anything (no `python3`, no network) — see `update-check.sh`, whose interval sidecar cache is invalidated with the `[ prefs -nt cache ]` bash builtin
 
 ### Hook Files Map
 
@@ -425,8 +476,10 @@ Each sub-script must exit `0` in all normal paths — a PreToolUse sub-script mu
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs |
 | `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: update checks, graphify hint, telemetry queue |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
-| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, notifications, telemetry, graph refresh |
+| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, notifications, telemetry, graph refresh, archive rotation. Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |
+| — | `scripts/hooks/lib/touched-paths.sh` | Shared library | Not a hook. Sourced by `stop.sh` to compute the touched-path set once; sub-scripts `02`, `02b`, `03`, `03b` consume `DEVTEAM_TOUCHED_PATHS` instead of re-forking `git status` + `git log`, and fall back to computing it themselves when run standalone. |
+| — | `scripts/hooks/lib/update-check.sh` | Shared library | Not a hook. The update-check engine behind `pre-tool-use/01-check-updates.sh`; also owns the auto-update path, which delegates the download to `scripts/lib/installer-fetch.sh` and **skips the upgrade entirely** when that library is absent rather than falling back to an unverified fetch. |
 
 ---
 
@@ -462,8 +515,11 @@ bash helpers/orphan-skill-scan.sh
 
 Read the output and act on it before considering the task done:
 
-- **AUTO-FIXED** lines: broken path references were automatically removed from agent files — verify the agent still reads correctly after the removal.
-- **ACTION REQUIRED** lines: a skill has no agent reference. Add a load reference in the suggested agent file, following that agent's existing skill-loading pattern (full path or backtick name form, whichever is already used).
+- **AUTO-FIXED** lines: a broken skill path was **repaired in place** — the scanner located the skill unambiguously by basename and repointed the reference at its new location. Nothing is deleted. Verify the new path is the one you intended (a move between categories is the usual cause).
+- **ACTION REQUIRED — Broken references that could not be resolved**: the scanner could not find a matching skill by basename, so it left the reference alone and reported it. Fix or remove the reference yourself.
+- **ACTION REQUIRED — Skills with no agent reference**: a skill has no agent reference. Add a load reference in the suggested agent file, following that agent's existing skill-loading pattern (full path or backtick name form, whichever is already used).
+
+> The scanner **never deletes**. Its earlier auto-fix ran `sed "/$ref/d"`, which removed the whole line containing the broken reference — on a routing-table row that took the detection signals with it, silently, on every Stop. Do not reintroduce a line-deleting fix.
 
 User-invocable skills (registered in the "User-Invocable Skills" table above) are excluded from this check — they are triggered by humans, not loaded by agents.
 
@@ -481,6 +537,8 @@ When the user writes any prompt matching the intent of setting up the project wi
 - "Initialize dev-team-agents here"
 
 **Immediately invoke the `setup-assistant` agent.** Do not ask clarifying questions first, do not run any commands, do not read files yourself — hand off directly to `setup-assistant`, which is designed to gather all context and drive the full setup flow.
+
+`/devteam:setup` (`commands/setup.md`) is the explicit slash-command entry point for the same flow: it detects `FIRST_RUN` vs `REFRESH` from the presence of `docs/project.md`, reports the mode, and spawns `setup-assistant` with that mode as context.
 
 ---
 

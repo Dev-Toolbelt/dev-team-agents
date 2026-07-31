@@ -1,6 +1,6 @@
 ---
 name: migration-v1-to-v2
-description: Detects and migrates projects from dev-team-agents v1 (Claude-only, materialized copies) to v2 (multi-provider, symlinks).
+description: Detect and migrate a project from dev-team-agents v1 to v2 (multi-provider, symlinks).
 ---
 
 # Migration v1 → v2

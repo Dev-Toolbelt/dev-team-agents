@@ -1,6 +1,6 @@
 ---
 name: ios-hig
-description: Apple Human Interface Guidelines (HIG) for iOS and iPadOS — navigation patterns, controls, typography, layout, Dark Mode, accessibility, and iPhone vs iPad adaptations. Load when the project targets iOS or uses a cross-platform framework.
+description: Apple Human Interface Guidelines for iOS and iPadOS. Load for iOS or iPadOS design tasks.
 ---
 
 ## Detection Signals

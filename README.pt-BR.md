@@ -2,13 +2,15 @@
 
 🇺🇸 [See the English Version](README.md)
 
-Um time global de agentes Claude Code especializados para desenvolvimento de software. Agnóstico a tecnologia, ciente do contexto do projeto e mantido colaborativamente.
+**Multi-agent development harness** — um harness para organizar agentes de IA no desenvolvimento de software. Agnóstico a tecnologia, ciente do contexto do projeto e mantido colaborativamente.
 
 ---
 
 ## O que é isso
 
-Um conjunto de agentes e skills do Claude Code que formam um time completo de desenvolvimento de software. Cada agente tem um papel definido, expertise e integração com workflows. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
+Não é apenas um pacote de agentes; é a camada que controla como esses agentes planejam, executam, testam, revisam e registram o trabalho.
+
+Cada agente tem um papel definido, expertise e integração com workflows. O que faz disso um harness, e não uma coleção, é tudo o que existe em volta deles — o plan gate que barra execução silenciosa, os hooks de ciclo de vida que garantem memória entre sessões, o roteamento de review, os validadores que mantêm a árvore inteira honesta. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
 
 17 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.pt-BR.md) completa.
 
@@ -118,7 +120,8 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 
 | Command | O que faz |
 |---------|-----------|
-| `/devteam:plan` | Planejamento — software-architect + product-analyst + database-specialist (+ backend/frontend/devops quando relevante) |
+| `/devteam:setup` | Onboarding — detecta primeira execução ou refresh, e então o setup-assistant configura `CLAUDE.md`, `docs/`, a wiki e suas preferências |
+| `/devteam:plan` | Planejamento — o product-analyst lidera e produz um documento de requisitos só de negócio, pronto para virar sprints; o software-architect entra apenas em pedido técnico explícito |
 | `/devteam:backend` | Implementação backend — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Implementação frontend — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
@@ -305,11 +308,13 @@ docs/development/code-standards.md  # padrões de código usados pelos reviewers
 
 ## Telemetria Anônima
 
-O dev-team-agents coleta **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos.
+O dev-team-agents pode coletar **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos. **Fica desativado a menos que você o ative.**
 
-**O que é coletado:** nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
+**Consentimento:** o instalador pergunta uma única vez, na primeira instalação, abrindo seu terminal diretamente — então o prompt aparece até no caminho `curl … | bash`. Responder `n`, não responder em 60 segundos, definir `DEVTEAM_NONINTERACTIVE=1` ou não ter terminal algum deixam tudo **desativado**. Nada é enfileirado ou enviado enquanto o `preferences.json` não disser `"telemetry": true`.
 
-**Desative a qualquer momento** editando `.dev-team-agents/user-data/preferences.json`:
+**O que é coletado** (somente quando ativado): nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
+
+**Mude a qualquer momento** editando `.dev-team-agents/user-data/preferences.json` — `false` para desativar, `true` para ativar:
 
 ```json
 { "telemetry": false }

@@ -1,6 +1,6 @@
 ---
 name: stack-detection
-description: Canonical signal-to-stack detection table. Agents load this skill to identify project technology stack from file signals rather than maintaining divergent inline heuristics.
+description: Identify a project's technology stack from file signals — canonical signal-to-stack table.
 ---
 
 # Stack Detection

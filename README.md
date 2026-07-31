@@ -2,13 +2,15 @@
 
 🇧🇷 [Veja a versão em Português do Brasil](README.pt-BR.md)
 
-A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware, and collaboratively maintained.
+**Multi-agent development harness** — a harness for organizing AI agents in software development. Stack-agnostic, project-aware, and collaboratively maintained.
 
 ---
 
 ## What This Is
 
-A set of Claude Code agents and skills that form a complete software development team. Each agent has a defined role, expertise, and workflow integration. They coexist with your project's own rules — project conventions always win.
+Not just a bundle of agents: it is the layer that governs how those agents plan, execute, test, review, and record their work.
+
+Each agent has a defined role, expertise, and workflow integration. What makes it a harness rather than a collection is everything around them — the plan gate that blocks silent execution, the lifecycle hooks that enforce session memory, the review routing, the validators that keep the whole tree honest. They coexist with your project's own rules — project conventions always win.
 
 17 agents cover the full development lifecycle: discovery, design, implementation, quality gates, and documentation. → See the full [Agent Reference](docs/agents.md).
 
@@ -118,7 +120,8 @@ After installation, slash commands are available under the `/devteam:` namespace
 
 | Command | What it does |
 |---------|-------------|
-| `/devteam:plan` | Planning — software-architect + product-analyst + database-specialist (+ backend/frontend/devops when relevant) |
+| `/devteam:setup` | Onboarding — detects first run vs refresh, then setup-assistant configures `CLAUDE.md`, `docs/`, the wiki, and your preferences |
+| `/devteam:plan` | Planning — product-analyst leads and produces a business-only requirements doc ready for sprints; software-architect joins on explicit technical request |
 | `/devteam:backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
@@ -305,11 +308,13 @@ docs/development/code-standards.md  # code standards used by reviewers
 
 ## Anonymous Telemetry
 
-dev-team-agents collects **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable.
+dev-team-agents can collect **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable. **It is disabled unless you turn it on.**
 
-**What is collected:** agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
+**Consent:** the installer asks once, on first install, by opening your terminal directly — so the prompt shows up even on the `curl … | bash` path. Answering `n`, not answering within 60 seconds, setting `DEVTEAM_NONINTERACTIVE=1`, or having no terminal at all each leave it **disabled**. Nothing is queued or sent until `preferences.json` says `"telemetry": true`.
 
-**Opt out at any time** by editing `.dev-team-agents/user-data/preferences.json`:
+**What is collected** (only when enabled): agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
+
+**Change it at any time** by editing `.dev-team-agents/user-data/preferences.json` — `false` to opt out, `true` to opt in:
 
 ```json
 { "telemetry": false }

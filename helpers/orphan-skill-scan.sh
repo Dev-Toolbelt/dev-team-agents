@@ -4,7 +4,9 @@
 # Orphaned  — skill exists in skills/ but no consumer file loads it (by path or name).
 # Broken    — a consumer file references a skills/.../SKILL.md path that does not exist.
 #
-# Broken references are auto-fixed (removed from the consumer file).
+# Broken references are repaired in place when the skill can be located by its
+# directory basename (the moved-skill case); anything else is reported, never
+# deleted. This script runs unattended from the Stop hook.
 # Orphaned skills produce an ACTION REQUIRED block for Claude to act on.
 #
 # Usage:

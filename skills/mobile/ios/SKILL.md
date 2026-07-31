@@ -1,6 +1,6 @@
 ---
 name: ios
-description: iOS-specific development guidelines — design, permissions, code signing, and native Swift/SwiftUI standards. Load when the project targets iOS.
+description: iOS engineering rules — permissions, code signing, Swift/SwiftUI. Load for iOS targets.
 ---
 
 ## Scope

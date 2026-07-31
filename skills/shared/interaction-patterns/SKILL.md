@@ -1,6 +1,6 @@
 ---
 name: interaction-patterns
-description: Quiz-first rule — use AskUserQuestion for all user-facing choices; add "Other" when open input is valid.
+description: Quiz-first rule — use AskUserQuestion for any user-facing choice, never plain text.
 ---
 
 # Interaction Patterns — Quiz-first Rule

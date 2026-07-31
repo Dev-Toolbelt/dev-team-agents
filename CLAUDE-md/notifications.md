@@ -44,17 +44,21 @@ Set `suppress_notifications` in `preferences.json`:
 
 ### Tip of Session
 
-`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`. 15 tips are defined inline in the script. Translations are provided for `pt-BR` and `es`; all other languages fall back to English.
+`stop/04-notifier.sh` emits one `ℹ️ info` tip per session, indexed by `(day_of_month - 1) % 15`.
+
+Tip text lives in **locale data files**, never in the script: `scripts/hooks/stop/tips/tips.<lang>.txt`, one tip per line, 15 lines each. `tips.en.txt`, `tips.pt-BR.txt` and `tips.es.txt` ship today; all other languages fall back to English. Only the selected locale's file is read, and only after the once-per-day gate opens.
+
+Adding a locale is one new file plus one `case` arm in the notifier. Changing a tip never touches the script.
 
 ### Stop Sub-script Convention
 
-Canonical version of this table lives in `CLAUDE.md` → "Stop Hook Sub-script Convention". Reproduced here for the notification tier (`04-`):
+Canonical version of this table lives in `CLAUDE.md` → "Stop Hook Sub-script Convention", together with the mandatory `NN[a-z]-name.sh` filename pattern the dispatcher enforces. Reproduced here for the notification tier (`04-`):
 
 | Prefix | Reserved for | Current scripts |
 |--------|-------------|-----------------|
 | `01-` | State detection and collection | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
-| `03-` | Static validation | `03-agent-lint.sh` |
+| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
-| `99-` | Final/cleanup tasks | `99-graphify-refresh.sh` |
+| `99-` | Final/cleanup tasks | `99-graphify-refresh.sh`, `99b-archive-index.sh` |

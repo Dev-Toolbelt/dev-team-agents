@@ -23,10 +23,12 @@ VALID_TIERS=("reasoning" "backend-exec" "frontend" "repetitive")
 # Skill `description` feeds the always-loaded skill index across every skill in
 # the repo, so it is the highest-leverage per-character cost in the tree.
 SKILL_DESC_LIMIT=95
-# Over-budget descriptions are reported as warnings while the current violators
-# are being trimmed. TO PROMOTE TO A HARD ERROR: flip this to `true` — nothing
-# else needs to change.
-SKILL_DESC_STRICT=false
+# Descriptions feed the always-loaded skill index across every skill in the tree,
+# so length here is the highest-leverage per-character cost in the repo. All
+# violators were trimmed on 2026-07-31, so this is enforced. Keep it `true`:
+# cut meta-narrative (which agent loads it, "authoritative", exhaustive lists),
+# never the routing signal that tells an agent when to load the skill.
+SKILL_DESC_STRICT=true
 
 # Quiz-first Rule (CLAUDE.md): plain-text prompts are forbidden for ANY finite
 # answer set — yes/no *and* 2–4 option multiple choice.

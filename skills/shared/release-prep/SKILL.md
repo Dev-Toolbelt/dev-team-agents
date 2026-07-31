@@ -1,6 +1,6 @@
 ---
 name: release-prep
-description: Pre-release checklist and versioning strategy for dev-team-agents. Covers semver decisions, tag creation, post-release steps, and rollback.
+description: Pre-release checklist for dev-team-agents — semver bump, tagging, rollback.
 ---
 
 ## Version Bump Strategy
