@@ -31,6 +31,8 @@ Kong is an open-source API gateway and platform built on Nginx/OpenResty. In Sup
 
 **Declarative config only**: Supabase does not use the Kong Admin API — all config is declarative in `kong.yml`. In self-hosted setups, always edit `kong.yml` rather than calling the Admin API, or changes will be lost on restart.
 
+**`strip_path` on prefix routes**: always set `strip_path: true` on a route matched by a path prefix — otherwise Kong forwards the prefix to the upstream and the upstream returns 404 for every request.
+
 **`apikey` header**: Supabase uses a custom `apikey` header (the anon or service-role key). The Supabase Kong config validates this via the JWT plugin — the `apikey` is a valid JWT signed with your `JWT_SECRET`. Always include `apikey` in the CORS plugin `headers` list.
 
 ## Load on Demand

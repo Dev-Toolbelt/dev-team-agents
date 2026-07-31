@@ -111,29 +111,36 @@ Do not ask a 4th round of questions — produce the output and let the user corr
 
 When multiple agents may run discovery concurrently (e.g., in a parallel spawn), use a lockfile to prevent duplicate discovery sessions from racing:
 
+Run the block below **verbatim and in this order**. The staleness sweep must come *before* the bail-out, otherwise a lock left behind by a crashed agent blocks discovery forever.
+
 ```bash
 LOCK=".claude/.discovery-lock"
+mkdir -p "$(dirname "$LOCK")"
 
-# Acquire lock (fail fast if already held)
+# 1. Sweep a stale lock first — a previous owner may have died before its EXIT trap ran.
+#    `find -mmin` behaves identically on GNU and BSD/macOS; no date/stat parsing needed.
+if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
+    echo "Removing stale discovery lock ($(cat "$LOCK"))"
+    rm -f "$LOCK"
+fi
+
+# 2. Bail out only if a lock is still held after the sweep — it is live.
 if [ -f "$LOCK" ]; then
-    echo "⚠ Discovery already in progress ($(cat $LOCK)). Waiting for it to complete."
+    echo "Discovery already in progress ($(cat "$LOCK")). Waiting for it to complete."
     exit 0
 fi
+
+# 3. Acquire.
 echo "$AGENT_NAME $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK"
 trap 'rm -f "$LOCK"' EXIT
 ```
 
 **Rules:**
-- Write `<agent-name> <ISO-timestamp>` to the lock so the owner is identifiable.
+- Write `<agent-name> <ISO-timestamp>` to the lock so the owner is identifiable. The timestamp is for humans reading the lock — staleness is judged from the file's own mtime, never by parsing that string.
+- Never compute the age with `date -d "$(awk ...)"`: `date -d` is GNU-only, so on macOS it fails, and a `|| echo 0` fallback makes every lock look infinitely old and deletes locks that are still live.
 - Remove the lock on EXIT (success or failure) via `trap`.
-- If the lock is stale (older than 30 minutes), remove it and proceed:
-  ```bash
-  if [ -f "$LOCK" ]; then
-      lock_ts=$(date -d "$(awk '{print $2}' "$LOCK")" +%s 2>/dev/null || echo 0)
-      age=$(( $(date +%s) - lock_ts ))
-      [ "$age" -gt 1800 ] && rm -f "$LOCK"
-  fi
-  ```
+- 30 minutes is the staleness threshold; change it by editing the `-mmin +30` value.
+- No scheduled job sweeps orphaned locks. A lock whose owner crashed persists until the next agent runs step 1 above — which is exactly why step 1 must not be skipped or reordered.
 - Discovery sessions started by the user directly (not by parallel spawns) do not need the lockfile.
 
 ---

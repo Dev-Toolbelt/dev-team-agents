@@ -145,6 +145,8 @@ supabase secrets set KEY=val   # set env secret for edge functions
 
 Migrations live in `supabase/migrations/` as timestamped SQL files. Always use the CLI to generate and apply migrations — never edit migration files after they've been applied.
 
+**After every schema change, regenerate the client types** (`supabase gen types typescript`) and commit them with the migration — stale generated types silently drift from the database and defeat type-safe queries.
+
 ---
 
 ## Environment Variables

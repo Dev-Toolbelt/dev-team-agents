@@ -5,6 +5,50 @@ description: Security review — OWASP Top 10, LGPD/GDPR, API, infrastructure.
 
 # Security Checklist
 
+## Ownership Boundary — Security Audit vs QA
+
+Two agents load this checklist. They do **not** run the same checks. Read this section first and cover only your side; otherwise the same finding is reported twice into one consolidated summary.
+
+| | `security-specialist` (security audit) | `qa-specialist` (behavioral QA) |
+|---|---|---|
+| **Question asked** | "Can this be abused by an attacker?" | "Does this behave correctly for a legitimate user?" |
+| **Method** | Read code, config, dependencies, and infrastructure; reason about attack paths | Exercise the running feature against its acceptance criteria |
+| **Evidence** | File and line reference for the weakness | Reproduction steps and observed vs expected behavior |
+
+**Owned by the security audit — QA does not report these:**
+
+| Section | Scope |
+|---|---|
+| A02 Cryptographic Failures | Hashing algorithms, cost factors, TLS config, secrets in code |
+| A05 Security Misconfiguration | Debug mode, default credentials, exposed ports, directory listing |
+| A06 Vulnerable Components | Dependency CVEs, audit tooling, update process |
+| A08 Integrity Failures | CI/CD integrity, deserialization, SRI hashes |
+| A10 SSRF | URL allowlists, internal address blocking, metadata endpoints |
+| HTTP Security Headers | Presence and correctness of every header |
+| LGPD / GDPR | Legal basis, DPAs, cross-border transfers, breach process |
+| Secrets & Credentials | Secret managers, git history, DB user privileges, key rotation |
+
+**Owned by behavioral QA — the security audit assumes QA covers these and does not duplicate them:**
+
+| Section | QA scope (behavior only) |
+|---|---|
+| A01 Broken Access Control | Sign in as user B, attempt to read user A's record — record the actual response |
+| A04 Insecure Design | Invalid state transitions are rejected; rate limits actually trigger and reset |
+| A07 Auth Failures | Login, logout, lockout, password reset, and expiry behave as specified end to end |
+| A09 Logging Failures | Auth and admin events actually appear in logs; sensitive values do not |
+| API-Specific Security | Validation rejects bad input; errors expose no stack traces; pagination is enforced |
+
+**Shared boundary — A03 Injection:** the security audit owns whether the code is structurally safe (parameterized queries, argument arrays, escaping). QA owns whether hostile input is rejected at runtime. Both may report on A03; each must state which of the two it observed.
+
+**When you find something on the other side:**
+
+- Report it — never stay silent because it is not your section.
+- Label it explicitly: `[cross-boundary → security-specialist]` or `[cross-boundary → qa-specialist]`.
+- Keep it to one line with the pointer; do not write the other agent's full analysis.
+- The consolidating command treats a cross-boundary line and the owner's full finding as **one** issue, not two.
+
+---
+
 ## OWASP Top 10 (2021)
 
 ### A01 — Broken Access Control

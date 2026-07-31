@@ -7,6 +7,7 @@
     "opt_out": "No plan gate. Used for thin runner commands (update, symlinks)."
   },
   "commands": {
+    "setup":             { "tier": "reasoning",    "agent": "setup-assistant",     "description": "Onboard a project into dev-team-agents (first run or refresh).",                          "plan_gate": "required" },
     "plan":              { "tier": "reasoning",    "agent": "product-analyst",     "description": "Plan a feature — product-analyst leads, optional software-architect.",                        "plan_gate": "required" },
     "architect":         { "tier": "reasoning",    "agent": "software-architect",  "description": "Architecture decisions, ADRs, trade-offs.",                                               "plan_gate": "required" },
     "adr":               { "tier": "reasoning",    "agent": "software-architect",  "description": "Create a new Architecture Decision Record.",                                            "plan_gate": "required" },

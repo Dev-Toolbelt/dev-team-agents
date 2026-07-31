@@ -81,7 +81,7 @@ When the project uses a UI component library, detect it and load the correspondi
 | **Ant Design** | `antd` dep, `ConfigProvider`, `@ant-design/icons` | `skills/ui-libraries/antd/SKILL.md` |
 | **Bootstrap** | `bootstrap` dep or CDN link, `data-bs-*` attrs, `.col-*` classes | `skills/ui-libraries/bootstrap/SKILL.md` |
 | **Chakra UI** | `@chakra-ui/react` dep, `ChakraProvider`/`Provider`, style props | `skills/ui-libraries/chakra-ui/SKILL.md` |
-| **jQuery** | `jquery` dep or CDN `<script>`, `$()` / `$.ajax()` usage | `skills/ui-libraries/jquery/SKILL.md` |
+| **jQuery** | `jquery` dep or CDN `<script>`, `$()` / `$.ajax()` usage | `skills/legacy/jquery/SKILL.md` |
 
 Skills with a **MCP available** (shadcn/ui, MUI, Ant Design): the skill file contains the exact `.claude/settings.json` config to auto-install the MCP — set it up before starting UI work for real-time component docs and API access.
 
