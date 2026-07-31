@@ -37,7 +37,7 @@ After completing any task that changes **observable behavior** — installation 
 
 **Before executing any non-trivial task** (file creation, file modification, script changes, refactoring, agent authoring), you MUST:
 
-1. Present a plan using the canonical format in `templates/plan-template.md`
+1. Present a plan using the canonical format in `templates/plan-template.md` (installed projects: `.dev-team-agents/templates/plan-template.md`)
 2. State explicitly: **"Awaiting your approval before proceeding."**
 3. Only execute after the user approves
 

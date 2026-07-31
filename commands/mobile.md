@@ -1,28 +1,28 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn in parallel:
-- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — implement the mobile changes (React Native, Expo, Flutter, native iOS/Android)
-- `ui-ux-designer` at `.claude/agents/dev-team/ui-ux-designer.md` — design system adherence and visual decisions (spawn only if the task involves visual design, UX decisions, or platform UI guidelines)
+- `mobile-developer` — implement the mobile changes (React Native, Expo, Flutter, native iOS/Android)
+- `ui-ux-designer` — design system adherence and visual decisions (spawn only if the task involves visual design, UX decisions, or platform UI guidelines)
 
 Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 
 **Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Write tests **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
 
-- For React Native / Expo (JS/TS) suites → spawn `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md`.
+- For React Native / Expo (JS/TS) suites → spawn `frontend-test-specialist`.
 - For Flutter or native iOS/Android → the `mobile-developer` writes the platform-appropriate tests (e.g., `flutter test`, XCTest, Espresso) for the implemented changes.
 
 ## Phase 3 — Mandatory review handoff (automatic)
 
 After Phase 1 (and Phase 2, if it ran) complete, **always** spawn the following in parallel via the Task tool — no user confirmation, this handoff is mandatory:
 
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — scope: all files changed this session (`git diff` against the base branch); it will route to mobile-specific review as needed
-- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — scope: validate the behavior of the changes against acceptance criteria and regression risk
+- `code-reviewer` — scope: all files changed this session (`git diff` against the base branch); it will route to mobile-specific review as needed
+- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk
 
 **After both complete**, synthesize their outputs into a single consolidated block of **critical findings only** and present it to the user:
 
@@ -89,6 +89,13 @@ or
 ```
 
 depending on which were selected.
+
+## Session close (mandatory)
+
+After the phases above complete — including any resolution agents:
+
+1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
+2. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
 
 ---
 

@@ -109,7 +109,7 @@ A "non-trivial task" is any task that involves:
 
 ### How to Enter Plan Mode
 
-1. Present the plan using the canonical format from `templates/plan-template.md`
+1. Present the plan using the canonical format from `.dev-team-agents/templates/plan-template.md`
 2. End the plan with: `---` followed by `**Awaiting your approval before proceeding.**`
 3. Stop. Do not execute anything.
 4. Only proceed after the user explicitly approves (e.g., "approved", "go ahead", "proceed")

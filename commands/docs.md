@@ -1,10 +1,14 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 - `technical-writer` at `.claude/agents/dev-team/technical-writer.md` — README, API docs, runbooks, playbooks, changelogs, release notes, architecture guides
+
+When the task produces a **runbook**, the agent fills in the shipped template at
+`.dev-team-agents/templates/runbook-template.md` rather than inventing a structure —
+that path is the installed location and resolves from any project root.
 
 ---
 

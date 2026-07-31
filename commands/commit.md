@@ -1,6 +1,6 @@
 Load the skill at `skills/shared/conventional-commits/SKILL.md` before doing anything.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
 ---
 
@@ -13,7 +13,7 @@ Before inspecting staged changes, run the `/devteam:learn` pass automatically.
 - The user explicitly wrote "skip learn", "don't learn", "sem learn", or similar in their prompt
 
 **To execute:**
-1. Read `commands/learn.md` and follow Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents — no user confirmation is needed.
+1. Run the `/devteam:learn` flow, Steps 1–4 exactly, with one override: in its Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents — no user confirmation is needed.
 2. Wait for all learn agents to complete before continuing.
 3. If the learn pass finds nothing to update (output "Nothing to capture"), proceed immediately.
 
@@ -49,19 +49,7 @@ git diff --stat
 
 ## Step 3 — Group changes into logical commits
 
-Analyze the staged files and group them by layer or context using the Layered Commits rules from the loaded skill:
-
-| Order | Layer | Examples |
-|-------|-------|---------|
-| 1 | Data / schema | migrations, seeds, fixtures |
-| 2 | Domain | entities, value objects, domain models |
-| 3 | Persistence | ORM models, repository interfaces |
-| 4 | Infrastructure | adapters, queries, repository implementations |
-| 5 | Application | services, use cases, handlers, DTOs |
-| 6 | Interface | controllers, routes, CLI, views |
-| 7 | Tests | unit, integration, E2E |
-| 8 | Config / CI | build, ci, chore |
-| 9 | Docs | documentation changes |
+Analyze the staged files and group them by layer or context using the **Layered Commits** ordering table in the `conventional-commits` skill loaded above — that table is the single source of truth for layer order and examples; do not restate it here. It ends at layer 7 (tests); this command continues with **8 — Config / CI** (build, ci, chore) and **9 — Docs** (documentation changes).
 
 Rules for grouping:
 - Skip layers with no changes
@@ -135,7 +123,7 @@ This runs the `validate-commit-msg.sh` script (if present) to catch format viola
 
 If any gate (lint, type-check, tests, or commit message validation) returns non-zero:
 - Show the output to the user
-- Ask: (a) fix and re-stage, (b) commit anyway, (c) abort
+- Ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**
 - Do NOT auto-fix without explicit user consent
 
 ---

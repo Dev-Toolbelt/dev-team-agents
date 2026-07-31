@@ -17,7 +17,7 @@ set -euo pipefail
 
 TARGET="${1:-.codex}"
 FIX_MODE=false
-if [ "$1" = "--fix" ]; then
+if [ "${1:-}" = "--fix" ]; then
     FIX_MODE=true
     TARGET="${2:-.codex}"
 fi

@@ -1,3 +1,10 @@
+<!--
+CANONICAL PLAN FORMAT. Installed at .dev-team-agents/templates/plan-template.md —
+use that path when referencing this file from an agent, skill, or command; a bare
+`templates/…` path resolves only inside the dev-team-agents repository.
+This file is the single source of truth for the plan structure, the Par.-column
+semantics, and the approval closer. Do not restate them anywhere else.
+-->
 ## Plan — [Task Name]
 
 ### Context

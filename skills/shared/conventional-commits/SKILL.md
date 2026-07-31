@@ -68,6 +68,8 @@ Generic ordering (adapt to the project's stack):
 | 5 | Application | services, use cases, handlers, DTOs |
 | 6 | Interface | controllers, routes, CLI commands, views |
 | 7 | Tests | unit, integration, E2E (bundle or split by suite) |
+| 8 | Config / CI | environment config, pipeline definitions, build settings |
+| 9 | Docs | README, changelog, ADRs, runbooks |
 
 Rules:
 - Skip layers with no change

@@ -1,6 +1,6 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
@@ -32,7 +32,7 @@ If the user chooses **Commit them now**, execute the following routine inline (s
 3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage — only commit what is already staged, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).
 4. Group staged files into logical commits by layer (data/schema → domain → persistence → infrastructure → application → interface → tests → config/CI → docs). Skip empty layers. Bundle single-context changes into one commit.
 5. For each group, write a commit message following the detected pattern. Never add `Co-Authored-By:`, AI attribution, or any non-user authorship footer.
-6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured (same gates as in `devteam:commit` Step 4.5). If a gate fails, ask the user: (a) fix and re-stage, (b) commit anyway, (c) abort.
+6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured (same gates as in `devteam:commit` Step 4.5). If a gate fails, ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**.
 7. Present the proposed commit plan to the user and execute the commits unless the user says to stop.
 8. After all commits, run `git log --oneline -5` and show the result.
 
@@ -72,7 +72,7 @@ git log ${DEFAULT_BRANCH}..HEAD --format="%s" 2>/dev/null | head -20
 
 Scan for commit messages that do **not** match the Conventional Commits pattern (`^(feat|fix|docs|refactor|perf|test|ci|build|chore|style)(\(.+\))?: .+`). If any non-conforming messages are found, report them to the user:
 
-> "The following commits don't follow the Conventional Commits format: [list]. Proceed anyway, or would you like to amend them first?"
+List them, then ask with `AskUserQuestion` (single-select): **Proceed anyway** (recommended — this is advisory) or **Amend them first**.
 
 Do not block the PR — this is advisory only.
 
@@ -97,10 +97,10 @@ Before drafting the PR body:
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT write the PR description inline — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Always spawn:
-- `technical-writer` at `.claude/agents/dev-team/technical-writer.md` — reads the commits and diff, writes the PR title and description based solely on what changed in this branch
+- `technical-writer` — reads the commits and diff, writes the PR title and description based solely on what changed in this branch
 
 If and only if $ARGUMENTS contains the word `review`, also spawn before creating the PR:
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — final quality gate before opening the PR
+- `code-reviewer` — final quality gate before opening the PR
 
 ---
 

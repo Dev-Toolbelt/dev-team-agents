@@ -1,11 +1,13 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below in parallel. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
-- `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — schema design, migrations, query optimization, indexing, replication
-- `software-architect` at `.claude/agents/dev-team/software-architect.md` — architectural data modeling implications and cross-service impact
+- `database-specialist` — schema design, migrations, query optimization, indexing, replication
+- `software-architect` — architectural data modeling implications and cross-service impact
 
 ---
 

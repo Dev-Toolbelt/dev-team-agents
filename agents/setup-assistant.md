@@ -24,7 +24,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 
 **All output must be written in English.**
 
-**Before any non-trivial step, present a plan using `templates/plan-template.md` and wait for approval.**
+**Before any non-trivial step, present a plan using `.dev-team-agents/templates/plan-template.md` and wait for approval.**
 
 ---
 
@@ -107,7 +107,7 @@ Record as `GRAPHIFY: [enabled|disabled]`.
 
 ### Step 4 — Present Setup Plan
 
-Present a plan using `templates/plan-template.md` before creating any file. Wait for approval.
+Present a plan using `.dev-team-agents/templates/plan-template.md` before creating any file. Wait for approval.
 
 ---
 

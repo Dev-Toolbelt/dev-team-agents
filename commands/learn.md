@@ -1,4 +1,6 @@
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
@@ -10,45 +12,23 @@ You are running the **`/devteam:learn`** command.
 
 ## Step 1 — Gather session evidence
 
-Collect the raw material before classifying anything.
-
-### 1a — Read session summary
+Collect the raw material before classifying anything. Read only headers and first
+lines of the project docs — never whole files.
 
 ```bash
 head -80 .dev-team-agents/user-data/session-summary.md 2>/dev/null || echo "(no session summary found)"
-```
-
-Extract from the most recent entry:
-- **Done**: what was implemented or changed
-- **Decisions**: key choices and why
-- **Next**: what remains
-
-### 1b — Read git evidence
-
-```bash
 git log --oneline -15
 git diff HEAD~3...HEAD --stat 2>/dev/null || git diff --stat
-```
-
-Identify: which files changed, in which layers, how many commits were made today.
-
-### 1c — List today's modified docs
-
-```bash
 find docs/ -newer .dev-team-agents/user-data/session-summary.md -type f 2>/dev/null | head -20
-```
-
-This reveals which docs were already updated in the session — skip those when patching.
-
-### 1d — Read current project docs state (surgical — only headers and first lines)
-
-```bash
-head -5 docs/project.md 2>/dev/null
-head -5 docs/development/architecture.md 2>/dev/null
-head -5 docs/development/code-standards.md 2>/dev/null
-head -5 docs/development/tech-stack.md 2>/dev/null
+head -5 docs/project.md docs/development/{architecture,code-standards,tech-stack}.md 2>/dev/null
 ls docs/wiki/ 2>/dev/null
 ```
+
+Extract from that output:
+- **Done / Decisions / Next** from the most recent session-summary entry.
+- Which files changed, in which layers, and how many commits were made today.
+- Which docs were already updated this session (`find` hits) — skip those when patching.
+- Which project docs and wiki domains already exist, so updates land as patches.
 
 ---
 
@@ -106,10 +86,8 @@ is atomic and conventional:
 | 2 | `docs(adr)` | [adr file] | [imperative summary] |
 | ... | ... | ... | ... |
 
-> **Total: N commits.** Follow the conventional-commits skill (loaded in Step 5) and check the
-> project's existing history (`git log --oneline -10`) before finalizing each message —
-> defer to the project's own pattern if it differs from Conventional Commits. Never add
-> AI attribution. This command commits locally only; it does **not** push.
+> **Total: N commits.** Message format is governed by the `conventional-commits` skill
+> (loaded in Step 5). Commits are local only; this command never pushes.
 
 Awaiting your approval before proceeding. Approving this plan authorizes the listed commits.
 ```
@@ -130,7 +108,7 @@ Then stop.
 
 ### Always spawn:
 
-**`technical-writer`** at `.claude/agents/dev-team/technical-writer.md`
+**`technical-writer`**
 
 Hand it this prompt, substituting the classified findings:
 
@@ -140,30 +118,26 @@ You are performing a /devteam:learn consolidation pass.
 Load `skills/shared/docs-sync/SKILL.md` before writing anything.
 
 Session evidence:
-[paste summary from Step 1a]
+[paste the evidence summary from Step 1]
 
 Approved updates to execute:
 [paste the approved table from Step 3]
 
-**CRITICAL: Document Location Rule**
-ALL documentation files MUST be written to the `docs/` directory at the project root.
-- Wiki entries: `docs/wiki/<domain>/<topic>.md`
-- Doc patches: `docs/development/*.md` or `docs/project.md`
-- Session summary: `.dev-team-agents/user-data/session-summary.md` (exception — this is framework data)
-
-NEVER write documentation to `.opencode/`, `.claude/`, `.dev-team-agents/`, or any hidden directory.
-
 Rules:
-- Doc patches: surgical Edit only — never rewrite a whole file. Update the `<!-- last-updated -->` marker.
-- Wiki entries: create or update `docs/wiki/<domain>/<topic>.md` using the format in `skills/shared/docs-sync/references/wiki-format.md`.
-- Session summary: if today's entry is missing or incomplete, write/append it now following the format in CLAUDE.md.
-- Respect all token-economy rules from the docs-sync skill: tables over prose, no duplicates, no history.
+- **Location:** every documentation file goes under `docs/` at the project root, at the
+  target the docs-sync skill defines for it. Never write documentation into `.opencode/`,
+  `.claude/`, `.dev-team-agents/`, or any other hidden directory. The one exception is the
+  session summary, which is framework data at `.dev-team-agents/user-data/session-summary.md`.
+- Doc patches and wiki entries: follow docs-sync exactly — surgical Edit only, never a whole-file
+  rewrite, `<!-- last-updated -->` refreshed, its token-economy rules respected.
+- Session summary: if today's entry is missing or incomplete, write/append it now in the
+  format defined in CLAUDE.md.
 - For each file touched, output exactly one line: "PATCHED <filepath>"
 ```
 
 ### Spawn conditionally (only if ADR candidates were detected):
 
-**`software-architect`** at `.claude/agents/dev-team/software-architect.md`
+**`software-architect`**
 
 ```
 You are performing a /devteam:learn ADR capture pass.
@@ -189,20 +163,11 @@ Do not create ADRs for decisions that are easily reversible or purely implementa
 After all agents complete, execute the **Commit plan** declared in Step 3 — do not wait
 for the user to run `/devteam:commit`; the plan approval already authorized these commits.
 
-1. Load `skills/shared/conventional-commits/SKILL.md`.
-2. Check the project's own history and defer to its pattern:
-   ```bash
-   git log --oneline -10
-   ```
-3. For each commit in the manifest, stage only that commit's files and commit it:
-   ```bash
-   git add <files-for-commit-N>
-   git commit -m "<type(scope): message>"
-   ```
-   - One atomic commit per manifest row; never mix layers.
-   - Never add AI attribution (`Co-Authored-By`, "Generated with…", etc.).
-   - Commit **locally only** — do not push.
-4. If a file in the manifest was not actually created/changed, skip its commit and note it.
+1. Load `skills/shared/conventional-commits/SKILL.md` and follow it for message format,
+   project-pattern detection (`git log --oneline -10`), and authorship rules.
+2. For each manifest row, stage only that row's files (`git add …`) and commit it. One
+   atomic commit per row; never mix layers; commit **locally only** — do not push.
+3. If a file in the manifest was not actually created/changed, skip its commit and note it.
 
 Then output a summary:
 

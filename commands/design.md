@@ -1,16 +1,25 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
-- `ui-ux-designer` at `.claude/agents/dev-team/ui-ux-designer.md` — design system, component design, UX flows, visual decisions
+- `ui-ux-designer` — design system, component design, UX flows, visual decisions
 
 Also spawn if the task includes implementation of design changes (when $ARGUMENTS contains "implement" or "build"):
-- `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` — implement the design changes in code
+- `frontend-developer` — implement the design changes in code
 
 Also spawn if mobile implementation is needed (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart AND implementation requested):
-- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — implement design changes for mobile platforms
+- `mobile-developer` — implement design changes for mobile platforms
+
+## Session close (mandatory)
+
+After the phases above complete — including any resolution agents:
+
+1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
+2. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
 
 ---
 

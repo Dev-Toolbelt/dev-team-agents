@@ -45,20 +45,14 @@ FLUSH_TTL_HOURS=24
 QUEUE_MAX_EVENTS=100
 
 # ── Guard: consent check ───────────────────────────────────────────────────────
-# Fails closed. Telemetry runs only when preferences.json exists and explicitly
-# records consent (`"telemetry": true`), which the installer writes only after
-# the user was actually given the chance to decline. No preferences file, an
-# unreadable one, a missing key, or no python3 to read it with all mean the
-# same thing: consent was never recorded, so nothing is collected or sent.
-_telemetry_enabled() {
-    [ -f "$PREFS_FILE" ] || return 1
-    command -v python3 >/dev/null 2>&1 || return 1
-    local val
-    val=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('telemetry',False)).lower())" \
-        2>/dev/null || echo "false")
-    [ "$val" = "true" ]
-}
+# `_telemetry_enabled` is defined once, in scripts/lib/telemetry-guard.sh, and
+# fails closed there. If that file is missing, this script must not send.
+# shellcheck source=../lib/telemetry-guard.sh
+if [ -f "$SCRIPT_DIR/../lib/telemetry-guard.sh" ]; then
+    . "$SCRIPT_DIR/../lib/telemetry-guard.sh"
+else
+    _telemetry_enabled() { return 1; }
+fi
 
 # ── Anonymous ID ───────────────────────────────────────────────────────────────
 _get_or_create_id() {

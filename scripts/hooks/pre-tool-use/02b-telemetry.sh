@@ -12,16 +12,11 @@ TELEMETRY_SEND="$SCRIPT_DIR/../../helpers/telemetry-send.sh"
 USER_DATA_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/user-data"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 
-# Opt-out guard
-_telemetry_enabled() {
-    [ -f "$PREFS_FILE" ] || return 0
-    command -v python3 >/dev/null 2>&1 || return 0
-    local val
-    val=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('telemetry',True)).lower())" \
-        2>/dev/null || echo "true")
-    [ "$val" = "true" ]
-}
+# Consent guard — single definition in scripts/lib/telemetry-guard.sh, fails
+# closed. A missing guard file means no consent could be verified: skip.
+# shellcheck source=../../lib/telemetry-guard.sh
+[ -f "$SCRIPT_DIR/../../lib/telemetry-guard.sh" ] || exit 0
+. "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
 
 _telemetry_enabled || exit 0
 command -v python3 >/dev/null 2>&1 || exit 0

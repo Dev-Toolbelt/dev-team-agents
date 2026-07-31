@@ -5,7 +5,7 @@ description: Protocol for creating operational runbooks — step-by-step inciden
 
 # Runbook Protocol
 
-A runbook documents how to respond to a specific operational event (incident, scheduled maintenance, deployment). Use the template at `templates/runbook-template.md`.
+A runbook documents how to respond to a specific operational event (incident, scheduled maintenance, deployment). Use the template at `.dev-team-agents/templates/runbook-template.md`.
 
 ## When to Create a Runbook
 
@@ -25,4 +25,4 @@ A runbook documents how to respond to a specific operational event (incident, sc
 
 ## Loading Instructions
 
-Load `templates/runbook-template.md` and fill in each section. Keep steps atomic (one action per step). Include exact commands, not descriptions of commands.
+Load `.dev-team-agents/templates/runbook-template.md` and fill in each section. Keep steps atomic (one action per step). Include exact commands, not descriptions of commands.

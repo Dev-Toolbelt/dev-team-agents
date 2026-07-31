@@ -44,7 +44,6 @@ suggest_consumer() {
     case "$1" in
         adr-template.md)     echo "software-architect (or scripts/new-adr.sh, which already anchors its own path)" ;;
         plan-template.md)    echo "skills/shared/plan-mode/SKILL.md or any agent that presents a plan" ;;
-        backlog-template.md) echo "product-analyst or skills/shared/backlog-template/SKILL.md" ;;
         runbook-template.md) echo "skills/shared/runbook/SKILL.md or devops-specialist" ;;
         *)                   echo "(inspect template content to determine the right agent or skill)" ;;
     esac

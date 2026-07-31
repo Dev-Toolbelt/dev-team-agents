@@ -36,65 +36,17 @@ When in doubt: **write the plan**.
 
 **Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.dev-team-agents/user-data/preferences.json` → `language` (default: English).
 
-Use this exact structure. Copy it, fill it in, present it.
+Load `.dev-team-agents/templates/plan-template.md` and fill it in. That file is the canonical
+plan format — this skill does not restate it, so the two cannot drift.
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- PLAN  ·  [Task Name]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Two rules the template encodes, restated here only because they change how you *execute*:
 
-CONTEXT
-  [One or two sentences: what triggered this task and why it matters.
-   Reference the backlog item, issue, or user request.]
+- The **Par.** column groups steps that can run simultaneously. Steps sharing a letter are sent as
+  simultaneous agent prompts in a single message; `---` means the step must wait for the previous one.
+- The plan ends with the approval closer. Present it verbatim from the template and then stop.
 
-SCOPE
-  In scope
-  ─────────
-  · [Item 1]
-  · [Item 2]
-
-  Out of scope
-  ─────────────
-  · [Item A — will NOT be changed]
-
-APPROACH
-  [One paragraph explaining the chosen strategy and the reasoning behind it.
-   If there was an alternative approach considered, mention it and why it was
-   rejected. Keep it tight — the steps below carry the detail.]
-
-STEPS
-  ┌────┬────────────────────────────────────────────────────┬───────────────────────────────┬────────────┬──────┐
-  │ #  │ Action                                             │ Files / Areas Affected        │ Complexity │ Par. │
-  ├────┼────────────────────────────────────────────────────┼───────────────────────────────┼────────────┼──────┤
-  │  1 │ [What will be done]                                │ path/to/file.ext              │ Low        │ A    │
-  │  2 │ [What will be done]                                │ path/to/file.ext              │ Medium     │ A    │
-  │  3 │ [What will be done]                                │ path/to/file.ext              │ High       │ —    │
-  └────┴────────────────────────────────────────────────────┴───────────────────────────────┴────────────┴──────┘
-
-  Complexity scale: Low = routine change | Medium = non-trivial, multiple touch points | High = architectural impact
-  Par. column: steps sharing the same letter (A, B, C…) can be sent as simultaneous agent prompts after approval.
-               Use "—" for steps that must wait for the previous one to complete.
-
-RISKS & DEPENDENCIES
-  · Risk: [Description] → Mitigation: [How it will be handled]
-  · Depends on: [Prerequisite that must be true before step N]
-  · Assumption: [What is being assumed about the current state]
-
-DEFINITION OF DONE
-  ☐ [Acceptance criterion 1]
-  ☐ [Acceptance criterion 2]
-  ☐ Linter / type-checker passes
-  ☐ Tests pass (if applicable)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Awaiting your approval before proceeding.
- Reply "approved" to execute · or provide feedback to adjust.
-
- ⚡ After approving: steps that share the same Par. group letter
-    can be sent as simultaneous agent prompts in a single message
-    to run them in parallel and reduce total execution time.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+Plans render as **pure markdown** — no box-drawing characters or decorative symbols, per
+`skills/shared/output-format/SKILL.md`.
 
 ---
 

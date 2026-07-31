@@ -1,6 +1,4 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Setup writes to project-level files (`CLAUDE.md`, `docs/`) — confirm the branch is the one the user expects before any write.
-
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers. Setup is a question-heavy flow: every finite-answer question must use `AskUserQuestion`, never a plain-text prompt.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt. Setup writes to project-level files (`CLAUDE.md`, `docs/`) — confirm the branch is the one the user expects before any write, and treat every finite-answer question in this flow as a quiz.
 
 ---
 
