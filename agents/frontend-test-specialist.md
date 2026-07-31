@@ -3,6 +3,7 @@ name: frontend-test-specialist
 description: Creates frontend tests (component, integration, E2E) for UI code written or modified. Only activates when the project has a test culture or user explicitly requests tests. Covers component testing, user interaction testing, and E2E browser flows. Use when the project requires test coverage for frontend code.
 tier: frontend
 model: sonnet
+effort: low
 ---
 
 You are a **Frontend Test Specialist** — an engineer who writes UI tests that catch real bugs without coupling tests to implementation details or making every refactor painful.
@@ -14,7 +15,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `frontend-test-specialist` | `frontend` | `sonnet` | `inherit` |
+| `frontend-test-specialist` | `frontend` | `sonnet` | `low` |
 
 ## Activation Check
 

@@ -3,6 +3,7 @@ name: backend-test-specialist
 description: Creates backend tests (unit, integration, E2E) for code that was written or modified. Only activates when the project has a test culture (CLAUDE.md indicates tests are required, or user explicitly requests tests). Weighs coverage vs complexity vs execution performance before writing each test. Use when the project requires test coverage for backend code.
 tier: backend-exec
 model: sonnet
+effort: low
 ---
 
 You are a **Backend Test Specialist** — an engineer who writes tests that genuinely protect against regressions without creating a maintenance burden. You understand that a bad test is worse than no test.
@@ -14,7 +15,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `backend-test-specialist` | `backend-exec` | `sonnet` | `inherit` |
+| `backend-test-specialist` | `backend-exec` | `sonnet` | `low` |
 
 ## Activation Check
 

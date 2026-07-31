@@ -408,7 +408,18 @@ def resolve_model(tiers_lib, provider, tier):
     return tier_entry[provider]
 
 
-def resolve_effort(tiers_lib, provider, tier):
+def resolve_effort(tiers_lib, provider, tier, agent=None):
+    """Effort for `tier` on `provider`, or None when neither level applies.
+
+    A per-agent entry in `agent_effort` wins over the tier-level `effort` map:
+    effort tracks how much a role needs to reason, which does not always follow
+    the tier that picks its model. `agent` is None for commands, which have a
+    tier but no agent identity.
+    """
+    if agent:
+        override = tiers_lib.get("agent_effort", {}).get(agent)
+        if isinstance(override, dict) and override.get(provider):
+            return override[provider]
     eff = tiers_lib.get("effort", {}).get(tier, {})
     return eff.get(provider)
 
@@ -448,7 +459,7 @@ def main():
                 die(f"agent '{name}' has no `tier:` key in frontmatter — "
                     f"add one of {REQUIRED_AGENT_TIERS}")
             model_id = resolve_model(lib["tiers"], args.provider, tier)
-            effort = resolve_effort(lib["tiers"], args.provider, tier)
+            effort = resolve_effort(lib["tiers"], args.provider, tier, agent=name)
             if args.provider == "claude":
                 rendered.append(render_agent_claude(name, fm, body, agent_path))
             elif args.provider == "opencode":
