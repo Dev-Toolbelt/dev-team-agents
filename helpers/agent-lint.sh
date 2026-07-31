@@ -17,8 +17,43 @@ for arg in "$@"; do
   esac
 done
 
-REQUIRED_FIELDS=("name" "description" "tier")
+REQUIRED_FIELDS=("name" "description" "tier" "model")
 VALID_TIERS=("reasoning" "backend-exec" "frontend" "repetitive")
+
+# scripts/lib/tiers.json stays canonical for the tier → model mapping. Each
+# agent mirrors its tier's `claude` value in two places the renderer cannot
+# derive at install time: the `model:` frontmatter key (Claude Code reads it to
+# pick the subagent model) and the `<!-- run-banner -->` row (the model-identity
+# table the agent prints). Three copies drift silently, so the mapping is
+# re-derived here on every lint run and any mismatch is an error.
+TIERS_JSON="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/lib/tiers.json"
+
+# "<tier><TAB><claude model>" lines, resolved once. A missing python3 or an
+# absent tiers.json legitimately skips the check (this helper also runs from a
+# Stop hook), but a tiers.json that is present and unreadable is an error —
+# silently skipping there would let the whole mapping drift unnoticed.
+# Keep the snippet free of backslashes inside f-string expressions: that is a
+# SyntaxError, and it previously turned this check into a silent no-op.
+TIER_MODEL_MAP=""
+TIER_MAP_BROKEN=false
+if [ -f "$TIERS_JSON" ] && command -v python3 >/dev/null 2>&1; then
+  if ! TIER_MODEL_MAP=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as fh:
+    for tier, entry in json.load(fh)["tiers"].items():
+        model = entry.get("claude")
+        if model:
+            print(tier + "\t" + model)
+' "$TIERS_JSON" 2>/dev/null) || [ -z "$TIER_MODEL_MAP" ]; then
+    TIER_MAP_BROKEN=true
+    TIER_MODEL_MAP=""
+  fi
+fi
+
+claude_model_for_tier() {
+  [ -z "$TIER_MODEL_MAP" ] && return 0
+  printf '%s\n' "$TIER_MODEL_MAP" | awk -F'\t' -v t="$1" '$1 == t { print $2; exit }'
+}
 
 # Skill `description` feeds the always-loaded skill index across every skill in
 # the repo, so it is the highest-leverage per-character cost in the tree.
@@ -89,6 +124,36 @@ check_agent() {
       tier_allowed=$(IFS=", "; echo "${VALID_TIERS[*]}")
       ERRORS+=("  · ${file}: invalid tier: ${tier} (allowed: ${tier_allowed})")
     fi
+  fi
+
+  # ── model: must mirror tiers.json[tier].claude ─────────────────────────────
+  local model expected
+  model=$(echo "$frontmatter" | grep -E "^model:" | head -1 | sed 's/^model:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
+  expected=$(claude_model_for_tier "$tier")
+  if [ -n "$expected" ] && [ -n "$model" ] && [ "$model" != "$expected" ]; then
+    ERRORS+=("  · ${file}: model '${model}' does not match tiers.json for tier '${tier}' (expected '${expected}')")
+  fi
+
+  # ── run-banner row must agree with the frontmatter ─────────────────────────
+  # The row is `| \`agent\` | \`tier\` | \`model\` | \`effort\` |` on the third
+  # line of the block. Claude is the identity case, so the source copy carries
+  # Claude's values; the renderer rewrites Model/Effort for other providers.
+  local name_fm banner
+  name_fm=$(echo "$frontmatter" | grep -E "^name:" | head -1 | sed 's/^name:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//')
+  banner=$(grep -A 3 '^<!-- run-banner -->$' "$file" | tail -1)
+  if [ -z "$banner" ]; then
+    ERRORS+=("  · ${file}: missing <!-- run-banner --> block (see skills/shared/model-identity/SKILL.md)")
+  else
+    local b_agent b_tier b_model
+    b_agent=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $2); print $2}')
+    b_tier=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $3); print $3}')
+    b_model=$(echo "$banner" | awk -F'|' '{gsub(/[ `]/, "", $4); print $4}')
+    [ -n "$name_fm" ] && [ "$b_agent" != "$name_fm" ] && \
+      ERRORS+=("  · ${file}: run-banner agent '${b_agent}' does not match frontmatter name '${name_fm}'")
+    [ -n "$tier" ] && [ "$b_tier" != "$tier" ] && \
+      ERRORS+=("  · ${file}: run-banner tier '${b_tier}' does not match frontmatter tier '${tier}'")
+    [ -n "$model" ] && [ "$b_model" != "$model" ] && \
+      ERRORS+=("  · ${file}: run-banner model '${b_model}' does not match frontmatter model '${model}'")
   fi
 
   # Check for quiz-first compliance (AskUserQuestion required for finite-answer prompts)
@@ -190,6 +255,10 @@ check_skill_name_uniqueness() {
 }
 
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ "$TIER_MAP_BROKEN" = true ]; then
+  ERRORS+=("  · scripts/lib/tiers.json: present but no tier → claude model could be read (agent model checks skipped)")
+fi
 
 for agent_file in agents/*.md; do
   [ -f "$agent_file" ] || continue
