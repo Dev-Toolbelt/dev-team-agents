@@ -270,7 +270,7 @@ MODE="${1:-}"
 
 case "$MODE" in
     --queue)
-        _telemetry_enabled || exit 0
+        _telemetry_enabled "$PREFS_FILE" || exit 0
         EVENT="${2:-}"
         PROPS="${3:-}"
         [ -n "$PROPS" ] || PROPS="{}"
@@ -279,7 +279,7 @@ case "$MODE" in
         _queue_event "$EVENT" "$PROPS"
         ;;
     --flush)
-        _telemetry_enabled || exit 0
+        _telemetry_enabled "$PREFS_FILE" || exit 0
         _should_flush || exit 0
         _flush_queue
         ;;

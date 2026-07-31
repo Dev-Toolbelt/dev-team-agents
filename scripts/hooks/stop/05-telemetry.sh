@@ -24,7 +24,7 @@ PREFS_FILE="$USER_DATA_DIR/preferences.json"
 # shellcheck source=scripts/lib/telemetry-guard.sh
 . "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
 
-_telemetry_enabled || exit 0
+_telemetry_enabled "$PREFS_FILE" || exit 0
 
 # Fast-path: the dispatcher reports a purely conversational Stop (no staged or
 # unstaged change, no commit today). Do not record a session_end for a session

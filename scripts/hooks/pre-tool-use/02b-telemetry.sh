@@ -21,7 +21,7 @@ PREFS_FILE="$USER_DATA_DIR/preferences.json"
 # shellcheck source=scripts/lib/telemetry-guard.sh
 . "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
 
-_telemetry_enabled || exit 0
+_telemetry_enabled "$PREFS_FILE" || exit 0
 command -v python3 >/dev/null 2>&1 || exit 0
 
 # Read the hook payload (stdin was captured by the dispatcher into DEVTEAM_HOOK_PAYLOAD,

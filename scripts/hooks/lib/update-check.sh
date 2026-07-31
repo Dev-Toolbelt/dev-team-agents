@@ -83,7 +83,7 @@ uc_ttl_fresh() {
 # Defines HTTP_GET / HTTP_DL. Returns 1 when neither curl nor wget is available.
 # The two are defined conditionally here and called by uc_fetch_latest /
 # uc_auto_update after this function has run, which shellcheck cannot follow.
-# shellcheck disable=SC2329  # invoked by callers after uc_setup_http succeeds
+# shellcheck disable=SC2317,SC2329  # invoked by callers after uc_setup_http succeeds
 uc_setup_http() {
     if command -v curl >/dev/null 2>&1; then
         HTTP_GET() { curl -fsSL --connect-timeout 5 --max-time 10 "$1"; }
