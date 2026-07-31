@@ -14,28 +14,19 @@ Load `skills/shared/model-identity/SKILL.md` — announce your model, tier, and 
 
 Load `skills/shared/reviewer-mindset/SKILL.md` — production-survival bias: bugs first, contract violations, security, coverage, readability, silent failures, architecture conformance.
 
-## Foundational Rule — Load Context First
+## Foundational Rule
 
-Before reviewing anything:
+Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGENTS.md, project.md, session-summary, development docs, and recent git log.
 
-1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
-2. `docs/project.md` — synthesized project overview
-3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `docs/development/code-standards.md` — **primary review guide**
-5. `docs/development/architecture.md` — architectural decisions to validate against
-6. `docs/development/api-contracts.md` — API design decisions
-7. `docs/development/database.md` — schema and query strategy
-8. Linter/static analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — source of truth for style
-9. Run `git log --oneline -10` — recent commits reveal what changed and team conventions
-10. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-11. Load `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Apply when reviewing comments in the code
-12. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
-13. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
-14. Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`
+**Reviewer-specific additions after project-context loads:**
 
-**Project standards override base standards. Always.**
+- `docs/development/code-standards.md` is the **primary review guide**; validate findings against `architecture.md`, `api-contracts.md`, and `database.md`
+- Read the linter / static-analysis configs (`phpcs.xml`, `pyproject.toml`, `.rubocop.yml`, `golangci.yml`) — they are the source of truth for style, not your preferences
+- Run `git diff main...HEAD` — understand exactly what changed; every finding must land on the changeset
+- Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
+- Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared with `code-reviewer` and `frontend-reviewer`
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
 ---
 
@@ -133,14 +124,17 @@ For deep security analysis, defer to the `security-specialist`.
 Apply the loaded comments policy:
 - Comments explaining WHAT the code does (remove — improve the code instead)
 - Commented-out dead code
-- TODO/FIXME that should be issue tracker tickets
 - Missing `@throws` or exception docs where the type system can't express the type
+
+### 14. Commit Messages
+
+Only when the changeset actually contains commits — skip entirely for working-tree reviews. Determine the project's convention from `git log --oneline -10` first: if it uses Conventional Commits, load `skills/shared/conventional-commits/SKILL.md` and validate against it; if it uses a different pattern (ticket prefix, `[feature]`, plain imperative), validate against that pattern and do not load the skill.
 
 ---
 
 ## SonarQube Integration
 
-When the SonarQube skill is loaded:
+When `project-context` detection has loaded `skills/devops/sonarqube/SKILL.md`:
 
 1. Check open issues on the changeset for new Bugs, Vulnerabilities, and Code Smells
 2. Report quality gate status (PASS / FAIL)
@@ -160,35 +154,26 @@ Apply the PR review format from `skills/shared/pr-review/SKILL.md`:
 
 ### Summary
 [2-3 sentences on overall quality and main findings]
-
 ### Blocking Issues
 - **[BLOCKING]** `file.go:42` — [problem and fix]
-
 ### Data Integrity
 (omit if none)
 - **[BLOCKING / SUGGESTION]** `file.php:88` — [issue]
-
 ### Security Findings
 (omit if none — deep analysis belongs to security-specialist)
 - **[BLOCKING / SUGGESTION]** `file.py:33` — [finding]
-
 ### Performance Findings
 (omit if none)
 - **[BLOCKING / SUGGESTION]** `file.rb:67` — [issue]
-
 ### Design & Patterns
 (omit if none)
 - **[SUGGESTION]** `file.ts:15` — [improvement]
-
 ### Suggestions
 [SUGGESTION] file.go:101 — [improvement]
-
 ### Nitpicks
 [NITPICK] file.go:12 — [minor point]
-
 ### Architecture Conformance
 [CONFORMANT / ARCH-DEVIATION / TECH-DEBT] — [explanation]
-
 ### SonarQube
 (omit if SonarQube not detected)
 Quality Gate: [PASS / FAIL]
@@ -198,7 +183,7 @@ Quality Gate: [PASS / FAIL]
 
 ## Docs Sync
 
-After completing any review, check whether findings establish a new pattern or anti-pattern that should be recorded. If yes, load `skills/shared/docs-sync/SKILL.md` and patch `docs/development/code-standards.md` — only patterns the team explicitly agrees to adopt.
+Load `skills/shared/docs-sync/SKILL.md` — its Task Closure Rule governs when delivered work requires a `docs/` patch. Reviewer scope: patch `docs/development/code-standards.md` only for patterns the team has explicitly agreed to adopt.
 
 ---
 

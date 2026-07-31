@@ -93,6 +93,14 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 
 ---
 
+## Task Closure Rule
+
+**This is the canonical statement of the rule. Agents reference it; they do not restate it.**
+
+After completing any task, check whether the work delivered triggers an entry in the Update
+Triggers table below. If it does, apply the surgical patch to the relevant `docs/` file. Run it
+in parallel with the commit — it is part of finishing the task, not a follow-up to it.
+
 ## When to Update What
 
 Load `references/update-triggers.md` for: full trigger table (which work requires which doc), update protocol steps, and user-intent trigger patterns (convention signals, note-taking signals, approval signals).

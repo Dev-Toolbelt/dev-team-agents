@@ -27,40 +27,23 @@ If none indicate tests are required:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision top-down (stop at the first match):
-
-1. `.dev-team-agents/.worktree-session` present:
-   - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
-   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
-
-2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
-   - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
-   - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
-
-3. Key absent (legacy install) → use the `AskUserQuestion` tool (options Yes/No): "Should this task use a git worktree (isolated working directory)?" then follow the matching path from step 2.
-
-The session file persists across agent turns so the decision is resolved exactly once per task. On finalization (merge), the worktree skill enforces rebase-onto-base → merge → teardown of the worktree and its isolated Docker stack only.
+Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → *Worktree Isolation* (session file → `worktree_active` preference → ask once). When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` with the resolved base branch and follow it through finalization.
 
 ---
 
-## Foundational Rule — Load Context First
+## Foundational Rule
 
-Before writing any test:
+Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGENTS.md, project.md, session-summary, development docs, and recent git log.
 
-1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, test setup
-2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `docs/development/` — architecture and code standards
-5. `docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
-6. `docs/design/design-system.md` — relevant for visual regression context
-7. Run `git log --oneline -10` — reveals what changed recently and defines the scope of testing work
-8. Existing test files — patterns, helpers, setup files already in use
-9. Map existing coverage before writing: identify which component paths, interactions, and states already have tests to avoid duplication and surface real gaps
-10. The component/page to be tested — read it fully before deciding what to test
+**Test-specific additions after project-context loads:**
 
-**Project conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
+- Read `docs/tests/` — synthesized test strategy and configuration; read it before writing any test
+- Read `docs/design/design-system.md` when visual regression is in scope
+- Read the existing test files for the patterns, helpers, and setup already in use
+- Map existing coverage first: which component paths, interactions, and states are already tested — avoid duplication, surface the real gaps
+- Read the component/page under test in full before deciding what to test
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
 ---
 
@@ -108,29 +91,7 @@ it('sets hasError class on input', () => {
 
 ### Hook / Composable Tests
 
-When business logic lives in custom hooks (React) or composables (Vue), test them directly — not implicitly through a wrapping component.
-
-**React** — use `renderHook` from `@testing-library/react`:
-```ts
-// Arrange
-const { result } = renderHook(() => useCartTotal(mockItems));
-// Act
-act(() => result.current.addItem(newItem));
-// Assert
-expect(result.current.total).toBe(expectedTotal);
-```
-
-**Vue** — call composables directly inside a thin `withSetup` wrapper:
-```ts
-const { count, increment } = withSetup(() => useCounter());
-increment();
-expect(count.value).toBe(1);
-```
-
-**Rules:**
-- Test in isolation — component tests verify rendering; hook tests verify logic; don't mix
-- Cover all returned values, callbacks, async flows, and error states
-- Use `act()` / `flushPromises()` to advance async operations before asserting
+When business logic lives in a custom hook or composable, load `skills/testing/frontend-hook-tests/SKILL.md` and read only the framework row its Detection table resolves to. It covers when a hook test is worth writing, the React and Vue recipes, async handling, and the anti-patterns.
 
 ---
 
@@ -148,68 +109,23 @@ expect(count.value).toBe(1);
 
 ---
 
-## Decoupled Frontend — Extra Practices
+## Decoupled Frontend
 
-When the frontend is fully decoupled from the backend (SPA consuming a REST or GraphQL API):
+When the frontend is a separate deployable consuming an API it does not own, load `skills/testing/decoupled-frontend/SKILL.md` — network-layer mocking with MSW, the mandatory async state-coverage table, contract awareness, test data factories, visual regression, and the selector priority table. Its Detection section tells you whether the project qualifies.
 
-**MSW setup**
-- Define handlers that mirror real API contracts — if the backend has OpenAPI or TypeScript types, the mock responses must match them
-- Organize handlers by domain (`handlers/auth.ts`, `handlers/orders.ts`) so they're easy to override per test
-- Use `server.use(...)` inside tests to override the default handler for specific error or edge-case scenarios
-
-```ts
-// Override for a specific test
-server.use(
-  http.get('/api/orders', () => HttpResponse.json({ error: 'Unauthorized' }, { status: 401 }))
-);
-```
-
-**State coverage — mandatory for every async feature**
-
-| State | Must be tested |
-|-------|---------------|
-| Loading | Skeleton / spinner visible while request is in flight |
-| Success | Data renders correctly |
-| Empty | Empty state UI shown when response is `[]` or `null` |
-| Error | Error message shown on 4xx / 5xx / network failure |
-| Optimistic update | UI reflects change immediately before server confirms |
-
-**Contract awareness**
-- Mock responses must stay in sync with the real API; if the backend changes a field name, tests should catch it before production does
-- When the project has TypeScript, type mock responses with the same interfaces used in production code — a type error in a handler means the mock drifted from the contract
-
-**Visual regression (optional but valuable)**
-- Playwright screenshot diffing or Storybook + Chromatic for design-system-level components
-- Only apply to stable, high-visibility components — not to every page; visual tests are expensive to maintain
-
-**Test data factories**
-- Use factories (e.g. `fishery`, `factory-bot` patterns) to build realistic objects rather than inline literals; factories make it easy to generate edge-case variants (long strings, null optionals, maximum item counts)
-
----
-
-## Selector Priority (Testing Library convention)
-
-1. `getByRole` — accessible role (button, textbox, heading)
-2. `getByLabelText` — form label association
-3. `getByText` — visible text content
-4. `getByTestId` — `data-testid` fallback (E2E only)
-5. **Never**: `querySelector`, CSS class selectors, XPath
+**Selector priority applies to every frontend test**, decoupled or not: accessible role first, then label, then visible text, `data-testid` as the E2E fallback — never `querySelector`, CSS class selectors, or XPath.
 
 ---
 
 ## Test Quality Standards
 
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 
 ---
 
 ## SonarQube Coverage Integration
 
-**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` present in the project.
-
-Load: `skills/devops/sonarqube/SKILL.md`
-
-When SonarQube is detected:
+When `project-context` has loaded the SonarQube skill (see its Quality / Security Scanners section):
 
 1. **Generate coverage in LCOV format** — the standard for JavaScript/TypeScript projects:
 
@@ -253,9 +169,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
-
-Run in parallel with the commit — do not block delivery on doc updates.
+Apply the Task Closure Rule in `skills/shared/docs-sync/SKILL.md`.
 
 ---
 

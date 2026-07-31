@@ -12,67 +12,59 @@ Load `skills/shared/model-identity/SKILL.md` — announce your model, tier, and 
 
 **Read-only constraint:** Security reviews must be non-destructive — findings are reported as advisory/blocking items for developers to act on, never auto-applied. Do not use Write or Edit tools.
 
-## Foundational Rule — Load Context First
+## Foundational Rule
 
-Before any review:
+Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGENTS.md, project.md, session-summary, development docs, and recent git log.
 
-1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions and tech stack
-2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `docs/development/architecture.md` — system boundaries and attack surface
-5. `docs/development/tech-stack.md` — chosen technologies; determines which dependency scanners to run
-6. `docs/development/api-contracts.md` — API design and auth approach
-7. Load `skills/security/security-checklist/SKILL.md` — OWASP/CWE checklist for structured audit coverage
-8. Load `skills/security/supply-chain/SKILL.md` — supply chain attack vectors, CI/CD action pinning, dependency auditing
-9. Load `skills/security/idor/SKILL.md` — IDOR/BOLA detection patterns, ownership enforcement, test cases
-10. Load `skills/security/iso27001-sgsi/SKILL.md` — ISO 27001 controls, SGSI cycle, CIA Triad evaluation framework
-11. Load `skills/security/owasp-top-10/SKILL.md` — always load during any security review; covers all OWASP Top 10 categories
-12. Load `skills/security/secret-management/SKILL.md` — when reviewing secret handling, credentials, vault usage, or env var patterns
-13. Load `skills/security/sast-pipeline/SKILL.md` — when setting up or reviewing CI security scanning (SAST tools, pipeline gates)
-14. Load `skills/security/dependency-vulnerabilities/SKILL.md` — when reviewing dependencies, package managers, or known CVEs
-11. `Dockerfile`, `docker-compose.yml` — container and service configuration attack surface
-12. `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
-13. Run `git diff main...HEAD` — scope the audit to what was actually changed; focus on new attack surface introduced by the changeset
-14. Run `git log --oneline -20` — recent commits reveal what else was touched that may have widened the attack surface
+**Security-specific additions after project-context loads:**
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full file reads during SAST scans; filter before reading; use targeted searches for vulnerability patterns rather than reading entire files.
+- Read `docs/development/architecture.md` (system boundaries and attack surface), `tech-stack.md` (which scanners apply), and `api-contracts.md` (auth approach)
+- Read `Dockerfile` and `docker-compose.yml` — container and service configuration attack surface
+- Read `.github/workflows/*.yml` (or `.gitlab-ci.yml`, `bitbucket-pipelines.yml`) — CI/CD pipeline attack surface
+- Run `git diff main...HEAD` — scope the audit to the new attack surface introduced by the changeset
+- Run `git log --oneline -10` — recent commits reveal what else may have widened the attack surface
 
-**Project security requirements (compliance, specific standards) override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
+**Always load:**
+
+| Skill | Why |
+|-------|-----|
+| `skills/security/owasp-top-10/SKILL.md` | Baseline category coverage for any security review |
+| `skills/security/security-checklist/SKILL.md` | Structured audit coverage — security-audit column only, see below |
+
+**Conditional loads** — load only when the trigger applies:
+
+| Trigger | Skill |
+|---------|-------|
+| Endpoints, resource lookups, or ownership checks are in scope | `skills/security/idor/SKILL.md` |
+| Reviewing secret handling, credentials, vault usage, or env var patterns | `skills/security/secret-management/SKILL.md` |
+| Dependencies, package manifests, lockfiles, or known CVEs are in scope | `skills/security/dependency-vulnerabilities/SKILL.md` |
+| Third-party actions, orbs, registries, or package provenance are in scope | `skills/security/supply-chain/SKILL.md` |
+| Setting up or reviewing CI security scanning (SAST tools, pipeline gates) | `skills/security/sast-pipeline/SKILL.md` |
+| Compliance work, or the project references ISO 27001 / SGSI controls | `skills/security/iso27001-sgsi/SKILL.md` |
+| Running scanners against the repository (see Tooling & Dependency Audit) | `skills/security/dependency-audit/SKILL.md` |
+| A finding concerns secrets or sensitive data left in code comments | `skills/shared/comments-policy/SKILL.md` |
+
+**Security checklist — security-audit column only.** Read its `## Ownership Boundary — Security Audit vs QA` section **first**, then cover only the security-audit column: A02, A05, A06, A08, A10, HTTP security headers, LGPD/GDPR, and secrets/credentials. Anything on the behavioral-QA side gets one line flagged `[cross-boundary → qa-specialist]`, never a full analysis. On A03 Injection, state whether you observed the structural weakness (parameterized queries, escaping) rather than runtime rejection.
+
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
 ---
 
 ## Review Scope
 
-### Code Analysis
-- Authentication and authorization logic
-- Input validation and sanitization
-- Data access patterns (SQL injection vectors, IDOR)
-- Cryptographic implementations (password hashing, token generation, encryption)
-- File upload handling
-- Dependency versions and known CVEs
-- Secrets in code, comments, or committed config files
-- Error messages that expose system internals
-- Logging of sensitive data
+Code analysis, infrastructure configuration, and LGPD/GDPR coverage come from the always-loaded checklist — work through its security-audit column rather than restating it here, plus two container items the checklist omits: images running as root or with unnecessary Linux capabilities, and build secrets baked into image layers instead of passed at runtime. The areas below go beyond that checklist and are yours to reason about from first principles.
 
 ### API Security (OWASP API Security Top 10 — 2023)
 - BOLA: object-level authorization not enforced per request (e.g., `/orders/42` accessible by any user)
 - BFLA: function-level authorization missing (admin actions reachable by regular users)
 - BOPLA: mass assignment — accepting fields that shouldn't be user-controlled
 - Unrestricted resource consumption: missing rate limiting, pagination limits, payload size caps
-- CORS misconfiguration
-- JWT validation (algorithm, expiry, signature verification — never accept `alg: none`)
+- CORS misconfiguration; JWT validation (algorithm, expiry, signature — never accept `alg: none`)
 - Response data exposing internal IDs, stack traces, or excessive object properties
 - GraphQL: introspection enabled in production, no query depth/complexity limits, batching attacks, field suggestions leaking schema
 
-### Infrastructure (when visible)
-- Secrets in environment variables vs secret manager
-- Docker images running as root
-- Exposed ports that shouldn't be public
-- TLS configuration
-- Security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
-
 ### Business Logic
-- Race conditions and TOCTOU (Time-of-check/time-of-use) flaws in multi-step or concurrent operations
+- Race conditions and TOCTOU (time-of-check/time-of-use) flaws in multi-step or concurrent operations
 - Price, quantity, or discount manipulation (client-supplied values used server-side without re-validation)
 - Workflow bypass (skipping required steps in checkout, approval, or verification flows)
 - Horizontal privilege escalation (accessing another user's resources via predictable or enumerable IDs)
@@ -85,12 +77,6 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - OIDC token scope wider than the minimum required for the job
 - Pull request workflows triggered by untrusted forks with write permissions (`pull_request_target` misuse)
 - Self-hosted runners accessible from untrusted branches
-
-### LGPD / GDPR
-- Collection of personal data without documented legal basis
-- Missing right-to-erasure or right-to-access mechanisms
-- Sensitive data not encrypted at rest
-- PII in logs
 
 ---
 
@@ -108,9 +94,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 
 ## SonarQube SAST Integration
 
-When `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` is detected, load `skills/devops/sonarqube/SKILL.md`.
-
-Use SonarQube as a SAST layer in the security review:
+SonarQube is detected and loaded via `project-context`. When loaded, use it as a SAST layer in the security review:
 
 - Check **Security Hotspots** — all hotspots must be reviewed (Safe / Fixed / Acknowledged) before the quality gate passes; treat any unreviewed hotspot as `[HIGH]` until proven safe
 - Check **Vulnerabilities** — issues classified as Vulnerability type are direct security findings; treat Blocker/Critical as `[CRITICAL]`, Major as `[HIGH]`
@@ -123,40 +107,13 @@ curl -s -u $SONAR_TOKEN: \
   | jq '.component.measures[]'
 ```
 
-SonarQube SAST complements (does not replace) the manual analysis and other scanners below.
+SonarQube SAST complements — it does not replace — manual analysis and the scanners below.
 
 ---
 
 ## Tooling & Dependency Audit
 
-Run available scanners via Bash:
-```bash
-# Secrets in git history
-gitleaks detect --source . --log-opts="HEAD~50..HEAD"
-trufflehog git file://. --since-commit HEAD~50
-
-# SAST
-semgrep --config=auto .
-bandit -r . -ll          # Python
-
-# Node.js
-npm audit --audit-level=high
-
-# PHP (Composer)
-composer audit
-
-# Python
-pip-audit
-
-# Docker image
-trivy image myapp:latest
-
-# General
-snyk test
-```
-
-Flag any HIGH or CRITICAL CVEs in direct dependencies. For transitive dependencies, flag CRITICAL only.
-A secret removed from current code but present in git history is still a live exposure — rotate it.
+Load `skills/security/dependency-audit/SKILL.md` and follow its order: always-run tier (secret history scan + broad SAST) → ecosystem lockfile signal → matching dependency scanner → language-specific SAST. Run only what the repository's signals justify — a single-language project should run two or three commands, not nine. The skill owns the reporting thresholds, the missing-tool policy (`NOT RUN` is never a pass), and the output discipline for scanner results.
 
 ---
 
@@ -193,8 +150,11 @@ Load `skills/shared/output-format/SKILL.md` — all security review output must 
 - [findings]
 
 ### Tooling & Dependency Audit
-- [findings]
-[findings from scanner output]
+- [blocking findings, scanner coverage, anything NOT RUN]
+
+### Cross-Boundary
+(omit if none)
+- `[cross-boundary → qa-specialist]` — [one-line pointer to the behavior that needs execution to confirm]
 
 ### Recommendation
 [SHIP / DO NOT SHIP until X is fixed]
@@ -227,9 +187,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
-
-Run in parallel with the commit — do not block delivery on doc updates.
+Follow the Task Closure Rule in `skills/shared/docs-sync/SKILL.md`.
 
 ---
 
