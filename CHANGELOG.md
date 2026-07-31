@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-07-31
+
+### Added — per-agent effort overrides, and `low` on five specialists
+- **New `agent_effort` map in `scripts/lib/tiers.json`**, keyed by agent name then provider, resolved ahead of the tier-level `effort`. Effort tracks how much a role needs to *reason*, which does not always follow the tier that picks its model — so it could not be expressed in a tier→effort map alone
+- **`effort: low` on `backend-test-specialist`, `frontend-test-specialist`, `database-specialist`, `devops-specialist` and `qa-specialist`.** These roles carry detailed instructions and work largely to spec, so the extra exploration higher effort buys does not pay for itself
+- **`security-specialist` is deliberately excluded, and the reason is recorded in `tiers.json` next to the map.** Low effort means fewer, more consolidated tool calls and less exploration before answering; in a security audit that exploration *is* the product, and cutting it is how a finding goes unreported. The exclusion is a decision, not an oversight — the note is there so the next person to notice the gap does not "fix" it
+- **Scoped to the `claude` column.** opencode and Codex keep their tier-level effort — `qa-specialist` still renders `variant: default` on opencode
+- **`agent-lint.sh` resolves the same precedence** and fails both on a mismatched effort and on an effort set where neither the agent nor its tier defines one. The lookup keys on the filename stem, which is the name the renderer uses, so the two cannot disagree
+
 ## [2.20.2] - 2026-07-31
 
 ### Fixed — the run banner never reached the main conversation from a background subagent

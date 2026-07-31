@@ -53,14 +53,20 @@ fi
 # "<tier><TAB><claude effort>" for tiers that set one. Claude Code supports a
 # per-subagent `effort:` key; a tier that omits it inherits the session level,
 # which is deliberate — see the _claude_note in tiers.json.
+# Emits "<tier><TAB><effort>" rows and "@<agent><TAB><effort>" rows, the latter
+# from the agent_effort override map, which wins over the tier level.
 TIER_EFFORT_MAP=""
 if [ "$TIER_MAP_BROKEN" = false ] && [ -f "$TIERS_JSON" ] && command -v python3 >/dev/null 2>&1; then
   TIER_EFFORT_MAP=$(python3 -c '
 import json, sys
 with open(sys.argv[1]) as fh:
-    for tier, entry in json.load(fh).get("effort", {}).items():
-        if isinstance(entry, dict) and entry.get("claude"):
-            print(tier + "\t" + entry["claude"])
+    lib = json.load(fh)
+for tier, entry in lib.get("effort", {}).items():
+    if isinstance(entry, dict) and entry.get("claude"):
+        print(tier + "\t" + entry["claude"])
+for agent, entry in lib.get("agent_effort", {}).items():
+    if isinstance(entry, dict) and entry.get("claude"):
+        print("@" + agent + "\t" + entry["claude"])
 ' "$TIERS_JSON" 2>/dev/null || true)
 fi
 
@@ -69,8 +75,15 @@ claude_model_for_tier() {
   printf '%s\n' "$TIER_MODEL_MAP" | awk -F'\t' -v t="$1" '$1 == t { print $2; exit }'
 }
 
-claude_effort_for_tier() {
+# $1 = tier, $2 = agent name. A per-agent override wins over the tier level.
+claude_effort_for() {
   [ -z "$TIER_EFFORT_MAP" ] && return 0
+  local hit
+  hit=$(printf '%s\n' "$TIER_EFFORT_MAP" | awk -F'\t' -v a="@$2" '$1 == a { print $2; exit }')
+  if [ -n "$hit" ]; then
+    printf '%s\n' "$hit"
+    return 0
+  fi
   printf '%s\n' "$TIER_EFFORT_MAP" | awk -F'\t' -v t="$1" '$1 == t { print $2; exit }'
 }
 
@@ -153,20 +166,23 @@ check_agent() {
     ERRORS+=("  · ${file}: model '${model}' does not match tiers.json for tier '${tier}' (expected '${expected}')")
   fi
 
-  # ── effort: present iff tiers.json defines one for the tier ────────────────
-  # Setting it overrides the session's effort level, so a tier that omits it
-  # must not carry the key — that is what keeps a user's lowered session
-  # effort from being silently undone.
-  local effort_fm expected_effort
+  # ── effort: present iff tiers.json defines one, by agent or by tier ────────
+  # Setting it overrides the session's effort level, so an agent that resolves
+  # to no effort must not carry the key — that is what keeps a user's lowered
+  # session effort from being silently undone.
+  local effort_fm expected_effort agent_stem
+  # Key the override lookup on the filename stem: that is the name the renderer
+  # uses, so the two lookups cannot disagree.
+  agent_stem=$(basename "$file" .md)
   # `|| true` is load-bearing: effort is absent on most agents, and under
   # `set -o pipefail` a non-matching grep fails the whole substitution and
   # kills the script before a single finding is printed.
   effort_fm=$(echo "$frontmatter" | grep -E "^effort:" | head -1 | sed 's/^effort:[[:space:]]*//' | tr -d '\r' | sed 's/[[:space:]]*$//' || true)
-  expected_effort=$(claude_effort_for_tier "$tier")
+  expected_effort=$(claude_effort_for "$tier" "$agent_stem")
   if [ -n "$expected_effort" ] && [ "$effort_fm" != "$expected_effort" ]; then
-    ERRORS+=("  · ${file}: effort '${effort_fm:-<missing>}' does not match tiers.json for tier '${tier}' (expected '${expected_effort}')")
+    ERRORS+=("  · ${file}: effort '${effort_fm:-<missing>}' does not match tiers.json (expected '${expected_effort}')")
   elif [ -z "$expected_effort" ] && [ -n "$effort_fm" ]; then
-    ERRORS+=("  · ${file}: effort '${effort_fm}' set, but tier '${tier}' defines no claude effort in tiers.json (omit it to inherit the session)")
+    ERRORS+=("  · ${file}: effort '${effort_fm}' set, but neither tier '${tier}' nor agent_effort defines a claude effort in tiers.json (omit it to inherit the session)")
   fi
 
   # ── run-banner row must agree with the frontmatter ─────────────────────────
@@ -196,10 +212,10 @@ check_agent() {
     # sets none — which is what the agent actually runs at without the key.
     if [ -n "$expected_effort" ]; then
       [ "$b_effort" != "$expected_effort" ] && \
-        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' does not match tiers.json for tier '${tier}' (expected '${expected_effort}')")
+        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' does not match tiers.json (expected '${expected_effort}')")
     elif [ -n "$TIER_EFFORT_MAP" ] || [ "$TIER_MAP_BROKEN" = false ]; then
       [ "$b_effort" != "inherit" ] && \
-        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' should be 'inherit' — tier '${tier}' sets no claude effort in tiers.json")
+        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' should be 'inherit' — this agent resolves to no claude effort in tiers.json")
     fi
   fi
 

@@ -33,7 +33,16 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 | `frontend` | frontend implementation, review, design, frontend tests | `sonnet` (effort: inherits) | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
 | `repetitive` | docs, changelogs, release notes, high-volume low-judgment | `haiku` (effort: low) | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
-Claude Code **does** support a per-subagent `effort:` key (`low` … `max`) — an earlier revision of this document claimed it had no effort concept, which was wrong. It is set on `repetitive` alone, because the key overrides the session's effort level and setting it everywhere would silently undo a user who lowered effort deliberately.
+Claude Code **does** support a per-subagent `effort:` key (`low` … `max`) — an earlier revision of this document claimed it had no effort concept, which was wrong. It is applied sparingly, because the key overrides the session's effort level and setting it everywhere would silently undo a user who lowered effort deliberately.
+
+Two levels resolve it, most specific first:
+
+| Source | Key | Today |
+|---|---|---|
+| `agent_effort` | agent name → provider | `low` on `backend-test-specialist`, `frontend-test-specialist`, `database-specialist`, `devops-specialist`, `qa-specialist` (claude only) |
+| `effort` | tier → provider | `low` on `repetitive`; the other three tiers set none for claude |
+
+The per-agent level exists because effort tracks how much a role needs to *reason*, which does not always follow the tier that picks its model: the five agents above run on Sonnet, but their work is directed enough by spec that the extra exploration does not pay for itself. `security-specialist` is deliberately excluded — see the note in `tiers.json`.
 
 The `claude` column holds **aliases**, not pinned model ids: Claude Code resolves `opus` / `sonnet` / `haiku` to the current model of that family, so the column does not go stale when a new model ships. It previously held pinned ids (`claude-opus-4-7`, `claude-sonnet-4-6`) and had drifted a generation behind. As of 2026-07-31 the aliases resolve to Claude Opus 5 ($5/$25 per MTok), Claude Sonnet 5 ($3/$15, introductory $2/$10 through 2026-08-31), and Claude Haiku 4.5 ($1/$5, 200K context against 1M on the others).
 

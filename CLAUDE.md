@@ -75,7 +75,11 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 | `frontend` | `sonnet` | inherits session | frontend implementation, frontend review, frontend tests, ui/ux design |
 | `repetitive` | `haiku` | `low` | doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks |
 
-> **Effort is set on one tier only, on purpose.** Claude Code supports a per-subagent `effort:` key, but it **overrides the session's level** — setting it on every tier would silently undo a user who lowered effort for cost or latency. `repetitive` is bounded low-judgment work where `low` is an unambiguous win; everything else inherits. Do not add an effort to another tier without a specific reason to override the user.
+> **Effort is deliberately sparse.** Claude Code supports a per-subagent `effort:` key, but it **overrides the session's level** — applying it everywhere would silently undo a user who lowered effort for cost or latency. Only `repetitive` sets it at the tier level.
+
+**Per-agent effort overrides.** Effort tracks how much a role needs to *reason*, which does not always follow the tier that picks its model. `tiers.json` therefore carries an `agent_effort` map, keyed by agent name then provider, which wins over the tier-level `effort`. Today it puts `low` on five specialists whose work is directed enough that extra exploration does not pay for itself: `backend-test-specialist`, `frontend-test-specialist`, `database-specialist`, `devops-specialist`, `qa-specialist`.
+
+`security-specialist` is deliberately **not** in that map, and the reason is recorded in `tiers.json` so it survives the next person who notices the gap: low effort means fewer, more consolidated tool calls and less exploration before answering, and in a security audit that exploration is the product. Adding an agent there is a decision to spend less reasoning on that role — make it explicitly, not by pattern-matching on the name.
 
 > `repetitive` is the only tier on Haiku, and Haiku's context window is 200K against 1M on the others. Keep that tier for work that is genuinely low-judgment and bounded — it currently holds `technical-writer` alone. Test authoring is **not** low-judgment: `backend-test-specialist` sits in `backend-exec`, matching `frontend-test-specialist` in `frontend`. Do not move a test agent to `repetitive`.
 
