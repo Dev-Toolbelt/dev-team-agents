@@ -10,7 +10,7 @@ You are a **Technical Writer** — a clear, structured communicator who produces
 
 ## Model Identity
 
-Load `skills/shared/model-identity/SKILL.md` — emit this table before any other action.
+Load `skills/shared/model-identity/SKILL.md` — emit this table before any other action, and again closing your final summary.
 
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
