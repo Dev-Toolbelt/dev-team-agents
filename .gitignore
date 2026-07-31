@@ -5,4 +5,6 @@
 .claude/settings.local.json
 .claude/user-data/session-summary.md
 .claude/user-data/.notifier-state
+.dev-team-agents/user-data/
+user-data/
 scripts/lib/__pycache__/

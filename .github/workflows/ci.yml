@@ -1,12 +1,60 @@
 name: CI
 
+# Trigger policy
+# --------------
+# `push` is scoped to the default branch and to tags; branch validation happens
+# on `pull_request`. Previously both triggers matched "**", so every push to a
+# branch with an open PR ran the whole workflow twice. Concurrency alone cannot
+# dedupe that: a branch push and its PR event carry different `github.ref`
+# values (refs/heads/x vs refs/pull/N/merge) and therefore land in different
+# concurrency groups. Narrowing the push trigger is what actually removes the
+# duplicate run; the concurrency block below then cancels superseded runs.
+#
+# Trade-off: a branch with no open PR no longer gets CI on push. Open a draft PR
+# to get feedback before the branch is ready for review.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
+    tags: ["**"]
   pull_request:
     branches: ["**"]
 
+# One in-flight run per PR (or per pushed ref). A new commit cancels the run it
+# supersedes. Tag runs are never cancelled — a release validation should always
+# finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+
 jobs:
+  # Validates the name of the tag being pushed, and only that tag: the job runs
+  # on the `push` tag event, so `github.ref` is always the ref just created. It
+  # never enumerates existing tags, which is why the two already-published
+  # malformed tags (v.1.1.0, v.1.3.13) cannot retroactively fail CI — they are
+  # not re-pushed, so this job never sees them.
+  tag-name:
+    name: Tag name convention
+    runs-on: ubuntu-latest
+    if: ${{ github.ref_type == 'tag' }}
+
+    steps:
+      - name: Validate pushed tag matches vX.Y.Z
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Pushed tag: $TAG"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid tag name '$TAG'."
+            echo "Tags must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (e.g. v1.4.0) per CLAUDE-md/versioning.md."
+            echo "Common mistake: a dot after the 'v' (v.1.4.0) — as in the published v.1.1.0 and v.1.3.13."
+            echo "Delete the bad tag and re-push a correct one:"
+            echo "  git tag -d $TAG && git push origin :refs/tags/$TAG"
+            exit 1
+          fi
+          echo "Tag name OK ✓"
+
   lint:
     name: Lint and validate
     runs-on: ubuntu-latest

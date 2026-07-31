@@ -2,6 +2,10 @@
 # Stop sub-script: emits context-window warnings and a rotating tip of session
 # using the DEV TEAM AGENTS notification format.
 #
+# Tip data: tips/tips.en.txt, tips/tips.pt-BR.txt, tips/tips.es.txt — one tip per
+# line, 15 lines each, index selected by (day_of_month - 1) % 15. Adding a locale
+# means adding a file plus one `case` arm; the tip text never lives in this script.
+#
 # Context estimation strategy (in order of preference):
 #   1. Transcript-based: read token usage from transcript JSONL (more accurate)
 #      then apply transcript_multiplier to compensate for system prompt + tools
@@ -16,6 +20,11 @@ USER_DATA_DIR="${PROJECT_ROOT}/.dev-team-agents/user-data"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SESSION_ID_FILE="${USER_DATA_DIR}/.session-id"
 NOTIFIER_STATE_FILE="${USER_DATA_DIR}/.notifier-state"
+
+# Rotating tips live in locale-keyed data files next to this script
+# (tips/tips.<lang>.txt, one tip per line, 15 lines each). Only the selected
+# locale's file is read, and only when the once-per-day gate at the bottom opens.
+TIPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/tips"
 
 # ── Hardcoded defaults (used when prefs file is missing or malformed) ─────────
 SUPPRESS="false"
@@ -172,67 +181,18 @@ if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     DAY=$(date +%-d 2>/dev/null || date +%d | sed 's/^0//')
     TIP_INDEX=$(( (DAY - 1) % 15 ))
 
-    TIPS_EN=(
-        "Use /compact regularly or start a new session to keep your context window healthy and avoid hallucinations in long sessions."
-        "Run /devteam:review before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist."
-        "Record hard architectural decisions as ADRs: bash .dev-team-agents/scripts/new-adr.sh \"title\". This prevents agents from questioning settled choices."
-        "Use /devteam:plan at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed)."
-        "Write non-obvious domain knowledge to the project wiki at docs/wiki/ after any revealing task — agents read it on startup."
-        "/devteam:commit groups your staged changes by layer and generates Conventional Commits automatically."
-        "Use /devteam:refactor for structured refactoring — it runs test-first coverage, maps dependencies, and produces ordered commit blocks."
-        "Run a health check occasionally: 'Run a health check on this project' — it auto-fixes stale hooks, broken symlinks, and outdated preferences."
-        "Use /devteam:security before any release or after touching auth, permissions, or data-handling code."
-        "The session-summary.md is read by agents on startup — keeping it updated means agents pick up context from your last session without re-asking questions."
-        "Use /devteam:dba when adding migrations or modifying schema — the database-specialist catches missed indexes and locking issues before they reach production."
-        "Set auto_update: true in preferences.json to get automatic updates of dev-team-agents when new versions are released."
-        "Use /devteam:docs to generate changelogs, runbooks, and release notes from your git history."
-        "Stack-specific skills (Next.js, Laravel, Vue, etc.) are auto-loaded by agents when detected — check .claude/skills/ for what is available in your project."
-        "Use /devteam:tester when you only need to add or update tests — it avoids spinning up the full dev team when scope is just coverage."
-    )
-
-    TIPS_PTBR=(
-        "Use /compact regularmente ou inicie uma nova sessão para manter sua janela de contexto saudável e evitar alucinações em sessões longas."
-        "Execute /devteam:review antes de abrir um PR — ele chama automaticamente code-reviewer, software-architect e security-specialist."
-        "Registre decisões arquiteturais difíceis como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Isso evita que agentes questionem escolhas já feitas."
-        "Use /devteam:plan no início de qualquer nova funcionalidade — ele executa uma análise multi-agente (architect + product + database + backend/frontend/devops conforme necessário)."
-        "Escreva conhecimento de domínio não óbvio na wiki do projeto em docs/wiki/ após qualquer tarefa reveladora — agentes leem isso na inicialização."
-        "/devteam:commit agrupa suas mudanças por camada e gera Conventional Commits automaticamente."
-        "Use /devteam:refactor para refatoração estruturada — ele executa cobertura test-first, mapeia dependências e produz blocos de commit ordenados."
-        "Execute um health check ocasionalmente: 'Faça um health check neste projeto' — ele corrige automaticamente hooks desatualizados, symlinks quebrados e preferências desatualizadas."
-        "Use /devteam:security antes de qualquer release ou após tocar em código de auth, permissões ou manipulação de dados."
-        "O session-summary.md é lido por agentes na inicialização — mantê-lo atualizado significa que agentes recuperam contexto da sua última sessão sem fazer perguntas repetidas."
-        "Use /devteam:dba ao adicionar migrações ou modificar schema — o database-specialist identifica índices faltantes e problemas de locking antes de chegarem à produção."
-        "Defina auto_update: true no preferences.json para receber atualizações automáticas do dev-team-agents quando novas versões forem lançadas."
-        "Use /devteam:docs para gerar changelogs, runbooks e release notes a partir do seu histórico git."
-        "Skills específicos de stack (Next.js, Laravel, Vue, etc.) são carregados automaticamente por agentes quando detectados — verifique .claude/skills/ para o que está disponível no seu projeto."
-        "Use /devteam:tester quando você só precisa adicionar ou atualizar testes — evita acionar o time completo quando o escopo é apenas cobertura."
-    )
-
-    TIPS_ES=(
-        "Usa /compact regularmente o inicia una nueva sesión para mantener tu ventana de contexto saludable y evitar alucinaciones en sesiones largas."
-        "Ejecuta /devteam:review antes de abrir un PR — llama automáticamente a code-reviewer, software-architect y security-specialist."
-        "Registra las decisiones arquitectónicas difíciles como ADRs: bash .dev-team-agents/scripts/new-adr.sh \"título\". Esto evita que los agentes cuestionen decisiones ya tomadas."
-        "Usa /devteam:plan al inicio de cualquier nueva funcionalidad — ejecuta un análisis multi-agente (architect + product + database + backend/frontend/devops según sea necesario)."
-        "Escribe conocimiento de dominio no obvio en la wiki del proyecto en docs/wiki/ después de cualquier tarea reveladora — los agentes la leen al inicio."
-        "/devteam:commit agrupa tus cambios por capa y genera Conventional Commits automáticamente."
-        "Usa /devteam:refactor para refactorización estructurada — ejecuta cobertura test-first, mapea dependencias y produce bloques de commit ordenados."
-        "Ejecuta un health check ocasionalmente: 'Haz un health check en este proyecto' — corrige automáticamente hooks obsoletos, symlinks rotos y preferencias desactualizadas."
-        "Usa /devteam:security antes de cualquier release o después de tocar código de auth, permisos o manejo de datos."
-        "El session-summary.md es leído por agentes al inicio — mantenerlo actualizado significa que los agentes retoman el contexto de tu última sesión sin hacer preguntas repetidas."
-        "Usa /devteam:dba al agregar migraciones o modificar esquemas — el database-specialist detecta índices faltantes y problemas de bloqueo antes de que lleguen a producción."
-        "Establece auto_update: true en preferences.json para recibir actualizaciones automáticas de dev-team-agents cuando se publiquen nuevas versiones."
-        "Usa /devteam:docs para generar changelogs, runbooks y notas de versión desde tu historial git."
-        "Los skills específicos de stack (Next.js, Laravel, Vue, etc.) son cargados automáticamente por los agentes cuando se detectan — revisa .claude/skills/ para ver qué está disponible."
-        "Usa /devteam:tester cuando solo necesitas agregar o actualizar pruebas — evita activar al equipo completo cuando el alcance es solo cobertura."
-    )
-
     case "$USER_LANG" in
-        pt-BR|pt) TIP="${TIPS_PTBR[$TIP_INDEX]}" ;;
-        es)       TIP="${TIPS_ES[$TIP_INDEX]}" ;;
-        *)        TIP="${TIPS_EN[$TIP_INDEX]}" ;;
+        pt-BR|pt) TIP_FILE="$TIPS_DIR/tips.pt-BR.txt" ;;
+        es)       TIP_FILE="$TIPS_DIR/tips.es.txt" ;;
+        *)        TIP_FILE="$TIPS_DIR/tips.en.txt" ;;
     esac
+    [ -f "$TIP_FILE" ] || TIP_FILE="$TIPS_DIR/tips.en.txt"
 
-    _notify "info" "ℹ️" "$TIP"
+    # One tip per line, 15 lines per locale. Only the selected locale's file is
+    # read, and only on the day the once-per-day gate above opens.
+    TIP=$(sed -n "$((TIP_INDEX + 1))p" "$TIP_FILE" 2>/dev/null || true)
+
+    [ -n "$TIP" ] && _notify "info" "ℹ️" "$TIP"
 
     printf '%s:%d:1:%s\n' "$SESSION_ID" "$TURNS" "$TODAY" > "$NOTIFIER_STATE_FILE"
 fi

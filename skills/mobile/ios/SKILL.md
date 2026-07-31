@@ -1,11 +1,16 @@
 ---
 name: ios
-description: iOS-specific development guidelines — design, permissions, code signing, and native Swift/SwiftUI standards. Load when the project targets iOS.
+description: iOS engineering rules — permissions, code signing, Swift/SwiftUI. Load for iOS targets.
 ---
 
-## Design & UX
+## Scope
 
-- Load `skills/mobile/ios-hig/SKILL.md` for the full reference on navigation patterns, controls, typography (Dynamic Type / SF Pro), layout (Safe Area), Dark Mode, and accessibility (VoiceOver, Reduce Motion)
+This skill is the **engineering** half of iOS support: platform rules that apply to any iOS task — permissions, signing, distribution, and native code standards.
+
+The **design** half lives in `skills/mobile/ios-hig/SKILL.md` (navigation patterns, controls, typography, layout, Dark Mode, accessibility). Load it **only when the task touches UI** — screen layout, navigation, visual or interaction design. A signing, build, or non-UI logic task does not need it.
+
+## Design & UX (non-negotiable, applies even to non-UI tasks)
+
 - Respect the **Safe Area** — never place interactive elements behind notches, home indicators, or Dynamic Island
 - Support **Dynamic Type** — use semantic text styles (`UIFont.preferredFont`, `Text().font(.body)`) instead of fixed sizes
 - Support both light and dark mode using semantic system colors only

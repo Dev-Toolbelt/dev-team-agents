@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
+# Stop sub-script: validate agent frontmatter (name / description / tier).
 # Gate: only run if agents/ or skills/ were touched in this session.
+set -euo pipefail
+
 # Fast-path: skip immediately when dispatcher reports no session changes.
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
 
-TOUCHED=$(git status --porcelain agents/ skills/ 2>/dev/null | head -1)
-TODAY_COMMITS=$(git log --since="$(date +%Y-%m-%d) 00:00:00" --oneline -- agents/ skills/ 2>/dev/null | head -1)
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" 2>/dev/null && pwd)" || exit 0
+[ -f "$LIB_DIR/touched-paths.sh" ] || exit 0
+# shellcheck source=scripts/hooks/lib/touched-paths.sh
+. "$LIB_DIR/touched-paths.sh"
 
-if [ -z "$TOUCHED" ] && [ -z "$TODAY_COMMITS" ]; then
-    exit 0
-fi
+# Consumes DEVTEAM_TOUCHED_PATHS computed once by the dispatcher; recomputes it
+# only when this script is run standalone.
+devteam_touched_matches '^(agents|skills)/' || exit 0
 
+# helpers/ is dev-only — stripped from the installed package — so this is a
+# silent no-op in user projects.
 SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../../../helpers/agent-lint.sh"
 [ -f "$SCRIPT" ] || exit 0
-exec "$SCRIPT" --quiet "$@"
+exec bash "$SCRIPT" --quiet "$@"

@@ -1,30 +1,30 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn in parallel:
-- `backend-developer` at `.claude/agents/dev-team/backend-developer.md` — implement server-side changes
-- `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` — implement client-side changes
-- `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — handle schema, migrations, queries (spawn only if the task involves database changes)
-- `ui-ux-designer` at `.claude/agents/dev-team/ui-ux-designer.md` — design system and visual decisions (spawn only if the task involves visual design or UX decisions)
+- `backend-developer` — implement server-side changes
+- `frontend-developer` — implement client-side changes
+- `database-specialist` — handle schema, migrations, queries (spawn only if the task involves database changes)
+- `ui-ux-designer` — design system and visual decisions (spawn only if the task involves visual design or UX decisions)
 
 Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 
 **Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialists below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
 
-- `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` — tests for backend changes
-- `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` — tests for frontend changes
+- `backend-test-specialist` — tests for backend changes
+- `frontend-test-specialist` — tests for frontend changes
 
 ## Phase 3 — Mandatory review handoff (automatic)
 
 After Phase 1 (and Phase 2, if it ran) complete, **always** spawn the following in parallel via the Task tool — no user confirmation, this handoff is mandatory:
 
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — scope: all files changed this session (`git diff` against the base branch)
-- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — scope: validate the behavior of the changes against acceptance criteria and regression risk
+- `code-reviewer` — scope: all files changed this session (`git diff` against the base branch)
+- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk
 
 **After both complete**, synthesize their outputs into a single consolidated block of **critical findings only** and present it to the user:
 
@@ -73,6 +73,13 @@ Based on the user's choice:
 - **Outro** → ask the user to describe their desired approach, then adapt accordingly
 
 **After the resolution agent(s) complete**, output a clear message indicating what was resolved:
+
+## Session close (mandatory)
+
+After the phases above complete — including any resolution agents:
+
+1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
+2. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
 
 ---
 

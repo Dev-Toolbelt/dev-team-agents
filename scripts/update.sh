@@ -9,13 +9,10 @@
 
 set -euo pipefail
 
-INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 USER_DATA_DIR="$INSTALL_DIR/user-data"
 AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
-
-GITHUB_OWNER="Dev-Toolbelt"
-GITHUB_REPO="dev-team-agents"
-INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/scripts/install.sh"
 
 # ── Silent check mode — delegates to hook sub-script ─────────────────────────
 
@@ -38,13 +35,21 @@ if [[ "${1:-}" == "--disable-auto" ]]; then
     exit 0
 fi
 
-# ── HTTP tool detection ────────────────────────────────────────────────────────
+# ── Shared installer-fetch logic ───────────────────────────────────────────────
+# HTTP tool detection, GitHub coordinates, ref pinning and payload verification
+# live in scripts/lib/installer-fetch.sh, shared with rollback.sh.
 
-if command -v curl >/dev/null 2>&1; then
-    HTTP_DL() { curl -fsSL -o "$1" "$2"; }
-elif command -v wget >/dev/null 2>&1; then
-    HTTP_DL() { wget -qO "$1" "$2"; }
-else
+INSTALLER_LIB="$SCRIPTS_DIR/lib/installer-fetch.sh"
+if [ ! -f "$INSTALLER_LIB" ]; then
+    echo "✗ Missing $INSTALLER_LIB — the installation is incomplete." >&2
+    echo "  Reinstall with:" >&2
+    echo "    curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash" >&2
+    exit 1
+fi
+# shellcheck source=scripts/lib/installer-fetch.sh
+source "$INSTALLER_LIB"
+
+if ! dta_have_http_tool; then
     echo "✗ Neither curl nor wget found. Cannot download update." >&2
     exit 1
 fi
@@ -63,9 +68,29 @@ fi
 TMP_INSTALLER=$(mktemp)
 trap 'rm -f "$TMP_INSTALLER"' EXIT
 
-echo "→ Downloading latest installer from GitHub..."
-HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
-bash "$TMP_INSTALLER" "$VERSION_ARG"
+# Pin the installer to the ref being installed. "latest" is resolved to the
+# newest release tag first, so the installer and the release payload it fetches
+# come from the same immutable tag instead of a moving `main`. Resolution falls
+# back to `main` when the GitHub API is unreachable, preserving the old path.
+INSTALL_REF=$(dta_resolve_ref "$VERSION_ARG")
+
+if [ "$INSTALL_REF" = "main" ]; then
+    INSTALL_TARGET="$VERSION_ARG"
+    echo "→ Downloading installer from GitHub (ref: main — could not resolve a release tag)..."
+else
+    INSTALL_TARGET="$INSTALL_REF"
+    echo "→ Downloading installer from GitHub (ref: $INSTALL_REF)..."
+fi
+
+# Fails closed: the installer is only executed after it downloads cleanly and
+# passes verification (see the integrity model in scripts/lib/installer-fetch.sh).
+if ! dta_fetch_installer "$TMP_INSTALLER" "$INSTALL_REF"; then
+    echo "✗ Update aborted — the installer could not be downloaded or verified." >&2
+    echo "  Nothing was changed. Your current installation is untouched." >&2
+    exit 1
+fi
+
+bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 
 # For opencode projects, re-render agents and merge command snippets
 if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then

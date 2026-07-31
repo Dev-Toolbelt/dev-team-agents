@@ -1,6 +1,6 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 
@@ -30,11 +30,9 @@ Once resolved, store the target as `<module>`.
 
 ## Step 1 — Scope guard
 
-If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), warn the user:
+If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), state in one line that this scope may take a long time and consume a significant number of tokens, then ask with `AskUserQuestion` (single-select): **Module by module** (recommended — a checkpoint between each), **All at once**, or **Cancel**.
 
-> "This scope may take a long time and consume a significant number of tokens. Do you want to proceed? If so, specify whether you want to process module by module (safer, with a checkpoint between each) or all at once."
-
-Do NOT proceed until the user explicitly confirms.
+Do NOT proceed until the user answers.
 
 ---
 
@@ -43,8 +41,7 @@ Do NOT proceed until the user explicitly confirms.
 Read `.dev-team-agents/.worktree-session`:
 
 - If the file exists and contains a decision (`worktree=no` or `worktree=yes branch=<b>`), follow it silently.
-- If absent, ask the user once:
-  > "Should I work in a new worktree with isolated infrastructure or in a new branch? (worktree / branch)"
+- If absent, ask once with `AskUserQuestion` (single-select, in the user's language): **Isolated worktree** — dedicated worktree plus an isolated infrastructure stack — or **New branch** — a new branch in the current checkout.
 
 If **worktree** is selected:
 1. Load `skills/shared/worktree/SKILL.md` and follow the full protocol.
@@ -88,7 +85,7 @@ Wait for the exploration result before proceeding.
 
 ### Phase 4a — Module analysis (spawn all in parallel)
 
-1. **`backend-developer`** at `.claude/agents/dev-team/backend-developer.md`
+1. **`backend-developer`**
    Scope: `<module>` backend code.
    Analyze for:
    - Silent bugs (unhandled nulls, type mismatches, race conditions, missing transactions, incorrect error handling)
@@ -97,7 +94,7 @@ Wait for the exploration result before proceeding.
    - High-value fixes that don't require overengineering
    - Code that should exist but doesn't (missing validation, missing authorization checks, missing logging for critical paths)
 
-2. **`frontend-developer`** at `.claude/agents/dev-team/frontend-developer.md`
+2. **`frontend-developer`**
    Scope: `<module>` frontend code.
    Analyze for:
    - Silent bugs (unhandled loading/error states, stale closures, race conditions in useEffect, missing key props, incorrect optimistic updates)
@@ -106,7 +103,7 @@ Wait for the exploration result before proceeding.
    - High-value fixes
    - Missing loading skeletons, error boundaries, or empty states
 
-3. **`security-specialist`** at `.claude/agents/dev-team/security-specialist.md`
+3. **`security-specialist`**
    Scope: `<module>` across the entire stack.
    Analyze for:
    - OWASP Top 10 / OWASP API Security Top 10 issues (IDOR, injection, broken auth, excessive data exposure, mass assignment, missing rate limiting)
@@ -114,7 +111,7 @@ Wait for the exploration result before proceeding.
    - Hardcoded secrets, debug endpoints, overly permissive CORS
    - Missing input sanitization or authorization gates
 
-4. **`devops-specialist`** at `.claude/agents/dev-team/devops-specialist.md`
+4. **`devops-specialist`**
    Scope: `<module>` impact on infrastructure.
    Analyze for:
    - Missing or inadequate monitoring/alerting for the module's critical paths
@@ -134,8 +131,8 @@ Each agent receives the exploration results from Step 3 as context.
 After Phase 4a completes, check the test gate:
 Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist(s) below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely**.
 
-- **`backend-test-specialist`** at `.claude/agents/dev-team/backend-test-specialist.md` — analyze test gaps and propose tests for the critical backend routines identified in Phase 4a. Do NOT write tests — only identify what should be tested and suggest test scenarios (including edge cases).
-- **`frontend-test-specialist`** at `.claude/agents/dev-team/frontend-test-specialist.md` — same for frontend code.
+- **`backend-test-specialist`** — analyze test gaps and propose tests for the critical backend routines identified in Phase 4a. Do NOT write tests — only identify what should be tested and suggest test scenarios (including edge cases).
+- **`frontend-test-specialist`** — same for frontend code.
 
 ---
 
@@ -180,7 +177,7 @@ Then:
 1. Write the report to `docs/audit/<module>-audit-YYYY-MM-DD.md` (create `docs/audit/` if it doesn't exist).
    - Use `<module>` in lowercase, hyphens for spaces.
    - Example: audit of module `Billing` → `docs/audit/billing-audit-2026-07-27.md`.
-2. Present the report to the user and ask if they want to proceed with implementing any items from the plan.
+2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.
 
 ---
 

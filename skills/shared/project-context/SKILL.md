@@ -109,7 +109,7 @@ A "non-trivial task" is any task that involves:
 
 ### How to Enter Plan Mode
 
-1. Present the plan using the canonical format from `templates/plan-template.md`
+1. Present the plan using the canonical format from `.dev-team-agents/templates/plan-template.md`
 2. End the plan with: `---` followed by `**Awaiting your approval before proceeding.**`
 3. Stop. Do not execute anything.
 4. Only proceed after the user explicitly approves (e.g., "approved", "go ahead", "proceed")
@@ -269,28 +269,16 @@ When loaded, the scanner skill governs: quality gate reporting, security hotspot
 
 ---
 
-## Docker Development Environment
+## Development Environment
 
-If the project uses Docker in development, **all commands and scripts must be executed inside the appropriate container** — not on the host machine.
+Detect and load the appropriate skill when the environment signal is present:
 
-**Detection:** the project uses Docker in development if any of these files exist at the root:
-- `docker-compose.yml`
-- `docker-compose.override.yml`
-- `compose.yml`
+| Detection | Skill to load |
+|-----------|--------------|
+| `docker-compose.yml`, `docker-compose.override.yml`, or `compose.yml` at the root | `skills/devops/docker-dev/SKILL.md` |
 
-**Default behavior when Docker is detected:**
-
-| Task | Command form |
-|------|-------------|
-| Run a script or CLI command | `docker compose exec <service> <command>` |
-| Run a one-off command | `docker compose run --rm <service> <command>` |
-| Access a shell | `docker compose exec <service> sh` (or `bash`) |
-
-- Identify the correct service name from the compose file before running any command (e.g., `app`, `api`, `backend`, `web`)
-- If the containers are not running, start them first: `docker compose up -d`
-- Never install dependencies, run migrations, execute tests, or invoke framework CLIs directly on the host when Docker is the dev environment
-
-**Exception:** if the user explicitly says to run a command outside the container (e.g., "run this on the host", "run locally"), honor that request for that specific command only. Default always reverts to running inside the container.
+When loaded, that skill governs the command execution contract: every command runs inside the
+container, which compose form to use, and the explicit-host exception.
 
 ---
 

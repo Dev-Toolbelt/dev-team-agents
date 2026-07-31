@@ -11,12 +11,17 @@ GoTrue is a stateless authentication microservice. It issues JWTs, manages user 
 
 ## Detection Signals
 
-| Signal | Meaning |
+Load this skill when any of the following are present:
+
+| Signal | Location |
 |---|---|
-| `GOTRUE_*` env vars | Standalone GoTrue |
-| `supabase.auth.*` calls in code | GoTrue via Supabase client |
-| `auth.users` table in Postgres | GoTrue-managed user table |
-| `auth` schema in database | GoTrue schema |
+| `GOTRUE_*` env vars | `.env`, `.env.example`, deploy config |
+| `SUPABASE_JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` | `.env`, `.env.example` |
+| `@supabase/supabase-js`, `@supabase/auth-js`, `@supabase/ssr` | `package.json` |
+| `supabase.auth.*` calls | application source |
+| `[auth]` or `[auth.hook.*]` section | `supabase/config.toml` |
+| `auth.users` table or `auth` schema | database schema / migrations |
+| `supabase/auth` or `gotrue` image | `docker-compose.yml` |
 
 ---
 
@@ -31,188 +36,30 @@ GoTrue is a stateless authentication microservice. It issues JWTs, manages user 
 | Anonymous | `supabase.auth.signInAnonymously()` |
 | SSO / SAML | `supabase.auth.signInWithSSO({ domain })` |
 
-Registration:
-```typescript
-const { data, error } = await supabase.auth.signUp({
-  email: 'user@example.com',
-  password: 'securepassword',
-  options: { data: { display_name: 'Jane' } }  // stored in raw_user_meta_data
-})
-```
-
 ---
 
-## JWT Structure
+## Core Rules
 
-GoTrue issues JWTs with these standard claims:
+These decide the shape of the work. Code-level detail lives in the references below.
 
-```json
-{
-  "iss": "https://your-project.supabase.co/auth/v1",
-  "sub": "uuid-of-user",
-  "aud": "authenticated",
-  "role": "authenticated",
-  "exp": 1700000000,
-  "iat": 1699996400,
-  "email": "user@example.com",
-  "phone": "",
-  "app_metadata": {
-    "provider": "email",
-    "providers": ["email"]
-  },
-  "user_metadata": {
-    "display_name": "Jane"
-  }
-}
-```
-
-Key claims:
-- `sub` — user UUID; equals `auth.uid()` in RLS policies
-- `role` — `anon` (unauthenticated) or `authenticated`; used by PostgREST to select Postgres role
-- `app_metadata` — server-controlled; safe for custom claims (roles, permissions)
-- `user_metadata` — user-controlled; do not use for authorization decisions
-
-**JWT expiry**: 1 hour by default. Configure via `JWT_EXPIRY` env var (seconds).
-
----
-
-## Session & Token Management
-
-GoTrue uses a two-token system:
-- **Access token** (JWT) — short-lived, stateless, used for API calls
-- **Refresh token** — long-lived, stored in the database, used to obtain a new access token
-
-```typescript
-// Get current session
-const { data: { session } } = await supabase.auth.getSession()
-
-// Listen for auth changes (handles refresh automatically)
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN') { /* store session */ }
-  if (event === 'SIGNED_OUT') { /* clear session */ }
-  if (event === 'TOKEN_REFRESHED') { /* update stored token */ }
-})
-
-// Manually sign out
-await supabase.auth.signOut()
-```
-
-The supabase-js client handles token refresh automatically when using `getSession()` or `onAuthStateChange`. In server-side contexts, refresh manually:
-
-```typescript
-const { data, error } = await supabase.auth.refreshSession({ refresh_token })
-```
-
----
-
-## Custom Claims
-
-Add custom data to the JWT via **app_metadata** — writable only with service-role key or via hooks:
-
-```typescript
-// Server-side only (service role)
-await adminSupabase.auth.admin.updateUserById(userId, {
-  app_metadata: { role: 'admin', tenant_id: 'acme' }
-})
-```
-
-In RLS policies, read custom claims:
-```sql
--- Check a custom role claim
-create policy "Admin only"
-on sensitive_table for select
-to authenticated
-using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
-```
-
-**Never** trust `user_metadata` for authorization — users can write it themselves.
-
----
-
-## Admin API
-
-The Admin API requires the service-role key. Available endpoints (via supabase-js):
-
-```typescript
-// List users
-const { data } = await adminSupabase.auth.admin.listUsers()
-
-// Get user by ID
-const { data } = await adminSupabase.auth.admin.getUserById(userId)
-
-// Create user (no email confirmation)
-const { data } = await adminSupabase.auth.admin.createUser({
-  email: 'user@example.com',
-  password: 'pass',
-  email_confirm: true
-})
-
-// Delete user
-await adminSupabase.auth.admin.deleteUser(userId)
-
-// Generate a magic link (for passwordless invites)
-const { data } = await adminSupabase.auth.admin.generateLink({
-  type: 'magiclink',
-  email: 'user@example.com'
-})
-```
-
----
-
-## Hooks (GoTrue Hooks)
-
-GoTrue supports hooks that fire at auth events, allowing custom logic:
-
-| Hook | Trigger |
+| Area | Rule |
 |---|---|
-| `custom_access_token` | Before JWT is issued — add custom claims |
-| `send_email` | Override email sending |
-| `send_sms` | Override SMS sending |
-| `mfa_verification_attempt` | Before MFA is checked |
-
-Hooks are configured in `supabase/config.toml` (Supabase CLI) or via GoTrue env vars.
-
-```toml
-[auth.hook.custom_access_token]
-enabled = true
-uri = "pg-functions://postgres/public/custom_access_token_hook"
-```
-
-PostgreSQL function hook example:
-```sql
-create or replace function public.custom_access_token_hook(event jsonb)
-returns jsonb language plpgsql as $$
-declare claims jsonb;
-begin
-  claims := event -> 'claims';
-  claims := jsonb_set(claims, '{app_metadata, role}', '"editor"');
-  return jsonb_set(event, '{claims}', claims);
-end;
-$$;
-```
+| Authorization source | Read roles and permissions from `app_metadata` only — it is server-controlled |
+| `user_metadata` | User-writable. Never an authorization input, under any circumstance |
+| Server-side trust | `getSession()` does not verify — always follow with `getUser()` before trusting an identity on the server |
+| Service-role key | Server-side only. Reaching it from client code grants full auth admin access |
+| Token lifetime | Access tokens are short-lived (1h default); the client must handle refresh via `onAuthStateChange` |
+| Claim changes | Custom claims are frozen into an issued JWT — a role change only applies after a token refresh |
+| Environment parity | Confirm email-confirmation and expiry settings match between environments; GoTrue defaults differ |
 
 ---
 
-## Server-Side JWT Verification
+## References
 
-Always verify the JWT on the server before trusting it:
-
-```typescript
-import { createClient } from '@supabase/supabase-js'
-
-// Pass the user's JWT — GoTrue validates it
-const supabase = createClient(url, anonKey, {
-  global: { headers: { Authorization: `Bearer ${userJwt}` } }
-})
-const { data: { user }, error } = await supabase.auth.getUser()
-if (error) throw new Error('Invalid token')
-```
-
-Or verify manually using the `SUPABASE_JWT_SECRET`:
-```typescript
-import jwt from 'jsonwebtoken'
-const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET!)
-```
+| File | Load when |
+|---|---|
+| `references/client-and-admin-api.md` | Implementing sign-in, sessions, refresh, the Admin API, or server-side JWT verification |
+| `references/claims-and-hooks.md` | Adding custom claims, writing RLS against them, or configuring GoTrue hooks |
 
 ---
 
@@ -223,3 +70,4 @@ const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET!)
 - Using `getSession()` on the server without re-verification — the session in the cookie may be stale; always call `getUser()` to verify server-side
 - Exposing the service-role key in client code — gives full auth admin access
 - Not enabling email confirmations in production — GoTrue defaults may differ between environments
+- Assuming a revoked role takes effect immediately — the old JWT stays valid until it expires or is refreshed

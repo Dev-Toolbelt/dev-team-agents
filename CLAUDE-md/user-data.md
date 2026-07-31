@@ -12,10 +12,13 @@ Files in `user-data/`:
 - `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
 - `.installed-version` — current installed version tag (**gitignored** by installer)
 - `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
+- `.last-releases-etag` / `.last-releases-version` — conditional-request ETag and the version string it resolved to, so a `304 Not Modified` still yields the latest tag (**gitignored** by installer)
+- `.update-check-interval` — one-line sidecar cache of `update_check_interval_hours`, invalidated by `preferences.json`'s mtime so the PreToolUse hook can read it with zero subprocesses (**gitignored** by installer)
+- `.last-archive-index` — date stamp gating `stop/99b-archive-index.sh` to at most one run per day (**gitignored** by installer)
 - `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
-- `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events (**gitignored** by installer)
+- `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events. Only written when `preferences.json` carries `"telemetry": true` — the gate in `scripts/lib/telemetry-guard.sh` fails closed (**gitignored** by installer)
 - `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 - `credentials.local.json` — remote environment credentials (SSH, database, app URLs, tokens). Created by installer with empty defaults. Agents use this to access staging/production in read-only mode by default. (**gitignored** by installer — **NEVER commit this file**)
 
@@ -37,9 +40,14 @@ Other directories under `.claude/` created by agents:
 | `CONTRIBUTING.md` | allowlist (not in `KEEP_ROOT`) | Contribution guide for this repo — not for user projects |
 | `LICENSE` | allowlist (not in `KEEP_ROOT`) | Repo license file — not for user projects |
 | `SECURITY.md` | allowlist (not in `KEEP_ROOT`) | Vulnerability disclosure policy — not for user projects |
+| `PRIVACY.md` | allowlist (not in `KEEP_ROOT`) | Telemetry/privacy policy for this repo — not for user projects |
 | `docs/` | allowlist (not in `KEEP_ROOT`) | Repository-level reports and internal docs irrelevant to users |
+| `CLAUDE-md/` | allowlist (not in `KEEP_ROOT`) | Companion sections of this repo's `CLAUDE.md` — authoring rules, not for end-users |
 | `.gitignore` | explicit `rm -f` (dotfile strip) | Repo-level gitignore — not for user projects |
-| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config — not for user projects |
-| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS) — not for user projects |
-| `helpers/` | explicit `rm -rf` | Authoring tools for this repo (linting, scanning, archiving) — not for user projects |
+| `.claude/` | explicit `rm -rf` (dotfile strip) | Repo-level Claude config, including the `agent-creator` and `release-prep` skills — not for user projects |
+| `.github/` | explicit `rm -rf` (dotfile strip) | Repo-level GitHub config (templates, CODEOWNERS, CI scripts) — not for user projects |
+| `helpers/` | explicit `rm -rf` | Root-level authoring tools for this repo (linting, scanning, archiving) — not for user projects. **Not** `scripts/helpers/`, which ships. |
+| `opencode/` | explicit `rm -rf` | opencode provider-plugin source — fetched on demand by `install-opencode.sh` / `install-provider.sh` |
 | `scripts/install.sh` | explicit `rm -f` | Accessed exclusively via `curl` — never bundled |
+
+`KEEP_ROOT` (in `scripts/install.sh`) is `agents scripts skills templates commands`; everything else at the repo root is removed by the allowlist pass before `apply_strip` runs. The cross-CLI plumbing (`render-provider.sh`, `install-opencode.sh`, `install-codex.sh`, `install-provider.sh`, `scripts/lib/`) is deliberately **kept** so providers can be added offline.

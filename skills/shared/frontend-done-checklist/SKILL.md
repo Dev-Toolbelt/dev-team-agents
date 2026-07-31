@@ -1,6 +1,6 @@
 ---
 name: frontend-done-checklist
-description: Pre-delivery checklist for frontend tasks — verifies design system compliance, responsiveness, accessibility, performance, security, type safety, and commit hygiene before declaring done. Loaded by frontend-developer before marking any task complete.
+description: Pre-delivery checklist for frontend tasks — run it before declaring any task complete.
 ---
 
 # Frontend Done Checklist

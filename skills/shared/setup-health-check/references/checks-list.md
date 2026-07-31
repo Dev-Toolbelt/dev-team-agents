@@ -27,7 +27,7 @@ find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc
 > **MATERIALIZED = the Windows condition.** git/MSYS wrote the link target
 > into a ~62-byte text file because native symlinks were unavailable
 > (Developer Mode off, process not elevated, `core.symlinks=false`). The
-> dev-team is invisible to Claude Code even though git-bash "sees" the links.
+> dev-team is invisible to the CLI even though git-bash "sees" the links.
 > This is a `🔧 FIX` that cannot be auto-`ln -s`'d — route it through
 > `fix-symlinks.sh`, which repairs when possible and otherwise surfaces the
 > 3 remediation options for the user.

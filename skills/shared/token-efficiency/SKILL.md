@@ -5,7 +5,7 @@ description: Token optimization — efficient reads, bash ops, model selection.
 
 # Token Efficiency
 
-This skill provides token optimization strategies for cost-effective Claude Code usage across all projects. Apply these guidelines by default unless the user explicitly requests verbose output or full file contents.
+This skill provides token optimization strategies for cost-effective agent runs across all projects and every supported CLI (Claude Code, opencode, Codex CLI). The strategies are CLI-independent — they are about how much text enters the context window, not about which tool reads it. Apply these guidelines by default unless the user explicitly requests verbose output or full file contents.
 
 **Default assumption: users prefer efficient, cost-effective assistance.**
 
@@ -13,18 +13,20 @@ This skill provides token optimization strategies for cost-effective Claude Code
 
 ## Model Selection Strategy
 
-| Task type | Model |
-|-----------|-------|
-| Learning a new codebase, understanding architecture, deep analysis | **Opus** |
-| Writing code, debugging, testing, documentation, routine questions | **Sonnet** (default) |
-| Structured output, fast repetitive extraction | **Haiku** |
+Pick by model *class*, not by product name — every supported provider offers all three. The concrete model id per class and provider is resolved from `scripts/lib/tiers.json`; the Claude Code column below is one example mapping.
+
+| Task type | Model class | Claude Code example |
+|-----------|-------------|---------------------|
+| Learning a new codebase, understanding architecture, deep analysis | **High-reasoning** | Opus |
+| Writing code, debugging, testing, documentation, routine questions | **Balanced** (default) | Sonnet |
+| Structured output, fast repetitive extraction | **Fast** | Haiku |
 
 **Typical session pattern:**
-1. **Opus** — 10–15 min upfront to understand the codebase (one-time investment)
-2. **Sonnet** — all implementation, debugging, and routine work
-3. **Opus** — return only for deep architectural questions
+1. **High-reasoning** — 10–15 min upfront to understand the codebase (one-time investment)
+2. **Balanced** — all implementation, debugging, and routine work
+3. **High-reasoning** — return only for deep architectural questions
 
-Savings: ~50% token cost vs. all-Opus usage.
+Savings: ~50% token cost vs. running the whole session on the high-reasoning model.
 
 ---
 

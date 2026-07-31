@@ -1,6 +1,6 @@
 ---
 name: model-identity
-description: Resolves and announces the agent's model identity (tier, model ID, effort) at startup. Every agent must load this at the very start to display its active model configuration.
+description: Announce the agent's tier, model, and effort at startup. Every agent loads this first.
 ---
 
 ## Model Identity Banner

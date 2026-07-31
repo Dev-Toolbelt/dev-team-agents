@@ -2,13 +2,15 @@
 
 🇺🇸 [See the English Version](README.md)
 
-Um time global de agentes Claude Code especializados para desenvolvimento de software. Agnóstico a tecnologia, ciente do contexto do projeto e mantido colaborativamente.
+**Multi-agent development harness** — um harness para organizar agentes de IA no desenvolvimento de software. Agnóstico a tecnologia, ciente do contexto do projeto e mantido colaborativamente.
 
 ---
 
 ## O que é isso
 
-Um conjunto de agentes e skills do Claude Code que formam um time completo de desenvolvimento de software. Cada agente tem um papel definido, expertise e integração com workflows. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
+Não é apenas um pacote de agentes; é a camada que controla como esses agentes planejam, executam, testam, revisam e registram o trabalho.
+
+Cada agente tem um papel definido, expertise e integração com workflows. O que faz disso um harness, e não uma coleção, é tudo o que existe em volta deles — o plan gate que barra execução silenciosa, os hooks de ciclo de vida que garantem memória entre sessões, o roteamento de review, os validadores que mantêm a árvore inteira honesta. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
 
 17 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.pt-BR.md) completa.
 
@@ -92,7 +94,7 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ## Primeiros Passos
 
-Após instalar, inicie o fluxo de setup dizendo ao Claude:
+Após instalar, inicie o fluxo de setup dizendo ao seu CLI:
 
 ```
 "Ajude-me a configurar este projeto com dev-team-agents"
@@ -118,7 +120,8 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 
 | Command | O que faz |
 |---------|-----------|
-| `/devteam:plan` | Planejamento — software-architect + product-analyst + database-specialist (+ backend/frontend/devops quando relevante) |
+| `/devteam:setup` | Onboarding — detecta primeira execução ou refresh, e então o setup-assistant configura `CLAUDE.md`, `docs/`, a wiki e suas preferências |
+| `/devteam:plan` | Planejamento — o product-analyst lidera e produz um documento de requisitos só de negócio, pronto para virar sprints; o software-architect entra apenas em pedido técnico explícito |
 | `/devteam:backend` | Implementação backend — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Implementação frontend — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
@@ -138,6 +141,10 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
+| `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 9 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier) e aplica correções automáticas seguras |
+| `/devteam:adr` | Architecture Decision Record — roda `scripts/new-adr.sh` para criar um ADR numerado, e então o software-architect preenche o template |
+| `/devteam:update` | Atualização — verifica se há uma nova release do dev-team-agents e a aplica |
+| `/devteam:symlinks` | Reparo de symlinks — detecta o SO, repara links materializados como arquivos comuns e guia a correção quando o SO bloqueia symlinks nativos |
 
 **Exemplos de uso:**
 
@@ -195,7 +202,7 @@ O time tem **17 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 
 ## Como Usar os Agentes
 
-Os agentes são invocados pelo papel no seu prompt para o Claude:
+Os agentes são invocados pelo papel no seu prompt:
 
 ```
 "Como o product-analyst, analise este PRD: [documento]"
@@ -204,7 +211,7 @@ Os agentes são invocados pelo papel no seu prompt para o Claude:
 "Como o code-reviewer, revise as mudanças em [arquivos]."
 ```
 
-Funciona no CLI do Claude Code (`claude`), app desktop, app web em [claude.ai/code](https://claude.ai/code) e extensões de IDE (VS Code, JetBrains).
+Nomear o papel funciona em todos os CLIs suportados — Claude Code (o CLI `claude`, app desktop, app web em [claude.ai/code](https://claude.ai/code), extensões de IDE), opencode e Codex CLI — porque os agentes são renderizados a partir de uma única fonte canônica por provedor.
 
 **Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa.
 
@@ -285,15 +292,15 @@ docs/development/code-standards.md  # padrões de código usados pelos reviewers
 
 ## Solução de Problemas
 
-**Agentes não são reconhecidos pelo Claude** — verifique se o symlink existe: `ls .claude/agents/dev-team/`. Se faltando, rode o instalador novamente a partir da raiz do projeto.
+**Agentes não são reconhecidos pelo CLI** — verifique se o symlink existe: `ls .claude/agents/dev-team/` (Claude Code), `ls .opencode/agents/` (opencode), `ls .codex/agents/` (Codex CLI). Se faltando, rode o instalador daquele provedor novamente a partir da raiz do projeto.
 
-**Skills não são carregadas** — verifique se `.claude/skills/` contém symlinks. Rode o instalador para restaurar links quebrados.
+**Skills não são carregadas** — verifique se `.claude/skills/` (ou `.opencode/skills/`, `.codex/skills/`) contém symlinks. Rode o instalador para restaurar links quebrados.
 
-**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os links de `.claude/` como arquivos-texto de ~62 bytes em vez de symlinks. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o Claude Code enxerga arquivos, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Corrija rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **Claude Code como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Reinicie o Claude Code após reparar para ele reindexar o dev-team.
+**Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os symlinks como arquivos-texto de ~62 bytes: os links de `.claude/` na instalação do Claude Code e o link de `skills/` dentro de `.opencode/` ou `.codex/` nos demais provedores. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o CLI enxerga arquivos comuns, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Repare a árvore do Claude rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **seu CLI como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Para opencode e Codex, rode novamente o instalador daquele provedor assim que os symlinks nativos estiverem habilitados. Reinicie o seu CLI após reparar para ele reindexar o dev-team.
 
 **Hook de verificação de atualização dispara a cada tool call** — verifique se `.dev-team-agents/user-data/.last-update-check` é um arquivo gravável (não um diretório) e se `scripts/hooks/pre-tool-use/01-check-updates.sh` é executável.
 
-**O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao Claude: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
+**O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao seu CLI: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
 
 **Um agente executou sem apresentar um plano primeiro** — verifique seu CLAUDE.md de projeto por alguma instrução que conflita com o plan mode.
 
@@ -301,11 +308,13 @@ docs/development/code-standards.md  # padrões de código usados pelos reviewers
 
 ## Telemetria Anônima
 
-O dev-team-agents coleta **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos.
+O dev-team-agents pode coletar **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos. **Fica desativado a menos que você o ative.**
 
-**O que é coletado:** nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
+**Consentimento:** o instalador pergunta uma única vez, na primeira instalação, abrindo seu terminal diretamente — então o prompt aparece até no caminho `curl … | bash`. Responder `n`, não responder em 60 segundos, definir `DEVTEAM_NONINTERACTIVE=1` ou não ter terminal algum deixam tudo **desativado**. Nada é enfileirado ou enviado enquanto o `preferences.json` não disser `"telemetry": true`.
 
-**Desative a qualquer momento** editando `.dev-team-agents/user-data/preferences.json`:
+**O que é coletado** (somente quando ativado): nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
+
+**Mude a qualquer momento** editando `.dev-team-agents/user-data/preferences.json` — `false` para desativar, `true` para ativar:
 
 ```json
 { "telemetry": false }

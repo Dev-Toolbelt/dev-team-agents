@@ -1,6 +1,6 @@
 ---
 name: material-design
-description: Material Design 3 (Material You) guidelines for Android and cross-platform mobile — color system, typography, components, motion, adaptive layout, and accessibility. Load when the project targets Android or uses a cross-platform framework.
+description: Material Design 3 (Material You) UI guidelines. Load for Android or cross-platform design.
 ---
 
 ## Detection Signals

@@ -1,6 +1,6 @@
 ---
 name: react-native
-description: Essential rules, patterns, and checklists for React Native projects — including Expo Managed and Bare workflows. Load only when react-native is detected in the project.
+description: React Native and Expo rules, patterns, and checklists. Load when react-native is detected.
 ---
 
 ## Detection Signals

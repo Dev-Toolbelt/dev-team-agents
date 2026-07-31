@@ -27,39 +27,24 @@ If none of these indicate tests are required, respond:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision top-down (stop at the first match):
+Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → Worktree Isolation: `.dev-team-agents/.worktree-session` → `worktree_active` in `.dev-team-agents/user-data/preferences.json` → ask once via `AskUserQuestion`.
 
-1. `.dev-team-agents/.worktree-session` present:
-   - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
-   - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
-
-2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
-   - `true` → set up a worktree **without asking**: resolve the base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the worktree skill
-   - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), run `git checkout -b <name>`, write `worktree=no branch=<name>`
-
-3. Key absent (legacy install) → use the `AskUserQuestion` tool (options Yes/No): "Should this task use a git worktree (isolated working directory)?" then follow the matching path from step 2.
-
-The session file persists across agent turns so the decision is resolved exactly once per task. On finalization (merge), the worktree skill enforces rebase-onto-base → merge → teardown of the worktree and its isolated Docker stack only.
+When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` and use the stored base branch. The session file makes the decision resolve exactly once per task.
 
 ---
 
-## Foundational Rule — Load Context First
+## Foundational Rule
 
-Before writing any test:
+Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGENTS.md, project.md, session-summary, development docs, and recent git log.
 
-1. `README.md`, `CLAUDE.md`, `AGENTS.md` — conventions, test commands, database setup
-2. `docs/project.md` — synthesized project overview; if present, use it to orient before loading individual dev files
-3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `docs/development/` — architecture, tech stack, code standards
-5. `docs/tests/` — synthesized test strategy and configuration (if present, read before writing any tests)
-6. Run `git log --oneline -10` — reveals what changed recently and defines the scope of testing work
-7. Existing test files — understand patterns, base classes, helpers, factories already in use
-8. Map existing coverage before writing: identify which paths of the target code already have tests to avoid duplication and to find real gaps
-9. The code to be tested — read it completely before deciding what to test
+**Test-specific additions after project-context loads:**
 
-**Project test conventions always override base standards.** This loading order follows the **`project-context`** skill (`skills/shared/project-context/SKILL.md`).
+- `docs/tests/` — synthesized test strategy and configuration; read it before writing any test
+- Existing test files — understand the patterns, base classes, helpers, and factories already in use
+- Map existing coverage before writing: identify which paths of the target code are already tested, to avoid duplication and find the real gaps
+- The code under test — read it completely before deciding what to test
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
 ---
 
@@ -82,6 +67,7 @@ Load and apply `skills/testing/test-strategy/SKILL.md` and `skills/testing/test-
 Load contextually based on the task:
 - `skills/testing/contract-testing/SKILL.md` — when testing API contracts between services (consumer-driven contracts, provider verification)
 - `skills/testing/mutation-testing/SKILL.md` — when assessing test suite quality or coverage confidence
+- `skills/testing/load-testing/SKILL.md` — when the task concerns throughput, latency or capacity: load profiles, SLO-derived thresholds, percentile interpretation. Distinct from `skills/architecture/performance-budgets/SKILL.md`, which covers client-side budgets
 
 ### What to test at each layer (backend context)
 
@@ -95,7 +81,7 @@ Load contextually based on the task:
 
 ## Test Quality Standards
 
-- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
 - Tests must be **deterministic**: same result every run, no sleep(), no random data without seed
 - Tests must be **isolated**: no shared state between tests, each owns its setup and teardown
 - **Meaningful assertions**: assert the outcome that matters, not just "it didn't throw"
@@ -106,24 +92,11 @@ Load contextually based on the task:
 
 ## SonarQube Coverage Integration
 
-**Detection**: `sonar-project.properties`, `.sonarcloud.properties`, or `SONAR_TOKEN` present in the project.
+Scanner detection is handled by `project-context`. When it has loaded `skills/devops/sonarqube/SKILL.md`:
 
-Load: `skills/devops/sonarqube/SKILL.md`
-
-When SonarQube is detected:
-
-1. **Generate coverage in the format SonarQube expects** — verify `sonar-project.properties` has the correct `sonar.*coverage.reportPaths` key for the project's language and that the test runner is configured to output that format:
-
-   | Language | Test runner flag | Output |
-   |---|---|---|
-   | PHP | `--coverage-clover coverage/clover.xml` | Clover XML |
-   | Python | `pytest --cov --cov-report=xml` | `coverage.xml` |
-   | Java | JaCoCo plugin | `target/site/jacoco/jacoco.xml` |
-   | Go | `go test -coverprofile=coverage.out ./...` | `coverage.out` |
-   | Ruby | SimpleCov (configured in `spec_helper`) | `coverage/.resultset.json` |
-
-2. **Coverage threshold**: the default SonarQube quality gate requires ≥ 80% on new code. Write tests to meet this threshold for the code being delivered; if coverage gaps remain, flag them explicitly to the `backend-developer`
-3. **Do not pad coverage**: don't write meaningless assertions to hit a number — every test must assert a real behavioral outcome
+1. **Generate coverage in the format SonarQube expects** — read `references/quality-gates.md` in that skill for the per-language test-runner command, output artifact, and `sonar.*coverage.reportPaths` key, then verify `sonar-project.properties` matches
+2. **Coverage threshold**: the default quality gate requires ≥ 80% on new code. Write tests to meet it for the code being delivered; if gaps remain, flag them explicitly to the `backend-developer`
+3. **Do not pad coverage**: no meaningless assertions to hit a number — every test must assert a real behavioral outcome
 
 ---
 
@@ -151,9 +124,7 @@ When Jira is active:
 
 ## Docs Sync
 
-After completing any task, check whether the work delivered triggered any entry in the Update Triggers table defined in `skills/shared/docs-sync/SKILL.md`. If yes, load that skill and apply the surgical patch to the relevant `docs/` file.
-
-Run in parallel with the commit — do not block delivery on doc updates.
+Load `skills/shared/docs-sync/SKILL.md` — its Task Closure Rule governs when delivered work requires a `docs/` patch.
 
 ---
 

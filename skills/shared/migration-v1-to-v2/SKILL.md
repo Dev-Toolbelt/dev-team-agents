@@ -1,6 +1,6 @@
 ---
 name: migration-v1-to-v2
-description: Detects and migrates projects from dev-team-agents v1 (Claude-only, materialized copies) to v2 (multi-provider, symlinks).
+description: Detect and migrate a project from dev-team-agents v1 to v2 (multi-provider, symlinks).
 ---
 
 # Migration v1 → v2
@@ -385,7 +385,7 @@ After a clean migration, `.claude/` holds only:
 - `settings.json` — hook registration
 - `settings.local.json` — personal overrides (untracked, may carry stale v1 paths — harmless)
 
-**Start a new Claude Code session** to load the v2 agents and skills. The diff (tree move + docs move) lands on every teammate's checkout on merge.
+**Start a new session in your CLI** (Claude Code, opencode, or Codex CLI) to load the v2 agents and skills. The diff (tree move + docs move) lands on every teammate's checkout on merge.
 
 ## Post-Migration Verification Checklist
 

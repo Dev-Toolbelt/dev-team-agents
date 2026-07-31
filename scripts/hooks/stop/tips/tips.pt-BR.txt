@@ -1,0 +1,15 @@
+Use /compact regularmente ou inicie uma nova sessão para manter sua janela de contexto saudável e evitar alucinações em sessões longas.
+Execute /devteam:review antes de abrir um PR — ele chama automaticamente code-reviewer, software-architect e security-specialist.
+Registre decisões arquiteturais difíceis como ADRs: bash .dev-team-agents/scripts/new-adr.sh "título". Isso evita que agentes questionem escolhas já feitas.
+Use /devteam:plan no início de qualquer nova funcionalidade — ele executa uma análise multi-agente (architect + product + database + backend/frontend/devops conforme necessário).
+Escreva conhecimento de domínio não óbvio na wiki do projeto em docs/wiki/ após qualquer tarefa reveladora — agentes leem isso na inicialização.
+/devteam:commit agrupa suas mudanças por camada e gera Conventional Commits automaticamente.
+Use /devteam:refactor para refatoração estruturada — ele executa cobertura test-first, mapeia dependências e produz blocos de commit ordenados.
+Execute um health check ocasionalmente: 'Faça um health check neste projeto' — ele corrige automaticamente hooks desatualizados, symlinks quebrados e preferências desatualizadas.
+Use /devteam:security antes de qualquer release ou após tocar em código de auth, permissões ou manipulação de dados.
+O session-summary.md é lido por agentes na inicialização — mantê-lo atualizado significa que agentes recuperam contexto da sua última sessão sem fazer perguntas repetidas.
+Use /devteam:dba ao adicionar migrações ou modificar schema — o database-specialist identifica índices faltantes e problemas de locking antes de chegarem à produção.
+Defina auto_update: true no preferences.json para receber atualizações automáticas do dev-team-agents quando novas versões forem lançadas.
+Use /devteam:docs para gerar changelogs, runbooks e release notes a partir do seu histórico git.
+Skills específicos de stack (Next.js, Laravel, Vue, etc.) são carregados automaticamente por agentes quando detectados — verifique .claude/skills/ para o que está disponível no seu projeto.
+Use /devteam:tester quando você só precisa adicionar ou atualizar testes — evita acionar o time completo quando o escopo é apenas cobertura.

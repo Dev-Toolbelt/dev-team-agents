@@ -9,14 +9,25 @@
 # used by update.sh, so network access is required.
 set -euo pipefail
 
-INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 USER_DATA_DIR="$INSTALL_DIR/user-data"
 PREV_VERSION_FILE="$USER_DATA_DIR/.installed-version.prev"
 CURRENT_VERSION_FILE="$USER_DATA_DIR/.installed-version"
 
-GITHUB_OWNER="Dev-Toolbelt"
-GITHUB_REPO="dev-team-agents"
-INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/scripts/install.sh"
+# ── Shared installer-fetch logic ───────────────────────────────────────────────
+# HTTP tool detection, GitHub coordinates, ref pinning and payload verification
+# live in scripts/lib/installer-fetch.sh, shared with update.sh.
+
+INSTALLER_LIB="$SCRIPTS_DIR/lib/installer-fetch.sh"
+if [ ! -f "$INSTALLER_LIB" ]; then
+    echo "✗ Missing $INSTALLER_LIB — the installation is incomplete." >&2
+    echo "  Reinstall with:" >&2
+    echo "    curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install.sh | bash" >&2
+    exit 1
+fi
+# shellcheck source=scripts/lib/installer-fetch.sh
+source "$INSTALLER_LIB"
 
 # ── Resolve target version ─────────────────────────────────────────────────────
 
@@ -50,13 +61,7 @@ fi
 
 echo "→ Rolling back from ${CURRENT:-unknown} to $TARGET ..."
 
-# ── HTTP tool detection ────────────────────────────────────────────────────────
-
-if command -v curl >/dev/null 2>&1; then
-    HTTP_DL() { curl -fsSL -o "$1" "$2"; }
-elif command -v wget >/dev/null 2>&1; then
-    HTTP_DL() { wget -qO "$1" "$2"; }
-else
+if ! dta_have_http_tool; then
     echo "✗ Neither curl nor wget found. Cannot download." >&2
     exit 1
 fi
@@ -73,9 +78,13 @@ git tag "$SAFETY_TAG" 2>/dev/null || true
 echo "  Tagged current state as: $SAFETY_TAG"
 echo "  To undo: git checkout $SAFETY_TAG && git checkout -b recovery-from-rollback"
 
-echo "→ Downloading installer from GitHub..."
-if ! HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL" 2>/dev/null; then
-    echo "✗ Failed to download installer. Check network connectivity." >&2
+# The installer is fetched from the target tag itself, not from `main`: rolling
+# back to v1.2.3 must run v1.2.3's installer, so the installer and the payload
+# it unpacks always come from the same immutable ref.
+echo "→ Downloading installer from GitHub (ref: $TARGET)..."
+if ! dta_fetch_installer "$TMP_INSTALLER" "$TARGET"; then
+    echo "✗ Rollback aborted — the installer for $TARGET could not be downloaded or verified." >&2
+    echo "  Nothing was changed. Your current installation is untouched." >&2
     exit 1
 fi
 

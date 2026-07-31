@@ -2,13 +2,15 @@
 
 🇧🇷 [Veja a versão em Português do Brasil](README.pt-BR.md)
 
-A global team of specialized Claude Code agents and skills for software development. Stack-agnostic, project-aware, and collaboratively maintained.
+**Multi-agent development harness** — a harness for organizing AI agents in software development. Stack-agnostic, project-aware, and collaboratively maintained.
 
 ---
 
 ## What This Is
 
-A set of Claude Code agents and skills that form a complete software development team. Each agent has a defined role, expertise, and workflow integration. They coexist with your project's own rules — project conventions always win.
+Not just a bundle of agents: it is the layer that governs how those agents plan, execute, test, review, and record their work.
+
+Each agent has a defined role, expertise, and workflow integration. What makes it a harness rather than a collection is everything around them — the plan gate that blocks silent execution, the lifecycle hooks that enforce session memory, the review routing, the validators that keep the whole tree honest. They coexist with your project's own rules — project conventions always win.
 
 17 agents cover the full development lifecycle: discovery, design, implementation, quality gates, and documentation. → See the full [Agent Reference](docs/agents.md).
 
@@ -92,7 +94,7 @@ Help me set up this project with dev-team-agents
 
 ## Getting Started
 
-After installing, start the setup flow by telling Claude:
+After installing, start the setup flow by telling your CLI:
 
 ```
 "Help me set up this project with dev-team-agents"
@@ -118,7 +120,8 @@ After installation, slash commands are available under the `/devteam:` namespace
 
 | Command | What it does |
 |---------|-------------|
-| `/devteam:plan` | Planning — software-architect + product-analyst + database-specialist (+ backend/frontend/devops when relevant) |
+| `/devteam:setup` | Onboarding — detects first run vs refresh, then setup-assistant configures `CLAUDE.md`, `docs/`, the wiki, and your preferences |
+| `/devteam:plan` | Planning — product-analyst leads and produces a business-only requirements doc ready for sprints; software-architect joins on explicit technical request |
 | `/devteam:backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
@@ -138,6 +141,10 @@ After installation, slash commands are available under the `/devteam:` namespace
 | `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
+| `/devteam:health-check` | Installation diagnostics — detects the active provider (Claude / opencode / Codex), runs 9 checks (symlinks, scripts, user data, provider config, graphify, CLAUDE.md, .gitignore, preferences, notifier) and applies safe auto-fixes |
+| `/devteam:adr` | Architecture Decision Record — runs `scripts/new-adr.sh` to scaffold a numbered ADR, then software-architect fills the template |
+| `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
+| `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
 
 **Usage examples:**
 
@@ -195,7 +202,7 @@ The team has **17 agents** covering the full lifecycle. Full details in the [Age
 
 ## How to Use Agents
 
-Agents are invoked by naming the role in your message to Claude:
+Agents are invoked by naming the role in your message:
 
 ```
 "As the product-analyst, analyze this PRD: [document]"
@@ -204,7 +211,7 @@ Agents are invoked by naming the role in your message to Claude:
 "As the code-reviewer, review the changes in [files]."
 ```
 
-This works in the Claude Code CLI (`claude`), desktop app, web app at [claude.ai/code](https://claude.ai/code), and IDE extensions (VS Code, JetBrains).
+Role-naming works in every supported CLI — Claude Code (the `claude` CLI, desktop app, web app at [claude.ai/code](https://claude.ai/code), IDE extensions), opencode, and Codex CLI — because the agents are rendered from one canonical source per provider.
 
 **Every agent presents a plan for approval before executing anything.** You review, adjust, and approve — then execution begins.
 
@@ -285,15 +292,15 @@ docs/development/code-standards.md  # code standards used by reviewers
 
 ## Troubleshooting
 
-**Agents are not recognized by Claude** — verify the symlink exists: `ls .claude/agents/dev-team/`. If missing, re-run the installer from your project root.
+**Agents are not recognized by the CLI** — verify the symlink exists: `ls .claude/agents/dev-team/` (Claude Code), `ls .opencode/agents/` (opencode), `ls .codex/agents/` (Codex CLI). If missing, re-run that provider's installer from your project root.
 
-**Skills are not loaded** — check that `.claude/skills/` contains symlinks. Re-run the installer to restore broken links.
+**Skills are not loaded** — check that `.claude/skills/` (or `.opencode/skills/`, `.codex/skills/`) contains symlinks. Re-run the installer to restore broken links.
 
-**Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes the `.claude/` links as plain ~62-byte text files instead of symlinks. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but Claude Code sees files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Fix it by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **Claude Code as administrator** (fully close it first, including the tray icon). Restart Claude Code after repairing so it re-indexes the dev-team.
+**Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes symlinks as plain ~62-byte text files: the `.claude/` links for the Claude Code install, and the `skills/` link under `.opencode/` or `.codex/` for the other providers. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but the CLI sees plain files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Repair the Claude tree by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **your CLI as administrator** (fully close it first, including the tray icon). For opencode and Codex, re-run that provider's installer once native symlinks are enabled. Restart your CLI after repairing so it re-indexes the dev-team.
 
 **Update check hook fires on every tool call** — check that `.dev-team-agents/user-data/.last-update-check` is a writable file (not a directory) and that `scripts/hooks/pre-tool-use/01-check-updates.sh` is executable.
 
-**`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell Claude: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
+**`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell your CLI: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
 
 **An agent executed without showing a plan first** — check your project CLAUDE.md for any instruction that conflicts with plan mode.
 
@@ -301,11 +308,13 @@ docs/development/code-standards.md  # code standards used by reviewers
 
 ## Anonymous Telemetry
 
-dev-team-agents collects **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable.
+dev-team-agents can collect **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable. **It is disabled unless you turn it on.**
 
-**What is collected:** agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
+**Consent:** the installer asks once, on first install, by opening your terminal directly — so the prompt shows up even on the `curl … | bash` path. Answering `n`, not answering within 60 seconds, setting `DEVTEAM_NONINTERACTIVE=1`, or having no terminal at all each leave it **disabled**. Nothing is queued or sent until `preferences.json` says `"telemetry": true`.
 
-**Opt out at any time** by editing `.dev-team-agents/user-data/preferences.json`:
+**What is collected** (only when enabled): agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
+
+**Change it at any time** by editing `.dev-team-agents/user-data/preferences.json` — `false` to opt out, `true` to opt in:
 
 ```json
 { "telemetry": false }

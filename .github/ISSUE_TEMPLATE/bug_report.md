@@ -15,7 +15,7 @@ labels: bug
 
 **Environment**
 - dev-team-agents version (run `cat .dev-team-agents/user-data/.installed-version`):
-- Claude Code version:
+- Provider / CLI (Claude Code, opencode, or Codex CLI) and its version:
 - OS:
 
 **Relevant agent / command / skill**

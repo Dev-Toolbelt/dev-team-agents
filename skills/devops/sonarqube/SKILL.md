@@ -45,7 +45,23 @@ The default **Sonar Way** gate checks **New Code** only:
 
 Block CI on gate failure: `-Dsonar.qualitygate.wait=true`
 
-Load `references/quality-gates.md` for: full conditions, issue taxonomy (Bug/Vulnerability/Hotspot/Smell), SAST hotspot workflow, coverage report paths by language, and troubleshooting.
+Load `references/quality-gates.md` for: full conditions, issue taxonomy (Bug/Vulnerability/Hotspot/Smell), SAST hotspot workflow, the **per-language coverage matrix** (test runner command → output artifact → `sonar.*.reportPaths` key), coverage quality rules, and troubleshooting.
+
+---
+
+## Rules for Code Changes
+
+Apply to any changeset delivered in a project where SonarQube is detected:
+
+| Issue type | Rule |
+|------------|------|
+| **Bug** | Do not introduce new ones — treat as a defect, not an optional fix |
+| **Vulnerability** | Do not introduce new ones — blocking, same as a Bug |
+| **Security Hotspot** | If the change touches a hotspot area (cryptography, SQL construction, command execution, path handling), document why it is safe so the reviewer can mark it `Safe` |
+| **Code Smell** | Fix Blocker and Critical; Major and below may be deferred but must not accumulate as a pattern |
+| **Coverage** | New code must meet the gate threshold (default ≥ 80%); if it does not, flag the gap to the test specialist rather than merging silently |
+
+Generate coverage **before** the scan — see the coverage matrix in `references/quality-gates.md` for the exact command per language.
 
 ---
 

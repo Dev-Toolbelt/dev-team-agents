@@ -1,6 +1,6 @@
 ---
 name: output-format
-description: Platform-agnostic output format — pure markdown, no box-drawing Unicode, no decorative symbols. Use for plans, reports, reviews, diagnostics, and any structured agent output.
+description: Pure-markdown output rules for plans, reports, reviews, and any structured agent output.
 ---
 
 # Output Format

@@ -39,7 +39,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `update_check_interval_hours` | `24` | Hours between update checks |
 | `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
-| `telemetry` | `true` | Anonymous usage telemetry (set to `false` to opt out). No personal data is ever collected — see `PRIVACY.md` |
+| `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` |
 | `worktree_active` | `false` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) |
 | `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides |
 | `worktree_path` | `".dev-team-agents/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
@@ -47,6 +47,24 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
+
+> **Exception — the `telemetry` read path fails closed.** `scripts/lib/telemetry-guard.sh` is the single definition of the gate (`_telemetry_enabled`), sourced by `scripts/helpers/telemetry-send.sh`, `stop/05-telemetry.sh` and `pre-tool-use/02b-telemetry.sh`. It returns "disabled" for a missing file, an unreadable file, a **missing `telemetry` key**, or no `python3` to read it with — consent that was never recorded is not consent. Never flip that to `true`, and never let a consumer that cannot source the guard fall back to sending.
+>
+> Note the interaction with the backfill below: `preferences-defaults.json` still carries `"telemetry": true`, so a legacy file missing the key reads as *disabled* until the next session start, at which point the backfill writes the schema value and it becomes *enabled*. The read path and the backfill therefore disagree. Whoever changes either one next should make `preferences-defaults.json` carry `false` so the two agree.
+
+### Telemetry consent
+
+`install.sh` decides the value on **first install only** (no existing `preferences.json`); on every re-install and update an existing value is preserved untouched.
+
+| Situation at install time | `telemetry` written |
+|---|---|
+| A controlling terminal is reachable (`/dev/tty` opens) and the user answers Enter/`y` | `true` |
+| …and the user answers `n` | `false` |
+| …and nobody answers within 60s, or stdin hits EOF | `false` — silence is not consent |
+| `DEVTEAM_NONINTERACTIVE=1` (CI, image builds, provisioning) | `false`, no prompt |
+| No terminal reachable at all | `false`, with a printed note explaining how to enable it later |
+
+The reachability test is "can we open `/dev/tty`", **not** `[ -t 0 ]`. The documented install path is `curl … | bash`, where stdin is a pipe and `[ -t 0 ]` is false even with a human watching — which is how the prompt used to be skipped while the value was preset to `true`.
 
 ### Worktree defaults
 

@@ -1,6 +1,8 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
+
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
@@ -10,9 +12,7 @@ Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $A
 
 Before spawning any agent, evaluate $ARGUMENTS:
 
-- If the argument is vague — "projeto inteiro", "tudo", "codebase", "all", "everything", or any similarly broad term — warn the user:
-  > "This scope may take a long time and consume a significant number of tokens. Do you want to proceed? If so, specify whether you want to process module by module (safer, with a checkpoint between each) or all at once."
-  Do NOT proceed until the user explicitly confirms.
+- If the argument is vague — "projeto inteiro", "tudo", "codebase", "all", "everything", or any similarly broad term — state in one line that this scope may take a long time and consume a significant number of tokens, then ask with `AskUserQuestion` (single-select): **Module by module** (recommended — a checkpoint between each), **All at once**, or **Cancel**. Do NOT proceed until the user answers.
 
 - If the argument is specific (a module, file, class, function, or named routine), proceed normally.
 
@@ -22,9 +22,7 @@ Before spawning any agent, evaluate $ARGUMENTS:
 
 Read `.dev-team-agents/.worktree-session` before asking:
 - If the file exists and contains a decision (`worktree=no` or `worktree=yes branch=<b>`), follow it silently.
-- If absent, ask the user once:
-  > "Should I work in a new worktree or a new branch? (worktree / branch)"
-  Write the answer to `.dev-team-agents/.worktree-session`, then act.
+- If absent, ask once with `AskUserQuestion` (single-select, in the user's language): **Isolated worktree** — a dedicated git worktree for this refactor — or **New branch** — a new branch in the current checkout. Write the answer to `.dev-team-agents/.worktree-session`, then act.
 
 **If worktree is selected:** load `skills/shared/worktree/SKILL.md` and enforce the project's branch naming pattern before creating anything. Read the last 20 branch names from `git branch -a` to detect the convention in use (e.g. `refactor/`, `feat/`, kebab-case, ticket prefix). Suggest a name that matches and ask the user to confirm before creating.
 
@@ -42,7 +40,7 @@ Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUI
 ### Phase 1 — Analysis
 
 Spawn:
-- `software-architect` at `.claude/agents/dev-team/software-architect.md`
+- `software-architect`
 
 Prompt:
 > "Analyze the following scope: $ARGUMENTS
@@ -64,9 +62,9 @@ Prompt:
 
 Spawn in parallel after Phase 1 is confirmed (test-specialists spawn only when the **Test gate** above resolves to running tests):
 
-- `software-architect` at `.claude/agents/dev-team/software-architect.md`
-- `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` (if backend scope **and** tests are required)
-- `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` (if frontend scope **and** tests are required)
+- `software-architect`
+- `backend-test-specialist` (if backend scope **and** tests are required)
+- `frontend-test-specialist` (if frontend scope **and** tests are required)
 
 Architect prompt:
 > "Using the approved scope document, produce the architectural refactoring plan:
@@ -82,8 +80,8 @@ Test-specialist prompt:
 > Any exclusion that affects observable behavior MUST be flagged and confirmed by the user before the plan is finalized."
 
 Also spawn conditionally:
-- `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — if scope document includes DB touchpoints
-- `security-specialist` at `.claude/agents/dev-team/security-specialist.md` — always; verify no security controls are weakened or removed by the planned changes
+- `database-specialist` — if scope document includes DB touchpoints
+- `security-specialist` — always; verify no security controls are weakened or removed by the planned changes
 
 Consolidate all outputs into a single **Refactoring Plan** containing:
 - Architectural changes
@@ -105,8 +103,8 @@ Present the full plan to the user and await explicit approval. Nothing changes i
 ### Phase 3 — Implementation
 
 Spawn after plan approval:
-- `backend-developer` at `.claude/agents/dev-team/backend-developer.md` (if backend scope)
-- `frontend-developer` at `.claude/agents/dev-team/frontend-developer.md` (if frontend scope)
+- `backend-developer` (if backend scope)
+- `frontend-developer` (if frontend scope)
 
 Implementation order is **inviolable** (when tests are required — see the **Test gate**; if `TESTS_REQUIRED=no`, skip Block 1 entirely and start at Block 2):
 
@@ -125,8 +123,8 @@ No refactoring commit may precede the last test commit.
 ### Phase 4 — Quality Gate
 
 Spawn in parallel:
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md`
-- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md`
+- `code-reviewer`
+- `qa-specialist`
 
 Code-reviewer prompt:
 > "Review the refactoring. Confirm external behavior is preserved, code quality improved, and no new issues introduced. All tests must still pass."
@@ -137,7 +135,7 @@ QA-specialist prompt:
 Any `[BLOCKING]` finding from either agent must be resolved before a PR is created.
 
 After quality gate passes, spawn:
-- `technical-writer` at `.claude/agents/dev-team/technical-writer.md` — draft the PR body with a before/after summary of what changed and why.
+- `technical-writer` — draft the PR body with a before/after summary of what changed and why.
 
 ---
 
@@ -148,6 +146,13 @@ If the scope is a single small file with no DB touchpoints and the test-speciali
 - database-specialist and security-specialist may be skipped if no DB or security-relevant code is in scope — the architect must explicitly confirm this before skipping
 
 Fast track still requires user approval of the plan before any implementation begins.
+
+## Session close (mandatory)
+
+After the phases above complete — including any resolution agents:
+
+1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
+2. **Hand off** — Phase 3 already committed the test and refactoring blocks. Close with one line naming the next step: `/devteam:pr` to open the pull request (use the technical-writer's PR body), or `/devteam:commit` first if anything is still uncommitted.
 
 ---
 

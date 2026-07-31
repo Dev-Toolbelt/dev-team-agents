@@ -4,6 +4,7 @@
 # Validates line-count limits declared in CLAUDE.md:
 #   agents/    — max ~200 lines each
 #   skills/    — max ~500 lines each (SKILL.md files only; references/ excluded)
+#   commands/  — max ~200 lines each (shipped verbatim into user projects)
 #
 # Exits 0 if all pass (or if --warn-only is set).
 # Exits 1 on violations in strict mode (default).
@@ -26,9 +27,15 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS_DIR="$REPO_ROOT/agents"
 SKILLS_DIR="$REPO_ROOT/skills"
+COMMANDS_DIR="$REPO_ROOT/commands"
 
 AGENT_LIMIT=200
 SKILL_LIMIT=500
+# Commands are thin orchestration wrappers that spawn agents — they should never
+# be longer than the richest content type in the repo. 200 is the ceiling already
+# established for agents, ~4x the current command median (~50 lines), and above
+# all but one shipped command today.
+COMMAND_LIMIT=200
 
 VIOLATIONS=()
 
@@ -50,6 +57,17 @@ while IFS= read -r f; do
     VIOLATIONS+=("  · $rel: $lines lines (limit: $SKILL_LIMIT)")
   fi
 done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
+
+# ── Check commands (shipped verbatim to .claude/commands/devteam/) ───────────
+if [ -d "$COMMANDS_DIR" ]; then
+  while IFS= read -r f; do
+    lines=$(wc -l < "$f")
+    if [ "$lines" -gt "$COMMAND_LIMIT" ]; then
+      rel="${f#"$REPO_ROOT"/}"
+      VIOLATIONS+=("  · $rel: $lines lines (limit: $COMMAND_LIMIT)")
+    fi
+  done < <(find "$COMMANDS_DIR" -name "*.md" | sort)
+fi
 
 # ── CLAUDE.md size check ──────────────────────────────────────────────────────
 CLAUDE_MD_LINES=$(wc -l < "$REPO_ROOT/CLAUDE.md" 2>/dev/null || echo 0)
@@ -84,7 +102,7 @@ for v in "${VIOLATIONS[@]}"; do
   echo "$v"
 done
 echo ""
-echo " Agents: max $AGENT_LIMIT lines | Skills: max $SKILL_LIMIT lines"
+echo " Agents: max $AGENT_LIMIT lines | Skills: max $SKILL_LIMIT lines | Commands: max $COMMAND_LIMIT lines"
 echo " Move long reference material to a references/ subdirectory."
 echo "$SEPARATOR"
 

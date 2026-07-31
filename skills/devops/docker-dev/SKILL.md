@@ -5,6 +5,26 @@ description: Docker dev — docker-compose, local Dockerfiles, container debuggi
 
 # Docker for Development Environments
 
+## Command Execution Contract
+
+**Canonical rule for every agent, not just devops.** When Docker is the development
+environment, all commands and scripts run **inside the appropriate container** — never on the host.
+
+| Task | Command form |
+|------|-------------|
+| Run a script or CLI command | `docker compose exec <service> <command>` |
+| Run a one-off command | `docker compose run --rm <service> <command>` |
+| Access a shell | `docker compose exec <service> sh` (or `bash`) |
+
+- Identify the correct service name from the compose file before running anything (`app`, `api`, `backend`, `web`, …)
+- If the containers are not running, start them first: `docker compose up -d`
+- Never install dependencies, run migrations, execute tests, or invoke framework CLIs on the host
+- Use the compose command form recorded as `DOCKER_COMPOSE:` in the project's `CLAUDE.md`
+  (`docker compose` vs legacy `docker-compose`) — see `skills/shared/stack-detection/SKILL.md`
+
+**Exception:** if the user explicitly asks for a command to run on the host ("run this locally"),
+honor it for that command only. The default reverts to in-container immediately after.
+
 ## Core Principles
 
 - Dev containers should **mirror production** as closely as possible without overcomplicating setup

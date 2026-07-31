@@ -1,11 +1,16 @@
 ---
 name: android
-description: Android-specific development guidelines — design, permissions, release signing, and native Kotlin/Jetpack Compose standards. Load when the project targets Android.
+description: Android engineering rules — permissions, release signing, Kotlin/Compose. Load for Android.
 ---
 
-## Design & UX
+## Scope
 
-- Load `skills/mobile/material-design/SKILL.md` for the full reference on color system (Material You tokens), typography scale, components (NavigationBar, FAB, Cards, Bottom Sheet), motion, adaptive layout (Window Size Classes), and accessibility (48dp touch targets, TalkBack)
+This skill is the **engineering** half of Android support: platform rules that apply to any Android task — permissions, release signing, distribution, and native code standards.
+
+The **design** half lives in `skills/mobile/material-design/SKILL.md` (color system, typography scale, components, motion, adaptive layout, accessibility). Load it **only when the task touches UI** — screen layout, navigation, visual or interaction design. A signing, build, or non-UI logic task does not need it.
+
+## Design & UX (non-negotiable, applies even to non-UI tasks)
+
 - Support **edge-to-edge** layout — use `WindowInsets` to avoid overlap with system bars
 - Use **adaptive icons** (`mipmap-anydpi-v26/`) — required for Android 8.0+
 - Support **back gesture** (predictive back on Android 14+) — register `OnBackPressedCallback` instead of overriding `onBackPressed()`

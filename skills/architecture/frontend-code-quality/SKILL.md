@@ -1,6 +1,6 @@
 ---
 name: frontend-code-quality
-description: Base code quality standards for frontend development — component size, state management, semantic HTML, accessibility, performance, loading states, metadata, KISS/YAGNI/DRY principles, type safety, and prop sprawl rules. Loaded by frontend-developer as the authoritative quality baseline.
+description: Base frontend code quality rules — component size, state, a11y, performance, type safety.
 ---
 
 # Frontend Code Quality Standards (Base Defaults)

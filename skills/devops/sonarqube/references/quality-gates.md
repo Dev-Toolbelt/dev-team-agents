@@ -70,17 +70,24 @@ All hotspots must be reviewed before the quality gate passes (`Security Hotspots
 
 Coverage only appears if the report is generated **before** the scan and the correct path is configured.
 
-| Language | Tool | sonar-project.properties key |
-|----------|------|------------------------------|
-| JavaScript / TypeScript | Jest (`--coverage`), Vitest | `sonar.javascript.lcov.reportPaths` |
-| Python | pytest-cov | `sonar.python.coverage.reportPaths` |
-| PHP | PHPUnit (Clover XML) | `sonar.php.coverage.reportPaths` |
-| Java | JaCoCo | `sonar.coverage.jacoco.xmlReportPaths` |
-| Go | `go test -coverprofile=coverage.out` | `sonar.go.coverage.reportPaths` |
-| Ruby | SimpleCov | `sonar.ruby.coverage.reportPaths` |
-| .NET | Coverlet / dotnet-coverage | `sonar.cs.vscoveragexml.reportsPaths` |
+| Language | Test runner command | Output artifact | sonar-project.properties key |
+|----------|---------------------|-----------------|------------------------------|
+| JavaScript / TypeScript | `jest --coverage --coverageReporters=lcov` | `coverage/lcov.info` | `sonar.javascript.lcov.reportPaths` |
+| JavaScript / TypeScript | `vitest run --coverage --coverage.reporter=lcov` | `coverage/lcov.info` | `sonar.javascript.lcov.reportPaths` |
+| Python | `pytest --cov --cov-report=xml` | `coverage.xml` | `sonar.python.coverage.reportPaths` |
+| PHP | `phpunit --coverage-clover coverage/clover.xml` | Clover XML | `sonar.php.coverage.reportPaths` |
+| Java | JaCoCo plugin (`mvn verify` / `gradle test jacocoTestReport`) | `target/site/jacoco/jacoco.xml` | `sonar.coverage.jacoco.xmlReportPaths` |
+| Go | `go test -coverprofile=coverage.out ./...` | `coverage.out` | `sonar.go.coverage.reportPaths` |
+| Ruby | SimpleCov (configured in `spec_helper`) | `coverage/.resultset.json` | `sonar.ruby.coverage.reportPaths` |
+| .NET | `dotnet test --collect:"XPlat Code Coverage"` (Coverlet) | `**/coverage.cobertura.xml` | `sonar.cs.vscoveragexml.reportsPaths` |
 
 Test the path before running the scanner — a misconfigured path results in 0% coverage with no error.
+
+**Coverage quality rules**
+
+- Do **not** pad coverage: an assertion that exists only to raise the number provides no safety net and hides the real gap.
+- Focus coverage on logic-bearing code — branches, error paths, state transitions — not on pure rendering or plain data holders.
+- If new code cannot reach the gate threshold, flag the remaining gap explicitly rather than silently lowering the gate.
 
 ---
 

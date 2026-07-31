@@ -1,6 +1,6 @@
 ---
 name: github-actions
-description: After an explicitly requested push, watch the repository's GitHub Actions and auto-fix failures until the run is green. Load when the user asks to push and the GitHub CLI is configured.
+description: Load when the user asks to push — watch GitHub Actions and auto-fix failures until green.
 ---
 
 # Push & GitHub Actions Monitoring

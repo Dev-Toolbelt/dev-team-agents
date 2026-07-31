@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Git worktree per task — <worktree_path>/<context>/<title>, default .dev-team-agents/worktrees.
+description: Git worktree per task — <worktree_path>/<context>/<title>, in .dev-team-agents/worktrees.
 ---
 
 # Worktree — Task Isolation Protocol

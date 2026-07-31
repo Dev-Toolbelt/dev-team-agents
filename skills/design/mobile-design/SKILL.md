@@ -1,6 +1,6 @@
 ---
 name: mobile-design
-description: Responsive and mobile-first design rules for UI specifications — breakpoints, navigation patterns, typography adjustments, spacing, touch targets, and component responsive behavior. Loaded by ui-ux-designer on every UI task to ensure mobile coverage.
+description: Mobile-first responsive UI specs — breakpoints, navigation, spacing, touch targets.
 ---
 
 # Mobile Design — Always Include

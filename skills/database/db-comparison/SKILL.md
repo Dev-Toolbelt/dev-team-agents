@@ -34,7 +34,7 @@ description: Database selection — strengths and use-case mapping by type.
 ### Vector / AI
 | Database | Use case |
 |----------|----------|
-| **pgvector** (PostgreSQL ext.) | Semantic search, embeddings, RAG pipelines — load `skills/integrations/database-multitenancy/SKILL.md` |
+| **pgvector** (PostgreSQL ext.) | Semantic search, embeddings, RAG pipelines — load `skills/architecture/llm-integration/SKILL.md` |
 | **Dedicated vector DBs** | Pinecone, Weaviate, Qdrant — when Postgres can't scale the vector workload |
 
 ### Managed Cloud (defer to cloud specialists when infra decisions needed)

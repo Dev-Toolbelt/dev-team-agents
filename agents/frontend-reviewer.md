@@ -14,27 +14,20 @@ Load `skills/shared/model-identity/SKILL.md` — announce your model, tier, and 
 
 Load `skills/shared/reviewer-mindset/SKILL.md` — production-survival bias: bugs first, contract violations, security, coverage, readability, silent failures, architecture conformance.
 
-## Foundational Rule — Load Context First
+## Foundational Rule
 
-Before reviewing anything:
+Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGENTS.md, project.md, session-summary, development docs, and recent git log.
 
-1. `README.md`, `CLAUDE.md`, `AGENTS.md` — project conventions
-2. `docs/project.md` — synthesized project overview
-3. `.dev-team-agents/user-data/session-summary.md` — read most recent entry only (topmost ## YYYY-MM-DD block); captures last session's decisions and what comes next
-4. `docs/development/code-standards.md` — **primary review guide**
-5. `docs/development/architecture.md` — architectural decisions to validate against
-6. `docs/design/design-system.md` — design tokens, component inventory, visual language
-7. Linter/style configs (`.eslintrc`, `.prettierrc`, `stylelint.config.js`) — source of truth for style
-8. Run `git log --oneline -10` — recent commits reveal what changed and team conventions
-9. Run `git diff main...HEAD` — understand exactly what changed; focus findings on the changeset
-10. Load `skills/shared/comments-policy/SKILL.md`. Load additional sections conditionally based on context (Python → type-annotations, tests → aaa-pattern, legacy review → anti-patterns). Apply when reviewing comments in the code
-11. Load `skills/shared/conventional-commits/SKILL.md` — validate commit messages in the changeset
-12. **SonarQube**: if `sonar-project.properties` or `SONAR_TOKEN` is present, load `skills/devops/sonarqube/SKILL.md`
-13. Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared across `code-reviewer`, `backend-reviewer`, and `frontend-reviewer`
+**Review-specific additions after project-context loads:**
 
-**Project standards override base standards. Always.**
+- Treat `docs/development/code-standards.md` as the **primary review guide**, checked against `docs/development/architecture.md`
+- Read `docs/design/design-system.md` — design tokens, component inventory, visual language
+- Read the linter/style configs (`.eslintrc`, `.prettierrc`, `stylelint.config.js`) — the source of truth for style; never report what a formatter already owns
+- Run `git diff <base>...HEAD` (or the working-tree diff) — findings stay inside the changeset
+- Load `skills/shared/comments-policy/SKILL.md` — applies when reviewing comments in the diff
+- Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared with `code-reviewer` and `backend-reviewer`
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads; filter before reading; summarize instead of dumping.
+Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
 ---
 
@@ -106,29 +99,32 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - Load `skills/architecture/form-handling/SKILL.md` when the changeset involves complex forms
 
 ### 10. Type Safety
-- `any` or equivalent untyped escape hatches — flag unless documented
-- Component props without declared types (PropTypes, TypeScript interfaces)
-- Forced type assertions (`as Type`) without a guard
-- Event handler types missing (`React.ChangeEvent<HTMLInputElement>` vs generic `Event`)
-- Optional props dereferenced without null-check
+Apply whatever type discipline the project has adopted — a type system, a runtime prop/schema validator, or documented contracts:
+- Untyped escape hatches (`any` and equivalents) — flag unless documented
+- Component inputs with no declared contract — e.g. missing TypeScript interfaces, PropTypes, or Vue `defineProps` types
+- Forced assertions/casts that bypass the checker without a guard
+- Handler payloads typed too loosely to catch a mistake — e.g. a generic `Event` where the specific event type exists (`React.ChangeEvent<HTMLInputElement>`)
+- Optional or nullable values dereferenced without a null-check
 
 ### 11. Code Quality & Conventions
-- KISS violations: unnecessary abstraction layers, HOCs wrapping HOCs, context for a single value
-- YAGNI violations: unused props added "for future use", generic components with one consumer
+- KISS violations: abstraction layers that add no behavior — e.g. wrappers wrapping wrappers (HOC chains), a shared context/store for a single value
+- YAGNI violations: inputs added "for future use", generic components with one consumer
 - DRY: duplicated fetch logic, repeated style blocks, copy-pasted component logic
-- Naming: load `skills/architecture/naming-conventions/SKILL.md` for component, hook, and file naming standards
+- Naming: load `skills/architecture/naming-conventions/SKILL.md` for component, hook/composable, and file naming standards
 
 ### 12. Comments
 Apply the loaded comments policy:
 - Comments explaining WHAT the code does (remove — improve the code instead)
 - Commented-out dead code
-- TODO/FIXME that should be issue tracker tickets
+
+### 13. Commit Messages
+Only when the review target contains commits (a branch or PR, not a working-tree diff): load `skills/shared/conventional-commits/SKILL.md` and validate the changeset's messages against it — or against the project's own established pattern, which wins.
 
 ---
 
 ## SonarQube Integration
 
-When the SonarQube skill is loaded:
+When `project-context` has loaded the SonarQube skill (see its Quality / Security Scanners section):
 
 1. Check open issues on the changeset for new Bugs, Vulnerabilities, and Code Smells
 2. Report quality gate status (PASS / FAIL)

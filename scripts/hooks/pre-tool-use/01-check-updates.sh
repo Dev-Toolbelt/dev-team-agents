@@ -1,209 +1,78 @@
 #!/usr/bin/env bash
 # PreToolUse sub-script: silent TTL-based update check.
 # Notifies Claude when a new version of dev-team-agents is available.
-# Auto-updates if .dev-team-agents/user-data/.auto-update flag exists.
+# Auto-updates when auto_update is enabled (or the legacy .auto-update flag exists).
+#
+# This file is the orchestrator only — preference reads, TTL cache, HTTP tool
+# detection, ETag-cached release fetch, notification format and the auto-update
+# trigger all live in ../lib/update-check.sh.
+#
+# Hot path (checked within the TTL window) is pure bash: no subprocess is
+# spawned at all. This hook runs on EVERY tool call.
 set -euo pipefail
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+LIB_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/update-check.sh"
+[ -f "$LIB_FILE" ] || exit 0
+# shellcheck source=scripts/hooks/lib/update-check.sh
+. "$LIB_FILE"
+
 USER_DATA_DIR="$INSTALL_DIR/user-data"
 LAST_CHECK_FILE="$USER_DATA_DIR/.last-update-check"
 VERSION_FILE="$USER_DATA_DIR/.installed-version"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
-
-# Read update_check_interval_hours from preferences.json (default: 24h)
-UPDATE_INTERVAL_HOURS=24
-if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    UPDATE_INTERVAL_HOURS=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(d.get('update_check_interval_hours',24))" \
-        2>/dev/null || echo 24)
-fi
-TWENTY_FOUR_HOURS=$(( UPDATE_INTERVAL_HOURS * 3600 ))
+INTERVAL_CACHE_FILE="$USER_DATA_DIR/.update-check-interval"
+ETAG_FILE="$USER_DATA_DIR/.last-releases-etag"
+# Cached latest-version string, paired with the ETag. On a 304 (release
+# unchanged) it is reused, so a local install that is behind the still-latest
+# release is not silently treated as up to date.
+VERSION_CACHE_FILE="$USER_DATA_DIR/.last-releases-version"
 
 GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
 GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"
-INSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/scripts/install.sh"
+# The installer URL is deliberately NOT built here. Auto-update resolves it via
+# scripts/lib/installer-fetch.sh so the unattended path gets the same ref
+# pinning and payload verification as the manual `update.sh`.
 
-# TTL: skip if checked within 24h
-if [ -f "$LAST_CHECK_FILE" ]; then
-    LAST_CHECK=$(cat "$LAST_CHECK_FILE")
-    NOW=$(date +%s)
-    DIFF=$((NOW - LAST_CHECK))
-    if [ "$DIFF" -lt "$TWENTY_FOUR_HOURS" ]; then
-        exit 0
-    fi
-fi
+# ── TTL gate (hot path — must stay fork-free) ─────────────────────────────────
+NOW=$(uc_now_epoch)
+INTERVAL_HOURS=$(uc_interval_hours "$PREFS_FILE" "$INTERVAL_CACHE_FILE")
+uc_ttl_fresh "$LAST_CHECK_FILE" "$INTERVAL_HOURS" "$NOW" && exit 0
 
-ETAG_FILE="$USER_DATA_DIR/.last-releases-etag"
-# Cached latest-version string, paired with the ETag. On a 304 (release unchanged)
-# we reuse this instead of exiting, so a local install that is behind the still-latest
-# release is not silently treated as up to date.
-VERSION_CACHE_FILE="$USER_DATA_DIR/.last-releases-version"
-LATEST=""
+# ── Cold path: network check ──────────────────────────────────────────────────
+uc_setup_http || exit 0
 
-# HTTP tool detection
-if command -v curl >/dev/null 2>&1; then
-    HTTP_GET() { curl -fsSL --connect-timeout 5 --max-time 10 "$1"; }
-    HTTP_DL()  { curl -fsSL --connect-timeout 5 --max-time 30 -o "$1" "$2"; }
-else
-    # wget path: ETag not supported; fall through without ETag caching
-    if command -v wget >/dev/null 2>&1; then
-        HTTP_GET() { wget -qO- "$1"; }
-        HTTP_DL()  { wget -qO "$1" "$2"; }
-    else
-        exit 0
-    fi
-fi
-
-# Update timestamp before network call — prevents hammering on bad-network sessions
+# Update the timestamp before the network call — prevents hammering on
+# bad-network sessions.
 mkdir -p "$USER_DATA_DIR" || exit 0
-date +%s > "$LAST_CHECK_FILE"
+printf '%s\n' "$NOW" > "$LAST_CHECK_FILE"
 
-# Fetch latest version via GitHub API (with ETag caching when curl is available)
-TMP_HEADERS=$(mktemp)
-TMP_BODY=$(mktemp)
-trap 'rm -f "$TMP_HEADERS" "$TMP_BODY"' EXIT
-
-RELEASES_URL="${GITHUB_API}/releases/latest"
-HTTP_STATUS=""
-
-if command -v curl >/dev/null 2>&1; then
-    # Build ETag conditional request header if we have a cached ETag
-    CURL_ARGS=(-sS --connect-timeout 5 --max-time 10 -D "$TMP_HEADERS" -o "$TMP_BODY" -w "%{http_code}")
-    if [ -f "$ETAG_FILE" ]; then
-        CACHED_ETAG=$(cat "$ETAG_FILE" 2>/dev/null || true)
-        [ -n "$CACHED_ETAG" ] && CURL_ARGS+=(-H "If-None-Match: ${CACHED_ETAG}")
-    fi
-
-    HTTP_STATUS=$(curl "${CURL_ARGS[@]}" "${RELEASES_URL}" 2>/dev/null || echo "000")
-
-    if [ "$HTTP_STATUS" = "304" ]; then
-        # Not Modified — the latest release is unchanged since the cached ETag.
-        # Reuse the cached version and continue to the local-vs-latest comparison
-        # instead of exiting, so an install that is behind the still-latest release
-        # is still detected. (If the cache is empty — an install predating this
-        # field — LATEST stays empty and the tags fallback below repopulates it.)
-        LATEST=$(cat "$VERSION_CACHE_FILE" 2>/dev/null || true)
-    else
-        if [ "$HTTP_STATUS" = "200" ]; then
-            # Save new ETag for next check
-            NEW_ETAG=$(grep -i '^etag:' "$TMP_HEADERS" | head -1 | sed 's/^[Ee][Tt][Aa][Gg]: *//;s/\r//' || true)
-            [ -n "$NEW_ETAG" ] && printf '%s' "$NEW_ETAG" > "$ETAG_FILE"
-        fi
-        API_RESP=$(cat "$TMP_BODY" 2>/dev/null || true)
-    fi
-else
-    API_RESP=$(HTTP_GET "${RELEASES_URL}" 2>/dev/null || true)
-fi
-
-# Parse the latest tag from the API response — unless a 304 already supplied it from cache
-if [ -z "$LATEST" ]; then
-    LATEST=$(printf '%s' "$API_RESP" \
-        | grep '"tag_name"' | head -1 \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
-fi
-
-if [ -z "$LATEST" ]; then
-    API_RESP=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
-    LATEST=$(printf '%s' "$API_RESP" \
-        | grep '"name"' | head -1 \
-        | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
-fi
-
-# Cache the resolved version alongside the ETag so a future 304 can reuse it
-[ -n "$LATEST" ] && printf '%s' "$LATEST" > "$VERSION_CACHE_FILE"
-
+LATEST=$(uc_fetch_latest "$GITHUB_API" "$ETAG_FILE" "$VERSION_CACHE_FILE")
 [ -n "$LATEST" ] || exit 0
 
 CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
 [ "$CURRENT" != "unknown" ] && [ "$LATEST" != "unknown" ] || exit 0
 [ "$CURRENT" != "$LATEST" ] || exit 0
 
-# Read preferences
+# ── Notify / auto-update ──────────────────────────────────────────────────────
 LANG_PREF="en"
-SUPPRESS="false"
+UC_SUPPRESS="false"
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     LANG_PREF=$(python3 -c \
         "import json; d=json.load(open('$PREFS_FILE')); print(d.get('language','en'))" \
         2>/dev/null || echo "en")
-    SUPPRESS=$(python3 -c \
+    UC_SUPPRESS=$(python3 -c \
         "import json,sys; d=json.load(open('$PREFS_FILE')); v=d.get('suppress_notifications',False); print('true' if v is True else ('false' if v is False else ','.join(v)))" \
         2>/dev/null || echo "false")
 fi
+export UC_SUPPRESS
 
-_is_suppressed() {
-    local TYPE="$1"
-    [ "$SUPPRESS" = "true" ] && return 0
-    case ",$SUPPRESS," in *,"$TYPE",*) return 0 ;; esac
-    return 1
-}
-
-_notify() {
-    local TYPE="$1"
-    local MSG="$2"
-    _is_suppressed "$TYPE" && return 0
-    local ICON
-    case "$TYPE" in
-        warning)  ICON="⚠️" ;;
-        critical) ICON="🚨" ;;
-        *)        ICON="ℹ️" ;;
-    esac
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " $ICON  DEV TEAM AGENTS  $ICON"
-    echo " $MSG"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-}
-
-# Auto-update mode: check preferences.json first, fall back to legacy flag file
-AUTO_UPDATE=false
-if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    AUTO_UPDATE=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('auto_update',False)).lower())" \
-        2>/dev/null || echo false)
-fi
-# Legacy flag file support (migration period)
-[ -f "${USER_DATA_DIR}/.auto-update" ] && AUTO_UPDATE=true
-
-if [ "$AUTO_UPDATE" = "true" ]; then
-    echo ""
-    echo "→ Auto-updating dev-team-agents: $CURRENT → $LATEST"
-    TMP_INSTALLER=$(mktemp)
-    trap 'rm -f "$TMP_INSTALLER"' EXIT
-    HTTP_DL "$TMP_INSTALLER" "$INSTALL_URL"
-    bash "$TMP_INSTALLER" latest
-    case "$LANG_PREF" in
-        pt-BR|pt*)
-            MSG="dev-team-agents atualizado para $LATEST. Execute um health check para verificar: \"Faça um health check neste projeto\"."
-            ;;
-        es*)
-            MSG="dev-team-agents actualizado a $LATEST. Ejecuta un health check para verificar: \"Haz un health check en este proyecto\"."
-            ;;
-        *)
-            MSG="dev-team-agents updated to $LATEST. Run a health check to verify: \"Run a health check on this project\"."
-            ;;
-    esac
-    _notify "info" "$MSG"
+if uc_auto_update_enabled "$PREFS_FILE" "$USER_DATA_DIR"; then
+    uc_perform_auto_update "$CURRENT" "$LATEST" "$INSTALL_DIR"
+    uc_notify "info" "$(uc_message updated "$LANG_PREF" "$CURRENT" "$LATEST")"
     exit 0
 fi
 
-# Notify only — update available
-case "$LANG_PREF" in
-    pt-BR|pt*)
-        MSG="Atualização disponível: $CURRENT → $LATEST
- Execute: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto"
-        ;;
-    es*)
-        MSG="Actualización disponible: $CURRENT → $LATEST
- Ejecuta: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto"
-        ;;
-    *)
-        MSG="Update available: $CURRENT → $LATEST
- Run: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto"
-        ;;
-esac
-_notify "warning" "$MSG"
+uc_notify "warning" "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
+exit 0

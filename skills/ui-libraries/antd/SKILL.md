@@ -28,7 +28,7 @@ Ant Design has an official MCP server with real-time documentation, code example
 }
 ```
 
-> If auto-configuration fails, ask the user to add the entry manually in **Claude Code → Settings → MCP Servers**, or run `npm install -g @ant-design/cli` and use `antd mcp` as the command.
+> If auto-configuration fails, ask the user to add the entry manually in their CLI's MCP settings (**Claude Code → Settings → MCP Servers**, the `mcp` block of `opencode.json`, or Codex CLI's MCP config), or run `npm install -g @ant-design/cli` and use `antd mcp` as the command.
 
 ## Core Concepts
 

@@ -1,6 +1,6 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
@@ -9,13 +9,13 @@ Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any qu
 ## Protagonist — product-analyst
 
 Always spawn:
-- `product-analyst` at `.claude/agents/dev-team/product-analyst.md` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`docs/backlog/overview.md`) ready to become sprints. It stays out of technical design.
+- `product-analyst` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`docs/backlog/overview.md`) ready to become sprints. It stays out of technical design.
 
 The `product-analyst` owns the conversation and the deliverable. Planning is business-first: the output is *what* and *why*, not *how*.
 
 ## Conditional — software-architect
 
-Spawn `software-architect` at `.claude/agents/dev-team/software-architect.md` **only if** the user **explicitly** asks for technical input in `$ARGUMENTS` — e.g., they request architecture, a technical design, stack/data-model/API decisions, trade-offs, or an ADR. In that case, the software-architect contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
+Spawn `software-architect` **only if** the user **explicitly** asks for technical input in `$ARGUMENTS` — e.g., they request architecture, a technical design, stack/data-model/API decisions, trade-offs, or an ADR. In that case, the software-architect contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
 
 If the request is purely a feature/business ask (the default), do **not** spawn the software-architect — keep the plan business-only.
 

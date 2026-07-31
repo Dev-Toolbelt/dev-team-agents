@@ -87,7 +87,9 @@ async handle(payload: unknown) {
 
 **Exponential backoff formula**: `base_delay * 2^attempt` with jitter — prevents thundering herd when many jobs fail simultaneously.
 
-Configure per-job retry limits (not global defaults) — a payment job and an analytics job have different tolerance for retries.
+**Minimum retry baseline** — unless the project defines otherwise: **3 attempts with exponential backoff starting at 2 s** (`2s → 4s → 8s`), then DLQ.
+
+Configure per-job retry limits (not global defaults) — a payment job and an analytics job have different tolerance for retries. A payment job warrants fewer attempts and faster DLQ escalation than an analytics event.
 
 ---
 

@@ -28,12 +28,17 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 | tier | role | claude | opencode | codex |
 | --- | --- | --- | --- | --- |
-| `reasoning` | architecture, planning, big refactors | `claude-opus-4-7` | `opencode-go/glm-5.2` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
-| `backend-exec` | backend implementation, review, database, devops, qa, mobile | `claude-sonnet-4-6` | `opencode-go/deepseek-v4-flash` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `reasoning` | architecture, planning, big refactors | `claude-opus-4-7` | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
+| `backend-exec` | backend implementation, review, database, devops, qa, mobile | `claude-sonnet-4-6` | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
 | `frontend` | frontend implementation, review, design, frontend tests | `claude-sonnet-4-6` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/minimax-m3` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
+| `repetitive` | test scaffolding, docs, runbook generation, high-volume low-judgment | `claude-sonnet-4-6` | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
-`model:` was removed from `agents/*.md` frontmatter — Claude Code auto-selects the model based on the agent name, and `tier:` in each agent (resolved via `tiers.json` per provider) is the single source of truth for provider-specific model assignment.
+`model:` was removed from `agents/*.md` frontmatter. **`tier:` is the single source of truth** — the renderer reads it and resolves it through `scripts/lib/tiers.json` into a provider-specific model id. No agent ever names a model; to change one, edit `tiers.json`.
+
+How that resolved id reaches the CLI differs by provider:
+
+- **opencode / codex** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
+- **claude** — the render is the identity case: `agents/*.md` is emitted byte-identical to source, so the rendered file carries no `model:` key and Claude Code applies its own default subagent model. The `claude` column in `tiers.json` documents the intended mapping (and satisfies the provider-column completeness check in `.github/scripts/ci/provider/_contract.py`), but it is not injected into the output.
 
 ---
 
@@ -70,6 +75,8 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 **Skills stay shared.** Every provider's installer symlinks this repo's `skills/` directory into the provider's skill-search path. Skill frontmatter is already compliant with the agentskills.io specification (`name` + `description` only), so no provider-specific rewrite is needed.
 
+> **Skill `name` must equal the skill's directory basename, and must be unique across all categories.** This is a cross-provider invariant, not a style rule: the render engine resolves opencode skills by frontmatter `name`, while the installers symlink by directory. A skill whose `name` disagrees with its directory loads under Claude and Codex but not under opencode. `helpers/agent-lint.sh` enforces both the match and the uniqueness.
+
 **Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,stop}.sh` are the same bash scripts across all three providers. Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with `PreToolUse` / `Stop` / `PreCompact` / `SessionStart` event names (which coincide with Claude's).
 
 ---
@@ -83,9 +90,9 @@ Expected cost: ~1 hour, no edits to `agents/`, `commands/`, `skills/`, or `scrip
 3. **Add a row to `scripts/lib/command-map.json`** — `providers.<provider>` declaring where slash commands are emitted and how the colon-separated name surfaces to the user.
 4. **(optional) Add a hook-binding adapter** — if the new provider exposes lifecycle events that should fire `scripts/hooks/*.sh`, add a plugin file (TS, bash, etc.) in a `<provider>/plugin/` directory inside this repo. Leave it out if the provider has no equivalent.
 5. **Add `scripts/install-<provider>.sh`** — a thin bash script (see `install-opencode.sh` for a template) that: locates the framework source, calls `scripts/render-provider.sh --provider <name>`, and wires the rendered tree into the target project.
-6. **Add a row in the CI matrix** in `.github/workflows/ci.yml` (`provider-matrix` job).
+6. **Add a value to the CI matrix** in `.github/workflows/ci.yml` (`provider-contracts` job, `matrix.provider`).
 
-> Note: `install-opencode.sh` and `install-codex.sh` (plus the render engine and `scripts/lib/{tiers,tool-map,command-map,commands}.json` + `opencode/plugin/`) are NOT bundled into a slim Claude install. Users bootstrap provider support by curl-piping `scripts/install-provider.sh <provider>`, which downloads the tarball and runs the matching installer from a temp source dir. This keeps the default client footprint minimal without sacrificing cross-CLI capability.
+> Note on packaging: the render engine, `scripts/lib/*.json`, `install-opencode.sh` and `install-codex.sh` **are** bundled into a Claude install — `scripts/lib/strip-tarball.sh` removes only `opencode/` (the plugin source), `helpers/`, `.claude/`, `.github/`, `.gitignore` and `scripts/install.sh`. Keeping the plumbing means a Claude user can add Codex or opencode support offline by running `.dev-team-agents/scripts/install-codex.sh` / `install-opencode.sh` directly. `scripts/install-provider.sh` remains the curl-pipe entry point for users starting from scratch; it also fetches `opencode/plugin/` on demand.
 
 If your provider can't expose `/devteam:<name>` (e.g., it hardcodes a slash namespace), document the divergence in this file's table above — never alter the canonical `commands/` source to fit the provider.
 
@@ -164,12 +171,15 @@ opencode/kimi-k2.7-code          → Kimi K2.7 Code
 
 `scripts/lib/tiers.json` is the canonical source. Current mapping (using `opencode-go` models):
 
-| Tier | opencode-go (default) | opencode-zen (premium) |
+| Tier | opencode-go (default, from `tiers.json`) | opencode-zen (premium alternative) |
 |------|----------------------|----------------------|
-| `reasoning` | `opencode-go/glm-5.2` | `opencode/claude-opus-4-7` |
-| `backend-exec` | `opencode-go/deepseek-v4-flash` | `opencode/gpt-5.6-terra` |
+| `reasoning` | `opencode-go/qwen3.7-plus` | `opencode/claude-opus-4-7` |
+| `backend-exec` | `opencode-go/kimi-k2.7-code` | `opencode/gpt-5.6-terra` |
 | `frontend` | `opencode-go/kimi-k2.6` | `opencode/gpt-5.6-terra` |
-| `repetitive` | `opencode-go/minimax-m3` | `opencode/gpt-5.6-luna` |
+| `repetitive` | `opencode-go/kimi-k2.5` | `opencode/gpt-5.6-luna` |
+
+Only the first column is read by the renderer. The premium column is a suggested
+substitution — changing it here changes nothing; edit `tiers.json` to change what ships.
 
 ### All opencode-go Models (alphabetical)
 

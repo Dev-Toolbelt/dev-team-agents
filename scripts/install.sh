@@ -61,24 +61,78 @@ else
     exit 1
 fi
 
+# ── Temp workspace and failure-safe cleanup ───────────────────────
+# Everything downloaded or extracted lives under TMP_DIR.
+#
+# The installation swap (Step 2c) never deletes the current installation
+# before the replacement is in place: the old tree is *renamed aside* and is
+# only removed once the new tree has been renamed into position. _cleanup()
+# is the safety net — if the process dies between those two renames it puts
+# the old tree back, so the project is never left without an installation.
+TMP_DIR=$(mktemp -d)
+NEW_DIR=""            # staged new installation (sibling of INSTALL_DIR)
+OLD_DIR=""            # previous installation, moved aside during the swap
+SWAP_DONE=false
+
+_cleanup() {
+    local _rc=$?
+    if [ "$SWAP_DONE" != true ] && [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
+        if [ ! -e "$INSTALL_DIR" ]; then
+            if mv "$OLD_DIR" "$INSTALL_DIR" 2>/dev/null; then
+                echo "" >&2
+                echo "→ Install failed (exit $_rc). Previous installation restored." >&2
+            else
+                echo "" >&2
+                echo "ERROR: install failed AND the previous installation could not be" >&2
+                echo "       restored automatically. It is intact at:" >&2
+                echo "         $OLD_DIR" >&2
+                echo "       Restore it with:" >&2
+                echo "         mv \"$OLD_DIR\" \"$INSTALL_DIR\"" >&2
+            fi
+        else
+            echo "" >&2
+            echo "NOTE: a copy of the previous installation was left at:" >&2
+            echo "        $OLD_DIR" >&2
+        fi
+    fi
+    if [ -n "$NEW_DIR" ] && [ -d "$NEW_DIR" ]; then rm -rf "$NEW_DIR" 2>/dev/null || true; fi
+    if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then rm -rf "$TMP_DIR" 2>/dev/null || true; fi
+    return $_rc
+}
+trap _cleanup EXIT
+
+# Surface the real reason an HTTP request failed instead of swallowing it.
+# Reads a captured stderr log and prints up to 5 unique lines, indented.
+_print_http_error() {
+    local _file="$1"
+    local _indent="${2:-  }"
+    [ -f "$_file" ] && [ -s "$_file" ] || return 0
+    echo "${_indent}Reported by the HTTP client:" >&2
+    awk 'NF && !seen[$0]++' "$_file" | head -5 | sed "s|^|${_indent}  |" >&2
+    return 0
+}
+
 # ── Step 1: Resolve version via GitHub API ────────────────────────
+_API_ERR="$TMP_DIR/github-api.err"
+
 if [ "$VERSION" = "latest" ]; then
-    _releases_json=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>/dev/null || true)
+    _releases_json=$(HTTP_GET "${GITHUB_API}/releases/latest" 2>>"$_API_ERR" || true)
     RESOLVED=$(echo "$_releases_json" \
         | grep '"tag_name"' | head -1 \
         | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' || true)
 
     # Fallback: tags list (repo has tags but no formal release)
     if [ -z "$RESOLVED" ]; then
-        _tags_json=$(HTTP_GET "${GITHUB_API}/tags" 2>/dev/null || true)
+        _tags_json=$(HTTP_GET "${GITHUB_API}/tags" 2>>"$_API_ERR" || true)
         RESOLVED=$(echo "$_tags_json" \
             | grep '"name"' | head -1 \
             | sed 's/.*"name": *"\([^"]*\)".*/\1/' || true)
     fi
 
-    # Fallback: main branch (no tags yet)
+    # Fallback: main branch (no tags yet, or the API is unreachable/rate-limited)
     if [ -z "$RESOLVED" ]; then
-        echo "→ No tags found. Using main branch."
+        echo "→ Could not resolve a release tag from the GitHub API. Using main branch."
+        _print_http_error "$_API_ERR" "  "
         RESOLVED="main"
     else
         echo "→ Installing latest: $RESOLVED"
@@ -95,25 +149,37 @@ else
     TARBALL_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/archive/refs/tags/${RESOLVED}.tar.gz"
 fi
 
-TMP_DIR=$(mktemp -d)
 TMP_TAR="$TMP_DIR/archive.tar.gz"
+_DL_ERR="$TMP_DIR/download.err"
 
-if ! HTTP_GET_FILE "$TARBALL_URL" "$TMP_TAR" 2>/dev/null; then
-    rm -rf "$TMP_DIR"
+set +e
+HTTP_GET_FILE "$TARBALL_URL" "$TMP_TAR" 2>"$_DL_ERR"
+_DL_RC=$?
+set -e
+
+if [ "$_DL_RC" -ne 0 ]; then
+    echo "ERROR: failed to download the release tarball (HTTP client exit $_DL_RC)." >&2
+    echo "  URL: $TARBALL_URL" >&2
+    _print_http_error "$_DL_ERR" "  "
     if [ -f "$USER_DATA_DIR/.installed-version" ]; then
-        echo "→ No network or download failed. Keeping existing install."
+        echo "→ Keeping the existing installation ($(cat "$USER_DATA_DIR/.installed-version" 2>/dev/null || echo unknown))." >&2
         exit 0
     fi
-    echo "ERROR: Failed to download $TARBALL_URL" >&2
     exit 1
 fi
 
 mkdir -p "$TMP_DIR/extracted"
-tar -xzf "$TMP_TAR" -C "$TMP_DIR/extracted"
+_TAR_ERR="$TMP_DIR/extract.err"
+if ! tar -xzf "$TMP_TAR" -C "$TMP_DIR/extracted" 2>"$_TAR_ERR"; then
+    echo "ERROR: could not extract the downloaded archive." >&2
+    echo "  URL: $TARBALL_URL" >&2
+    echo "  The download may be truncated, or the server returned an error page." >&2
+    _print_http_error "$_TAR_ERR" "  "
+    exit 1
+fi
 
 EXTRACTED_ROOT=$(find "$TMP_DIR/extracted" -maxdepth 1 -mindepth 1 -type d | head -1)
 if [ -z "$EXTRACTED_ROOT" ]; then
-    rm -rf "$TMP_DIR"
     echo "ERROR: Tarball extraction produced no directory." >&2
     exit 1
 fi
@@ -122,8 +188,7 @@ fi
 PREV_CHECK=""
 [ -f "$USER_DATA_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$USER_DATA_DIR/.last-update-check")
 
-# Replace existing installation (handles tarball and legacy git-clone installs)
-# Uses atomic rename so the running script is never deleted mid-execution.
+# Replace existing installation (handles tarball and legacy git-clone installs).
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Allowlist: only these top-level entries are distributed to users
@@ -150,27 +215,59 @@ done
 source "$EXTRACTED_ROOT/scripts/lib/strip-tarball.sh"
 apply_strip "$EXTRACTED_ROOT"
 
+# ── Step 2c: Swap the new installation into place (failure-safe) ──
+# Nothing is destroyed before its replacement exists. Order of operations:
+#
+#   1. stage the new tree as a sibling of the target   (.dev-team-agents.new.$$)
+#   2. copy the existing user-data/ into the staged tree
+#   3. rename the current installation aside           (.dev-team-agents.old.$$)
+#   4. rename the staged tree into place               (same-filesystem rename)
+#   5. delete the aside copy — only after step 4 succeeded
+#
+# Steps 3 and 4 are same-filesystem renames, so each is atomic. A failure at
+# any point leaves either the old tree or the new tree in place, never
+# nothing, and _cleanup() restores the old tree if we die between 3 and 4.
+# Staging as a sibling also means the running script's own directory is
+# renamed rather than unlinked, which is what keeps `update.sh` (executing
+# from inside the tree being replaced) readable for the rest of its run.
+NEW_DIR="$INSTALL_DIR.new.$$"
+rm -rf "$NEW_DIR"
+if ! mv "$EXTRACTED_ROOT" "$NEW_DIR" 2>/dev/null; then
+    # mv across filesystems can fail part-way; fall back to an explicit copy.
+    rm -rf "$NEW_DIR"
+    mkdir -p "$NEW_DIR"
+    cp -R "$EXTRACTED_ROOT/." "$NEW_DIR/"
+fi
+
+# Carry user data (preferences.json, session-summary.md, telemetry queue, …)
+# into the staged tree BEFORE the swap, so it is never the only copy on disk.
+if [ -d "$USER_DATA_DIR" ]; then
+    rm -rf "$NEW_DIR/user-data"
+    cp -R "$USER_DATA_DIR" "$NEW_DIR/user-data"
+fi
+
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
-    # Preserve user data across updates — save before removing the install dir
-    USER_DATA_BACKUP=$(mktemp -d)
-    if [ -d "$USER_DATA_DIR" ]; then
-        cp -r "$USER_DATA_DIR" "$USER_DATA_BACKUP/"
-    fi
-    rm -rf "$INSTALL_DIR"
-    mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    # Restore user data
-    if [ -d "$USER_DATA_BACKUP/user-data" ]; then
-        rm -rf "$USER_DATA_DIR"
-        mv "$USER_DATA_BACKUP/user-data" "$USER_DATA_DIR"
-    fi
-    rm -rf "$TMP_DIR" "$USER_DATA_BACKUP" || true
-else
-    mv "$EXTRACTED_ROOT" "$INSTALL_DIR"
-    rm -rf "$TMP_DIR" || true
+    OLD_DIR="$INSTALL_DIR.old.$$"
+    rm -rf "$OLD_DIR"
+    mv "$INSTALL_DIR" "$OLD_DIR"
+fi
+
+mv "$NEW_DIR" "$INSTALL_DIR"
+SWAP_DONE=true
+NEW_DIR=""
+
+if [ -n "$OLD_DIR" ]; then
+    rm -rf "$OLD_DIR" 2>/dev/null || true
+    OLD_DIR=""
 fi
 
 # ── Step 2b: Create credentials.local.json if missing ─────────────
+# The distributed tarball carries no user-data/ (it is runtime state, and the
+# KEEP_ROOT allowlist strips it), so on a first install this directory does not
+# exist yet and the heredoc below would fail with "No such file or directory".
+mkdir -p "$USER_DATA_DIR"
+
 CREDENTIALS_FILE="$USER_DATA_DIR/credentials.local.json"
 if [ ! -f "$CREDENTIALS_FILE" ]; then
     cat > "$CREDENTIALS_FILE" <<'JSONEOF'
@@ -613,10 +710,12 @@ else
 fi
 
 # ── Step 11: Make scripts executable ─────────────────────────────
-chmod +x "$INSTALL_DIR/scripts/"*.sh
-chmod +x "$INSTALL_DIR/scripts/hooks/"*.sh 2>/dev/null || true
-chmod +x "$INSTALL_DIR/scripts/hooks/pre-tool-use/"*.sh 2>/dev/null || true
-chmod +x "$INSTALL_DIR/scripts/hooks/stop/"*.sh 2>/dev/null || true
+# Walk the whole scripts/ tree instead of enumerating directories one by one.
+# The manual list silently went stale when scripts/hooks/lib/, scripts/helpers/
+# and scripts/lib/ were added — a recursive find cannot drift that way.
+if [ -d "$INSTALL_DIR/scripts" ]; then
+    find "$INSTALL_DIR/scripts" -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+fi
 
 # ── Step 12: Set up user preferences ─────────────────────────────
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
@@ -625,9 +724,36 @@ PREFS_LANGUAGE="en"
 # session-start health-check backfill (scripts/hooks/session-start.sh).
 PREFS_DEFAULTS_FILE="$INSTALL_DIR/scripts/lib/preferences-defaults.json"
 
-# Ask for language preference when running in an interactive terminal
-# and preferences.json does not yet exist
-if [ -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
+# ── Interactivity detection ───────────────────────────────────────
+# The documented install path is `curl … | bash`, where stdin is a PIPE. A
+# `[ -t 0 ]` test is therefore false even when a human is sitting at the
+# terminal watching the install scroll by, so it is the wrong question to ask.
+# The right question is "can we reach the controlling terminal?" — which is
+# exactly what reading from /dev/tty needs. Set DEVTEAM_NONINTERACTIVE=1 to
+# force the silent path (CI, image builds, automated provisioning).
+_can_prompt() {
+    [ "${DEVTEAM_NONINTERACTIVE:-0}" = "1" ] && return 1
+    [ -e /dev/tty ] || return 1
+    { : </dev/tty; } 2>/dev/null || return 1
+    return 0
+}
+
+# Read one line from the controlling terminal into the named variable.
+# Returns non-zero on EOF or timeout, so callers can distinguish "the user
+# pressed Enter" (consent to the default) from "nobody answered".
+_prompt_read() {
+    local __var="$1"
+    local __timeout="${2:-60}"
+    local __reply=""
+    local __rc=0
+    read -r -t "$__timeout" __reply </dev/tty || __rc=$?
+    printf -v "$__var" '%s' "$__reply"
+    return $__rc
+}
+
+# Ask for language preference when a terminal is reachable and
+# preferences.json does not yet exist
+if [ ! -f "$PREFS_FILE" ] && _can_prompt; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " LANGUAGE PREFERENCE"
@@ -637,11 +763,13 @@ if [ -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
     echo ""
     echo "  Examples: en  pt-BR  es  fr  de  ja  zh-CN"
     printf " Language [en]: "
-    read -r PREFS_LANGUAGE </dev/tty || true
-    PREFS_LANGUAGE="${PREFS_LANGUAGE:-en}"
+    _prompt_read PREFS_LANGUAGE 60 || echo ""
+    # Sanitize: this value is interpolated into JSON on the no-python3 path.
+    PREFS_LANGUAGE=$(printf '%s' "$PREFS_LANGUAGE" | tr -cd 'A-Za-z0-9_-' | cut -c1-16)
+    [ -n "$PREFS_LANGUAGE" ] || PREFS_LANGUAGE="en"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-elif [ ! -t 0 ] && [ ! -f "$PREFS_FILE" ]; then
-    echo "→ NOTE: Non-interactive install. Setting language to 'en'. Edit .dev-team-agents/user-data/preferences.json to change."
+elif [ ! -f "$PREFS_FILE" ]; then
+    echo "→ NOTE: No terminal available. Setting language to 'en'. Edit .dev-team-agents/user-data/preferences.json to change."
 fi
 
 # Migrate legacy .auto-update flag → auto_update field in preferences.json
@@ -650,12 +778,18 @@ if [ -f "$USER_DATA_DIR/.auto-update" ]; then
     AUTO_UPDATE_VALUE="true"
 fi
 
-# Ask for telemetry preference on first interactive install
-TELEMETRY_VALUE="true"
+# ── Telemetry consent ─────────────────────────────────────────────
+# Telemetry is only ever enabled when the user was actually given the chance
+# to decline it. The default is DISABLED: if no terminal is reachable there
+# is no way to obtain consent, so nothing is collected. (Previously the value
+# was preset to "true" and the prompt was gated on `[ -t 0 ]`, which is false
+# under the documented `curl … | bash` install — telemetry was therefore
+# enabled on that path without the prompt ever being shown.)
+TELEMETRY_VALUE="false"
 IS_FIRST_INSTALL=false
 [ ! -f "$PREFS_FILE" ] && IS_FIRST_INSTALL=true
 
-if [ "$IS_FIRST_INSTALL" = true ] && [ -t 0 ]; then
+if [ "$IS_FIRST_INSTALL" = true ] && _can_prompt; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " ANONYMOUS USAGE TELEMETRY"
@@ -671,12 +805,22 @@ if [ "$IS_FIRST_INSTALL" = true ] && [ -t 0 ]; then
     echo "   \"telemetry\": false  in .dev-team-agents/user-data/preferences.json"
     echo ""
     printf " Enable anonymous telemetry? [Y/n]: "
-    read -r _TELEMETRY_INPUT </dev/tty || true
-    case "${_TELEMETRY_INPUT:-y}" in
-        [nN]*) TELEMETRY_VALUE="false" ; echo "→ Telemetry disabled." ;;
-        *)     TELEMETRY_VALUE="true"  ; echo "→ Telemetry enabled (opt out anytime in preferences.json)." ;;
-    esac
+    if _prompt_read _TELEMETRY_INPUT 60; then
+        case "${_TELEMETRY_INPUT:-y}" in
+            [nN]*) TELEMETRY_VALUE="false" ; echo "→ Telemetry disabled." ;;
+            *)     TELEMETRY_VALUE="true"  ; echo "→ Telemetry enabled (opt out anytime in preferences.json)." ;;
+        esac
+    else
+        # Timeout or EOF — silence is not consent.
+        TELEMETRY_VALUE="false"
+        echo ""
+        echo "→ No answer received. Telemetry left DISABLED."
+    fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+elif [ "$IS_FIRST_INSTALL" = true ]; then
+    echo "→ NOTE: No terminal available to ask about anonymous telemetry, so it is DISABLED."
+    echo "  Enable it later with \"telemetry\": true in .dev-team-agents/user-data/preferences.json"
+    echo "  (see PRIVACY.md for exactly what would be collected)."
 fi
 
 if command -v python3 >/dev/null 2>&1; then

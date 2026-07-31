@@ -47,12 +47,17 @@ Behavior:
      Settings → System → For developers; agent then runs
      `git config core.symlinks true && git checkout -- .claude` and re-validates.
   2. **Elevated terminal once** — user runs the two git commands above in an
-     Administrator PowerShell, then restarts Claude Code.
-  3. **Run Claude Code as administrator** — fully close the app (incl. tray and
+     Administrator PowerShell, then restarts the CLI.
+  3. **Run the CLI as administrator** — fully close the app (incl. tray and
      lingering processes), right-click → Run as administrator, re-run the helper.
 
-After any successful repair, tell the user to restart Claude Code so it
+After any successful repair, tell the user to restart their CLI so it
 re-indexes commands, agents, and skills.
+
+> `fix-symlinks.sh` inspects the `.claude/` tree only. On opencode and Codex
+> installs the `skills/` symlink under `.opencode/` or `.codex/` breaks the same
+> way — check it with `test -L <config-dir>/skills/dev-team-agents` and repair by
+> re-running that provider's installer.
 
 ## Auto-fix for non-executable scripts
 

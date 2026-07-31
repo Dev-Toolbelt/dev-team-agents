@@ -1,6 +1,6 @@
 ---
 name: push-notifications
-description: Web Push Notifications — service worker setup, VAPID, cross-browser compatibility, permission UX, subscription management, payload display, and security.
+description: Web Push — service worker, VAPID, permission UX, subscriptions, browser support, security.
 ---
 
 ## Decision Table — What to Load

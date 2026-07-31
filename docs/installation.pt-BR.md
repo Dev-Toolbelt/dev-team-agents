@@ -2,6 +2,8 @@
 
 Este documento cobre pin de versão, atualizações, configuração de idioma, atualizações automáticas e ajuste de notificações. Para o install de uma linha, veja o [README](../README.pt-BR.md#como-instalar).
 
+> **Escopo — a instalação do Claude Code** (`scripts/install.sh`). Caminhos específicos do Claude como `.claude/` e `.claude/settings.json` estão corretos aqui e não são o único caminho de instalação. Para os demais CLIs suportados, veja [install-opencode.md](install-opencode.md) e [install-codex.md](install-codex.md).
+
 ---
 
 ## Instalar uma Versão Específica
@@ -189,3 +191,23 @@ Se preferir que cada desenvolvedor instale localmente:
 .claude/commands/devteam/
 .dev-team-agents/.worktree-session
 ```
+
+### Windows: symlinks em uma instalação commitada
+
+`.claude/agents/dev-team`, `.claude/commands/devteam` e cada `.claude/skills/<nome>` são **symlinks** (modo git `120000`). Quando alguém do time no Windows clona ou faz checkout de um repo que os commitou, o git só cria symlinks reais se houver suporte nativo — **Modo Desenvolvedor ligado, processo elevado ou `core.symlinks=true`**. Caso contrário, o git/MSYS escreve o caminho de destino de cada link em um arquivo de texto comum de ~62 bytes.
+
+Essa falha passa fácil despercebida: o `ls -la` do `git-bash` ainda mostra os links falsos como `lrwxrwxrwx` (emulação do MSYS), mas o Windows e o Claude Code enxergam arquivos comuns — então todo o dev-team falha silenciosamente ao carregar (`/devteam:*`, agentes e skills somem). Confirme o estado real com `test -L` em vez de `ls`:
+
+```bash
+test -L .claude/commands/devteam && echo "link" || echo "quebrado"
+```
+
+Repare com o helper incluído, que corrige automaticamente quando o SO permite e, caso contrário, imprime as três opções de remediação (Modo Desenvolvedor, terminal elevado ou rodar o Claude Code como administrador):
+
+```bash
+bash .dev-team-agents/scripts/fix-symlinks.sh
+```
+
+Reinicie o Claude Code após o reparo para que ele reindexe comandos, agentes e skills. Ligar o Modo Desenvolvedor é a correção duradoura — ela também cobre clones futuros deste e de outros repos, sem nenhum passo de administrador.
+
+De dentro do Claude Code você pode rodar o mesmo reparo como comando — `/devteam:symlinks` — que detecta o SO, executa o helper e guia você pela correção do SO quando os symlinks nativos estão bloqueados. Se os links estiverem quebrados a ponto de os comandos `/devteam:` não carregarem, rode o script `fix-symlinks.sh` diretamente como mostrado acima.

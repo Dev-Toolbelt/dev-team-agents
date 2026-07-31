@@ -1,17 +1,19 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Always spawn:
-- `backend-test-specialist` at `.claude/agents/dev-team/backend-test-specialist.md` — unit, integration, and E2E tests for backend changes
+- `backend-test-specialist` — unit, integration, and E2E tests for backend changes
 
 Also spawn if the context includes frontend changes:
-- `frontend-test-specialist` at `.claude/agents/dev-team/frontend-test-specialist.md` — component, E2E, and accessibility tests for frontend changes
+- `frontend-test-specialist` — component, E2E, and accessibility tests for frontend changes
 
 Also spawn if the context includes mobile changes (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
-- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — author or update tests for mobile components (Detox, Maestro, Appium, XCTest, Espresso)
+- `mobile-developer` — author or update tests for mobile components (Detox, Maestro, Appium, XCTest, Espresso)
 
 ---
 

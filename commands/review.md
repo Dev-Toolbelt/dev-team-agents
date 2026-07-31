@@ -1,6 +1,6 @@
-Load `skills/shared/current-context/SKILL.md` to identify the active branch, modified files, and worktree state before acting. Restrict all actions to the detected scope unless $ARGUMENTS explicitly requests broader.
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/shared/interaction-patterns/SKILL.md` before asking the user any question with a finite set of answers.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
 ---
 
@@ -30,16 +30,16 @@ Once the target is resolved, load `skills/shared/spawn-classifier/SKILL.md` and 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT review inline — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Always spawn in parallel:
-- `code-reviewer` at `.claude/agents/dev-team/code-reviewer.md` — overall code quality, routes internally to backend-reviewer and/or frontend-reviewer based on what changed
-- `software-architect` at `.claude/agents/dev-team/software-architect.md` — architectural consistency and design decisions
-- `security-specialist` at `.claude/agents/dev-team/security-specialist.md` — security vulnerabilities and OWASP concerns
-- `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — validate behavior against acceptance criteria and assess regression risk
+- `code-reviewer` — overall code quality, routes internally to backend-reviewer and/or frontend-reviewer based on what changed
+- `software-architect` — architectural consistency and design decisions
+- `security-specialist` — security vulnerabilities and OWASP concerns
+- `qa-specialist` — validate behavior against acceptance criteria and assess regression risk
 
 Also spawn if the task involves database changes:
-- `database-specialist` at `.claude/agents/dev-team/database-specialist.md` — query efficiency, schema correctness, migration safety
+- `database-specialist` — query efficiency, schema correctness, migration safety
 
 Also spawn if the diff includes mobile files (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
-- `mobile-developer` at `.claude/agents/dev-team/mobile-developer.md` — review mobile-specific code quality, platform APIs, memory management, and lifecycle patterns
+- `mobile-developer` — review mobile-specific code quality, platform APIs, memory management, and lifecycle patterns
 
 Task: $ARGUMENTS
 

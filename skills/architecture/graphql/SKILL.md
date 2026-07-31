@@ -3,13 +3,24 @@ name: graphql
 description: GraphQL — schema, resolvers, N+1/DataLoader, pagination.
 ---
 
+# GraphQL
+
 ## Detection Signals
 
-- `graphql` or `@graphql-tools/*` in `package.json`
-- `.graphql` / `.gql` schema files in the repository
-- `apollo-server`, `graphql-yoga`, `strawberry-graphql`, `ariadne`, `gqlgen`, `async-graphql` dependency
-- `GRAPHQL_ENDPOINT` env var or `/graphql` route in routing config
-- `ApolloClient`, `urql`, or `graphql-request` on the frontend
+Load this skill when any of the following are present:
+
+| Signal | Location |
+|--------|----------|
+| `graphql` or `@graphql-tools/*` dependency | `package.json` |
+| `.graphql` / `.gql` schema files | anywhere in the repository |
+| `apollo-server`, `graphql-yoga`, `mercurius` | `package.json` |
+| `strawberry-graphql`, `ariadne`, `graphene` | `pyproject.toml`, `requirements.txt` |
+| `gqlgen`, `graphql-go` | `go.mod` |
+| `async-graphql`, `juniper` | `Cargo.toml` |
+| `webonyx/graphql-php`, `lighthouse` | `composer.json` |
+| `GRAPHQL_ENDPOINT` env var | `.env`, `.env.example` |
+| `/graphql` route | routing config |
+| `ApolloClient`, `urql`, `graphql-request` | frontend dependencies |
 
 ---
 
@@ -23,7 +34,7 @@ description: GraphQL — schema, resolvers, N+1/DataLoader, pagination.
 | Schema generated from code annotations / decorators | Code-first |
 
 - **Schema-first**: SDL (Schema Definition Language) files are committed; resolvers implement the contract.
-- **Code-first**: resolvers are annotated and the schema is generated at build time (e.g. TypeGraphQL, Strawberry, gqlgen).
+- **Code-first**: resolvers are annotated and the schema is generated at build time.
 
 **Do not mix approaches.** Follow whichever the project already uses.
 
@@ -45,182 +56,28 @@ description: GraphQL — schema, resolvers, N+1/DataLoader, pagination.
 
 ---
 
-## Query Design
+## Core Rules
 
-```graphql
-# Good — explicit, typed arguments
-type Query {
-  user(id: ID!): User
-  users(filter: UserFilterInput, page: Int, perPage: Int): UserConnection!
-  order(id: ID!): Order
-}
+These decide the shape of the work. The full patterns and code live in the references below.
 
-# Bad — catch-all input loses discoverability
-type Query {
-  users(input: JSON): [User]
-}
-```
-
-- Mark fields non-null (`!`) only when the server guarantees a value — never lie about nullability
-- Use `!` on list fields (`[User!]!`) when neither the list nor its elements can be null
-- Input arguments for filtering should use dedicated Input types, not scalars
+| Area | Rule |
+|---|---|
+| Nullability | Mark a field non-null (`!`) only when the server truly guarantees a value |
+| Mutation arguments | Wrap in a single `input` object; return the mutated entity in the payload |
+| Business errors | Return them as data (`errors: [UserError!]!`), not as top-level GraphQL errors |
+| Related data | Never fetch it in a resolver without a per-request DataLoader — this is the default source of N+1 |
+| Collections | Never return an unbounded list; paginate (cursor-based for anything that can grow) |
+| Subscriptions | Filter server-side and enforce the same auth rules as queries |
+| Query hardening | Depth and complexity limits configured; introspection disabled in production |
 
 ---
 
-## Mutation Conventions
+## References
 
-Wrap mutation arguments in a single `input` object for extensibility and forward-compatibility:
-
-```graphql
-type Mutation {
-  createUser(input: CreateUserInput!): CreateUserPayload!
-  updateOrder(id: ID!, input: UpdateOrderInput!): UpdateOrderPayload!
-}
-
-input CreateUserInput {
-  email: String!
-  name: String!
-  role: UserRole!
-}
-
-# Payload: return the mutated entity + optional user-facing errors
-type CreateUserPayload {
-  user: User
-  errors: [UserError!]!
-}
-
-type UserError {
-  field: String        # which field caused the error (null = global error)
-  message: String!
-  code: String!        # machine-readable code for client handling
-}
-```
-
-**Rules:**
-- Return the mutated object in the payload so clients can update their cache without a refetch
-- Use `errors: [UserError!]!` (always-present empty array) instead of nullable `error` — this is the [Errors-as-Data](https://productionreadygraphql.com) pattern
-- Reserve top-level GraphQL errors for unexpected failures (auth, server crash), not for business-rule violations
-
----
-
-## N+1 Prevention — DataLoader
-
-Every resolver that loads related data by ID must use a DataLoader (batching + caching per request):
-
-```ts
-// Without DataLoader — fires 1 query per user (N+1)
-const resolver = {
-  Order: {
-    user: (order) => db.users.findById(order.userId),  // ❌
-  },
-}
-
-// With DataLoader — batches into 1 query for all orders in the request
-const userLoader = new DataLoader(async (ids: string[]) => {
-  const users = await db.users.findByIds(ids);
-  return ids.map(id => users.find(u => u.id === id) ?? null);
-});
-
-const resolver = {
-  Order: {
-    user: (order, _, ctx) => ctx.loaders.user.load(order.userId),  // ✅
-  },
-}
-```
-
-**Rules:**
-- Create DataLoaders **per request** (in context), never as singletons — singletons leak data between requests
-- One DataLoader per entity type (`userLoader`, `productLoader`, etc.)
-- Before writing a resolver that fetches related data, check whether a loader already exists in the context
-
----
-
-## Pagination
-
-Use **Relay cursor-based pagination** for collections that can grow large. Use offset (`page` / `perPage`) only for small, stable lists.
-
-```graphql
-# Relay-style connection pattern
-type UserConnection {
-  edges: [UserEdge!]!
-  pageInfo: PageInfo!
-  totalCount: Int!
-}
-
-type UserEdge {
-  node: User!
-  cursor: String!
-}
-
-type PageInfo {
-  hasNextPage: Boolean!
-  hasPreviousPage: Boolean!
-  startCursor: String
-  endCursor: String
-}
-
-type Query {
-  users(first: Int, after: String, last: Int, before: String): UserConnection!
-}
-```
-
-**Rules:**
-- Never return unbounded lists (`[User!]!` without pagination args) — always paginate
-- `totalCount` is expensive on large tables; make it optional or computed lazily
-- Cursors must be opaque to clients (base64-encode the underlying offset or ID)
-
----
-
-## Subscriptions
-
-```graphql
-type Subscription {
-  orderStatusChanged(orderId: ID!): OrderStatusEvent!
-}
-
-type OrderStatusEvent {
-  orderId: ID!
-  status: OrderStatus!
-  updatedAt: String!
-}
-```
-
-**Rules:**
-- Filter events server-side — never send all events and filter client-side
-- Subscriptions must enforce the same auth rules as queries/mutations
-- Keep subscription payloads small — include IDs and changed fields; let the client refetch full data if needed
-- Always handle connection cleanup (unsubscribe on disconnect) to prevent memory leaks server-side
-
----
-
-## Error Handling
-
-| Error type | Where it goes | Example |
-|---|---|---|
-| Business rule violation | `errors` field in payload | "Email already taken" |
-| Auth failure | Top-level GraphQL error with `extensions.code: UNAUTHENTICATED` | Token expired |
-| Forbidden | Top-level GraphQL error with `extensions.code: FORBIDDEN` | Missing permission |
-| Input validation | `errors` field in payload | "Email format invalid" |
-| Unexpected server error | Top-level GraphQL error with `extensions.code: INTERNAL_SERVER_ERROR` | DB connection lost |
-
-**Never expose stack traces or internal error details to clients in production.**
-
-```ts
-// Include machine-readable codes in extensions for client handling
-throw new GraphQLError("Not authenticated", {
-  extensions: { code: "UNAUTHENTICATED" },
-});
-```
-
----
-
-## Security
-
-- **Depth limiting**: reject queries deeper than a configured threshold (typically 5–7 levels) to prevent deeply nested query attacks
-- **Complexity limiting**: assign cost weights to fields; reject queries exceeding a total budget
-- **Introspection**: disable in production unless the API is public and introspection is intentional
-- **Field authorization**: check permissions per resolver, not just at the operation level — a query can reach sensitive fields through nested types
-- **Rate limiting**: apply per-IP or per-user limits on the `/graphql` endpoint, not just on individual resolvers
+| File | Load when |
+|---|---|
+| `references/schema-and-operations.md` | Writing queries, mutations, pagination, or subscriptions — full SDL patterns |
+| `references/resolvers-and-errors.md` | Writing or reviewing resolvers — DataLoader batching, error taxonomy, query-level security |
 
 ---
 
