@@ -90,7 +90,7 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 **Run Banner Rule.** Every agent prints a model-identity table — agent, tier, model, effort — twice: opening its first response, and closing the summary it hands back. On every provider. The second emission is the load-bearing one: only an agent's **final** message reaches the main conversation, so a subagent running in the background would otherwise show its banner to nobody.
 
-**The closing emission needs its own section at the very bottom of the agent body**, `## Before You Finish`, enforced by `agent-lint.sh` both for presence and for being last. This is not decoration: stating the requirement only in `## Model Identity` at the top produced 13 opening banners out of 13 and **zero** closing banners out of 6 multi-message runs. An instruction that has to survive a 22-message task has to be the last thing read before the summary is written, not the first. If you add a section to an agent, it goes *above* that one.
+**The closing emission needs its own section at the very bottom of the agent body**, `## Before You Finish`, enforced by `agent-lint.sh` both for presence and for being last. This is not decoration: stating the requirement only in `## Model Identity` at the top produced 14 opening banners out of 16 and **zero** closing banners out of 6 multi-message runs. An instruction that has to survive a 22-message task has to be the last thing read before the summary is written, not the first. If you add a section to an agent, it goes *above* that one.
 
 The rule and the table format live in `skills/shared/model-identity/SKILL.md`; each agent body carries only its own values, in a `<!-- run-banner -->` block inside `## Model Identity`:
 

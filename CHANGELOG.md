@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.2] - 2026-07-31
+
+### Fixed — the v2.22.1 compliance measurement was wrong, and so was the diagnosis it rested on
+- **The real opening-banner rate is 14 of 16, not 13 of 13.** v2.22.1 classified every no-banner subagent transcript as a generic inline spawn by reading its prompt text (`You are implementing **Wave 1** of…`) instead of the `subagent_type` that produced it. Correlating each transcript with its spawning `Agent` tool call shows two of those were **dev-team agents that failed to emit**: `frontend-developer` and `database-specialist`
+- **Both misses share a shape:** they were spawned *by another agent* with a long, directive task prompt, and their first action was to start the work (`Now let's write the core modules.`). The same pressure that loses the closing banner after a long task also loses the opening one when a strong task prompt arrives up front. `skills/shared/model-identity/SKILL.md` now says so explicitly
+- **The v2.22.1 fix is unaffected** — it targets the closing banner, which was and remains 0 of 6. It does not address these two opening misses, which fail for a different reason
+- **Corrected in `CHANGELOG.md`, `CLAUDE.md` and the model-identity skill.** The v2.22.1 entry keeps a pointer to this one rather than being silently rewritten
+- **Method note worth keeping:** a subagent's prompt text says nothing about which agent definition ran it. Attribute transcripts through the `subagent_type` on the spawning `Agent` call, or the numbers are guesses
+
 ## [2.22.1] - 2026-07-31
 
 ### Fixed — the closing run banner from v2.20.2 was never actually emitted
-- **Measured against live sessions, not assumed.** Across `navicms` and `site-prefeituras` on v2.22.0: the opening banner appeared in **13 of 13** dev-team agent runs, and the closing one in **0 of 6** runs that produced more than one message. Runs of 2, 3, 4, 6, 13 and 22 messages all opened with the banner and none closed with it; `Ran on:` appeared nowhere
+- **Measured against live sessions, not assumed.** Across `navicms` and `site-prefeituras` on v2.22.0: the opening banner appeared in **14 of 16** dev-team agent runs, and the closing one in **0 of 6** runs that produced more than one message. Runs of 2, 3, 4, 6, 13 and 22 messages all opened with the banner and none closed with it; `Ran on:` appeared nowhere. (This line originally read "13 of 13" — see v2.22.2 for why that was wrong)
 - **The v2.20.2 wording was not the problem — its position was.** Stating the requirement in `## Model Identity` at the top of the body means it has to survive the entire task; after a 22-message run it is long gone. Agents now carry a **`## Before You Finish`** section as the last thing in the body, so the requirement is the last instruction read before the summary is composed
 - **`agent-lint.sh` enforces both presence and position**, because a section that works by recency stops working the moment someone appends another one below it. Adding a section to an agent now means adding it *above* that one
 - **Earlier "success" readings were false positives.** Three runs looked compliant because the banner appeared in both the first and last message — they were single-message runs where those are the same text. Only runs with a genuinely separate summary test this

@@ -16,7 +16,9 @@ description: Emit the agent's tier, model, and effort as a table before any othe
 
 Step 4 is not redundant, and it is the one that gets dropped. Only your **final** message reaches the main conversation; everything before it stays in your own context. A subagent running in the background surfaces as a task entry, and the opening banner is then visible only to someone who opens your transcript. Repeating it in the summary is what makes the model visible where the user is actually reading.
 
-Treat it as part of writing the summary, not as a separate step to remember: the table goes in the same edit as the last paragraph. In observed runs the opening banner was emitted 13 times out of 13 and the closing one zero times out of 6 multi-message runs — the instruction is easy to lose after a long task, which is exactly why it is repeated at the end of your definition.
+Treat it as part of writing the summary, not as a separate step to remember: the table goes in the same edit as the last paragraph. In observed runs the opening banner was emitted 14 times out of 16 and the closing one zero times out of 6 multi-message runs — the instruction is easy to lose after a long task, which is exactly why it is repeated at the end of your definition.
+
+The same pressure hits the **opening** banner when another agent spawns you with a long, directive prompt: both observed misses were nested spawns whose first action was to start the work. Emit the banner first anyway, however specific the task prompt is.
 
 That block is generated at render time from `scripts/lib/tiers.json` for the provider you are running under, so its values are already correct. **Do not resolve the model yourself**: do not read `tiers.json`, do not detect the provider, do not infer a model from what you believe you are running on. Any of those produces a wrong or unverifiable banner, and all three cost a tool call the render already paid for.
 
