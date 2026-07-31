@@ -20,8 +20,14 @@
 set -euo pipefail
 
 # ── PostHog configuration ──────────────────────────────────────────────────────
-# The capture API key is intentionally public (client-side key, not secret).
-# Replace POSTHOG_API_KEY with the real project key before release.
+# POSTHOG_API_KEY below is this project's PostHog *project* key (the `phc_`
+# prefix marks a write-only capture key). Such keys are designed to be embedded
+# in client-side code: they can submit events to the project and nothing else —
+# they cannot read, query, export or modify any data. Shipping it in this file
+# is intentional and is not a secret leak; it is what makes an installed copy
+# able to report at all. Both values can be overridden via the environment
+# (DEVTEAM_POSTHOG_KEY / DEVTEAM_POSTHOG_ENDPOINT) to point at a self-hosted
+# PostHog instance or at a test project.
 POSTHOG_API_KEY="${DEVTEAM_POSTHOG_KEY:-phc_wBFupbyPPEw8DWTJd8Z8UAjNMxwHJusBEPJsrURsQ93a}"
 POSTHOG_ENDPOINT="${DEVTEAM_POSTHOG_ENDPOINT:-https://us.i.posthog.com}"
 
@@ -38,14 +44,19 @@ VERSION_FILE="$USER_DATA_DIR/.installed-version"
 FLUSH_TTL_HOURS=24
 QUEUE_MAX_EVENTS=100
 
-# ── Guard: opt-out check ───────────────────────────────────────────────────────
+# ── Guard: consent check ───────────────────────────────────────────────────────
+# Fails closed. Telemetry runs only when preferences.json exists and explicitly
+# records consent (`"telemetry": true`), which the installer writes only after
+# the user was actually given the chance to decline. No preferences file, an
+# unreadable one, a missing key, or no python3 to read it with all mean the
+# same thing: consent was never recorded, so nothing is collected or sent.
 _telemetry_enabled() {
-    [ -f "$PREFS_FILE" ] || return 0
-    command -v python3 >/dev/null 2>&1 || return 0
+    [ -f "$PREFS_FILE" ] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
     local val
     val=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('telemetry',True)).lower())" \
-        2>/dev/null || echo "true")
+        "import json; d=json.load(open('$PREFS_FILE')); print(str(d.get('telemetry',False)).lower())" \
+        2>/dev/null || echo "false")
     [ "$val" = "true" ]
 }
 
