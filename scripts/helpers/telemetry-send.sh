@@ -47,7 +47,10 @@ QUEUE_MAX_EVENTS=100
 # ── Guard: consent check ───────────────────────────────────────────────────────
 # `_telemetry_enabled` is defined once, in scripts/lib/telemetry-guard.sh, and
 # fails closed there. If that file is missing, this script must not send.
-# shellcheck source=../lib/telemetry-guard.sh
+# Path is repo-root-relative on purpose: CI runs `shellcheck -x` from the repo
+# root, and a script-relative form resolves to nothing there (SC1091), which in
+# turn hides the guard's use of PREFS_FILE and raises a bogus SC2034 here.
+# shellcheck source=scripts/lib/telemetry-guard.sh
 if [ -f "$SCRIPT_DIR/../lib/telemetry-guard.sh" ]; then
     . "$SCRIPT_DIR/../lib/telemetry-guard.sh"
 else

@@ -80,12 +80,16 @@ for consumer_file in "${CONSUMER_FILES[@]}"; do
         matches=()
         while IFS= read -r m; do
             [ -n "$m" ] && matches+=("${m#"$REPO_ROOT"/}")
-        done < <(find "$SKILLS_DIR" -type d -name "$skill_name" 2>/dev/null \
-                 -exec test -f '{}/SKILL.md' \; -print | sort)
+        done < <(find "$SKILLS_DIR" -type d -name "$skill_name" \
+                 -exec test -f '{}/SKILL.md' \; -print 2>/dev/null | sort)
 
         if [ "${#matches[@]}" -eq 1 ]; then
             new_ref="${matches[0]}/SKILL.md"
+            # Single quotes are required: these are sed programs, not strings to
+            # expand — `&` and the bracket class must reach sed verbatim.
+            # shellcheck disable=SC2016
             old_e=$(printf '%s\n' "$ref"     | sed 's/[[\.*^$()+?{|/]/\\&/g')
+            # shellcheck disable=SC2016
             new_e=$(printf '%s\n' "$new_ref" | sed 's/[[\.*^$&/]/\\&/g')
             if sed -i.bak "s/$old_e/$new_e/g" "$consumer_file" 2>/dev/null; then
                 rm -f "${consumer_file}.bak"
@@ -160,6 +164,8 @@ done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 #             "… load `path` …"        (quoted prompts passed to another agent)
 #             prose connectors: "defined in `path`", "table in `path`",
 #                               "the `x` skill (`path`)", "format from `path`"
+# Single-quoted on purpose: this is an awk program, not a shell string.
+# shellcheck disable=SC2016
 LOAD_DIRECTIVE_AWK='
 {
   line = $0

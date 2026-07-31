@@ -17,8 +17,11 @@ PREFS_FILE="$USER_DATA_DIR/preferences.json"
 
 # Consent guard — single definition in scripts/lib/telemetry-guard.sh, fails
 # closed. A missing guard file means no consent could be verified: skip.
-# shellcheck source=../../lib/telemetry-guard.sh
 [ -f "$SCRIPT_DIR/../../lib/telemetry-guard.sh" ] || exit 0
+# Path is repo-root-relative on purpose — see scripts/helpers/telemetry-send.sh.
+# The directive must sit directly above the `.` line; a guard between the two
+# detaches it and the source goes unresolved again.
+# shellcheck source=scripts/lib/telemetry-guard.sh
 . "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
 
 _telemetry_enabled || exit 0
