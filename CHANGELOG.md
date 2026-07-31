@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-07-31
+
+### Fixed — Claude Code does support per-subagent effort; v2.20.0 said it did not
+- **The claim was checked against the docs and was wrong.** `tiers.json`, `CLAUDE.md`, `docs/providers.md` and the model-identity skill all stated that Claude Code has no effort concept, and the run banner printed `—` in the Effort column. Claude Code accepts an `effort:` frontmatter key on subagents (`low` … `max`)
+- **`repetitive` now sets `effort: low`** — bounded, low-judgment work where the saving is unambiguous, on top of the Haiku move. **No other tier sets it**, deliberately: the key *overrides* the session's effort level, so setting it everywhere would silently undo a user who lowered effort for cost or latency. Omitted means the agent inherits the session, which is the right default
+- **The banner's Effort column now reads `inherit`** on tiers that set none, instead of `—`, which is what the agent actually runs at
+- **`agent-lint.sh` guards the new key in both directions:** an agent whose tier defines an effort must carry it and match, and an agent whose tier does not must not carry one at all
+
+### Fixed — a `set -o pipefail` interaction that made the linter exit silently
+- **`grep` returning 1 inside a command substitution killed the whole script.** `effort:` is absent on 16 of 17 agents, so `effort_fm=$(… | grep -E "^effort:" | …)` failed the pipeline, `set -e` fired, and the linter exited 1 having printed nothing — no findings, no error, no clue
+- **The same latent bug sat in the banner lookup.** An agent with no `<!-- run-banner -->` block would have crashed the linter instead of reporting the missing block — the exact condition that check exists to catch. Both now end in `|| true`
+
+### Verified — model aliases are accepted by Claude Code
+- Confirmed on two independent sources: the subagent frontmatter reference (`sonnet`, `opus`, `haiku`, `fable`, a full model ID, or `inherit`), and the installed 2.1.140 binary, which carries the `opus` / `sonnet` / `haiku` / `inherit` literals. `fable` is **absent** from that build, which reinforces the earlier decision to keep it out of the tier map
+- **Documented two ways the banner can be out of step with reality.** The frontmatter `model:` is only the third source Claude Code consults, after `CLAUDE_CODE_SUBAGENT_MODEL` and any per-invocation `model` parameter; and an org `availableModels` allowlist makes it silently fall back to the inherited model. The banner reports configured intent, not the runtime's final choice
+
 ## [2.20.0] - 2026-07-31
 
 > **Action required if you maintain a custom agent.** The authoring rule was "**No `model:` key**"; `model:` is now required and must equal `tiers.json[<tier>].claude`. Any agent authored against the old rule fails `helpers/agent-lint.sh` on the next run — including from the `Stop` hook. Add the key (`reasoning` → `opus`, `backend-exec` / `frontend` → `sonnet`, `repetitive` → `haiku`) plus the `<!-- run-banner -->` block; the lint message names the expected value. Released as a minor rather than a major despite the agent-behavior change, so this note is the migration signal.

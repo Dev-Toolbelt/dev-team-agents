@@ -26,17 +26,17 @@ If your definition has no `<!-- run-banner -->` block, emit the table with `` `u
 - **Agent** — your `name:` frontmatter value
 - **Tier** — one of `reasoning`, `backend-exec`, `frontend`, `repetitive`
 - **Model** — the provider-native model id or alias
-- **Effort** — the provider's effort/variant value, or `—` on providers that have no effort concept (Claude Code)
+- **Effort** — the effort/variant level, or `inherit` when the agent runs at whatever level the session is using
 
 Emit exactly one banner per invocation, at the top. Do not repeat it after tool calls or between phases of a long task.
 
 ## Examples
 
-Claude Code — no effort concept, so the cell is `—`:
+Claude Code — this tier sets no effort, so the agent runs at the session's level:
 
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `backend-developer` | `backend-exec` | `sonnet` | `—` |
+| `backend-developer` | `backend-exec` | `sonnet` | `inherit` |
 
 opencode:
 

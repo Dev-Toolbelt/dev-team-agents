@@ -28,10 +28,12 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 | tier | role | claude | opencode | codex |
 | --- | --- | --- | --- | --- |
-| `reasoning` | architecture, planning, big refactors | `opus` | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
-| `backend-exec` | backend implementation, review, database, devops, qa, mobile, backend tests | `sonnet` | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `frontend` | frontend implementation, review, design, frontend tests | `sonnet` | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `repetitive` | docs, changelogs, release notes, high-volume low-judgment | `haiku` | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
+| `reasoning` | architecture, planning, big refactors | `opus` (effort: inherits) | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
+| `backend-exec` | backend implementation, review, database, devops, qa, mobile, backend tests | `sonnet` (effort: inherits) | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `frontend` | frontend implementation, review, design, frontend tests | `sonnet` (effort: inherits) | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `repetitive` | docs, changelogs, release notes, high-volume low-judgment | `haiku` (effort: low) | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
+
+Claude Code **does** support a per-subagent `effort:` key (`low` … `max`) — an earlier revision of this document claimed it had no effort concept, which was wrong. It is set on `repetitive` alone, because the key overrides the session's effort level and setting it everywhere would silently undo a user who lowered effort deliberately.
 
 The `claude` column holds **aliases**, not pinned model ids: Claude Code resolves `opus` / `sonnet` / `haiku` to the current model of that family, so the column does not go stale when a new model ships. It previously held pinned ids (`claude-opus-4-7`, `claude-sonnet-4-6`) and had drifted a generation behind. As of 2026-07-31 the aliases resolve to Claude Opus 5 ($5/$25 per MTok), Claude Sonnet 5 ($3/$15, introductory $2/$10 through 2026-08-31), and Claude Haiku 4.5 ($1/$5, 200K context against 1M on the others).
 
@@ -47,6 +49,13 @@ How the resolved id reaches the CLI differs by provider:
 Every agent prints an agent/tier/model/effort table as the first thing in its first response, on all three providers. The format lives in `skills/shared/model-identity/SKILL.md`; the per-agent values live in a `<!-- run-banner -->` block in the agent body. The source copy carries Claude's values (identity case), and `render_run_banner()` rewrites the **Model** and **Effort** cells for opencode and Codex — the Agent and Tier cells are provider-agnostic and pass through untouched.
 
 Resolving this at render time is deliberate. The alternative — having each agent read `tiers.json` and detect the active provider at runtime — costs a tool call on every invocation and misreports the model in any project with more than one provider installed, which `install-codex.sh` / `install-opencode.sh` explicitly support.
+
+**The banner states configured intent, not what the runtime actually chose.** On Claude Code the frontmatter `model:` is only the third source consulted, and two things can override it without the banner knowing:
+
+1. `CLAUDE_CODE_SUBAGENT_MODEL` — an environment variable set to an alias or model id wins over the frontmatter for every subagent.
+2. A per-invocation `model` parameter passed when the subagent is spawned.
+
+There is also a silent-fallback case: if the org restricts models via an `availableModels` allowlist, Claude Code **skips** an excluded value and runs the subagent on the inherited model instead — no error, and the banner still prints the configured model. If a banner ever disagrees with observed cost or behavior, check the environment variable and the allowlist before suspecting `tiers.json`.
 
 ---
 

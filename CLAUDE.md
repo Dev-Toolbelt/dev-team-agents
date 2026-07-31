@@ -62,18 +62,20 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 ### Agents (`agents/*.md`)
 
-- Frontmatter: exactly `name`, `description`, `tier`, `model` — all four are required and enforced by `helpers/agent-lint.sh` (`REQUIRED_FIELDS`), which runs in CI and from the `Stop` hook (`scripts/hooks/stop/03-agent-lint.sh`)
+- Frontmatter: `name`, `description`, `tier`, `model` — all four are required and enforced by `helpers/agent-lint.sh` (`REQUIRED_FIELDS`), which runs in CI and from the `Stop` hook (`scripts/hooks/stop/03-agent-lint.sh`). A fifth key, `effort:`, is present **only** on agents whose tier defines one in `tiers.json` (today: `repetitive`); the lint fails both on a missing one and on an extra one
 - **`tier:` is the source of truth; `model:` is a checked mirror of it.** `scripts/lib/tiers.json` is the canonical tier → model map (it also carries the per-provider `effort` value where the provider has one). The render engine resolves the tier to a provider-specific model id for opencode and Codex. Claude Code is the identity case — its agents are symlinked from source and never pass through the renderer, so it cannot be handed a resolved model at install time; it reads `model:` from the frontmatter instead. That key therefore holds **exactly** `tiers.json[<tier>].claude` and nothing else. To change a model, edit `tiers.json` and re-run the mirror; never hand-edit `model:` to a different value — `agent-lint.sh` fails on any divergence between `tiers.json`, `model:`, and the run-banner row.
 - **The `claude` column holds aliases** (`opus` / `sonnet` / `haiku`), not pinned model ids. Claude Code resolves an alias to the current model of that family, so the column does not go stale on a model launch. Pinned ids did exactly that, which is why they were replaced.
 - **No `tools:` key**, and therefore no tools-order rule. Tool availability is provider-native; the renderer rewrites tool names per provider from `scripts/lib/tool-map.json`.
 - Valid `tier:` values — any other value fails the lint:
 
-| Tier | `claude` model | Use for |
-|------|----------------|---------|
-| `reasoning` | `opus` | architecture, planning, refactoring, security analysis, onboarding decisions |
-| `backend-exec` | `sonnet` | backend implementation, backend review, code review, database, devops, qa, mobile, backend tests |
-| `frontend` | `sonnet` | frontend implementation, frontend review, frontend tests, ui/ux design |
-| `repetitive` | `haiku` | doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks |
+| Tier | `claude` model | `claude` effort | Use for |
+|------|----------------|-----------------|---------|
+| `reasoning` | `opus` | inherits session | architecture, planning, refactoring, security analysis, onboarding decisions |
+| `backend-exec` | `sonnet` | inherits session | backend implementation, backend review, code review, database, devops, qa, mobile, backend tests |
+| `frontend` | `sonnet` | inherits session | frontend implementation, frontend review, frontend tests, ui/ux design |
+| `repetitive` | `haiku` | `low` | doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks |
+
+> **Effort is set on one tier only, on purpose.** Claude Code supports a per-subagent `effort:` key, but it **overrides the session's level** — setting it on every tier would silently undo a user who lowered effort for cost or latency. `repetitive` is bounded low-judgment work where `low` is an unambiguous win; everything else inherits. Do not add an effort to another tier without a specific reason to override the user.
 
 > `repetitive` is the only tier on Haiku, and Haiku's context window is 200K against 1M on the others. Keep that tier for work that is genuinely low-judgment and bounded — it currently holds `technical-writer` alone. Test authoring is **not** low-judgment: `backend-test-specialist` sits in `backend-exec`, matching `frontend-test-specialist` in `frontend`. Do not move a test agent to `repetitive`.
 
