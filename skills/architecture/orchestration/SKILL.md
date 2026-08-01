@@ -95,7 +95,7 @@ model-identity skill — the orchestrator never names a model.
 | `database-specialist` | `backend-exec` | Schema, queries, migrations |
 | `devops-specialist` | `backend-exec` | Docker, CI/CD, deploy |
 | `security-specialist` | `reasoning` | Security audit, compliance |
-| `backend-test-specialist` | `repetitive` | Backend test coverage |
+| `backend-test-specialist` | `backend-exec` | Backend test coverage |
 | `frontend-test-specialist` | `frontend` | Frontend test coverage |
 | `code-reviewer` | `backend-exec` | Code review routing |
 | `backend-reviewer` | `backend-exec` | Backend PR review |
@@ -106,6 +106,51 @@ model-identity skill — the orchestrator never names a model.
 | `ui-ux-designer` | `frontend` | Design system, UX |
 
 Canonical agent path: `.claude/agents/dev-team/<agent-name>.md` for every row above.
+
+The roster is validated against `agents/` by `helpers/agent-lint.sh` — a row naming an agent that
+does not exist, or declaring the wrong tier, fails the lint.
+
+---
+
+## Spawn Integrity
+
+**A spawn that did not happen must never be reported as one that did.** Three checks, in order,
+around every delegation round. They exist because the failure they prevent is silent: the user
+reads a completion report, the UI shows no running work, and nothing was written to disk.
+
+### 1. Preflight — is the Task tool actually available to you?
+
+Check your own tool list before the first spawn. **If the Task tool is not there, stop.** Report
+this and end your turn:
+
+> Cannot delegate: the Task tool is not available in this context. No subagents were spawned and
+> no work was done. Run this from the main conversation, or invoke the specialist agents directly.
+
+Do not continue. Do not describe what the subagents would have done. Do not emit a consolidated
+summary. An orchestrator with no Task tool has produced nothing.
+
+**Nested delegation is where this bites.** An orchestrator that is itself running as a subagent may
+not have the Task tool at all — the provider decides, not this skill. Never assume you have it
+because the skill describes using it.
+
+### 2. Name validation — roster names only
+
+Every `subagent_type` you pass MUST appear verbatim in the Agent Roster above. Do not invent a
+name, shorten one, or infer one from the role — `test-author`, `test-writer` and `api-dev` are not
+agents. If the role you need has no roster row, delegate to the closest row or ask the user; never
+guess. An unknown type makes the spawn fail, and a failed spawn narrated as a success is
+indistinguishable from check 1's failure.
+
+### 3. Evidence — every claimed spawn carries its returned run banner
+
+Each subagent emits a model-identity run banner in its **final** message
+(`skills/shared/model-identity/SKILL.md`), and that final message is the only thing that reaches
+you. The banner is therefore proof of execution: **no banner returned means that agent did not
+run.**
+
+Fill the summary from what came back. A subagent that returned no banner is reported `NOT RUN`.
+Never compose a banner yourself to fill the row — writing evidence you did not receive defeats the
+only check that can catch a phantom spawn.
 
 ---
 
@@ -139,13 +184,18 @@ Canonical agent path: `.claude/agents/dev-team/<agent-name>.md` for every row ab
    - Tests run after their implementation agent completes
    - Log what each agent did as it completes; capture output for the summary
 
-4. **Consolidated summary** after all agents complete:
+4. **Consolidated summary** after all agents complete. The Agents table is an **evidence record,
+   not a recollection** — every row is filled from what the subagent actually returned, per
+   *Spawn Integrity* check 3:
 
    ```markdown
    ## Implementation Complete
 
    ### Agents spawned
-   [list of agents and what they did]
+   | Agent | Model (from its returned banner) | Result |
+   |---|---|---|
+   | `backend-developer` | `sonnet` | what it reported doing |
+   | `frontend-test-specialist` | — | NOT RUN — no banner returned |
 
    ### Documents produced / modified
    [list]
@@ -153,3 +203,6 @@ Canonical agent path: `.claude/agents/dev-team/<agent-name>.md` for every row ab
    ### Next steps
    Run `/devteam:review` for code review and QA handoff.
    ```
+
+   If every row reads `NOT RUN`, that is the headline: the task was not executed. Say so first,
+   before anything else — do not bury it under a summary of intended work.

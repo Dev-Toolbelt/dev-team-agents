@@ -327,6 +327,58 @@ check_skill_name_uniqueness() {
   done < <(printf '%s\n' "${SKILL_NAMES[@]}" | cut -f1 | sort | uniq -d)
 }
 
+# ── Orchestration roster must match agents/ ───────────────────────────────────
+# skills/architecture/orchestration/SKILL.md carries the roster an orchestrator
+# reads to choose a subagent_type. It was hand-maintained and unvalidated, and it
+# drifted: backend-test-specialist was listed as `repetitive` while its own
+# frontmatter said `backend-exec`. A wrong NAME there is worse than a wrong tier
+# — the orchestrator passes it straight to the Task tool, the spawn fails, and a
+# failed spawn is trivially narrated as a success (see the skill's Spawn
+# Integrity section).
+ROSTER_FILE="$REPO_ROOT/skills/architecture/orchestration/SKILL.md"
+# Deliberately absent from the roster: the orchestrator itself, and the
+# onboarding agent, which the user invokes and no orchestrator delegates to.
+ROSTER_EXEMPT=("software-architect" "setup-assistant")
+
+check_orchestration_roster() {
+  [ -f "$ROSTER_FILE" ] || return 0
+
+  local rows row name tier agent_file actual seen=" "
+
+  # Rows between the "## Agent Roster" heading and the next H2 only, so the
+  # scope-classification table further down is not mistaken for a roster row.
+  rows=$(awk '/^## Agent Roster/{f=1;next} /^## /{f=0} f' "$ROSTER_FILE" \
+         | grep -oE '^\| `[a-z0-9-]+` \| `[a-z0-9-]+` \|' || true)
+
+  while IFS= read -r row; do
+    [ -z "$row" ] && continue
+    name=$(printf '%s' "$row" | awk -F'`' '{print $2}')
+    tier=$(printf '%s' "$row" | awk -F'`' '{print $4}')
+    seen="${seen}${name} "
+
+    agent_file="$REPO_ROOT/agents/${name}.md"
+    if [ ! -f "$agent_file" ]; then
+      ERRORS+=("  · orchestration roster lists '${name}', but agents/${name}.md does not exist — an orchestrator passing that to the Task tool gets a failed spawn")
+      continue
+    fi
+
+    actual=$(grep -m1 '^tier:' "$agent_file" | sed 's/^tier:[[:space:]]*//' | tr -d '[:space:]' || true)
+    if [ -n "$actual" ] && [ "$actual" != "$tier" ]; then
+      ERRORS+=("  · orchestration roster: '${name}' listed as tier '${tier}' but agents/${name}.md declares '${actual}'")
+    fi
+  done <<< "$rows"
+
+  # Reverse direction — an agent no orchestrator can reach.
+  local a base
+  for a in "$REPO_ROOT"/agents/*.md; do
+    [ -f "$a" ] || continue
+    base=$(basename "$a" .md)
+    case " ${ROSTER_EXEMPT[*]} " in *" $base "*) continue ;; esac
+    case "$seen" in *" $base "*) continue ;; esac
+    ERRORS+=("  · agents/${base}.md is missing from the orchestration roster — no orchestrator can delegate to it (add a row, or add it to ROSTER_EXEMPT)")
+  done
+}
+
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ "$TIER_MAP_BROKEN" = true ]; then
@@ -345,6 +397,7 @@ while IFS= read -r skill_file; do
 done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 
 check_skill_name_uniqueness
+check_orchestration_roster
 
 # Warnings are reported only in verbose mode — they are non-blocking and would
 # otherwise fire on every Stop-hook run.
