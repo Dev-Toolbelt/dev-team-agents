@@ -208,26 +208,26 @@ cat .dev-team-agents/user-data/preferences.json 2>/dev/null || echo "MISSING"
 
 **Step 2 — Schema validation (if file exists):**
 
+Read the required key set from the canonical schema — never hardcode it here. The
+hardcoded list this check used to carry went stale and missed eight fields.
+
 ```bash
 python3 - <<'EOF'
-import json, sys
-required = {
-    "language": "en",
-    "context_window_percent_warning": 55,
-    "context_window_percent_limit": 60,
-    "suppress_notifications": False,
-    "session_summary_max_days": 30,
-    "session_summary_max_entries": 30,
-    "docs_stale_after_days": 30,
-    "auto_update": False,
-    "update_check_interval_hours": 24,
-}
+import json
+DEFAULTS = ".dev-team-agents/scripts/lib/preferences-defaults.json"
+PREFS    = ".dev-team-agents/user-data/preferences.json"
+# Opt-in fields. This preferences.json already exists, so its owner never saw
+# the installer prompt for a field added later — backfill them as false.
+CONSENT_KEYS = ("telemetry", "auto_update")
 try:
-    with open(".dev-team-agents/user-data/preferences.json") as f:
+    with open(DEFAULTS) as f:
+        required = json.load(f)
+    with open(PREFS) as f:
         data = json.load(f)
-    missing = {k: v for k, v in required.items() if k not in data}
+    missing = [k for k in required if k not in data]
     if missing:
-        print("MISSING_FIELDS: " + ", ".join(missing.keys()))
+        print("MISSING_FIELDS: " + ", ".join(sorted(missing)))
+        print("CONSENT_FIELDS: " + ", ".join(k for k in CONSENT_KEYS if k in missing))
     else:
         print("OK")
 except Exception as e:
@@ -238,8 +238,10 @@ EOF
 | Result | Action |
 |--------|--------|
 | `OK` | No action needed |
-| `MISSING_FIELDS: …` | Auto-fix: inject missing fields with defaults (do not overwrite existing values) |
+| `MISSING_FIELDS: …` | Auto-fix: inject missing fields with their value from `preferences-defaults.json`. Never overwrite an existing value. Any field also listed on `CONSENT_FIELDS` is injected as `false`, not as its schema default |
 | `ERROR: …` | Ask user to re-run setup-assistant; file may be malformed |
+
+**Never regenerate `preferences.json` wholesale.** A malformed file is reported to the user, not replaced — the fix is additive or nothing. The same applies to `credentials.local.json` (Category 10): it is created only when absent.
 
 **Step 3 — Legacy migration:**
 

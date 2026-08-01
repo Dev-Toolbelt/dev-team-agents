@@ -33,31 +33,22 @@ AskUserQuestion:
     - label: "Yes, run onboarding"
       description: "Run the health check and set up your preferences (language, notifications, etc.)"
     - label: "No, skip for now"
-      description: "Create a default preferences.json (English) and continue — you can change it anytime"
+      description: "Create a default preferences.json and continue — you can change it anytime"
 ```
 
 **If the user chooses "Yes, run onboarding":**
 - Invoke the `setup-assistant` agent in `FIRST_RUN` mode.
 
 **If the user chooses "No, skip for now":**
-1. Create `.dev-team-agents/user-data/preferences.json` with all defaults from `skills/shared/user-preferences/SKILL.md`:
-   ```json
-   {
-     "language": "en",
-     "context_window_percent_warning": 55,
-     "context_window_percent_limit": 60,
-     "suppress_notifications": false,
-     "session_summary_max_days": 30,
-     "session_summary_max_entries": 30,
-     "docs_stale_after_days": 30,
-     "auto_update": false,
-     "update_check_interval_hours": 24,
-     "transcript_multiplier": 1.8,
-     "model_max_tokens": 200000,
-     "telemetry": true
-   }
+1. Create `.dev-team-agents/user-data/preferences.json` by copying the canonical default schema verbatim:
+   ```bash
+   cp .dev-team-agents/scripts/lib/preferences-defaults.json \
+      .dev-team-agents/user-data/preferences.json
    ```
-2. Notify the user: "Default preferences created (language: English). You can change them anytime by editing `.dev-team-agents/user-data/preferences.json`."
+   Copy the file — do not retype the JSON. The schema in `scripts/lib/preferences-defaults.json` is the single source of truth, and a hand-written copy here drifted from it before. Read it if you need to report the values back; `skills/shared/user-preferences/SKILL.md` documents what each field means.
+
+   **Only when the file does not already exist.** An existing `preferences.json` is never overwritten, and neither is `credentials.local.json`.
+2. Notify the user, in their configured language: "Default preferences created. You can change them anytime by editing `.dev-team-agents/user-data/preferences.json`." — state the `language` value the file actually got.
 3. Continue with their original request.
 
 ---

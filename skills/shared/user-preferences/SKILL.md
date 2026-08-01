@@ -21,43 +21,49 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 
 ```json
 {
-  "language": "en",
+  "language": "pt-BR",
   "context_window_percent_warning": 55,
   "context_window_percent_limit": 60,
   "suppress_notifications": false,
   "session_summary_max_days": 30,
   "session_summary_max_entries": 30,
   "docs_stale_after_days": 30,
-  "auto_update": false,
+  "auto_update": true,
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "telemetry": true,
-  "worktree_active": false,
+  "worktree_active": true,
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",
-  "worktree_docker_isolate": true
+  "worktree_docker_isolate": true,
+  "qa_browser": null
 }
 ```
 
+**These defaults apply only to a preferences.json that does not exist yet.** An existing file is never rewritten: `install.sh` merges with existing values winning, and the `session-start.sh` backfill only adds absent keys.
+
+**Consent keys — `telemetry` and `auto_update`.** Both default to `true` in a fresh file, where the installer prompts for them. They are **never** backfilled as `true` into a preferences.json that already exists: that file's owner never saw the prompt for a field added after they installed, so an absent key is read as "no". Both install and the session-start backfill write `false` in that case.
+
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `language` | string | `"en"` | Conversation language (BCP 47 tag). Docs remain English. |
+| `language` | string | `"pt-BR"` | Conversation language (BCP 47 tag). Docs remain English. |
 | `context_window_percent_warning` | number | `55` | % at which agents emit a `warning` notification |
 | `context_window_percent_limit` | number | `60` | % at which agents emit a `critical` notification |
 | `suppress_notifications` | bool or array | `false` | `false` = none suppressed; `true` = all suppressed; `["info"]` = suppress by type |
 | `session_summary_max_days` | number | `30` | Days before session-summary entries are trimmed |
 | `session_summary_max_entries` | number | `30` | Maximum number of entries in session-summary.md |
 | `docs_stale_after_days` | number | `30` | Days before project.md and session-summary.md are considered stale |
-| `auto_update` | bool | `false` | Auto-update dev-team-agents when a new version is detected |
+| `auto_update` | bool | `true` | Auto-update dev-team-agents when a new version is detected (consent key) |
 | `update_check_interval_hours` | number | `24` | Hours between update checks |
 | `transcript_multiplier` | number | `1.8` | Multiplier to estimate full context from transcript tokens |
 | `model_max_tokens` | number | `200000` | Context window for the active model |
-| `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) |
-| `worktree_active` | bool | `false` | Default to a git worktree per task without asking |
+| `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) (consent key) |
+| `worktree_active` | bool | `true` | Default to a git worktree per task without asking |
 | `worktree_base_branch` | string or null | `null` | Base branch for worktrees (`null` = auto-detect) |
 | `worktree_path` | string | `".dev-team-agents/worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
+| `qa_browser` | string or null | `null` | Browser the `qa-specialist` drives (`null` = ask on first use) |
 
 ---
 
