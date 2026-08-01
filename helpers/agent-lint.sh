@@ -347,6 +347,9 @@ check_orchestration_roster() {
 
   # Rows between the "## Agent Roster" heading and the next H2 only, so the
   # scope-classification table further down is not mistaken for a roster row.
+  # Single-quoted on purpose: the backticks are literal markdown table syntax,
+  # not command substitution.
+  # shellcheck disable=SC2016
   rows=$(awk '/^## Agent Roster/{f=1;next} /^## /{f=0} f' "$ROSTER_FILE" \
          | grep -oE '^\| `[a-z0-9-]+` \| `[a-z0-9-]+` \|' || true)
 
