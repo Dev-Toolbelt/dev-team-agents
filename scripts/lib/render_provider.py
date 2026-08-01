@@ -413,8 +413,9 @@ def resolve_effort(tiers_lib, provider, tier, agent=None):
 
     A per-agent entry in `agent_effort` wins over the tier-level `effort` map:
     effort tracks how much a role needs to reason, which does not always follow
-    the tier that picks its model. `agent` is None for commands, which have a
-    tier but no agent identity.
+    the tier that picks its model. Commands pass their lead agent from
+    commands.json — they run AS that agent on opencode, so its override applies
+    to them too. `agent` is None only when no lead agent is known.
     """
     if agent:
         override = tiers_lib.get("agent_effort", {}).get(agent)
@@ -479,7 +480,13 @@ def main():
                 die(f"command '{name}' has no metadata entry in scripts/lib/commands.json — add one")
             tier = meta["tier"]
             model_id = resolve_model(lib["tiers"], args.provider, tier)
-            effort = resolve_effort(lib["tiers"], args.provider, tier)
+            # The lead agent is passed on purpose: on opencode the snippet's
+            # `agent` makes the command run AS that agent, so an agent_effort
+            # override has to reach the command too. Without it, `devteam:qa`
+            # ran qa-specialist at the tier's effort while spawning the same
+            # agent directly gave it `low` — the effort-axis twin of the model
+            # mismatch that commands.json `_tier_rule` now prevents.
+            effort = resolve_effort(lib["tiers"], args.provider, tier, meta.get("agent"))
             if args.provider == "claude":
                 rendered.append(render_command_claude(name, body, cmd_path))
             elif args.provider == "opencode":

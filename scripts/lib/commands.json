@@ -1,6 +1,8 @@
 {
   "$schema": "internal://commands.json",
   "_comment": "Per-command metadata. The command body lives verbatim at commands/<name>.md. The renderer uses this file to (a) choose the lead agent for opencode/codex, (b) resolve the model id via tiers.json, (c) emit the frontmatter expected by each provider, (d) apply plan gate softening per provider. Add a new row when adding a command; do NOT add frontmatter to commands/*.md directly (Claude Code parses them as body-only).",
+  "_tier_rule": "A command's `tier` MUST equal the tier of the agent named in its `agent` field — helpers/agent-lint.sh fails on any divergence. The two are not independent knobs: on opencode the snippet's `agent` makes the command run AS that agent while `model` comes from the command's tier, so a mismatch runs an agent on a model that is not its own. Two rows had drifted before the rule was written down (`tester` sat in `repetitive` while backend-test-specialist is `backend-exec`; `health-check` sat in `backend-exec` while it named `setup-assistant`, a `reasoning` agent).",
+  "_filler_agent_note": "`update`, `symlinks` and `health-check` spawn NO agent — they are thin script/skill runners. Their `agent` field is filler the renderer still requires, and all three name `technical-writer` so the filler stays consistent and the tier rule above resolves to `repetitive`, which is what that class of work actually is. Do not read those three rows as a delegation target.",
   "_plan_gate_values": {
     "required": "Always present plan + wait for approval. Used for architectural/planning commands.",
     "conditional": "Use plan mode for complex tasks; execute directly for simple ones. Plan gate text is softened for non-Claude providers.",
@@ -23,14 +25,14 @@
     "review":            { "tier": "backend-exec", "agent": "code-reviewer",       "description": "Code review before merge.",                                                        "plan_gate": "conditional" },
     "qa":                { "tier": "backend-exec", "agent": "qa-specialist",       "description": "Validate feature behavior and acceptance criteria.",                                 "plan_gate": "conditional" },
     "design":            { "tier": "frontend",     "agent": "ui-ux-designer",      "description": "Design system, UX flows, visual decisions.",                                        "plan_gate": "conditional" },
-    "tester":            { "tier": "repetitive",  "agent": "backend-test-specialist", "description": "Write or update tests only.",                                                    "plan_gate": "conditional" },
+    "tester":            { "tier": "backend-exec", "agent": "backend-test-specialist", "description": "Write or update tests only.",                                                   "plan_gate": "conditional" },
     "docs":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Docs, changelogs, runbooks, release notes.",                                          "plan_gate": "conditional" },
     "pr":                { "tier": "repetitive",  "agent": "technical-writer",    "description": "Draft and create a pull request.",                                                  "plan_gate": "conditional" },
     "commit":            { "tier": "repetitive",  "agent": "technical-writer",    "description": "Group staged changes by layer and write commits.",                                  "plan_gate": "conditional" },
     "learn":             { "tier": "repetitive",  "agent": "technical-writer",    "description": "Consolidate session decisions into docs, wiki, ADRs.",                              "plan_gate": "conditional" },
     "update":            { "tier": "repetitive",  "agent": "technical-writer",    "description": "Check for and apply dev-team-agents updates.",                                      "plan_gate": "opt_out" },
     "symlinks":          { "tier": "repetitive",  "agent": "technical-writer",    "description": "Diagnose and repair broken dev-team-agents symlinks.",                              "plan_gate": "opt_out" },
-    "health-check":      { "tier": "backend-exec", "agent": "setup-assistant",    "description": "Health check — validate and repair dev-team-agents installation.",                  "plan_gate": "opt_out" },
+    "health-check":      { "tier": "repetitive",  "agent": "technical-writer",    "description": "Health check — validate and repair dev-team-agents installation.",                  "plan_gate": "opt_out" },
     "audit":             { "tier": "backend-exec", "agent": "code-reviewer",     "description": "Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan.", "plan_gate": "conditional" }
   }
 }

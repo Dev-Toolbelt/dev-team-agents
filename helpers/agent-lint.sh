@@ -385,6 +385,59 @@ check_orchestration_roster() {
   done
 }
 
+# ── commands.json tier must match its lead agent's tier ───────────────────────
+# The two fields are not independent knobs. On opencode the snippet's `agent`
+# makes the command run AS that agent while `model` is resolved from the
+# COMMAND's tier, so a divergence runs an agent on a model that is not its own.
+# Unvalidated, two rows drifted: `tester` sat in `repetitive` while
+# backend-test-specialist is `backend-exec` (contradicting the CLAUDE.md rule
+# against putting a test agent on that tier), and `health-check` sat in
+# `backend-exec` while naming `setup-assistant`, a `reasoning` agent. The CI
+# contract checker validates the rendered output and only catches a dangling
+# ref, so the source-side rule lives here — same reason as the roster check.
+COMMANDS_JSON="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/lib/commands.json"
+
+check_command_roster() {
+  [ -f "$COMMANDS_JSON" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  local rows name tier agent agent_file actual
+  rows=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as fh:
+    lib = json.load(fh)
+for name, entry in lib.get("commands", {}).items():
+    if name.startswith("_") or not isinstance(entry, dict):
+        continue
+    print(name + "\t" + entry.get("tier", "") + "\t" + entry.get("agent", ""))
+' "$COMMANDS_JSON" 2>/dev/null || true)
+
+  if [ -z "$rows" ]; then
+    ERRORS+=("  · scripts/lib/commands.json: present but no command rows could be read (command tier check skipped)")
+    return 0
+  fi
+
+  while IFS=$'\t' read -r name tier agent; do
+    [ -z "$name" ] && continue
+
+    if [ -z "$agent" ]; then
+      ERRORS+=("  · commands.json: '${name}' has no 'agent' — the renderer needs one even for runner commands that spawn nothing (see _filler_agent_note)")
+      continue
+    fi
+
+    agent_file="$REPO_ROOT/agents/${agent}.md"
+    if [ ! -f "$agent_file" ]; then
+      ERRORS+=("  · commands.json: '${name}' names agent '${agent}', but agents/${agent}.md does not exist")
+      continue
+    fi
+
+    actual=$(grep -m1 '^tier:' "$agent_file" | sed 's/^tier:[[:space:]]*//' | tr -d '[:space:]' || true)
+    if [ -n "$actual" ] && [ "$actual" != "$tier" ]; then
+      ERRORS+=("  · commands.json: '${name}' is tier '${tier}' but its lead agent '${agent}' declares '${actual}' — on opencode that runs the agent on a model that is not its own (see _tier_rule)")
+    fi
+  done <<< "$rows"
+}
+
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ "$TIER_MAP_BROKEN" = true ]; then
@@ -404,6 +457,7 @@ done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 
 check_skill_name_uniqueness
 check_orchestration_roster
+check_command_roster
 
 # Warnings are reported only in verbose mode — they are non-blocking and would
 # otherwise fire on every Stop-hook run.
