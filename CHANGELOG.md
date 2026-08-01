@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-08-01
+
+### Changed — the run banner says `session-default` instead of `inherit`
+- **An agent that sets no `effort:` key showed `inherit` in its banner**, which names the mechanism rather than telling the reader what the agent is running at. The 11 agents in `reasoning`, `backend-exec` and `frontend` now show `session-default`; the 6 carrying `effort: low` are unchanged
+- **Showing the resolved level was rejected, not overlooked.** The session's effort is not knowable at render time, and `skills/shared/model-identity/SKILL.md` forbids an agent from resolving its own identity at runtime — so the fix is a clearer label for the same semantics, not new information
+- **The label is hyphenated on purpose.** `helpers/agent-lint.sh` strips spaces from the banner cell before comparing, so a two-word label would have to be matched as `sessiondefault` and would read like a typo to whoever touches that check next
+- Propagated to `helpers/agent-lint.sh`, `skills/shared/model-identity/SKILL.md`, `CLAUDE.md`, `docs/providers.md`, and the `render_run_banner()` fallback in `scripts/lib/render_provider.py`. `inherit` stays in prose describing the **frontmatter** mechanism, where inheritance is still the accurate word
+
+### Fixed
+- **The `CLAUDE.md` run-banner example showed a third value**, an em dash, while every agent showed `inherit`. It is now aligned with the 11 agents it documents
+
+### Added — why `qa-specialist` takes low effort and the reviewers do not
+- **`agent_effort` carried a note for the agent it excludes (`security-specialist`) but none for the one that looks like it should have been excluded too.** `_why_qa_specialist` in `scripts/lib/tiers.json` records the dividing line: not whether the role inspects code, but whether the agent is **handed what to check**. QA validates observable behavior against acceptance criteria written before it ran; review and security audit exist to surface what nobody wrote down, and that exploration is exactly what `low` cuts
+- The same test is summarized in `CLAUDE.md` next to the `agent_effort` description, so it is applied before adding an agent to the map rather than after
+
 ## [2.23.0] - 2026-08-01
 
 ### Changed — versioning policy now describes what the repo actually does
