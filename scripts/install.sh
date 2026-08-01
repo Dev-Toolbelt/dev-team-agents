@@ -719,7 +719,8 @@ fi
 
 # ── Step 12: Set up user preferences ─────────────────────────────
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
-PREFS_LANGUAGE="en"
+# Keep this in sync with "language" in scripts/lib/preferences-defaults.json.
+PREFS_LANGUAGE="pt-BR"
 # Canonical default schema — single source of truth, also read by the
 # session-start health-check backfill (scripts/hooks/session-start.sh).
 PREFS_DEFAULTS_FILE="$INSTALL_DIR/scripts/lib/preferences-defaults.json"
@@ -762,20 +763,28 @@ if [ ! -f "$PREFS_FILE" ] && _can_prompt; then
     echo " (Documents and technical output always remain in English)"
     echo ""
     echo "  Examples: en  pt-BR  es  fr  de  ja  zh-CN"
-    printf " Language [en]: "
+    printf " Language [pt-BR]: "
     _prompt_read PREFS_LANGUAGE 60 || echo ""
     # Sanitize: this value is interpolated into JSON on the no-python3 path.
     PREFS_LANGUAGE=$(printf '%s' "$PREFS_LANGUAGE" | tr -cd 'A-Za-z0-9_-' | cut -c1-16)
-    [ -n "$PREFS_LANGUAGE" ] || PREFS_LANGUAGE="en"
+    [ -n "$PREFS_LANGUAGE" ] || PREFS_LANGUAGE="pt-BR"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 elif [ ! -f "$PREFS_FILE" ]; then
-    echo "→ NOTE: No terminal available. Setting language to 'en'. Edit .dev-team-agents/user-data/preferences.json to change."
+    echo "→ NOTE: No terminal available. Setting language to 'pt-BR'. Edit .dev-team-agents/user-data/preferences.json to change."
 fi
 
-# Migrate legacy .auto-update flag → auto_update field in preferences.json
-AUTO_UPDATE_VALUE="false"
+# Value written to a FRESH preferences.json — it comes from the canonical
+# schema (auto_update: true). It is never applied to an install that already
+# has a preferences.json: existing values win, and a pre-existing file that
+# predates the field is treated as "never opted in" (see CONSENT_KEYS below).
+AUTO_UPDATE_VALUE="true"
+
+# The legacy .auto-update flag file predates the auto_update field. An install
+# carrying it opted in explicitly, so the consent guard must not read its
+# missing auto_update key as a "no" and silently revoke that choice.
+LEGACY_AUTO_UPDATE="false"
 if [ -f "$USER_DATA_DIR/.auto-update" ]; then
-    AUTO_UPDATE_VALUE="true"
+    LEGACY_AUTO_UPDATE="true"
 fi
 
 # ── Telemetry consent ─────────────────────────────────────────────
@@ -824,14 +833,15 @@ elif [ "$IS_FIRST_INSTALL" = true ]; then
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PREFS_FILE" "$PREFS_DEFAULTS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" "$TELEMETRY_VALUE" "$IS_FIRST_INSTALL" <<'PYEOF'
+    python3 - "$PREFS_FILE" "$PREFS_DEFAULTS_FILE" "$PREFS_LANGUAGE" "$AUTO_UPDATE_VALUE" "$TELEMETRY_VALUE" "$IS_FIRST_INSTALL" "$LEGACY_AUTO_UPDATE" <<'PYEOF'
 import sys, json, os
 
-prefs_file, defaults_file, language, auto_update_str, telemetry_str, is_first_str = \
-    sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+prefs_file, defaults_file, language, auto_update_str, telemetry_str, is_first_str, \
+    legacy_auto_update_str = sys.argv[1:8]
 auto_update = (auto_update_str == "true")
 telemetry = (telemetry_str == "true")
 is_first = (is_first_str == "true")
+legacy_auto_update = (legacy_auto_update_str == "true")
 
 # Load the canonical static default schema (single source of truth). If it is
 # unreadable, fall back to a minimal set so the install still produces a file;
@@ -861,6 +871,17 @@ if is_first:
     merged["language"] = language
     merged["auto_update"] = auto_update
     merged["telemetry"] = telemetry
+else:
+    # Consent keys are opt-in and must never be switched on by a backfill.
+    # An install whose preferences.json predates one of these fields never had
+    # the chance to accept it, so the absent key means "no", not "use the
+    # default". Only a brand-new file gets the schema's enabled default.
+    for key in ("telemetry", "auto_update"):
+        if key not in existing:
+            merged[key] = False
+    # …unless the legacy .auto-update flag records an explicit earlier opt-in.
+    if legacy_auto_update:
+        merged["auto_update"] = True
 
 with open(prefs_file, 'w') as f:
     json.dump(merged, f, indent=2)
@@ -868,7 +889,13 @@ with open(prefs_file, 'w') as f:
 PYEOF
     echo "→ User preferences: .dev-team-agents/user-data/preferences.json"
 else
-    # Fallback: write a plain JSON file without python3
+    # Fallback: write a plain JSON file without python3.
+    # This heredoc is a hand-maintained MIRROR of
+    # scripts/lib/preferences-defaults.json — there is no JSON parser on this
+    # path to read the schema with. When you add or change a key there, change
+    # it here too; the two drifted once already (qa_browser was missing).
+    # Only ever written when no preferences.json exists, so it cannot clobber
+    # a user's values and needs no consent-key guard.
     if [ ! -f "$PREFS_FILE" ]; then
         cat > "$PREFS_FILE" <<EOF
 {
@@ -884,10 +911,11 @@ else
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "telemetry": $TELEMETRY_VALUE,
-  "worktree_active": false,
+  "worktree_active": true,
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",
-  "worktree_docker_isolate": true
+  "worktree_docker_isolate": true,
+  "qa_browser": null
 }
 EOF
         echo "→ User preferences: .dev-team-agents/user-data/preferences.json"

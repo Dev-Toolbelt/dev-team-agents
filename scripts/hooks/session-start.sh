@@ -20,6 +20,12 @@ PREFS_DEFAULTS_FILE="${SCRIPT_DIR}/../lib/preferences-defaults.json"
 # Missing keys are written with their defaults; existing user values are never
 # overwritten. No-op (no write) when the file is already complete. This
 # self-heals installs that predate a newly added preference key.
+#
+# Exception — CONSENT_KEYS. This file already exists, so its owner never saw
+# the installer prompt for a field added after they installed. Backfilling the
+# schema's enabled default would switch telemetry or auto-update on without
+# anyone agreeing to it, so those two are backfilled as false. The user opts in
+# by editing preferences.json (or re-running the installer on a fresh install).
 if [ -f "$PREFS_FILE" ] && [ -f "$PREFS_DEFAULTS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     python3 - "$PREFS_FILE" "$PREFS_DEFAULTS_FILE" <<'PYEOF' 2>/dev/null || true
 import sys, json
@@ -31,7 +37,11 @@ try:
         prefs = json.load(f)
 except (json.JSONDecodeError, IOError):
     sys.exit(0)
+CONSENT_KEYS = ("telemetry", "auto_update")
 missing = {k: v for k, v in defaults.items() if k not in prefs}
+for k in CONSENT_KEYS:
+    if k in missing:
+        missing[k] = False
 if missing:
     prefs.update(missing)
     with open(prefs_file, 'w') as f:
