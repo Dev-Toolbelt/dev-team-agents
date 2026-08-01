@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.2] - 2026-08-01
+
+### Fixed — two `commands.json` rows ran an agent on a model that was not its own
+- **`tester` was `tier: repetitive` while its lead `backend-test-specialist` is `backend-exec`** — which also contradicted the `CLAUDE.md` rule against putting a test agent on that tier. On opencode the command rendered `kimi-k2.5` for an agent whose own file declares `kimi-k2.7-code`
+- **`health-check` was `tier: backend-exec` while naming `setup-assistant`, a `reasoning` agent.** The command spawns no agent at all — the field is filler the renderer requires — so it now names `technical-writer` at `repetitive`, matching `update` and `symlinks`, the two other `opt_out` runners
+- **The fields are not independent knobs.** On opencode the snippet's `agent` makes the command run *as* that agent while `model` comes from the **command's** tier. 23 of the 25 rows already mirrored their lead agent's tier; the rule was simply never written down or checked
+
+### Added
+- **`check_command_roster()` in `helpers/agent-lint.sh`** — every command's `agent` must exist in `agents/`, and its `tier` must equal that agent's tier. The CI contract checker validates the *rendered* output and only catches a dangling ref, so the source-side rule lives in the lint, alongside the orchestration-roster check that exists for the same reason
+- **`_tier_rule` and `_filler_agent_note` in `scripts/lib/commands.json`**, and the matching rule in `CLAUDE.md` next to the command table
+
+### Fixed — commands ignored their lead agent's effort override
+- **The same defect on the effort axis.** `resolve_effort()` was called with `agent=None` for commands, so a command took its tier's effort and skipped the `agent_effort` override of the agent it runs as. `devteam:tester`, `devteam:dba`, `devops` and `qa` rendered `default`/`medium` for agents that declare `low`
+- **The renderer now passes the lead agent from `commands.json`.** All 25 commands render an effort that matches the agent they run as — verified across opencode and Codex
+- `tester` had been masking this: its old (wrong) `repetitive` tier produced `low` by accident, so fixing the model exposed the effort mismatch that was underneath
+
 ## [2.23.1] - 2026-08-01
 
 ### Changed — the run banner says `session-default` instead of `inherit`
