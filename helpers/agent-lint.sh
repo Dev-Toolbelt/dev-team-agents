@@ -218,14 +218,17 @@ check_agent() {
       ERRORS+=("  · ${file}: run-banner tier '${b_tier}' does not match frontmatter tier '${tier}'")
     [ -n "$model" ] && [ "$b_model" != "$model" ] && \
       ERRORS+=("  · ${file}: run-banner model '${b_model}' does not match frontmatter model '${model}'")
-    # Effort: the banner shows the tier's value, or `inherit` when the tier
-    # sets none — which is what the agent actually runs at without the key.
+    # Effort: the banner shows the tier's value, or `session-default` when the
+    # tier sets none — which is what the agent actually runs at without the key.
+    # The label is hyphenated on purpose: b_effort is compared after spaces are
+    # stripped above, so a two-word label would have to be matched here as
+    # "sessiondefault" and read like a typo.
     if [ -n "$expected_effort" ]; then
       [ "$b_effort" != "$expected_effort" ] && \
         ERRORS+=("  · ${file}: run-banner effort '${b_effort}' does not match tiers.json (expected '${expected_effort}')")
     elif [ -n "$TIER_EFFORT_MAP" ] || [ "$TIER_MAP_BROKEN" = false ]; then
-      [ "$b_effort" != "inherit" ] && \
-        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' should be 'inherit' — this agent resolves to no claude effort in tiers.json")
+      [ "$b_effort" != "session-default" ] && \
+        ERRORS+=("  · ${file}: run-banner effort '${b_effort}' should be 'session-default' — this agent resolves to no claude effort in tiers.json")
     fi
   fi
 

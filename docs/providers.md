@@ -28,9 +28,9 @@ Every agent and command declares one of four tiers. Each tier is resolved to a c
 
 | tier | role | claude | opencode | codex |
 | --- | --- | --- | --- | --- |
-| `reasoning` | architecture, planning, big refactors | `opus` (effort: inherits) | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
-| `backend-exec` | backend implementation, review, database, devops, qa, mobile, backend tests | `sonnet` (effort: inherits) | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
-| `frontend` | frontend implementation, review, design, frontend tests | `sonnet` (effort: inherits) | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `reasoning` | architecture, planning, big refactors | `opus` (effort: none — banner shows `session-default`) | `opencode-go/qwen3.7-plus` (effort: high) | `openai/gpt-5.6-sol` (effort: high) |
+| `backend-exec` | backend implementation, review, database, devops, qa, mobile, backend tests | `sonnet` (effort: none — banner shows `session-default`) | `opencode-go/kimi-k2.7-code` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
+| `frontend` | frontend implementation, review, design, frontend tests | `sonnet` (effort: none — banner shows `session-default`) | `opencode-go/kimi-k2.6` (effort: default) | `openai/gpt-5.6-terra` (effort: medium) |
 | `repetitive` | docs, changelogs, release notes, high-volume low-judgment | `haiku` (effort: low) | `opencode-go/kimi-k2.5` (effort: low) | `openai/gpt-5.6-luna` (effort: low) |
 
 Claude Code **does** support a per-subagent `effort:` key (`low` … `max`) — an earlier revision of this document claimed it had no effort concept, which was wrong. It is applied sparingly, because the key overrides the session's effort level and setting it everywhere would silently undo a user who lowered effort deliberately.

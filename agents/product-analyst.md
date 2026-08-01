@@ -14,7 +14,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `product-analyst` | `reasoning` | `opus` | `inherit` |
+| `product-analyst` | `reasoning` | `opus` | `session-default` |
 
 ## Foundational Rule
 

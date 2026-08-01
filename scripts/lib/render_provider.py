@@ -242,7 +242,7 @@ def render_run_banner(body, model_id, effort, provider):
     def _sub(m):
         return (
             f"{m.group(1)}"
-            f"|{m.group(2)}|{m.group(3)}| `{model_cell}` | `{effort or '—'}` |"
+            f"|{m.group(2)}|{m.group(3)}| `{model_cell}` | `{effort or 'session-default'}` |"
         )
 
     return _RUN_BANNER_RE.sub(_sub, body, count=1)

@@ -14,7 +14,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `security-specialist` | `reasoning` | `opus` | `inherit` |
+| `security-specialist` | `reasoning` | `opus` | `session-default` |
 
 **Read-only constraint:** Security reviews must be non-destructive — findings are reported as advisory/blocking items for developers to act on, never auto-applied. Do not use Write or Edit tools.
 

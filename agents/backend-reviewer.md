@@ -14,7 +14,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `backend-reviewer` | `backend-exec` | `sonnet` | `inherit` |
+| `backend-reviewer` | `backend-exec` | `sonnet` | `session-default` |
 
 ## Reviewer Mindset
 

@@ -70,9 +70,9 @@ This reduces total wall-clock time significantly on multi-agent tasks.
 
 | Tier | `claude` model | `claude` effort | Use for |
 |------|----------------|-----------------|---------|
-| `reasoning` | `opus` | inherits session | architecture, planning, refactoring, security analysis, onboarding decisions |
-| `backend-exec` | `sonnet` | inherits session | backend implementation, backend review, code review, database, devops, qa, mobile, backend tests |
-| `frontend` | `sonnet` | inherits session | frontend implementation, frontend review, frontend tests, ui/ux design |
+| `reasoning` | `opus` | none — banner shows `session-default` | architecture, planning, refactoring, security analysis, onboarding decisions |
+| `backend-exec` | `sonnet` | none — banner shows `session-default` | backend implementation, backend review, code review, database, devops, qa, mobile, backend tests |
+| `frontend` | `sonnet` | none — banner shows `session-default` | frontend implementation, frontend review, frontend tests, ui/ux design |
 | `repetitive` | `haiku` | `low` | doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks |
 
 > **Effort is deliberately sparse.** Claude Code supports a per-subagent `effort:` key, but it **overrides the session's level** — applying it everywhere would silently undo a user who lowered effort for cost or latency. Only `repetitive` sets it at the tier level.
@@ -100,7 +100,7 @@ The rule and the table format live in `skills/shared/model-identity/SKILL.md`; e
 <!-- run-banner -->
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `backend-developer` | `backend-exec` | `sonnet` | `—` |
+| `backend-developer` | `backend-exec` | `sonnet` | `session-default` |
 ```
 
 The source copy holds Claude's values because Claude is the identity case; `render_run_banner()` in `scripts/lib/render_provider.py` rewrites the **Model** and **Effort** cells for opencode and Codex (Agent and Tier are provider-agnostic and pass through). Resolving the banner at render time — rather than having the agent read `tiers.json` and sniff the provider at runtime — is deliberate: it costs no tool call per invocation, and it cannot report the wrong provider in a project that has more than one installed.

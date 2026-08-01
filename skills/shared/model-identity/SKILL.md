@@ -33,7 +33,7 @@ If your definition has no `<!-- run-banner -->` block, emit the table with `` `u
 - **Agent** — your `name:` frontmatter value
 - **Tier** — one of `reasoning`, `backend-exec`, `frontend`, `repetitive`
 - **Model** — the provider-native model id or alias
-- **Effort** — the effort/variant level, or `inherit` when the agent runs at whatever level the session is using
+- **Effort** — the effort/variant level, or `session-default` when the agent sets none and therefore runs at whatever level the session is using
 
 Emit the banner exactly twice per invocation: opening the first response, and closing the final one. Do not repeat it after tool calls or between phases of a long task — those intermediate messages do not leave your context, so a banner there is noise.
 
@@ -43,7 +43,7 @@ Claude Code — this tier sets no effort, so the agent runs at the session's lev
 
 | Agent | Tier | Model | Effort |
 |---|---|---|---|
-| `backend-developer` | `backend-exec` | `sonnet` | `inherit` |
+| `backend-developer` | `backend-exec` | `sonnet` | `session-default` |
 
 opencode:
 
