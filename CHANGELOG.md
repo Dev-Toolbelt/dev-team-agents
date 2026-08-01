@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — default `preferences.json` values (fresh installs only)
+- **`language` `en` → `pt-BR`, `auto_update` `false` → `true`, `worktree_active` `false` → `true`, `telemetry` `false` → `true`** in `scripts/lib/preferences-defaults.json`. These apply **only to a `preferences.json` that does not exist yet** — an existing file is still never rewritten, and neither is `credentials.local.json`
+- **The installer still asks.** The language prompt now defaults to `[pt-BR]`, and the telemetry consent gate is unchanged: no terminal, `DEVTEAM_NONINTERACTIVE=1`, `n`, or 60s of silence all still write `telemetry: false`. Silence is still not consent
+
+### Fixed — the default schema had drifted across five copies
+- **`qa_browser` was missing** from the no-python3 fallback heredoc in `install.sh`, which also hardcoded `worktree_active: false` independently of the schema
+- **`telemetry` was inverted** between `skills/shared/user-preferences/SKILL.md` (`true`) and the canonical file (`false`)
+- **The health check validated a stale 9-field list**, silently passing files missing eight fields. It now reads the required set from `preferences-defaults.json` instead of hardcoding it
+- **`skills/shared/project-context/SKILL.md` hand-wrote a 12-field copy** in its first-run path. It now copies the canonical file rather than retyping the JSON
+- **`CLAUDE.md` now names the canonical file and lists every mirror** that cannot read it, so the next key change touches all of them
+
+### Fixed — a backfill could switch telemetry and auto-update on without consent
+- **`telemetry` and `auto_update` are now `CONSENT_KEYS`.** When either is absent from an **existing** `preferences.json`, both `install.sh` and `scripts/hooks/session-start.sh` write `false` rather than the schema's `true`. That file's owner never saw a prompt for a field added after they installed, so an absent key means "no"
+- **This resolves a disagreement `CLAUDE-md/preferences.md` had recorded as an open question.** The fail-closed read path in `telemetry-guard.sh` treats a missing key as disabled, while the backfill would write the schema default and flip it to enabled at the next session start. The fix was the backfill, not the schema value — a fresh install should still default to enabled, subject to the prompt
+- **The legacy `.auto-update` flag file still wins.** An install carrying it opted in explicitly, so the consent guard does not read its missing `auto_update` key as a revocation
+
+### Fixed — an orchestrator could report spawns that never happened
+- **Observed in the wild:** a `software-architect` run reported spawning `test-author` and `frontend-test-specialist` and said it was "waiting on the consolidated summary", while the UI showed no running task — no side panel, no animated logo, no pulsing bullet. `test-author` **does not exist** in this repo. Nothing had been spawned; the narration was invented
+- **`skills/architecture/orchestration/SKILL.md` gained a `## Spawn Integrity` section** with three ordered checks: (1) **preflight** — if the Task tool is not in your tool list, stop and say so; never describe what the subagents would have done, which matters most for a nested orchestrator that may not have the tool at all; (2) **name validation** — `subagent_type` must appear verbatim in the Agent Roster, never inferred from the role; (3) **evidence** — a subagent's run banner arrives only in its final message, so no banner returned means it did not run
+- **The consolidated-summary template was inviting the failure.** `### Agents spawned` / `[list of agents and what they did]` asks for a list from memory and accepts one written by an orchestrator that spawned nobody. It is now a table whose Model column is filled from the **returned** banner, with `NOT RUN` for any agent that returned none — and an all-`NOT RUN` result must be stated as the headline, not buried
+- **`helpers/agent-lint.sh` now validates the roster against `agents/`** in both directions: a row naming a nonexistent agent, a row whose tier contradicts the agent's frontmatter, or an agent missing from the roster entirely (with `software-architect` and `setup-assistant` exempt — the orchestrator itself and the user-invoked onboarding agent). Verified against all three failure modes rather than assumed
+- **Fixed the drift this check immediately caught:** the roster listed `backend-test-specialist` as tier `repetitive`, contradicting both its frontmatter and the explicit rule in `CLAUDE.md` that test authoring is not low-judgment work
+
+### Fixed — subagents ran the full test suite despite `scoped-test-execution`
+- **The rule was opt-in and reached 5 of 17 agents.** Nothing instructed a full-suite run; the leak was by omission. `frontend-developer`, `database-specialist`, the three reviewers and `software-architect` never loaded the skill
+- **It is now part of the Foundational Rule.** `skills/shared/project-context/SKILL.md` carries a `## Test Execution — Scoped by Default` section, so every agent reaches it through the skill it already loads first. Fixing this centrally, rather than in twelve agent bodies, also kept `devops-specialist` (at the 211-line ceiling) from needing to grow
+- **Orchestrators were propagating the problem.** `skills/architecture/orchestration/SKILL.md` now forbids passing "run the tests" unqualified into a spawn prompt, or instructing a full-suite run unless the user asked for one this session
+- **Where the rule already existed, it was a checkbox on line ~157** of a 200-line body — passive, and read last. The two agents phrasing it that way (`backend-developer`, `mobile-developer`) now use the imperative "load before invoking any test runner" form that the compliant agents already used
+- **The CI carve-out is explicit.** This governs local runs only; a pipeline still executes 100% of the suite and must never be narrowed to satisfy the rule
+
 ## [2.22.2] - 2026-07-31
 
 ### Fixed — the v2.22.1 compliance measurement was wrong, and so was the diagnosis it rested on

@@ -159,7 +159,8 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Worktree decision cascade | `CLAUDE.md` → *Canonical worktree decision cascade* + `skills/shared/worktree/SKILL.md` | Delegate from `## Worktree Isolation` (see Agents above) |
 | Layered-commit table and commit message format | `skills/shared/conventional-commits/SKILL.md` | Load it; commands must not carry a second copy of the table |
 | Plan document format | `templates/plan-template.md`, loaded via `skills/shared/plan-mode/SKILL.md` | Load the template; never ship a second rendering of the format |
-| Which tests to execute when finishing a task — scoped to the touched code, full suite only on explicit user request | `skills/shared/scoped-test-execution/SKILL.md` | Load it and delegate; never restate the exception, and never add a second escalation criterion (suite speed, refactor width, shared code) |
+| Spawn integrity — no Task tool means stop and say so; `subagent_type` must come from the roster; a returned run banner is the only proof an agent ran | `skills/architecture/orchestration/SKILL.md` § Spawn Integrity | Load it and delegate. Never write a second "verify the spawn" rule, and never let a summary template ask for a list of agents from memory — the table is filled from returned banners |
+| Which tests to execute when finishing a task — scoped to the touched code, full suite only on explicit user request | `skills/shared/scoped-test-execution/SKILL.md`, made mandatory for every agent by `skills/shared/project-context/SKILL.md` § Test Execution | Nothing — loading project-context is the enforcement. Add a per-agent load line only where the agent runs tests and its role changes the scope derivation; never restate the exception, and never add a second escalation criterion (suite speed, refactor width, shared code) |
 
 When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
@@ -285,7 +286,8 @@ dev-team-agents/
 ├── helpers/         ← DEV-ONLY authoring tools, never shipped (see "Two helpers directories" below)
 │   ├── agent-lint.sh              ← agent frontmatter (name/description/tier/model) +
 │   │                                model↔tiers.json↔run-banner drift + skill
-│   │                                identity (name == dir, unique) + quiz-first
+│   │                                identity (name == dir, unique) + quiz-first +
+│   │                                orchestration roster ↔ agents/ (name + tier, both ways)
 │   ├── size-limits.sh             ← agents 205 (200 content + 5 run-banner) · commands 200 · skills 500
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
@@ -347,6 +349,19 @@ When a rule or script path references "helpers", state which of the two it means
 ## User Preferences
 
 → See [`CLAUDE-md/preferences.md`](CLAUDE-md/preferences.md) for the preferences.json schema, language rules, and migration notes.
+
+**`scripts/lib/preferences-defaults.json` is the single source of truth for the default schema.** Everything else is a mirror, and the set had already drifted five ways before it was reconciled (`qa_browser` missing from one, `telemetry` inverted in another, eight fields missing from a third). When you change a key, change every mirror in the same commit:
+
+| Mirror | Why it cannot just read the JSON |
+|--------|----------------------------------|
+| `scripts/install.sh` — no-python3 fallback heredoc | No JSON parser available on that path |
+| `CLAUDE-md/preferences.md` — schema block + field table | Documentation |
+| `skills/shared/user-preferences/SKILL.md` — schema block + field table | Documentation read by agents |
+| `README.md` / `README.pt-BR.md` — worktree preference table | Documentation |
+
+`skills/shared/project-context/SKILL.md` and `skills/shared/setup-health-check/references/checks-list.md` **read the canonical file** instead of mirroring it — keep them that way.
+
+**Defaults apply only to a file that does not exist.** `preferences.json` and `credentials.local.json` are both created when absent and never rewritten: install merges with existing values winning, and the session-start backfill only adds missing keys. **`telemetry` and `auto_update` are `CONSENT_KEYS`** — both default to `true` in a fresh file, but are backfilled as `false` into a pre-existing one, because that file's owner never saw a prompt for a field added after they installed. The lists live in `scripts/install.sh` and `scripts/hooks/session-start.sh`; keep them in sync.
 
 ---
 
