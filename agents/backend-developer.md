@@ -154,7 +154,7 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 - [ ] Logs are structured, carry useful context, and contain no sensitive data
 - [ ] Jobs (if any) are idempotent and have a DLQ configured
 - [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
-- [ ] Tests covering the change pass — follow `skills/shared/scoped-test-execution/SKILL.md`; run the full suite only if the user explicitly asks
+- [ ] Tests covering the change pass — load `skills/shared/scoped-test-execution/SKILL.md` **before** invoking any test runner and derive the scope from it; the full suite runs only if the user explicitly asked in this session
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 - [ ] No Claude attribution in commit messages or PR body — never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference; authorship belongs only to the authenticated git user
 

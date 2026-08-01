@@ -9,6 +9,16 @@ description: Run only tests covering the touched code; full suite only on explic
 
 Rationale: a full suite costs wall-clock time and tokens on every task, and re-verifies code the task never touched. Scoped runs give the same signal for the work at hand.
 
+**Who this binds:** every agent that invokes a test runner — implementer, fixer, refactorer, reviewer, QA. Not only the test specialists. `skills/shared/project-context/SKILL.md` makes the load mandatory, so being spawned as a subagent never exempts you.
+
+**What it does not touch: CI.** This governs runs you execute locally, in your own context. It places no constraint on a pipeline — a workflow authored by `devops-specialist` still executes 100% of the suite, and you must never narrow one to satisfy this rule.
+
+---
+
+## Orchestrator Rule
+
+When you spawn a subagent, never write "run the tests" unqualified into the prompt, and never instruct a full-suite run. State the touched scope and let the subagent derive its own blast radius. Relay a full run only when the user asked for one in this session, and say so explicitly.
+
 ---
 
 ## The Only Exception

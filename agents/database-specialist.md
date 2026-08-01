@@ -170,6 +170,12 @@ When Jira is active:
 
 ---
 
+## Test Execution
+
+Load `skills/shared/scoped-test-execution/SKILL.md` before executing any test command — migration and query work verifies through the tests covering the touched schema and its dependents, never the project's full suite.
+
+---
+
 ## Docs Sync
 
 Load `skills/shared/docs-sync/SKILL.md` — its Task Closure Rule governs when delivered work requires a `docs/` patch.

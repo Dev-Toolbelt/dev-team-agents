@@ -155,6 +155,8 @@ The `frontend-test-specialist` writes the tests. Make their job easy.
 
 Load `skills/shared/frontend-done-checklist/SKILL.md` and run through all items before declaring any task complete.
 
+Load `skills/shared/scoped-test-execution/SKILL.md` before executing any test command — you run the tests covering what you touched, never the project's full suite unless the user asks for it in this session.
+
 ---
 
 ## Jira Integration

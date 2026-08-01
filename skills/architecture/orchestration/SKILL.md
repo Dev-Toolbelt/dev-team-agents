@@ -64,10 +64,15 @@ In this mode the Execution Strategy Gate quiz is **skipped entirely** — resolv
    `BRANCH=<branch>`, and: "All file operations MUST target the WORKTREE_PATH. Do NOT write files
    in the main repo root."
 
-4. **Automatic review cycle** — after all implementation subagents finish, spawn `code-reviewer`
+4. **Scoped test execution** — never instruct a subagent to run the project's full test suite, and
+   never pass "run the tests" unqualified. Each subagent runs the tests covering what it touched,
+   per `skills/shared/scoped-test-execution/SKILL.md`. Only relay a full-suite run when the user
+   asked for one in this session — and then say so explicitly in the spawn prompt.
+
+5. **Automatic review cycle** — after all implementation subagents finish, spawn `code-reviewer`
    then `qa-specialist`. Resolve any findings in a new round autonomously; do not ask the user.
 
-5. **Final notification** — notify only when implementation, review, QA, and the consolidated
+6. **Final notification** — notify only when implementation, review, QA, and the consolidated
    summary are all complete.
 
 > **Critical**: subagents have no shell access and cannot create worktrees or branches. The

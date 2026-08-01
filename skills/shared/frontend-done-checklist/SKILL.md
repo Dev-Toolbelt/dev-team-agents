@@ -19,7 +19,7 @@ Run through every item before declaring a task complete:
 - [ ] No `dangerouslySetInnerHTML` / `v-html` with unsanitized content
 - [ ] No auth tokens or PII stored in `localStorage` / `sessionStorage`
 - [ ] No type errors — type checker passes with no new errors or warnings (where the language supports it)
-- [ ] Tests covering the change pass — follow `skills/shared/scoped-test-execution/SKILL.md`; run the full suite only if the user explicitly asks
+- [ ] Tests covering the change pass — load `skills/shared/scoped-test-execution/SKILL.md` **before** invoking any test runner and derive the scope from it; the full suite runs only if the user explicitly asked in this session
 - [ ] Bundle impact reviewed — no new dependency added without checking its size and necessity
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 - [ ] No Claude attribution in commit messages or PR body — never add "Co-Authored-By: Claude", "🤖 Generated with Claude Code", or any AI/Claude reference; authorship belongs only to the authenticated git user

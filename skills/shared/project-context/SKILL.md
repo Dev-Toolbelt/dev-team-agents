@@ -248,6 +248,25 @@ The skill defines when and how to use the `AskUserQuestion` tool (quiz format wi
 
 ---
 
+## Test Execution — Scoped by Default
+
+**Load `skills/shared/scoped-test-execution/SKILL.md` before running any test command.**
+
+This binds **every** agent, not only the test specialists. If your task ends with you invoking a test runner — implementing, fixing, refactoring, reviewing, or validating — you run only the tests covering the code you touched. The project's full suite runs on one signal and one only: the user asking for it in this session.
+
+| Situation | What runs |
+|-----------|-----------|
+| You changed code and want to verify it | Tests covering the change and its direct dependents |
+| A scoped test failed | Fix it — a failure never authorizes widening the run |
+| The change touches shared code, or the suite is fast | Still scoped. Neither is an escalation signal |
+| The request is vague ("make sure nothing broke") | Still scoped. Offer the full run; do not start it |
+| The user explicitly asked for the whole suite | Full suite |
+| A CI pipeline is executing | Full suite — this rule governs local runs only and never constrains a pipeline |
+
+Load the skill for the blast-radius derivation and the per-stack runner filters. Do not work from this table alone.
+
+---
+
 ## Quality / Security Scanners
 
 Detect and load the appropriate skill when any scanner config is present:

@@ -167,7 +167,7 @@ Every run above covers only the flows and targets touching your change — the D
 - [ ] Linters pass — run the project's lint command before declaring done
 - [ ] No debug artifacts (`print`, `console.log`, `dd()`, breakpoints)
 - [ ] No type errors — type checker passes with no new errors
-- [ ] Tests covering the change pass — follow `skills/shared/scoped-test-execution/SKILL.md`; run the full suite only if the user explicitly asks
+- [ ] Tests covering the change pass — load `skills/shared/scoped-test-execution/SKILL.md` **before** invoking any test runner and derive the scope from it; the full suite runs only if the user explicitly asked in this session
 - [ ] Store-submission checklist from the framework skill reviewed if a release is being prepared
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 - [ ] No Claude attribution in commit messages or PR body
