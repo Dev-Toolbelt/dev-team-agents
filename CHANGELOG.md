@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-08-01
+
+### Changed — versioning policy now describes what the repo actually does
+- **"Breaking changes (agent behavior changes, removed skills) → major" was never applied literally.** Read as written it makes nearly every release a major; in practice `v2.20.2` shipped a new mandatory emission for all 17 agents as a **patch** and `v2.21.0` changed how five specialists reason as a **minor**
+- `CLAUDE-md/versioning.md` now spells out the three tiers with the real tags as examples, and states the test that decides a major: **does an existing installation behave differently after an update without its user asking?** Changed values in `preferences-defaults.json` do not qualify on their own, because an existing `preferences.json` is never rewritten
+
 ### Changed — default `preferences.json` values (fresh installs only)
 - **`language` `en` → `pt-BR`, `auto_update` `false` → `true`, `worktree_active` `false` → `true`, `telemetry` `false` → `true`** in `scripts/lib/preferences-defaults.json`. These apply **only to a `preferences.json` that does not exist yet** — an existing file is still never rewritten, and neither is `credentials.local.json`
 - **The installer still asks.** The language prompt now defaults to `[pt-BR]`, and the telemetry consent gate is unchanged: no terminal, `DEVTEAM_NONINTERACTIVE=1`, `n`, or 60s of silence all still write `telemetry: false`. Silence is still not consent
