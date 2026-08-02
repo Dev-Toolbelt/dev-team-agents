@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.3] - 2026-08-02
+
+### Fixed — Codex installs now converge old projects to the new skills-first layout
+- **`install-codex.sh` now removes legacy project-local prompt aliases under `.codex/prompts/`** when refreshing a project. Older Codex installs kept `/prompts:devteam-*` files inside the repo; re-running the installer now migrates them to the supported shape: project-local `$devteam-*` skills in `.codex/skills/`, with `/prompts:devteam-*` available only as optional user-local aliases in `~/.codex/prompts`
+- **`update.sh` now re-runs the Codex installer when a project has `.codex/` config**, just as it already did for opencode. That means `/devteam:update` now repairs stale Codex layouts and refreshes generated agents, hooks, and command skills instead of leaving Codex installs partially outdated
+- **The Codex health-check now treats project-local `.codex/prompts/devteam-*.md` files as legacy drift**, so it can point the user to the canonical repair path instead of accepting the old layout as healthy
+
 ## [2.24.2] - 2026-08-02
 
 ### Fixed — the Codex port now matches the runtime that actually executes the harness

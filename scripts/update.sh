@@ -98,6 +98,13 @@ if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
     bash .dev-team-agents/scripts/install-opencode.sh
 fi
 
+# For Codex projects, re-render agents, migrate legacy prompt layouts, and
+# refresh project-local command skills.
+if [ -f ".codex/hooks.json" ] || [ -d ".codex" ]; then
+    echo "→ Codex config detected, re-running install-codex.sh..."
+    bash .dev-team-agents/scripts/install-codex.sh
+fi
+
 # Invalidate context cache after version change
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 

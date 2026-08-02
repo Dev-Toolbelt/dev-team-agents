@@ -144,15 +144,32 @@ for event, suffix in managed.items():
     print(f"{event}:{'OK' if found else 'MISSING'}")
 PY
 
-# Prompts generated
-find commands -maxdepth 1 -name '*.md' 2>/dev/null | wc -l
-find .codex/prompts -maxdepth 1 -name 'devteam-*.md' 2>/dev/null | wc -l
-
 # Generated command skills
 find .codex/skills -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' 2>/dev/null | wc -l
 
 # Generated skill payload files
 find .codex/skills -path '*/devteam-*/SKILL.md' 2>/dev/null | wc -l
+
+# Generated skill frontmatter names match their folder basenames
+python3 - <<'PY'
+import re
+from pathlib import Path
+
+skills_dir = Path(".codex/skills")
+for skill_dir in sorted(skills_dir.glob("devteam-*")):
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_md.exists():
+        print(f"{skill_dir.name}:MISSING_SKILL_MD")
+        continue
+    text = skill_md.read_text()
+    m_name = re.search(r'^name:\s*"([^"]+)"', text, re.M)
+    got = m_name.group(1) if m_name else None
+    state = "OK" if got == skill_dir.name else "MISMATCH"
+    print(f"{skill_dir.name}:{state}:name={got}")
+PY
+
+# Legacy project-local prompts from the pre-skills-first Codex layout
+find .codex/prompts -maxdepth 1 -type f -name 'devteam-*.md' 2>/dev/null | wc -l
 
 # Agent TOML model / effort mapping against tiers.json + agent_effort overrides
 python3 - <<'PY'
@@ -193,9 +210,11 @@ PY
 |-------|----------|------------|
 | `.codex/hooks.json` exists and parses | No `HOOKS_JSON_INVALID` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Managed hook entries present | `SessionStart:OK`, `PreToolUse:OK`, `PreCompact:OK`, `Stop:OK` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
-| Prompt files generated | Count of `.codex/prompts/devteam-*.md` equals `find commands -maxdepth 1 -name '*.md'` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Generated command skills present | Counts of `.codex/skills/devteam-*` dirs and `SKILL.md` files equal `find commands -maxdepth 1 -name '*.md'` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Generated command skill names match folder basenames | Every row ends in `:OK:name=devteam-*` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Legacy project-local prompt aliases absent | Count of `.codex/prompts/devteam-*.md` is `0` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Agent TOML `model`/`model_reasoning_effort` matches `tiers.json` | Every row ends in `:OK:` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| User-local prompt aliases (optional) | If the user explicitly wants `/prompts:devteam-*`, the matching `devteam-*.md` files exist in `~/.codex/prompts/` and Codex was restarted afterward | Re-run `bash .dev-team-agents/scripts/install-codex.sh --user-prompts` |
 
 ## Category 5 — Graphify (skip if not enabled)
 
