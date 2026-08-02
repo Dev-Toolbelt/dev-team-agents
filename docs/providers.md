@@ -104,7 +104,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
                               .opencode/plugins/dev-team-agents.ts (event ↔ bash hooks)
 ```
 
-**Bodies are emitted almost verbatim.** A short "Tool conventions" preamble added per provider explains how each Claude Code tool name the body references maps to the target provider's native tool (e.g., `Task` → `task` in opencode, `Task` → `spawn_agent` in codex, `AskUserQuestion` → direct plain-text questions in codex since it has no structured quiz tool). The Codex renderer also applies a narrow rewrite pass for Claude-specific question-tool phrasing and quiz JSON blocks so the rendered prompt does not instruct a nonexistent tool call.
+**Bodies are emitted almost verbatim.** A short "Tool conventions" preamble added per provider explains how each Claude Code tool name the body references maps to the target provider's native tool (e.g., `Task` → `task` in opencode, `Task` → `spawn_agent` in codex, `AskUserQuestion` → Codex structured user-input flow when that surface exposes it, with plain-text fallback only when it does not). The Codex renderer also applies a narrow rewrite pass for Claude-specific tool phrasing while preserving the original quiz structure and options.
 
 **Skills stay shared.** Every provider's installer symlinks this repo's `skills/` directory into the provider's skill-search path. Skill frontmatter is already compliant with the agentskills.io specification (`name` + `description` only), so no provider-specific rewrite is needed.
 

@@ -28,9 +28,9 @@
       }
     },
     "codex": {
-      "_comment": "Codex surfaces differ between CLI, app, and evolving runtime builds. The renderer therefore maps Claude idioms to Codex concepts, not to a brittle single tool roster. AskUserQuestion falls back to plain text because Codex has no structured quiz tool. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
+      "_comment": "Codex surfaces differ between CLI, app, and evolving runtime builds. The renderer therefore maps Claude idioms to Codex concepts, not to a brittle single tool roster. AskUserQuestion should use Codex's structured user-input flow when the current surface exposes it, with plain-text fallback only as a last resort. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
       "tool_rewrites": {
-        "AskUserQuestion": "_plain_text_",
+        "AskUserQuestion": "request_user_input_or_plain_text_fallback",
         "Task": "spawn_agent",
         "TodoWrite": "update_plan",
         "WebSearch": "WebSearch",
@@ -40,7 +40,7 @@
       },
       "_unchanged": ["Read", "Write", "Edit", "Bash"],
       "idiom_notes": [
-        "· **Codex-native equivalents.** Use the file, shell/search, subagent, plan/todo, and web tools available in the current Codex surface. Tool names can differ between CLI, app, and newer runtime builds; prefer the current-session equivalent over the literal Claude name in the source body. Ask user questions as plain text — no quiz/selection tool is available.",
+        "· **Codex-native equivalents.** Use the file, shell/search, subagent, plan/todo, and web tools available in the current Codex surface. Tool names can differ between CLI, app, and newer runtime builds; prefer the current-session equivalent over the literal Claude name in the source body. When the source body calls for a structured user-choice step, use Codex's structured user-input flow if it is available in the current session; fall back to a direct plain-text question only when no structured question tool exists.",
         "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read `.dev-team-agents/skills/<name>/SKILL.md` or the matching category path with the current file-read tool.",
         "· **Subagent spawn.** When the body directs you to spawn an agent, use the current Codex subagent mechanism to invoke the agent defined at `.codex/agents/<name>.toml`. Resolve agents by name, not by a Claude path.",
         "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, and `.dev-team-agents/scripts/...` are real files. Read them with the current file-read tool.",

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.6] - 2026-08-02
+
+### Fixed — Codex preserves structured quizzes and provider rewrites stay isolated
+- **The Codex renderer no longer flattens `AskUserQuestion` flows into plain-text prompts or strips quiz JSON blocks.** Rendered Codex skills and agents now preserve the original structured choice flow so dynamic quizzes, confirmation gates, and guided branching survive the provider adaptation
+- **Codex tool-convention notes now instruct the runtime to use structured user input whenever the current surface exposes it, with plain-text fallback only as a last resort.** This aligns the generated artifacts with the actual Codex app/runtime behavior instead of hard-coding a degraded interaction model
+- **The opencode agent renderer no longer passes through Codex-only body rewrites.** This removes a real cross-provider leakage bug in the render pipeline and keeps provider-specific adaptations scoped to the intended target
+
 ## [2.24.5] - 2026-08-02
 
 ### Changed — Codex now standardizes on `$devteam-*` only
