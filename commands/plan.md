@@ -13,11 +13,13 @@ Always spawn:
 
 The `product-analyst` owns the conversation and the deliverable. Planning is business-first: the output is *what* and *why*, not *how*.
 
+After `overview.md` is approved, `product-analyst` writes a spec per feature (Step 5b — see `skills/shared/spec-gate/SKILL.md`) before generating sprints.
+
 ## Conditional — software-architect
 
-Spawn `software-architect` **only if** the user **explicitly** asks for technical input in `$ARGUMENTS` — e.g., they request architecture, a technical design, stack/data-model/API decisions, trade-offs, or an ADR. In that case, the software-architect contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
+Spawn `software-architect` **explicitly** when the user asks for technical input in `$ARGUMENTS`, **or automatically** per the `spec-gate` rule: any spec whose `touches` field spans more than one layer, or that introduces a new API/schema/integration point, gets its `<feature>-contract.md` written by `software-architect` without waiting for the user to ask. Either way it contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
 
-If the request is purely a feature/business ask (the default), do **not** spawn the software-architect — keep the plan business-only.
+If the request is purely a feature/business ask and no spec trips the gate, do **not** spawn the software-architect — keep the plan business-only.
 
 ---
 

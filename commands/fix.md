@@ -4,6 +4,8 @@ Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $A
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
+If the bug links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — treat its Given/When/Then as the fix boundary and ask rather than assume when something isn't covered.
+
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Phase 1 — spawn based on where the bug lives (in parallel if both apply):

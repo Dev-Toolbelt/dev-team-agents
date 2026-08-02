@@ -2,6 +2,8 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
+If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — every spawned agent below treats its Given/When/Then as the implementation boundary and asks rather than assumes when something isn't covered.
+
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.

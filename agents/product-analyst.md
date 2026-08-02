@@ -28,7 +28,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
-**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5 or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it.
+**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5, specs in Step 5b, or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it. When about to write a spec (Step 5b), also load `skills/shared/spec-gate/SKILL.md`.
 
 ## Your Mission
 
@@ -108,6 +108,15 @@ When the decisions are closed (or covered by stated defaults):
    Wait for explicit approval. If changes are requested, update and re-run the self-review.
 
 This document is the deliverable of the planning step — **ready to be turned into sprints**. Do not generate sprint files in this step unless the user asks to proceed.
+
+## Step 5b — Spec per Feature (mandatory before sprints)
+
+Before generating sprints, write one spec to `docs/specs/<feature>.md` per feature/capability in the
+approved scope, using `.dev-team-agents/templates/spec-template.md`. Format, the `touches`/`depends_on` fields, and
+the auto-contract gate are defined in `skills/shared/spec-gate/SKILL.md` — load it here, not before.
+
+Skip this step only for a single-file, trivial change with no ambiguity (e.g. `/devteam:fix` scope) —
+state explicitly that no spec was written and why.
 
 ## Step 6 — Sprint Generation (later step, on request)
 

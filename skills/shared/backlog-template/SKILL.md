@@ -142,6 +142,7 @@ A wave starts only after every task in the previous wave is done.
 **Estimate**: [hours or story points]
 **Wave**: A
 **Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
+**Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
 **Depends on**: [TASK-XXX or "none"]
 **Status**: [ ] Pending
 

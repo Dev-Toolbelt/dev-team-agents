@@ -104,6 +104,14 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 
 ## When You Act
 
+### Contract Gate (auto-spawn from a spec)
+
+When spawned by the `spec-gate` rule (touches more than one layer, or introduces a new
+API/schema/integration point), write **only** `docs/specs/<feature>-contract.md` — interface shapes,
+schema fields, error format, technical dependency order. Load `skills/shared/spec-gate/SKILL.md`
+first. Do not touch `overview.md`, restate the business rule, or make a product decision; a
+contradiction with the spec goes back to `product-analyst`, not a silent technical override.
+
 ### In DISCOVERY (after product-analyst closes scope)
 
 **Step 1 — Propose 2-3 architectural approaches** before producing any document. For each significant decision (overall architecture style, tech stack direction, data strategy), present 2-3 options with trade-offs and lead with your recommendation. Ask one section at a time and wait for alignment before advancing to the next. Apply YAGNI — do not propose complexity that isn't justified by the closed scope.

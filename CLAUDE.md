@@ -168,6 +168,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Wiki specification — entry format, `Tags` retrieval key, dynamic domain folders, index rows, never-delete. Every project gets one at `docs/wiki/`; `setup-assistant` creates `wiki/README.md` on FIRST_RUN as a **retrieval index** (one row per entry: `path \| keywords \| read-it-when`), the only part loaded unconditionally, greppable so context cost stays flat as it grows | `skills/shared/docs-sync/references/wiki-format.md` | Load it before writing an entry — one without its index row is unreachable, so that is an incomplete write. The **read** path (keyword lookup against the index) belongs to project-context § Context Loading Order and is the only part that lives elsewhere |
 | No-Destruction Rule — a health check creates, moves, or adapts; it never deletes | `skills/shared/setup-health-check/SKILL.md` § No-Destruction Rule | Load it and delegate. Never write a per-check exemption: the rule holds for zero-byte markers too, because a rule with a judgment call in it eventually gets the judgment wrong |
 | Reuse guidelines registry — mandatory reuse/standardization rules as `docs/development/reuse-guidelines.md` (Structural layer, see Memory Layers below), plus the review/lint gates | `skills/shared/reuse-guidelines/SKILL.md` | Load it and run the gate; never restate the table format or copy rows into review output — reference the row's `name` |
+| Spec layer — per-feature `docs/specs/<feature>.md` (Given/When/Then, `touches`/`depends_on`), auto-contract gate, execution scope-lock, living-spec Amendment Log, and the end-of-work Spec Sync Gate (`[SPEC-DRIFT]` blocks deploy) | `skills/shared/spec-gate/SKILL.md`, `templates/spec-template.md` | Load it wherever the table applies — product-analyst (Step 5b), software-architect (contract/amendment), coding agents (scope-lock, business amendments), qa-specialist (sync gate). Never restate the format, gate condition, or amendment rules |
 
 When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
@@ -595,5 +596,4 @@ When the user writes any prompt matching the intent of setting up the project wi
 
 ## Coexistence Rule (Core Principle)
 
-`dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task.
-This principle must be reinforced in every agent and command.
+`dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task. This principle must be reinforced in every agent and command.

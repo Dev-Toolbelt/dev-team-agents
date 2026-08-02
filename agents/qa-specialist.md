@@ -23,7 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 **QA-specific additions after project-context loads:**
 
-- Read `docs/backlog/` — task acceptance criteria and Definition of Done
+- Read `docs/backlog/` — task acceptance criteria and Definition of Done; if a spec is linked, load `skills/shared/spec-gate/SKILL.md` and validate against its Given/When/Then instead of a re-derived interpretation
 - Read `docs/development/api-contracts.md` — expected request/response shapes
 - Run `git diff main...HEAD` — scope validation to what actually changed before assessing regression risk
 - Run `git log --oneline -10` — recent commits reveal where additional regression risk may be hiding
@@ -69,6 +69,7 @@ Load `skills/shared/scoped-test-execution/SKILL.md` before running any automated
 | **User experience** | Flow completable without reading documentation; error messages tell the user what to do, not just what went wrong; loading state indicated for async operations; back/refresh mid-flow does not break state |
 | **Performance** | Response times acceptable for the use case (list pages, form submissions, heavy queries); concurrent users and parallel requests produce correct results — no races or data corruption; long-running and async operations complete within expected bounds; no observable resource accumulation (memory, open connections) across repeated operations |
 | **Observability** | Relevant events logged — no silent failures that disappear without a trace; error logs carry enough context (IDs, inputs, stack) to debug without a debugger; distributed traces propagated across service boundaries; key metrics emitted (counters, durations, error rates) for the new behavior |
+| **Spec sync** (spec-linked tasks only) | Load `skills/shared/spec-gate/SKILL.md`; verify the Given/When/Then still match what was built and every Amendment Log entry carries a reason; tag a mismatch `[SPEC-DRIFT]` and treat it as `[BLOCKER]` |
 
 ---
 
@@ -175,7 +176,7 @@ When working in **Workflow C (Maintenance)** on legacy code:
 **Severity → deploy decision:**
 | Severity | Deploy? |
 |----------|---------|
-| [BLOCKER] | ❌ FAIL — blocks deploy |
+| [BLOCKER] / [SPEC-DRIFT] | ❌ FAIL — blocks deploy until the spec is corrected |
 | [MAJOR] | ⚠️ PASS WITH NOTES — deploy only with explicit business sign-off |
 | [MINOR] | ✅ PASS WITH NOTES — ship, file a follow-up ticket |
 ```
@@ -193,8 +194,7 @@ When Jira is active:
 - Fetch the issue before reporting (`mcp__atlassian__getJiraIssue`) — confirm the current status and assignee
 - Create bugs directly in Jira with type `Bug`, severity-matched priority, and steps to reproduce in the description
 - Transition the validated issue to **In Review** or **Done** after a PASS verdict — always call `mcp__atlassian__getTransitionsForJiraIssue` first to get valid transition IDs
-- Add a comment summarizing the QA verdict and any findings (`mcp__atlassian__addCommentToJiraIssue`)
-- Link the bug issue to the parent story or task with `mcp__atlassian__createIssueLink` (link type: `blocks`)
+- Add a comment summarizing the QA verdict and any findings (`mcp__atlassian__addCommentToJiraIssue`), and link the bug issue to the parent story or task with `mcp__atlassian__createIssueLink` (link type: `blocks`)
 
 ---
 
