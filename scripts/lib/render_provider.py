@@ -474,7 +474,15 @@ def main():
         opencode_snippet = {}
         for cmd_path in sorted(commands_dir.glob("*.md")):
             name = cmd_path.stem
-            body = cmd_path.read_text()
+            # Command frontmatter is Claude-only: a `model:` key pins that
+            # command's body to a fixed model instead of the session's. The
+            # other providers resolve the model from commands.json `tier`, so
+            # the block is stripped here — left in, it would be emitted as
+            # literal YAML at the head of the opencode `template` string and of
+            # the Codex prompt. render_command_claude re-reads the source file,
+            # so Claude still receives it byte-identical (the contract checker
+            # enforces exactly that).
+            _cmd_fm, body = parse_frontmatter(cmd_path.read_text())
             meta = commands_meta.get(name)
             if not meta:
                 die(f"command '{name}' has no metadata entry in scripts/lib/commands.json — add one")

@@ -1,3 +1,7 @@
+---
+model: haiku
+---
+
 Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
 ---

@@ -1,3 +1,7 @@
+---
+model: haiku
+---
+
 You are running the **`/devteam:health-check`** command. Load `skills/shared/setup-health-check/SKILL.md` — it contains the 9 check categories, fix patterns, and output format. Load `skills/shared/output-format/SKILL.md` for the platform-agnostic output standard (pure markdown, no box-drawing Unicode, no decorative symbols). Apply it to ALL output produced by this command.
 
 ---

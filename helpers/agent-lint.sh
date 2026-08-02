@@ -401,7 +401,7 @@ check_command_roster() {
   [ -f "$COMMANDS_JSON" ] || return 0
   command -v python3 >/dev/null 2>&1 || return 0
 
-  local rows name tier agent agent_file actual
+  local rows name tier agent agent_file actual cmd_file pin expected_pin
   rows=$(python3 -c '
 import json, sys
 with open(sys.argv[1]) as fh:
@@ -434,6 +434,29 @@ for name, entry in lib.get("commands", {}).items():
     actual=$(grep -m1 '^tier:' "$agent_file" | sed 's/^tier:[[:space:]]*//' | tr -d '[:space:]' || true)
     if [ -n "$actual" ] && [ "$actual" != "$tier" ]; then
       ERRORS+=("  · commands.json: '${name}' is tier '${tier}' but its lead agent '${agent}' declares '${actual}' — on opencode that runs the agent on a model that is not its own (see _tier_rule)")
+    fi
+
+    # `model:` frontmatter pin — Claude-only, and the only route by which a
+    # command's tier reaches Claude Code at all (it symlinks the body and never
+    # renders). The key OVERRIDES the session's model, so it is permitted on the
+    # `repetitive` tier alone: a haiku pin can never raise what the user chose,
+    # while pinning a `reasoning` command to opus would silently undo someone who
+    # lowered the session for cost. Presence is permitted, not required — see
+    # _claude_model_pin in commands.json for why `explain` deliberately has none.
+    cmd_file="$REPO_ROOT/commands/${name}.md"
+    if [ -f "$cmd_file" ] && [ "$(head -1 "$cmd_file")" = "---" ]; then
+      pin=$(awk 'NR==1 { next } /^---[[:space:]]*$/ { exit } /^model:/ { sub(/^model:[[:space:]]*/, ""); print; exit }' \
+            "$cmd_file" | tr -d '[:space:]')
+      if [ -n "$pin" ]; then
+        if [ "$tier" != "repetitive" ]; then
+          ERRORS+=("  · commands/${name}.md: 'model: ${pin}' on a '${tier}' command — the key overrides the session model, so only 'repetitive' may pin one (see commands.json _claude_model_pin)")
+        else
+          expected_pin=$(claude_model_for_tier "$tier")
+          if [ -n "$expected_pin" ] && [ "$pin" != "$expected_pin" ]; then
+            ERRORS+=("  · commands/${name}.md: 'model: ${pin}' does not match tiers.json['${tier}'].claude (expected '${expected_pin}')")
+          fi
+        fi
+      fi
     fi
   done <<< "$rows"
 }
