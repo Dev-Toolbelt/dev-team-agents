@@ -139,7 +139,7 @@ Always create:
 - `docs/project.md`
 - `docs/development/tech-stack.md`, `architecture.md`, `code-standards.md`
 - `docs/backlog/README.md`
-- `docs/wiki/README.md` (even if empty — agents add domain rows over time per docs-sync protocol)
+- `docs/wiki/README.md` — the retrieval index, created with its `## Index` table header and no rows; agents append one row per entry (format: `skills/shared/docs-sync/references/wiki-format.md`). **Never overwrite an existing one**
 - `docs/design/design-system.md` (UI projects only)
 
 **Conditional docs:**
