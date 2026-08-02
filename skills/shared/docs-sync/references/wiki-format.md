@@ -1,5 +1,7 @@
 # Docs Sync — Wiki Format & Protocol
 
+**This is the canonical wiki specification.** Agents and skills reference it; they do not restate it. `skills/shared/project-context/references/wiki.md` points here.
+
 The wiki captures **domain knowledge that isn't derivable from reading the code** — non-obvious behaviors, multi-component flows, platform-specific gotchas, and concepts that work differently in this project than their name implies.
 
 ---
@@ -12,6 +14,7 @@ Write a new page (or update an existing one) when a task reveals:
 - A gotcha, invariant, or constraint that would surprise a new agent
 - A sync/dispatch behavior, state machine edge case, or offline-first deviation
 - A business rule that lives nowhere obvious in the code
+- A decision made without an ADR — below the threshold for a full record, but worth keeping
 
 **Do NOT write** for: things clear from reading the code, standard library patterns, or anything already in `CLAUDE.md`.
 
@@ -23,6 +26,7 @@ Write a new page (or update an existing one) when a task reveals:
 # [Concept or Flow Title]
 
 **Origin:** [task or feature context] | YYYY-MM-DD
+**Tags:** [comma-separated keywords — the retrieval key; see Index below]
 
 > [One-sentence "read this first" callout — the most important gotcha for a new agent]
 
@@ -36,9 +40,26 @@ Write a new page (or update an existing one) when a task reveals:
 
 ## Gotchas
 [Bullets — only surprises, not documentation of the obvious]
+
+## References
+[Related ADR, code path, or external doc — omit when there are none]
 ```
 
 Omit sections that add no value. Keep entries under 80 lines.
+
+**`Tags` is load-bearing, not decoration.** It is what an agent greps to decide whether to read the entry at all. Use the words someone would actually search — domain nouns, component names, error strings — not categories.
+
+---
+
+## Never Delete an Entry
+
+A wiki entry is superseded, never removed. When knowledge goes stale, add to the top of the entry:
+
+```markdown
+> ⚠️ Outdated as of YYYY-MM-DD — [what changed, and where the current behavior is documented]
+```
+
+Then update the body. Deleting the entry destroys the only record that the old behavior ever existed, which is exactly what the next agent needs when it hits a system still running it. The same rule governs every memory artifact — see the No-Destruction Rule in `skills/shared/setup-health-check/SKILL.md`.
 
 ---
 
@@ -66,20 +87,34 @@ When a topic spans two domains, place the file in the more specific one and link
    - New concept → new file (`kebab-case.md`, e.g., `order-state-machine.md`)
    - Additional detail to existing concept → Edit the existing file
 3. **Write / Edit** the entry
-4. **Update** `wiki/README.md`: add a new domain row if the folder is new; update the entry count
+4. **Update** `wiki/README.md`: add one index row for the entry — path, its `Tags`, and its callout. Editing an existing entry means updating that row, not adding a second one
 5. **Never** include session dates, author names, or task history in the body
+
+A wiki entry that is not in the index is invisible: step 3 without step 4 writes knowledge nothing will ever retrieve.
 
 ---
 
-## wiki/README.md Format
+## wiki/README.md Format — Retrieval Index
+
+One row per **entry**, not per domain. This file is the only part of the wiki an agent loads unconditionally, so it must stay greppable and small: the row carries just enough to decide whether opening the entry is worth it.
 
 ```markdown
 # Wiki
 
-## Domains
+## Index
 
-| Folder | Covers | Entries |
-|--------|--------|---------|
-| `auth/` | Authentication, JWT, RBAC | 2 |
-| `orders/` | Order state machine, transitions | 1 |
+| Entry | Keywords | Read it when |
+|-------|----------|--------------|
+| `auth/jwt-refresh.md` | jwt, refresh token, 401, session expiry | A session dies before its stated TTL |
+| `orders/state-machine.md` | order status, transition, cancel, refund | Changing anything that moves an order between states |
 ```
+
+| Column | Content |
+|--------|---------|
+| **Entry** | Path relative to `docs/wiki/`, in backticks |
+| **Keywords** | Copied verbatim from the entry's `Tags` line — the two must not drift |
+| **Read it when** | The entry's callout, compressed to one clause. A trigger condition, not a summary |
+
+**Entry counts are not tracked.** A count is a number to keep in sync that answers no question an agent has; `ls` produces it on demand.
+
+**A project whose `README.md` still carries the older `## Domains` count table keeps it.** Add the `## Index` section above it and leave the domain rows in place — their `Covers` text is knowledge someone wrote. Never regenerate this file over an existing one.

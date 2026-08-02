@@ -4,60 +4,6 @@ Every project gets a wiki at `docs/wiki/`. Agents write entries after completing
 
 The `setup-assistant` creates `wiki/README.md` on FIRST_RUN.
 
-See `skills/shared/docs-sync/SKILL.md` for the wiki entry format, domain folder rules, and update protocol.
+**The canonical specification lives in `skills/shared/docs-sync/references/wiki-format.md`** — entry format, `Tags` retrieval key, never-delete rule, dynamic domain folders, index format, and the update protocol. Load it before writing an entry. Do not restate any part of it here; this file existed as a second copy and had already drifted into a conflicting entry format and a contradictory (predefined) folder list before it was reduced to this pointer.
 
-## When to Write a Wiki Entry
-
-Write a wiki entry when a task reveals:
-- Non-obvious behavior that future agents would need to know
-- Gotchas or edge cases that caused confusion
-- Multi-layer flows that aren't obvious from code alone
-- Integration quirks between components or external services
-- Decisions made without an ADR (below the threshold for a full ADR but worth recording)
-
-## Directory Structure
-
-```
-docs/wiki/
-├── README.md          ← index of all entries; created by setup-assistant on FIRST_RUN
-├── backend/           ← backend domain entries
-├── frontend/          ← frontend domain entries
-├── database/          ← schema, migrations, query patterns
-├── devops/            ← CI/CD, infra, deployment quirks
-└── integrations/      ← external service integration notes
-```
-
-Use the domain folder that best matches the topic. When a topic spans domains, place it in the primary domain and cross-reference from the README index.
-
-## Entry Format
-
-```markdown
-# [Short descriptive title]
-
-**Date**: YYYY-MM-DD
-**Agent**: [agent-name]
-**Tags**: [comma-separated keywords]
-
-## Context
-
-[Why this is worth knowing — the situation that surfaced this knowledge]
-
-## Finding
-
-[The actual knowledge: what was discovered, how it behaves, what the gotcha is]
-
-## Impact
-
-[What breaks or degrades if this isn't known / followed]
-
-## References
-
-- [Link to related ADR, code file, or external doc if applicable]
-```
-
-## Update Protocol
-
-1. After completing a task, assess whether new non-obvious domain knowledge was surfaced
-2. If yes, create or update an entry in the appropriate domain folder
-3. Add a one-line summary to `wiki/README.md` under the correct domain heading
-4. Never delete wiki entries — mark outdated ones with `> ⚠️ Outdated as of YYYY-MM-DD` and explain what changed
+For **reading** the wiki at the start of a task — keyword lookup against the index rather than loading the directory — see `skills/shared/project-context/SKILL.md` § Context Loading Order.
