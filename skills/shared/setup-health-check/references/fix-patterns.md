@@ -97,9 +97,9 @@ When legacy individual entries are detected, offer migration:
 
 > Your `.gitignore` uses the old per-file pattern for `user-data/`. The current version uses a directory-level ignore (`.dev-team-agents/user-data/`) with a `graphify.json` exception. Migrate automatically?
 
-On confirmation: remove the 4 legacy lines, add the 3 new entries.
+On confirmation: **replace** the 4 legacy lines with the 3 new entries — a single rewrite of the block, not a delete followed by an append. The 4 legacy paths are all covered by the directory pattern that replaces them, so nothing stops being ignored at any point; a two-step edit leaves a window where `user-data/` is tracked. This is a config rewrite, not a removal — see the No-Destruction Rule in `../SKILL.md`.
 
-Legacy entries to remove:
+Legacy entries superseded by the rewrite:
 ```
 .dev-team-agents/user-data/session-summary.md
 .dev-team-agents/user-data/.last-update-check
@@ -141,7 +141,24 @@ If legacy `.claude/` directories still exist (user-data, docs, context, tasks, d
 | `.claude/dev-team-agents/` | `.dev-team-agents/` | Run `bash .dev-team-agents/scripts/migrate-to-root.sh` |
 | `.claude/.worktree-session` | `.dev-team-agents/.worktree-session` | `mv .claude/.worktree-session .dev-team-agents/` |
 
-After moving, remove empty legacy dirs: `rmdir .claude/user-data .claude/docs .claude/context .claude/tasks 2>/dev/null; rm -rf .claude/dev-team-agents 2>/dev/null`
+After moving, clean up under the **No-Destruction Rule** (`../SKILL.md`):
+
+```bash
+# Empty leftovers only — rmdir without -r fails on anything still holding content
+rmdir .claude/user-data .claude/docs .claude/context .claude/tasks 2>/dev/null
+
+# .claude/dev-team-agents/ — quarantine whatever migrate-to-root.sh left behind
+if [ -d .claude/dev-team-agents ] && [ -n "$(ls -A .claude/dev-team-agents 2>/dev/null)" ]; then
+  QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+  mkdir -p "$QUARANTINE"
+  mv .claude/dev-team-agents "$QUARANTINE/"
+  echo "→ Quarantined leftover .claude/dev-team-agents → $QUARANTINE/"
+else
+  rmdir .claude/dev-team-agents 2>/dev/null
+fi
+```
+
+This path previously ran `rm -rf .claude/dev-team-agents`, unconditionally, on the line following `migrate-to-root.sh`. A migration that failed halfway therefore destroyed `user-data/` — session summaries, preferences, credentials — with no record that it had. Residue after a migration is evidence the migration is incomplete; it is never cleanup.
 
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
@@ -289,9 +306,15 @@ if [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ ! -f ".dev-team-agents/use
     chmod 600 ".dev-team-agents/user-data/credentials.local.json"
     echo "→ Migrated credentials.local.json from project root to .dev-team-agents/user-data/"
 elif [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ -f ".dev-team-agents/user-data/credentials.local.json" ]; then
-    echo "→ WARNING: credentials.local.json exists at both locations. Remove the root-level file: rm credentials.local.json"
+    QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+    mkdir -p "$QUARANTINE"
+    mv "$PROJECT_ROOT/credentials.local.json" "$QUARANTINE/credentials.local.json"
+    chmod 600 "$QUARANTINE/credentials.local.json"
+    echo "→ credentials.local.json existed at both locations. The root-level copy was moved to $QUARANTINE/ — the one in user-data/ is authoritative. Compare them before discarding: the two may hold different keys."
 fi
 ```
+
+Never instruct the user to `rm` the duplicate. Two credential files at different paths are not presumed identical — the root-level one may carry a key the other lacks, and that is unrecoverable once deleted.
 
 ## Auto-fix for missing gitignore entry
 
@@ -332,7 +355,7 @@ done
 ## Auto-fix for legacy .auto-update flag
 
 ```bash
-# Set auto_update: true in preferences.json, then remove flag file
+# Set auto_update: true in preferences.json, then retire the flag file
 python3 - .dev-team-agents/user-data/preferences.json <<'PYEOF'
 import sys, json
 f = sys.argv[1]
@@ -340,5 +363,9 @@ with open(f) as fh: data = json.load(fh)
 data['auto_update'] = True
 with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
 PYEOF
-rm .dev-team-agents/user-data/.auto-update
+QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+mkdir -p "$QUARANTINE"
+mv .dev-team-agents/user-data/.auto-update "$QUARANTINE/"
 ```
+
+The flag carries no content — its existence *was* the value, and that value is now in `preferences.json`. It is still moved rather than deleted, because the No-Destruction Rule has no "this one is safe" exception: a rule with a judgment call in it gets the judgment wrong eventually, and quarantining a zero-byte marker costs nothing.
