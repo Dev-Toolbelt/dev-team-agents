@@ -167,6 +167,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Memory layers — which artifact holds what, and the three-question routing that picks one | `skills/shared/project-context/SKILL.md` § Memory Layers | Nothing — loading project-context is the enforcement. Never add a sixth layer or a per-agent memory file: one finding lands in one layer, referenced from others, never copied |
 | Wiki specification — entry format, `Tags` retrieval key, dynamic domain folders, index rows, never-delete. Every project gets one at `docs/wiki/`; `setup-assistant` creates `wiki/README.md` on FIRST_RUN as a **retrieval index** (one row per entry: `path \| keywords \| read-it-when`), the only part loaded unconditionally, greppable so context cost stays flat as it grows | `skills/shared/docs-sync/references/wiki-format.md` | Load it before writing an entry — one without its index row is unreachable, so that is an incomplete write. The **read** path (keyword lookup against the index) belongs to project-context § Context Loading Order and is the only part that lives elsewhere |
 | No-Destruction Rule — a health check creates, moves, or adapts; it never deletes | `skills/shared/setup-health-check/SKILL.md` § No-Destruction Rule | Load it and delegate. Never write a per-check exemption: the rule holds for zero-byte markers too, because a rule with a judgment call in it eventually gets the judgment wrong |
+| Reuse guidelines registry — mandatory-component rules (e.g. "always use the shared Modal") as `docs/development/reuse-guidelines.csv`, a Structural-layer artifact per `skills/shared/project-context/SKILL.md` § Memory Layers, plus the review gate that reads it | `skills/shared/reuse-guidelines/SKILL.md` | Load it and run the gate against the diff; never restate the CSV format or copy its rows into review output — reference the row's `name` |
 
 When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
@@ -230,6 +231,7 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 | `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; after creating (which pushes), loads `skills/shared/github-actions/SKILL.md` to watch Actions and auto-fix failures |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:learn` | technical-writer + software-architect¹ | Consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs |
+| `/devteam:rule` | technical-writer | Cataloging a mandatory reuse/standardization rule (`/devteam:rule use o componente XPTO em todo o projeto`) into `docs/development/reuse-guidelines.md`, classified as `code-pattern` / `path-convention` / `design-rule` |
 | `/devteam:explain` | none — answers in the main context | Explaining a term, acronym or piece of jargon seen in the session (`/devteam:explain SPA` or `/devteam:explain SPA, SSR, tenant`); short by design — expands every acronym, states the problem the term solves, gives one example, draws a `mermaid` diagram only when the term is a shape (flow, exchange, hierarchy, lifecycle), and always closes by offering an interactive quiz |
 | `/devteam:update` | runs `update.sh` (which delegates freshness check to `hooks/pre-tool-use/01-check-updates.sh`) | Checking for and applying dev-team-agents updates |
 | `/devteam:symlinks` | runs `fix-symlinks.sh` (detects OS, repairs materialized `.claude/` links, guides the OS fix on exit 3) | Diagnosing and repairing broken dev-team-agents symlinks (Windows without native symlink support) |
@@ -238,7 +240,7 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 ¹ conditional — spawned only when the task context involves that scope.
 ² test-gated — spawned only when the project's `CLAUDE.md` `## dev-team-agents` section has `TESTS_REQUIRED=yes` (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, the test phase is skipped entirely.
 
-> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:health-check` (operates on the local installation), and `/devteam:learn` (operates on session evidence, not a branch scope). These four are the complete list — verify with `grep -L current-context commands/*.md`. `/devteam:symlinks` and `/devteam:explain` also do not load it, but both name it in prose to record that it does not apply, so neither appears in that grep.
+> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:health-check` (operates on the local installation), `/devteam:learn` (operates on session evidence, not a branch scope), and `/devteam:rule` (catalogs a user-stated rule into `docs/development/reuse-guidelines.md`, not scoped to a branch or diff). These five are the complete list — verify with `grep -L current-context commands/*.md`. `/devteam:symlinks` and `/devteam:explain` also do not load it, but both name it in prose to record that it does not apply, so neither appears in that grep.
 
 > **Exception — commands that do NOT require Plan Gate:** the canonical per-command `plan_gate` value lives in `scripts/lib/commands.json` (`required` / `conditional` / `opt_out`). Only `/devteam:update`, `/devteam:symlinks`, and `/devteam:health-check` are `opt_out` — thin script/skill runners with their own interactive guardrails. `/devteam:review` and `/devteam:explain` are `conditional` and read-only by design (neither body carries a plan-gate step — review reads the diff and delegates; explain answers a question and writes nothing), so in practice both execute directly.
 
@@ -484,7 +486,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 |--------|-------------|-----------------|
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
-| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh` |
+| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | `99-graphify-refresh.sh`, `99b-archive-index.sh` |
