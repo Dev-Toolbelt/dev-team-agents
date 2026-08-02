@@ -25,8 +25,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/backlog/` — task acceptance criteria and Definition of Done; if a spec is linked, load `skills/shared/spec-gate/SKILL.md` and validate against its Given/When/Then instead of a re-derived interpretation
 - Read `docs/development/api-contracts.md` — expected request/response shapes
-- Run `git diff main...HEAD` — scope validation to what actually changed before assessing regression risk
-- Run `git log --oneline -10` — recent commits reveal where additional regression risk may be hiding
+- Run `git diff main...HEAD` — scope validation to what actually changed before assessing regression risk; `git log --oneline -10` for where additional risk may be hiding
 - Read the changed/created code — understand what was built in detail
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
@@ -169,6 +168,7 @@ When working in **Workflow C (Maintenance)** on legacy code:
 - [x] Error states handled
 - [ ] Empty state missing — needs UI for zero results
 - [x] Mobile responsive
+- [x] No open assumptions left unresolved (spec-gate hard gate — see `skills/shared/spec-gate/SKILL.md`)
 
 ### Verdict
 [PASS / PASS WITH NOTES / FAIL — reason]

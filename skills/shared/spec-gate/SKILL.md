@@ -62,6 +62,14 @@ Every coding agent (`backend-developer`, `frontend-developer`, `mobile-developer
 - If the spec and its contract disagree, the contract wins on interface shape; a business
   contradiction goes back to `product-analyst`, not a silent implementation choice.
 
+<HARD-GATE>
+A feature is never marked implemented or `done` while an open assumption remains. Every assumption
+made during execution resolves, before hand-off, to exactly one of: an answered question, a spec
+amendment (see Living Spec below), or an explicit blocker stated to the user. "I assumed X and moved
+on" is not a valid end state at any severity — this holds even when the assumption turned out
+correct.
+</HARD-GATE>
+
 ## QA Validation
 
 `qa-specialist` validates behavior against the linked spec's `Given/When/Then` blocks — the same
