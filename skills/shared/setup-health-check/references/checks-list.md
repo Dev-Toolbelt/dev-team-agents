@@ -71,7 +71,8 @@ done
 |-------|----------|
 | `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` (never `.claude/user-data/`) |
 | `.installed-version` exists | WARN only — re-run installer to populate |
-| Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration), then remove old dirs. Do NOT skip this step. |
+| Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration). Do NOT skip this step. Leftovers are `rmdir`'d only when empty, and quarantined otherwise — never `rm -rf` |
+| Memory artifacts present (`session-summary.md`, `docs/wiki/`, `docs/development/adrs/`, `docs/project.md`) | Adapt in place only — see Category 11. Never regenerate over an existing file |
 
 ## Category 4 — settings.json / Provider Config
 
@@ -328,7 +329,7 @@ done
 | `.dev-team-agents/user-data/` in `.gitignore` | Required | Append automatically (never `.claude/user-data/`) |
 | `!.dev-team-agents/user-data/graphify.json` in `.gitignore` | Required | Append automatically |
 | `.dev-team-agents/.worktree-session` in `.gitignore` | Required | Append automatically |
-| Legacy individual entries present | Outdated | **Offer migration**: remove individual entries and add directory pattern |
+| Legacy individual entries present | Outdated | **Offer migration**: replace the individual entries with the directory pattern in one rewrite (fix-patterns.md) — not a delete followed by an append |
 | `.claude/user-data/` or `.claude/dev-team-agents/` in `.gitignore` | **WRONG** — replace with `.dev-team-agents/` entries immediately | `sed -i '' 's|\.claude/user-data|.dev-team-agents/user-data|g' .gitignore` |
 
 ## Category 8 — User Preferences
@@ -442,3 +443,31 @@ grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/n
 | Top-level keys (`devops`, `app`) present | Required | Add missing keys with defaults (never remove existing data) |
 | No root-level `credentials.local.json` | Required (migrate) | Move to `.dev-team-agents/user-data/credentials.local.json` (see fix-patterns.md) |
 | `.gitignore` entry present | Required | Append `.dev-team-agents/user-data/credentials.local.json` with a strong comment |
+
+## Category 11 — Memory Artifacts
+
+These files accumulate knowledge that exists nowhere else (`skills/shared/project-context/SKILL.md` § Memory Layers). Every fix here is an in-place adaptation. **Nothing in this category may create, overwrite, or delete an entry** — the check reports and patches structure, never content.
+
+```bash
+# Presence
+[ -f .dev-team-agents/user-data/session-summary.md ] && echo "SESSION: OK" || echo "SESSION: MISSING"
+[ -d docs/wiki ] && echo "WIKI: OK" || echo "WIKI: MISSING"
+[ -d docs/development/adrs ] && echo "ADRS: OK" || echo "ADRS: MISSING"
+
+# Wiki index format: does README.md carry a retrieval index, or only the legacy domain-count table?
+if [ -f docs/wiki/README.md ]; then
+  grep -q "^## Index" docs/wiki/README.md && echo "WIKI_INDEX: OK" || echo "WIKI_INDEX: LEGACY_FORMAT"
+  # entries on disk vs rows in the index
+  echo "WIKI_FILES: $(find docs/wiki -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "WIKI_ROWS: $(grep -c '^| `' docs/wiki/README.md 2>/dev/null || echo 0)"
+fi
+```
+
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| `session-summary.md` missing | WARN | Create empty — never regenerate one that exists |
+| `docs/wiki/` missing | WARN | `mkdir -p docs/wiki` + index-format `README.md` (see `skills/shared/docs-sync/references/wiki-format.md`) |
+| `WIKI_INDEX: LEGACY_FORMAT` | Outdated | **Adapt in place**: insert the `## Index` section above the existing `## Domains` table. Keep every domain row — the `Covers` text is authored content. Never rewrite the file |
+| `WIKI_ROWS` < `WIKI_FILES` | Outdated | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
+| `WIKI_ROWS` > `WIKI_FILES` | WARN only | A row points at a file that is gone. **Report the row; do not remove it** — a missing entry is a restore candidate, and the row is the only surviving record of what it held |
+| ADR numbering has gaps | WARN only | Report. Never renumber: ADR ids are referenced from commits, wiki entries, and other ADRs |
