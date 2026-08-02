@@ -471,3 +471,23 @@ fi
 | `WIKI_ROWS` < `WIKI_FILES` | Outdated | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
 | `WIKI_ROWS` > `WIKI_FILES` | WARN only | A row points at a file that is gone. **Report the row; do not remove it** — a missing entry is a restore candidate, and the row is the only surviving record of what it held |
 | ADR numbering has gaps | WARN only | Report. Never renumber: ADR ids are referenced from commits, wiki entries, and other ADRs |
+
+### Reuse Guidelines Backfill
+
+Existing docs often already state a mandatory-reuse rule in prose — written before `docs/development/reuse-guidelines.md` (`skills/shared/reuse-guidelines/SKILL.md`) existed, or added later by someone who didn't know the registry was the right place. Scan for candidates and offer to promote them; never populate the registry silently.
+
+```bash
+# Candidate phrases (PT + EN) — mandatory-reuse language, not just any convention
+grep -niE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigatório|always use|canonical component|mandatory component|must (always )?use' \
+  docs/development/code-standards.md docs/design/design-system.md 2>/dev/null
+grep -rniE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigatório|always use|canonical component|mandatory component|must (always )?use' \
+  docs/wiki/ 2>/dev/null
+```
+
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| Candidate sentence found, no matching row in `reuse-guidelines.md` | Report | Propose a row (`name`/`type`/`rule`/`detection`/`canonical_ref`, per the skill's classify step) to the user before writing anything |
+| User confirms the proposed row | Fix | **Adapt the source document in place**: replace the rule's sentence/paragraph with a one-line reference (`See docs/development/reuse-guidelines.md § <name>`), keeping the same heading/anchor — never delete the heading or the surrounding section. Then append the confirmed row to `reuse-guidelines.md` (create the file from `.dev-team-agents/templates/reuse-guidelines-template.md`'s header if it doesn't exist yet) |
+| User declines or the match is ambiguous | WARN only | Report and leave the source document untouched |
+
+This is the same No-Destruction discipline as the rest of this category: content moves or gets referenced, it never disappears.

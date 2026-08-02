@@ -369,3 +369,29 @@ mv .dev-team-agents/user-data/.auto-update "$QUARANTINE/"
 ```
 
 The flag carries no content — its existence *was* the value, and that value is now in `preferences.json`. It is still moved rather than deleted, because the No-Destruction Rule has no "this one is safe" exception: a rule with a judgment call in it gets the judgment wrong eventually, and quarantining a zero-byte marker costs nothing.
+
+## Backfill for `docs/development/reuse-guidelines.md`
+
+Triggered by the Reuse Guidelines Backfill check (Category 11). After the user confirms a proposed row for a sentence found in `code-standards.md`, `design-system.md`, or a wiki entry:
+
+```bash
+REGISTRY="docs/development/reuse-guidelines.md"
+
+# Create the registry from the template's header if this is the first row ever backfilled
+if [ ! -f "$REGISTRY" ]; then
+  head -n 3 .dev-team-agents/templates/reuse-guidelines-template.md | tail -n 2 > "$REGISTRY"
+  # (the two header lines: "| name | type | ... |" and the "|---|---|...|" separator —
+  #  never copy the template's example row)
+fi
+
+# Append the confirmed row (built in the check step, not here)
+echo "$CONFIRMED_ROW" >> "$REGISTRY"
+```
+
+Then, in the **source document** (`code-standards.md`, `design-system.md`, or the wiki entry), replace the located sentence/paragraph with a one-line pointer, using Edit — never Write the whole file:
+
+```
+See `docs/development/reuse-guidelines.md` § <name> for the canonical rule.
+```
+
+Keep the original heading in place even if the paragraph under it is now just the pointer — removing the heading changes anchors other docs or commits may reference. This is a content *move*, not a deletion: the rule still exists, now in one place instead of two.

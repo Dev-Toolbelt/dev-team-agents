@@ -18,7 +18,8 @@ When work is delivered, patch the corresponding doc section immediately. Use the
 | Schema migration applied | `architecture.md` | Module Map or API Contracts |
 | Architectural layer added or renamed | `architecture.md` | Layers |
 | Non-obvious domain behavior discovered | `wiki/<domain>/<topic>.md` | New or updated wiki entry |
-| User explicitly asks to standardize, note, or remember something | `wiki/<domain>/<topic>.md` or `code-standards.md` | User-triggered wiki write |
+| User designates a specific component/class/helper, file location, or design rule as mandatory going forward | `docs/development/reuse-guidelines.md` | New registry row — see `skills/shared/reuse-guidelines/SKILL.md` |
+| User explicitly asks to standardize, note, or remember something (general convention, not a specific reusable component/path/rule) | `wiki/<domain>/<topic>.md` or `code-standards.md` | User-triggered wiki write |
 
 ---
 
@@ -80,6 +81,7 @@ When the user's message matches any of these patterns, **treat it as an explicit
 
 ### Where to write user-triggered entries
 
+0. **Check this first**: does the statement name a specific component, class, helper, file location, or design rule that must now be reused/followed project-wide (e.g. "use o componente XPTO em todo o projeto", "arquivos de upload sempre em xpto/pasta", "botões da seção X sempre à esquerda")? If so, this is a `reuse-guidelines` entry, not a wiki/code-standards one — run the classify → propose → confirm → append routine in `skills/shared/reuse-guidelines/SKILL.md` § Growing the Registry instead of the steps below. Confirm with: _"Catalogado em `docs/development/reuse-guidelines.md` — regra `<name>`."_
 1. Use `code-standards.md` (`## Patterns in Use` or `## Anti-Patterns`) for code conventions
 2. Use a wiki entry (`wiki/<domain>/<topic>.md`) for domain rules, behavioral constraints, or multi-layer decisions
 3. If unsure which document fits, prefer the wiki — it is the more flexible format
