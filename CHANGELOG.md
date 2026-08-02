@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-08-02
+
+### Added — Spec layer between overview and sprints, with a living-spec amendment protocol
+- **`product-analyst` now writes one testable spec per feature** (`docs/specs/<feature>.md`, `Given/When/Then` acceptance criteria, `touches`/`depends_on`) before generating sprints, using the new `templates/spec-template.md` and `skills/shared/spec-gate/SKILL.md`
+- **A mechanical gate auto-spawns `software-architect`** to write `<feature>-contract.md` whenever a spec's `touches` field spans more than one layer or introduces a new API/schema — no user request needed
+- **Execution agents and `qa-specialist` now treat the linked spec as the implementation and validation boundary**, asking rather than assuming when something isn't covered, instead of re-interpreting the sprint task text
+- **A Living Spec amendment protocol keeps the spec current after implementation**: business-level divergence is amended in place by the executing agent, interface-level divergence goes through `software-architect`, and every amendment is logged in the spec's new `Amendment Log` section
+- **A Spec Sync Gate at the end of work** has `qa-specialist` verify the spec still matches what was built and every amendment carries a reason, tagging drift `[SPEC-DRIFT]` and treating it as a `[BLOCKER]`
+- **A hard gate blocks marking a feature done while an open assumption remains** — every assumption must resolve to an answered question, a spec amendment, or an explicit blocker before hand-off, enforced by `qa-specialist`'s Definition of Done check
+- **A new `skills/shared/feature-learn/SKILL.md` fires automatically at the end of `backend`/`frontend`/`fullstack`/`mobile` sessions**, promoting spec amendments and non-obvious findings into docs, wiki, or an ADR (scoped mirror of `/devteam:learn`) so knowledge compounds feature-to-feature instead of aging unpromoted in `session-summary.md`
+
 ## [2.24.7] - 2026-08-02
 
 ### Fixed — Codex now routes guided choices through `request_user_input` and audits that generation
