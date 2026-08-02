@@ -123,6 +123,32 @@ A "non-trivial task" is any task that involves:
 
 ---
 
+## Memory Layers
+
+**This is the canonical map of the project's memory.** Every artifact below has exactly one job. Agents route by it; they do not restate it.
+
+| Layer | Artifact | Holds | Lifespan |
+|-------|----------|-------|----------|
+| **Structural** | `docs/project.md`, `docs/development/*.md` | Current state: stack, architecture, standards | Rewritten in place — always describes now |
+| **Episodic** | `.dev-team-agents/user-data/session-summary.md` | What happened, in order | Decays (rotation policy below) |
+| **Semantic** | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
+| **Decisional** | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
+| **Mechanical** | `graphify-out/graph.json` | Where things are in the code | Regenerated — never hand-written |
+
+### Routing — which layer gets this?
+
+Three questions, in order. The first "yes" wins:
+
+1. **Is it derivable by reading the code?** → None of them. Do not write it down. This is the rule that keeps memory from becoming a second, aging source of truth that contradicts the repository.
+2. **Is it a hard-to-reverse choice with non-obvious reasoning?** → ADR.
+3. **Will it still be true after this sprint?** → Wiki if it's knowledge, structural docs if it's current state. If no → session summary, and let it decay.
+
+A single finding lands in **one** primary layer. It may be referenced from another; it is never copied into one.
+
+`/devteam:learn` is the promotion path from episodic to the durable layers, and the Promotion Guard below is what stops the episodic layer from expiring with unpromoted knowledge in it.
+
+---
+
 ## Context Loading Order
 
 Before starting any task, load context in this order (read what exists — skip what doesn't):
@@ -140,6 +166,8 @@ Before starting any task, load context in this order (read what exists — skip 
 8. .agents/ (directory)                  ← project-level agent overrides
 9. docs/development/             ← architecture, code-standards, tech-stack
 10. docs/backlog/                ← current sprint and task context
+11. docs/wiki/README.md          ← retrieval index; grep it for the task's keywords and
+                                             open only the entries that match
 ```
 
 **When `docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
@@ -151,6 +179,10 @@ After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` fiel
 **When `.dev-team-agents/user-data/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
 
 **When `docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
+
+**When `docs/wiki/README.md` exists**, read that index — and only that index. Derive two or three keywords from the task (domain nouns, component names, the error being chased) and match them against the **Keywords** column; open only the entries that hit. Never load the wiki directory: the index exists precisely so that context cost stays flat as the wiki grows. An empty match set is a valid result — proceed without opening anything.
+
+This is the wiki's **read** path. Writing entries is `skills/shared/docs-sync/references/wiki-format.md`, which owns the index row format the lookup depends on.
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
 
@@ -181,6 +213,27 @@ After writing a new entry, trim entries according to `.dev-team-agents/user-data
 - `session_summary_max_entries` (default: 30) — keep at most this many entries total
 
 To trim: identify the cutoff date (`date -v-${MAX_DAYS}d +%Y-%m-%d` on macOS, `date -d "${MAX_DAYS} days ago" +%Y-%m-%d` on Linux), then remove all `## YYYY-MM-DD` blocks with a date before the cutoff. If the remaining count still exceeds `session_summary_max_entries`, remove the oldest entries until within the limit.
+
+#### Promotion Guard — check before trimming
+
+Trimming is the one place in the memory layer where knowledge is destroyed by design, and it is the correct design: episodic memory is supposed to decay. What must not decay is the durable knowledge that was only ever recorded there.
+
+Before removing any block, scan the blocks about to go for a non-empty `**Decisions**:` line. For each one, check whether that decision already exists in a durable artifact:
+
+```bash
+grep -ril "<distinctive term from the decision>" docs/development/adrs/ docs/wiki/ 2>/dev/null
+```
+
+If nothing matches, the decision was never promoted. Report it once, in the user's language, before trimming:
+
+> ⚠️ Expiring session entries contain decisions not found in any ADR or wiki entry:
+> - YYYY-MM-DD — [decision, one line]
+>
+> Run `/devteam:learn` to promote them, or confirm they can be dropped.
+
+Then proceed with the trim. **The guard reports; it does not block, and it does not promote on its own** — an automatic promotion would fill the wiki with entries nobody chose to keep, which is the failure mode the "not derivable from code" test exists to prevent.
+
+Entries whose `**Decisions**:` line is empty or absent are trimmed silently — there is nothing to lose.
 
 ---
 
