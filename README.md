@@ -144,7 +144,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
 | `/devteam:explain` | Glossary on demand — explains a term, acronym, or piece of jargon you saw in the session. Short by design: expands every acronym, states the problem it solves, gives one example in your project's language, and draws a mermaid diagram when the term is a shape (a flow, an exchange between parties, a hierarchy, a lifecycle) rather than just a definition. Closes by offering an interactive quiz |
-| `/devteam:health-check` | Installation diagnostics — detects the active provider (Claude / opencode / Codex), runs 9 checks (symlinks, scripts, user data, provider config, graphify, CLAUDE.md, .gitignore, preferences, notifier) and applies safe auto-fixes |
+| `/devteam:health-check` | Installation diagnostics — detects the active provider (Claude / opencode / Codex), runs 11 checks (symlinks, scripts, user data, provider config, graphify, CLAUDE.md, .gitignore, preferences, notifier, credentials, memory artifacts) and applies safe auto-fixes. It never deletes: anything it can't place is moved to `.dev-team-agents/user-data/legacy/<date>/`, and files that hold accumulated knowledge are adapted in place, never regenerated |
 | `/devteam:adr` | Architecture Decision Record — runs `scripts/new-adr.sh` to scaffold a numbered ADR, then software-architect fills the template |
 | `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
 | `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
@@ -276,11 +276,24 @@ Coding agents resolve the worktree decision from a **three-level cascade**:
 
 ## Agent Memory
 
-Agents start each session with no memory of previous ones. Three mechanisms minimize context loss:
+Agents start each session with no memory of previous ones. Five layers minimize context loss, each holding one kind of thing:
 
-- **Session summary** — at the end of any session where files changed, agents write an entry to `.dev-team-agents/user-data/session-summary.md`. A `Stop` hook enforces this automatically.
-- **ADRs** — significant, hard-to-reverse decisions are recorded as Architecture Decision Records in `docs/development/adrs/`. Create one with: `bash .dev-team-agents/scripts/new-adr.sh "title"`
-- **Project context skill** — defines the context-loading order every agent follows at startup, including the session summary and ADR index.
+| Layer | Where | Holds | Lifespan |
+|-------|-------|-------|----------|
+| Structural | `docs/project.md`, `docs/development/` | Stack, architecture, standards | Rewritten — always describes now |
+| Episodic | `.dev-team-agents/user-data/session-summary.md` | What happened, in order | Decays after ~30 days |
+| Semantic | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
+| Decisional | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
+| Mechanical | `graphify-out/graph.json` | Where things are in the code | Regenerated |
+
+**One question decides where something goes: is it derivable by reading the code?** If yes, it isn't written down at all — that rule is what keeps the memory from becoming a second, aging source of truth that contradicts the repository.
+
+- **Session summary** — written at the end of any session where files changed; a `Stop` hook enforces it. Before old entries are trimmed, agents check whether the decisions in them were ever promoted to an ADR or wiki entry, and tell you which weren't rather than dropping them silently.
+- **Wiki** — `docs/wiki/README.md` is a keyword index, one row per entry. Agents grep it for the task at hand and open only what matches, so a wiki with 200 entries costs the same at startup as one with 5.
+- **ADRs** — create one with `bash .dev-team-agents/scripts/new-adr.sh "title"`.
+- **`/devteam:learn`** — promotes what a session learned from the episodic layer into the durable ones.
+
+Nothing in this system deletes knowledge automatically. The episodic layer is the sole exception, by design, and the promotion check above is what guards it.
 
 ---
 

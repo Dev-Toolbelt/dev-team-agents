@@ -144,7 +144,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
 | `/devteam:explain` | Glossário sob demanda — explica um termo, sigla ou jargão que você viu na sessão. Direto por princípio: expande toda sigla, diz o problema que aquilo resolve, dá um exemplo na linguagem do seu projeto e desenha um diagrama mermaid quando o termo é uma forma (um fluxo, uma troca entre partes, uma hierarquia, um ciclo de vida) e não apenas uma definição. Fecha oferecendo um quiz interativo |
-| `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 9 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier) e aplica correções automáticas seguras |
+| `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 11 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier, credenciais, artefatos de memória) e aplica correções automáticas seguras. Ele nunca apaga: o que não souber onde colocar vai para `.dev-team-agents/user-data/legacy/<data>/`, e arquivos que acumulam conhecimento são adaptados no lugar, nunca regenerados |
 | `/devteam:adr` | Architecture Decision Record — roda `scripts/new-adr.sh` para criar um ADR numerado, e então o software-architect preenche o template |
 | `/devteam:update` | Atualização — verifica se há uma nova release do dev-team-agents e a aplica |
 | `/devteam:symlinks` | Reparo de symlinks — detecta o SO, repara links materializados como arquivos comuns e guia a correção quando o SO bloqueia symlinks nativos |
@@ -276,11 +276,24 @@ Os agentes de codificação resolvem a decisão de worktree por uma **cascata de
 
 ## Memória dos Agentes
 
-Agentes iniciam cada sessão sem memória das anteriores. Três mecanismos minimizam a perda de contexto:
+Agentes iniciam cada sessão sem memória das anteriores. Cinco camadas minimizam a perda de contexto, cada uma guardando um tipo de coisa:
 
-- **Resumo de sessão** — ao final de qualquer sessão com arquivos alterados, os agentes escrevem uma entrada em `.dev-team-agents/user-data/session-summary.md`. Um hook `Stop` enforça isso automaticamente.
-- **ADRs** — decisões significativas e difíceis de reverter são registradas como Architecture Decision Records em `docs/development/adrs/`. Crie um com: `bash .dev-team-agents/scripts/new-adr.sh "título"`
-- **Project context skill** — define a ordem de carregamento de contexto que todo agente segue no startup, incluindo o resumo de sessão e o índice de ADRs.
+| Camada | Onde | Guarda | Vida útil |
+|--------|------|--------|-----------|
+| Estrutural | `docs/project.md`, `docs/development/` | Stack, arquitetura, padrões | Reescrita — sempre descreve o agora |
+| Episódica | `.dev-team-agents/user-data/session-summary.md` | O que aconteceu, em ordem | Expira em ~30 dias |
+| Semântica | `docs/wiki/` | O que não dá para deduzir do código | Permanente; substituída, nunca apagada |
+| Decisional | `docs/development/adrs/` | Por que uma escolha difícil de reverter foi feita | Permanente e imutável |
+| Mecânica | `graphify-out/graph.json` | Onde as coisas estão no código | Regenerada |
+
+**Uma pergunta decide onde algo vai: dá para deduzir isso lendo o código?** Se sim, não é escrito em lugar nenhum — essa regra é o que impede a memória de virar uma segunda fonte de verdade que envelhece e passa a contradizer o repositório.
+
+- **Resumo de sessão** — escrito ao final de qualquer sessão com arquivos alterados; um hook `Stop` enforça. Antes de entradas antigas serem removidas, os agentes verificam se as decisões nelas chegaram a virar ADR ou entrada de wiki, e avisam quais não viraram em vez de descartá-las em silêncio.
+- **Wiki** — `docs/wiki/README.md` é um índice por palavra-chave, uma linha por entrada. Os agentes fazem grep nele para a tarefa atual e abrem só o que casar, então um wiki com 200 entradas custa o mesmo no startup que um com 5.
+- **ADRs** — crie um com `bash .dev-team-agents/scripts/new-adr.sh "título"`.
+- **`/devteam:learn`** — promove o que a sessão aprendeu da camada episódica para as duráveis.
+
+Nada nesse sistema apaga conhecimento automaticamente. A camada episódica é a única exceção, por design, e a verificação de promoção acima é o que a protege.
 
 ---
 
