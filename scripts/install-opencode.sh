@@ -186,11 +186,19 @@ if [[ $DRY_RUN -eq 0 ]]; then
 JSON
     echo "  + created $CFG_FILE"
   fi
+  # The snippet reaches jq through a FILE, never through argv. Every command
+  # body is embedded in it as a `template` string, so the JSON grows with the
+  # command roster — `--argjson new "$CLEAN_JSON"` passed it as an exec
+  # argument and died with `jq: Argument list too long` (E2BIG) once the roster
+  # crossed ARG_MAX. Do not convert this back to --argjson.
+  snippet_json=$(mktemp)
+  printf '%s' "$CLEAN_JSON" > "$snippet_json"
   tmp=$(mktemp)
-  jq --argjson new "$CLEAN_JSON" '.command = (.command // {}) * $new' "$CFG_FILE" > "$tmp" \
+  jq --slurpfile new "$snippet_json" '.command = (.command // {}) * $new[0]' "$CFG_FILE" > "$tmp" \
     && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$tmp" \
     && mv "$tmp" "$CFG_FILE"
-  CMD_COUNT=$(echo "$CLEAN_JSON" | jq '. | length')
+  CMD_COUNT=$(jq '. | length' "$snippet_json")
+  rm -f "$snippet_json"
   echo "  + merged ${CMD_COUNT} command keys into .opencode/opencode.json (key: devteam:<name>)"
 fi
 
