@@ -21,12 +21,14 @@
 #   2. Calls scripts/render-provider.sh --provider codex into a staging dir.
 #   3. Copies staged .codex/agents/*.toml into <project>/.codex/agents/.
 #   4. Copies staged .codex/prompts/devteam-*.md into <project>/.codex/prompts/.
-#   5. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
-#   6. Writes a hooks.json file at <project>/.codex/hooks.json that wires
+#   5. Copies staged .codex/skills/devteam-*/SKILL.md into <project>/.codex/skills/
+#      so the same workflows are available as explicit Codex skills (`$devteam-*`).
+#   6. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
+#   7. Writes a hooks.json file at <project>/.codex/hooks.json that wires
 #      scripts/hooks/{pre-tool-use,session-start,pre-compact,stop}.sh to the
 #      Codex PreToolUse/SessionStart/PreCompact/Stop events. Idempotent: only
 #      dev-team-managed hook entries are touched.
-#   7. Records the installed version.
+#   8. Records the installed version.
 
 set -euo pipefail
 
@@ -121,6 +123,17 @@ if [[ $DRY_RUN -eq 0 ]]; then
   cp -f "$STAGING/.codex/prompts/"devteam-*.md "$CODEX_DIR/prompts/"
   PROMPT_COUNT=$(find "$CODEX_DIR/prompts/" -maxdepth 1 -name 'devteam-*.md' | wc -l | tr -d ' ')
   echo "  + copied $PROMPT_COUNT prompt files to .codex/prompts/ (as /prompts:devteam-<name>)"
+
+  if [[ -d "$STAGING/.codex/skills" ]]; then
+    find "$STAGING/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | while read -r skill_dir; do
+      skill_name="$(basename "$skill_dir")"
+      rm -rf "$CODEX_DIR/skills/$skill_name"
+      mkdir -p "$CODEX_DIR/skills/$skill_name"
+      cp -f "$skill_dir/SKILL.md" "$CODEX_DIR/skills/$skill_name/SKILL.md"
+    done
+    SKILL_COUNT=$(find "$CODEX_DIR/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | wc -l | tr -d ' ')
+    echo "  + copied $SKILL_COUNT generated command skills to .codex/skills/ (as \$devteam-<name>)"
+  fi
 
   # skills symlink
   SKILLS_LINK="$CODEX_DIR/skills/dev-team-agents"
@@ -218,7 +231,7 @@ fi
 echo ""
 echo "install-codex: done."
 echo "  Next: restart Codex CLI."
-echo "  Agents available as subagents via spawn_agent. Prompts exposed as /prompts:devteam-<name>."
+echo "  Agents available as subagents via spawn_agent. Prompts exposed as /prompts:devteam-<name>. Command skills also exposed as \$devteam-<name>."
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "  (dry-run — no files written)"
 fi

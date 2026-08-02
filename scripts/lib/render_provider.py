@@ -146,8 +146,23 @@ def soften_plan_gate(body, provider, plan_gate_setting):
 # tools or idioms. Each is replaced with the Codex equivalent.
 
 _CODEX_BODY_REPLACEMENTS = [
+    # AskUserQuestion fallbacks — Codex has no structured quiz tool.
+    (r'\buse the `AskUserQuestion` tool with options:\b',
+     'ask the user directly and present the options as plain text:'),
+    (r'\buse the \*\*`AskUserQuestion`\*\* tool with a single question:\b',
+     'ask the user directly with a single plain-text question:'),
+    (r'\buse the \*\*`AskUserQuestion`\*\* tool to offer a health check:\b',
+     'ask the user directly in plain text whether to run a health check:'),
+    (r'\buse `AskUserQuestion` for every question with a finite set of answers\b',
+     'ask the user directly in plain text for every question with a finite set of answers'),
+    (r'\bvia `AskUserQuestion`\b', 'in plain text'),
+    (r'\bwith `AskUserQuestion`\b', 'in plain text'),
+    (r'\bvia AskUserQuestion\b', 'in plain text'),
+    (r'\bwith AskUserQuestion\b', 'in plain text'),
+    (r'\bthe `AskUserQuestion` tool\b', 'asking the user directly in plain text'),
+    (r'\b`AskUserQuestion` tool\b', 'asking the user directly in plain text'),
     # Tool name references in running text
-    (r'\bAskUserQuestion\b', 'a plain text question'),
+    (r'\bAskUserQuestion\b', 'ask the user directly in plain text'),
     (r'\bTodoWrite\b', 'update_plan'),
     (r'\bthe Task tool\b', 'spawn_agent'),
     (r'\bthe `Task` tool\b', 'spawn_agent'),
@@ -159,6 +174,7 @@ _CODEX_BODY_REPLACEMENTS = [
     (r'\bthe `question` tool\b', 'a direct question'),
     (r'\b`question` tool\b', 'a direct question'),
     (r'\bquestion tool\b', 'a direct question'),
+    (r'`ask the user directly in plain text`', 'ask the user directly in plain text'),
     # Hook references that are Claude-specific
     (r'\.claude/settings\.json', '.codex/hooks.json'),
     # JSON quiz blocks (Codex has no quiz tool — replace with plain text)
@@ -372,10 +388,26 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_body_rewrites(body)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
-    # First paragraph becomes description in a comment header, then body.
+    # Prompts are plain markdown files; unlike custom agents, they do not carry
+    # model or reasoning settings that Codex applies at runtime. Keep only the
+    # descriptive metadata that is true in the rendered artifact.
     desc = meta.get("description", "")
-    content = f"<!-- description: {desc} -->\n<!-- model: {model_id} | agent: {meta.get('agent','')} -->\n\n" + note + body
-    return {"path": f".codex/prompts/devteam-{name}.md", "content": content}
+    content = (
+        f"<!-- description: {desc} -->\n"
+        f"<!-- lead-agent: {meta.get('agent','')} | tier: {meta.get('tier','')} -->\n\n"
+        + note + body
+    )
+    skill_content = (
+        "---\n"
+        f'name: "devteam-{name}"\n'
+        f'description: "{desc}"\n'
+        "---\n\n"
+        + note + body
+    )
+    return [
+        {"path": f".codex/prompts/devteam-{name}.md", "content": content},
+        {"path": f".codex/skills/devteam-{name}/SKILL.md", "content": skill_content},
+    ]
 
 
 # ─── validation ───────────────────────────────────────────────────────
@@ -501,7 +533,11 @@ def main():
                 entry = render_command_opencode(name, meta, body, model_id, effort, lib["tool_map"])
                 opencode_snippet[entry["snippet_key"]] = entry["snippet_entry"]
             elif args.provider == "codex":
-                rendered.append(render_command_codex(name, meta, body, model_id, effort, lib["tool_map"]))
+                codex_outputs = render_command_codex(name, meta, body, model_id, effort, lib["tool_map"])
+                if isinstance(codex_outputs, list):
+                    rendered.extend(codex_outputs)
+                else:
+                    rendered.append(codex_outputs)
 
         if args.provider == "opencode" and opencode_snippet:
             snippet_path = tgt / ".opencode" / "commands.snippet.jsonc"

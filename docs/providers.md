@@ -8,7 +8,7 @@ Supported providers:
 | --- | --- | --- | --- | --- | --- |
 | **claude** | Claude Code | `scripts/install.sh` (existing) | `agents/*.md` symlinked to `.claude/agents/dev-team/` | `/devteam:<name>` (subdir-derived) | `.claude/settings.json` (existing) |
 | **opencode** | opencode TUI/CLI | `scripts/install-opencode.sh` | `.opencode/agents/<name>.md` (mode: subagent) | `/devteam:<name>` (inline in `.opencode/opencode.json` `command` object — NOT file-based, see note below) | `.opencode/plugins/dev-team-agents.ts` → `scripts/hooks/*.sh` |
-| **codex** | OpenAI Codex CLI | `scripts/install-codex.sh` | `.codex/agents/<name>.toml` | `/prompts:devteam-<name>` (Codex hardcodes the `/prompts:` namespace — divergent, see note below) | `.codex/hooks.json` → `scripts/hooks/*.sh` |
+| **codex** | OpenAI Codex CLI | `scripts/install-codex.sh` | `.codex/agents/<name>.toml` | `/prompts:devteam-<name>` and `$devteam-<name>` (skills-first fallback; see note below) | `.codex/hooks.json` → `scripts/hooks/*.sh` |
 
 The slash-command UX is preserved across providers where possible:
 
@@ -16,9 +16,10 @@ The slash-command UX is preserved across providers where possible:
 Claude    :  /devteam:plan do a plan
 opencode  :  /devteam:plan do a plan
 Codex     :  /prompts:devteam-plan do a plan   (forced divergence)
+Codex alt :  $devteam-plan do a plan           (skills-first path)
 ```
 
-The `/prompts:devteam-…` divergence in Codex is structural: Codex CLI exposes custom prompts under a hardcoded `/prompts:` namespace with no free colon support. To preserve discoverability and grouping, the `devteam-` prefix is baked into the prompt file name. The command body — including `$ARGUMENTS`, plan gate, and delegation to the same subagents — is identical across all three providers.
+The `/prompts:devteam-…` divergence in Codex is structural: Codex CLI exposes custom prompts under a hardcoded `/prompts:` namespace with no free colon support. To preserve discoverability and grouping, the `devteam-` prefix is baked into the prompt file name. Because custom prompts are now deprecated upstream, the Codex installer also renders matching explicit skills as `$devteam-<name>`. Both entrypoints carry the same command body — including `$ARGUMENTS`, plan gate, and delegation to the same subagents.
 
 ---
 
@@ -54,7 +55,8 @@ The `claude` column holds **aliases**, not pinned model ids: Claude Code resolve
 
 How the resolved id reaches the CLI differs by provider:
 
-- **opencode / codex** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file by the renderer: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
+- **opencode / codex agents** — the id (and the `effort` value, where the provider has one) is written into the rendered agent file by the renderer: `model:` / `variant:` in the opencode frontmatter, `model = ` / `model_reasoning_effort = ` in the Codex TOML.
+- **codex prompts** — the slash-command prompt files under `.codex/prompts/` are plain Markdown prompts. They do **not** carry runtime model or reasoning configuration; those settings apply only to the spawned custom agents in `.codex/agents/*.toml`. Any model note in a prompt is informational only and must not be treated as enforced runtime config.
 - **claude** — the render is the identity case: `agents/*.md` is emitted byte-identical to source, and `install.sh` symlinks `agents/` into `.claude/agents/dev-team/` rather than rendering into it. Nothing can be injected at install time, so the model has to already be in the source file — hence the `model:` key. Claude Code reads it and runs the subagent on that model; without it, every subagent would silently fall back to the session's default model and the whole tier system would be inert on Claude Code, which is what happened before this was wired up.
 
 ### Run banner
@@ -98,12 +100,13 @@ There is also a silent-fallback case: if the org restricts models via an `availa
                   ▼               ▼             ▼
    .claude/agents/dev-team/  .opencode/agents/   .codex/agents/<name>.toml
    .claude/commands/devteam/ .opencode/opencode.json    .codex/prompts/devteam-*
+                                                  .codex/skills/devteam-*/SKILL.md
    (symlink — install.sh)    (deep-merge into .opencode/opencode.json)
                                                   .codex/hooks.json (4 managed entries)
                               .opencode/plugins/dev-team-agents.ts (event ↔ bash hooks)
 ```
 
-**Bodies are emitted verbatim.** A short "Tool conventions" preamble added per provider explains how each Claude Code tool name the body references maps to the target provider's native tool (e.g., `Task` → `task` in opencode, `Task` → `spawn_agent` in codex, `AskUserQuestion` → plain-text in codex since it has no structured quiz tool). No token munging elsewhere — the model figures out the native call.
+**Bodies are emitted almost verbatim.** A short "Tool conventions" preamble added per provider explains how each Claude Code tool name the body references maps to the target provider's native tool (e.g., `Task` → `task` in opencode, `Task` → `spawn_agent` in codex, `AskUserQuestion` → direct plain-text questions in codex since it has no structured quiz tool). The Codex renderer also applies a narrow rewrite pass for Claude-specific question-tool phrasing and quiz JSON blocks so the rendered prompt does not instruct a nonexistent tool call.
 
 **Skills stay shared.** Every provider's installer symlinks this repo's `skills/` directory into the provider's skill-search path. Skill frontmatter is already compliant with the agentskills.io specification (`name` + `description` only), so no provider-specific rewrite is needed.
 
@@ -134,7 +137,8 @@ If your provider can't expose `/devteam:<name>` (e.g., it hardcodes a slash name
 
 - **opencode `variant` maps to model effort.** The renderer injects `variant: <effort>` into each agent's frontmatter and each command snippet's inline config. opencode passes `variant` to the model provider, which maps it to reasoning effort (e.g., `high`, `default`, `low`). The tier map's effort column is now enforced via the `variant` field.
 - **Skill-loading idiom differs per provider.** Agent bodies were authored for Claude Code (e.g., `Load skills/shared/plan-mode/SKILL.md`). In opencode, the model should invoke the `skill` tool with the skill's folder name (e.g., `skill({ name: 'plan-mode' })`). In Codex, the model reads the file at `.dev-team-agents/skills/<category>/<name>/SKILL.md`. The renderer prepends a per-provider preamble that explains this to each provider's agent — no body rewrite occurs.
-- **Codex UX divergence.** Codex's custom-prompt namespace is hardcoded as `/prompts:`. Commands are exposed as `/prompts:devteam-<name>` (e.g., `/prompts:devteam-plan`) rather than `/devteam:<name>`. Claude Code and opencode preserve the canonical `/devteam:<name>` UX.
+- **Codex UX divergence.** Codex's custom-prompt namespace is hardcoded as `/prompts:`. Commands are exposed as `/prompts:devteam-<name>` (e.g., `/prompts:devteam-plan`) rather than `/devteam:<name>`. Claude Code and opencode preserve the canonical `/devteam:<name>` UX. The Codex port now also renders matching explicit skills (`$devteam-<name>`) so the workflows remain available on the skills-native path.
+- **Codex custom prompts are deprecated upstream.** OpenAI documents custom prompts as deprecated in favor of skills. The current Codex port keeps `.codex/prompts/devteam-*.md` as a compatibility layer for slash-command discoverability, and pairs them with generated `.codex/skills/devteam-*/SKILL.md` entrypoints as the forward-compatible path.
 - **opencode command registration.** Commands must be declared as **inline entries** in `opencode.json` under the `command` key (e.g., `"devteam:plan": {…}`). File-based `.opencode/commands/` files produce commands without the `devteam:` prefix (e.g., `/backend` instead of `/devteam:backend`). The renderer (`render_provider.py`) emits inline entries automatically; if `.opencode/commands/` files exist from an older install, remove them and re-render, or manually add the `command` block to `opencode.json`.
 
 ## Troubleshooting

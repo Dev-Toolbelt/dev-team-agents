@@ -2,7 +2,7 @@
 
 The same agent team, skills, and lifecycle hooks run in OpenAI Codex CLI. The Claude slim installer intentionally **does not** bundle the Codex plumbing — you bootstrap it on demand.
 
-> **Note:** Codex's slash-command namespace is hardcoded as `/prompts:`, so dev-team-agents commands are exposed as `/prompts:devteam-<name>` (e.g. `/prompts:devteam-plan`) rather than `/devteam:<name>`. The command body and delegation flow are identical.
+> **Note:** Codex's custom-prompt namespace is hardcoded as `/prompts:` and that surface is now deprecated upstream in favor of skills. dev-team-agents therefore installs **both** compatibility prompts (`/prompts:devteam-<name>`) and explicit command skills (`$devteam-<name>`). The command body and delegation flow are identical.
 
 ## Install
 
@@ -12,14 +12,15 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
 ```
 
-This downloads the latest source, renders 17 agents as `.codex/agents/<name>.toml`, renders 22 prompts as `.codex/prompts/devteam-<name>.md`, symlinks skills into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`.
+This downloads the latest source, renders 17 agents as `.codex/agents/<name>.toml`, renders the devteam command prompts as `.codex/prompts/devteam-<name>.md`, renders matching explicit skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`.
 
 ## After install
 
-Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 4 managed hooks. After that:
+Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 4 managed hooks. After that, either entrypoint works:
 
 ```
 /prompts:devteam-plan do a plan
+$devteam-plan do a plan
 ```
 
 ## First-time trust flow
@@ -47,7 +48,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/
 
 - **`install-codex.sh: ERROR: source missing cross-CLI plumbing`** — you tried to run `install-codex.sh` from a slim Claude install. Use the curl-pipe above instead.
 - **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
-- **Prompts don't appear** — ensure the project's `.codex/` directory is trusted (Codex warns on first open). Run Codex from the project root and accept the trust prompt.
+- **Prompts don't appear** — ensure the project's `.codex/` directory is trusted (Codex warns on first open). Run Codex from the project root and accept the trust prompt. You can still use the generated `$devteam-<name>` skills even if you avoid the deprecated prompt surface.
 - **`[features] hooks = false`** — Codex defaults hooks to enabled. If disabled via config, re-enable: `[features] hooks = true`.
 
 ## Model tier → id map

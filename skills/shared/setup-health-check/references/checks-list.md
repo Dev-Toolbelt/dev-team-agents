@@ -112,7 +112,90 @@ done
 
 ### For Codex provider
 
-Check `.codex/hooks.json` — the 4 managed hook entries (SessionStart, PreToolUse, Stop, PreCompact) are present and point to valid script paths; check `prompts/` dir for `devteam-*.md` files.
+```bash
+# Hooks.json present and parseable
+[ -f .codex/hooks.json ] && python3 - <<'PY'
+import json
+from pathlib import Path
+p = Path(".codex/hooks.json")
+try:
+    data = json.loads(p.read_text())
+except Exception:
+    print("HOOKS_JSON_INVALID")
+    raise SystemExit(0)
+
+hooks = data.get("hooks", {})
+managed = {
+    "SessionStart": ".dev-team-agents/scripts/hooks/session-start.sh",
+    "PreToolUse": ".dev-team-agents/scripts/hooks/pre-tool-use.sh",
+    "PreCompact": ".dev-team-agents/scripts/hooks/pre-compact.sh",
+    "Stop": ".dev-team-agents/scripts/hooks/stop.sh",
+}
+for event, suffix in managed.items():
+    groups = hooks.get(event, [])
+    found = False
+    for grp in groups if isinstance(groups, list) else []:
+        for hook in (grp.get("hooks", []) if isinstance(grp, dict) else []):
+            if isinstance(hook, dict) and hook.get("type") == "command" and suffix in (hook.get("command") or ""):
+                found = True
+                break
+        if found:
+            break
+    print(f"{event}:{'OK' if found else 'MISSING'}")
+PY
+
+# Prompts generated
+find commands -maxdepth 1 -name '*.md' 2>/dev/null | wc -l
+find .codex/prompts -maxdepth 1 -name 'devteam-*.md' 2>/dev/null | wc -l
+
+# Generated command skills
+find .codex/skills -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' 2>/dev/null | wc -l
+
+# Generated skill payload files
+find .codex/skills -path '*/devteam-*/SKILL.md' 2>/dev/null | wc -l
+
+# Agent TOML model / effort mapping against tiers.json + agent_effort overrides
+python3 - <<'PY'
+import json, re
+from pathlib import Path
+
+tiers = json.loads(Path(".dev-team-agents/scripts/lib/tiers.json").read_text())
+agent_dir = Path(".codex/agents")
+
+def expected_for(agent_name, tier):
+    model = tiers["tiers"][tier]["codex"].split("/", 1)[1]
+    effort = None
+    override = tiers.get("agent_effort", {}).get(agent_name)
+    if isinstance(override, dict):
+        effort = override.get("codex")
+    if effort is None:
+        effort = tiers.get("effort", {}).get(tier, {}).get("codex")
+    return model, effort
+
+for f in sorted(agent_dir.glob("*.toml")):
+    text = f.read_text()
+    m_model = re.search(r'^model = "([^"]+)"', text, re.M)
+    m_effort = re.search(r'^model_reasoning_effort = "([^"]+)"', text, re.M)
+    m_tier = re.search(r'^\| `[^`]+` \| `([^`]+)` \|', text, re.M)
+    if not (m_model and m_tier):
+        print(f"{f.stem}:INVALID")
+        continue
+    tier = m_tier.group(1)
+    want_model, want_effort = expected_for(f.stem, tier)
+    got_model = m_model.group(1)
+    got_effort = m_effort.group(1) if m_effort else None
+    state = "OK" if (got_model == want_model and got_effort == want_effort) else "MISMATCH"
+    print(f"{f.stem}:{state}:model={got_model}:effort={got_effort}:expected_model={want_model}:expected_effort={want_effort}")
+PY
+```
+
+| Check | Expected | Fix action |
+|-------|----------|------------|
+| `.codex/hooks.json` exists and parses | No `HOOKS_JSON_INVALID` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Managed hook entries present | `SessionStart:OK`, `PreToolUse:OK`, `PreCompact:OK`, `Stop:OK` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Prompt files generated | Count of `.codex/prompts/devteam-*.md` equals `find commands -maxdepth 1 -name '*.md'` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Generated command skills present | Counts of `.codex/skills/devteam-*` dirs and `SKILL.md` files equal `find commands -maxdepth 1 -name '*.md'` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Agent TOML `model`/`model_reasoning_effort` matches `tiers.json` | Every row ends in `:OK:` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 
 ## Category 5 — Graphify (skip if not enabled)
 

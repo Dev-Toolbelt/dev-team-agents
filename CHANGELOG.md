@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.2] - 2026-08-02
+
+### Fixed — the Codex port now matches the runtime that actually executes the harness
+- **Codex command prompts no longer pretend to pin runtime model/effort.** In Codex, those settings apply to `.codex/agents/*.toml`, not to `.codex/prompts/*.md`; the renderer now keeps prompt metadata informational and leaves the enforcement to the spawned agents
+- **The Codex renderer no longer emits invalid quiz-tool instructions.** Claude-specific `AskUserQuestion` phrasing and embedded quiz JSON are rewritten into direct plain-text questioning so the rendered Codex artifacts stop referring to nonexistent tool calls
+- **The Codex compatibility checker now validates the artifacts the port actually ships.** It scans prompts, agents, and generated skills, and fails on stale pseudo-tool residues and misleading prompt model metadata
+
+### Added — a skills-first Codex entrypoint alongside the legacy prompt surface
+- **Every Codex command now renders twice:** as the existing compatibility prompt `/prompts:devteam-<name>` and as an explicit skill `$devteam-<name>`
+- **`install-codex.sh` now installs both entrypoints** and documents `$devteam-*` as the forward-compatible path while keeping `/prompts:devteam-*` available
+- **The setup-health-check references now validate the full Codex install shape** — hooks, generated prompts, generated `$devteam-*` skills, and `.codex/agents/*.toml` `model` / `model_reasoning_effort` against `tiers.json` including `agent_effort` overrides
+
 ## [2.24.1] - 2026-08-02
 
 ### Fixed — the opencode installer silently produced an empty command block

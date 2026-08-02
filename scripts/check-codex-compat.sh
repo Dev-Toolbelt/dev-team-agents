@@ -34,11 +34,15 @@ ISSUES=0
 FORBIDDEN_PATTERNS=(
     "AskUserQuestion"
     "TodoWrite"
-    "apply_patch"
     "_plain_text_"
     "_post_render_note"
     "**NOTE for Codex port"
     "Bodies using _plain_text_question_"
+    '`a plain text question`'
+    '`a direct plain-text question`'
+    "a plain text question tool"
+    "a direct plain-text question tool"
+    "<!-- model:"
 )
 
 check_file() {
@@ -85,6 +89,15 @@ HOOKS_FILE="$TARGET/hooks.json"
 if [ -f "$HOOKS_FILE" ]; then
     echo "--- hooks.json ---"
     check_file "$HOOKS_FILE"
+fi
+
+# Scan generated/local skills
+SKILLS_DIR="$TARGET/skills"
+if [ -d "$SKILLS_DIR" ]; then
+    echo "--- skills/ ---"
+    find "$SKILLS_DIR" -type f -name 'SKILL.md' | while read -r f; do
+        check_file "$f"
+    done
 fi
 
 echo ""

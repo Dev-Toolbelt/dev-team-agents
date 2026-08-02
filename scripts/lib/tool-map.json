@@ -28,7 +28,7 @@
       }
     },
     "codex": {
-      "_comment": "Codex uses function-calling tools: apply_patch (file edits), spawn_agent (subagent), update_plan (plan/todos), Read (files), Bash (shell), Glob/Grep (search), WebSearch (web). Codex has no structured quiz tool — AskUserQuestion falls back to plain text. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
+      "_comment": "Codex surfaces differ between CLI, app, and evolving runtime builds. The renderer therefore maps Claude idioms to Codex concepts, not to a brittle single tool roster. AskUserQuestion falls back to plain text because Codex has no structured quiz tool. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
       "tool_rewrites": {
         "AskUserQuestion": "_plain_text_",
         "Task": "spawn_agent",
@@ -40,11 +40,11 @@
       },
       "_unchanged": ["Read", "Write", "Edit", "Bash"],
       "idiom_notes": [
-        "· **Available tools:** `Read`, `Write`, `Edit` (file ops), `Bash` (shell, also for file search), `spawn_agent` (subagents), `update_plan` (plan/todos), `WebSearch` (web). Ask user questions as plain text — no quiz/selection tool is available.",
-        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read the file `.dev-team-agents/skills/<name>/SKILL.md` with `Read`.",
-        "· **Subagent spawn.** When the body directs you to spawn an agent, use `spawn_agent({ agent_type: '<name>' })`. Agent definitions are at `.codex/agents/<name>.toml` — resolved by name, not path.",
-        "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real files. Read them with `Read`.",
-        "· **Plan gate.** For complex or architectural tasks, use Codex's plan mode. For simple tasks, execute directly. Use `update_plan` to present a plan.",
+        "· **Codex-native equivalents.** Use the file, shell/search, subagent, plan/todo, and web tools available in the current Codex surface. Tool names can differ between CLI, app, and newer runtime builds; prefer the current-session equivalent over the literal Claude name in the source body. Ask user questions as plain text — no quiz/selection tool is available.",
+        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read `.dev-team-agents/skills/<name>/SKILL.md` or the matching category path with the current file-read tool.",
+        "· **Subagent spawn.** When the body directs you to spawn an agent, use the current Codex subagent mechanism to invoke the agent defined at `.codex/agents/<name>.toml`. Resolve agents by name, not by a Claude path.",
+        "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, and `.dev-team-agents/scripts/...` are real files. Read them with the current file-read tool.",
+        "· **Plan gate.** For complex or architectural tasks, use Codex's plan mode or the current-session planning mechanism. For simple tasks, execute directly.",
         "· **Task arguments.** `$ARGUMENTS` in this prompt = the user's free-form input after the slash command. Use it as the task description."
       ],
       "path_rewrites": {

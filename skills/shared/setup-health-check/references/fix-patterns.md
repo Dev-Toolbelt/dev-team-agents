@@ -59,6 +59,25 @@ re-indexes commands, agents, and skills.
 > way — check it with `test -L <config-dir>/skills/dev-team-agents` and repair by
 > re-running that provider's installer.
 
+## Auto-fix for Codex provider drift
+
+When any of the following Codex checks fail:
+- missing or invalid `.codex/hooks.json`
+- missing managed hook entries
+- missing `/prompts:devteam-*` files
+- missing generated `$devteam-*` skill dirs
+- mismatched `.codex/agents/*.toml` `model` / `model_reasoning_effort`
+
+re-render and reinstall the Codex provider:
+
+```bash
+bash .dev-team-agents/scripts/install-codex.sh
+```
+
+This is the canonical repair because the Codex install is rendered output. Fixing
+individual prompt, skill, TOML, or hook files by hand invites drift from the
+canonical source in `agents/`, `commands/`, `skills/`, and `scripts/lib/*.json`.
+
 ## Auto-fix for non-executable scripts
 
 ```bash
