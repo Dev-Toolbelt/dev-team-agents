@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.7] - 2026-08-02
+
+### Fixed — Codex now routes guided choices through `request_user_input` and audits that generation
+- **The Codex renderer now maps `AskUserQuestion` explicitly to `request_user_input` in Plan mode and rewrites quiz payload examples into the Codex shape.** Generated Codex command skills now preserve structured choice payloads in a form the runtime can actually consume instead of only describing an abstract quiz flow
+- **Codex no longer silently degrades guided choices into inline prose when the session is outside Plan mode.** The rendered instructions now require a `/plan` retry when `request_user_input` is unavailable, so commands that depend on interactive branching stop pretending to offer a native chooser they cannot render
+- **`/devteam:health-check` now verifies the new Codex quiz generation explicitly.** The Codex provider checks inspect rendered skills for `request_user_input`, `/plan` retry guidance, and absence of the old plain-text-degrade wording, then repair drift by re-running `install-codex.sh`
+
 ## [2.24.6] - 2026-08-02
 
 ### Fixed — Codex preserves structured quizzes and provider rewrites stay isolated

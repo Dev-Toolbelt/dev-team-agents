@@ -38,6 +38,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from textwrap import dedent
 
 
 REQUIRED_AGENT_TIERS = ("reasoning", "backend-exec", "frontend", "repetitive")
@@ -146,23 +147,23 @@ def soften_plan_gate(body, provider, plan_gate_setting):
 # tools or idioms. Each is replaced with the Codex equivalent.
 
 _CODEX_BODY_REPLACEMENTS = [
-    # AskUserQuestion adaptation — prefer Codex's structured user-input flow.
+    # AskUserQuestion adaptation — map explicitly to request_user_input.
     (r'\buse the `AskUserQuestion` tool with options:\b',
-     "use Codex's structured user-input flow with the same options when available; otherwise ask the user directly and present the same options as plain text:"),
+     "use the `request_user_input` tool (Plan mode) with the same options; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
     (r'\buse the \*\*`AskUserQuestion`\*\* tool with a single question:\b',
-     "use Codex's structured user-input flow for the same single question when available; otherwise ask the user directly in plain text:"),
+     "use the **`request_user_input`** tool (Plan mode) for the same single question; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
     (r'\buse the \*\*`AskUserQuestion`\*\* tool to offer a health check:\b',
-     "use Codex's structured user-input flow to offer the same health check when available; otherwise ask the user directly in plain text whether to run it:"),
+     "use the **`request_user_input`** tool (Plan mode) to offer the same health check; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
     (r'\buse `AskUserQuestion` for every question with a finite set of answers\b',
-     "use Codex's structured user-input flow for every question with a finite set of answers whenever available, with plain-text fallback only when needed"),
-    (r'\bvia `AskUserQuestion`\b', "via Codex's structured user-input flow when available"),
-    (r'\bwith `AskUserQuestion`\b', "with Codex's structured user-input flow when available"),
-    (r'\bvia AskUserQuestion\b', "via Codex's structured user-input flow when available"),
-    (r'\bwith AskUserQuestion\b', "with Codex's structured user-input flow when available"),
-    (r'\bthe `AskUserQuestion` tool\b', "Codex's structured user-input flow when available"),
-    (r'\b`AskUserQuestion` tool\b', "Codex's structured user-input flow when available"),
+     "use the `request_user_input` tool (Plan mode) for every question with a finite set of answers; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry instead of falling back silently"),
+    (r'\bvia `AskUserQuestion`\b', "via `request_user_input` (Plan mode)"),
+    (r'\bwith `AskUserQuestion`\b', "with `request_user_input` (Plan mode)"),
+    (r'\bvia AskUserQuestion\b', "via `request_user_input` (Plan mode)"),
+    (r'\bwith AskUserQuestion\b', "with `request_user_input` (Plan mode)"),
+    (r'\bthe `AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
+    (r'\b`AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
     # Tool name references in running text
-    (r'\bAskUserQuestion\b', "Codex structured user-input flow when available"),
+    (r'\bAskUserQuestion\b', "`request_user_input` (Plan mode)"),
     (r'\bTodoWrite\b', 'update_plan'),
     (r'\bthe Task tool\b', 'spawn_agent'),
     (r'\bthe `Task` tool\b', 'spawn_agent'),
@@ -170,13 +171,87 @@ _CODEX_BODY_REPLACEMENTS = [
     (r'\bUse the Task tool\b', 'Use spawn_agent'),
     (r'\bTask tool\b', 'spawn_agent'),
     (r'\b`Task` tool\b', 'spawn_agent'),
-    # question tool phrasing (opencode-specific name; Codex uses current-session equivalent)
-    (r'\bthe `question` tool\b', "Codex's structured user-input flow when available"),
-    (r'\b`question` tool\b', "Codex's structured user-input flow when available"),
-    (r'\bquestion tool\b', "Codex's structured user-input flow when available"),
+    # question tool phrasing (opencode-specific name; Codex uses request_user_input)
+    (r'\bthe `question` tool\b', "`request_user_input` (Plan mode)"),
+    (r'\b`question` tool\b', "`request_user_input` (Plan mode)"),
+    (r'\bquestion tool\b', "`request_user_input` (Plan mode)"),
     # Hook references that are Claude-specific
     (r'\.claude/settings\.json', '.codex/hooks.json'),
 ]
+
+
+def _slugify_identifier(text):
+    value = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    return value or "user_choice"
+
+
+def _convert_codex_question_payload(payload):
+    questions = payload.get("questions")
+    if not isinstance(questions, list) or not questions:
+        return payload
+
+    converted = []
+    for index, question in enumerate(questions, start=1):
+        if not isinstance(question, dict):
+            converted.append(question)
+            continue
+
+        header = str(question.get("header") or f"Choice {index}")
+        prompt = str(question.get("question") or "Choose one option.")
+        base_id = question.get("id") or header or prompt
+        qid = _slugify_identifier(str(base_id))
+
+        options = []
+        raw_options = question.get("options") or []
+        if isinstance(raw_options, list):
+            for option in raw_options:
+                if not isinstance(option, dict):
+                    continue
+                label = str(option.get("label") or "").strip()
+                if not label or label.lower() == "other":
+                    continue
+                options.append({
+                    "label": label,
+                    "description": str(option.get("description") or "").strip(),
+                })
+
+        converted.append({
+            "header": header,
+            "id": qid,
+            "question": prompt,
+            "options": options[:3],
+        })
+
+    return {"questions": converted}
+
+
+_CODEX_JSON_BLOCK_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+
+
+def rewrite_codex_question_blocks(body):
+    """Convert AskUserQuestion JSON examples into request_user_input payloads."""
+
+    def _replace(match):
+        raw_payload = match.group(1).strip()
+        try:
+            parsed = json.loads(raw_payload)
+        except json.JSONDecodeError:
+            return match.group(0)
+
+        if not isinstance(parsed, dict) or "questions" not in parsed:
+            return match.group(0)
+
+        converted = _convert_codex_question_payload(parsed)
+        rendered = json.dumps(converted, indent=2, ensure_ascii=False)
+        return dedent(
+            f"""\
+            ```json
+            {rendered}
+            ```
+            """
+        ).rstrip()
+
+    return _CODEX_JSON_BLOCK_RE.sub(_replace, body)
 
 def apply_codex_body_rewrites(body):
     """Apply all Codex-specific text replacements to the body.
@@ -190,7 +265,7 @@ def apply_codex_body_rewrites(body):
         if r'\n' in pattern:
             flags |= re.DOTALL
         result = re.sub(pattern, replacement, result, flags=flags)
-    return result
+    return rewrite_codex_question_blocks(result)
 
 
 # ─── tool-map rendering ────────────────────────────────────────────────

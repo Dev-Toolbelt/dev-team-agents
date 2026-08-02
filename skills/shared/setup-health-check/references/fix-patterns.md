@@ -67,6 +67,7 @@ When any of the following Codex checks fail:
 - missing generated `$devteam-*` skill dirs
 - generated `$devteam-*` skill frontmatter names do not match their folder basenames
 - legacy project-local `.codex/prompts/devteam-*.md` aliases still exist
+- rendered Codex command skills still use the pre-`request_user_input` quiz generation (missing `request_user_input`, missing `/plan` retry guidance, or still instructing degraded plain-text choice rendering)
 - mismatched `.codex/agents/*.toml` `model` / `model_reasoning_effort`
 
 re-render and reinstall the Codex provider:
