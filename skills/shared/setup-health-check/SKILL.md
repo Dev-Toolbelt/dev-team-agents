@@ -5,7 +5,7 @@ description: Setup health check — categories, commands, auto-fix actions.
 
 # Setup Health Check
 
-Run a structured audit of the dev-team-agents installation in a project. Checks 10 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`.
+Run a structured audit of the dev-team-agents installation in a project. Checks 11 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`. It never deletes — see the No-Destruction Rule below.
 
 ## When to Run
 
@@ -19,11 +19,45 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
 1. Load `references/checks-list.md` — run each category's detection commands
 2. Collect results: ✅ OK / ⚠️ WARN / 🔧 FIX per category
 3. Display the summary using the format in `references/audit-format.md`
-4. Apply auto-fixes from `references/fix-patterns.md`:
+4. Apply auto-fixes from `references/fix-patterns.md`, under the No-Destruction Rule below:
    - WARN items: apply silently
    - FIX items that touch `settings.json`: show diff, ask confirmation
    - FIX items that touch `.gitignore` (legacy migration): ask confirmation
    - All other FIX items: apply without asking
+
+## No-Destruction Rule
+
+**This is the canonical statement. `references/checks-list.md` and `references/fix-patterns.md` delegate to it; neither restates it.**
+
+> A health check never deletes. Every fix creates, moves, or adapts in place.
+
+The health check runs unattended, on an installation it has just decided is broken — which is exactly the state in which its assumptions about what a file contains are least reliable. A wrong fix that moved something is recoverable; a wrong fix that deleted it is not.
+
+| Situation | Permitted action | Never |
+|-----------|-----------------|-------|
+| Path moved between versions | `mv` to the new path (merge if the target exists) | `rm` the source "after" migrating |
+| File in a superseded format | Adapt in place — add the new structure, keep existing content | Regenerate the file over the old one |
+| Config line replaced | Rewrite the line to its current form | Delete and re-add as two steps |
+| Content is unrecognized, orphaned, or ambiguous | `mv` to quarantine (below) | Delete as cleanup |
+| Directory left over and **empty** | `rmdir` without `-r` | `rm -rf` |
+
+`rmdir` without `-r` is the only removal in the skill. It is permitted precisely because it fails by construction on a non-empty directory, so it cannot destroy data — the safety is in the tool, not in the check that ran before it.
+
+### Quarantine
+
+Anything that would otherwise be removed goes to a dated directory instead:
+
+```bash
+QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+mkdir -p "$QUARANTINE"
+mv <path> "$QUARANTINE/"
+```
+
+Report every quarantined path in the audit output. Nothing empties this directory — not the health check, not the updater. It is gitignored with the rest of `user-data/`, and the cost of it accumulating is orders of magnitude below the cost of one wrongly deleted `user-data/`.
+
+### Memory artifacts — adapt, never regenerate
+
+`session-summary.md`, `docs/wiki/`, `docs/development/adrs/` and `docs/project.md` accumulate knowledge that exists nowhere else (see `skills/shared/project-context/SKILL.md` § Memory Layers). For these, "outdated format" is never grounds for a rewrite: patch the file to the current format and keep every line of content that is already there.
 
 ## Categories (checked in order)
 
@@ -39,6 +73,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `04-notifier.sh` executable, state files present |
 | 10 | Credentials | `credentials.local.json` at correct path, no legacy root file, required top-level keys, gitignored |
+| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated |
 
 ## Load on Demand
 
