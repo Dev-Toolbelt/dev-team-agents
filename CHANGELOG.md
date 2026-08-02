@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.4] - 2026-08-02
+
+### Fixed — Codex CI fixtures no longer expect the removed project-local prompt directory
+- **The slim-bootstrap contract test now validates the installed Codex project shape against command skills, not `.codex/prompts/`.** The skills-first migration intentionally stopped creating project-local `devteam-*.md` prompt files, but the bootstrap assertion still `find`ed that directory and failed even when the install was correct
+- **The Codex installed-fixture validator now requires `.codex/skills/devteam-*` and rejects leftover `.codex/prompts/devteam-*.md` files.** This brings CI in line with the new installer behavior and catches regressions back to the legacy layout instead of enshrining it
+
 ## [2.24.3] - 2026-08-02
 
 ### Fixed — Codex installs now converge old projects to the new skills-first layout

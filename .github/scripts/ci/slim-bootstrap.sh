@@ -155,12 +155,18 @@ print(f"codex bootstrap OK ✓  (hooks: {sorted(present)}, all 4 paths verified 
 PY
 
 n_codex_agents=$(find "$FIXTURE/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
-n_codex_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
+n_codex_skills=$(find "$FIXTURE/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | wc -l | tr -d ' ')
 [ "$n_codex_agents" -ge 17 ] || { echo "codex bootstrap FAIL: <17 agents" >&2; exit 1; }
-[ "$n_codex_prompts" -ge 22 ] || { echo "codex bootstrap FAIL: <22 prompts" >&2; exit 1; }
+[ "$n_codex_skills" -ge 22 ] || { echo "codex bootstrap FAIL: <22 command skills" >&2; exit 1; }
 [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || {
   echo "codex bootstrap FAIL: skills symlink missing" >&2; exit 1
 }
+# Project-local prompts were removed in the skills-first Codex layout.
+if [ -d "$FIXTURE/.codex/prompts" ]; then
+  n_codex_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
+  [ "$n_codex_prompts" -eq 0 ] || {
+    echo "codex bootstrap FAIL: legacy project-local prompts still present ($n_codex_prompts)" >&2; exit 1; }
+fi
 # Codex hooks.json references bash scripts at .dev-team-agents/scripts/hooks/.
 # Verify they actually exist post-bootstrap (catches broken ensure_claude_framework wiring).
 for h in stop pre-tool-use session-start pre-compact; do

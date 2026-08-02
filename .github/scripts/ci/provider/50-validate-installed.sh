@@ -67,16 +67,20 @@ assert not missing_paths, f"codex hooks.json references missing scripts: {missin
 print(f"codex fixture: hook events={sorted(hooks_obj.keys())} (all 4 paths verified on disk)")
 PY
     n_agents=$(find "$FIXTURE/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
-    n_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
+    n_skills=$(find "$FIXTURE/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | wc -l | tr -d ' ')
     [ -L "$FIXTURE/.codex/skills/dev-team-agents" ] || { echo "FAIL: codex skills symlink missing" >&2; exit 1; }
     # Also assert the Claude framework runtime subset is materialized
     [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/stop.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/stop.sh not materialized (codex hooks would dangle)" >&2; exit 1; }
     [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/pre-tool-use.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/pre-tool-use.sh not materialized" >&2; exit 1; }
     [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/session-start.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/session-start.sh not materialized" >&2; exit 1; }
     [ -f "$FIXTURE/.dev-team-agents/scripts/hooks/pre-compact.sh" ] || { echo "FAIL: .dev-team-agents/scripts/hooks/pre-compact.sh not materialized" >&2; exit 1; }
-    echo "codex fixture: agents=$n_agents prompts=$n_prompts"
+    if [ -d "$FIXTURE/.codex/prompts" ]; then
+      n_prompts=$(find "$FIXTURE/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
+      [ "$n_prompts" -eq 0 ] || { echo "FAIL: legacy project-local codex prompts still present ($n_prompts)" >&2; exit 1; }
+    fi
+    echo "codex fixture: agents=$n_agents skills=$n_skills"
     [ "$n_agents" -ge 17 ] || { echo "FAIL: <17 codex agents" >&2; exit 1; }
-    [ "$n_prompts" -ge 22 ] || { echo "FAIL: <22 codex prompts" >&2; exit 1; }
+    [ "$n_skills" -ge 22 ] || { echo "FAIL: <22 codex command skills" >&2; exit 1; }
     ;;
   *)
     echo "50-validate-installed: unknown provider '$PROVIDER'" >&2; exit 2 ;;
