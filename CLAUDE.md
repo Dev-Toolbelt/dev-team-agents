@@ -1,5 +1,4 @@
 # CLAUDE.md — dev-team-agents
-
 Instructions for working on this repository. These rules apply to Claude when authoring or modifying agents, skills, scripts, and documentation inside `dev-team-agents`.
 
 ---
@@ -597,5 +596,4 @@ When the user writes any prompt matching the intent of setting up the project wi
 ## Coexistence Rule (Core Principle)
 
 `dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task.
-
-This principle must be reinforced in every agent and every command.
+This principle must be reinforced in every agent and command.

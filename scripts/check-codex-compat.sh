@@ -38,8 +38,8 @@ FORBIDDEN_PATTERNS=(
     "_post_render_note"
     "**NOTE for Codex port"
     "Bodies using _plain_text_question_"
-    '`a plain text question`'
-    '`a direct plain-text question`'
+    "\`a plain text question\`"
+    "\`a direct plain-text question\`"
     "a plain text question tool"
     "a direct plain-text question tool"
     "<!-- model:"
