@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # check-codex-compat.sh — Lint rendered Codex output for forbidden terms.
-# Scans .codex/prompts/*.md and .codex/agents/*.toml for instructions that
-# reference tools, paths, or concepts that do not exist in Codex CLI.
+# Scans .codex/skills/**/SKILL.md, .codex/agents/*.toml, and any leftover
+# legacy prompt files for instructions that reference tools, paths, or
+# concepts that do not exist in Codex CLI.
 #
 # Usage:
 #   bash scripts/check-codex-compat.sh                    # scan .codex/ in current dir

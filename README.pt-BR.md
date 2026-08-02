@@ -45,7 +45,7 @@ Um motor de renderização (`scripts/render-provider.sh`, Python puro com só st
      ▼                ▼                                                            ▼ direto
   .opencode/          .codex/                                        ┌──────────────────────────────┐
   agents/<n>.md       agents/<n>.toml    ← reshape de frontmatter     │  .claude/                    │
-  opencode.json       prompts/devteam-*  ← formato do slash command   │  agents/dev-team/<n>.md      │
+  opencode.json       skills/devteam-*   ← formato de skill no Codex  │  agents/dev-team/<n>.md      │
   plugins/dev-team-    hooks.json         ← liga os dispatchers bash  │  commands/devteam/<n>.md    │
   agents.ts            skills/ → symlink                              │  skills/<name>/             │
   skills/ → symlink                                                   │  settings.json → hooks/*.sh │
@@ -161,9 +161,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 
 **Em qual modelo cada comando roda.** Todo comando declara um tier em `scripts/lib/commands.json`, e no opencode e no Codex esse tier vira um modelo concreto na hora da instalação. No Claude Code o corpo é symlinkado como está, então o tier só chega até ele por uma chave `model:` no frontmatter do comando — e essa chave é usada apenas nos sete comandos `repetitive` (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), que rodam em Haiku. Todos os outros herdam o modelo em que sua sessão está. O motivo é deliberado: `model:` sobrescreve a sessão, então fixar um comando de planejamento em Opus desfaria em silêncio uma sessão que você baixou para economizar, enquanto um pin em Haiku só pode custar menos do que você escolheu.
 
-No **Codex especificamente**, esse pin por tier vale para os **agentes** renderizados em `.codex/agents/*.toml`. Os arquivos `/prompts:devteam-*` são prompts Markdown simples, então não carregam campos runtime de `model` ou `model_reasoning_effort` por conta própria — eles dependem dos agentes que disparam para aplicar a política de modelo/esforço no Codex.
-
-No **Codex especificamente**, o entrypoint oficial local ao projeto é `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`. Se você quiser autocomplete por slash command também ali, rode novamente `scripts/install-codex.sh --user-prompts` para copiar aliases de compatibilidade para `~/.codex/prompts/` e então reinicie o Codex.
+No **Codex especificamente**, esse pin por tier vale para os **agentes** renderizados em `.codex/agents/*.toml`. O entrypoint oficial local ao projeto é `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; a skill em si é só orquestração e depende dos agentes disparados para aplicar a política de modelo/esforço no Codex.
 
 ---
 

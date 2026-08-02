@@ -22,7 +22,7 @@ Design:
                   `<target>/.opencode/commands.snippet.jsonc` containing
                   `{ "devteam:plan": {...}, ... }` to be deep-merged into the
                   project's `opencode.json` `command` block by the installer.
-      - codex:   `<target>/.codex/prompts/devteam-<name>.md` (body verbatim)
+      - codex:   `<target>/.codex/skills/devteam-<name>/SKILL.md`
 
 Usage:
   python3 render_provider.py --provider <p> --source-dir <S> --target-dir <T>
@@ -388,15 +388,7 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_body_rewrites(body)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
-    # Prompts are plain markdown files; unlike custom agents, they do not carry
-    # model or reasoning settings that Codex applies at runtime. Keep only the
-    # descriptive metadata that is true in the rendered artifact.
     desc = meta.get("description", "")
-    content = (
-        f"<!-- description: {desc} -->\n"
-        f"<!-- lead-agent: {meta.get('agent','')} | tier: {meta.get('tier','')} -->\n\n"
-        + note + body
-    )
     skill_content = (
         "---\n"
         f'name: "devteam-{name}"\n'
@@ -404,10 +396,7 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
         "---\n\n"
         + note + body
     )
-    return [
-        {"path": f".codex/prompts/devteam-{name}.md", "content": content},
-        {"path": f".codex/skills/devteam-{name}/SKILL.md", "content": skill_content},
-    ]
+    return {"path": f".codex/skills/devteam-{name}/SKILL.md", "content": skill_content}
 
 
 # ─── validation ───────────────────────────────────────────────────────

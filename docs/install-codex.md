@@ -2,7 +2,7 @@
 
 The same agent team, skills, and lifecycle hooks run in OpenAI Codex CLI. The Claude slim installer intentionally **does not** bundle the Codex plumbing — you bootstrap it on demand.
 
-> **Note:** Codex's custom-prompt namespace is hardcoded as `/prompts:` and that surface is now deprecated upstream in favor of skills. dev-team-agents therefore treats **project-local skills** (`$devteam-<name>`) as the default path. Compatibility prompts (`/prompts:devteam-<name>`) are optional user-local aliases you can install into `~/.codex/prompts`.
+> **Note:** Codex custom prompts are deprecated upstream in favor of skills. dev-team-agents therefore uses **project-local skills** (`$devteam-<name>`) as the official command path.
 
 ## Install
 
@@ -23,25 +23,6 @@ $devteam-plan do a plan
 ```
 
 You can also open `/skills` and select `devteam-plan`.
-
-## Optional slash-command aliases
-
-If you specifically want `/prompts:devteam-*` autocomplete, install the optional
-user-level prompt aliases:
-
-```bash
-bash <path-to-dev-team-agents>/scripts/install-codex.sh --user-prompts --source <path-to-dev-team-agents>
-```
-
-Or, from a project using the bootstrap installer:
-
-```bash
-bash .dev-team-agents/scripts/install-codex.sh --user-prompts
-```
-
-This copies `devteam-*.md` prompts into `~/.codex/prompts/`, which is the
-location Codex documents for custom prompts. Restart Codex afterward so they are
-re-indexed.
 
 ## First-time trust flow
 
@@ -69,7 +50,6 @@ bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/
 - **`install-codex.sh: ERROR: source missing cross-CLI plumbing`** — you tried to run `install-codex.sh` from a slim Claude install. Use the curl-pipe above instead.
 - **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
 - **`$devteam-*` doesn't appear or run** — ensure the project's `.codex/` directory is trusted, restart Codex, and verify `.codex/skills/devteam-<name>/SKILL.md` exists in the project.
-- **`/prompts:devteam-*` doesn't appear** — those are optional user-level aliases, not project files. Install them with `bash .dev-team-agents/scripts/install-codex.sh --user-prompts`, then restart Codex.
 - **`[features] hooks = false`** — Codex defaults hooks to enabled. If disabled via config, re-enable: `[features] hooks = true`.
 
 ## Model tier → id map

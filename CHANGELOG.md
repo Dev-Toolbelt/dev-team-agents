@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.5] - 2026-08-02
+
+### Changed — Codex now standardizes on `$devteam-*` only
+- **The Codex renderer and installer no longer treat `/prompts:` as a supported command surface.** Rendered Codex commands now exist only as project-local skills under `.codex/skills/devteam-*/SKILL.md`, and the surrounding command-map/docs text was updated to make `$devteam-*` the sole official invocation path
+- **Legacy prompt aliases are now handled only as drift cleanup.** `install-codex.sh`, the health-check references, and the compatibility notes still detect and remove old `.codex/prompts/devteam-*.md` leftovers, but the harness no longer offers or documents prompt alias installation as part of normal Codex usage
+
+### Fixed — `devteam:commit` no longer dead-ends on unstaged-only changes
+- **When a project has modified files but nothing staged, `/devteam:commit` now routes through a structured decision instead of stopping on a plain-text blocker.** The command asks whether it should stage everything and commit, just show the commit plan, or abort
+- **Re-running `install-codex.sh` from the project's own `.dev-team-agents` copy now works.** The materialized runtime now includes the minimal render plumbing required for `--source .dev-team-agents`, skips self-copy loops safely, and bootstraps the notifier state files expected by hooks and health-checks
+
 ## [2.24.4] - 2026-08-02
 
 ### Fixed — Codex CI fixtures no longer expect the removed project-local prompt directory

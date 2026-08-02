@@ -10,7 +10,7 @@
 # Output lands under:
 #   <target>/.claude/{agents/dev-team,commands/devteam}/*.md   (provider=claude)
 #   <target>/.opencode/agents/*.md + <target>/.opencode/commands.snippet.jsonc (provider=opencode)
-#   <target>/.codex/agents/*.toml + <target>/.codex/prompts/devteam-*.md        (provider=codex)
+#   <target>/.codex/agents/*.toml + <target>/.codex/skills/devteam-*/SKILL.md   (provider=codex)
 #
 # Fails fast (exit 1) on unknown provider, unknown tier, missing tiers.json
 # column, or missing `tier:` key in an agent's frontmatter.

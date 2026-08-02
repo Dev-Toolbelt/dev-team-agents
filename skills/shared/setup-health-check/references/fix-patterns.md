@@ -79,17 +79,6 @@ This is the canonical repair because the Codex install is rendered output. Fixin
 individual prompt, skill, TOML, or hook files by hand invites drift from the
 canonical source in `agents/`, `commands/`, `skills/`, and `scripts/lib/*.json`.
 
-If the user explicitly wants slash-command autocomplete via `/prompts:devteam-*`,
-install the optional user-level aliases:
-
-```bash
-bash .dev-team-agents/scripts/install-codex.sh --user-prompts
-```
-
-That writes compatibility prompts to `~/.codex/prompts/`, which Codex scans as
-the supported custom-prompt location. They are optional and are not required
-for a healthy project-local Codex install.
-
 ## Auto-fix for non-executable scripts
 
 ```bash

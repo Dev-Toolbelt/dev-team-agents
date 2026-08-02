@@ -214,7 +214,6 @@ PY
 | Generated command skill names match folder basenames | Every row ends in `:OK:name=devteam-*` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Legacy project-local prompt aliases absent | Count of `.codex/prompts/devteam-*.md` is `0` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Agent TOML `model`/`model_reasoning_effort` matches `tiers.json` | Every row ends in `:OK:` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
-| User-local prompt aliases (optional) | If the user explicitly wants `/prompts:devteam-*`, the matching `devteam-*.md` files exist in `~/.codex/prompts/` and Codex was restarted afterward | Re-run `bash .dev-team-agents/scripts/install-codex.sh --user-prompts` |
 
 ## Category 5 — Graphify (skip if not enabled)
 

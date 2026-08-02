@@ -26,14 +26,14 @@
       }
     },
     "codex": {
-      "_comment": "Codex CLI exposes custom prompts as /prompts:<name>. No free `:` namespace is supported. Divergence from the `/devteam:<name>` UX is documented in docs/providers.md.",
-      "output_form": "prompts_dir",
-      "target_path_template": ".codex/prompts/devteam-{name}.md",
-      "exposed_name_template": "/prompts:devteam-{name}",
-      "ux_divergence": "Codex's custom-prompt namespace is hardcoded as /prompts:. The devteam prefix is baked into the prompt file name to preserve discoverability and grouping.",
+      "_comment": "Codex uses project-local skills as the official command surface. The canonical identifier stays `devteam-<name>`, invoked as `$devteam-<name>`.",
+      "output_form": "skills_dir",
+      "target_path_template": ".codex/skills/devteam-{name}/SKILL.md",
+      "exposed_name_template": "$devteam-{name}",
+      "ux_divergence": "Codex does not preserve the `/devteam:<name>` slash namespace; the harness standardizes on project-local skills instead.",
       "frontmatter_passthrough": false,
       "frontmatter_to_inline": {
-        "_comment": "Codex prompts are plain markdown with no frontmatter. Renderer drops agent model/tier (caller agent must be invoked via spawn_agent from a parent context).",
+        "_comment": "Codex command skills use SKILL.md frontmatter and delegate into provider-native tools from the command body.",
         "description": "_first_paragraph_of_body_",
         "body": "_body_emitted_verbatim_"
       }

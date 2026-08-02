@@ -13,7 +13,6 @@
 #
 # Usage (from project root):
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh
-#   bash <path-to-dev-team-agents>/scripts/install-codex.sh --user-prompts
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh --source /abs/path
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh --dry-run
 #
@@ -23,30 +22,25 @@
 #   3. Copies staged .codex/agents/*.toml into <project>/.codex/agents/.
 #   4. Copies staged .codex/skills/devteam-*/SKILL.md into <project>/.codex/skills/
 #      so the workflows are available as explicit Codex skills (`$devteam-*`).
-#   5. Optionally copies staged .codex/prompts/devteam-*.md into ~/.codex/prompts/
-#      when `--user-prompts` is passed, for slash-command autocomplete as
-#      `/prompts:devteam-<name>`.
-#   6. Removes legacy project-local prompt aliases from <project>/.codex/prompts/
-#      so older installs converge to the skills-first layout.
-#   7. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
-#   8. Writes a hooks.json file at <project>/.codex/hooks.json that wires
+#   5. Removes any legacy prompt aliases from <project>/.codex/prompts/ and
+#      ~/.codex/prompts/ so older installs converge to the skills-first layout.
+#   6. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
+#   7. Writes a hooks.json file at <project>/.codex/hooks.json that wires
 #      scripts/hooks/{pre-tool-use,session-start,pre-compact,stop}.sh to the
 #      Codex PreToolUse/SessionStart/PreCompact/Stop events. Idempotent: only
 #      dev-team-managed hook entries are touched.
-#   9. Records the installed version.
+#   8. Records the installed version.
 
 set -euo pipefail
 
 PROJECT_ROOT="$(pwd)"
 DRY_RUN=0
 SOURCE_ARG=""
-USER_PROMPTS=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source) SOURCE_ARG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --user-prompts) USER_PROMPTS=1; shift ;;
     *) echo "install-codex: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -77,7 +71,6 @@ echo "====================================="
 echo "Project root:  $PROJECT_ROOT"
 echo "Source dir:    $SOURCE_DIR"
 if [[ $DRY_RUN -eq 1 ]]; then echo "Mode:          DRY-RUN (no writes)"; fi
-if [[ $USER_PROMPTS -eq 1 ]]; then echo "User prompts:  ENABLED (~/.codex/prompts)"; fi
 echo ""
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -139,6 +132,15 @@ if [[ $DRY_RUN -eq 0 ]]; then
     echo "  + copied $SKILL_COUNT generated command skills to .codex/skills/ (as \$devteam-<name>)"
   fi
 
+  # skills symlink
+  SKILLS_LINK="$CODEX_DIR/skills/dev-team-agents"
+  if [[ -L "$SKILLS_LINK" || -e "$SKILLS_LINK" ]]; then rm -rf "$SKILLS_LINK"; fi
+  ln -s "$SOURCE_DIR/skills" "$SKILLS_LINK"
+  echo "  + symlinked skills/ -> $SKILLS_LINK"
+fi
+
+# ── remove legacy prompt aliases from old Codex layouts ──────────────────────
+if [[ $DRY_RUN -eq 0 ]]; then
   LEGACY_PROMPTS_DIR="$CODEX_DIR/prompts"
   if [[ -d "$LEGACY_PROMPTS_DIR" ]]; then
     find "$LEGACY_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' -delete
@@ -148,21 +150,10 @@ if [[ $DRY_RUN -eq 0 ]]; then
     echo "  + removed legacy project-local prompt aliases from .codex/prompts/"
   fi
 
-  # skills symlink
-  SKILLS_LINK="$CODEX_DIR/skills/dev-team-agents"
-  if [[ -L "$SKILLS_LINK" || -e "$SKILLS_LINK" ]]; then rm -rf "$SKILLS_LINK"; fi
-  ln -s "$SOURCE_DIR/skills" "$SKILLS_LINK"
-  echo "  + symlinked skills/ -> $SKILLS_LINK"
-fi
-
-# ── optional user-level prompt aliases for slash-command autocomplete ─────────
-if [[ $USER_PROMPTS -eq 1 ]]; then
   USER_PROMPTS_DIR="${HOME}/.codex/prompts"
-  mkdir -p "$USER_PROMPTS_DIR"
-  if [[ $DRY_RUN -eq 0 ]]; then
-    cp -f "$STAGING/.codex/prompts/"devteam-*.md "$USER_PROMPTS_DIR/"
-    PROMPT_COUNT=$(find "$USER_PROMPTS_DIR" -maxdepth 1 -name 'devteam-*.md' | wc -l | tr -d ' ')
-    echo "  + copied $PROMPT_COUNT prompt files to $USER_PROMPTS_DIR/ (as /prompts:devteam-<name>)"
+  if [[ -d "$USER_PROMPTS_DIR" ]]; then
+    find "$USER_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' -delete
+    echo "  + removed legacy user-level prompt aliases from ~/.codex/prompts/"
   fi
 fi
 
@@ -256,11 +247,6 @@ echo ""
 echo "install-codex: done."
 echo "  Next: restart Codex CLI."
 echo "  Agents available as subagents via spawn_agent. Command skills are exposed as \$devteam-<name>."
-if [[ $USER_PROMPTS -eq 1 ]]; then
-  echo "  User-local prompt aliases were installed at ~/.codex/prompts as /prompts:devteam-<name>."
-else
-  echo "  Optional: re-run with --user-prompts to install /prompts:devteam-<name> aliases in ~/.codex/prompts."
-fi
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "  (dry-run — no files written)"
 fi

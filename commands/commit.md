@@ -74,6 +74,16 @@ git diff --stat
 - Identify which files are unstaged but modified (`git diff --name-only`)
 - Do NOT auto-stage everything. Stage only what the user has explicitly staged, unless `$ARGUMENTS` contains `all` or `--all`, in which case run `git add -A` before proceeding.
 
+**If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. Use `AskUserQuestion` with a single-select question:
+
+- `Stage all and commit` — run `git add -A` and continue normally
+- `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
+- `Abort` — stop without staging or committing anything
+
+If there are neither staged nor unstaged changes, output exactly `Nothing to commit.`
+
+Then stop.
+
 ---
 
 ## Step 3 — Group changes into logical commits

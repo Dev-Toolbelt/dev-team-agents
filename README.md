@@ -45,7 +45,7 @@ A render engine (`scripts/render-provider.sh`, plain Python with stdlib only) re
      ▼                ▼                                              ┌──────────────────────────────┐
   .opencode/          .codex/                                        │  .claude/                    │
   agents/<n>.md       agents/<n>.toml    ← frontmatter reshape       │  agents/dev-team/<n>.md      │
-  opencode.json       prompts/devteam-*  ← slash command form       │  commands/devteam/<n>.md    │
+  opencode.json       skills/devteam-*   ← Codex skill form         │  commands/devteam/<n>.md    │
   plugins/dev-team-    hooks.json         ← wire bash dispatchers    │  skills/<name>/             │
   agents.ts            skills/ → symlink                              │  settings.json → hooks/*.sh │
   skills/ → symlink                                                   └──────────────────────────────┘
@@ -161,9 +161,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 
 **Which model a command runs on.** Every command declares a tier in `scripts/lib/commands.json`, and on opencode and Codex that tier resolves to a concrete model at install time. On Claude Code the body is symlinked as-is, so the tier reaches it only through a `model:` key in the command's frontmatter — and that key is used on the seven `repetitive` commands alone (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), which run on Haiku. Every other command inherits whatever model your session is set to. The reason is deliberate: `model:` overrides the session, so pinning a planning command to Opus would silently undo a session you lowered to save cost, while a Haiku pin can only ever cost less than what you chose.
 
-For **Codex specifically**, that tier pin applies to the rendered **agents** in `.codex/agents/*.toml`. The `/prompts:devteam-*` files are plain Markdown prompts, so they do not carry runtime `model` or `model_reasoning_effort` fields of their own — they rely on the agents they spawn to enforce the Codex-side model/effort policy.
-
-For **Codex specifically**, the official project-local entrypoint is `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`. If you want slash-command autocomplete there as well, re-run `scripts/install-codex.sh --user-prompts` to copy compatibility aliases into `~/.codex/prompts/`, then restart Codex.
+For **Codex specifically**, that tier pin applies to the rendered **agents** in `.codex/agents/*.toml`. The official project-local entrypoint is `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; the skill itself is orchestration only and relies on the spawned agents to enforce the Codex-side model/effort policy.
 
 ---
 

@@ -241,21 +241,16 @@ def check_codex(staging, source):
         if name not in src_agents:
             errs += fail(f"codex/{f.name}: rendered agent name does not match any source agent")
 
-    # prompts at .codex/prompts/devteam-<name>.md non-empty with description header
-    prompts_dir = Path(staging) / ".codex" / "prompts"
-    prompts = sorted(prompts_dir.glob("devteam-*.md"))
-    if not prompts:
-        errs += fail("codex: no rendered prompts found")
-    for p in prompts:
+    skills_dir = Path(staging) / ".codex" / "skills"
+    skills = sorted(p for p in skills_dir.glob("devteam-*/SKILL.md"))
+    if not skills:
+        errs += fail("codex: no rendered command skills found")
+    for p in skills:
         text = p.read_text()
         if not text.strip():
-            errs += fail(f"codex/{p.name}: empty prompt body")
-        if "<!-- description:" not in text:
-            errs += fail(f"codex/{p.name}: missing '<!-- description: ... -->' header")
-        # name should match devteam-<cmd-name>
-        m = re.match(r"^devteam-(.+)\.md$", p.name)
-        if not m:
-            errs += fail(f"codex/{p.name}: filename must match 'devteam-<name>.md'")
+            errs += fail(f"codex/{p.parent.name}/SKILL.md: empty skill body")
+        if not re.search(r'^name:\s*"devteam-[^"]+"', text, re.M):
+            errs += fail(f"codex/{p.parent.name}/SKILL.md: missing or invalid 'name: \"devteam-*\"' frontmatter")
     return errs
 
 

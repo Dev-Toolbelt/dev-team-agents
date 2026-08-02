@@ -30,7 +30,7 @@ PY
     ;;
   codex)
     actual_agents=$(find "$STAGING/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
-    actual_commands=$(find "$STAGING/.codex/prompts" -maxdepth 1 -name 'devteam-*.md' -type f | wc -l | tr -d ' ')
+    actual_commands=$(find "$STAGING/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | wc -l | tr -d ' ')
     ;;
   *)
     echo "20-attendance: unknown provider '$PROVIDER'" >&2; exit 2 ;;
