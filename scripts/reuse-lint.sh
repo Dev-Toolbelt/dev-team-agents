@@ -38,7 +38,7 @@ _clean() {
 PATTERN_NAMES=() PATTERN_REGEX=() PATTERN_REF=()
 PATH_NAMES=() PATH_GLOB=() PATH_DIR=() PATH_REF=()
 
-while IFS='|' read -r _ f_name f_type f_rule f_detect f_ref _; do
+while IFS='|' read -r _ f_name f_type _ f_detect f_ref _; do
   name="$(_clean "$f_name")"
   [ -z "$name" ] && continue
   [ "$name" = "name" ] && continue
@@ -82,6 +82,7 @@ while IFS= read -r line; do
       if [ -n "$CURRENT_FILE" ]; then
         base="$(basename "$CURRENT_FILE")"
         for i in "${!PATH_NAMES[@]}"; do
+          # shellcheck disable=SC2053 # intentional glob match against the registry's name-glob/dir-prefix
           if [[ "$base" == ${PATH_GLOB[$i]} ]] && [[ "$CURRENT_FILE" != ${PATH_DIR[$i]}* ]]; then
             VIOLATIONS=$((VIOLATIONS + 1))
             [ "$QUIET" = "1" ] || echo "[reuse-lint] BLOCKED — $CURRENT_FILE: violates '${PATH_NAMES[$i]}' path-convention, must live under ${PATH_DIR[$i]}"
