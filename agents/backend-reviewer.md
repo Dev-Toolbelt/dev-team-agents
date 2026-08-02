@@ -31,6 +31,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Run `git diff main...HEAD` — understand exactly what changed; every finding must land on the changeset
 - Load `skills/shared/comments-policy/SKILL.md` — apply when reviewing comments in the code
 - Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared with `code-reviewer` and `frontend-reviewer`
+- Load `skills/shared/reuse-guidelines/SKILL.md` — when `docs/development/reuse-guidelines.md` exists, check `code-pattern`/`path-convention` rows mechanically and walk every `design-rule` row by hand against the diff; a match on any type is `[BLOCKING]`
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
