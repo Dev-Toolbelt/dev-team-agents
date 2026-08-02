@@ -143,6 +143,7 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
+| `/devteam:explain` | Glossário sob demanda — explica um termo, sigla ou jargão que você viu na sessão. Direto por princípio: expande toda sigla, diz o problema que aquilo resolve, dá um exemplo na linguagem do seu projeto e desenha um diagrama mermaid quando o termo é uma forma (um fluxo, uma troca entre partes, uma hierarquia, um ciclo de vida) e não apenas uma definição. Fecha oferecendo um quiz interativo |
 | `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 9 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier) e aplica correções automáticas seguras |
 | `/devteam:adr` | Architecture Decision Record — roda `scripts/new-adr.sh` para criar um ADR numerado, e então o software-architect preenche o template |
 | `/devteam:update` | Atualização — verifica se há uma nova release do dev-team-agents e a aplica |
@@ -155,7 +156,10 @@ Após a instalação, os slash commands ficam disponíveis sob o namespace `/dev
 /devteam:backend implementar o endpoint de exportação PDF
 /devteam:review
 /devteam:pr draft
+/devteam:explain SPA, SSR, tenant, middleware
 ```
+
+**Em qual modelo cada comando roda.** Todo comando declara um tier em `scripts/lib/commands.json`, e no opencode e no Codex esse tier vira um modelo concreto na hora da instalação. No Claude Code o corpo é symlinkado como está, então o tier só chega até ele por uma chave `model:` no frontmatter do comando — e essa chave é usada apenas nos sete comandos `repetitive` (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), que rodam em Haiku. Todos os outros herdam o modelo em que sua sessão está. O motivo é deliberado: `model:` sobrescreve a sessão, então fixar um comando de planejamento em Opus desfaria em silêncio uma sessão que você baixou para economizar, enquanto um pin em Haiku só pode custar menos do que você escolheu.
 
 ---
 

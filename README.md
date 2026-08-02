@@ -143,6 +143,7 @@ After installation, slash commands are available under the `/devteam:` namespace
 | `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
+| `/devteam:explain` | Glossary on demand — explains a term, acronym, or piece of jargon you saw in the session. Short by design: expands every acronym, states the problem it solves, gives one example in your project's language, and draws a mermaid diagram when the term is a shape (a flow, an exchange between parties, a hierarchy, a lifecycle) rather than just a definition. Closes by offering an interactive quiz |
 | `/devteam:health-check` | Installation diagnostics — detects the active provider (Claude / opencode / Codex), runs 9 checks (symlinks, scripts, user data, provider config, graphify, CLAUDE.md, .gitignore, preferences, notifier) and applies safe auto-fixes |
 | `/devteam:adr` | Architecture Decision Record — runs `scripts/new-adr.sh` to scaffold a numbered ADR, then software-architect fills the template |
 | `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
@@ -155,7 +156,10 @@ After installation, slash commands are available under the `/devteam:` namespace
 /devteam:backend implement the PDF export endpoint
 /devteam:review
 /devteam:pr draft
+/devteam:explain SPA, SSR, tenant, middleware
 ```
+
+**Which model a command runs on.** Every command declares a tier in `scripts/lib/commands.json`, and on opencode and Codex that tier resolves to a concrete model at install time. On Claude Code the body is symlinked as-is, so the tier reaches it only through a `model:` key in the command's frontmatter — and that key is used on the seven `repetitive` commands alone (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), which run on Haiku. Every other command inherits whatever model your session is set to. The reason is deliberate: `model:` overrides the session, so pinning a planning command to Opus would silently undo a session you lowered to save cost, while a Haiku pin can only ever cost less than what you chose.
 
 ---
 
