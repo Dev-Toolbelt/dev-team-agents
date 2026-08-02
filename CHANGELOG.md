@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-08-02
+
+### Added — `/devteam:explain`, a glossary you can reach without leaving the session
+- **`/devteam:explain SPA` or `/devteam:explain SPA, SSR, tenant, middleware`** — explains a term, acronym, or piece of jargon that came up in the conversation. Acronyms and initialisms are always expanded on the heading line; every term gets what it is, **the problem it solves**, and a concrete example — a code block in the project's own language when the concept is a code concept
+- **Short by design.** Two sentences for the definition, one or two for the problem, the shortest example that shows the point, and an explicit list of things never to write — no opening line about the question, no restatement of what was asked, no closing summary, no "the topic goes deeper than this" caveat
+- **It draws when the term is a shape.** A fenced `mermaid` block for a flow (middleware, CI pipeline), an exchange between parties (OAuth, webhook), containment (multi-tenancy, subnets), or a lifecycle (saga, order status) — capped at three to seven nodes, with edges labelled by what actually moves. It deliberately does **not** draw for a definition, a property, or a convention (`idempotent`, `DTO`, `camelCase`): a box with the word inside it teaches nothing and makes a short answer feel long, which is the failure the command exists to avoid
+- **It answers in the main context and spawns no agent.** That is the point, not an omission: the terms come from the live session, and a subagent receives only the prompt text — it would lose the message where the term appeared, the file it was about, and the decision it belonged to. The command grounds each term in the session first, the repository second (citing `file:line`), and only then explains it generically
+- **It always closes by offering an interactive quiz** — application questions rather than recall, one at a time, each wrong option a real misconception, and feedback that names the misconception instead of just pointing at the right letter
+- Joins `update`, `symlinks` and `health-check` as a row whose `agent` is filler; it is `conditional` on the plan gate and, like `/devteam:review`, carries no plan-gate step because it writes nothing
+
+### Added — commands can pin their model on Claude Code
+- **`commands/<name>.md` may now open with a YAML frontmatter block, and `model:` in it pins that command's body.** Until now `commands.json` `tier` was inert on Claude Code, which symlinks command bodies and never passes them through the render engine — the tier only ever took effect on opencode and Codex
+- **The seven `repetitive` commands** (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`) carry `model: haiku`. The other eighteen carry no key and keep inheriting the session
+- **Restricted to `repetitive` on purpose, with the argument that already keeps `effort:` sparse:** the key *overrides* the session's model. Pinning `/devteam:plan` to `opus` would silently undo a user who lowered the session for cost; a `haiku` pin can only ever cost less than what they chose. `/devteam:explain` is `repetitive` and deliberately carries **no** pin — its output is a teaching explanation grounded in the user's own code, and the session model is the one they picked for that
+- **`check_command_roster()` in `helpers/agent-lint.sh` now enforces it** — a pin outside `repetitive` fails, and a pin inside it must equal `tiers.json.repetitive.claude`. Presence is permitted, not required. All three branches were negative-tested
+- The `commands.json` `_comment` had stated the opposite (*"do NOT add frontmatter to commands/*.md directly — Claude Code parses them as body-only"*). Claude Code does read command frontmatter; the note is replaced by `_claude_model_pin`, which records the rule and the reasoning
+
+### Fixed
+- **The renderer now strips command frontmatter before emitting the opencode template and the Codex prompt.** Command bodies were read with a raw `read_text()`, so the new YAML block would have been emitted as literal text at the head of every `template` string and every Codex prompt. `render_command_claude` still re-reads the source file, so Claude receives it byte-identical — verified against the CI contract checker on all three providers
+
 ## [2.23.2] - 2026-08-01
 
 ### Fixed — two `commands.json` rows ran an agent on a model that was not its own
