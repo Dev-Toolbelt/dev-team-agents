@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.1] - 2026-08-02
+
+### Fixed — the opencode installer silently produced an empty command block
+- **`install-opencode.sh` handed the whole command snippet to `jq` as an exec argument** (`jq --argjson new "$CLEAN_JSON"`). Every command body is embedded in that JSON as a `template` string, so it grows with the roster — adding `/devteam:explain` pushed it past `ARG_MAX` and the merge died with `jq: Argument list too long`, leaving `.opencode/opencode.json` with `"command": {}`
+- **The snippet now reaches `jq` through a temp file, read with `--slurpfile`**, which has no size ceiling
+- **`v2.24.0` carries the defect**: an opencode install from that tag registers zero slash commands. Use `v2.24.1` instead. Claude Code and Codex installs are unaffected — neither path goes through this merge
+- Caught by the two CI jobs that exist for exactly this, `slim-bootstrap` and the opencode installed-fixture validator; both now report 26 commands
+
 ## [2.24.0] - 2026-08-02
 
 ### Added — `/devteam:explain`, a glossary you can reach without leaving the session
