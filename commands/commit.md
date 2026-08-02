@@ -1,3 +1,7 @@
+---
+model: haiku
+---
+
 Load the skill at `skills/shared/conventional-commits/SKILL.md` before doing anything.
 
 Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
@@ -18,6 +22,31 @@ Before inspecting staged changes, run the `/devteam:learn` pass automatically.
 3. If the learn pass finds nothing to update (output "Nothing to capture"), proceed immediately.
 
 This ensures all session knowledge is captured in the project's knowledge base before changes are committed.
+
+---
+
+## Step 0.5 — Worktree finalization quiz
+
+Check for an active worktree session:
+
+```bash
+cat .dev-team-agents/.worktree-session 2>/dev/null
+```
+
+If the file is absent, or reads `worktree=no ...`, skip this step entirely — commit normally.
+
+If it reads `worktree=yes branch=<b>`, use `AskUserQuestion` before staging or committing anything:
+
+**Question:** "This work is in an isolated worktree (and Docker stack, if used). What should `/devteam:commit` do?"
+
+| Option | Effect |
+|--------|--------|
+| Commit + rebase + merge + teardown (recommended) | Run Steps 1–5 as commits, then follow the worktree skill's finalize flow: rebase onto base → resolve → merge → teardown worktree + isolated Docker stack only |
+| Commit + rebase | Run Steps 1–5 as commits, then rebase the worktree branch onto its base branch — no merge, no teardown |
+| Commit only | Run Steps 1–5 as commits inside the worktree; leave rebase, merge, and teardown for later |
+| Other | Let the user describe a different flow in free text |
+
+Carry the selected option through to Step 5: after commits are executed, perform only the additional actions the user selected (rebase / merge / teardown), never more than what was chosen. For merge + teardown, load `skills/shared/worktree/SKILL.md` and follow its finalize step exactly, including the isolated-Docker-stack-only teardown rule.
 
 ---
 
