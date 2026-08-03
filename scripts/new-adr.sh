@@ -14,6 +14,16 @@ fi
 ADR_DIR="docs/development/adrs"
 mkdir -p "$ADR_DIR"
 
+# Surface existing ADR titles first — the caller is responsible for checking
+# this list isn't already covering the same decision before a new file is
+# created (see skills/shared/adr/SKILL.md § Check Before Creating).
+EXISTING=$(grep -h '^# ' "$ADR_DIR"/adr-[0-9]*.md 2>/dev/null || true)
+if [ -n "$EXISTING" ]; then
+    echo "Existing ADRs — confirm this decision isn't already covered:"
+    echo "$EXISTING"
+    echo
+fi
+
 # Find the next sequential number
 LAST=$(for f in "$ADR_DIR"/adr-[0-9]*.md; do
     [ -f "$f" ] || continue

@@ -56,9 +56,20 @@ docs/development/adrs/
 **Risks**: [What could go wrong, and how to mitigate]
 ```
 
+## Check Before Creating
+
+**Before running the script**, read the `# ` heading of every file in `docs/development/adrs/` (`grep -h '^# ' docs/development/adrs/adr-*.md`) and check whether the decision is already covered:
+
+- **Same decision, not yet decided** (still `Proposed`, or genuinely still open) → edit that file, do not create a new one.
+- **Same decision, already `Accepted`, and this is a reversal** → create a new ADR, then set the old one's status to `Superseded by ADR-XXX` and link forward.
+- **Related but distinct decision** (e.g. this one narrows or extends an existing ADR without reversing it) → create a new ADR and cross-reference the related one in `## Context`.
+- **Genuinely new topic** → create a new ADR.
+
+This check applies regardless of which command or agent triggers ADR creation (`/devteam:adr`, `/devteam:learn`, `software-architect` acting on the CLAUDE.md trigger) — each is a separate entry point into the same registry, and none of them can see what another already wrote without this step.
+
 ## Creating an ADR
 
-Use the script to auto-number and scaffold the file:
+Use the script to auto-number and scaffold the file — it also prints existing ADR titles as a mechanical reminder of the check above:
 
 ```bash
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"

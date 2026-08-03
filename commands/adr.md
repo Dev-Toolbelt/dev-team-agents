@@ -10,7 +10,9 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 ## Step 2 — Create the ADR file
 
-Run the ADR creation script to auto-number the file and place it in `docs/development/adrs/`:
+Load `skills/shared/adr/SKILL.md` and run its Check Before Creating step against `docs/development/adrs/` — if the decision is already covered, follow that step's guidance (edit the existing file, or supersede it) instead of continuing here.
+
+Otherwise, run the ADR creation script to auto-number the file and place it in `docs/development/adrs/`:
 
 ```bash
 bash .dev-team-agents/scripts/new-adr.sh "$ARGUMENTS"

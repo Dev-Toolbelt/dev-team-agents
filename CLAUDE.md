@@ -466,7 +466,7 @@ Write an ADR when a decision is:
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-The script auto-numbers the file and places it in `docs/development/adrs/`. Fill in the generated template and change the status from `Proposed` to `Accepted`.
+The script prints existing ADR titles and auto-numbers the file — see `skills/shared/adr/SKILL.md` § Check Before Creating before running it, so a decision doesn't get a second, duplicate ADR. Fill in the generated template and change the status from `Proposed` to `Accepted`.
 
 ### Stop Hook (Automated Enforcement)
 
