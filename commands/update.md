@@ -147,7 +147,7 @@ Then immediately use the **`AskUserQuestion`** tool to offer a health check:
 }
 ```
 
-- If the user answers **Yes**: output exactly `"Run a health check on this project"` as a prompt to trigger the health check flow.
+- If the user answers **Yes**: immediately execute the `/devteam:health-check` flow (`commands/health-check.md`) inline — Step 0 provider detection through Step 3 report — in this same turn. Do not stop after the answer and do not merely print a message describing the health check; run it.
 - If the user answers **No**: stop. Do not add anything else.
 
 ---
