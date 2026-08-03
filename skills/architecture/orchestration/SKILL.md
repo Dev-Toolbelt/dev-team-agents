@@ -155,6 +155,62 @@ only check that can catch a phantom spawn.
 
 ---
 
+## Subagent Report Economy
+
+A subagent's final message is the only thing that reaches the orchestrator's context (see check 3
+above) — every other line it produced along the way is invisible to you but still cost real tokens
+to generate. That final message must be a **report**, not a transcript: what was done, key
+decisions, files touched, and the run banner. Nothing else.
+
+Every spawn prompt MUST instruct the subagent to close with a short, structured summary and
+explicitly forbid dumping full file contents, command output, or step-by-step narration into the
+final message. A rough shape to include in the prompt:
+
+> End your final message with a concise report only: files changed (paths, no diffs), key
+> decisions and why, anything the user must know, and the run banner. Do not paste full file
+> contents, command logs, or a play-by-play of intermediate steps.
+
+This is not optional politeness — a verbose subagent report multiplies across every parallel spawn
+in a round, and the orchestrator's own consolidated summary compounds on top of it. Applying
+`skills/shared/token-efficiency/SKILL.md` to what the subagent *reads* still leaves its *output*
+unbounded; this rule closes that gap.
+
+---
+
+## Spawn Prompt Economy
+
+Report Economy above bounds what a subagent sends back. These two rules bound what the
+orchestrator sends it in the first place — the input side of the same round-trip.
+
+### Pass condensed context, not a re-read instruction
+
+By the time a plan is approved, the orchestrator has already loaded and synthesized
+`skills/shared/project-context/SKILL.md`'s Context Loading Order (stack, conventions, relevant
+ADRs, active constraints). A spawn prompt that just tells the subagent to "load project context"
+makes it redo that synthesis from raw files, and every subagent in the same parallel round repeats
+it independently.
+
+Instead, inline what you already know into the spawn prompt: the relevant stack facts,
+conventions, and any ADR decisions that bear on this subagent's slice of work — a few lines, not a
+file dump. The subagent still has the repository if it needs to go deeper; this only removes the
+redundant re-derivation of what the orchestrator already established. Never omit the load
+instruction entirely — condensed context is a head start, not a replacement for the subagent's own
+Foundational Rule.
+
+### Reference the plan file, don't paste the plan
+
+When the approved plan exists on disk (e.g. saved by `/devteam:plan`), spawn prompts for a `Par.`
+group MUST pass the **file path and the specific section/step** that agent owns, not the plan text
+inlined into the prompt. Pasting the full plan into every parallel spawn multiplies its token cost
+by the number of agents in the round for content each agent mostly doesn't need — its own step is
+usually a fraction of the document.
+
+If the plan was only ever presented in-conversation and never written to disk, inlining the
+relevant excerpt is the fallback — but prefer writing it to a file first when the round has more
+than one or two parallel spawns.
+
+---
+
 ## Orchestration Flow
 
 1. **Classify the scope**:

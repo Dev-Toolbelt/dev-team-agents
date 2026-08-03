@@ -22,34 +22,9 @@ This means every agent must:
 
 ## First-Time Setup Guard
 
-**When you see `[DEVTEAM:FIRST_TIME_SETUP]` at the start of a session**, stop immediately and ask the user the following quiz before doing anything else — including loading context or answering their original prompt:
-
-```
-AskUserQuestion:
-  question: "It looks like this is your first time using dev-team-agents on this machine.
-             Would you like to run the onboarding wizard to configure your preferences?"
-  header: "First-time setup"
-  options:
-    - label: "Yes, run onboarding"
-      description: "Run the health check and set up your preferences (language, notifications, etc.)"
-    - label: "No, skip for now"
-      description: "Create a default preferences.json and continue — you can change it anytime"
-```
-
-**If the user chooses "Yes, run onboarding":**
-- Invoke the `setup-assistant` agent in `FIRST_RUN` mode.
-
-**If the user chooses "No, skip for now":**
-1. Create `.dev-team-agents/user-data/preferences.json` by copying the canonical default schema verbatim:
-   ```bash
-   cp .dev-team-agents/scripts/lib/preferences-defaults.json \
-      .dev-team-agents/user-data/preferences.json
-   ```
-   Copy the file — do not retype the JSON. The schema in `scripts/lib/preferences-defaults.json` is the single source of truth, and a hand-written copy here drifted from it before. Read it if you need to report the values back; `skills/shared/user-preferences/SKILL.md` documents what each field means.
-
-   **Only when the file does not already exist.** An existing `preferences.json` is never overwritten, and neither is `credentials.local.json`.
-2. Notify the user, in their configured language: "Default preferences created. You can change them anytime by editing `.dev-team-agents/user-data/preferences.json`." — state the `language` value the file actually got.
-3. Continue with their original request.
+**Trigger: `[DEVTEAM:FIRST_TIME_SETUP]` at the start of a session.** Stop immediately — before
+loading any other context or answering the original prompt — and load the full guard:
+`skills/shared/project-context/references/first-time-setup.md`
 
 ---
 
@@ -190,50 +165,9 @@ Read each file that exists. Combine the information into a unified understanding
 
 ## Session Summary — Write Rules
 
-### Multi-Agent Sessions
-
-When multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
-
-```markdown
-## YYYY-MM-DD | [task title]
-### backend-developer
-**Done**: ...
-**Decisions**: ...
-**Next**: ...
-### frontend-developer
-**Done**: ...
-```
-
-If no entry exists for today, create one with the agent name as the first sub-heading.
-
-### Rotation Policy
-
-After writing a new entry, trim entries according to `.dev-team-agents/user-data/preferences.json`:
-- `session_summary_max_days` (default: 30) — remove entries older than this many days
-- `session_summary_max_entries` (default: 30) — keep at most this many entries total
-
-To trim: identify the cutoff date (`date -v-${MAX_DAYS}d +%Y-%m-%d` on macOS, `date -d "${MAX_DAYS} days ago" +%Y-%m-%d` on Linux), then remove all `## YYYY-MM-DD` blocks with a date before the cutoff. If the remaining count still exceeds `session_summary_max_entries`, remove the oldest entries until within the limit.
-
-#### Promotion Guard — check before trimming
-
-Trimming is the one place in the memory layer where knowledge is destroyed by design, and it is the correct design: episodic memory is supposed to decay. What must not decay is the durable knowledge that was only ever recorded there.
-
-Before removing any block, scan the blocks about to go for a non-empty `**Decisions**:` line. For each one, check whether that decision already exists in a durable artifact:
-
-```bash
-grep -ril "<distinctive term from the decision>" docs/development/adrs/ docs/wiki/ 2>/dev/null
-```
-
-If nothing matches, the decision was never promoted. Report it once, in the user's language, before trimming:
-
-> ⚠️ Expiring session entries contain decisions not found in any ADR or wiki entry:
-> - YYYY-MM-DD — [decision, one line]
->
-> Run `/devteam:learn` to promote them, or confirm they can be dropped.
-
-Then proceed with the trim. **The guard reports; it does not block, and it does not promote on its own** — an automatic promotion would fill the wiki with entries nobody chose to keep, which is the failure mode the "not derivable from code" test exists to prevent.
-
-Entries whose `**Decisions**:` line is empty or absent are trimmed silently — there is nothing to lose.
+**Trigger: you are about to write or trim `.dev-team-agents/user-data/session-summary.md`.** Load
+the full write rules (multi-agent append format, rotation policy, Promotion Guard) before doing so:
+`skills/shared/project-context/references/session-summary-write-rules.md`
 
 ---
 
@@ -267,17 +201,8 @@ When a conflict exists between our base standard and a project convention:
 
 ## Immutability Warning
 
-If a user asks to modify any file inside `.dev-team-agents/`, respond with:
-
-> ⚠️ **Not recommended**: modifying files inside `.dev-team-agents/` directly means your changes will be **overwritten on the next update** (`.dev-team-agents/scripts/install.sh latest`).
->
-> Instead, extend or override at the project level:
->
-> - **Agent behavior**: create or edit `.claude/CLAUDE.md` in your project with explicit instructions that override the agent's defaults
-> - **Workflow rules**: add a `docs/development/code-standards.md` with your project-specific conventions
-> - **Agent override**: create `.agents/<agent-name>.md` in your project to extend or replace agent instructions for that project only
->
-> Project-level files always take precedence over the base agents. This is by design.
+**Trigger: a user asks to modify any file inside `.dev-team-agents/`.** Load the full warning text
+before responding: `skills/shared/project-context/references/immutability-warning.md`
 
 ---
 
