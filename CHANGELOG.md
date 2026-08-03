@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.27.0] - 2026-08-02
+
+### Added — Consistency-loop fixes across coding and design agents
+- **`reuse-guidelines` is now consulted before creating, not just at review time** — `frontend-developer`, `ui-ux-designer`, `backend-developer`, `database-specialist`, `devops-specialist`, `mobile-developer`, and `software-architect` all check `docs/development/reuse-guidelines.md` for a canonical implementation before proposing anything new
+- **`ui-ux-designer` auto-switches to Consultive Mode** after `frontend-developer` reports UI changes in the same session, instead of waiting to be asked
+- **`software-architect` gained a live Consultive Mode alongside `backend-developer`**, flagging `[ARCH-DEVIATION]` in-session instead of only at the post-hoc Quality Gate; `backend-developer`'s done-checklist now requires resolving it first
+- **`design-system-audit`'s Design Mode template now fits the 80-line cap** enforced by `docs-sync` for `docs/design/design-system.md`, instead of a template that could never fit it
+- **New non-blocking `design-token-lint` Stop hook** reports hardcoded CSS `px` values outside `var(--...)` tokens as a nudge, without blocking the session
+- **ADR creation now checks for an existing ADR on the same topic first** — `skills/shared/adr/SKILL.md` gained a Check Before Creating step, `/devteam:adr` loads it before scaffolding, and `new-adr.sh` prints existing ADR titles as a mechanical reminder, closing a gap where `/devteam:adr`, `/devteam:learn`, and `software-architect` could each independently create a duplicate ADR for the same decision
+
 ## [2.26.0] - 2026-08-02
 
 ### Added — Spec layer between overview and sprints, with a living-spec amendment protocol
