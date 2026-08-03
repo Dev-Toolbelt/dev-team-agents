@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.27.2] - 2026-08-03
+
+### Fixed
+- **`install.sh`'s directory swap now falls back to copy+delete when a rename fails even after retries** — v2.27.1's retry-only fix assumed transient locks, but on WSL a project under `/mnt/<drive>/...` (DrvFs) can fail a whole-directory `rename()` reliably, with nothing locked. `_mv_or_copy` tries the retried rename first and falls back to an explicit `cp -R` + `rm -rf` before giving up; the error message now also names DrvFs as a possible cause on `/mnt/` paths
+
 ## [2.27.1] - 2026-08-03
 
 ### Fixed

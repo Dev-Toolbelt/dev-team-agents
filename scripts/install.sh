@@ -90,11 +90,30 @@ _mv_retry() {
     return 1
 }
 
+# Same as _mv_retry, with a copy+delete fallback for filesystems where a
+# whole-directory rename is unreliable even with nothing locked — notably
+# WSL's DrvFs (any /mnt/<drive>/... path), where rename() on a directory can
+# fail with EPERM regardless of retries, but a plain copy succeeds fine.
+_mv_or_copy() {
+    local src="$1" dst="$2"
+    if _mv_retry "$src" "$dst"; then
+        return 0
+    fi
+    rm -rf "$dst"
+    mkdir -p "$dst"
+    if cp -R "$src/." "$dst/" 2>/dev/null; then
+        rm -rf "$src"
+        return 0
+    fi
+    rm -rf "$dst"
+    return 1
+}
+
 _cleanup() {
     local _rc=$?
     if [ "$SWAP_DONE" != true ] && [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
         if [ ! -e "$INSTALL_DIR" ]; then
-            if _mv_retry "$OLD_DIR" "$INSTALL_DIR"; then
+            if _mv_or_copy "$OLD_DIR" "$INSTALL_DIR"; then
                 echo "" >&2
                 echo "→ Install failed (exit $_rc). Previous installation restored." >&2
             else
@@ -248,13 +267,7 @@ apply_strip "$EXTRACTED_ROOT"
 # from inside the tree being replaced) readable for the rest of its run.
 NEW_DIR="$INSTALL_DIR.new.$$"
 rm -rf "$NEW_DIR"
-if ! _mv_retry "$EXTRACTED_ROOT" "$NEW_DIR"; then
-    # mv across filesystems (or a still-locked file) can fail part-way;
-    # fall back to an explicit copy.
-    rm -rf "$NEW_DIR"
-    mkdir -p "$NEW_DIR"
-    cp -R "$EXTRACTED_ROOT/." "$NEW_DIR/"
-fi
+_mv_or_copy "$EXTRACTED_ROOT" "$NEW_DIR"
 
 # Carry user data (preferences.json, session-summary.md, telemetry queue, …)
 # into the staged tree BEFORE the swap, so it is never the only copy on disk.
@@ -267,23 +280,25 @@ if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
     OLD_DIR="$INSTALL_DIR.old.$$"
     rm -rf "$OLD_DIR"
-    if ! _mv_retry "$INSTALL_DIR" "$OLD_DIR"; then
+    if ! _mv_or_copy "$INSTALL_DIR" "$OLD_DIR"; then
         echo "" >&2
         echo "ERROR: could not move $INSTALL_DIR aside to install the update." >&2
-        echo "       This is almost always a file inside it locked by another" >&2
-        echo "       process — an editor, a terminal cd'd into the folder, or" >&2
-        echo "       antivirus real-time scanning (common on Windows right after" >&2
-        echo "       a download). Close anything with files open under:" >&2
+        echo "       Usually a file inside it is locked by another process —" >&2
+        echo "       an editor, a terminal cd'd into the folder, or antivirus" >&2
+        echo "       real-time scanning (common on Windows right after a" >&2
+        echo "       download). On WSL with a project under /mnt/<drive>/...," >&2
+        echo "       this can also just be DrvFs being unreliable for this op." >&2
+        echo "       Close anything with files open under:" >&2
         echo "         $INSTALL_DIR" >&2
         echo "       then re-run the update. Nothing was changed." >&2
         exit 1
     fi
 fi
 
-if ! _mv_retry "$NEW_DIR" "$INSTALL_DIR"; then
+if ! _mv_or_copy "$NEW_DIR" "$INSTALL_DIR"; then
     echo "" >&2
-    echo "ERROR: staged update could not be moved into place (same permission" >&2
-    echo "       lock issue as above). Close anything with files open under:" >&2
+    echo "ERROR: staged update could not be moved into place (same cause as" >&2
+    echo "       above). Close anything with files open under:" >&2
     echo "         $INSTALL_DIR" >&2
     echo "       then re-run the update." >&2
     exit 1
