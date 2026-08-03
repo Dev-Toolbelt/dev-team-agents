@@ -25,6 +25,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/development/database.md` and `tech-stack.md` for existing decisions
 - Check `.env`, `.env.local`, `docker-compose.yml` for connection strings and credentials
+- Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before adding a new table/column pattern
 - Scan existing schema files and migrations for current state
 - Run `git log --oneline -10` to reveal recent migration history and schema changes in flight
 

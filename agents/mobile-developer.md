@@ -23,6 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Mobile-specific additions after project-context loads:**
 
 - Read `docs/development/architecture.md`, `tech-stack.md`, and `code-standards.md` before writing a single line of code
+- Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before adding a new screen/component pattern
 - Read `docs/backlog/` for the current task context
 - Follow `skills/shared/comments-policy/SKILL.md` for any code you write or review
 - Run `git log --oneline -10` — reveals recent patterns and active areas of the codebase
@@ -154,7 +155,7 @@ Every run above covers only the flows and targets touching your change — the D
 
 ## What to Do Before Declaring Done
 
-- [ ] Project context loaded — rules from `CLAUDE.md` and `architecture.md` respected
+- [ ] Project context loaded — rules from `CLAUDE.md` and `architecture.md` respected — cross-checked against `docs/development/reuse-guidelines.md` when it exists, not just self-assessed
 - [ ] Framework skill loaded if applicable (React Native or Flutter) and its checklist applied
 - [ ] Tested on a **real device** (not just simulator) for the target platform(s)
 - [ ] App startup time not regressed — no heavy synchronous work on the main thread at launch

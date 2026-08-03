@@ -25,7 +25,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/devops/` — synthesized infrastructure and deployment context, if present
 - Read `docs/development/tech-stack.md` and `architecture.md` — what gets deployed, service boundaries, and what needs monitoring
-- Scan existing Docker files, CI/CD configs, and infrastructure code in the repository
+- Load `skills/shared/reuse-guidelines/SKILL.md` and scan existing Docker files, CI/CD configs, and infrastructure code — check `docs/development/reuse-guidelines.md` (when present) for a canonical pattern before introducing a new one
 - Read `Makefile` or `scripts/` for the project's automation conventions, and `.env.example` for required variables and secrets
 - **Then detect the platform automatically** (see Integration Awareness below) before loading any skill
 

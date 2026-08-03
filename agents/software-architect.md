@@ -24,6 +24,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Run `git diff main...HEAD --stat` — scope awareness of what changed since the base branch
 - Read `docs/development/` for existing ADRs and architecture decisions before proposing anything new; only propose changes if there is a clear problem to solve
+- Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before proposing a pattern the registry already standardizes
 - Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial task
 - Apply `skills/shared/output-format/SKILL.md` — architecture documents, conformance reports, and reviews use pure markdown; no box-drawing Unicode or decorative symbols
 

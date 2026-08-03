@@ -23,7 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Backend-specific additions after project-context loads:**
 
 - Read `docs/development/api-contracts.md` and `docs/development/database.md` before touching endpoints, models, or queries
-- Read the existing code in the target module and match its patterns exactly before writing anything new
+- Load `skills/shared/reuse-guidelines/SKILL.md` and read the existing code in the target module — check `docs/development/reuse-guidelines.md` (when present) for a canonical implementation, then match its patterns exactly before writing anything new
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
