@@ -48,6 +48,18 @@ if ! command -v claude >/dev/null 2>&1; then
     echo "  Install Claude Code before using agents: https://claude.ai/code"
     echo ""
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "  WARNING: python3 not found. It is a prerequisite for dev-team-agents"
+    echo "  (used by the render engine, graphify, and settings.json merges)."
+    case "$(uname -s 2>/dev/null)" in
+        Darwin) echo "  Install it with: brew install python3" ;;
+        Linux)  echo "  Install it with: sudo apt install python3   (Debian/Ubuntu)"
+                echo "                or: sudo dnf install python3   (Fedora/RHEL)" ;;
+        *)      echo "  On Windows: install from https://www.python.org/downloads/ or run: winget install Python.Python.3" ;;
+    esac
+    echo "  The installer will continue, but some features will fall back to degraded behavior without it."
+    echo ""
+fi
 
 # ── HTTP tool detection ───────────────────────────────────────────
 if command -v curl >/dev/null 2>&1; then

@@ -5,7 +5,7 @@ description: Setup health check — categories, commands, auto-fix actions.
 
 # Setup Health Check
 
-Run a structured audit of the dev-team-agents installation in a project. Checks 11 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`. It never deletes — see the No-Destruction Rule below.
+Run a structured audit of the dev-team-agents installation in a project. Checks 12 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`. It never deletes — see the No-Destruction Rule below.
 
 ## When to Run
 
@@ -74,6 +74,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 9 | Notifier | `04-notifier.sh` executable, state files present |
 | 10 | Credentials | `credentials.local.json` at correct path, no legacy root file, required top-level keys, gitignored |
 | 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated |
+| 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
 
 ## Load on Demand
 

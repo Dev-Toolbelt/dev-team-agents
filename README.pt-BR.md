@@ -72,6 +72,21 @@ Um motor de renderização (`scripts/render-provider.sh`, Python puro com só st
 
 ---
 
+## Pré-requisitos
+
+**Python 3** precisa estar instalado no sistema — ele alimenta o motor de renderização, o graphify e os merges seguros de JSON no `settings.json`. Nada além do seu CLI de escolha é necessário.
+
+Se estiver ausente, o instalador, o atualizador e o `/devteam:health-check` vão avisar e continuar em modo degradado. Instale com:
+
+| Sistema | Comando |
+|---------|---------|
+| macOS | `brew install python3` |
+| Linux (Debian/Ubuntu) | `sudo apt install python3` |
+| Linux (Fedora/RHEL) | `sudo dnf install python3` |
+| Windows | [python.org/downloads](https://www.python.org/downloads/) ou `winget install Python.Python.3` |
+
+---
+
 ## Instalação rápida
 
 | CLI | Comando único | Docs |
@@ -145,7 +160,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
 | `/devteam:rule` | Padronização — cataloga uma regra obrigatória de reuso (ex.: `/devteam:rule use o componente XPTO em todo o projeto`) em `docs/development/reuse-guidelines.md`, para que trabalhos futuros nunca a ignorem. Classificada como `code-pattern`, `path-convention` ou `design-rule`; aplicada pelo gate de review e, para os tipos mecanizáveis, por um lint no Stop hook |
 | `/devteam:explain` | Glossário sob demanda — explica um termo, sigla ou jargão que você viu na sessão. Direto por princípio: expande toda sigla, diz o problema que aquilo resolve, dá um exemplo na linguagem do seu projeto e desenha um diagrama mermaid quando o termo é uma forma (um fluxo, uma troca entre partes, uma hierarquia, um ciclo de vida) e não apenas uma definição. Fecha oferecendo um quiz interativo |
-| `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 11 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier, credenciais, artefatos de memória) e aplica correções automáticas seguras. Ele nunca apaga: o que não souber onde colocar vai para `.dev-team-agents/user-data/legacy/<data>/`, e arquivos que acumulam conhecimento são adaptados no lugar, nunca regenerados |
+| `/devteam:health-check` | Diagnóstico da instalação — detecta o provedor ativo (Claude / opencode / Codex), roda 12 verificações (symlinks, scripts, user data, config do provedor, graphify, CLAUDE.md, .gitignore, preferências, notifier, credenciais, artefatos de memória, pré-requisito do Python) e aplica correções automáticas seguras. Ele nunca apaga: o que não souber onde colocar vai para `.dev-team-agents/user-data/legacy/<data>/`, e arquivos que acumulam conhecimento são adaptados no lugar, nunca regenerados |
 | `/devteam:adr` | Architecture Decision Record — roda `scripts/new-adr.sh` para criar um ADR numerado, e então o software-architect preenche o template |
 | `/devteam:update` | Atualização — verifica se há uma nova release do dev-team-agents e a aplica |
 | `/devteam:symlinks` | Reparo de symlinks — detecta o SO, repara links materializados como arquivos comuns e guia a correção quando o SO bloqueia symlinks nativos |

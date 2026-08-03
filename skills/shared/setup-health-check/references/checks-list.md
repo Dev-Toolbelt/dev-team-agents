@@ -569,3 +569,15 @@ grep -rniE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigat
 | User declines or the match is ambiguous | WARN only | Report and leave the source document untouched |
 
 This is the same No-Destruction discipline as the rest of this category: content moves or gets referenced, it never disappears.
+
+## Category 12 — Python Prerequisite
+
+```bash
+command -v python3 >/dev/null 2>&1 && echo "PYTHON3: OK" || echo "PYTHON3: MISSING"
+```
+
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| `python3` not found | WARN only | None — this is a host-level prerequisite, not something the health check can install. Report it and print the OS-specific install hint (see install.sh's Prerequisites check: `brew install python3` on macOS, `apt`/`dnf install python3` on Linux, python.org or `winget install Python.Python.3` on Windows) |
+
+Only warn when `python3` is actually missing — do not repeat this hint on every run once it is present.
