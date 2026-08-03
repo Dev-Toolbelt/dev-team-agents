@@ -30,27 +30,29 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 
 **Consent keys — `telemetry` and `auto_update`.** Both are `true` in the schema, which is the value a *fresh* file gets (for `telemetry`, still subject to the install prompt below). Neither is ever written as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key means "no". Both `install.sh` and the session-start backfill write `false` in that case.
 
-| Field | Default | Purpose |
-|-------|---------|---------|
-| `language` | `"pt-BR"` | BCP 47 language tag for agent conversation with the user. The installer prompts for it on first install; this is the value used when nobody answers |
-| `context_window_percent_warning` | `55` | % at which agents emit a `warning` notification |
-| `context_window_percent_limit` | `60` | % at which agents emit a `critical` notification |
-| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types |
-| `session_summary_max_days` | `30` | Days before session-summary entries are trimmed |
-| `session_summary_max_entries` | `30` | Maximum number of session-summary entries |
-| `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale |
-| `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table |
-| `update_check_interval_hours` | `24` | Hours between update checks |
-| `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) |
-| `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens |
-| `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` |
-| `worktree_active` | `true` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) |
-| `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides |
-| `worktree_path` | `".dev-team-agents/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) |
-| `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold |
-| `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here |
+| Field | Default | Purpose | Consumed at (read → applied) |
+|-------|---------|---------|-------------------------------|
+| `language` | `"pt-BR"` | BCP 47 language tag for agent conversation with the user. The installer prompts for it on first install; this is the value used when nobody answers | `skills/shared/project-context/SKILL.md` (agent-executed) |
+| `context_window_percent_warning` | `55` | % at which agents emit a `warning` notification | `scripts/hooks/stop/04-notifier.sh` |
+| `context_window_percent_limit` | `60` | % at which agents emit a `critical` notification | `scripts/hooks/stop/04-notifier.sh` |
+| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types | `scripts/hooks/stop/04-notifier.sh`, `scripts/hooks/session-start.sh`, `scripts/hooks/pre-tool-use/01-check-updates.sh` |
+| `session_summary_max_days` | `30` | Days before session-summary entries are trimmed | `skills/shared/project-context/SKILL.md` (agent-executed) |
+| `session_summary_max_entries` | `30` | Maximum number of session-summary entries | `skills/shared/project-context/SKILL.md` (agent-executed) |
+| `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale | `scripts/hooks/session-start.sh`, `skills/shared/notifier/SKILL.md` |
+| `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table | `scripts/hooks/lib/update-check.sh` (`uc_auto_update_enabled`), gates `scripts/hooks/pre-tool-use/01-check-updates.sh` |
+| `update_check_interval_hours` | `24` | Hours between update checks | `scripts/hooks/lib/update-check.sh` |
+| `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context (compensates for system prompt + tools not stored in transcript) | `scripts/hooks/stop/04-notifier.sh` |
+| `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens | `scripts/hooks/stop/04-notifier.sh` |
+| `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` | `scripts/lib/telemetry-guard.sh` (`_telemetry_enabled`), consumed by `scripts/hooks/pre-tool-use/02b-telemetry.sh`, `scripts/hooks/stop/05-telemetry.sh`, `scripts/helpers/telemetry-send.sh` |
+| `worktree_active` | `true` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) | CLAUDE.md worktree decision cascade + `## Worktree Isolation` section in every coding agent (agent-executed) |
+| `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/branch-flow.md` (agent-executed) |
+| `worktree_path` | `".dev-team-agents/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) | `skills/shared/worktree/SKILL.md` (agent-executed) |
+| `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/docker-isolation.md` (agent-executed) |
+| `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here | `agents/qa-specialist.md` |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
+>
+> **Keep the "Consumed at" column current.** It exists so a new field's wiring can be verified by reading this table instead of grepping the repo — the same gap-check done when this column was added found every field already wired, but with no single place recording that. When you add a preferences field, add its consumer(s) here in the same change; when you move a consumer, update this row instead of leaving it stale.
 
 > **Exception — the `telemetry` read path fails closed.** `scripts/lib/telemetry-guard.sh` is the single definition of the gate (`_telemetry_enabled`), sourced by `scripts/helpers/telemetry-send.sh`, `stop/05-telemetry.sh` and `pre-tool-use/02b-telemetry.sh`. It returns "disabled" for a missing file, an unreadable file, a **missing `telemetry` key**, or no `python3` to read it with — consent that was never recorded is not consent. Never flip that to `true`, and never let a consumer that cannot source the guard fall back to sending.
 >

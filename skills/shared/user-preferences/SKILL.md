@@ -65,6 +65,8 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 | `qa_browser` | string or null | `null` | Browser the `qa-specialist` drives (`null` = ask on first use) |
 
+> For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.
+
 ---
 
 ## Language Policy

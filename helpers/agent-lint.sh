@@ -235,6 +235,14 @@ check_agent() {
   # Check for quiz-first compliance (AskUserQuestion required for finite-answer prompts)
   check_quiz_first "$file" "$QUIZ_YESNO_RE" "plain-text yes/no prompt found"
   check_quiz_first "$file" "$QUIZ_MC_RE" "plain-text multiple-choice prompt found"
+
+  # Every agent must load project-context/SKILL.md (the Foundational Rule) —
+  # it is the only place preferences.json, the Contradiction Guard, and the
+  # Memory Layers routing actually get read. An agent that skips this load
+  # silently ignores every user preference instead of failing loudly.
+  if ! grep -q 'project-context/SKILL\.md' "$file"; then
+    ERRORS+=("  · ${file}: does not reference skills/shared/project-context/SKILL.md (Foundational Rule) — user preferences.json would go unread")
+  fi
 }
 
 # Flags plain-text prompts that should be an AskUserQuestion call.
