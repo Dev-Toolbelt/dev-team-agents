@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`install.sh` retries the directory renames used to swap `.dev-team-agents` into place** — on Windows a single locked file (open editor, terminal `cd`'d into the folder, antivirus real-time scan) could fail the whole-directory `mv` and abort the update; the swap now retries up to 5 times with a 1s backoff before failing, and the resulting error message names the exact directory and likely causes instead of a raw `mv` permission error
+
 ## [2.27.0] - 2026-08-02
 
 ### Added — Consistency-loop fixes across coding and design agents

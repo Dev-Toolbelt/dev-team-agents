@@ -74,11 +74,27 @@ NEW_DIR=""            # staged new installation (sibling of INSTALL_DIR)
 OLD_DIR=""            # previous installation, moved aside during the swap
 SWAP_DONE=false
 
+# Retries a directory rename a few times before giving up. On Windows a
+# `mv` of a directory can fail transiently with a permission/lock error when
+# antivirus real-time scanning or an editor/terminal still holds a handle on
+# a file inside it — most of these clear within a second or two on their own.
+_mv_retry() {
+    local src="$1" dst="$2" attempt=0 max_attempts=5
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        if mv "$src" "$dst" 2>/dev/null; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    return 1
+}
+
 _cleanup() {
     local _rc=$?
     if [ "$SWAP_DONE" != true ] && [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
         if [ ! -e "$INSTALL_DIR" ]; then
-            if mv "$OLD_DIR" "$INSTALL_DIR" 2>/dev/null; then
+            if _mv_retry "$OLD_DIR" "$INSTALL_DIR"; then
                 echo "" >&2
                 echo "→ Install failed (exit $_rc). Previous installation restored." >&2
             else
@@ -232,8 +248,9 @@ apply_strip "$EXTRACTED_ROOT"
 # from inside the tree being replaced) readable for the rest of its run.
 NEW_DIR="$INSTALL_DIR.new.$$"
 rm -rf "$NEW_DIR"
-if ! mv "$EXTRACTED_ROOT" "$NEW_DIR" 2>/dev/null; then
-    # mv across filesystems can fail part-way; fall back to an explicit copy.
+if ! _mv_retry "$EXTRACTED_ROOT" "$NEW_DIR"; then
+    # mv across filesystems (or a still-locked file) can fail part-way;
+    # fall back to an explicit copy.
     rm -rf "$NEW_DIR"
     mkdir -p "$NEW_DIR"
     cp -R "$EXTRACTED_ROOT/." "$NEW_DIR/"
@@ -250,10 +267,27 @@ if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
     OLD_DIR="$INSTALL_DIR.old.$$"
     rm -rf "$OLD_DIR"
-    mv "$INSTALL_DIR" "$OLD_DIR"
+    if ! _mv_retry "$INSTALL_DIR" "$OLD_DIR"; then
+        echo "" >&2
+        echo "ERROR: could not move $INSTALL_DIR aside to install the update." >&2
+        echo "       This is almost always a file inside it locked by another" >&2
+        echo "       process — an editor, a terminal cd'd into the folder, or" >&2
+        echo "       antivirus real-time scanning (common on Windows right after" >&2
+        echo "       a download). Close anything with files open under:" >&2
+        echo "         $INSTALL_DIR" >&2
+        echo "       then re-run the update. Nothing was changed." >&2
+        exit 1
+    fi
 fi
 
-mv "$NEW_DIR" "$INSTALL_DIR"
+if ! _mv_retry "$NEW_DIR" "$INSTALL_DIR"; then
+    echo "" >&2
+    echo "ERROR: staged update could not be moved into place (same permission" >&2
+    echo "       lock issue as above). Close anything with files open under:" >&2
+    echo "         $INSTALL_DIR" >&2
+    echo "       then re-run the update." >&2
+    exit 1
+fi
 SWAP_DONE=true
 NEW_DIR=""
 
