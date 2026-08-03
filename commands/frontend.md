@@ -11,6 +11,7 @@ If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-g
 Phase 1 — spawn in parallel:
 - `frontend-developer` — implement the frontend changes
 - `ui-ux-designer` — design system adherence and visual decisions (spawn only if the task involves visual design or UX decisions)
+- `seo-specialist` — SEO quality gate (spawn when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md` — public site, landing page, e-commerce, blog, or any indexable surface)
 
 Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 

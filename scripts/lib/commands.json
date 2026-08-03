@@ -27,6 +27,7 @@
     "review":            { "tier": "backend-exec", "agent": "code-reviewer",       "description": "Code review before merge.",                                                        "plan_gate": "conditional" },
     "qa":                { "tier": "backend-exec", "agent": "qa-specialist",       "description": "Validate feature behavior and acceptance criteria.",                                 "plan_gate": "conditional" },
     "design":            { "tier": "frontend",     "agent": "ui-ux-designer",      "description": "Design system, UX flows, visual decisions.",                                        "plan_gate": "conditional" },
+    "seo":               { "tier": "frontend",     "agent": "seo-specialist",      "description": "SEO quality gate — technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness.", "plan_gate": "conditional" },
     "tester":            { "tier": "backend-exec", "agent": "backend-test-specialist", "description": "Write or update tests only.",                                                   "plan_gate": "conditional" },
     "docs":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Docs, changelogs, runbooks, release notes.",                                          "plan_gate": "conditional" },
     "pr":                { "tier": "repetitive",  "agent": "technical-writer",    "description": "Draft and create a pull request.",                                                  "plan_gate": "conditional" },

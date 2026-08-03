@@ -35,6 +35,8 @@ Evaluate the task description or user message:
 | "test", "spec", "coverage", "unit test", "integration test" (backend context) | `backend-test-specialist` |
 | "design", "UX", "wireframe", "mockup", "user flow", "component library" | `ui-ux-designer` |
 | "design system", "token", "Figma" | `ui-ux-designer` + `frontend-developer` |
+| "SEO", "meta tag", "structured data", "sitemap", "Core Web Vitals", "llms.txt", "GEO", "otimização para IA/LLM" | `seo-specialist` |
+| Project is a public site, landing page, e-commerce/online store, or blog (see `skills/design/seo-optimization/SKILL.md` § Detection Signals) | `seo-specialist` alongside `frontend-developer`/`ui-ux-designer` |
 | "database", "schema", "migration", "index", "query", "ORM" | `database-specialist` |
 | "deploy", "CI/CD", "pipeline", "Docker", "Kubernetes", "infra" | `devops-specialist` |
 | "architecture", "ADR", "design decision", "trade-off", "system design" | `software-architect` |

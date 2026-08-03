@@ -12,7 +12,7 @@ Não é apenas um pacote de agentes; é a camada que controla como esses agentes
 
 Cada agente tem um papel definido, expertise e integração com workflows. O que faz disso um harness, e não uma coleção, é tudo o que existe em volta deles — o plan gate que barra execução silenciosa, os hooks de ciclo de vida que garantem memória entre sessões, o roteamento de review, os validadores que mantêm a árvore inteira honesta. Eles coexistem com as regras do seu projeto — as convenções do projeto sempre prevalecem.
 
-17 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.pt-BR.md) completa.
+18 agentes cobrem todo o ciclo de desenvolvimento: discovery, design, implementação, quality gates e documentação. → Veja a [Referência de Agentes](docs/agents.pt-BR.md) completa.
 
 ---
 
@@ -144,6 +144,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
 | `/devteam:fullstack` | Implementação full-stack — times de backend + frontend em paralelo |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
+| `/devteam:seo` | Quality gate de SEO — seo-specialist (técnico, on-page, Core Web Vitals, dados estruturados, GEO/LLM) |
 | `/devteam:fix` | Correção de bug — desenvolvedor(es) relevante(s) → test-specialist |
 | `/devteam:refactor` | Refatoração — software-architect planeja, desenvolvedor(es) executam |
 | `/devteam:architect` | Decisões de arquitetura e ADRs — software-architect |
@@ -183,7 +184,7 @@ No **Codex especificamente**, esse pin por tier vale para os **agentes** renderi
 
 ## Agentes
 
-O time tem **17 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [Referência de Agentes](docs/agents.md).
+O time tem **18 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [Referência de Agentes](docs/agents.md).
 
 **Planejamento & arquitetura**
 
@@ -201,6 +202,7 @@ O time tem **17 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 | `frontend-developer` | Código client-side — telas, componentes, fluxos de UI |
 | `mobile-developer` | Features mobile — React Native, Expo, Flutter, iOS/Android nativo |
 | `ui-ux-designer` | Design system, fluxos de UX e decisões visuais |
+| `seo-specialist` | Quality gate de SEO — técnico, on-page, Core Web Vitals, dados estruturados, GEO/LLM |
 | `devops-specialist` | CI/CD, Docker, infraestrutura e scripts de deploy |
 
 **Qualidade & revisão**

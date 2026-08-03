@@ -12,7 +12,7 @@ Not just a bundle of agents: it is the layer that governs how those agents plan,
 
 Each agent has a defined role, expertise, and workflow integration. What makes it a harness rather than a collection is everything around them — the plan gate that blocks silent execution, the lifecycle hooks that enforce session memory, the review routing, the validators that keep the whole tree honest. They coexist with your project's own rules — project conventions always win.
 
-17 agents cover the full development lifecycle: discovery, design, implementation, quality gates, and documentation. → See the full [Agent Reference](docs/agents.md).
+18 agents cover the full development lifecycle: discovery, design, implementation, quality gates, and documentation. → See the full [Agent Reference](docs/agents.md).
 
 ---
 
@@ -144,6 +144,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
+| `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) |
 | `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
 | `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
@@ -183,7 +184,7 @@ For **Codex specifically**, that tier pin applies to the rendered **agents** in 
 
 ## Agents
 
-The team has **17 agents** covering the full lifecycle. Full details in the [Agent Reference](docs/agents.md).
+The team has **18 agents** covering the full lifecycle. Full details in the [Agent Reference](docs/agents.md).
 
 **Planning & architecture**
 
@@ -201,6 +202,7 @@ The team has **17 agents** covering the full lifecycle. Full details in the [Age
 | `frontend-developer` | Client-side code — screens, components, UI flows |
 | `mobile-developer` | Mobile features — React Native, Expo, Flutter, native iOS/Android |
 | `ui-ux-designer` | Design system, UX flows, and visual decisions |
+| `seo-specialist` | SEO quality gate — technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness |
 | `devops-specialist` | CI/CD, Docker, infrastructure, and deploy scripts |
 
 **Quality & review**
