@@ -313,7 +313,7 @@ dev-team-agents/
 │   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
 │   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
 │   ├── fix-symlinks.sh · check-updates.sh (shim) · new-adr.sh
-│   ├── graphify-refresh.sh · validate-commit-msg.sh
+│   ├── graphify-refresh.sh · validate-commit-msg.sh · reuse-lint.sh · design-token-lint.sh
 │   ├── lib/         ← render-engine data and shared install logic
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
@@ -486,7 +486,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 |--------|-------------|-----------------|
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
-| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh` |
+| `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh`, `03d-design-token-lint.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh` |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | `99-graphify-refresh.sh`, `99b-archive-index.sh` |
