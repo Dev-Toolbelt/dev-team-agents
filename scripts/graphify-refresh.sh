@@ -96,7 +96,7 @@ if [ "$HAS_STRUCTURAL" -eq 0 ] && [ -n "$CURRENT_COMMIT" ]; then
   if [ -z "$LAST_BUILD_COMMIT" ]; then
     # No prior build marker — scan full git history for structural changes
     for src_dir in "${SOURCES[@]}"; do
-      if git log --diff-filter=ADR --name-only --format="" -- "$src_dir" 2>/dev/null | grep -q .; then
+      if [ -n "$(git log --diff-filter=ADR --name-only --format="" -- "$src_dir" 2>/dev/null | head -n1)" ]; then
         HAS_STRUCTURAL=1
         break
       fi
@@ -104,7 +104,7 @@ if [ "$HAS_STRUCTURAL" -eq 0 ] && [ -n "$CURRENT_COMMIT" ]; then
   elif [ "$CURRENT_COMMIT" != "$LAST_BUILD_COMMIT" ]; then
     # New commits since last build — check diff between builds
     for src_dir in "${SOURCES[@]}"; do
-      if git diff --diff-filter=ADR --name-only "$LAST_BUILD_COMMIT"..HEAD -- "$src_dir" 2>/dev/null | grep -q .; then
+      if [ -n "$(git diff --diff-filter=ADR --name-only "$LAST_BUILD_COMMIT"..HEAD -- "$src_dir" 2>/dev/null | head -n1)" ]; then
         HAS_STRUCTURAL=1
         break
       fi
@@ -152,6 +152,9 @@ if [ ! -d "graphify-src/$OUTPUT_PATH" ]; then
 fi
 
 echo "📦 Moving $OUTPUT_PATH to project root..." >&2
+# graphify protects the cache dir with a macOS `deny delete` ACL, which makes `rm -rf` fail with EACCES.
+# Strip ACLs first (no-op on Linux).
+[ -e "$OUTPUT_PATH" ] && chmod -R -N "$OUTPUT_PATH" 2>/dev/null || true
 rm -rf "$OUTPUT_PATH"
 mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 

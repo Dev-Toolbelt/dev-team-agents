@@ -256,24 +256,102 @@ PY
 
 Detect: `[ -f .dev-team-agents/user-data/graphify.json ] && echo ENABLED || echo DISABLED`
 
-If ENABLED:
+If DISABLED, skip the rest of this category and report `Graphify ... N/A (not configured)`.
+
+If ENABLED, run 5a–5e in order.
+
+### 5a — Dependencies
+
+```bash
+command -v graphify >/dev/null 2>&1 && echo "OK: graphify" || echo "MISSING: graphify binary"
+command -v jq >/dev/null 2>&1 && echo "OK: jq" || echo "MISSING: jq"
+```
+
+### 5b — Config validity
+
+```bash
+CFG=.dev-team-agents/user-data/graphify.json
+jq empty "$CFG" 2>/dev/null && echo "OK: valid JSON" || echo "INVALID: graphify.json is not valid JSON"
+jq -e '.targetPaths | length > 0' "$CFG" >/dev/null 2>&1 && echo "OK: targetPaths present" || echo "MISSING: targetPaths empty or absent"
+
+# Every targetPath must exist in the project
+jq -r '.targetPaths[]? // empty' "$CFG" 2>/dev/null | while IFS= read -r p; do
+  [ -e "$p" ] && echo "OK: targetPath $p" || echo "MISSING: targetPath '$p' does not exist"
+done
+
+# Every manifestPath, if declared, must exist
+jq -r '.manifestPaths[]? // empty' "$CFG" 2>/dev/null | while IFS= read -r m; do
+  [ -e "$m" ] && echo "OK: manifestPath $m" || echo "MISSING: manifestPath '$m' does not exist"
+done
+```
+
+### 5c — Hook wiring
 
 ```bash
 ls .dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
 ls .dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
-ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING"
-grep -qxF '.dev-team-agents/user-data/.graphify-last-run' .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
-# Also check for legacy sub-script that causes stop-hook loops
+# Legacy sub-script that causes stop-hook loops
 ls .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
+```
+
+### 5d — Output presence and integrity
+
+```bash
+ls graphify-out/ 2>/dev/null | head -3 || echo "MISSING: graphify-out/"
+if [ -f graphify-out/graph.json ]; then
+  jq empty graphify-out/graph.json 2>/dev/null && echo "OK: graph.json valid" || echo "INVALID: graphify-out/graph.json is not valid JSON"
+else
+  echo "MISSING: graphify-out/graph.json"
+fi
+[ -f graphify-out/GRAPH_REPORT.md ] && echo "OK: GRAPH_REPORT.md" || echo "MISSING: graphify-out/GRAPH_REPORT.md"
+
+# Is the last recorded build behind the current commit?
+LAST="$(tr -d '[:space:]' < .dev-team-agents/user-data/.graphify-last-run 2>/dev/null)"
+HEAD_COMMIT="$(git rev-parse HEAD 2>/dev/null)"
+[ -n "$LAST" ] && [ -n "$HEAD_COMMIT" ] && [ "$LAST" != "$HEAD_COMMIT" ] && echo "MARKER_BEHIND_HEAD: last=$LAST head=$HEAD_COMMIT"
+```
+
+### 5e — Generation actually works (not just "files exist")
+
+Run the refresh script for real and confirm it does what it claims — file *presence* alone does not prove the pipeline works; `graphify-refresh.sh` has shipped versions where the change-detection gate silently no-op'd (SIGPIPE under `pipefail`) or the output swap silently aborted (macOS ACL on `graphify-out/cache` blocking `rm -rf`), both exiting `0` with no visible error:
+
+```bash
+BEFORE_MTIME=$(stat -f %m graphify-out/graph.json 2>/dev/null || stat -c %Y graphify-out/graph.json 2>/dev/null || echo 0)
+bash .dev-team-agents/scripts/graphify-refresh.sh; REFRESH_EXIT=$?
+AFTER_MTIME=$(stat -f %m graphify-out/graph.json 2>/dev/null || stat -c %Y graphify-out/graph.json 2>/dev/null || echo 0)
+echo "EXIT:$REFRESH_EXIT"
+[ "$REFRESH_EXIT" -ne 0 ] && echo "REFRESH_FAILED"
+```
+
+- If `MARKER_BEHIND_HEAD` was reported in 5d (or `graphify-out/` was `MISSING`) and `AFTER_MTIME` equals `BEFORE_MTIME`, the refresh **silently no-op'd** — the script ran, exited `0`, and did not rebuild. Report as FIX, not WARN.
+- If `REFRESH_FAILED`, surface the script's stderr to the user rather than treating it as a WARN.
+
+### 5f — .gitignore entries
+
+```bash
+grep -qxF ".dev-team-agents/user-data/.graphify-last-run" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
+grep -qxF "graphify-out/cache" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
+grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
+| `graphify` binary installed | WARN — cannot auto-install; report the install command for the detected OS (`graphify-setup/SKILL.md` Step 2) |
+| `jq` installed | WARN — same (Step 3) |
+| `graphify.json` is valid JSON | FIX blocked — report the parse error; never rewrite user config content automatically |
+| `targetPaths` non-empty | Same — report and ask the user to correct `graphify.json` |
+| Each `targetPaths` entry exists on disk | WARN — list the missing paths; do not remove them from the config (may be a rename in progress) |
+| Each `manifestPaths` entry exists | WARN — same |
 | `stop/99-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
 | `stop/02-graphify-refresh.sh` exists (legacy) | `rm .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
 | `graphify-out/` directory exists | WARN — run: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
+| `graphify-out/graph.json` present and valid JSON | FIX — re-run the refresh script; if still missing/invalid after that, report the failure instead of fabricating a graph |
+| `graphify-out/GRAPH_REPORT.md` present | WARN — re-run the refresh script |
+| Refresh script silently no-op'd or failed (5e) | FIX — re-run `bash .dev-team-agents/scripts/graphify-refresh.sh` and surface its stderr; this signals a bug in the script itself, not stale output |
 | `.dev-team-agents/user-data/.graphify-last-run` in `.gitignore` | `echo '.dev-team-agents/user-data/.graphify-last-run' >> .gitignore` |
+| `graphify-out/cache` in `.gitignore` | `echo 'graphify-out/cache' >> .gitignore` |
+| `!.dev-team-agents/user-data/graphify.json` in `.gitignore` | Append automatically (see Category 7) |
 
 ## Category 6 — CLAUDE.md
 

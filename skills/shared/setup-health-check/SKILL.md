@@ -67,7 +67,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 2 | Scripts & Executability | All hook dispatchers and sub-scripts are executable |
 | 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
-| 5 | Graphify | Skip if not enabled; check sub-scripts and output dir |
+| 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity, and that a real refresh run actually rebuilds the output (not just that files exist) |
 | 6 | CLAUDE.md | `## dev-team-agents` section present |
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
