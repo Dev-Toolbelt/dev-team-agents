@@ -23,7 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Frontend-specific additions after project-context loads:**
 
 - Read `docs/design/design-system.md` — colors, typography, spacing, component inventory
-- Scan the existing component tree for the patterns already in use before adding new ones
+- Load `skills/shared/reuse-guidelines/SKILL.md` and scan the existing component tree — check `docs/development/reuse-guidelines.md` (when present) for a canonical implementation before adding anything new
 - Run `git log --oneline -10` to reveal recently introduced component patterns and the active UI surface
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
@@ -176,6 +176,7 @@ Load these skills **only when the task matches the trigger**:
 | Performance optimization, Core Web Vitals, or bundle size | `skills/architecture/performance-budgets/SKILL.md` |
 | Offline-first (IndexedDB, SQLite/OPFS, service worker background sync) | `skills/integrations/offline-first/SKILL.md` |
 | PWA (`manifest.json`, `service-worker.js`, Workbox, Vite PWA plugin) | `skills/integrations/pwa/SKILL.md` |
+| Design system component (Button, Card, Modal) or critical flow (checkout, onboarding) | `skills/testing/visual-regression/SKILL.md` |
 
 ---
 

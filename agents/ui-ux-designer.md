@@ -25,6 +25,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Read `docs/design/design-system.md` — the existing design system, if any
 - Read `docs/development/tech-stack.md` for what the frontend stack makes feasible
 - Read the existing UI code and components to understand what is already built
+- Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before proposing a new pattern or component
 - Run `git log --oneline -10` to reveal what UI changed recently and where design debt accumulated
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
@@ -74,6 +75,7 @@ Determine your mode from context:
 - Frontend development is ongoing
 - The user asks to review, maintain, or improve existing UI
 - A `frontend-developer` is building something and needs design guidance
+- **Always** switch to Consultive Mode after `frontend-developer` reports UI changes in the same session — do not wait to be asked
 
 ---
 

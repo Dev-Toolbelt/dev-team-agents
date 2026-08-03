@@ -7,7 +7,8 @@ description: Pre-delivery checklist for frontend tasks — run it before declari
 
 Run through every item before declaring a task complete:
 
-- [ ] Matches the design system (colors, spacing, typography, component patterns)
+- [ ] Matches the design system (colors, spacing, typography, component patterns) — cross-checked against `docs/development/reuse-guidelines.md` when it exists, not just self-assessed
+- [ ] If `ui-ux-designer` produced a Design Review this session, every `[ISSUE]` in it is resolved (not just `[SUGGESTION]`)
 - [ ] Responsive — tested at 375px (mobile), 768px (tablet), 1280px+ (desktop)
 - [ ] Accessible — keyboard navigable, no missing ARIA labels, sufficient contrast
 - [ ] No console errors or warnings
