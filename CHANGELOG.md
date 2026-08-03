@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.0] - 2026-08-03
+
+### Added
+- **Token economy in subagent delegation** — `skills/architecture/orchestration/SKILL.md` gains two mandatory rules: Subagent Report Economy (every spawn prompt must instruct the subagent to close with a concise report — no dumped file contents, command logs, or step-by-step narration — since a subagent's final message is the only thing that reaches the orchestrator's context) and Spawn Prompt Economy (pass condensed, already-synthesized project context instead of a re-read instruction, and reference an on-disk plan by file path + section instead of pasting the full plan into every parallel spawn)
+
+### Changed
+- **`project-context/SKILL.md` split for lighter per-agent loads** — First-Time Setup Guard, Session Summary Write Rules, and the Immutability Warning moved to `skills/shared/project-context/references/`, loaded only on their trigger condition instead of unconditionally on every load; the always-loaded body drops from 372 to 297 lines with no loss of coverage
+
 ## [2.27.3] - 2026-08-03
 
 ### Added
