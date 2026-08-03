@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.27.3] - 2026-08-03
+
+### Added
+- **Python 3 is now documented as a prerequisite** and checked as a non-blocking warning — `install.sh` warns with OS-specific install instructions (macOS/Linux/Windows) when `python3` is missing instead of failing silently later; `/devteam:health-check` gained Category 12 (Python Prerequisite) with the same warn-only behavior; `README.md`/`README.pt-BR.md` document it in a new Prerequisites section
+
 ## [2.27.2] - 2026-08-03
 
 ### Fixed
