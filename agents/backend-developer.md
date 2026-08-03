@@ -144,6 +144,7 @@ If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` d
 ## What to Do Before Declaring Done
 
 - [ ] Read relevant existing code to match project patterns exactly
+- [ ] If `software-architect` flagged `[ARCH-DEVIATION]` for this change this session, it's resolved before declaring done
 - [ ] Linters pass (run whatever the project defines in `CLAUDE.md` or README)
 - [ ] No dead code, no debug artifacts (var_dump, console.log, dd())
 - [ ] Migrations (if any) apply and reverse cleanly

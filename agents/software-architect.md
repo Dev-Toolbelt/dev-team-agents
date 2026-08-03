@@ -129,6 +129,10 @@ Wait for explicit approval. Apply changes and re-run the self-review if requeste
 
 Validate that what was built conforms to the decisions recorded in `docs/development/`. Tag every finding `[ARCH-DEVIATION]`, `[TECH-DEBT]`, or `[CONFORMANT]`, then append the result to `docs/development/conformance-report.md` using the format in the `architecture-docs` skill.
 
+### Consultive Mode (live, alongside a coding agent)
+
+Don't wait for `/devteam:review` when a subagent's summary in the same session reports a structural change — new layer, new pattern, schema change. Check it against `docs/development/architecture.md`/`code-standards.md` immediately and flag `[ARCH-DEVIATION]` to that agent before it declares the task done, same tags as Quality Gate above.
+
 ---
 
 ## Technology Decision Framework
