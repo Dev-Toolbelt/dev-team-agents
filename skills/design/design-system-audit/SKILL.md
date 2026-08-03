@@ -101,6 +101,8 @@ PROBLEMATIC: [accessibility issues, low contrast, missing focus states]
 
 ## Step 4 — Produce Design Context Document
 
+This document is capped at 80 lines — see `skills/shared/docs-sync/SKILL.md` § `docs/design/design-system.md` for the enforced schema. Condense to that schema (`UI Library / Color Tokens / Typography Scale / Component Inventory / Spacing Scale`); do not emit every sub-section below verbatim on a mature project.
+
 When in **Design Mode** (pre-build), generate `docs/design/design-system.md`:
 
 ```markdown
@@ -152,7 +154,7 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ## Design System Creation (Design Mode)
 
-When building a design system from scratch, produce `docs/design/design-system.md` with the following sections:
+When building a design system from scratch, produce `docs/design/design-system.md` — same 80-line schema as Step 4 above. Use the detail below to derive the values, but write only the condensed tables into the doc:
 
 ### Color System
 ```
