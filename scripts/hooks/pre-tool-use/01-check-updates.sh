@@ -52,7 +52,13 @@ LATEST=$(uc_fetch_latest "$GITHUB_API" "$ETAG_FILE" "$VERSION_CACHE_FILE")
 [ -n "$LATEST" ] || exit 0
 
 CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
-[ "$CURRENT" != "unknown" ] && [ "$LATEST" != "unknown" ] || exit 0
+if [ "$CURRENT" = "unknown" ]; then
+    echo "→ dev-team-agents: could not determine the installed version" \
+         "($VERSION_FILE missing or unreadable). Update checks are paused" \
+         "until it is restored — run /devteam:health-check to repair it." >&2
+    exit 0
+fi
+[ "$LATEST" != "unknown" ] || exit 0
 [ "$CURRENT" != "$LATEST" ] || exit 0
 
 # ── Notify / auto-update ──────────────────────────────────────────────────────
@@ -69,8 +75,11 @@ fi
 export UC_SUPPRESS
 
 if uc_auto_update_enabled "$PREFS_FILE" "$USER_DATA_DIR"; then
-    uc_perform_auto_update "$CURRENT" "$LATEST" "$INSTALL_DIR"
-    uc_notify "info" "$(uc_message updated "$LANG_PREF" "$CURRENT" "$LATEST")"
+    if uc_perform_auto_update "$CURRENT" "$LATEST" "$INSTALL_DIR"; then
+        uc_notify "info" "$(uc_message updated "$LANG_PREF" "$CURRENT" "$LATEST")"
+    else
+        uc_notify "warning" "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
+    fi
     exit 0
 fi
 

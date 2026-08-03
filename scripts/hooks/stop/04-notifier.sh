@@ -7,10 +7,16 @@
 # means adding a file plus one `case` arm; the tip text never lives in this script.
 #
 # Context estimation strategy (in order of preference):
-#   1. Transcript-based: read token usage from transcript JSONL (more accurate)
-#      then apply transcript_multiplier to compensate for system prompt + tools
-#      not stored in the transcript.
+#   1. Transcript-based: reads the LAST assistant usage entry's
+#      cache_read_input_tokens + cache_creation_input_tokens + input_tokens —
+#      prompt caching means that sum IS the exact context size sent on the most
+#      recent API call, so no compensating multiplier is needed. Summing across
+#      turns instead would double-count history repeatedly, since each turn's
+#      input_tokens already includes everything sent before it.
 #   2. Turn-count heuristic: fallback when transcript_path is not available.
+#
+# transcript_multiplier is read from preferences.json for backward compatibility
+# but is no longer applied by method 1 — see notifications.md.
 set -uo pipefail
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
@@ -91,11 +97,14 @@ fi
 
 printf '%s:%d:%d:%s\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" > "$NOTIFIER_STATE_FILE"
 
-# ── Fast-path: skip expensive processing in purely conversational sessions ────
-# If no file changes were detected (DEVTEAM_NO_CHANGES=true) AND the tip for
-# today was already shown, there is nothing to emit — exit early.
+# ── Fast-path: skip only the once-per-day tip in purely conversational sessions
+# Context-window estimation must still run every Stop regardless of
+# DEVTEAM_NO_CHANGES — context grows from conversation turns, not from file
+# edits, so a no-file-change session is exactly where the warning matters most.
+# Only the once-per-day tip (already shown today) is safe to skip here.
+SKIP_TIP=0
 if [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && [ "${STATE_DATE:-}" = "${TODAY:-}" ]; then
-    exit 0
+    SKIP_TIP=1
 fi
 
 # ── Context window estimation ─────────────────────────────────────────────────
@@ -105,8 +114,15 @@ METHOD="turns"
 # Attempt 1: transcript-based estimation (more accurate than turn count).
 # The hook payload (stdin, saved to DEVTEAM_HOOK_PAYLOAD by stop.sh) contains
 # transcript_path — a JSONL file where each line is a conversation turn with
-# usage data. We sum all input+output tokens and apply a multiplier to
-# estimate the full context (system prompt + tools + messages).
+# usage data. Anthropic's prompt caching means each assistant usage entry's
+# input_tokens is only the NEW delta for that turn — the rest of the
+# conversation already sent shows up as cache_read_input_tokens /
+# cache_creation_input_tokens. Summing input_tokens across turns therefore
+# double-counts the same history repeatedly and grows unboundedly.
+# The actual current context size is the LAST assistant usage entry's
+# cache_read + cache_creation + input tokens — that IS what was sent to the
+# API on the most recent call. No compensating multiplier is needed once the
+# real value is read directly.
 TRANSCRIPT_PATH=""
 if [ -n "${DEVTEAM_HOOK_PAYLOAD:-}" ] && [ -f "${DEVTEAM_HOOK_PAYLOAD:-}" ] && command -v python3 >/dev/null 2>&1; then
     TRANSCRIPT_PATH=$(python3 -c \
@@ -117,7 +133,7 @@ fi
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] && command -v python3 >/dev/null 2>&1; then
     TRANSCRIPT_TOKENS=$(python3 -c "
 import json
-total = 0
+last_context = 0
 try:
     with open('${TRANSCRIPT_PATH}') as f:
         for line in f:
@@ -129,17 +145,23 @@ try:
                 usage = (entry.get('usage') or
                          entry.get('message', {}).get('usage') or
                          entry.get('response', {}).get('usage') or {})
-                total += usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
+                if not usage:
+                    continue
+                context = (usage.get('input_tokens', 0) +
+                           usage.get('cache_read_input_tokens', 0) +
+                           usage.get('cache_creation_input_tokens', 0))
+                if context > 0:
+                    last_context = context
             except Exception:
                 pass
 except Exception:
     pass
-print(total)
+print(last_context)
 " 2>/dev/null || echo 0)
 
     if [ "${TRANSCRIPT_TOKENS:-0}" -gt 0 ] 2>/dev/null; then
         PCT_USED=$(python3 -c \
-            "print(min(100, round($TRANSCRIPT_TOKENS * $TRANSCRIPT_MULTIPLIER * 100 / $MODEL_MAX_TOKENS)))" \
+            "print(min(100, round($TRANSCRIPT_TOKENS * 100 / $MODEL_MAX_TOKENS)))" \
             2>/dev/null || echo 0)
         METHOD="transcript"
     fi
@@ -177,7 +199,7 @@ elif [ "${PCT_USED:-0}" -ge "${WARN_PCT:-55}" ] 2>/dev/null; then
 fi
 
 # ── Tip of session (once per session) ────────────────────────────────────────
-if [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
+if [ "$SKIP_TIP" -eq 0 ] && [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppressed "info"; then
     DAY=$(date +%-d 2>/dev/null || date +%d | sed 's/^0//')
     TIP_INDEX=$(( (DAY - 1) % 15 ))
 

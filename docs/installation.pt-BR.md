@@ -105,12 +105,12 @@ Configure em `.dev-team-agents/user-data/preferences.json`:
 | `context_window_percent_warning` | `55` | % a partir da qual um warning é emitido |
 | `context_window_percent_limit` | `60` | % a partir da qual um alerta crítico é emitido |
 | `suppress_notifications` | `false` | `false` / `true` / `["info"]` |
-| `transcript_multiplier` | `1.8` | Multiplicador aplicado à contagem de tokens do transcript para estimar o contexto completo |
+| `transcript_multiplier` | `1.8` | Descontinuado, não é mais aplicado (veja abaixo) |
 | `model_max_tokens` | `200000` | Janela de contexto do modelo ativo |
 
 Defina `suppress_notifications` como `true` para silenciar todas as notificações, ou como `["info"]` para suprimir apenas as dicas.
 
-Os warnings de janela de contexto usam contagens de tokens do transcript (do payload do hook Stop) multiplicadas por `transcript_multiplier`. Ajuste `transcript_multiplier` para cima se os warnings dispararem cedo demais, ou para baixo se dispararem tarde demais. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso troque por um modelo não-200k.
+Os warnings de janela de contexto lêem a contagem de tokens de cache/input da última entrada de uso do transcript (do payload do hook Stop) — o tamanho exato do contexto enviado na última chamada à API, sem necessidade de multiplicador. `transcript_multiplier` permanece no schema por compatibilidade retroativa, mas não tem mais efeito. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso troque por um modelo não-200k.
 
 ### Worktree e isolamento Docker
 

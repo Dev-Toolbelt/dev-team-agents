@@ -56,7 +56,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `docs_stale_after_days` | number | `30` | Days before project.md and session-summary.md are considered stale |
 | `auto_update` | bool | `true` | Auto-update dev-team-agents when a new version is detected (consent key) |
 | `update_check_interval_hours` | number | `24` | Hours between update checks |
-| `transcript_multiplier` | number | `1.8` | Multiplier to estimate full context from transcript tokens |
+| `transcript_multiplier` | number | `1.8` | Deprecated, no longer applied — context is read directly from the transcript's last usage entry |
 | `model_max_tokens` | number | `200000` | Context window for the active model |
 | `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) (consent key) |
 | `worktree_active` | bool | `true` | Default to a git worktree per task without asking |

@@ -105,12 +105,12 @@ Configure in `.dev-team-agents/user-data/preferences.json`:
 | `context_window_percent_warning` | `55` | % at which a warning is emitted |
 | `context_window_percent_limit` | `60` | % at which a critical alert is emitted |
 | `suppress_notifications` | `false` | `false` / `true` / `["info"]` |
-| `transcript_multiplier` | `1.8` | Multiplier applied to transcript token count to estimate full context |
+| `transcript_multiplier` | `1.8` | Deprecated, no longer applied (see below) |
 | `model_max_tokens` | `200000` | Context window of the active model |
 
 Set `suppress_notifications` to `true` to silence all notifications, or to `["info"]` to suppress only tips.
 
-Context window warnings use transcript token counts (from the Stop hook payload) multiplied by `transcript_multiplier`. Adjust `transcript_multiplier` up if warnings fire too early, or down if they fire too late. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
+Context window warnings read the last transcript usage entry's cache/input token counts (from the Stop hook payload) — the exact size of the context sent on the most recent API call, no multiplier needed. `transcript_multiplier` is kept in the schema for backward compatibility but has no effect. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
 
 ### Worktree & Docker isolation
 

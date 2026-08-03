@@ -112,6 +112,11 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 **Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,stop}.sh` are the same bash scripts across all three providers. Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with `PreToolUse` / `Stop` / `PreCompact` / `SessionStart` event names (which coincide with Claude's).
 
+**Context-window notification payload is provider-specific — by design, not oversight.** `stop/04-notifier.sh` estimates context usage from whatever JSON its stdin's `transcript_path` points at, reading the last usage entry's `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` (see `CLAUDE-md/notifications.md`). Each provider's stdin comes from a different source:
+- **Claude Code** passes its own transcript JSONL directly — the native format, no adaptation needed.
+- **Codex** hook stdin is documented to coincide with Claude's shape, and OpenAI's own usage schema (`input_tokens`/`output_tokens`, no separate cache fields) parses correctly under the same keys with zero code change — a cached-token subtotal there is informational, not additive, so leaving the Anthropic-only cache keys absent naturally falls back to `input_tokens` alone, which is already the full context size for that schema.
+- **opencode** has no on-disk transcript file at all. `opencode/plugin/dev-team-agents.ts`'s `buildContextPayload()` calls `client.session.messages()`, reads the last assistant message's `tokens: {input, output, cache: {read, write}}` from the SDK, and writes a **synthetic one-line JSONL** shaped like Claude's transcript before invoking `stop.sh` — so the same bash-side parsing works unmodified. Before this, the opencode plugin called `stop.sh` with no stdin at all, so the transcript-based method could never activate there; every session silently used the coarser turn-count fallback regardless of `preferences.json`.
+
 ---
 
 ## Adding a new provider

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.28.1] - 2026-08-03
+
+### Fixed
+- **Context-window warnings (`context_window_percent_warning`/`_limit`) now fire in purely conversational sessions** — `stop/04-notifier.sh`'s `DEVTEAM_NO_CHANGES` fast-path used to skip the entire context estimation block whenever no file changed, so sessions with no edits never got warned no matter how full the context actually was. The fast-path now only skips the once-per-day tip lookup.
+- **Context-window estimation is now exact instead of a compensated heuristic** — the transcript-based method used to sum `input_tokens + output_tokens` across every turn and apply `transcript_multiplier` (1.8) to correct for the resulting drift; because of prompt caching each turn's `input_tokens` already includes the full prior conversation, so the sum silently double-counted history and grew unboundedly. It now reads only the LAST usage entry's `cache_read_input_tokens + cache_creation_input_tokens + input_tokens` — the exact context size sent on the most recent API call. `transcript_multiplier` is deprecated (no-op, kept for backward-compat reads) and documented as such across `notifications.md`, `preferences.md`, `user-preferences/SKILL.md`, and both installation guides.
+- **opencode sessions now get the same accurate context estimation as Claude Code** — `opencode/plugin/dev-team-agents.ts` used to invoke `stop.sh` with no stdin at all on `session.idle`, so the transcript-based method could never activate there and every opencode session silently used the coarse turn-count fallback. The plugin now fetches the last assistant message's token usage via `client.session.messages()` and passes a synthetic transcript payload shaped like Claude's, requiring no change to the shared bash parsing. Codex needed no change — its usage schema already parses correctly under the same keys.
+- **`auto_update` no longer fails silently when `.installed-version` is missing or corrupted** — `pre-tool-use/01-check-updates.sh` used to `exit 0` with zero diagnostic; it now prints a message pointing at `/devteam:health-check`.
+- **Auto-update no longer reports success when it actually failed** — the "updated to $latest" notification used to fire unconditionally even when `uc_perform_auto_update` failed (e.g. a partial install missing `installer-fetch.sh`); it now checks the return code and falls back to the "update available" notice on failure.
+
 ## [2.28.0] - 2026-08-03
 
 ### Added

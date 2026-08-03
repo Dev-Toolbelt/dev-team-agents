@@ -37,10 +37,10 @@ Set `suppress_notifications` in `preferences.json`:
 
 `stop/04-notifier.sh` estimates context usage using two strategies (in order of preference):
 
-1. **Transcript-based** (primary): reads `transcript_path` from the Stop hook payload, sums `input_tokens + output_tokens` across all turns, then applies `transcript_multiplier` (default `1.8`) to compensate for system prompt, tools, and memory not stored in the transcript. Result is compared to `model_max_tokens`.
+1. **Transcript-based** (primary): reads `transcript_path` from the Stop hook payload and takes the **last** assistant usage entry's `cache_read_input_tokens + cache_creation_input_tokens + input_tokens`. Prompt caching means that sum is the exact size of the context sent on the most recent API call — no compensating multiplier needed. Result is compared to `model_max_tokens`.
 2. **Turn-count heuristic** (fallback): fires when the transcript path is unavailable. Calibrates `100% ≈ 45 turns` and scales linearly. Less accurate for content-heavy sessions.
 
-> **Limitation**: the actual context percentage (as shown by `/context`) is not accessible from bash hooks. The transcript-based estimate covers the conversation messages portion (~55% of total) and approximates the rest via the multiplier. Adjust `transcript_multiplier` in `preferences.json` if notifications fire too early or too late for your typical session profile.
+> **`transcript_multiplier` is deprecated and no longer applied.** The prior implementation summed `input_tokens + output_tokens` across *all* turns, which double-counted history on every turn (each turn's `input_tokens` already includes everything sent before it) — the multiplier existed to compensate for the resulting drift, not for system-prompt/tool overhead. Reading the last usage entry directly gives the exact figure, so the key is read for backward compatibility only and has no effect. It will be removed from `preferences-defaults.json` in a future minor version.
 
 ### Tip of Session
 
