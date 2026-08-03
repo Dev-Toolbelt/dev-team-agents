@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.27.1] - 2026-08-03
+
 ### Fixed
 - **`install.sh` retries the directory renames used to swap `.dev-team-agents` into place** — on Windows a single locked file (open editor, terminal `cd`'d into the folder, antivirus real-time scan) could fail the whole-directory `mv` and abort the update; the swap now retries up to 5 times with a 1s backoff before failing, and the resulting error message names the exact directory and likely causes instead of a raw `mv` permission error
+- **`graphify-refresh.sh`'s change-detection gate is no longer defeated by `SIGPIPE` under `pipefail`** — `grep -q` closing the pipe on `git log`/`git diff` made the gate silently skip rebuilds, and the output swap could abort silently on macOS's deny-delete ACL on `graphify-out/cache`, losing the freshly built graph; both failure modes exited 0, so the graph went stale with no visible signal. Health check Category 5 now validates `graphify.json` content and every `targetPaths`/`manifestPaths` entry, checks output integrity, and actually runs the refresh script to confirm it rebuilds instead of trusting that `graphify-out/` exists
 
 ## [2.27.0] - 2026-08-02
 
