@@ -53,6 +53,7 @@ if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     USER_LANG=$(_pref language en)
     WARN_PCT=$(_pref context_window_percent_warning 55)
     CRIT_PCT=$(_pref context_window_percent_limit 60)
+    # shellcheck disable=SC2034  # read for backward compatibility only, see comment above
     TRANSCRIPT_MULTIPLIER=$(_pref transcript_multiplier 1.8)
     MODEL_MAX_TOKENS=$(_pref model_max_tokens 200000)
     NO_COMMIT_TURNS=$(_pref session_no_commit_turns 8)

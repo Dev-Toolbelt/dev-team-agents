@@ -154,7 +154,9 @@ fi
 echo "📦 Moving $OUTPUT_PATH to project root..." >&2
 # graphify protects the cache dir with a macOS `deny delete` ACL, which makes `rm -rf` fail with EACCES.
 # Strip ACLs first (no-op on Linux).
-[ -e "$OUTPUT_PATH" ] && chmod -R -N "$OUTPUT_PATH" 2>/dev/null || true
+if [ -e "$OUTPUT_PATH" ]; then
+  chmod -R -N "$OUTPUT_PATH" 2>/dev/null || true
+fi
 rm -rf "$OUTPUT_PATH"
 mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 
