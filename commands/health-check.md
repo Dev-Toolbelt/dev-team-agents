@@ -97,3 +97,15 @@ If all categories pass with no warnings or fixes:
 ```
 Health Check: all categories passed. dev-team-agents is healthy.
 ```
+
+---
+
+## Step 4 — Record the run
+
+Regardless of outcome, write today's date so `session-start.sh` stops warning that this project's health check is overdue:
+
+```bash
+mkdir -p .dev-team-agents/user-data
+date +%Y-%m-%d > .dev-team-agents/user-data/.last-health-check
+```
+```

@@ -477,14 +477,18 @@ EOF
 echo "OK" || echo "FAIL"
 
 [ -f .dev-team-agents/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
+[ -f .dev-team-agents/user-data/.session-head ] && echo "session-head: OK" || echo "session-head: MISSING (will be created on next session start)"
 [ -f .dev-team-agents/user-data/.notifier-state ] && echo "notifier-state: OK" || echo "notifier-state: MISSING (will be created on first stop hook)"
+[ -f .dev-team-agents/user-data/.last-health-check ] && echo "last-health-check: OK" || echo "last-health-check: MISSING (this run will create it — see Step 4 of /devteam:health-check)"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
 | `stop/04-notifier.sh` exists and is executable | `chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
 | `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
+| `.session-head` missing | OK — created automatically by `session-start.sh` on next session; until then the uncommitted-progress warning stays silent (no baseline HEAD to compare against) |
 | `.notifier-state` missing | OK — created automatically by `stop/04-notifier.sh` on first turn |
+| `.last-health-check` missing | OK — this very health check run writes it (Step 4 of `commands/health-check.md`); nothing to fix here |
 
 ## Category 10 — Credentials
 

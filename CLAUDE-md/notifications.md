@@ -23,8 +23,8 @@ Agents and shell hooks emit structured notifications using the DEV TEAM AGENTS f
 
 | Hook | Notifications |
 |------|--------------|
-| `session-start.sh` | Persistent state: missing `preferences.json`, stale docs |
-| `stop/04-notifier.sh` | Session progress: context window warnings, tip of session |
+| `session-start.sh` | Persistent state: missing `preferences.json`, stale docs, stale/never-run health check |
+| `stop/04-notifier.sh` | Session progress: context window warnings, tip of session, uncommitted-progress warning |
 
 ### Suppression
 
@@ -41,6 +41,16 @@ Set `suppress_notifications` in `preferences.json`:
 2. **Turn-count heuristic** (fallback): fires when the transcript path is unavailable. Calibrates `100% ≈ 45 turns` and scales linearly. Less accurate for content-heavy sessions.
 
 > **`transcript_multiplier` is deprecated and no longer applied.** The prior implementation summed `input_tokens + output_tokens` across *all* turns, which double-counted history on every turn (each turn's `input_tokens` already includes everything sent before it) — the multiplier existed to compensate for the resulting drift, not for system-prompt/tool overhead. Reading the last usage entry directly gives the exact figure, so the key is read for backward compatibility only and has no effect. It will be removed from `preferences-defaults.json` in a future minor version.
+
+### Health Check Staleness
+
+`session-start.sh` reads `.dev-team-agents/user-data/.last-health-check` — a plain `YYYY-MM-DD` marker that `/devteam:health-check` writes on every run (Step 4, `commands/health-check.md`; see also `setup-health-check/SKILL.md` § Flow). Two cases warn, both gated by `docs_stale_after_days`:
+- **Marker present but older than the threshold** — "Last health check was N days ago."
+- **No marker at all**, but the project is otherwise in motion (`docs/project.md` or `session-summary.md` already exists) — "No health check has been recorded." A brand-new install is exempt: it already goes through the setup flow.
+
+### Uncommitted-Progress Warning
+
+`stop/04-notifier.sh` fires a `warning` at most once per session when all three hold: the turn count has reached `session_no_commit_turns` (default `8`), `git rev-parse HEAD` matches what `session-start.sh` recorded at session start (`.dev-team-agents/user-data/.session-head`), and `git status --porcelain` is non-empty. That combination is exactly "real work has piled up and nothing has been committed" — a crash, `/clear`, or context compaction loses the most right there. The notifier-state file (`.notifier-state`) gained a fifth `nocommit_warned` field so the warning fires once, not on every subsequent Stop.
 
 ### Tip of Session
 

@@ -71,6 +71,11 @@ fi
 mkdir -p "$USER_DATA_DIR"
 date +%s > "${USER_DATA_DIR}/.session-id"
 
+# ── Record the commit HEAD was at when this session started ───────
+# stop/04-notifier.sh compares the current HEAD against this to detect a
+# session with real turn count but zero commits — see that script.
+git rev-parse HEAD > "${USER_DATA_DIR}/.session-head" 2>/dev/null || true
+
 # ── Helper: check if a type is suppressed ─────────────────────────
 _is_suppressed() {
     local type="$1"
@@ -166,6 +171,28 @@ if [ -f "$SESSION_SUMMARY" ]; then
             WARN=1
             MESSAGES+=("⚠️  session-summary.md last entry is ${DAYS_SINCE} days old — this project may be inactive or the summary needs updating.")
         fi
+    fi
+fi
+
+# ── Check: health check staleness ─────────────────────────────────
+LAST_HEALTH_CHECK="${USER_DATA_DIR}/.last-health-check"
+if [ -f "$LAST_HEALTH_CHECK" ]; then
+    HC_DATE=$(head -1 "$LAST_HEALTH_CHECK" 2>/dev/null | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}" | head -1)
+    if [ -n "$HC_DATE" ]; then
+        DAYS_SINCE_HC=$(_days_since_date_str "$HC_DATE")
+        if [ "$DAYS_SINCE_HC" -gt "$STALE_DAYS" ]; then
+            WARN=1
+            MESSAGES+=("⚠️  Last /devteam:health-check was ${DAYS_SINCE_HC} days ago — run it to catch drift (broken symlinks, stale config, missing scripts).")
+        fi
+    fi
+else
+    # No marker at all: either never run, or an install that predates this
+    # check. Only nag once things are otherwise in motion (a project.md or
+    # session-summary.md already exists) — a brand-new install already gets
+    # a setup flow and doesn't need a second, redundant prompt.
+    if [ -f "$PROJECT_MD" ] || [ -f "$SESSION_SUMMARY" ]; then
+        WARN=1
+        MESSAGES+=("⚠️  No /devteam:health-check has been recorded for this project — run it once to verify the installation.")
     fi
 fi
 

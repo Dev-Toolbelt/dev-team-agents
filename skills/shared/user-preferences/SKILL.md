@@ -32,6 +32,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
+  "session_no_commit_turns": 8,
   "telemetry": true,
   "worktree_active": true,
   "worktree_base_branch": null,
@@ -53,11 +54,12 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `suppress_notifications` | bool or array | `false` | `false` = none suppressed; `true` = all suppressed; `["info"]` = suppress by type |
 | `session_summary_max_days` | number | `30` | Days before session-summary entries are trimmed |
 | `session_summary_max_entries` | number | `30` | Maximum number of entries in session-summary.md |
-| `docs_stale_after_days` | number | `30` | Days before project.md and session-summary.md are considered stale |
+| `docs_stale_after_days` | number | `30` | Days before project.md, session-summary.md, and the last health check are considered stale |
 | `auto_update` | bool | `true` | Auto-update dev-team-agents when a new version is detected (consent key) |
 | `update_check_interval_hours` | number | `24` | Hours between update checks |
 | `transcript_multiplier` | number | `1.8` | Deprecated, no longer applied — context is read directly from the transcript's last usage entry |
 | `model_max_tokens` | number | `200000` | Context window for the active model |
+| `session_no_commit_turns` | number | `8` | Turns of work with a dirty tree and no commit before a one-time-per-session warning |
 | `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) (consent key) |
 | `worktree_active` | bool | `true` | Default to a git worktree per task without asking |
 | `worktree_base_branch` | string or null | `null` | Base branch for worktrees (`null` = auto-detect) |

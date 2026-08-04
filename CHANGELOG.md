@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.0] - 2026-08-03
+
+### Added
+- **Health check staleness notification** — `session-start.sh` now warns when `/devteam:health-check` hasn't run in over `docs_stale_after_days`, or has never been recorded on a project already in motion. `/devteam:health-check` (Step 4) and `setup-health-check/SKILL.md` (Flow step 5) now write today's date to `.dev-team-agents/user-data/.last-health-check` on every run.
+- **Uncommitted-progress warning** — `stop/04-notifier.sh` fires a one-time-per-session `warning` when the turn count passes the new `session_no_commit_turns` preference (default `8`) with a dirty working tree and no commit since the session started (tracked via `.dev-team-agents/user-data/.session-head`, written by `session-start.sh`). Catches the case where a crash, `/clear`, or context compaction would lose the most.
+
 ## [2.28.1] - 2026-08-03
 
 ### Fixed

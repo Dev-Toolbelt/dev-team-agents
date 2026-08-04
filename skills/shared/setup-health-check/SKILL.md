@@ -24,6 +24,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
    - FIX items that touch `settings.json`: show diff, ask confirmation
    - FIX items that touch `.gitignore` (legacy migration): ask confirmation
    - All other FIX items: apply without asking
+5. Write today's date (`YYYY-MM-DD`) to `.dev-team-agents/user-data/.last-health-check`, creating the file if absent. `session-start.sh` reads this marker to warn when a project has gone `docs_stale_after_days` (default `30`) without a health check — see `CLAUDE-md/notifications.md`. This step runs even when all categories pass.
 
 ## No-Destruction Rule
 

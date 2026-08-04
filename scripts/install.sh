@@ -971,6 +971,7 @@ else
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
+  "session_no_commit_turns": 8,
   "telemetry": $TELEMETRY_VALUE,
   "worktree_active": true,
   "worktree_base_branch": null,

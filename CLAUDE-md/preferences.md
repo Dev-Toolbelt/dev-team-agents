@@ -17,6 +17,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
   "update_check_interval_hours": 24,
   "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
+  "session_no_commit_turns": 8,
   "telemetry": true,
   "worktree_active": true,
   "worktree_base_branch": null,
@@ -38,11 +39,12 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types | `scripts/hooks/stop/04-notifier.sh`, `scripts/hooks/session-start.sh`, `scripts/hooks/pre-tool-use/01-check-updates.sh` |
 | `session_summary_max_days` | `30` | Days before session-summary entries are trimmed | `skills/shared/project-context/SKILL.md` (agent-executed) |
 | `session_summary_max_entries` | `30` | Maximum number of session-summary entries | `skills/shared/project-context/SKILL.md` (agent-executed) |
-| `docs_stale_after_days` | `30` | Days before `project.md` and `session-summary.md` are flagged as stale | `scripts/hooks/session-start.sh`, `skills/shared/notifier/SKILL.md` |
+| `docs_stale_after_days` | `30` | Days before `project.md`, `session-summary.md`, and the last `/devteam:health-check` run are flagged as stale | `scripts/hooks/session-start.sh`, `skills/shared/notifier/SKILL.md` |
 | `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table | `scripts/hooks/lib/update-check.sh` (`uc_auto_update_enabled`), gates `scripts/hooks/pre-tool-use/01-check-updates.sh` |
 | `update_check_interval_hours` | `24` | Hours between update checks | `scripts/hooks/lib/update-check.sh` |
 | `transcript_multiplier` | `1.8` | **Deprecated, no longer applied.** `04-notifier.sh` now reads the last transcript usage entry's cache/input tokens directly — the exact context size, no multiplier needed. Kept only for backward-compat reads | `scripts/hooks/stop/04-notifier.sh` (read, unused) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens | `scripts/hooks/stop/04-notifier.sh` |
+| `session_no_commit_turns` | `8` | Turn count after which a `warning` fires if the session has real work (dirty working tree) but HEAD hasn't moved since `session-start.sh` recorded it. Fires at most once per session | `scripts/hooks/stop/04-notifier.sh` |
 | `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` | `scripts/lib/telemetry-guard.sh` (`_telemetry_enabled`), consumed by `scripts/hooks/pre-tool-use/02b-telemetry.sh`, `scripts/hooks/stop/05-telemetry.sh`, `scripts/helpers/telemetry-send.sh` |
 | `worktree_active` | `true` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) | CLAUDE.md worktree decision cascade + `## Worktree Isolation` section in every coding agent (agent-executed) |
 | `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/branch-flow.md` (agent-executed) |

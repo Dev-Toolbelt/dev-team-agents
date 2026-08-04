@@ -25,6 +25,7 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 USER_DATA_DIR="${PROJECT_ROOT}/.dev-team-agents/user-data"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SESSION_ID_FILE="${USER_DATA_DIR}/.session-id"
+SESSION_HEAD_FILE="${USER_DATA_DIR}/.session-head"
 NOTIFIER_STATE_FILE="${USER_DATA_DIR}/.notifier-state"
 
 # Rotating tips live in locale-keyed data files next to this script
@@ -39,6 +40,7 @@ WARN_PCT=55
 CRIT_PCT=60
 TRANSCRIPT_MULTIPLIER="1.8"
 MODEL_MAX_TOKENS=200000
+NO_COMMIT_TURNS=8
 
 # ── Read preferences (overrides defaults when file is valid) ──────────────────
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
@@ -53,6 +55,7 @@ if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     CRIT_PCT=$(_pref context_window_percent_limit 60)
     TRANSCRIPT_MULTIPLIER=$(_pref transcript_multiplier 1.8)
     MODEL_MAX_TOKENS=$(_pref model_max_tokens 200000)
+    NO_COMMIT_TURNS=$(_pref session_no_commit_turns 8)
 fi
 
 # ── Helper: check suppression ─────────────────────────────────────────────────
@@ -85,17 +88,50 @@ STATE_SESSION=$(echo "$STATE" | cut -d: -f1)
 STATE_TURNS=$(echo "$STATE" | cut -d: -f2)
 STATE_TIP=$(echo "$STATE" | cut -d: -f3)
 STATE_DATE=$(echo "$STATE" | cut -d: -f4)
+STATE_NOCOMMIT=$(echo "$STATE" | cut -d: -f5)
 TODAY=$(date +%Y-%m-%d 2>/dev/null || echo "")
 
 if [ "$STATE_SESSION" = "$SESSION_ID" ]; then
     TURNS=$(( ${STATE_TURNS:-0} + 1 ))
     TIP_SHOWN="${STATE_TIP:-0}"
+    NOCOMMIT_WARNED="${STATE_NOCOMMIT:-0}"
 else
     TURNS=1
     TIP_SHOWN=0
+    NOCOMMIT_WARNED=0
 fi
 
-printf '%s:%d:%d:%s\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" > "$NOTIFIER_STATE_FILE"
+_save_state() {
+    printf '%s:%d:%d:%s:%d\n' "$SESSION_ID" "$TURNS" "$TIP_SHOWN" "${STATE_DATE:-}" "$NOCOMMIT_WARNED" > "$NOTIFIER_STATE_FILE"
+}
+_save_state
+
+# ── Uncommitted-progress check (once per session) ──────────────────────────────
+# A session can accumulate real work — many turns, files changed — without a
+# single commit landing. That is exactly the state in which a crash, a
+# /clear, or a context-window compaction loses the most. Fires at most once
+# per session: TURNS reached the threshold, HEAD hasn't moved since
+# session-start.sh recorded it, and the working tree actually has changes.
+if [ "$NOCOMMIT_WARNED" -eq 0 ] 2>/dev/null \
+    && [ "$TURNS" -ge "$NO_COMMIT_TURNS" ] 2>/dev/null \
+    && [ -f "$SESSION_HEAD_FILE" ] \
+    && command -v git >/dev/null 2>&1 \
+    && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    SESSION_HEAD=$(cat "$SESSION_HEAD_FILE" 2>/dev/null || echo "")
+    CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
+    if [ -n "$SESSION_HEAD" ] && [ "$SESSION_HEAD" = "$CURRENT_HEAD" ] \
+        && [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        NOCOMMIT_WARNED=1
+        _save_state
+        if [ "$USER_LANG" = "pt-BR" ] || [ "$USER_LANG" = "pt" ]; then
+            _notify "warning" "⚠️" "${TURNS} turnos de trabalho nesta sessão sem nenhum commit. Considere commitar o progresso para não arriscar perdê-lo."
+        elif [ "$USER_LANG" = "es" ]; then
+            _notify "warning" "⚠️" "${TURNS} turnos de trabajo en esta sesión sin ningún commit. Considera confirmar el progreso para no arriesgarte a perderlo."
+        else
+            _notify "warning" "⚠️" "${TURNS} turns of work this session with no commit yet. Consider committing your progress to avoid losing it."
+        fi
+    fi
+fi
 
 # ── Fast-path: skip only the once-per-day tip in purely conversational sessions
 # Context-window estimation must still run every Stop regardless of
@@ -216,7 +252,9 @@ if [ "$SKIP_TIP" -eq 0 ] && [ "${STATE_DATE:-}" != "${TODAY:-}" ] && ! _is_suppr
 
     [ -n "$TIP" ] && _notify "info" "ℹ️" "$TIP"
 
-    printf '%s:%d:1:%s\n' "$SESSION_ID" "$TURNS" "$TODAY" > "$NOTIFIER_STATE_FILE"
+    TIP_SHOWN=1
+    STATE_DATE="$TODAY"
+    _save_state
 fi
 
 exit 0

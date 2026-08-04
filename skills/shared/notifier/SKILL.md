@@ -55,9 +55,11 @@ Any unrecognized value → treat as `false`.
 - `preferences.json` missing or incomplete
 - `project.md` stale beyond `docs_stale_after_days`
 - `session-summary.md` last entry older than `docs_stale_after_days`
+- Last `/devteam:health-check` run older than `docs_stale_after_days`, or never recorded on a project already in motion — see `CLAUDE-md/notifications.md` § Health Check Staleness
 
 **stop/04-notifier conditions:**
-- Context window heuristic warning/critical (turn counter)
+- Context window estimate (transcript-based when available, turn-counter fallback otherwise) — see `CLAUDE-md/notifications.md` § Context Window Estimation
+- Uncommitted-progress warning: turn count past `session_no_commit_turns` with a dirty tree and no commit since session start, once per session — see `CLAUDE-md/notifications.md` § Uncommitted-Progress Warning
 - Tip of session (once per session, indexed by day)
 
 Do NOT duplicate the session-summary missing-entry warning — that is handled by `01-session-summary.sh`.
