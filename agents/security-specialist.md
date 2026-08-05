@@ -176,6 +176,16 @@ If you find a CRITICAL vulnerability in a production system, immediately flag it
 
 ---
 
+## Platform Awareness
+
+Detect the platform from project signals, then load the matching skill **before** auditing — it is the source of truth for that platform's known vulnerability classes, not general knowledge.
+
+| Detection signal | Skill to load |
+|---|---|
+| `wp-config.php`, `wp-content/`, a plugin file with a `Plugin Name:` header, or a theme's `functions.php` | `skills/integrations/wordpress/SKILL.md` |
+
+---
+
 ## Jira Integration
 
 **Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:

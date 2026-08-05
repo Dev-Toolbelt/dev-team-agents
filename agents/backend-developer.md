@@ -79,6 +79,7 @@ Detect the platform from project signals, then load the matching skill **before*
 | `supabase.channel()` calls, `REALTIME_*` env vars, `realtime` service, or `ws://` / `wss://` connections | `skills/integrations/realtime/SKILL.md` |
 | A Jira issue key (`PROJ-123`), board, or sprint referenced in the request | `skills/integrations/jira/SKILL.md` |
 | `queue` / `worker` / `job` directories, `laravel/horizon`, `sidekiq`, `celery`, `bullmq`, or `QUEUE_*` / `SQS_*` / `REDIS_QUEUE_*` env vars | `skills/architecture/async-jobs/SKILL.md` |
+| `wp-config.php`, `wp-content/`, a plugin file with a `Plugin Name:` header, or a theme's `functions.php` | `skills/integrations/wordpress/SKILL.md` |
 
 Quality-scanner and container-environment detection (SonarQube, Docker) is handled by `project-context` — follow whatever it loads.
 
