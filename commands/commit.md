@@ -96,6 +96,14 @@ Rules for grouping:
 - If all staged changes belong to a single layer or context, produce exactly one commit
 - Each commit must leave the codebase in a coherent state (compilable, runnable)
 
+**Graphify isolation.** `graphify-out/` is regenerated output (touched by the `99-graphify-refresh.sh` Stop hook whenever tracked source paths change), not hand-authored work. If staged or unstaged changes include anything under `graphify-out/`, **never bundle them into the same commit as the task's actual changes** — always split them into their own trailing commit(s), after every other group, e.g.:
+
+```
+chore(graphify): refresh dependency graph
+```
+
+If `graphify-out/` changes are unstaged when the rest of the task's changes are staged, stage them separately for their own commit rather than leaving them out or folding them into `git add -A`.
+
 ---
 
 ## Step 4 — Write commit messages

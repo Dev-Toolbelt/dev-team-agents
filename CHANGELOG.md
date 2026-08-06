@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.2] - 2026-08-06
+
+### Fixed
+- **`/devteam:commit` no longer bundles `graphify-out/` regenerated output into the task's commit** — new "Graphify isolation" rule in `commands/commit.md` always splits any staged or unstaged `graphify-out/` changes into their own trailing `chore(graphify): ...` commit, after the task's other layered commits.
+
 ## [2.30.1] - 2026-08-06
 
 ### Fixed
