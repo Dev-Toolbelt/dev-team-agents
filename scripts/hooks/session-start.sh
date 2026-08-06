@@ -9,7 +9,13 @@ unset BASH_ENV ENV
 set -uo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-USER_DATA_DIR="${PROJECT_ROOT}/.dev-team-agents/user-data"
+# user-data/ is shared state that lives only in the main worktree (it is
+# gitignored, so a linked worktree never has its own copy). Resolve it via
+# --git-common-dir so a session started inside .worktrees/<name>/ still reads
+# the same preferences.json / session-summary.md as the main checkout.
+MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -n "$MAIN_REPO_ROOT" ] || MAIN_REPO_ROOT="$PROJECT_ROOT"
+USER_DATA_DIR="${MAIN_REPO_ROOT}/.dev-team-agents/user-data"
 DOCS_DIR="${PROJECT_ROOT}/docs"
 PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

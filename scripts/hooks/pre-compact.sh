@@ -12,15 +12,15 @@ set -euo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # Skip if dev-team-agents user-data directory is not set up yet
-[ -d ".dev-team-agents/user-data" ] || exit 0
-
 # Only act when there is something to summarise.
 # shellcheck source=scripts/hooks/lib/session-summary-detect.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/session-summary-detect.sh"
 
+[ -d "${REPO_ROOT:-.}/.dev-team-agents/user-data" ] || exit 0
+
 [ "$HAS_CHANGES" = false ] && exit 0
 
-SUMMARY_FILE=".dev-team-agents/user-data/session-summary.md"
+SUMMARY_FILE="${REPO_ROOT:-.}/.dev-team-agents/user-data/session-summary.md"
 
 if [ ! -f "$SUMMARY_FILE" ] || ! grep -q "^## $TODAY" "$SUMMARY_FILE" 2>/dev/null; then
     cat >&2 <<EOF
