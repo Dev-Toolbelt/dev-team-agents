@@ -123,4 +123,10 @@ Every test follows Arrange → Act → Assert:
 // Assert — verify the outcome
 ```
 
+---
+
+## Verify the New File Lands Where the Runner Looks
+
+Before finishing, check the new test's path against the runner's actual `include`/`testMatch` config (`vitest.config.*`, `jest.config.*`, `phpunit.xml`, etc.), not just the project's stated convention. A test placed outside that glob (e.g. colocated under `src/` when the runner only scans `tests/`) passes silently by never running — it reports success while covering nothing. Run the scoped command from `skills/shared/scoped-test-execution/SKILL.md` against the new file specifically and confirm it was actually picked up, not skipped.
+
 Add these as comments in tests where the sections aren't obvious.

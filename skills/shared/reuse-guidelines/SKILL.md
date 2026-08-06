@@ -73,3 +73,5 @@ Both resolve to the same steps:
 ## Updating the Registry
 
 Adding, editing, or retiring a row is a `docs/development/*.md`-class change — same Structural layer as `code-standards.md`. Retiring a rule: delete the row, do not comment it out — a disabled rule that still parses as active is a false negative waiting to happen.
+
+**When the canonical implementation's dependency changes, update `detection` in the same change.** A `code-pattern` row's regex is often written against a specific import path or library name (e.g. `from '[r]eact-hot-toast'`). If a later task swaps that library (e.g. to `sonner`) without touching the registry row, the regex keeps parsing and `reuse-lint.sh` keeps exiting 0 — but it can no longer match the thing it exists to catch. This is a silent false negative, not a missing rule, so it will not surface on its own. Whenever you change what a `canonical_ref` file imports or depends on, grep the registry for rows whose `detection` references the old dependency and update them in the same commit.
