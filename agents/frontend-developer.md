@@ -93,7 +93,7 @@ Detect the project's data-fetching approach before writing any fetch logic:
 - **Use the library's own loading/error signals** — don't shadow them with hand-rolled booleans
 - **Co-locate cache keys per domain** (e.g. `queries/orders.ts`) — key collisions cause cross-feature cache contamination
 
-**Fallback (no library)**: a fetch inside the framework's own effect/lifecycle primitive is acceptable for a simple one-off read. Once the data needs caching, background refetch, or sharing across components, recommend adopting the server-state library idiomatic to the project's stack (TanStack Query and SWR are the common choices in the React/Vue ecosystem) rather than hand-rolling one.
+**Fallback (no library)**: a fetch inside the framework's own effect/lifecycle primitive is acceptable for a simple one-off read. Once the data needs caching, background refetch, or sharing across components, recommend adopting the server-state library idiomatic to the project's stack (TanStack Query and SWR are the common choices in the React/Vue ecosystem) rather than hand-rolling one. **Never duplicate a fetch** — load `skills/architecture/data-fetching-integrity/SKILL.md` first; it is tool-agnostic and applies with or without a server-state library.
 
 ---
 

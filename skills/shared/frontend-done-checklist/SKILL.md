@@ -14,6 +14,7 @@ Run through every item before declaring a task complete:
 - [ ] No console errors or warnings
 - [ ] No hardcoded strings for international projects (use i18n keys)
 - [ ] LCP measured (Lighthouse or DevTools) — target < 2.5 s
+- [ ] No duplicate/redundant API calls — checked against `skills/architecture/data-fetching-integrity/SKILL.md` (network panel: no repeated identical requests per action, no re-fetch on every render, no avoidable waterfall)
 - [ ] Linters pass
 - [ ] No debug artifacts
 - [ ] Browser console: no errors; warnings that require disproportionate effort may be skipped but must be noted

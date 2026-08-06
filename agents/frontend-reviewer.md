@@ -69,6 +69,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - **Blocking render**: synchronous operations in the render path; heavy computation without `useMemo`
 - **Bundle bloat**: new dependencies without checking their weight (`import-cost`, `bundlephobia`); barrel imports that defeat tree-shaking
 - **LCP impact**: images without dimensions (layout shift), render-blocking resources, missing `loading="lazy"` on below-fold images
+- **Duplicate/redundant API calls**: load `skills/architecture/data-fetching-integrity/SKILL.md` and check the diff against its symptom table (double-fire on mount, re-fetch on every render, siblings independently fetching the same resource, avoidable waterfalls, no de-dupe for concurrent identical requests, un-debounced fetch-on-input) — flag `[BLOCKING]` on any match
 
 ### 5. Accessibility (a11y)
 - Interactive elements that are not keyboard navigable (`div onClick` without `role` + `tabIndex`)

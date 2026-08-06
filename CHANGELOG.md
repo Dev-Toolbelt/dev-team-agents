@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-08-06
+
+### Added
+- **`data-fetching-integrity` skill** (`skills/architecture/data-fetching-integrity/SKILL.md`) — tool-agnostic gate for duplicate/redundant API calls in SPA/SSG frontends: symptom table (double-fire on mount, re-fetch on every render, siblings independently fetching the same resource, avoidable waterfalls, no de-dupe for concurrent identical requests, un-debounced fetch-on-input), root causes, and prevention rules.
+- **New mandatory rule wired into `frontend-developer`, `frontend-reviewer`, and `qa-specialist`** — developer loads the skill before writing fetch logic, reviewer flags a match as `[BLOCKING]`, QA validates via the network panel as `[BLOCKER]`. Added as a pre-delivery item in `skills/shared/frontend-done-checklist/SKILL.md`.
+
 ## [2.30.2] - 2026-08-06
 
 ### Fixed
