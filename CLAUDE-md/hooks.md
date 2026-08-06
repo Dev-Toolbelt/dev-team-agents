@@ -62,3 +62,13 @@ Each sub-script must:
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |
 | — | `scripts/hooks/lib/touched-paths.sh` | Shared library | Not a hook. Sourced by `stop.sh` to compute the touched-path set once; sub-scripts `02`, `02b`, `03`, `03b` consume `DEVTEAM_TOUCHED_PATHS` instead of re-forking `git status` + `git log`, and fall back to computing it themselves when run standalone. |
 | — | `scripts/hooks/lib/update-check.sh` | Shared library | Not a hook. The update-check engine behind `pre-tool-use/01-check-updates.sh`; also owns the auto-update path, which delegates the download to `scripts/lib/installer-fetch.sh` and **skips the upgrade entirely** when that library is absent rather than falling back to an unverified fetch. |
+
+### PreCompact Block — Ask, Don't Just Comply
+
+`pre-compact.sh` can only emit plain text on stdout — it has no way to render an interactive prompt. When its "SESSION SUMMARY REQUIRED" block appears, Claude must not silently write the entry (nor sit idle waiting on the user to notice). Instead, use `AskUserQuestion` with:
+
+- **"Generate and write it automatically" (recommended)** — Claude drafts the entry from the session's own changes and writes it immediately
+- **"I'll write it myself"** — wait for the user's own text, then write it verbatim
+- **"Show me a draft first"** — Claude drafts the entry and shows it before writing, so the user can edit before compaction proceeds
+
+This is a Claude-side response behavior, not a change to the hook script — the script's role stays limited to detection and blocking.

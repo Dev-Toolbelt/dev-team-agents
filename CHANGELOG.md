@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.1] - 2026-08-06
+
+### Fixed
+- **PreCompact block now prompts instead of silently complying** — `CLAUDE-md/hooks.md` documents that `pre-compact.sh` can only emit plain text, so on its "SESSION SUMMARY REQUIRED" block Claude must use `AskUserQuestion` (generate automatically / write it myself / show a draft first) instead of writing the entry without asking.
+
 ## [2.30.0] - 2026-08-06
 
 ### Added
