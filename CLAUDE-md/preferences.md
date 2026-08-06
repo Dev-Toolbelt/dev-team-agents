@@ -23,7 +23,8 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true,
-  "qa_browser": null
+  "qa_browser": null,
+  "ci_cd_detected": null
 }
 ```
 
@@ -51,6 +52,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `worktree_path` | `".dev-team-agents/worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) | `skills/shared/worktree/SKILL.md` (agent-executed) |
 | `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/docker-isolation.md` (agent-executed) |
 | `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here | `agents/qa-specialist.md` |
+| `ci_cd_detected` | `null` | Cached result of the GitHub Actions detection (`.github/workflows/*.yml`/`.yaml` present). `null` = not yet checked; `true`/`false` once checked. A cached `true` is trusted as-is; a cached `false` is always rechecked (cheap, and workflows get added over time) | `skills/shared/github-actions/SKILL.md` (agent-executed) |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 >

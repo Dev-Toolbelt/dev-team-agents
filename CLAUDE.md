@@ -230,7 +230,8 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 | `/devteam:devops` | devops-specialist | CI/CD, Docker, infra, deploy scripts |
 | `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ + mobile-developer¹ | Writing or updating tests only |
 | `/devteam:docs` | technical-writer | Docs, changelogs, runbooks, release notes |
-| `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; after creating (which pushes), loads `skills/shared/github-actions/SKILL.md` to watch Actions and auto-fix failures |
+| `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; before creating (which pushes), loads `skills/shared/github-actions/SKILL.md`, which asks a CI/CD-aware quiz when GitHub Actions is configured, then watches Actions and auto-fixes failures if the user opted in |
+| `/devteam:push` | none — thin wrapper around `skills/shared/github-actions/SKILL.md` | Pushing the current branch; asks a CI/CD-aware quiz (watch CI vs. push-only vs. other) when GitHub Actions is configured, otherwise pushes normally |
 | `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
 | `/devteam:learn` | technical-writer + software-architect¹ | Consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs |
 | `/devteam:rule` | technical-writer | Cataloging a mandatory reuse/standardization rule (`/devteam:rule use o componente XPTO em todo o projeto`) into `docs/development/reuse-guidelines.md`, classified as `code-pattern` / `path-convention` / `design-rule` |
@@ -243,7 +244,7 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 
 > **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:health-check` (operates on the local installation), `/devteam:learn` (operates on session evidence, not a branch scope), and `/devteam:rule` (catalogs a user-stated rule into `docs/development/reuse-guidelines.md`, not scoped to a branch or diff). These five are the complete list — verify with `grep -L current-context commands/*.md`. `/devteam:symlinks` and `/devteam:explain` also do not load it, but both name it in prose to record that it does not apply, so neither appears in that grep.
 
-> **Exception — commands that do NOT require Plan Gate:** the canonical per-command `plan_gate` value lives in `scripts/lib/commands.json` (`required` / `conditional` / `opt_out`). Only `/devteam:update`, `/devteam:symlinks`, and `/devteam:health-check` are `opt_out` — thin script/skill runners with their own interactive guardrails. `/devteam:review` and `/devteam:explain` are `conditional` and read-only by design (neither body carries a plan-gate step — review reads the diff and delegates; explain answers a question and writes nothing), so in practice both execute directly.
+> **Exception — commands that do NOT require Plan Gate:** the canonical per-command `plan_gate` value lives in `scripts/lib/commands.json` (`required` / `conditional` / `opt_out`). Only `/devteam:update`, `/devteam:symlinks`, `/devteam:health-check`, and `/devteam:push` are `opt_out` — thin script/skill runners with their own interactive guardrails. `/devteam:review` and `/devteam:explain` are `conditional` and read-only by design (neither body carries a plan-gate step — review reads the diff and delegates; explain answers a question and writes nothing), so in practice both execute directly.
 
 **Command tier mirrors its lead agent's tier.** Each row in `scripts/lib/commands.json` carries a `tier` and an `agent`, and the two are **not** independent knobs: on opencode the snippet's `agent` makes the command run *as* that agent while `model` is resolved from the **command's** tier, so a divergence runs an agent on a model that is not its own. `helpers/agent-lint.sh` (`check_command_roster`) fails on any mismatch, and on an `agent` with no file in `agents/`. The CI contract checker validates rendered output and only catches a dangling ref — the source-side rule is the lint's.
 
@@ -428,6 +429,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 - **Always write in English** — even if the conversation with the user is in another language
 - This file is read at agent startup via `skills/shared/project-context/SKILL.md`
 - The `Stop` dispatcher (`scripts/hooks/stop.sh`) runs `scripts/hooks/stop/01-session-summary.sh`, which detects when this is missing and prompts you
+- **A push is also a finalization signal, not only session end.** `/devteam:push`, and the push that `/devteam:pr` triggers via `gh pr create`, run the same detection the `Stop` hook uses (dirty working tree, staged changes, or a commit made today — see `scripts/hooks/lib/session-summary-detect.sh`) right after the push succeeds, and write today's entry then if it is missing, instead of waiting for the session to end.
 
 **Multi-agent sessions**: when multiple agents work in the same session, each agent **appends** its contribution to today's entry — never overwrites. Use the agent name as a sub-heading:
 
@@ -489,13 +491,14 @@ When making a git commit for any task:
 
 ## Push & CI Monitoring Rule
 
-When the user **explicitly asks to push** (a commit alone does not count) and the GitHub CLI is configured (`gh auth status` succeeds):
+When the user **explicitly asks to push** (a commit alone does not count) — including via `/devteam:push` — and the GitHub CLI is configured (`gh auth status` succeeds):
 
 1. **Load `skills/shared/github-actions/SKILL.md`** and follow it.
-2. If the repo has workflow files (`.github/workflows/*`), watch the triggered run and, on failure, run the capped **diagnose → fix → re-push** loop (max 3 attempts), reporting a **one-line summary** to the user each cycle.
-3. Stop and hand back to the user when the run is green, the 3-attempt cap is reached, or the failure is not auto-fixable (missing secret, infra, required approval). Never disable/skip a workflow or weaken a test to force green.
+2. If the repo has workflow files (`.github/workflows/*`, cached in `preferences.json` as `ci_cd_detected`), **ask the user first** with a dynamic quiz (`AskUserQuestion`): watch CI and auto-fix (recommended), push only, or other. Only proceed to watching if they opt in.
+3. If watching, watch the triggered run and, on failure, run the capped **diagnose → fix → re-push** loop (max 3 attempts), reporting a **one-line summary** to the user each cycle.
+4. Stop and hand back to the user when the run is green, the 3-attempt cap is reached, or the failure is not auto-fixable (missing secret, infra, required approval). Never disable/skip a workflow or weaken a test to force green.
 
-If `gh` is not configured or there are no workflow files, push normally and skip the monitoring loop.
+If `gh` is not configured or there are no workflow files, push normally and skip both the quiz and the monitoring loop. The same quiz gates the push that happens when opening a PR via `/devteam:pr`.
 
 ---
 

@@ -977,7 +977,8 @@ else
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true,
-  "qa_browser": null
+  "qa_browser": null,
+  "ci_cd_detected": null
 }
 EOF
         echo "→ User preferences: .dev-team-agents/user-data/preferences.json"

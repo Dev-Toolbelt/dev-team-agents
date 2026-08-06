@@ -156,7 +156,8 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:devops` | Infraestrutura / CI/CD — devops-specialist |
 | `/devteam:tester` | Apenas testes — backend-test-specialist + frontend-test-specialist |
 | `/devteam:docs` | Documentação — technical-writer |
-| `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar |
+| `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar; antes do push, pergunta com um quiz sensível a CI/CD (acompanhar Actions vs. só o push) quando o GitHub Actions está configurado |
+| `/devteam:push` | Push — pergunta com um quiz sensível a CI/CD (acompanhar CI + auto-correção vs. só o push vs. outro) quando o GitHub Actions está configurado; faz push normalmente caso contrário |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
 | `/devteam:rule` | Padronização — cataloga uma regra obrigatória de reuso (ex.: `/devteam:rule use o componente XPTO em todo o projeto`) em `docs/development/reuse-guidelines.md`, para que trabalhos futuros nunca a ignorem. Classificada como `code-pattern`, `path-convention` ou `design-rule`; aplicada pelo gate de review e, para os tipos mecanizáveis, por um lint no Stop hook |
@@ -176,7 +177,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 /devteam:explain SPA, SSR, tenant, middleware
 ```
 
-**Em qual modelo cada comando roda.** Todo comando declara um tier em `scripts/lib/commands.json`, e no opencode e no Codex esse tier vira um modelo concreto na hora da instalação. No Claude Code o corpo é symlinkado como está, então o tier só chega até ele por uma chave `model:` no frontmatter do comando — e essa chave é usada apenas nos sete comandos `repetitive` (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), que rodam em Haiku. Todos os outros herdam o modelo em que sua sessão está. O motivo é deliberado: `model:` sobrescreve a sessão, então fixar um comando de planejamento em Opus desfaria em silêncio uma sessão que você baixou para economizar, enquanto um pin em Haiku só pode custar menos do que você escolheu.
+**Em qual modelo cada comando roda.** Todo comando declara um tier em `scripts/lib/commands.json`, e no opencode e no Codex esse tier vira um modelo concreto na hora da instalação. No Claude Code o corpo é symlinkado como está, então o tier só chega até ele por uma chave `model:` no frontmatter do comando — e essa chave é usada apenas nos comandos `repetitive` (`docs`, `pr`, `push`, `commit`, `learn`, `update`, `symlinks`, `health-check`), que rodam em Haiku. Todos os outros herdam o modelo em que sua sessão está. O motivo é deliberado: `model:` sobrescreve a sessão, então fixar um comando de planejamento em Opus desfaria em silêncio uma sessão que você baixou para economizar, enquanto um pin em Haiku só pode custar menos do que você escolheu.
 
 No **Codex especificamente**, esse pin por tier vale para os **agentes** renderizados em `.codex/agents/*.toml`. O entrypoint oficial local ao projeto é `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; a skill em si é só orquestração e depende dos agentes disparados para aplicar a política de modelo/esforço no Codex.
 

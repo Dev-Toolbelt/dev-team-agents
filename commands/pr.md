@@ -123,7 +123,11 @@ Wait for the user to approve the draft before creating the PR.
 
 ## Post-create — Watch GitHub Actions
 
-Creating a PR pushes the branch, which counts as an explicit push. After `gh pr create` succeeds, load `skills/shared/github-actions/SKILL.md` and follow it: check its preconditions (gh authenticated + `.github/workflows/*` present), watch the triggered run, and on failure run its capped diagnose→fix→re-push loop, reporting a one-line summary each cycle. If the preconditions fail, skip silently.
+Creating a PR pushes the branch, which counts as an explicit push. Before `gh pr create` runs the push, load `skills/shared/github-actions/SKILL.md` and follow it in full: check its preconditions (gh authenticated + `.github/workflows/*` present, using the cached `ci_cd_detected` preference), then its quiz step — ask the user whether to watch CI or just push, per that skill's Flow § 0. On failure while watching, run its capped diagnose→fix→re-push loop, reporting a one-line summary each cycle. If the preconditions fail, skip silently and push normally.
+
+## Post-create — Session summary (opening a PR is a finalization signal)
+
+After `gh pr create` succeeds, apply the Session Summary Rule from `CLAUDE.md` right now rather than waiting for session end: check `git status --porcelain`, `git diff --cached`, and today's commits — the same detection `scripts/hooks/lib/session-summary-detect.sh` uses. If there is a signal and `.dev-team-agents/user-data/session-summary.md` has no entry for today, write one (Done/Decisions/Next, in English) before finishing the command.
 
 ---
 

@@ -10,20 +10,35 @@ Load this skill **only when the user explicitly asks to push** (e.g., "push", "f
 ## Preconditions (check in order, stop if any fails)
 
 1. `gh auth status` succeeds → the GitHub CLI is configured and authenticated.
-2. The repo has at least one workflow: `.github/workflows/*.yml` or `*.yaml` exists.
+2. The repo has at least one workflow: `.github/workflows/*.yml` or `*.yaml` exists. Use the cached `ci_cd_detected` field in `.dev-team-agents/user-data/preferences.json` instead of re-scanning every time:
+   - `true` → trust it, skip the scan.
+   - `null` or `false` → scan `.github/workflows/*.yml`/`*.yaml`, then write the result back to `ci_cd_detected`. A cached `false` is always rechecked (cheap, and workflows get added over time); a cached `true` never is.
 
 If `gh` is **not** configured → push normally and skip the rest of this skill (do not attempt to install or configure `gh`).
 If there are **no workflow files** → push normally and tell the user in one line there are no Actions to watch.
 
 ## Flow
 
+### 0. Ask how to proceed (quiz)
+
+Both preconditions passed — CI/CD is configured for this repo. Before pushing, load `skills/shared/interaction-patterns/SKILL.md` and ask with `AskUserQuestion` (single-select, options in the user's `language` from `preferences.json`):
+
+> "This project has GitHub Actions configured. How would you like to proceed?"
+- **Executar `git push` + acompanhar CI (recomendado)** — push, then watch the triggered run and auto-fix on failure (continue to step 1)
+- **Somente git push** — push and stop; do not watch Actions
+- *("Other" is offered automatically by `AskUserQuestion` for free-text answers — interpret it as the user's intent, e.g. asking to also open a PR, and act on it instead of guessing.)*
+
+If the user picks **Somente git push**, run the push and stop — skip steps 2–4 below entirely.
+
+This quiz applies both when the user asks to push directly and when a push happens as part of opening a PR (`gh pr create`) — see `commands/pr.md`.
+
 ### 1. Push
 
 Run the push the user asked for. Capture the branch name.
 
-### 2. Suggest watching the run
+### 2. Watch the run
 
-Immediately after a successful push, tell the user you will watch the triggered Actions run, then start watching:
+Tell the user you are watching the triggered Actions run, then start watching:
 
 ```bash
 # Give GitHub a moment to register the run, then find it for this branch/commit

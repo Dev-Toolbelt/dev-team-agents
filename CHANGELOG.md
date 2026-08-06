@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.0] - 2026-08-06
+
+### Added
+- **`/devteam:push` command** — thin wrapper around `skills/shared/github-actions/SKILL.md`; asks a CI/CD-aware quiz (watch CI + auto-fix vs. push-only vs. other) when GitHub Actions is configured, otherwise pushes normally. `plan_gate: opt_out`.
+- **CI/CD-aware quiz before pushing** — `skills/shared/github-actions/SKILL.md` now asks the user (via `AskUserQuestion`) whether to watch CI or just push, instead of always watching. The same quiz gates the push triggered by `/devteam:pr`'s `gh pr create`.
+- **`ci_cd_detected` preference** — caches the GitHub Actions detection result in `preferences.json` (`null` = unchecked, `true` trusted as-is, `false` always rechecked).
+- **Push as a session-summary finalization signal** — `/devteam:push` and the push inside `/devteam:pr` now write today's `session-summary.md` entry right after a successful push if one is missing, instead of waiting for session end.
+
 ## [2.29.0] - 2026-08-03
 
 ### Added

@@ -156,7 +156,8 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:devops` | Infrastructure / CI/CD — devops-specialist |
 | `/devteam:tester` | Tests only — backend-test-specialist + frontend-test-specialist |
 | `/devteam:docs` | Documentation — technical-writer |
-| `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating |
+| `/devteam:pr` | Pull request — drafts title + description, asks for confirmation before creating; before the push, asks a CI/CD-aware quiz (watch Actions vs. push-only) when GitHub Actions is configured |
+| `/devteam:push` | Push — asks a CI/CD-aware quiz (watch CI + auto-fix vs. push-only vs. other) when GitHub Actions is configured; pushes normally otherwise |
 | `/devteam:commit` | Commit — reads staged changes, groups by layer, writes and runs commits |
 | `/devteam:learn` | Knowledge capture — consolidates session decisions, patterns, and discoveries into docs, wiki, and ADRs, then auto-commits the result (declares the commit manifest in its plan) |
 | `/devteam:rule` | Standardization — catalogs a mandatory reuse rule (e.g. `/devteam:rule use o componente XPTO em todo o projeto`) into `docs/development/reuse-guidelines.md`, so future work never overlooks it. Classified as `code-pattern`, `path-convention`, or `design-rule`; enforced by the review gate and, for the mechanizable types, by a Stop-hook lint |
@@ -176,7 +177,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 /devteam:explain SPA, SSR, tenant, middleware
 ```
 
-**Which model a command runs on.** Every command declares a tier in `scripts/lib/commands.json`, and on opencode and Codex that tier resolves to a concrete model at install time. On Claude Code the body is symlinked as-is, so the tier reaches it only through a `model:` key in the command's frontmatter — and that key is used on the seven `repetitive` commands alone (`docs`, `pr`, `commit`, `learn`, `update`, `symlinks`, `health-check`), which run on Haiku. Every other command inherits whatever model your session is set to. The reason is deliberate: `model:` overrides the session, so pinning a planning command to Opus would silently undo a session you lowered to save cost, while a Haiku pin can only ever cost less than what you chose.
+**Which model a command runs on.** Every command declares a tier in `scripts/lib/commands.json`, and on opencode and Codex that tier resolves to a concrete model at install time. On Claude Code the body is symlinked as-is, so the tier reaches it only through a `model:` key in the command's frontmatter — and that key is used on the `repetitive` commands alone (`docs`, `pr`, `push`, `commit`, `learn`, `update`, `symlinks`, `health-check`), which run on Haiku. Every other command inherits whatever model your session is set to. The reason is deliberate: `model:` overrides the session, so pinning a planning command to Opus would silently undo a session you lowered to save cost, while a Haiku pin can only ever cost less than what you chose.
 
 For **Codex specifically**, that tier pin applies to the rendered **agents** in `.codex/agents/*.toml`. The official project-local entrypoint is `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; the skill itself is orchestration only and relies on the spawned agents to enforce the Codex-side model/effort policy.
 

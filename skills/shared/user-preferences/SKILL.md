@@ -38,7 +38,8 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
   "worktree_base_branch": null,
   "worktree_path": ".dev-team-agents/worktrees",
   "worktree_docker_isolate": true,
-  "qa_browser": null
+  "qa_browser": null,
+  "ci_cd_detected": null
 }
 ```
 
@@ -66,6 +67,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `worktree_path` | string | `".dev-team-agents/worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 | `qa_browser` | string or null | `null` | Browser the `qa-specialist` drives (`null` = ask on first use) |
+| `ci_cd_detected` | bool or null | `null` | Cached GitHub Actions detection (`null` = unchecked) |
 
 > For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.
 
