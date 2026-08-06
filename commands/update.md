@@ -1,4 +1,6 @@
 ---
+description: Check for and apply dev-team-agents updates
+argument-hint: [<version tag>]
 model: haiku
 ---
 

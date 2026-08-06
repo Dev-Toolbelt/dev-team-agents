@@ -1,4 +1,5 @@
 ---
+description: Validate and repair the dev-team-agents installation
 model: haiku
 ---
 

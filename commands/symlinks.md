@@ -1,4 +1,5 @@
 ---
+description: Diagnose and repair broken dev-team-agents symlinks
 model: haiku
 ---
 

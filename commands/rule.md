@@ -1,4 +1,6 @@
 ---
+description: Catalog a mandatory reuse or standardization rule
+argument-hint: <rule description>
 model: haiku
 ---
 

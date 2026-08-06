@@ -1,3 +1,8 @@
+---
+description: Onboard this project into dev-team-agents (first run or refresh)
+argument-hint: [notes about the project]
+---
+
 Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt. Setup writes to project-level files (`CLAUDE.md`, `docs/`) — confirm the branch is the one the user expects before any write, and treat every finite-answer question in this flow as a quiz.
 
 ---

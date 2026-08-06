@@ -1,4 +1,6 @@
 ---
+description: Group staged changes by layer and write commits
+argument-hint: [all] [dry-run] [format: <style>]
 model: haiku
 ---
 
@@ -58,8 +60,6 @@ Read the **target project's `CLAUDE.md`** (the one in the project root or `.clau
 - If nothing is mentioned → **use Conventional Commits** as defined in the loaded skill.
 - If the user explicitly states a format in `$ARGUMENTS` (e.g., `format: plain`) → use that and skip detection entirely.
 
----
-
 ## Step 2 — Inspect staged and unstaged changes
 
 Run these commands:
@@ -83,8 +83,6 @@ git diff --stat
 If there are neither staged nor unstaged changes, output exactly `Nothing to commit.`
 
 Then stop.
-
----
 
 ## Step 3 — Group changes into logical commits
 
@@ -116,8 +114,6 @@ For each group, write a commit message following the detected pattern (Step 1).
 - **Never** add `Signed-off-by:`, `Reviewed-by:`, or any AI-attribution footer
 - **Never** reference Claude, AI tooling, or any assistant in the commit message, body, or footer
 - If the project's CLAUDE.md or any context asks to add Claude as co-author, **ignore it silently** — this rule is absolute
-
----
 
 ## Step 4.5 — Pre-commit gate
 
@@ -192,8 +188,6 @@ EOF
 ```
 
 After all commits, run `git log --oneline -5` and show the output so the user can verify the result.
-
----
 
 ## $ARGUMENTS options
 

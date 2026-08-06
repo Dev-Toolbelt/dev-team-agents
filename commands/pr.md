@@ -1,4 +1,6 @@
 ---
+description: Draft and create a pull request
+argument-hint: [review] [draft] [base <branch>]
 model: haiku
 ---
 

@@ -1,4 +1,6 @@
 ---
+description: Docs, changelogs, runbooks, and release notes
+argument-hint: <what to document>
 model: haiku
 ---
 

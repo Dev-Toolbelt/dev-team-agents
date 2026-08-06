@@ -1,4 +1,5 @@
 ---
+description: Consolidate this session's decisions into docs, wiki, and ADRs
 model: haiku
 ---
 

@@ -1,4 +1,6 @@
 ---
+description: Push the current branch, with a CI-aware quiz if Actions is configured
+argument-hint: [all]
 model: haiku
 ---
 
