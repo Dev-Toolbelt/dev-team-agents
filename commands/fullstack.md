@@ -94,7 +94,7 @@ After the phases above complete — including any resolution agents:
 
 ---
 
-**PLAN GATE — mandatory for every spawned agent:**
+**PLAN GATE:** Applies to Phase 1 and to the resolution agents re-spawned after findings — both write files. It does NOT apply to Phase 3's `code-reviewer`/`qa-specialist` handoff, which the command spawns automatically ("no user confirmation") because it's pure review/validation that produces a report, not a file change.
 1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.

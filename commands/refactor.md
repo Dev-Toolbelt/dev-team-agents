@@ -161,7 +161,7 @@ After the phases above complete — including any resolution agents:
 
 ---
 
-**PLAN GATE — mandatory for every spawned agent:**
+**PLAN GATE:** Applies to Phase 3 only — the only phase that writes files without its own dedicated gate. Phases 1, 2, and 4 already have their own checkpoints ("nothing changes in the code" in Phase 1 and 2, plus a named `▶ CHECKPOINT`; Phase 4 is `code-reviewer`/`qa-specialist`, review-only) — this gate is not duplicated on top of those.
 1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
