@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DISABLED (2026-08-06) — pending review, see CLAUDE-md/hooks.md § Disabled Hooks.
+# Rename back to 02b-telemetry.sh to re-enable.
 # PreToolUse sub-script: queue telemetry events for agent spawns and devteam commands.
 # Reads the Claude Code hook payload from stdin; exits 0 always (never blocks tool use).
 set -euo pipefail

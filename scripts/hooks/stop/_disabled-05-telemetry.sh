@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DISABLED (2026-08-06) — pending review, see CLAUDE-md/hooks.md § Disabled Hooks.
+# Rename back to 05-telemetry.sh to re-enable.
 # Stop sub-script: queue a session_end telemetry event and flush if TTL reached.
 # Exits 0 always — telemetry must never block the Stop hook.
 set -euo pipefail

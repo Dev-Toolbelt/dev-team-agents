@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DISABLED (2026-08-06) — pending review, see CLAUDE-md/hooks.md § Disabled Hooks.
+# Rename back to 04-notifier.sh to re-enable.
 # Stop sub-script: emits context-window warnings and a rotating tip of session
 # using the DEV TEAM AGENTS notification format.
 #
