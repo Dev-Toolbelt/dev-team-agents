@@ -7,10 +7,13 @@ GRAPH="graphify-out/graph.json"
 [ -f "$GRAPH" ] || exit 0
 
 INPUT=$(cat)
-TOOL_NAME=$(printf '%s' "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
-case "$TOOL_NAME" in
-    Glob|Grep) ;;
+# Pure-bash substring match instead of grep|sed: skips 2 forked subprocesses
+# on every tool call that isn't Glob/Grep — the common case whenever a
+# knowledge graph is present.
+case "$INPUT" in
+    *'"tool_name":"Glob"'*|*'"tool_name": "Glob"'*) ;;
+    *'"tool_name":"Grep"'*|*'"tool_name": "Grep"'*) ;;
     *) exit 0 ;;
 esac
 

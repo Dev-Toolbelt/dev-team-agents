@@ -12,18 +12,6 @@ TELEMETRY_SEND="$SCRIPT_DIR/../../helpers/telemetry-send.sh"
 USER_DATA_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)/user-data"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 
-# Consent guard — single definition in scripts/lib/telemetry-guard.sh, fails
-# closed. A missing guard file means no consent could be verified: skip.
-[ -f "$SCRIPT_DIR/../../lib/telemetry-guard.sh" ] || exit 0
-# Path is repo-root-relative on purpose — see scripts/helpers/telemetry-send.sh.
-# The directive must sit directly above the `.` line; a guard between the two
-# detaches it and the source goes unresolved again.
-# shellcheck source=scripts/lib/telemetry-guard.sh
-. "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
-
-_telemetry_enabled "$PREFS_FILE" || exit 0
-command -v python3 >/dev/null 2>&1 || exit 0
-
 # Read the hook payload (stdin was captured by the dispatcher into DEVTEAM_HOOK_PAYLOAD,
 # but PreToolUse dispatcher passes it via stdin directly to each sub-script)
 PAYLOAD=""
@@ -35,18 +23,30 @@ fi
 
 [ -n "$PAYLOAD" ] || exit 0
 
-# Cheap early-exit before forking python3: only Task and Bash tool calls are
-# ever queued below, so a raw substring check on the still-unparsed payload
-# skips the fork for every other tool (Read, Edit, Grep, ...) — the majority
-# of calls in a session. The match itself also tells us which tool matched,
-# so no separate python3 parse of tool_name is needed — one less fork per
-# Task/Bash call. The python3 parse of tool_input below remains the source
-# of truth for the Bash branch's command string.
+# Cheap early-exit BEFORE the consent guard / python3 check below: only Task
+# and Bash tool calls are ever queued, so a raw substring check on the
+# still-unparsed payload skips the consent subshell and python3 fork entirely
+# for every other tool (Read, Edit, Grep, ...) — the majority of calls in a
+# session. The match itself also tells us which tool matched, so no separate
+# python3 parse of tool_name is needed. The python3 parse of tool_input below
+# remains the source of truth for the Bash branch's command string.
 case "$PAYLOAD" in
     *'"tool_name":"Task"'*|*'"tool_name": "Task"'*)   TOOL_NAME="Task" ;;
     *'"tool_name":"Bash"'*|*'"tool_name": "Bash"'*)   TOOL_NAME="Bash" ;;
     *) exit 0 ;;
 esac
+
+# Consent guard — single definition in scripts/lib/telemetry-guard.sh, fails
+# closed. A missing guard file means no consent could be verified: skip.
+[ -f "$SCRIPT_DIR/../../lib/telemetry-guard.sh" ] || exit 0
+# Path is repo-root-relative on purpose — see scripts/helpers/telemetry-send.sh.
+# The directive must sit directly above the `.` line; a guard between the two
+# detaches it and the source goes unresolved again.
+# shellcheck source=scripts/lib/telemetry-guard.sh
+. "$SCRIPT_DIR/../../lib/telemetry-guard.sh"
+
+_telemetry_enabled "$PREFS_FILE" || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
 
 case "$TOOL_NAME" in
     Task)
