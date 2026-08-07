@@ -64,37 +64,7 @@ When emitting system notifications (context window warnings, missing config, tip
 
 ## Mandatory Plan Mode — No Silent Execution
 
-**Before executing any non-trivial task, you MUST present a plan and wait for approval.**
-
-A "non-trivial task" is any task that involves:
-- Creating, modifying, or deleting files
-- Running commands with side effects (installs, migrations, deploys)
-- Architectural decisions or design choices
-- Generating project documentation or backlog items
-- Any task with more than one step
-
-### How to Enter Plan Mode
-
-1. Present the plan using the canonical format from `.dev-team-agents/templates/plan-template.md`
-2. End the plan with: `---` followed by `**Awaiting your approval before proceeding.**`
-3. Stop. Do not execute anything.
-4. Only proceed after the user explicitly approves (e.g., "approved", "go ahead", "proceed")
-
-### What Requires a Plan
-- Implementing a feature or fix
-- Creating or modifying architecture documents
-- Running migrations or schema changes
-- Setting up environments or CI/CD
-- Security or performance changes
-- Any task a workflow step describes as "the agent will..."
-
-### What Does NOT Require a Plan
-- Answering a question
-- Explaining existing code
-- Showing a file's contents
-- Single-line typo fixes
-
-**Never execute and then explain. Always plan first, execute second.**
+**Load `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task.** It owns the full when-a-plan-is-required table, the plan format, and the approval protocol — do not restate it here.
 
 ---
 
@@ -160,6 +130,8 @@ After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` fiel
 This is the wiki's **read** path. Writing entries is `skills/shared/docs-sync/references/wiki-format.md`, which owns the index row format the lookup depends on.
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
+
+**Trivial-task exception**: when the task is confined to a single file with a small, well-specified change — the same bar as the Plan Mode "single-line typo fix" exception in `skills/shared/plan-mode/SKILL.md` — skip this loading order entirely and load only `CLAUDE.md` plus the target file. Fall back to the full order the moment the task turns out to touch more than one file or needs architectural context.
 
 ---
 

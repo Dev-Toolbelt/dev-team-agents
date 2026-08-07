@@ -72,13 +72,13 @@ When a changed file matches multiple patterns:
 
 ## Default Rule
 
-When scope is unclear — no strong file-path or text match — **spawn `software-architect` first**:
+When scope is unclear — no strong file-path or text match — **ask before spawning**, per the Quiz-first Rule (`skills/shared/interaction-patterns/SKILL.md`):
 
-1. `software-architect` analyzes the task and produces a plan
-2. Plan identifies which domains are affected
-3. Downstream agents are spawned based on the plan output
+1. Use `AskUserQuestion` (single-select) offering the likely domains: Backend, Frontend, Database, DevOps, Security, Architecture, and "Not sure — let an agent classify it."
+2. If the user picks a domain, spawn the matching agent directly — no classification agent needed.
+3. Only if the user picks "Not sure" does this fall back to spawning `software-architect` first to analyze the task and produce a plan that identifies which domains are affected; downstream agents are then spawned from that plan.
 
-This prevents incorrect agents from producing work that conflicts with the actual architecture.
+This avoids paying for a full reasoning-tier agent invocation just to classify an ambiguous request, while still preventing incorrect agents from producing work that conflicts with the actual architecture when the user genuinely doesn't know.
 
 ---
 
