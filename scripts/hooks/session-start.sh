@@ -63,14 +63,22 @@ USER_LANG="en"
 SUPPRESS="false"
 
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    _read_pref() {
-        python3 -c \
-            "import json,sys; d=json.load(open('$PREFS_FILE')); v=d.get('$1',$2); print(str(v).lower() if isinstance(v,bool) else v)" \
-            2>/dev/null || echo "$2"
-    }
-    STALE_DAYS=$(_read_pref docs_stale_after_days 30)
-    USER_LANG=$(_read_pref language en)
-    SUPPRESS=$(_read_pref suppress_notifications false)
+    # Single fork reading all three keys at once (was 3 separate python3
+    # subprocess calls) — same defaults, same fallback-to-default on
+    # malformed/missing file.
+    _ALL_PREFS=$(python3 -c "
+import json
+try:
+    d = json.load(open('$PREFS_FILE'))
+except Exception:
+    d = {}
+def s(v):
+    return str(v).lower() if isinstance(v, bool) else str(v)
+print('\x1f'.join([s(d.get('docs_stale_after_days', 30)), s(d.get('language', 'en')), s(d.get('suppress_notifications', False))]))
+" 2>/dev/null || true)
+    if [ -n "$_ALL_PREFS" ]; then
+        IFS=$'\x1f' read -r STALE_DAYS USER_LANG SUPPRESS <<< "$_ALL_PREFS"
+    fi
 fi
 
 # ── Write session ID for the notifier turn counter ────────────────

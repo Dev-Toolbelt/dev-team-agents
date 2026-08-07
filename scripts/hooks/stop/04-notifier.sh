@@ -44,19 +44,31 @@ NO_COMMIT_TURNS=8
 
 # ── Read preferences (overrides defaults when file is valid) ──────────────────
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    _pref() {
-        python3 -c \
-            "import json,sys; d=json.load(open('$PREFS_FILE')); v=d.get('$1',$2); print(str(v).lower() if isinstance(v,bool) else v)" \
-            2>/dev/null || echo "$2"
-    }
-    SUPPRESS=$(_pref suppress_notifications false)
-    USER_LANG=$(_pref language en)
-    WARN_PCT=$(_pref context_window_percent_warning 55)
-    CRIT_PCT=$(_pref context_window_percent_limit 60)
-    # shellcheck disable=SC2034  # read for backward compatibility only, see comment above
-    TRANSCRIPT_MULTIPLIER=$(_pref transcript_multiplier 1.8)
-    MODEL_MAX_TOKENS=$(_pref model_max_tokens 200000)
-    NO_COMMIT_TURNS=$(_pref session_no_commit_turns 8)
+    # Single fork reading all seven keys at once (was 7 separate python3
+    # subprocess calls) — same defaults, same fallback-to-default behavior.
+    _ALL_PREFS=$(python3 -c "
+import json
+try:
+    d = json.load(open('$PREFS_FILE'))
+except Exception:
+    d = {}
+def s(v):
+    return str(v).lower() if isinstance(v, bool) else str(v)
+keys = [
+    ('suppress_notifications', False),
+    ('language', 'en'),
+    ('context_window_percent_warning', 55),
+    ('context_window_percent_limit', 60),
+    ('transcript_multiplier', 1.8),
+    ('model_max_tokens', 200000),
+    ('session_no_commit_turns', 8),
+]
+print('\x1f'.join(s(d.get(k, dv)) for k, dv in keys))
+" 2>/dev/null || true)
+    if [ -n "$_ALL_PREFS" ]; then
+        # shellcheck disable=SC2034  # TRANSCRIPT_MULTIPLIER read for backward compatibility only, see comment above
+        IFS=$'\x1f' read -r SUPPRESS USER_LANG WARN_PCT CRIT_PCT TRANSCRIPT_MULTIPLIER MODEL_MAX_TOKENS NO_COMMIT_TURNS <<< "$_ALL_PREFS"
+    fi
 fi
 
 # ── Helper: check suppression ─────────────────────────────────────────────────
@@ -167,34 +179,69 @@ if [ -n "${DEVTEAM_HOOK_PAYLOAD:-}" ] && [ -f "${DEVTEAM_HOOK_PAYLOAD:-}" ] && c
         2>/dev/null || true)
 fi
 
+# Incremental scan cache: transcripts only grow (append-only JSONL), so a
+# Stop hook that already scanned up to byte N last time never needs to
+# re-read bytes [0, N) again — only what was appended since. Cache file
+# holds transcript_path\x1foffset\x1flast_context. A path mismatch (new
+# session) or an offset past EOF (transcript rotated/truncated) invalidates
+# the cache and falls back to a full scan, same as before this change.
+TRANSCRIPT_CACHE_FILE="${USER_DATA_DIR}/.notifier-transcript-cache"
+CACHED_PATH="" CACHED_OFFSET=0 CACHED_CONTEXT=0
+if [ -f "$TRANSCRIPT_CACHE_FILE" ]; then
+    IFS=$'\x1f' read -r CACHED_PATH CACHED_OFFSET CACHED_CONTEXT < "$TRANSCRIPT_CACHE_FILE" 2>/dev/null || true
+fi
+
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] && command -v python3 >/dev/null 2>&1; then
-    TRANSCRIPT_TOKENS=$(python3 -c "
+    FILE_SIZE=$(stat -f %z "$TRANSCRIPT_PATH" 2>/dev/null || stat -c %s "$TRANSCRIPT_PATH" 2>/dev/null || echo 0)
+    START_OFFSET=0
+    LAST_CONTEXT_SEED=0
+    if [ "$CACHED_PATH" = "$TRANSCRIPT_PATH" ] \
+        && [ "${CACHED_OFFSET:-0}" -le "${FILE_SIZE:-0}" ] 2>/dev/null; then
+        START_OFFSET="${CACHED_OFFSET:-0}"
+        LAST_CONTEXT_SEED="${CACHED_CONTEXT:-0}"
+    fi
+
+    SCAN_RESULT=$(python3 -c "
 import json
-last_context = 0
+path = '${TRANSCRIPT_PATH}'
+start_offset = ${START_OFFSET}
+last_context = ${LAST_CONTEXT_SEED}
+new_offset = start_offset
 try:
-    with open('${TRANSCRIPT_PATH}') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+    with open(path, 'rb') as f:
+        f.seek(start_offset)
+        data = f.read()
+    # Only advance the offset past complete lines — a partial trailing line
+    # (transcript still being appended) is re-read next time instead of
+    # being split across two scans, which would otherwise corrupt it.
+    newline_idx = data.rfind(b'\n')
+    processed = data[:newline_idx + 1] if newline_idx != -1 else b''
+    new_offset = start_offset + len(processed)
+    for line in processed.decode('utf-8', errors='ignore').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+            usage = (entry.get('usage') or
+                     entry.get('message', {}).get('usage') or
+                     entry.get('response', {}).get('usage') or {})
+            if not usage:
                 continue
-            try:
-                entry = json.loads(line)
-                usage = (entry.get('usage') or
-                         entry.get('message', {}).get('usage') or
-                         entry.get('response', {}).get('usage') or {})
-                if not usage:
-                    continue
-                context = (usage.get('input_tokens', 0) +
-                           usage.get('cache_read_input_tokens', 0) +
-                           usage.get('cache_creation_input_tokens', 0))
-                if context > 0:
-                    last_context = context
-            except Exception:
-                pass
+            context = (usage.get('input_tokens', 0) +
+                       usage.get('cache_read_input_tokens', 0) +
+                       usage.get('cache_creation_input_tokens', 0))
+            if context > 0:
+                last_context = context
+        except Exception:
+            pass
 except Exception:
     pass
-print(last_context)
-" 2>/dev/null || echo 0)
+print(f'{new_offset}\x1f{last_context}')
+" 2>/dev/null || printf '%s\x1f%s' "$START_OFFSET" "$LAST_CONTEXT_SEED")
+
+    IFS=$'\x1f' read -r NEW_OFFSET TRANSCRIPT_TOKENS <<< "$SCAN_RESULT"
+    printf '%s\x1f%s\x1f%s\n' "$TRANSCRIPT_PATH" "${NEW_OFFSET:-0}" "${TRANSCRIPT_TOKENS:-0}" > "$TRANSCRIPT_CACHE_FILE" 2>/dev/null || true
 
     if [ "${TRANSCRIPT_TOKENS:-0}" -gt 0 ] 2>/dev/null; then
         PCT_USED=$(python3 -c \
