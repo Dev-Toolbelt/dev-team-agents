@@ -35,6 +35,16 @@ fi
 
 [ -n "$PAYLOAD" ] || exit 0
 
+# Cheap early-exit before forking python3: only Task and Bash tool calls are
+# ever queued below, so a raw substring check on the still-unparsed payload
+# skips the fork for every other tool (Read, Edit, Grep, ...) — the majority
+# of calls in a session. The python3 parse below remains the source of truth;
+# this is purely a fast-path, never a correctness filter.
+case "$PAYLOAD" in
+    *'"tool_name":"Task"'*|*'"tool_name": "Task"'*|*'"tool_name":"Bash"'*|*'"tool_name": "Bash"'*) ;;
+    *) exit 0 ;;
+esac
+
 # Extract tool_name and relevant input fields
 TOOL_NAME=$(python3 -c \
     "import json,sys; d=json.loads(sys.argv[1]); print(d.get('tool_name',''))" \
