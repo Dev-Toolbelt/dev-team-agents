@@ -20,12 +20,14 @@ Phase 1 — spawn in parallel:
 - `ui-ux-designer` — design system and visual decisions (spawn only if the task involves visual design or UX decisions)
 - `seo-specialist` — SEO quality gate (spawn when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md` — public site, landing page, e-commerce, blog, or any indexable surface)
 
-Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
+Phase 2 — Tests (conditional) — spawn per track, not as a single barrier:
 
 **Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialists below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
 
-- `backend-test-specialist` — tests for backend changes
-- `frontend-test-specialist` — tests for frontend changes
+- `backend-test-specialist` — tests for backend changes; spawn as soon as `backend-developer` (and `database-specialist`, if it ran) complete — do not wait on the frontend track
+- `frontend-test-specialist` — tests for frontend changes; spawn as soon as `frontend-developer` (and `ui-ux-designer`/`seo-specialist`, if they ran) complete — do not wait on the backend track
+
+Each test-specialist has no data dependency on the other track's output, so its own Phase-1 completion is the only gate — the two may run in parallel with each other and even overlap with a still-running Phase 1 agent on the other track.
 
 ## Phase 3 — Mandatory review handoff (automatic)
 
