@@ -39,9 +39,7 @@ for f in \
   .dev-team-agents/scripts/hooks/pre-tool-use.sh \
   .dev-team-agents/scripts/hooks/stop.sh \
   .dev-team-agents/scripts/hooks/session-start.sh \
-  .dev-team-agents/scripts/hooks/pre-tool-use/01-check-updates.sh \
   .dev-team-agents/scripts/hooks/stop/01-session-summary.sh \
-  .dev-team-agents/scripts/hooks/stop/04-notifier.sh \
   .dev-team-agents/scripts/update.sh; do
   [ -f "$f" ] && [ -x "$f" ] && echo "OK: $f" || echo "FAIL: $f"
 done
@@ -288,7 +286,9 @@ done
 ### 5c — Hook wiring
 
 ```bash
-ls .dev-team-agents/scripts/hooks/stop/99-graphify-refresh.sh 2>/dev/null || echo "MISSING"
+# 99-graphify-refresh.sh is disabled by design (renamed to _disabled-99-graphify-refresh.sh,
+# see CLAUDE-md/hooks.md § Disabled Hooks) — the graph is refreshed on demand only. Do not
+# report the original filename as MISSING.
 ls .dev-team-agents/scripts/hooks/pre-tool-use/02-graphify-hint.sh 2>/dev/null || echo "MISSING"
 # Legacy sub-script that causes stop-hook loops
 ls .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh 2>/dev/null && echo "LEGACY_FOUND"
@@ -342,7 +342,7 @@ grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && e
 | `targetPaths` non-empty | Same — report and ask the user to correct `graphify.json` |
 | Each `targetPaths` entry exists on disk | WARN — list the missing paths; do not remove them from the config (may be a rename in progress) |
 | Each `manifestPaths` entry exists | WARN — same |
-| `stop/99-graphify-refresh.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6) |
+| `stop/99-graphify-refresh.sh` | Disabled by design — do not create; refresh is on-demand via `bash .dev-team-agents/scripts/graphify-refresh.sh` |
 | `stop/02-graphify-refresh.sh` exists (legacy) | `rm .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh` |
 | `pre-tool-use/02-graphify-hint.sh` exists and is executable | Create it (content from `graphify-setup/SKILL.md` Step 6b) |
 | `graphify-out/` directory exists | WARN — run: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
@@ -471,23 +471,19 @@ EOF
 
 ## Category 9 — Notifier
 
-```bash
-[ -f .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
-[ -x .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && \
-echo "OK" || echo "FAIL"
+**Disabled by design** — `stop/04-notifier.sh` was renamed to `stop/_disabled-04-notifier.sh` (see `CLAUDE-md/hooks.md` § Disabled Hooks, pending review). Do not report the original filename as missing or attempt to `chmod +x` it back into the dispatch convention.
 
+```bash
 [ -f .dev-team-agents/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
 [ -f .dev-team-agents/user-data/.session-head ] && echo "session-head: OK" || echo "session-head: MISSING (will be created on next session start)"
-[ -f .dev-team-agents/user-data/.notifier-state ] && echo "notifier-state: OK" || echo "notifier-state: MISSING (will be created on first stop hook)"
 [ -f .dev-team-agents/user-data/.last-health-check ] && echo "last-health-check: OK" || echo "last-health-check: MISSING (this run will create it — see Step 4 of /devteam:health-check)"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
-| `stop/04-notifier.sh` exists and is executable | `chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh` |
+| `stop/04-notifier.sh` | Disabled by design — do not restore |
 | `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
 | `.session-head` missing | OK — created automatically by `session-start.sh` on next session; until then the uncommitted-progress warning stays silent (no baseline HEAD to compare against) |
-| `.notifier-state` missing | OK — created automatically by `stop/04-notifier.sh` on first turn |
 | `.last-health-check` missing | OK — this very health check run writes it (Step 4 of `commands/health-check.md`); nothing to fix here |
 
 ## Category 10 — Credentials

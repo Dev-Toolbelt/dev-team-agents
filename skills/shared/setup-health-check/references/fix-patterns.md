@@ -87,8 +87,10 @@ chmod +x .dev-team-agents/scripts/hooks/pre-tool-use.sh
 chmod +x .dev-team-agents/scripts/hooks/stop.sh
 chmod +x .dev-team-agents/scripts/hooks/session-start.sh
 chmod +x .dev-team-agents/scripts/hooks/stop/01-session-summary.sh
-chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh
 chmod +x .dev-team-agents/scripts/update.sh
+# 04-notifier.sh, 05-telemetry.sh, 02b-telemetry.sh, 01-check-updates.sh, and
+# 99-graphify-refresh.sh are disabled by design — do not chmod their _disabled- variants
+# back into the dispatch convention. See CLAUDE-md/hooks.md § Disabled Hooks.
 ```
 
 ## Auto-fix for .gitignore migration (legacy per-file → directory pattern)

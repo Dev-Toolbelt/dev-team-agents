@@ -72,7 +72,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 6 | CLAUDE.md | `## dev-team-agents` section present |
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
-| 9 | Notifier | `04-notifier.sh` executable, state files present |
+| 9 | Notifier | Disabled by design (`_disabled-04-notifier.sh`) — do not report as missing; check state files only |
 | 10 | Credentials | `credentials.local.json` at correct path, no legacy root file, required top-level keys, gitignored |
 | 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated |
 | 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
