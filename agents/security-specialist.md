@@ -125,46 +125,7 @@ Load `skills/security/dependency-audit/SKILL.md` and follow its order: always-ru
 
 ## Output Format
 
-Load `skills/shared/output-format/SKILL.md` — all security review output must follow pure markdown format, no box-drawing Unicode or decorative symbols.
-
-```
-## Security Review — [Brief Title]
-
-### Executive Summary
-[2-3 sentences: overall risk posture]
-
-### Critical Findings
-- **[CRITICAL]** [Title]
-  - Location: `file.js:42`
-  - Description: [what the vulnerability is]
-  - Attack scenario: [how an attacker would exploit this]
-  - Remediation: [specific fix with code example if helpful]
-
-### High Findings
-- **[HIGH]** ...
-
-### Medium / Low / Info
-- **[MEDIUM / LOW / INFO]** ...
-
-### Business Logic
-- [findings]
-
-### CI/CD Pipeline
-- [findings]
-
-### LGPD / GDPR
-- [findings]
-
-### Tooling & Dependency Audit
-- [blocking findings, scanner coverage, anything NOT RUN]
-
-### Cross-Boundary
-(omit if none)
-- `[cross-boundary → qa-specialist]` — [one-line pointer to the behavior that needs execution to confirm]
-
-### Recommendation
-[SHIP / DO NOT SHIP until X is fixed]
-```
+Load `skills/shared/output-format/SKILL.md` — all security review output must follow pure markdown format, no box-drawing Unicode or decorative symbols. Fill the exact structure in `skills/security/security-checklist/references/output-template.md`.
 
 ---
 
