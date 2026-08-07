@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# DISABLED (2026-08-06) — moved to scripts/hooks/session-start.sh so the check
+# runs once per session instead of on every tool call. See CLAUDE-md/hooks.md.
 # PreToolUse sub-script: silent TTL-based update check.
 # Notifies Claude when a new version of dev-team-agents is available.
 # Auto-updates when auto_update is enabled (or the legacy .auto-update flag exists).

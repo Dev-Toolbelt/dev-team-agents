@@ -86,9 +86,52 @@ mkdir -p "$USER_DATA_DIR"
 date +%s > "${USER_DATA_DIR}/.session-id"
 
 # ── Record the commit HEAD was at when this session started ───────
-# stop/04-notifier.sh compares the current HEAD against this to detect a
-# session with real turn count but zero commits — see that script.
+# stop/_disabled-04-notifier.sh compares the current HEAD against this to
+# detect a session with real turn count but zero commits — see that script.
 git rev-parse HEAD > "${USER_DATA_DIR}/.session-head" 2>/dev/null || true
+
+# ── Update check (moved from pre-tool-use/01-check-updates.sh) ────
+# Runs once per session instead of on every tool call. TTL-gated internally —
+# most sessions land inside the interval window and this is a no-op fork-free
+# check (see uc_ttl_fresh in update-check.sh). Errors degrade to a silent skip;
+# a SessionStart hook must never block the session.
+UC_LIB_FILE="${SCRIPT_DIR}/lib/update-check.sh"
+if [ -f "$UC_LIB_FILE" ]; then
+    # shellcheck source=scripts/hooks/lib/update-check.sh
+    . "$UC_LIB_FILE"
+
+    UC_INSTALL_DIR="${MAIN_REPO_ROOT}/.dev-team-agents"
+    UC_LAST_CHECK_FILE="${USER_DATA_DIR}/.last-update-check"
+    UC_VERSION_FILE="${USER_DATA_DIR}/.installed-version"
+    UC_INTERVAL_CACHE_FILE="${USER_DATA_DIR}/.update-check-interval"
+    UC_ETAG_FILE="${USER_DATA_DIR}/.last-releases-etag"
+    UC_VERSION_CACHE_FILE="${USER_DATA_DIR}/.last-releases-version"
+    UC_GITHUB_API="https://api.github.com/repos/Dev-Toolbelt/dev-team-agents"
+
+    UC_NOW=$(uc_now_epoch)
+    UC_INTERVAL_HOURS=$(uc_interval_hours "$PREFS_FILE" "$UC_INTERVAL_CACHE_FILE")
+    if ! uc_ttl_fresh "$UC_LAST_CHECK_FILE" "$UC_INTERVAL_HOURS" "$UC_NOW"; then
+        if uc_setup_http; then
+            mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
+            printf '%s\n' "$UC_NOW" > "$UC_LAST_CHECK_FILE" 2>/dev/null || true
+            UC_LATEST=$(uc_fetch_latest "$UC_GITHUB_API" "$UC_ETAG_FILE" "$UC_VERSION_CACHE_FILE")
+            UC_CURRENT=$(cat "$UC_VERSION_FILE" 2>/dev/null || echo "unknown")
+            if [ -n "$UC_LATEST" ] && [ "$UC_LATEST" != "unknown" ] \
+                && [ "$UC_CURRENT" != "unknown" ] && [ "$UC_CURRENT" != "$UC_LATEST" ]; then
+                export UC_SUPPRESS="$SUPPRESS"
+                if uc_auto_update_enabled "$PREFS_FILE" "$USER_DATA_DIR"; then
+                    if uc_perform_auto_update "$UC_CURRENT" "$UC_LATEST" "$UC_INSTALL_DIR"; then
+                        uc_notify "info" "$(uc_message updated "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                    else
+                        uc_notify "warning" "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                    fi
+                else
+                    uc_notify "warning" "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                fi
+            fi
+        fi
+    fi
+fi
 
 # ── Helper: check if a type is suppressed ─────────────────────────
 _is_suppressed() {
