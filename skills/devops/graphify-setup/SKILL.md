@@ -154,7 +154,13 @@ Omit `manifestPaths` if no manifest files were found. Do not ask the user to con
 
 ## Step 6 — Graphify Hook Sub-scripts
 
-The `99-graphify-refresh.sh` (Stop) and `02-graphify-hint.sh` (PreToolUse) sub-scripts are **built-in** to the dev-team-agents tarball. No manual creation is needed.
+The `02-graphify-hint.sh` (PreToolUse) sub-script is **built-in** to the dev-team-agents tarball. No manual creation is needed.
+
+Graph rebuilds are **on-demand, not automatic** — the Stop hook that used to rebuild on every session (`99-graphify-refresh.sh`) is disabled (see `CLAUDE-md/hooks.md` § Disabled Hooks). Refresh the graph manually when needed:
+
+```bash
+bash .dev-team-agents/scripts/graphify-refresh.sh
+```
 
 Remove any legacy file if present:
 
