@@ -552,23 +552,21 @@ fi
 
 ### Reuse Guidelines Backfill
 
-Existing docs often already state a mandatory-reuse rule in prose — written before `docs/development/reuse-guidelines.md` (`skills/shared/reuse-guidelines/SKILL.md`) existed, or added later by someone who didn't know the registry was the right place. Scan for candidates and offer to promote them; never populate the registry silently.
+Existing docs often already state a mandatory-reuse rule in prose — written before `docs/development/reuse-guidelines.md` (`skills/shared/reuse-guidelines/SKILL.md`) existed, or added later by someone who didn't know the registry was the right place. `commands/sync-rules.md` (`/devteam:sync-rules`) owns the scan-and-backfill routine — do not re-implement the grep or the propose/confirm/append flow here.
 
 ```bash
-# Candidate phrases (PT + EN) — mandatory-reuse language, not just any convention
-grep -niE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigatório|always use|canonical component|mandatory component|must (always )?use' \
-  docs/development/code-standards.md docs/design/design-system.md 2>/dev/null
-grep -rniE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigatório|always use|canonical component|mandatory component|must (always )?use' \
-  docs/wiki/ 2>/dev/null
+# Quick, detection-only signal for the audit summary — the real scan (full docs/
+# scope, dedup against existing rows, per-candidate confirm) lives in /devteam:sync-rules
+grep -rliE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigatório|always use|canonical component|mandatory component|must (always )?use' \
+  docs/development/code-standards.md docs/design/design-system.md docs/wiki/ 2>/dev/null
 ```
 
-| Check | Status | Auto-fix |
-|-------|--------|----------|
-| Candidate sentence found, no matching row in `reuse-guidelines.md` | Report | Propose a row (`name`/`type`/`rule`/`detection`/`canonical_ref`, per the skill's classify step) to the user before writing anything |
-| User confirms the proposed row | Fix | **Adapt the source document in place**: replace the rule's sentence/paragraph with a one-line reference (`See docs/development/reuse-guidelines.md § <name>`), keeping the same heading/anchor — never delete the heading or the surrounding section. Then append the confirmed row to `reuse-guidelines.md` (create the file from `.dev-team-agents/templates/reuse-guidelines-template.md`'s header if it doesn't exist yet) |
-| User declines or the match is ambiguous | WARN only | Report and leave the source document untouched |
+| Check | Status | Action |
+|-------|--------|--------|
+| Any file matches and has no corresponding row in `reuse-guidelines.md` | WARN | Report the count of matching files and point to `/devteam:sync-rules` — do not classify or propose rows inline here |
+| No matches | OK | No action |
 
-This is the same No-Destruction discipline as the rest of this category: content moves or gets referenced, it never disappears.
+Health-check stays detection-only for this category: it tells the user something is worth scanning, `/devteam:sync-rules` does the classify → propose → confirm → append work (per-candidate confirmation, never a bulk write).
 
 ## Category 12 — Python Prerequisite
 

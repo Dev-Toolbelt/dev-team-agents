@@ -74,7 +74,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | Disabled by design (`_disabled-04-notifier.sh`) — do not report as missing; check state files only |
 | 10 | Credentials | `credentials.local.json` at correct path, no legacy root file, required top-level keys, gitignored |
-| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated |
+| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules` |
 | 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
 
 ## Load on Demand
