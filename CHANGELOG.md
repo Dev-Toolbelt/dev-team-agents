@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-08-08
+
+### Added
+- **`/devteam:sync-rules` command** (`commands/sync-rules.md`) — scans `docs/` for conventions documented only in prose, dedupes against `docs/development/reuse-guidelines.md`, and runs `/devteam:rule`'s classify → propose → confirm → append routine per candidate. Fixes the gap where a documented convention (e.g. a response-envelope rule) never becomes a mechanically enforced registry row, so neither `reuse-lint.sh` nor the review gate can catch a violation.
+- Wired into `install.sh` and `update.sh` (post-run suggestion to run the scan) and into `/devteam:health-check` Category 11, which now stays detection-only and points to the command instead of duplicating its classify/propose logic.
+
 ## [2.32.1] - 2026-08-08
 
 ### Fixed
