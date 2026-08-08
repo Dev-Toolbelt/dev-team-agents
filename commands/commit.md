@@ -86,20 +86,18 @@ Then stop.
 
 ## Step 2.5 — Unrelated unstaged changes quiz
 
-Determine which files were touched in today's session: cross-reference `git status --short` output against the paths mentioned in today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and any files this command has read or edited so far in the current conversation.
+Cross-reference `git status --short` against today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and files touched in this conversation to find today's changes.
 
-If there are **unstaged or untracked files that are not part of what was touched in this session today**, do not silently ignore or auto-stage them. Use `AskUserQuestion` with a single-select question:
-
-**Question:** "There are unstaged changes that don't look like they're from today's session. What should `/devteam:commit` do?"
+If unstaged/untracked files fall **outside** that set, don't auto-stage them — ask via `AskUserQuestion` ("There are unstaged changes that don't look like today's session. What should `/devteam:commit` do?"):
 
 | Option | Effect |
 |--------|--------|
-| Fazer commits somente do que foi tocado aqui (recommended) | Stage and commit only the files touched in this session today; leave every other unstaged/untracked file untouched |
-| Stage e commitar tudo | Run `git add -A` and include the unrelated changes in the commit plan |
-| Mostrar só o plano (dry-run) | Continue in preview mode — show what would be committed without staging or committing anything |
-| Abortar | Stop without staging or committing anything |
+| Only today's files (recommended) | Stage/commit only files touched in this session; leave the rest untouched |
+| Stage everything | `git add -A`, include unrelated changes in the plan |
+| Dry-run | Preview only, nothing staged |
+| Abort | Stop, nothing staged or committed |
 
-Carry the selected scope into Step 3 — only the files matching the chosen option are staged and grouped into commits.
+Carry the chosen scope into Step 3.
 
 ## Step 3 — Group changes into logical commits
 
@@ -138,7 +136,7 @@ Before executing any commit, run quick validations on the staged files.
 
 If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthook `lefthook.yml`, `.pre-commit-config.yaml`), skip Steps 4.5a–c and let `git commit` trigger the hooks naturally.
 
-### 4.5a — Lint
+### 4.5a — Lint and type-check
 
 | Project signal | Command |
 |----------------|---------|
@@ -148,20 +146,15 @@ If the project already has Git pre-commit hooks (Husky `husky.config.*`, Lefthoo
 | `phpcs.xml` or `phpcs.xml.dist` present | `vendor/bin/phpcs <staged-php-files>` |
 | `pyproject.toml` with `ruff` | `ruff check <staged-py-files>` |
 | `Makefile` with `lint` target | `make lint` |
-
-### 4.5b — Type-check
-
-| Project signal | Command |
-|----------------|---------|
 | `tsconfig.json` present | `npx tsc --noEmit` |
 | `pyproject.toml` with `mypy` dependency | `mypy <staged-py-files>` |
 | `pyrightconfig.json` or `pyright` in devDependencies | `npx pyright` |
 
-### 4.5c — Tests (scoped to the staged files)
+### 4.5b — Tests (scoped to the staged files)
 
 Load `skills/shared/scoped-test-execution/SKILL.md` and run only the tests covering the staged files and their direct dependents. Do not run the project's full suite here — CI owns that, and the skill's single exception (an explicit user request) does not fire from a `/devteam:commit` invocation.
 
-### 4.5d — Commit message validation
+### 4.5c — Commit message validation
 
 Before executing each commit, validate the message against the project's commit format:
 
@@ -191,18 +184,7 @@ Then **execute the commits directly** using `git commit` unless:
 - `$ARGUMENTS` contains `dry-run` or `--dry-run` → show the plan only, do not commit
 - The user explicitly says not to execute (e.g., "just show me", "don't commit", "preview only")
 
-For multiple commits, stage each group individually with `git add <files>` before each `git commit -m`.
-
-Use a HEREDOC for multi-line messages:
-
-```bash
-git commit -m "$(cat <<'EOF'
-type(scope): short description
-
-Optional body explaining the WHY.
-EOF
-)"
-```
+For multiple commits, stage each group individually with `git add <files>` before each `git commit -m`. Use a HEREDOC for multi-line messages: `git commit -m "$(cat <<'EOF'\ntype(scope): short description\n\nOptional body.\nEOF\n)"`.
 
 After all commits, run `git log --oneline -5` and show the output so the user can verify the result.
 
