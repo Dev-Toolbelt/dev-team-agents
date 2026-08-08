@@ -39,6 +39,7 @@
     "symlinks":          { "tier": "repetitive",  "agent": "technical-writer",    "description": "Diagnose and repair broken dev-team-agents symlinks.",                              "plan_gate": "opt_out" },
     "health-check":      { "tier": "repetitive",  "agent": "technical-writer",    "description": "Health check — validate and repair dev-team-agents installation.",                  "plan_gate": "opt_out" },
     "audit":             { "tier": "backend-exec", "agent": "code-reviewer",     "description": "Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan.", "plan_gate": "conditional" },
-    "rule":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Catalog a mandatory reuse/standardization rule into docs/development/reuse-guidelines.md.", "plan_gate": "conditional" }
+    "rule":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Catalog a mandatory reuse/standardization rule into docs/development/reuse-guidelines.md.", "plan_gate": "conditional" },
+    "sync-rules":        { "tier": "repetitive",  "agent": "technical-writer",    "description": "Scan docs/ for undocumented conventions and catalog them via /devteam:rule.", "plan_gate": "opt_out" }
   }
 }
