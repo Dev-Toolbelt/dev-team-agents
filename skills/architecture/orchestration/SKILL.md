@@ -81,6 +81,31 @@ In this mode the Execution Strategy Gate quiz is **skipped entirely** — resolv
 
 ---
 
+## Progress Visibility
+
+A silent orchestrator running many sequential steps unattended is indistinguishable, from the
+user's side, from one that has stalled or died. "Notify only at the end" (step 6 above) governs
+the *final* handoff — it does not license silence in between.
+
+**After every subagent in an autonomous sprint returns, emit one short visible line before
+continuing to the next step**: `<agent> — <step> done (<one-clause result>). Continuing to
+<next step>.` This is a log line, not a report — it must not repeat the subagent's full summary
+or dump file contents (see *Subagent Report Economy*). Its only job is to give the user a
+heartbeat they can see without asking.
+
+**Never claim progress the orchestrator cannot ground in something it just observed.** A status
+line like "6 tests still failing" or "committed and moving to the next step" must be backed by
+the subagent's returned banner/report or a command the orchestrator itself ran (`git log`, `git
+status`, test output) — not inferred from what the plan says *should* have happened by now. If
+asked for status mid-sprint and nothing has changed since the last checkpoint line, say exactly
+that — do not narrate invented progress to fill the gap.
+
+This adds negligible token cost (one short line per completed step) against the cost of a user
+losing trust in the run and needing to manually re-verify the repository state, which is what
+prompted this rule.
+
+---
+
 ## Agent Roster
 
 Each agent's model is resolved from its tier plus the active provider at runtime
