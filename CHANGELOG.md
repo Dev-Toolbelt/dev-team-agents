@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.32.1] - 2026-08-08
+
+### Fixed
+- **`orchestration` skill — Spawn Integrity check 4 (Liveness)**: the orchestrator had no way to distinguish a subagent that was still executing from one that had silently stalled or died — its only signal was the final returned message, so a status question mid-run got answered from stale assumption. Now it notes spawn time, tries any available status/output check before answering, and states explicitly that completion can't be confirmed instead of asserting "still running".
+
+### Added
+- **`/devteam:commit` — Step 2.5 unrelated-changes quiz**: before staging, cross-references unstaged/untracked files against what was actually touched in today's session and asks via `AskUserQuestion` how to handle anything that doesn't match, instead of silently sweeping unrelated work into the commit plan.
+
 ## [2.31.0] - 2026-08-06
 
 ### Added
