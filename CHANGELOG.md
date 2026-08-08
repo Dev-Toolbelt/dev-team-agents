@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.0] - 2026-08-08
+
+### Added
+- **`/devteam:sync-rules` — mode selection**: a new Step 2 asks via `AskUserQuestion` whether to apply every surviving candidate automatically ("Apply all automatically", recommended) or review each one individually, before scanning starts. `--all`/`--yes` still skips straight to all-mode without the quiz. Previously the command always confirmed one candidate at a time with no way to batch-apply.
+
 ## [2.33.0] - 2026-08-08
 
 ### Added
