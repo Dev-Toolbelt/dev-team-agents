@@ -98,7 +98,9 @@ line like "6 tests still failing" or "committed and moving to the next step" mus
 the subagent's returned banner/report or a command the orchestrator itself ran (`git log`, `git
 status`, test output) — not inferred from what the plan says *should* have happened by now. If
 asked for status mid-sprint and nothing has changed since the last checkpoint line, say exactly
-that — do not narrate invented progress to fill the gap.
+that — do not narrate invented progress to fill the gap. This includes the specific case of a
+subagent that has not yet returned at all: see *Spawn Integrity* check 4 (Liveness) for what to say
+instead of "still running."
 
 This adds negligible token cost (one short line per completed step) against the cost of a user
 losing trust in the run and needing to manually re-verify the repository state, which is what
@@ -177,6 +179,29 @@ run.**
 Fill the summary from what came back. A subagent that returned no banner is reported `NOT RUN`.
 Never compose a banner yourself to fill the row — writing evidence you did not receive defeats the
 only check that can catch a phantom spawn.
+
+### 4. Liveness — "still running" is a claim, not a default
+
+The Task tool is asynchronous and this skill has no poll/heartbeat primitive: the only signal that
+a spawned subagent produces is its final returned message. Nothing distinguishes "still executing
+normally" from "stalled or died silently" until that message arrives — so never fill that gap by
+asserting the agent is still running. That is invented progress, exactly what *Progress Visibility*
+already forbids for status lines; this check applies the same rule specifically to liveness claims.
+
+Note the wall-clock time of each spawn. If the user asks for status and no return has arrived:
+
+- **Before treating a spawn as stalled**, actually try to confirm it: check for any status/output
+  tool this provider exposes for the specific run (e.g. a task-status or task-output lookup), if
+  one is available to you in this context. Use it before concluding anything — do not skip straight
+  to guessing.
+- **If no such check is available, or it returns nothing new**, say exactly that — do not say
+  "still running." State the elapsed time since spawn and that no completion signal has been
+  received, e.g.: "No update from `<agent>` since it was spawned <elapsed>. I cannot confirm it is
+  still executing — only that no return message has arrived." Offer to re-spawn if the elapsed time
+  is unreasonable for the task.
+- **Never re-assert a previous "in progress" claim as new information.** Each time the user asks,
+  re-derive the answer from what has actually been observed since the last checkpoint, not from
+  what you last told them.
 
 ---
 
