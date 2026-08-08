@@ -84,6 +84,23 @@ If there are neither staged nor unstaged changes, output exactly `Nothing to com
 
 Then stop.
 
+## Step 2.5 — Unrelated unstaged changes quiz
+
+Determine which files were touched in today's session: cross-reference `git status --short` output against the paths mentioned in today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and any files this command has read or edited so far in the current conversation.
+
+If there are **unstaged or untracked files that are not part of what was touched in this session today**, do not silently ignore or auto-stage them. Use `AskUserQuestion` with a single-select question:
+
+**Question:** "There are unstaged changes that don't look like they're from today's session. What should `/devteam:commit` do?"
+
+| Option | Effect |
+|--------|--------|
+| Fazer commits somente do que foi tocado aqui (recommended) | Stage and commit only the files touched in this session today; leave every other unstaged/untracked file untouched |
+| Stage e commitar tudo | Run `git add -A` and include the unrelated changes in the commit plan |
+| Mostrar só o plano (dry-run) | Continue in preview mode — show what would be committed without staging or committing anything |
+| Abortar | Stop without staging or committing anything |
+
+Carry the selected scope into Step 3 — only the files matching the chosen option are staged and grouped into commits.
+
 ## Step 3 — Group changes into logical commits
 
 Analyze the staged files and group them by layer or context using the **Layered Commits** ordering table in the `conventional-commits` skill loaded above — that table is the single source of truth for layer order and examples; do not restate it here. It ends at layer 7 (tests); this command continues with **8 — Config / CI** (build, ci, chore) and **9 — Docs** (documentation changes).
