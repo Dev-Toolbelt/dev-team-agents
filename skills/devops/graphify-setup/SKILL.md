@@ -157,7 +157,7 @@ GITIGNORE_ENTRIES=(
   "# Dev Team Agents"
   ".dev-team-agents/user-data/.graphify-last-run"
   "graphify-out/cache"
-  ".dev-team-agents/worktrees"
+  ".worktrees"
 )
 
 for ENTRY in "${GITIGNORE_ENTRIES[@]}"; do
@@ -167,7 +167,7 @@ done
 
 - `.dev-team-agents/user-data/.graphify-last-run` — build marker, project-specific, not shared
 - `graphify-out/cache` — Graphify internal cache, rebuilt automatically
-- `.dev-team-agents/worktrees` — worktree isolation directories, local only
+- `.worktrees` — worktree isolation directories, local only
 
 ---
 

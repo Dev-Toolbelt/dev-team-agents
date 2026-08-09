@@ -120,7 +120,7 @@ Controle como os agentes de codificação isolam o trabalho, no mesmo `preferenc
 {
   "worktree_active": false,
   "worktree_base_branch": null,
-  "worktree_path": ".dev-team-agents/worktrees",
+  "worktree_path": ".worktrees",
   "worktree_docker_isolate": true
 }
 ```
@@ -129,7 +129,7 @@ Controle como os agentes de codificação isolam o trabalho, no mesmo `preferenc
 |-------|--------|-----------|
 | `worktree_active` | `false` | Quando `true`, os agentes criam uma worktree por task **sem perguntar** |
 | `worktree_base_branch` | `null` | Base branch para novas worktrees (`null` = auto-detectar a branch padrão do repo) |
-| `worktree_path` | `".dev-team-agents/worktrees"` | Onde as worktrees são criadas (`<path>/<contexto>/<título>`) |
+| `worktree_path` | `".worktrees"` | Onde as worktrees são criadas (`<path>/<contexto>/<título>`) |
 | `worktree_docker_isolate` | `true` | Com `worktree_active` e um projeto Docker Compose, sobe um stack isolado por worktree (containers/volumes/redes namespaceados, portas não publicadas) |
 
 O arquivo de sessão `.dev-team-agents/.worktree-session` sobrepõe esses defaults para uma única task. No merge, os agentes fazem rebase na base branch, mergeiam e derrubam somente a worktree e seu stack Docker isolado. As quatro chaves são preenchidas automaticamente com esses defaults a cada sessão, se estiverem ausentes.

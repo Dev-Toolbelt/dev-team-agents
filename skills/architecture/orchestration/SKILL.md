@@ -21,7 +21,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` for the quiz structure.
    python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
    ```
    Defaults if unreadable: `worktree_active=true`, `worktree_base_branch` = auto-detected,
-   `worktree_path=.dev-team-agents/worktrees`, `worktree_docker_isolate=true`.
+   `worktree_path=.worktrees`, `worktree_docker_isolate=true`.
 
 2. Determine the recommendation:
    - `worktree_active == true` → **Isolated worktree** (first option)

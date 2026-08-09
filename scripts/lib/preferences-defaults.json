@@ -14,7 +14,7 @@
   "telemetry": true,
   "worktree_active": true,
   "worktree_base_branch": null,
-  "worktree_path": ".dev-team-agents/worktrees",
+  "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "ci_cd_detected": null

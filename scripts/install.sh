@@ -751,7 +751,7 @@ _add_gitignore ".dev-team-agents/user-data/"
 _add_gitignore "!.dev-team-agents/user-data/graphify.json"
 _add_gitignore ".dev-team-agents/user-data/credentials.local.json"
 _add_gitignore ".dev-team-agents/.worktree-session"
-_add_gitignore ".dev-team-agents/worktrees/"
+_add_gitignore ".worktrees/"
 
 echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + worktrees dir)"
 
@@ -995,7 +995,7 @@ else
   "telemetry": $TELEMETRY_VALUE,
   "worktree_active": true,
   "worktree_base_branch": null,
-  "worktree_path": ".dev-team-agents/worktrees",
+  "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "ci_cd_detected": null

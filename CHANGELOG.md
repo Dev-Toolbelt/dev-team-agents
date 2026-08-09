@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.37.0] - 2026-08-09
+
+### Changed
+- **`worktree_path` default moved to the project root**: the default value of `worktree_path` changed from `.dev-team-agents/worktrees` to `.worktrees`, and the matching `.gitignore` entry follows. Applies only to a fresh `preferences.json` — an existing file is never rewritten. Updated across the canonical default (`scripts/lib/preferences-defaults.json`), the installer, every skill that reads or documents the key, and all docs/README mirrors.
+
 ## [2.36.0] - 2026-08-09
 
 ### Added
