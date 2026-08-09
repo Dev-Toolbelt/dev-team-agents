@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.34.2] - 2026-08-08
+
+### Fixed
+- **`worktree` skill — teardown could destroy uncommitted work**: `git worktree remove` deletes uncommitted/untracked content silently, and the finalization flow (`references/branch-flow.md` Step 8) ran it right after merge with no check on working-tree state. A worktree with no commits — abandoned, or merged in a sibling worktree — lost all its edits on teardown with no warning. Finalization now runs `git status --porcelain` before removal; a dirty tree aborts teardown and asks the user (commit / discard / keep the worktree) instead of proceeding.
+
+## [2.34.1] - 2026-08-08
+
 ### Fixed
 - **`scripts/install.sh` — orphaned `.dev-team-agents.old.*` / `.new.*` swap directories**: the install/update swap (Step 2c) renamed the previous installation aside before removing it, but the final `rm -rf` was best-effort (`|| true`) and never retried, so a process killed mid-swap — or a failed removal on a locked/permission-denied file — left the backup on disk forever, with no warning. Install now self-heals any stray `.old.*`/`.new.*` directory from a previous interrupted run at startup, and `_cleanup()` retries the removal on exit and prints an explicit warning with the path if it still fails, instead of swallowing the error silently. `/devteam:health-check` Category 3 also now detects and removes any leftover swap directories as a safety net.
 
