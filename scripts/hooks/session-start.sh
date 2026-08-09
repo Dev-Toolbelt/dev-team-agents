@@ -74,12 +74,14 @@ except Exception:
     d = {}
 def s(v):
     return str(v).lower() if isinstance(v, bool) else str(v)
-print('\x1f'.join([s(d.get('docs_stale_after_days', 30)), s(d.get('language', 'en')), s(d.get('suppress_notifications', False))]))
+print('\x1f'.join([s(d.get('docs_stale_after_days', 30)), s(d.get('language', 'en')), s(d.get('suppress_notifications', False)), s(d.get('auto_update', False)), s(d.get('worktree_active', False))]))
 " 2>/dev/null || true)
     if [ -n "$_ALL_PREFS" ]; then
-        IFS=$'\x1f' read -r STALE_DAYS USER_LANG SUPPRESS <<< "$_ALL_PREFS"
+        IFS=$'\x1f' read -r STALE_DAYS USER_LANG SUPPRESS AUTO_UPDATE WORKTREE_ACTIVE <<< "$_ALL_PREFS"
     fi
 fi
+AUTO_UPDATE="${AUTO_UPDATE:-false}"
+WORKTREE_ACTIVE="${WORKTREE_ACTIVE:-false}"
 
 # ── Write session ID for the notifier turn counter ────────────────
 mkdir -p "$USER_DATA_DIR"
@@ -164,10 +166,28 @@ echo ""
 echo "[DEVTEAM:TEST_SCOPE_RULE] Run only tests covering touched code; full suite only on explicit user request this session (see skills/shared/scoped-test-execution/SKILL.md)."
 echo ""
 
-# ── Language banner (always shown when language is non-English) ───
-if [ -f "$PREFS_FILE" ] && [ "$USER_LANG" != "en" ] && [ "$USER_LANG" != "" ]; then
-    echo "→ Conversation language: $USER_LANG (from preferences.json)"
+# ── Session banner (always shown, once per session) ───────────────
+# Fallback chain for version: an installed project has .installed-version;
+# this repo's own self-hosted install does not, so fall back to the first
+# released entry in CHANGELOG.md (the [Unreleased] header is skipped).
+DT_VERSION_FILE="${USER_DATA_DIR}/.installed-version"
+if [ -f "$DT_VERSION_FILE" ]; then
+    DT_VERSION="$(cat "$DT_VERSION_FILE" 2>/dev/null)"
+else
+    DT_VERSION="$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "${PROJECT_ROOT}/CHANGELOG.md" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
 fi
+[ -n "$DT_VERSION" ] || DT_VERSION="unknown"
+case "$DT_VERSION" in v*) ;; *) DT_VERSION="v${DT_VERSION}" ;; esac
+
+DT_AUTO_UPDATE_LABEL="No"
+[ "$AUTO_UPDATE" = "true" ] && DT_AUTO_UPDATE_LABEL="Yes"
+DT_WORKTREE_LABEL="No"
+[ "$WORKTREE_ACTIVE" = "true" ] && DT_WORKTREE_LABEL="Yes"
+
+echo "DevTeam Agents • ${DT_VERSION} (github.com/Dev-Toolbelt/dev-team-agents)"
+echo "─────────────────────────────────────────────────"
+echo "Language: ${USER_LANG} | Auto Update: ${DT_AUTO_UPDATE_LABEL} | Worktree: ${DT_WORKTREE_LABEL}"
+echo ""
 
 # ── Cross-platform date diff helper ──────────────────────────────
 _days_since_modified() {
