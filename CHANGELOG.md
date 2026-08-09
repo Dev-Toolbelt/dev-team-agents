@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.35.1] - 2026-08-09
+
+### Changed
+- **`worktree` skill — unified naming rule made explicit**: worktree directory, branch, and (when Docker isolation applies) Docker Compose project/container names always derived from the same `<context>/<brief-title>` slug, but this was only implicit across `SKILL.md` and `docker-isolation.md`. Added an explicit "Unified naming" bullet to `SKILL.md` → Key Rules and a cross-reference in `docker-isolation.md`, so agents state the rule instead of inferring it.
+
 ## [2.35.0] - 2026-08-09
 
 ### Added

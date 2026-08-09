@@ -102,6 +102,7 @@ docker compose -p "$COMPOSE_PROJECT_NAME" ps --format "table {{.Name}}\t{{.Statu
 
 ## Key Rules
 
+- **Unified naming**: worktree directory, branch, and (when Docker isolation applies) the Docker Compose project name and its containers must all derive from the **same** `<context>/<brief-title>` slug — worktree path `<wt-path>/<context>/<brief-title>`, branch `<context>/<brief-title>`, Docker project `<base-project>-wt-<context>-<brief-title>` (see `references/docker-isolation.md` → Step 2). Never let one of these drift to a different name than the others — that is what keeps a task's worktree, branch, and containers instantly identifiable as belonging together.
 - **Never** use `git checkout -b` in the main tree — always `git worktree add`
 - **Never** hardcode `main`, `master`, or `beta` as base — resolve from `worktree_base_branch`, project config, or the auto-detected default branch
 - **Finalization is mandatory**: on merge, rebase onto the base first, then merge, then tear down **only** the worktree and its isolated Docker stack — never the main infra

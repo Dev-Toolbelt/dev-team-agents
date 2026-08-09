@@ -3,6 +3,10 @@
 Spin up a **fully isolated Docker Compose stack per worktree** so worktree work
 never touches the main project's containers, volumes, networks, or host ports.
 
+> Unified naming rule (see `../SKILL.md` → Key Rules): the Docker project name
+> derived here must stay in lockstep with the worktree directory and branch name,
+> both built from the same `<context>/<brief-title>` slug.
+
 Applies only when **both** hold:
 - `worktree_docker_isolate` is `true` in `.dev-team-agents/user-data/preferences.json`, and
 - the project uses Docker Compose (a compose file exists and `docker` is running).
