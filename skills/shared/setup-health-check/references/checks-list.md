@@ -63,6 +63,12 @@ cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "MISSING"
 for _legacy in .claude/user-data .claude/docs .claude/context .claude/tasks .claude/dev-team-agents; do
   [ -e "$_legacy" ] && echo "LEGACY_DIR: $_legacy"
 done
+
+# Check for orphaned install-swap artifacts (see scripts/install.sh Step 2c) —
+# left behind only when a prior install/update was killed or crashed mid-swap.
+for _stray in .dev-team-agents.old.* .dev-team-agents.new.*; do
+  [ -d "$_stray" ] && echo "STRAY_SWAP_DIR: $_stray"
+done
 ```
 
 | Check | Auto-fix |
@@ -71,6 +77,7 @@ done
 | `.installed-version` exists | WARN only — re-run installer to populate |
 | Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration). Do NOT skip this step. Leftovers are `rmdir`'d only when empty, and quarantined otherwise — never `rm -rf` |
 | Memory artifacts present (`session-summary.md`, `docs/wiki/`, `docs/development/adrs/`, `docs/project.md`) | Adapt in place only — see Category 11. Never regenerate over an existing file |
+| `.dev-team-agents.old.*` / `.dev-team-agents.new.*` present (`STRAY_SWAP_DIR`) | **Exception to the No-Destruction Rule, stated explicitly**: these are never user data — they are transient copies internal to the install/update swap (`scripts/install.sh` Step 2c) that only survive when a prior run was killed mid-swap. Safe to `rm -rf` outright. Report which path(s) were removed |
 
 ## Category 4 — settings.json / Provider Config
 

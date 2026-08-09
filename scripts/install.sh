@@ -32,6 +32,16 @@ SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
 USER_DATA_DIR="$PROJECT_ROOT/.dev-team-agents/user-data"
 VERSION="${1:-latest}"
 
+# Self-heal: remove any `.old.*` / `.new.*` swap-artifact directories left
+# behind by a previous run that was killed or crashed mid-swap (see Step 2c
+# below). These are always transient script-internal copies, never user
+# data — the current $INSTALL_DIR (or its restored form) is the only one
+# that matters going forward.
+for _stray in "$INSTALL_DIR".old.* "$INSTALL_DIR".new.*; do
+    [ -d "$_stray" ] && rm -rf "$_stray"
+done
+unset _stray
+
 echo "dev-team-agents installer (project-level)"
 echo "========================================="
 echo "Project root: $PROJECT_ROOT"
@@ -140,6 +150,19 @@ _cleanup() {
             echo "" >&2
             echo "NOTE: a copy of the previous installation was left at:" >&2
             echo "        $OLD_DIR" >&2
+        fi
+    elif [ "$SWAP_DONE" = true ] && [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
+        # Swap already succeeded — OLD_DIR is a spare copy, not a safety net.
+        # Try to remove it now; if that fails (locked file, permissions), warn
+        # loudly instead of swallowing the error, so it never turns into
+        # silent, permanent leftover junk in the project root.
+        if ! rm -rf "$OLD_DIR" 2>/dev/null; then
+            echo "" >&2
+            echo "WARNING: could not remove the old installation backup at:" >&2
+            echo "           $OLD_DIR" >&2
+            echo "         It is safe to delete manually:" >&2
+            echo "           rm -rf \"$OLD_DIR\"" >&2
+            echo "         The next install/update will also clean it up automatically." >&2
         fi
     fi
     if [ -n "$NEW_DIR" ] && [ -d "$NEW_DIR" ]; then rm -rf "$NEW_DIR" 2>/dev/null || true; fi
@@ -317,11 +340,8 @@ if ! _mv_or_copy "$NEW_DIR" "$INSTALL_DIR"; then
 fi
 SWAP_DONE=true
 NEW_DIR=""
-
-if [ -n "$OLD_DIR" ]; then
-    rm -rf "$OLD_DIR" 2>/dev/null || true
-    OLD_DIR=""
-fi
+# OLD_DIR (if any) is now just a spare copy, not a safety net — leave it for
+# _cleanup() on EXIT to remove, which warns instead of swallowing a failure.
 
 # ── Step 2b: Create credentials.local.json if missing ─────────────
 # The distributed tarball carries no user-data/ (it is runtime state, and the

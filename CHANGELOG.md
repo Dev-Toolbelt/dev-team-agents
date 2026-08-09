@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`scripts/install.sh` — orphaned `.dev-team-agents.old.*` / `.new.*` swap directories**: the install/update swap (Step 2c) renamed the previous installation aside before removing it, but the final `rm -rf` was best-effort (`|| true`) and never retried, so a process killed mid-swap — or a failed removal on a locked/permission-denied file — left the backup on disk forever, with no warning. Install now self-heals any stray `.old.*`/`.new.*` directory from a previous interrupted run at startup, and `_cleanup()` retries the removal on exit and prints an explicit warning with the path if it still fails, instead of swallowing the error silently. `/devteam:health-check` Category 3 also now detects and removes any leftover swap directories as a safety net.
+
 ## [2.34.0] - 2026-08-08
 
 ### Added
