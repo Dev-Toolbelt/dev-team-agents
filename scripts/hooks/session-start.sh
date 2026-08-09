@@ -153,6 +153,17 @@ if [ ! -f "$PREFS_FILE" ]; then
     echo ""
 fi
 
+# ── Scoped test execution reminder (always shown, every session) ──
+# skills/shared/scoped-test-execution/SKILL.md is normally loaded via
+# project-context's mandatory load inside /devteam:* agent routing. A
+# session working outside that routing (plain main-loop work) never
+# triggers that load, so the rule below is injected unconditionally here
+# as the structural fix for that gap. pre-tool-use/02b-full-suite-guard.sh
+# is the complementary per-command safety net.
+echo ""
+echo "[DEVTEAM:TEST_SCOPE_RULE] Run only tests covering touched code; full suite only on explicit user request this session (see skills/shared/scoped-test-execution/SKILL.md)."
+echo ""
+
 # ── Language banner (always shown when language is non-English) ───
 if [ -f "$PREFS_FILE" ] && [ "$USER_LANG" != "en" ] && [ "$USER_LANG" != "" ]; then
     echo "→ Conversation language: $USER_LANG (from preferences.json)"

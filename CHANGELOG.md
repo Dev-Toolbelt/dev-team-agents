@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.35.0] - 2026-08-09
+
+### Added
+- **Full-suite test guard**: `skills/shared/scoped-test-execution/SKILL.md` (never run the full test suite without explicit user request) was only enforced inside `/devteam:*` agent routing, via `project-context`'s mandatory load — a plain main-loop session never triggered that load and could self-escalate to an unscoped full-suite run. `scripts/hooks/session-start.sh` now injects the rule unconditionally into every session, and a new `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` nudges (does not block, per this repo's PreToolUse convention) when a `Bash` command looks like an unscoped full-suite run (pytest/jest/phpunit/go test/gradle/flutter/cargo/rspec with no path/filter).
+
 ## [2.34.2] - 2026-08-08
 
 ### Fixed
