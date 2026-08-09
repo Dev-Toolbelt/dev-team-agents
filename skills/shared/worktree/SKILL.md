@@ -52,7 +52,7 @@ Load `references/branch-flow.md` for the complete step-by-step flow:
 5. Create: `git worktree add <wt-path>/<ctx>/<title> -b <ctx>/<title> <base>`
 6. Work exclusively inside `<wt-path>/<ctx>/<title>/` — when `worktree_docker_isolate` and the project uses Docker, load `references/docker-isolation.md`
 7. Commit with `git -C <wt-path>/<ctx>/<title> ...` (intermediate commits are normal)
-8. Finalize on merge: rebase onto base → resolve → commit → merge → teardown worktree + isolated Docker stack only
+8. Finalize on merge: rebase onto base → resolve → commit → merge → **dirty-worktree guard** (`git status --porcelain`; abort teardown and ask the user if not clean) → teardown worktree + isolated Docker stack only
 
 ---
 
@@ -105,4 +105,5 @@ docker compose -p "$COMPOSE_PROJECT_NAME" ps --format "table {{.Name}}\t{{.Statu
 - **Never** use `git checkout -b` in the main tree — always `git worktree add`
 - **Never** hardcode `main`, `master`, or `beta` as base — resolve from `worktree_base_branch`, project config, or the auto-detected default branch
 - **Finalization is mandatory**: on merge, rebase onto the base first, then merge, then tear down **only** the worktree and its isolated Docker stack — never the main infra
+- **Never remove a dirty worktree**: before `git worktree remove`, run `git status --porcelain` inside it — non-empty output means uncommitted/untracked content would be destroyed. Abort and ask the user (commit / discard / keep) instead of proceeding
 - The session file is ephemeral — remove it on cleanup, keep it gitignored

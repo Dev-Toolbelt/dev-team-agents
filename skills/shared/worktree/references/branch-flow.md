@@ -142,18 +142,29 @@ git -C "$WT" commit -m "..."   # only if there is staged work
 git checkout "$BASE"
 git merge --ff-only "$BRANCH" || git merge --no-ff "$BRANCH"
 
-# 4. Teardown — ONLY the worktree's own infrastructure
+# 4. Dirty-worktree guard — MANDATORY, run before removal
+git -C "$WT" status --porcelain
+#    Non-empty output → STOP. Do NOT remove the worktree. `git worktree remove`
+#    deletes uncommitted/untracked content permanently — merging the branch does
+#    NOT make the working tree clean by itself. Ask the user (AskUserQuestion):
+#    "The worktree has uncommitted changes — commit them, discard them, or keep
+#    the worktree without tearing down?" Proceed to removal only once the guard
+#    reports a clean tree.
+
+# 5. Teardown — ONLY the worktree's own infrastructure
 #    (isolated Docker stack: see references/docker-isolation.md → Teardown)
 git worktree remove "$WT"
 git branch -d "$BRANCH"
 rm -f .dev-team-agents/.worktree-session
 ```
 
-Use `git worktree remove --force` only when the user explicitly requests it.
+Use `git worktree remove --force` only when the user explicitly requests it — this bypasses the dirty-worktree guard, so confirm the user knows uncommitted content will be lost.
 
 > **Safety:** teardown removes the worktree, its branch, and its **isolated** Docker
 > stack only. Never run `docker compose down` without the isolated `-p <project>`,
-> and never delete the base branch or the main stack.
+> and never delete the base branch or the main stack. **Never run `git worktree
+> remove` on a worktree with uncommitted changes** — check `git status --porcelain`
+> first, every time, even on a routine finalization.
 
 ---
 
