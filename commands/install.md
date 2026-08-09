@@ -26,21 +26,22 @@ You are running the **`/devteam:install`** command — the single entrypoint for
 
 ## Step 2 — Listing mode (no args / `list` / any invalid name present)
 
-For each of the 7 tools in the skill's Supported Tools table, run its **Detect** command to get current status. Then print exactly this table (fill in the rows):
+For each of the 7 tools in the skill's Supported Tools table, run its **Detect** command to get current status. Then print exactly this (fill in the Status column):
 
 ```
 /devteam:install <tool> [<tool2> ...]   — install one or more
 /devteam:install all                    — install everything below
-
-Tool       Gain                                                    Status
-rg         Faster, lower-token grep replacement                    <installed|not installed>
-fd         Faster, .gitignore-aware find replacement                <installed|not installed>
-jq         JSON field extraction without reading whole files        <installed|not installed>
-ast-grep   Structural code search/rewrite by AST pattern             <installed|not installed>
-tokei      Instant codebase size/complexity stats                   <installed|not installed>
-delta      Readable git diff pager for reviewing agent diffs         <installed|not installed>
-graphify   Knowledge-graph codebase navigation (biggest token win)   <installed|not installed>
 ```
+
+| Tool | Gain | Status |
+|------|------|--------|
+| `rg` | Faster, lower-token grep replacement | `<installed\|not installed>` |
+| `fd` | Faster, `.gitignore`-aware find replacement | `<installed\|not installed>` |
+| `jq` | JSON field extraction without reading whole files | `<installed\|not installed>` |
+| `ast-grep` | Structural code search/rewrite by AST pattern | `<installed\|not installed>` |
+| `tokei` | Instant codebase size/complexity stats | `<installed\|not installed>` |
+| `delta` | Readable git diff pager for reviewing agent diffs | `<installed\|not installed>` |
+| `graphify` | Knowledge-graph codebase navigation (biggest token win) | `<installed\|not installed>` |
 
 If this listing mode was entered because of one or more invalid names, prepend:
 

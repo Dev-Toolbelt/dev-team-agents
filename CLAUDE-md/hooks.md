@@ -1,3 +1,13 @@
+## Session Start Banner — Echo Rule
+
+`scripts/hooks/session-start.sh` prints a `[DEVTEAM:SESSION_BANNER]`-tagged block (name, installed version, repo link, language, auto-update status, worktree status) once per session. **A `SessionStart` hook's stdout is delivered to Claude as context, not printed to the user's terminal** — unlike a plain shell script, nothing renders it on screen unless Claude's own reply does.
+
+**Trigger: `[DEVTEAM:SESSION_BANNER]` present in session-start context.** Reproduce the three lines that follow the tag **verbatim, unmodified**, as the first thing in your **first reply of the session** — before any other text, tool call, or acknowledgment. Do not summarize, translate, or reformat the block. This applies to every session, including ones not routed through a `/devteam:*` command, since `session-start.sh` fires for all of them.
+
+If the tag is absent from context (a session resumed mid-conversation, a hook error, or a provider that does not deliver SessionStart context this way), do not fabricate the banner — say nothing about it.
+
+---
+
 ## Stop Hook (Automated Enforcement)
 
 `install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`. This dispatcher runs every sub-script in `scripts/hooks/stop/` whose filename matches the naming convention, in order, including `01-session-summary.sh`, which:
@@ -57,7 +67,7 @@ Each sub-script must:
 
 | Event | File | Dispatcher | Purpose |
 |-------|------|-----------|---------|
-| `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder |
+| `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
 | `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, full-suite test guard (update checks and telemetry queue disabled, see § Disabled Hooks) |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
 | `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, archive rotation (notifications, telemetry, and graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |

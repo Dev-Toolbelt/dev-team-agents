@@ -480,7 +480,7 @@ The script prints existing ADR titles and auto-numbers the file — see `skills/
 
 `install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`, running every sub-script in `scripts/hooks/stop/` in order — including `01-session-summary.sh`, which detects missing session-summary entries and prompts for one. No manual setup is required.
 
-→ See [`CLAUDE-md/hooks.md`](CLAUDE-md/hooks.md) for the Stop and PreToolUse sub-script conventions and the full hook files map.
+→ See [`CLAUDE-md/hooks.md`](CLAUDE-md/hooks.md) for the Stop and PreToolUse sub-script conventions, the Session Start Banner echo rule, and the full hook files map.
 
 ---
 

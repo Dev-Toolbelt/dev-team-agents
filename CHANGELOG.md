@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.37.1] - 2026-08-09
+
+### Fixed
+- **Session identity banner was never visible to the user**: `scripts/hooks/session-start.sh`'s banner (added in 2.36.0) assumed `SessionStart` hook stdout prints to the terminal like a plain shell script. It doesn't — Claude Code delivers it as context for Claude, not as rendered terminal output, so the banner was silently invisible on every provider. The hook now tags the block with `[DEVTEAM:SESSION_BANNER]`, and a new rule in `CLAUDE-md/hooks.md` § Session Start Banner — Echo Rule instructs Claude to reproduce it verbatim as the first thing in its first reply of the session.
+- **`Stop` hook payload temp file collided on macOS**: `scripts/hooks/stop.sh` used `mktemp /tmp/devteam-stop-payload.XXXXXX.json` — BSD/macOS `mktemp` only substitutes `XXXXXX` when it is the literal end of the template, so the trailing `.json` suffix made it create a file with the literal, unrandomized name instead. The first `Stop` on a machine silently created that literal file; every `Stop` after it failed with `mkstemp failed ...: File exists`. Dropped the `.json` suffix — no consumer of `DEVTEAM_HOOK_PAYLOAD` depends on the extension, they all read it as a plain file path.
+- **`/devteam:install` listing table was hand-aligned columns, not a markdown table**: `commands/install.md` Step 2 now renders the tool status list as a proper `| Tool | Gain | Status |` table.
+
 ## [2.37.0] - 2026-08-09
 
 ### Changed

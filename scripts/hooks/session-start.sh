@@ -184,6 +184,7 @@ DT_AUTO_UPDATE_LABEL="No"
 DT_WORKTREE_LABEL="No"
 [ "$WORKTREE_ACTIVE" = "true" ] && DT_WORKTREE_LABEL="Yes"
 
+echo "[DEVTEAM:SESSION_BANNER]"
 echo "DevTeam Agents • ${DT_VERSION} (github.com/Dev-Toolbelt/dev-team-agents)"
 echo "─────────────────────────────────────────────────"
 echo "Language: ${USER_LANG} | Auto Update: ${DT_AUTO_UPDATE_LABEL} | Worktree: ${DT_WORKTREE_LABEL}"

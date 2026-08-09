@@ -12,7 +12,7 @@ unset BASH_ENV ENV
 set -euo pipefail
 
 # Capture hook payload from stdin before dispatching to sub-scripts.
-HOOK_TMP=$(mktemp /tmp/devteam-stop-payload.XXXXXX.json)
+HOOK_TMP=$(mktemp /tmp/devteam-stop-payload.XXXXXX)
 cat > "$HOOK_TMP" || true
 export DEVTEAM_HOOK_PAYLOAD="$HOOK_TMP"
 trap 'rm -f "$HOOK_TMP"' EXIT
