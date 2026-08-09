@@ -85,7 +85,7 @@ Spawn an Explore subagent for broad codebase searches. Saves 70–80% tokens vs.
 
 ## Optional CLI Tools
 
-The rules above assume `grep`, `find`, and manual JSON reading. Faster, lower-token alternatives exist for each — `rg` (ripgrep), `fd`, `jq`, `ast-grep` (structural code search/rewrite), `tokei` (instant repo stats), `delta` (readable diff review). None are required; `skills/shared/setup-health-check/references/checks-list.md` Category 13 detects them and reports the install command per OS when missing.
+The rules above assume `grep`, `find`, and manual JSON reading. Faster, lower-token alternatives exist for each — `rg` (ripgrep), `fd`, `jq`, `ast-grep` (structural code search/rewrite), `tokei` (instant repo stats), `delta` (readable diff review). None are required; run `/devteam:install list` to see what's missing, or `/devteam:install <tool>` to install one — see `skills/devops/tool-installers/SKILL.md` for the cross-OS knowledge base. `skills/shared/setup-health-check/references/checks-list.md` Category 13 only detects and points here.
 
 ## Decision Tree for File Operations
 

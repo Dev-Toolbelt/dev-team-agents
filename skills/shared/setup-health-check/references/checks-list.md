@@ -343,8 +343,8 @@ grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && e
 
 | Check | Auto-fix |
 |-------|----------|
-| `graphify` binary installed | WARN — cannot auto-install; report the install command for the detected OS (`graphify-setup/SKILL.md` Step 2) |
-| `jq` installed | WARN — same (Step 3) |
+| `graphify` binary installed | WARN — cannot auto-install; direct the user to `/devteam:install graphify` |
+| `jq` installed | WARN — same, `/devteam:install jq` |
 | `graphify.json` is valid JSON | FIX blocked — report the parse error; never rewrite user config content automatically |
 | `targetPaths` non-empty | Same — report and ask the user to correct `graphify.json` |
 | Each `targetPaths` entry exists on disk | WARN — list the missing paths; do not remove them from the config (may be a rename in progress) |
@@ -589,7 +589,7 @@ Only warn when `python3` is actually missing — do not repeat this hint on ever
 
 ## Category 13 — Productivity & Token-Efficiency Tools
 
-These are optional CLI tools that reduce the token cost of the raw bash operations `skills/shared/token-efficiency/SKILL.md` already recommends (search, find, JSON extraction, structural code search, repo stats, diff review). None of them are required for dev-team-agents to function — WARN only, same as Category 12. Never attempt to install them automatically; report the OS-specific command and let the user run it.
+These are optional CLI tools that reduce the token cost of the raw bash operations `skills/shared/token-efficiency/SKILL.md` already recommends (search, find, JSON extraction, structural code search, repo stats, diff review). None of them are required for dev-team-agents to function — WARN only, same as Category 12. The health check never installs anything itself — installation and cross-OS knowledge live in `/devteam:install` (`skills/devops/tool-installers/SKILL.md`).
 
 ```bash
 for _tool in rg fd jq ast-grep tokei delta; do
@@ -597,17 +597,8 @@ for _tool in rg fd jq ast-grep tokei delta; do
 done
 ```
 
-| Tool | Purpose | macOS (`brew`) | Debian/Ubuntu (`apt`) | Fedora (`dnf`) | Windows (`winget`/`scoop`) |
-|------|---------|-----------------|------------------------|-----------------|----------------------------|
-| `rg` (ripgrep) | Faster, smaller-output alternative to `grep -r` | `brew install ripgrep` | `apt install ripgrep` | `dnf install ripgrep` | `winget install BurntSushi.ripgrep.MSVC` |
-| `fd` | Faster, `.gitignore`-aware alternative to `find` | `brew install fd` | `apt install fd-find` | `dnf install fd-find` | `winget install sharkdp.fd` |
-| `jq` | JSON field extraction without reading whole files (also used by Category 5 Graphify checks) | `brew install jq` | `apt install jq` | `dnf install jq` | `winget install jqlang.jq` |
-| `ast-grep` | Structural code search/rewrite by AST pattern instead of regex — targets exact syntax nodes for large refactors | `brew install ast-grep` | `cargo install ast-grep --locked` (no apt package) | `cargo install ast-grep --locked` (no dnf package) | `winget install ast-grep.ast-grep` |
-| `tokei` | Instant codebase size/complexity stats without an agent reading the whole tree | `brew install tokei` | `apt install tokei` (Ubuntu 22.04+; otherwise `cargo install tokei`) | `dnf install tokei` | `winget install XAMPPRocky.tokei` |
-| `delta` | Readable git diff pager for human review of agent-generated diffs/PRs | `brew install git-delta` | `apt install git-delta` (Debian 12+/Ubuntu 23.04+; otherwise download `.deb` from releases) | `dnf install git-delta` | `winget install dandavison.delta` |
-
 | Check | Status | Auto-fix |
 |-------|--------|----------|
-| Any tool in the list missing | WARN only | None — report the missing tool(s) and print the install command for the detected OS from the table above; never install automatically |
+| Any tool in the list missing | WARN only | None — report the missing tool(s) and direct the user to `/devteam:install <tool>` (or `/devteam:install all`); never install automatically |
 
 Only warn when a tool is actually missing — do not repeat the hint on every run once it is present.

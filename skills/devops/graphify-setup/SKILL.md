@@ -53,38 +53,14 @@ Do not continue on Windows until WSL is confirmed active.
 
 ---
 
-## Step 2 — Check and Install graphify
+## Step 2 — Check and Install graphify + jq
 
 ```bash
 command -v graphify && graphify --version || echo "NOT_FOUND"
-```
-
-**If not found**, attempt installation based on the detected OS without asking:
-
-| OS | Try in order |
-|----|-------------|
-| macOS | `brew install graphify` |
-| Linux/WSL | `npm install -g graphify` → fallback `pip install graphify` |
-
-Run the install command directly. If it fails due to a permission error or requires `sudo`, inform the user of the exact command to run and wait for them to confirm it's done before continuing. After install, re-run `command -v graphify` to verify. Do not continue until graphify is confirmed working.
-
----
-
-## Step 3 — Check and Install jq
-
-```bash
 command -v jq && jq --version || echo "NOT_FOUND"
 ```
 
-**If not found**, attempt installation without asking:
-
-| OS | Command |
-|----|---------|
-| macOS | `brew install jq` |
-| Ubuntu/Debian / WSL | `sudo apt-get install -y jq` |
-| Fedora/RHEL | `sudo dnf install -y jq` |
-
-If the install requires elevated privileges and fails, report the command to the user and wait for confirmation before continuing.
+If either is missing, run `/devteam:install graphify jq` and wait for it to finish — that command owns the cross-OS install/verify logic for both (`skills/devops/tool-installers/SKILL.md`). Do not install them directly here; this avoids duplicating install commands in two places. Do not continue past this step until both are confirmed working.
 
 ---
 
@@ -208,7 +184,7 @@ If it fails, diagnose the error:
 | Symptom | Fix |
 |---------|-----|
 | `graphify not found` | Complete Step 2 |
-| `jq not found` | Complete Step 3 |
+| `jq not found` | Complete Step 2 |
 | `graphify.json not found` | Complete Step 5 — file must be at `.dev-team-agents/user-data/graphify.json` |
 | Source dir not found | Verify path with user and update `.dev-team-agents/user-data/graphify.json` |
 
