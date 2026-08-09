@@ -586,3 +586,28 @@ command -v python3 >/dev/null 2>&1 && echo "PYTHON3: OK" || echo "PYTHON3: MISSI
 | `python3` not found | WARN only | None — this is a host-level prerequisite, not something the health check can install. Report it and print the OS-specific install hint (see install.sh's Prerequisites check: `brew install python3` on macOS, `apt`/`dnf install python3` on Linux, python.org or `winget install Python.Python.3` on Windows) |
 
 Only warn when `python3` is actually missing — do not repeat this hint on every run once it is present.
+
+## Category 13 — Productivity & Token-Efficiency Tools
+
+These are optional CLI tools that reduce the token cost of the raw bash operations `skills/shared/token-efficiency/SKILL.md` already recommends (search, find, JSON extraction, structural code search, repo stats, diff review). None of them are required for dev-team-agents to function — WARN only, same as Category 12. Never attempt to install them automatically; report the OS-specific command and let the user run it.
+
+```bash
+for _tool in rg fd jq ast-grep tokei delta; do
+  command -v "$_tool" >/dev/null 2>&1 && echo "OK: $_tool" || echo "MISSING: $_tool"
+done
+```
+
+| Tool | Purpose | macOS (`brew`) | Debian/Ubuntu (`apt`) | Fedora (`dnf`) | Windows (`winget`/`scoop`) |
+|------|---------|-----------------|------------------------|-----------------|----------------------------|
+| `rg` (ripgrep) | Faster, smaller-output alternative to `grep -r` | `brew install ripgrep` | `apt install ripgrep` | `dnf install ripgrep` | `winget install BurntSushi.ripgrep.MSVC` |
+| `fd` | Faster, `.gitignore`-aware alternative to `find` | `brew install fd` | `apt install fd-find` | `dnf install fd-find` | `winget install sharkdp.fd` |
+| `jq` | JSON field extraction without reading whole files (also used by Category 5 Graphify checks) | `brew install jq` | `apt install jq` | `dnf install jq` | `winget install jqlang.jq` |
+| `ast-grep` | Structural code search/rewrite by AST pattern instead of regex — targets exact syntax nodes for large refactors | `brew install ast-grep` | `cargo install ast-grep --locked` (no apt package) | `cargo install ast-grep --locked` (no dnf package) | `winget install ast-grep.ast-grep` |
+| `tokei` | Instant codebase size/complexity stats without an agent reading the whole tree | `brew install tokei` | `apt install tokei` (Ubuntu 22.04+; otherwise `cargo install tokei`) | `dnf install tokei` | `winget install XAMPPRocky.tokei` |
+| `delta` | Readable git diff pager for human review of agent-generated diffs/PRs | `brew install git-delta` | `apt install git-delta` (Debian 12+/Ubuntu 23.04+; otherwise download `.deb` from releases) | `dnf install git-delta` | `winget install dandavison.delta` |
+
+| Check | Status | Auto-fix |
+|-------|--------|----------|
+| Any tool in the list missing | WARN only | None — report the missing tool(s) and print the install command for the detected OS from the table above; never install automatically |
+
+Only warn when a tool is actually missing — do not repeat the hint on every run once it is present.
