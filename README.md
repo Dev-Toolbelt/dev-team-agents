@@ -144,6 +144,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
+| `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
 | `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) |
 | `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
 | `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
