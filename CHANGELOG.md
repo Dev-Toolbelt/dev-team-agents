@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.36.0] - 2026-08-09
+
+### Added
+- **Session banner**: `scripts/hooks/session-start.sh` now prints a one-time identity banner at the start of every session — name, installed version (with a `CHANGELOG.md`-based fallback for this repo's own self-hosted install), repo link, conversation language, auto-update status, and worktree status. Replaces the old standalone "Conversation language" line.
+
 ## [2.35.1] - 2026-08-09
 
 ### Changed
