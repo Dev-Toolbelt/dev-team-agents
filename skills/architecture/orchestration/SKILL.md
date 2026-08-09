@@ -190,10 +190,10 @@ already forbids for status lines; this check applies the same rule specifically 
 
 Note the wall-clock time of each spawn. If the user asks for status and no return has arrived:
 
-- **Before treating a spawn as stalled**, actually try to confirm it: check for any status/output
-  tool this provider exposes for the specific run (e.g. a task-status or task-output lookup), if
-  one is available to you in this context. Use it before concluding anything — do not skip straight
-  to guessing.
+- **Before treating a spawn as stalled, actually call the status tool.** On Claude Code that means
+  `TaskList` (or `TaskGet`/`TaskOutput` for the specific task id if you have it) — call it and read
+  the result before saying anything about liveness. Do not skip straight to guessing, and do not
+  substitute a re-read of the plan or your own last message for an actual tool call.
 - **If no such check is available, or it returns nothing new**, say exactly that — do not say
   "still running." State the elapsed time since spawn and that no completion signal has been
   received, e.g.: "No update from `<agent>` since it was spawned <elapsed>. I cannot confirm it is

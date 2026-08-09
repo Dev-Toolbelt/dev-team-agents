@@ -86,6 +86,7 @@ Non-negotiable spawn invariants:
 - Every spawn prompt carries `WORKTREE_PATH` and `BRANCH`, and forbids writing outside that path
 - Independent agents are spawned in parallel; dependent ones in sequence
 - After all agents complete, present one consolidated summary and point the user at `/devteam:review`
+- **On a status question, call `TaskList`/`TaskGet`/`TaskOutput` first** — never answer from the plan or a prior message (orchestration skill, Spawn Integrity check 4, Liveness)
 
 ---
 
