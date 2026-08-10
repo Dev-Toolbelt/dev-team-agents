@@ -120,6 +120,7 @@ Controle como os agentes de codificação isolam o trabalho, no mesmo `preferenc
 {
   "worktree_active": false,
   "worktree_base_branch": null,
+  "worktree_commit_action": "ask",
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true
 }
@@ -129,6 +130,7 @@ Controle como os agentes de codificação isolam o trabalho, no mesmo `preferenc
 |-------|--------|-----------|
 | `worktree_active` | `false` | Quando `true`, os agentes criam uma worktree por task **sem perguntar** |
 | `worktree_base_branch` | `null` | Base branch para novas worktrees (`null` = auto-detectar a branch padrão do repo) |
+| `worktree_commit_action` | `"ask"` | O que `/devteam:commit` faz em uma worktree ativa: `ask`, `finalize`, `rebase` ou `commit-only` |
 | `worktree_path` | `".worktrees"` | Onde as worktrees são criadas (`<path>/<contexto>/<título>`) |
 | `worktree_docker_isolate` | `true` | Com `worktree_active` e um projeto Docker Compose, sobe um stack isolado por worktree (containers/volumes/redes namespaceados, portas não publicadas) |
 

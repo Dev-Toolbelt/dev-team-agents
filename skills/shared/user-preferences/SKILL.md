@@ -36,6 +36,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
   "telemetry": true,
   "worktree_active": true,
   "worktree_base_branch": null,
+  "worktree_commit_action": "ask",
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
@@ -64,6 +65,7 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 | `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) (consent key) |
 | `worktree_active` | bool | `true` | Default to a git worktree per task without asking |
 | `worktree_base_branch` | string or null | `null` | Base branch for worktrees (`null` = auto-detect) |
+| `worktree_commit_action` | string | `"ask"` | Default post-commit action in an active worktree: `ask`, `finalize`, `rebase`, or `commit-only` |
 | `worktree_path` | string | `".worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 | `qa_browser` | string or null | `null` | Browser the `qa-specialist` drives (`null` = ask on first use) |

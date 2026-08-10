@@ -995,6 +995,7 @@ else
   "telemetry": $TELEMETRY_VALUE,
   "worktree_active": true,
   "worktree_base_branch": null,
+  "worktree_commit_action": "ask",
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,

@@ -21,6 +21,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
   "telemetry": true,
   "worktree_active": true,
   "worktree_base_branch": null,
+  "worktree_commit_action": "ask",
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
@@ -49,6 +50,7 @@ All user-level preferences are stored in `.dev-team-agents/user-data/preferences
 | `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` | `scripts/lib/telemetry-guard.sh` (`_telemetry_enabled`), consumed by `scripts/hooks/pre-tool-use/02b-telemetry.sh`, `scripts/hooks/stop/05-telemetry.sh`, `scripts/helpers/telemetry-send.sh` |
 | `worktree_active` | `true` | When `true`, coding agents default to a git worktree per task without asking. See [worktree cascade](#worktree-defaults) | CLAUDE.md worktree decision cascade + `## Worktree Isolation` section in every coding agent (agent-executed) |
 | `worktree_base_branch` | `null` | Base branch for new worktrees. `null` = auto-detect (`origin/HEAD` → current branch). Project `CLAUDE.md`/config overrides | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/branch-flow.md` (agent-executed) |
+| `worktree_commit_action` | `"ask"` | Default `/devteam:commit` behavior inside an active worktree: `ask`, `finalize`, `rebase`, or `commit-only`. Lets Codex skip the interactive chooser when a fixed action is preferred | `commands/commit.md` (agent-executed) |
 | `worktree_path` | `".worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) | `skills/shared/worktree/SKILL.md` (agent-executed) |
 | `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/docker-isolation.md` (agent-executed) |
 | `qa_browser` | `null` | Preferred browser for `qa-specialist` browser testing when the in-app Claude browser is unavailable (CLI). `null` = ask on first use and offer to save the choice here | `agents/qa-specialist.md` |

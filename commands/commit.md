@@ -37,7 +37,26 @@ cat .dev-team-agents/.worktree-session 2>/dev/null
 
 If the file is absent, or reads `worktree=no ...`, skip this step entirely — commit normally.
 
-If it reads `worktree=yes branch=<b>`, use `AskUserQuestion` before staging or committing anything:
+If it reads `worktree=yes branch=<b>`, resolve the post-commit action in this order:
+
+1. If `$ARGUMENTS` contains `finalize`, `merge`, or `teardown`, set the action to **Commit + rebase + merge + teardown**
+2. Else if `$ARGUMENTS` contains `rebase`, set the action to **Commit + rebase**
+3. Else if `$ARGUMENTS` contains `commit-only`, `only`, or `keep-worktree`, set the action to **Commit only**
+4. Else read `.dev-team-agents/user-data/preferences.json` and check `worktree_commit_action`
+5. If that preference is absent or equals `ask`, use `AskUserQuestion` before staging or committing anything
+
+`worktree_commit_action` accepts these values:
+
+| Value | Effect |
+|-------|--------|
+| `ask` | Keep the interactive chooser |
+| `finalize` | Auto-select **Commit + rebase + merge + teardown** |
+| `rebase` | Auto-select **Commit + rebase** |
+| `commit-only` | Auto-select **Commit only** |
+
+When the action is auto-resolved from `$ARGUMENTS` or `worktree_commit_action`, print one short line stating which path was selected, then continue without asking.
+
+Only if the action is still unresolved after that cascade, use `AskUserQuestion`:
 
 **Question:** "This work is in an isolated worktree (and Docker stack, if used). What should `/devteam:commit` do?"
 
@@ -196,3 +215,6 @@ After all commits, run `git log --oneline -5` and show the output so the user ca
 | `dry-run` / `--dry-run` | Show proposed commits without executing |
 | `format: <pattern>` | Override pattern detection; use the specified format |
 | `amend` | Amend the last commit instead of creating a new one (requires user confirmation) |
+| `finalize` / `merge` / `teardown` | In an active worktree, skip the chooser and auto-run commit + rebase + merge + teardown |
+| `rebase` | In an active worktree, skip the chooser and auto-run commit + rebase |
+| `commit-only` / `keep-worktree` | In an active worktree, skip the chooser and commit without finalizing the worktree |

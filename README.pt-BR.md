@@ -279,7 +279,7 @@ git commit -m "chore: add dev-team-agents"
 Os agentes de codificação resolvem a decisão de worktree por uma **cascata de três níveis**:
 
 1. **`.dev-team-agents/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
-2. **Defaults do `preferences.json`** — `worktree_active` já vem `true`, então os agentes criam uma worktree por task **sem perguntar**; defina `false` para trabalhar direto numa branch. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.worktrees/<ctx>/<title>/`).
+2. **Defaults do `preferences.json`** — `worktree_active` já vem `true`, então os agentes criam uma worktree por task **sem perguntar**; defina `false` para trabalhar direto numa branch. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.worktrees/<ctx>/<title>/`). `worktree_commit_action` controla o que `/devteam:commit` faz dentro de uma worktree ativa: `ask` mantém o chooser, `finalize` executa automaticamente rebase + merge + teardown, `rebase` executa só o rebase, e `commit-only` apenas commita sem finalizar a worktree.
 3. **Perguntar uma vez** — apenas em instalações legadas onde a chave de preferência não existe.
 
 **Isolamento Docker** — quando `worktree_active` está ligado e o projeto usa Docker Compose, os agentes podem subir um **stack compose isolado por worktree** (`worktree_docker_isolate: true`). Containers, redes e volumes são namespaceados com um nome claro (`<projeto>-wt-<ctx>-<title>`), as portas do host não são publicadas, e nada toca no stack principal.
@@ -290,6 +290,7 @@ Os agentes de codificação resolvem a decisão de worktree por uma **cascata de
 |-----------|--------|-----------|
 | `worktree_active` | `true` | Criar uma worktree por task por padrão (sem prompt) |
 | `worktree_base_branch` | `null` | Base branch (`null` = auto-detectar) |
+| `worktree_commit_action` | `ask` | Ação padrão do `/devteam:commit` em uma worktree ativa |
 | `worktree_path` | `.worktrees` | Onde as worktrees são criadas |
 | `worktree_docker_isolate` | `true` | Stack Docker isolado por worktree (quando há Docker) |
 

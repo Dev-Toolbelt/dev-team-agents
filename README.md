@@ -279,7 +279,7 @@ git commit -m "chore: add dev-team-agents"
 Coding agents resolve the worktree decision from a **three-level cascade**:
 
 1. **`.dev-team-agents/.worktree-session`** (per-session override) — shared across all agents in the task, so multi-agent workflows resolve it exactly once.
-2. **`preferences.json` defaults** — `worktree_active` is `true` out of the box, so agents create a worktree per task **without asking**; set it to `false` to work directly on a branch instead. The base branch comes from `worktree_base_branch` (or is auto-detected — never hardcoded to `main`/`master`), and worktrees are created under `worktree_path` (default `.worktrees/<ctx>/<title>/`).
+2. **`preferences.json` defaults** — `worktree_active` is `true` out of the box, so agents create a worktree per task **without asking**; set it to `false` to work directly on a branch instead. The base branch comes from `worktree_base_branch` (or is auto-detected — never hardcoded to `main`/`master`), and worktrees are created under `worktree_path` (default `.worktrees/<ctx>/<title>/`). `worktree_commit_action` controls what `/devteam:commit` does inside an active worktree: `ask` keeps the chooser, `finalize` auto-runs rebase + merge + teardown, `rebase` auto-runs only the rebase, and `commit-only` skips finalization.
 3. **Ask once** — only on legacy installs where the preference key is absent.
 
 **Docker isolation** — when `worktree_active` is on and the project uses Docker Compose, agents can spin up an **isolated compose stack per worktree** (`worktree_docker_isolate: true`). Containers, networks, and volumes are namespaced with a clear name (`<project>-wt-<ctx>-<title>`), host ports are not published, and nothing touches the main stack.
@@ -290,6 +290,7 @@ Coding agents resolve the worktree decision from a **three-level cascade**:
 |-----------|---------|---------|
 | `worktree_active` | `true` | Create a worktree per task by default (no prompt) |
 | `worktree_base_branch` | `null` | Base branch (`null` = auto-detect) |
+| `worktree_commit_action` | `ask` | Default `/devteam:commit` action in an active worktree |
 | `worktree_path` | `.worktrees` | Where worktrees are created |
 | `worktree_docker_isolate` | `true` | Isolated Docker stack per worktree (when Docker is present) |
 
