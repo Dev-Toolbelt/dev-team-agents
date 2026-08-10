@@ -16,62 +16,6 @@ Cada agente tem um papel definido, expertise e integração com workflows. O que
 
 ---
 
-## Como Funciona — Fonte Única, Multi-CLI
-
-Uma fonte canônica de verdade vive neste repositório: `agents/`, `commands/`, `skills/`, `templates/`, `scripts/hooks/`, mais um conjunto pequeno de arquivos JSON de metadados (`scripts/lib/tiers.json`, `tool-map.json`, `command-map.json`, `commands.json`). Nada específico de provedor fica versionado para qualquer CLI.
-
-Um motor de renderização (`scripts/render-provider.sh`, Python puro com só stdlib) lê a fonte canônica e emite a árvore de arquivos esperada por cada CLI. Os instaladores por CLI traduzem o frontmatter dos agentes, prefixam uma curta nota "Convenções de ferramentas" por provedor que mapeia os nomes de ferramenta do Claude Code para as ferramentas nativas daquele CLI, e ligam os hooks de ciclo de vida aos mesmos dispatchers bash em `scripts/hooks/`.
-
-```
-                      ┌─────────────────────────────────────────────────────┐
-                      │           ESTE REPO (fonte canônica)                 │
-                      │     agents/  commands/  skills/  templates/         │
-                      │     scripts/hooks/*.sh   (dispatchers bash únicos)  │
-                      │     scripts/lib/{tiers, tool-map, command-map,      │
-                      │                   commands, preferences}.json       │
-                      └──────────────────────────┬──────────────────────────┘
-                                                 │
-            ┌───────────────────────────────────┴────────────────────────────────────┐
-            │                                                                          │
-            ▼                                                                          ▼
-  ┌───────────────────────────────────┐                            ┌──────────────────────────────┐
-  │   scripts/render-provider.sh      │                            │   scripts/install.sh          │
-  │   (python3, só stdlib)             │                            │   (instalador do Claude Code) │
-  │                                   │                            │   bundle slim para o          │
-  │   --provider claude | opencode |  │                            │   .dev-team-agents/   │
-  │              codex                 │                            │   do projeto                  │
-  └──┬────────────────┬───────────────┘                            └───────────────┬──────────────┘
-     │ renderiza      │ renderiza                                                  │ funciona
-     ▼                ▼                                                            ▼ direto
-  .opencode/          .codex/                                        ┌──────────────────────────────┐
-  agents/<n>.md       agents/<n>.toml    ← reshape de frontmatter     │  .claude/                    │
-  opencode.json       skills/devteam-*   ← formato de skill no Codex  │  agents/dev-team/<n>.md      │
-  plugins/dev-team-    hooks.json         ← liga os dispatchers bash  │  commands/devteam/<n>.md    │
-  agents.ts            skills/ → symlink                              │  skills/<name>/             │
-  skills/ → symlink                                                   │  settings.json → hooks/*.sh │
-     │                                                                  └──────────────────────────────┘
-     │ invocado de um projeto Claude-slim via                            │ tratado pelo caminho Claude
-     │                                                                  │ existente — sem bootstrap
-     │   bash <(curl -sSL .../install-provider.sh) opencode              │ extra necessário
-     │   bash <(curl -sSL .../install-provider.sh) codex
-     ▼
-  /devteam:plan do a plan          ← UX idêntica onde suportado (caminho de projeto no Codex → $devteam-plan)
-```
-
-**Modelo em camadas — três preocupações, mantidas separadas:**
-
-1. **Conhecimento** (skills, prompts de papel dos agentes, prompts de fluxo dos comandos, comportamento dos hooks). Autorado uma vez, versionado neste repo, idêntico entre provedores.
-2. **Adaptadores** (formato de frontmatter por provedor, tabela de mapeamento de nomes de ferramenta, formato de saída do slash command). Definidos uma vez por provedor em `scripts/lib/*.json` e renderizados no install time. Adicionar um provedor novo = uma coluna em `tiers.json` + uma linha em `tool-map.json` + uma linha em `command-map.json` + um `install-<provider>.sh` enxuto.
-3. **Ligação** (`.claude/settings.json` para Claude, `.opencode/plugins/dev-team-agents.ts` para opencode, `.codex/hooks.json` para Codex). Os três invocam os MESMOS dispatchers em `scripts/hooks/*.sh` — sem duplicação de hooks por provedor.
-
-**Model id por agente é rígido por tier.** Cada agente declara um de `reasoning | backend-exec | frontend | repetitive`. Cada tier é resolvido para um model id concreto via `tiers.json` por provedor, então trocar de provedor é uma mudança de uma coluna — sem editar o corpo de qualquer agente. No Claude Code isso significa que arquitetura e segurança rodam em Opus, implementação e review em Sonnet, e geração de docs em Haiku, em vez de todo subagente compartilhar o modelo da sessão.
-
-**Todo agente abre com um run banner** — uma tabela agente/tier/modelo/effort impressa antes de qualquer outra coisa, nos três provedores, para você sempre ver qual modelo está fazendo o trabalho.
-
-> Referência completa: [docs/providers.md](docs/providers.md)
-
----
-
 ## Pré-requisitos
 
 **Python 3** precisa estar instalado no sistema — ele alimenta o motor de renderização, o graphify e os merges seguros de JSON no `settings.json`. Nada além do seu CLI de escolha é necessário.
@@ -179,9 +123,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 /devteam:explain SPA, SSR, tenant, middleware
 ```
 
-**Em qual modelo cada comando roda.** Todo comando declara um tier em `scripts/lib/commands.json`, e no opencode e no Codex esse tier vira um modelo concreto na hora da instalação. No Claude Code o corpo é symlinkado como está, então o tier só chega até ele por uma chave `model:` no frontmatter do comando — e essa chave é usada apenas nos comandos `repetitive` (`docs`, `pr`, `push`, `commit`, `learn`, `update`, `symlinks`, `health-check`), que rodam em Haiku. Todos os outros herdam o modelo em que sua sessão está. O motivo é deliberado: `model:` sobrescreve a sessão, então fixar um comando de planejamento em Opus desfaria em silêncio uma sessão que você baixou para economizar, enquanto um pin em Haiku só pode custar menos do que você escolheu.
-
-No **Codex especificamente**, esse pin por tier vale para os **agentes** renderizados em `.codex/agents/*.toml`. O entrypoint oficial local ao projeto é `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; a skill em si é só orquestração e depende dos agentes disparados para aplicar a política de modelo/esforço no Codex.
+Os detalhes de tier de modelo, renderização por provedor e orquestração específica do Codex agora ficam em [Arquitetura do Harness](docs/harness.pt-BR.md).
 
 ---
 
@@ -240,10 +182,6 @@ Os agentes são invocados pelo papel no seu prompt:
 "Como o code-reviewer, revise as mudanças em [arquivos]."
 ```
 
-Nomear o papel funciona em todos os CLIs suportados — Claude Code (o CLI `claude`, app desktop, app web em [claude.ai/code](https://claude.ai/code), extensões de IDE), opencode e Codex CLI — porque os agentes são renderizados a partir de uma única fonte canônica por provedor.
-
-**Cada agente apresenta um plano para aprovação antes de executar qualquer coisa.** Você revisa, ajusta e aprova — depois a execução começa.
-
 ---
 
 ## Tarefas Comuns
@@ -272,27 +210,9 @@ git add .dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .cla
 git commit -m "chore: add dev-team-agents"
 ```
 
----
+Isolamento com worktree, thresholds de notificação, idioma e outros ajustes locais de runtime agora ficam em [Preferências do Usuário](docs/user-preferences.pt-BR.md).
 
-## Isolamento com Worktree
-
-Os agentes de codificação resolvem a decisão de worktree por uma **cascata de três níveis**:
-
-1. **`.dev-team-agents/.worktree-session`** (override da sessão) — compartilhado entre todos os agentes da task, então workflows com múltiplos agentes resolvem exatamente uma vez.
-2. **Defaults do `preferences.json`** — `worktree_active` já vem `true`, então os agentes criam uma worktree por task **sem perguntar**; defina `false` para trabalhar direto numa branch. A base branch vem de `worktree_base_branch` (ou é detectada automaticamente — nunca hardcoded como `main`/`master`), e as worktrees são criadas em `worktree_path` (padrão `.worktrees/<ctx>/<title>/`). `worktree_commit_action` controla o que `/devteam:commit` faz dentro de uma worktree ativa: `ask` mantém o chooser, `finalize` executa automaticamente rebase + merge + teardown, `rebase` executa só o rebase, e `commit-only` apenas commita sem finalizar a worktree.
-3. **Perguntar uma vez** — apenas em instalações legadas onde a chave de preferência não existe.
-
-**Isolamento Docker** — quando `worktree_active` está ligado e o projeto usa Docker Compose, os agentes podem subir um **stack compose isolado por worktree** (`worktree_docker_isolate: true`). Containers, redes e volumes são namespaceados com um nome claro (`<projeto>-wt-<ctx>-<title>`), as portas do host não são publicadas, e nada toca no stack principal.
-
-**Finalização** — quando você pede o merge, o agente faz **rebase na base branch**, resolve conflitos, commita, faz o merge e então derruba **somente** a worktree e seu stack Docker isolado.
-
-| Preferência | Padrão | Propósito |
-|-----------|--------|-----------|
-| `worktree_active` | `true` | Criar uma worktree por task por padrão (sem prompt) |
-| `worktree_base_branch` | `null` | Base branch (`null` = auto-detectar) |
-| `worktree_commit_action` | `ask` | Ação padrão do `/devteam:commit` em uma worktree ativa |
-| `worktree_path` | `.worktrees` | Onde as worktrees são criadas |
-| `worktree_docker_isolate` | `true` | Stack Docker isolado por worktree (quando há Docker) |
+Para a estrutura de acesso a staging/produção, veja [Referência de Credentials](docs/credentials.local.pt-BR.md).
 
 ---
 
@@ -349,7 +269,7 @@ docs/development/code-standards.md  # padrões de código usados pelos reviewers
 
 ---
 
-## Telemetria Anônima
+## Telemetria Anônima (BETA)
 
 O dev-team-agents pode coletar **dados de uso anônimos e agregados** para nos ajudar a entender quais agentes e comandos são mais valiosos. **Fica desativado a menos que você o ative.**
 

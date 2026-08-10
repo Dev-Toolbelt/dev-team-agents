@@ -16,62 +16,6 @@ Each agent has a defined role, expertise, and workflow integration. What makes i
 
 ---
 
-## How It Works — Single Source, Multi-CLI
-
-One canonical source of truth lives in this repo: `agents/`, `commands/`, `skills/`, `templates/`, `scripts/hooks/`, plus a small set of JSON metadata files (`scripts/lib/tiers.json`, `tool-map.json`, `command-map.json`, `commands.json`). Nothing provider-specific is checked in for any CLI.
-
-A render engine (`scripts/render-provider.sh`, plain Python with stdlib only) reads the canonical source and emits the file tree each provider's CLI expects. Per-CLI installers translate agent frontmatter, prep a short per-provider "Tool conventions" note that maps Claude Code tool names to that CLI's native tools, and wire lifecycle hooks to the same bash dispatchers in `scripts/hooks/`.
-
-```
-                      ┌─────────────────────────────────────────────────────┐
-                      │              THIS REPO (canonical source)           │
-                      │     agents/  commands/  skills/  templates/         │
-                      │     scripts/hooks/*.sh   (single bash dispatchers) │
-                      │     scripts/lib/{tiers, tool-map, command-map,      │
-                      │                   commands, preferences}.json       │
-                      └──────────────────────────┬──────────────────────────┘
-                                                 │
-            ┌───────────────────────────────────┴────────────────────────────────────┐
-            │                                                                          │
-            ▼                                                                          ▼
-  ┌───────────────────────────────────┐                            ┌──────────────────────────────┐
-  │   scripts/render-provider.sh      │                            │   scripts/install.sh          │
-  │   (python3, stdlib only)          │                            │   (Claude Code installer)     │
-  │                                   │                            │   slim bundle to project's    │
-  │   --provider claude | opencode |  │                            │   .dev-team-agents/    │
-  │              codex                 │                            └───────────────┬──────────────┘
-  └──┬────────────────┬───────────────┘                                            │ works
-     │ renders         │ renders                                                    ▼ directly
-     ▼                ▼                                              ┌──────────────────────────────┐
-  .opencode/          .codex/                                        │  .claude/                    │
-  agents/<n>.md       agents/<n>.toml    ← frontmatter reshape       │  agents/dev-team/<n>.md      │
-  opencode.json       skills/devteam-*   ← Codex skill form         │  commands/devteam/<n>.md    │
-  plugins/dev-team-    hooks.json         ← wire bash dispatchers    │  skills/<name>/             │
-  agents.ts            skills/ → symlink                              │  settings.json → hooks/*.sh │
-  skills/ → symlink                                                   └──────────────────────────────┘
-     │                                                                  ▼
-     │ invoked from a Claude-slim project via                          │ handled by existing Claude
-     │                                                                  │ install path — no extra
-     │   bash <(curl -sSL .../install-provider.sh) opencode              │ bootstrap needed
-     │   bash <(curl -sSL .../install-provider.sh) codex
-     ▼
-  /devteam:plan do a plan          ← identical UX where supported (Codex project path → $devteam-plan)
-```
-
-**Layered model — three concerns, kept separate:**
-
-1. **Knowledge** (skills, agent role prompts, command flow prompts, hook behavior). Authored once, versioned in this repo, identical across providers.
-2. **Adapters** (per-provider frontmatter shape, tool-name mapping table, slash-command output form). Defined once per provider in `scripts/lib/*.json` and rendered at install time. Adding a new provider = one column in `tiers.json` + one row in `tool-map.json` + one row in `command-map.json` + a thin `install-<provider>.sh`.
-3. **Binding** (`.claude/settings.json` for Claude, `.opencode/plugins/dev-team-agents.ts` for opencode, `.codex/hooks.json` for Codex). All three invoke the SAME `scripts/hooks/*.sh` dispatchers — no per-provider hook duplication.
-
-**Per-agent model id is rigid per tier.** Every agent declares one of `reasoning | backend-exec | frontend | repetitive`. Each tier is resolved to a concrete model id through `tiers.json` per provider, so switching providers is a one-column change — no agent body edits. On Claude Code that means architecture and security work runs on Opus, implementation and review on Sonnet, and doc generation on Haiku, instead of every subagent sharing the session's model.
-
-**Every agent opens with a run banner** — an agent/tier/model/effort table printed before it does anything else, on all three providers, so you can always see which model is doing the work.
-
-> Full reference: [docs/providers.md](docs/providers.md)
-
----
-
 ## Prerequisites
 
 **Python 3** must be installed on your system — it powers the render engine, graphify, and safe JSON merges into `settings.json`. Nothing else is required beyond your CLI of choice.
@@ -179,9 +123,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 /devteam:explain SPA, SSR, tenant, middleware
 ```
 
-**Which model a command runs on.** Every command declares a tier in `scripts/lib/commands.json`, and on opencode and Codex that tier resolves to a concrete model at install time. On Claude Code the body is symlinked as-is, so the tier reaches it only through a `model:` key in the command's frontmatter — and that key is used on the `repetitive` commands alone (`docs`, `pr`, `push`, `commit`, `learn`, `update`, `symlinks`, `health-check`), which run on Haiku. Every other command inherits whatever model your session is set to. The reason is deliberate: `model:` overrides the session, so pinning a planning command to Opus would silently undo a session you lowered to save cost, while a Haiku pin can only ever cost less than what you chose.
-
-For **Codex specifically**, that tier pin applies to the rendered **agents** in `.codex/agents/*.toml`. The official project-local entrypoint is `$devteam-<name>` via `.codex/skills/devteam-*/SKILL.md`; the skill itself is orchestration only and relies on the spawned agents to enforce the Codex-side model/effort policy.
+Model-tier resolution, provider rendering, and Codex-specific orchestration details live in [Harness Architecture](docs/harness.md).
 
 ---
 
@@ -240,10 +182,6 @@ Agents are invoked by naming the role in your message:
 "As the code-reviewer, review the changes in [files]."
 ```
 
-Role-naming works in every supported CLI — Claude Code (the `claude` CLI, desktop app, web app at [claude.ai/code](https://claude.ai/code), IDE extensions), opencode, and Codex CLI — because the agents are rendered from one canonical source per provider.
-
-**Every agent presents a plan for approval before executing anything.** You review, adjust, and approve — then execution begins.
-
 ---
 
 ## Common Tasks
@@ -272,27 +210,9 @@ git add .dev-team-agents/ .claude/agents/ .claude/skills/ .claude/commands/ .cla
 git commit -m "chore: add dev-team-agents"
 ```
 
----
+Worktree isolation, notification thresholds, language settings, and other local runtime knobs now live in [User Preferences](docs/user-preferences.md).
 
-## Worktree Isolation
-
-Coding agents resolve the worktree decision from a **three-level cascade**:
-
-1. **`.dev-team-agents/.worktree-session`** (per-session override) — shared across all agents in the task, so multi-agent workflows resolve it exactly once.
-2. **`preferences.json` defaults** — `worktree_active` is `true` out of the box, so agents create a worktree per task **without asking**; set it to `false` to work directly on a branch instead. The base branch comes from `worktree_base_branch` (or is auto-detected — never hardcoded to `main`/`master`), and worktrees are created under `worktree_path` (default `.worktrees/<ctx>/<title>/`). `worktree_commit_action` controls what `/devteam:commit` does inside an active worktree: `ask` keeps the chooser, `finalize` auto-runs rebase + merge + teardown, `rebase` auto-runs only the rebase, and `commit-only` skips finalization.
-3. **Ask once** — only on legacy installs where the preference key is absent.
-
-**Docker isolation** — when `worktree_active` is on and the project uses Docker Compose, agents can spin up an **isolated compose stack per worktree** (`worktree_docker_isolate: true`). Containers, networks, and volumes are namespaced with a clear name (`<project>-wt-<ctx>-<title>`), host ports are not published, and nothing touches the main stack.
-
-**Finalization** — when you ask to merge, the agent **rebases onto the base branch**, resolves conflicts, commits, merges, and then tears down **only** the worktree and its isolated Docker stack.
-
-| Preference | Default | Purpose |
-|-----------|---------|---------|
-| `worktree_active` | `true` | Create a worktree per task by default (no prompt) |
-| `worktree_base_branch` | `null` | Base branch (`null` = auto-detect) |
-| `worktree_commit_action` | `ask` | Default `/devteam:commit` action in an active worktree |
-| `worktree_path` | `.worktrees` | Where worktrees are created |
-| `worktree_docker_isolate` | `true` | Isolated Docker stack per worktree (when Docker is present) |
+For staging/production access structure, see [Credentials Reference](docs/credentials.local.md).
 
 ---
 
@@ -349,7 +269,7 @@ docs/development/code-standards.md  # code standards used by reviewers
 
 ---
 
-## Anonymous Telemetry
+## Anonymous Telemetry (BETA)
 
 dev-team-agents can collect **anonymous, aggregate usage data** to help us understand which agents and commands are most valuable. **It is disabled unless you turn it on.**
 

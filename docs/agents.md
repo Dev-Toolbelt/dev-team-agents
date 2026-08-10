@@ -4,6 +4,14 @@ Full list of agents included in Dev Team Agents, their roles, development phases
 
 ---
 
+## How Agent Invocation Works
+
+Role-naming works in every supported CLI — Claude Code (the `claude` CLI, desktop app, web app at [claude.ai/code](https://claude.ai/code), IDE extensions), opencode, and Codex CLI — because the agents are rendered from one canonical source per provider.
+
+Every agent presents a plan for approval before executing anything. You review, adjust, and approve — then execution begins.
+
+---
+
 ## Team
 
 | Agent | Role | Phase | Tier |

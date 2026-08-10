@@ -4,6 +4,14 @@ Lista completa dos agentes incluídos no Dev Team Agents, seus papéis, fases do
 
 ---
 
+## Como Funciona a Invocação dos Agentes
+
+Nomear o papel funciona em todos os CLIs suportados — Claude Code (o CLI `claude`, app desktop, app web em [claude.ai/code](https://claude.ai/code), extensões de IDE), opencode e Codex CLI — porque os agentes são renderizados a partir de uma única fonte canônica por provedor.
+
+Cada agente apresenta um plano para aprovação antes de executar qualquer coisa. Você revisa, ajusta e aprova — depois a execução começa.
+
+---
+
 ## Time
 
 | Agente | Papel | Fase | Tier |
