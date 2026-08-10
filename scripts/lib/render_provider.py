@@ -290,6 +290,41 @@ def apply_codex_body_rewrites(body, interaction_mode="optional"):
     return rewrite_codex_question_blocks(result)
 
 
+def apply_codex_command_specialization(name, body):
+    """Apply command-specific Codex-only behavior without mutating the source command.
+
+    Keep the canonical command body provider-agnostic; specialize only the
+    rendered Codex output where the runtime UX differs.
+    """
+    if name != "commit":
+        return body
+
+    original = dedent(
+        """\
+        **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. Use `AskUserQuestion` with a single-select question:
+
+        - `Stage all and commit` — run `git add -A` and continue normally
+        - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
+        - `Abort` — stop without staging or committing anything
+        """
+    ).strip()
+
+    replacement = dedent(
+        """\
+        **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. First determine today's session files by cross-referencing today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and files touched in this conversation. Then use `AskUserQuestion` with a single-select question:
+
+        - `Stage only today's files and commit` — stage only files that match today's session/context and continue normally; this is the default Codex path
+        - `Stage everything and commit` — run `git add -A` and continue normally
+        - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
+        - `Abort` — stop without staging or committing anything
+
+        If today's session/context cannot be determined confidently, treat `Just show the commit plan` as the recommended fallback instead of staging everything by default.
+        """
+    ).strip()
+
+    return body.replace(original, replacement)
+
+
 # ─── tool-map rendering ────────────────────────────────────────────────
 def tool_conventions_note(provider, tool_map):
     """Returns a markdown note string prepended to every rendered agent body.
@@ -479,6 +514,7 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
     interaction_mode = meta.get("interaction_mode", "optional")
     # Apply path rewrites, Codex body rewrites, and plan gate softening
     body = apply_path_rewrites(body, "codex", tool_map)
+    body = apply_codex_command_specialization(name, body)
     body = apply_codex_body_rewrites(body, interaction_mode)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     desc = meta.get("description", "")
