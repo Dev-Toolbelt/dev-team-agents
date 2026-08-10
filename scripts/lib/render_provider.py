@@ -296,33 +296,405 @@ def apply_codex_command_specialization(name, body):
     Keep the canonical command body provider-agnostic; specialize only the
     rendered Codex output where the runtime UX differs.
     """
-    if name != "commit":
-        return body
+    replacements = {
+        "commit": [
+            (
+                dedent(
+                    """\
+                    **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. Use `AskUserQuestion` with a single-select question:
 
-    original = dedent(
-        """\
-        **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. Use `AskUserQuestion` with a single-select question:
+                    - `Stage all and commit` — run `git add -A` and continue normally
+                    - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
+                    - `Abort` — stop without staging or committing anything
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. First determine today's session files by cross-referencing today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and files touched in this conversation. Then use `AskUserQuestion` with a single-select question:
 
-        - `Stage all and commit` — run `git add -A` and continue normally
-        - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
-        - `Abort` — stop without staging or committing anything
-        """
-    ).strip()
+                    - `Stage only today's files and commit` — stage only files that match today's session/context and continue normally; this is the default Codex path
+                    - `Stage everything and commit` — run `git add -A` and continue normally
+                    - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
+                    - `Abort` — stop without staging or committing anything
 
-    replacement = dedent(
-        """\
-        **If there are no staged files but there are unstaged or untracked changes**, do not stop with a plain-text blocker. First determine today's session files by cross-referencing today's `.dev-team-agents/user-data/session-summary.md` entry (if present) and files touched in this conversation. Then use `AskUserQuestion` with a single-select question:
+                    If today's session/context cannot be determined confidently, treat `Just show the commit plan` as the recommended fallback instead of staging everything by default.
+                    """
+                ).strip(),
+            ),
+            (
+                "5. If that preference is absent or equals `ask`, use `AskUserQuestion` before staging or committing anything",
+                "5. If that preference is absent or equals `ask`, default to **Commit only** on Codex and continue without asking",
+            ),
+            (
+                dedent(
+                    """\
+                    Only if the action is still unresolved after that cascade, use `AskUserQuestion` with: "This work is in an isolated worktree (and Docker stack, if used). What should `/devteam:commit` do?"
 
-        - `Stage only today's files and commit` — stage only files that match today's session/context and continue normally; this is the default Codex path
-        - `Stage everything and commit` — run `git add -A` and continue normally
-        - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
-        - `Abort` — stop without staging or committing anything
+                    | Option | Effect |
+                    |--------|--------|
+                    | Commit + rebase + merge + teardown (recommended) | Run Steps 1–5 as commits, then follow the worktree skill's finalize flow: rebase onto base → resolve → merge → teardown worktree + isolated Docker stack only |
+                    | Commit + rebase | Run Steps 1–5 as commits, then rebase the worktree branch onto its base branch — no merge, no teardown |
+                    | Commit only | Run Steps 1–5 as commits inside the worktree; leave rebase, merge, and teardown for later |
+                    | Other | Let the user describe a different flow in free text |
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    Only if the action is still unresolved after that cascade, default to **Commit only** on Codex. Run Steps 1–5 as commits inside the worktree and leave rebase, merge, and teardown for later unless the user explicitly asked for `finalize`, `merge`, `teardown`, `rebase`, `commit-only`, `only`, or `keep-worktree`.
+                    """
+                ).strip(),
+            ),
+            (
+                dedent(
+                    """\
+                    If any gate (lint, type-check, tests, or commit message validation) returns non-zero:
+                    - Show the output to the user
+                    - Ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**
+                    - Do NOT auto-fix without explicit user consent
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    If any gate (lint, type-check, tests, or commit message validation) returns non-zero:
+                    - Show the output to the user
+                    - On Codex, default to **Abort** unless the user explicitly asks to fix and re-stage or to commit anyway
+                    - Do NOT auto-fix without explicit user consent
+                    """
+                ).strip(),
+            ),
+        ],
+        "push": [
+            (
+                dedent(
+                    """\
+                    2. Resolve the path in this order:
+                       - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+                       - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+                       - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+                       - Else ask (via `AskUserQuestion`):
 
-        If today's session/context cannot be determined confidently, treat `Just show the commit plan` as the recommended fallback instead of staging everything by default.
-        """
-    ).strip()
+                       > "There are uncommitted changes. What would you like to do before pushing?"
+                       - **Commit them now** — run the commit routine below, then continue to Step 0
+                       - **Skip and continue** — proceed to Step 0 without committing
+                       - **Abort** — stop the command entirely
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    2. Resolve the path in this order:
+                       - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+                       - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+                       - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+                       - Else on Codex choose **Commit them now** by default, using the same session-scoped behavior as `devteam:commit` rather than `git add -A`
+                    """
+                ).strip(),
+            ),
+            (
+                "3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage — only commit what is already staged, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).",
+                "3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage everything on Codex — when the inline commit routine runs, use the same session-scoped staging policy as `devteam:commit`, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).",
+            ),
+            (
+                "Load `skills/shared/github-actions/SKILL.md` and follow it in full: it checks its preconditions (gh authenticated + `.github/workflows/*` present, using the cached `ci_cd_detected` preference), then — only if both hold — asks the quiz in its Flow § 0 (watch CI vs. push-only vs. other). If the preconditions fail, push normally without a quiz.",
+                "Load `skills/shared/github-actions/SKILL.md` and follow it in full for its checks and execution, but on Codex default its Flow § 0 choice to **push-only** unless the user explicitly asks to watch CI. If the preconditions fail, push normally without a quiz.",
+            ),
+            (
+                "6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured. If a gate fails, ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**.",
+                "6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured. If a gate fails, show the output and, on Codex, default to **Abort** unless the user explicitly asks to fix and re-stage or to commit anyway.",
+            ),
+        ],
+        "pr": [
+            (
+                dedent(
+                    """\
+                    2. Resolve the path in this order:
+                       - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+                       - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+                       - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+                       - Else ask (via `AskUserQuestion`):
 
-    return body.replace(original, replacement)
+                       > "There are uncommitted changes. What would you like to do before creating the PR?"
+                       - **Commit them now** — run the full commit routine below, then continue to Step 0a
+                       - **Skip and continue** — proceed to Step 0a without committing
+                       - **Abort** — stop the command entirely
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    2. Resolve the path in this order:
+                       - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+                       - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+                       - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+                       - Else on Codex choose **Commit them now** by default, using the same session-scoped behavior as `devteam:commit` rather than `git add -A`
+                    """
+                ).strip(),
+            ),
+            (
+                "3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage — only commit what is already staged, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).",
+                "3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage everything on Codex — when the inline commit routine runs, use the same session-scoped staging policy as `devteam:commit`, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).",
+            ),
+            (
+                "Creating a PR pushes the branch, which counts as an explicit push. Before `gh pr create` runs the push, load `skills/shared/github-actions/SKILL.md` and follow it in full: check its preconditions (gh authenticated + `.github/workflows/*` present, using the cached `ci_cd_detected` preference), then its quiz step — ask the user whether to watch CI or just push, per that skill's Flow § 0. On failure while watching, run its capped diagnose→fix→re-push loop, reporting a one-line summary each cycle. If the preconditions fail, skip silently and push normally.",
+                "Creating a PR pushes the branch, which counts as an explicit push. Before `gh pr create` runs the push, load `skills/shared/github-actions/SKILL.md` and follow it in full for its checks and execution, but on Codex default its Flow § 0 choice to **push-only** unless the user explicitly asks to watch CI. On failure while watching, run its capped diagnose→fix→re-push loop, reporting a one-line summary each cycle. If the preconditions fail, skip silently and push normally.",
+            ),
+            (
+                "6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured (same gates as in `devteam:commit` Step 4.5). If a gate fails, ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**.",
+                "6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured (same gates as in `devteam:commit` Step 4.5). If a gate fails, show the output and, on Codex, default to **Abort** unless the user explicitly asks to fix and re-stage or to commit anyway.",
+            ),
+        ],
+        "review": [
+            (
+                dedent(
+                    """\
+                    If `$ARGUMENTS` is **empty**, ask the user with `AskUserQuestion` (single-select) what to review:
+
+                    > "What should I review?"
+                    - **Current local branch** — review the diff of the active branch against its base branch (default)
+                    - **Another local branch** — ask which branch (free-text), then review its diff against the base branch
+                    - **A pull request link** — ask for the PR URL (GitHub, GitLab, Bitbucket, etc.), then fetch and review that PR's diff
+                    - **Other** — let the user type a custom scope (specific files, a commit range, a folder)
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    If `$ARGUMENTS` is **empty**, default on Codex to **Current local branch** and review the diff of the active branch against its base branch. Only ask if the current target cannot be resolved confidently.
+                    """
+                ).strip(),
+            ),
+            (
+                dedent(
+                    """\
+                    Then use `AskUserQuestion` (single-select) to ask:
+
+                    > "Apply the review findings?"
+                    - **Apply all findings** — automatically apply every suggested change to the codebase
+                    - **Apply selected findings** — ask which findings to apply and apply only those
+                    - **Skip, just show the summary** — do not modify any files; print the full review report
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    Then, on Codex, default to **Apply all findings** unless the user explicitly asks to apply only selected findings or to skip. Apply every suggested change to the codebase directly.
+                    """
+                ).strip(),
+            ),
+        ],
+        "audit": [
+            (
+                dedent(
+                    """\
+                    If `$ARGUMENTS` is **empty**, ask the user with `AskUserQuestion` (single-select with "Other" option for free-text):
+
+                    > "Which module/area should I audit?"
+
+                    Offer a few generic examples as options (`auth`, `api`, `database`, `notifications`, `search`, `admin`) or let them type a custom area.
+
+                    Once resolved, store the target as `<module>`.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    If `$ARGUMENTS` is **empty**, infer `<module>` from the active branch/worktree scope, files touched in this session, and `current-context`. If a single current module/area is clear, use it on Codex without asking. Only ask when the current scope cannot be resolved confidently.
+                    """
+                ).strip(),
+            ),
+            (
+                'If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), state in one line that this scope may take a long time and consume a significant number of tokens, then ask with `AskUserQuestion` (single-select): **Module by module** (recommended — a checkpoint between each), **All at once**, or **Cancel**.',
+                'If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), state in one line that this scope may take a long time and consume a significant number of tokens, then default on Codex to **Module by module** unless the user explicitly asks for **All at once** or **Cancel**.',
+            ),
+            (
+                "Do NOT proceed until the user answers.",
+                "Proceed with **Module by module** on Codex unless the user explicitly overrides that default.",
+            ),
+            (
+                "- If absent, ask once with `AskUserQuestion` (single-select, in the user's language): **Isolated worktree** — dedicated worktree plus an isolated infrastructure stack — or **New branch** — a new branch in the current checkout.",
+                "- If absent, default on Codex to **Isolated worktree** — dedicated worktree plus an isolated infrastructure stack — unless the user explicitly asks for a new branch in the current checkout.",
+            ),
+            (
+                "2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.",
+                "2. Present the report to the user and, on Codex, default to **Report only** unless the user explicitly asks to implement the plan now or to implement selected items.",
+            ),
+        ],
+        "update": [
+            (
+                dedent(
+                    """\
+                    Then immediately use the **`AskUserQuestion`** tool with a single question:
+
+                    ```json
+                    {
+                      "questions": [
+                        {
+                          "question": "Apply update?",
+                          "header": "Update",
+                          "multiSelect": false,
+                          "options": [
+                            { "label": "Yes", "description": "Download and apply the update now." },
+                            { "label": "No",  "description": "Skip this update and keep the current version." }
+                          ]
+                        }
+                      ]
+                    }
+                    ```
+
+                    Wait for the user's answer before proceeding.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    On Codex, default to **Yes** and apply the update immediately unless `$ARGUMENTS` contains `--no`.
+                    """
+                ).strip(),
+            ),
+            (
+                dedent(
+                    """\
+                    Then immediately use the **`AskUserQuestion`** tool to offer a health check:
+
+                    ```json
+                    {
+                      "questions": [
+                        {
+                          "question": "Run a health check to verify the installation?",
+                          "header": "Health check",
+                          "multiSelect": false,
+                          "options": [
+                            { "label": "Yes", "description": "Run a health check on this project now." },
+                            { "label": "No",  "description": "Skip the health check." }
+                          ]
+                        }
+                      ]
+                    }
+                    ```
+
+                    - If the user answers **Yes**: immediately execute the `/devteam:health-check` flow (`commands/health-check.md`) inline — Step 0 provider detection through Step 3 report — in this same turn. Do not stop after the answer and do not merely print a message describing the health check; run it.
+                    - If the user answers **No**: stop. Do not add anything else.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    On Codex, default to **Yes** and immediately execute the `/devteam:health-check` flow (`commands/health-check.md`) inline after the update succeeds, unless `$ARGUMENTS` contains `--skip-health-check`.
+                    """
+                ).strip(),
+            ),
+        ],
+        "install": [
+            (
+                dedent(
+                    """\
+                    Show the user the exact install command(s) that will run for each tool in `to_install` (per the OS bound in Step 4), including `jq` automatically if `graphify` is in the list and `jq` is not already installed. Ask with `AskUserQuestion`:
+
+                    ```json
+                    {
+                      "questions": [
+                        {
+                          "question": "Install the tool(s) listed above now?",
+                          "header": "Confirm install",
+                          "multiSelect": false,
+                          "options": [
+                            { "label": "Yes, install", "description": "Run the install command(s) shown above." },
+                            { "label": "No, cancel", "description": "Do not run anything." }
+                          ]
+                        }
+                      ]
+                    }
+                    ```
+
+                    On **No, cancel** → stop, report nothing was installed.
+
+                    On **Yes, install** → for each tool in `to_install` (in dependency order — `jq` before `graphify`), run its install command. If a command requires elevated privileges and fails, report the exact command and wait for the user's confirmation that they ran it before continuing (per the skill's "Elevated Privileges" section). After each install, re-run the tool's **Detect** command to verify.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    Show the user the exact install command(s) that will run for each tool in `to_install` (per the OS bound in Step 4), including `jq` automatically if `graphify` is in the list and `jq` is not already installed. On Codex, if the user explicitly invoked `/devteam:install` with valid tool arguments, default to **Yes, install** and proceed without asking unless `$ARGUMENTS` contains `--no`.
+
+                    Run each install in dependency order — `jq` before `graphify`. If a command requires elevated privileges and fails, report the exact command and wait for the user's confirmation that they ran it before continuing (per the skill's "Elevated Privileges" section). After each install, re-run the tool's **Detect** command to verify.
+                    """
+                ).strip(),
+            ),
+        ],
+        "symlinks": [
+            (
+                dedent(
+                    """\
+                    The environment cannot create native symlinks yet (Windows without Developer Mode / elevation / `core.symlinks=true`). Use the **`AskUserQuestion`** tool:
+
+                    ```json
+                    {
+                      "questions": [
+                        {
+                          "question": "Native symlinks are blocked on this machine. How do you want to fix it?",
+                          "header": "Symlink fix",
+                          "multiSelect": false,
+                          "options": [
+                            { "label": "Developer Mode", "description": "Recommended, no admin. Settings → System → For developers → enable Developer Mode. Fixes this and future clones." },
+                            { "label": "Elevated terminal", "description": "Fastest, one-off. Open PowerShell as Administrator in the project root." },
+                            { "label": "Run CLI as admin", "description": "Fully close <CLI> (including tray/Task Manager), then relaunch as administrator." }
+                          ]
+                        }
+                      ]
+                    }
+                    ```
+
+                    Wait for the answer, then:
+
+                    - **Developer Mode** → instruct the user to enable it now, then confirm with `AskUserQuestion` ("Developer Mode enabled?" → Yes / Not yet). On **Yes**, run Step 5. On **Not yet**, output `Enable Developer Mode, then run /devteam:symlinks again.` and stop.
+                    - **Elevated terminal** → tell the user to run, in the project root of an Administrator PowerShell:
+                      ```
+                      git config core.symlinks true
+                      git checkout -- <config-dir>
+                      ```
+                      Then `Restart <CLI> afterward.` and stop (the elevated session does the checkout, not this one).
+                    - **Run CLI as admin** → output `Close <CLI> completely, reopen it as administrator, then run /devteam:symlinks again.` and stop.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    The environment cannot create native symlinks yet (Windows without Developer Mode / elevation / `core.symlinks=true`). On Codex, do not open a chooser here. Output one objective instruction that tells the user the required prerequisite to fix next, then stop.
+
+                    Prefer this order:
+                    - If the environment clearly indicates Windows without native symlink support, output `Enable Developer Mode or rerun this command from an elevated terminal, then run /devteam:symlinks again.`
+                    - Otherwise output `Native symlinks are blocked in this environment. Fix the OS-level prerequisite, then run /devteam:symlinks again.`
+                    """
+                ).strip(),
+            ),
+        ],
+        "explain": [
+            (
+                dedent(
+                    """\
+                    ## Step 5 — Offer the quiz (mandatory)
+
+                    **Always close with this.** It is not conditional on how long the explanation was, how simple the term looked, or whether the user seemed satisfied.
+
+                    Use `AskUserQuestion` (single-select):
+
+                    > "Want to go deeper with an interactive quiz?"
+
+                    - **Yes, cover everything** — a quiz across all the terms just explained
+                    - **Yes, one term only** — ask which term, then quiz on that one
+                    - **No, this is enough** — stop here
+
+                    On the third option, print one line confirming it and end. Do not re-offer.
+
+                    If `$ARGUMENTS` contains `--no-quiz`, skip Step 5 entirely and stop after the explanation blocks.
+                    """
+                ).strip(),
+                dedent(
+                    """\
+                    ## Step 5 — Quiz handling on Codex
+
+                    On Codex, skip the quiz flow by default and stop after the explanation blocks unless the user explicitly asks for an interactive quiz. Treat this as if `--no-quiz` had been passed when the request does not explicitly opt into a quiz.
+                    """
+                ).strip(),
+            ),
+        ],
+    }
+
+    result = body
+    for old, new in replacements.get(name, []):
+        result = result.replace(old, new)
+    return result
 
 
 # ─── tool-map rendering ────────────────────────────────────────────────
