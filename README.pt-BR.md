@@ -241,15 +241,7 @@ Nada nesse sistema apaga conhecimento automaticamente. A camada episódica é a 
 
 ## Coexistência & Customização
 
-Dev Team Agents é uma **camada base**. As convenções do seu projeto sempre têm precedência: `CLAUDE.md` → `AGENTS.md` → `.agents/<agent-name>.md`. Se seu projeto diz usar tabs, os agentes usam tabs.
-
-**Não** modifique arquivos dentro de `.dev-team-agents/` — eles são sobrescritos na atualização. Faça o override no nível do projeto:
-
-```bash
-.agents/backend-developer.md          # override por agente
-CLAUDE.md                             # regras globais para todos os agentes
-docs/development/code-standards.md  # padrões de código usados pelos reviewers
-```
+Overrides no nível do projeto, regras de precedência e orientações de customização agora ficam em [Arquitetura do Harness](docs/harness.pt-BR.md).
 
 ---
 

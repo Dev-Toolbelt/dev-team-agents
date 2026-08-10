@@ -241,15 +241,7 @@ Nothing in this system deletes knowledge automatically. The episodic layer is th
 
 ## Coexistence & Customization
 
-Dev Team Agents is a **base layer**. Your project's own conventions always take precedence: `CLAUDE.md` → `AGENTS.md` → `.agents/<agent-name>.md`. If your project says use tabs, agents use tabs.
-
-Do **not** modify files inside `.dev-team-agents/` — they are overwritten on update. Override at the project level instead:
-
-```bash
-.agents/backend-developer.md          # per-agent override
-CLAUDE.md                             # project-wide rules for all agents
-docs/development/code-standards.md  # code standards used by reviewers
-```
+Project-level overrides, precedence rules, and customization guidance now live in [Harness Architecture](docs/harness.md).
 
 ---
 

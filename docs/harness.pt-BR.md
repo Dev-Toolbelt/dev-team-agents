@@ -13,6 +13,7 @@ Como o Dev Team Agents funciona internamente: uma fonte canônica, múltiplos de
 - [Commands, Agents e Skills](#commands-agents-e-skills)
 - [Tiers de Modelo e Resolução](#tiers-de-modelo-e-resolução)
 - [Hooks e Runtime Compartilhado](#hooks-e-runtime-compartilhado)
+- [Coexistência e Customização](#coexistência-e-customização)
 - [Por Que Essa Estrutura Existe](#por-que-essa-estrutura-existe)
 - [Documentos Relacionados](#documentos-relacionados)
 
@@ -142,6 +143,20 @@ A integração por provedor difere, mas o comportamento de runtime converge para
 A escolha importante de design é que os provedores chamam a mesma lógica de hook em vez de manter implementações duplicadas por CLI.
 
 Isso também explica por que estado do usuário, como preferências, resumos de sessão e credenciais, é documentado como dado de runtime local ao projeto, e não como recurso específico de um provedor.
+
+---
+
+## Coexistência e Customização
+
+Dev Team Agents é uma camada base. As convenções do seu projeto sempre têm precedência: `CLAUDE.md` -> `AGENTS.md` -> `.agents/<agent-name>.md`. Se seu projeto diz usar tabs, os agentes usam tabs.
+
+Não modifique arquivos dentro de `.dev-team-agents/` diretamente. Eles são artefatos gerenciados da instalação e podem ser sobrescritos em uma atualização. Faça overrides no nível do projeto:
+
+```bash
+.agents/backend-developer.md         # override por agente
+CLAUDE.md                            # regras globais para todos os agentes
+docs/development/code-standards.md   # padrões de código usados pelos reviewers
+```
 
 ---
 
