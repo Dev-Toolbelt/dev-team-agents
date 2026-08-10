@@ -1,6 +1,6 @@
 ---
 description: Explain a term, acronym, or jargon from this session, then quiz on it
-argument-hint: <term1, term2, ...>
+argument-hint: <term1, term2, ...> [--no-quiz]
 ---
 
 Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt. Load `skills/shared/output-format/SKILL.md` and apply it to all output. Read `.dev-team-agents/user-data/preferences.json` → `language` (default `en`) and write the explanation, the quiz, and every option label in that language.
@@ -101,6 +101,8 @@ Use `AskUserQuestion` (single-select):
 - **No, this is enough** — stop here
 
 On the third option, print one line confirming it and end. Do not re-offer.
+
+If `$ARGUMENTS` contains `--no-quiz`, skip Step 5 entirely and stop after the explanation blocks.
 
 ---
 

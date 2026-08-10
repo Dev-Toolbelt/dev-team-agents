@@ -147,23 +147,6 @@ def soften_plan_gate(body, provider, plan_gate_setting):
 # tools or idioms. Each is replaced with the Codex equivalent.
 
 _CODEX_BODY_REPLACEMENTS = [
-    # AskUserQuestion adaptation — map explicitly to request_user_input.
-    (r'\buse the `AskUserQuestion` tool with options:\b',
-     "use the `request_user_input` tool (Plan mode) with the same options; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
-    (r'\buse the \*\*`AskUserQuestion`\*\* tool with a single question:\b',
-     "use the **`request_user_input`** tool (Plan mode) for the same single question; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
-    (r'\buse the \*\*`AskUserQuestion`\*\* tool to offer a health check:\b',
-     "use the **`request_user_input`** tool (Plan mode) to offer the same health check; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry so Codex can show the interactive chooser:"),
-    (r'\buse `AskUserQuestion` for every question with a finite set of answers\b',
-     "use the `request_user_input` tool (Plan mode) for every question with a finite set of answers; if it is unavailable in the current surface, tell the user to switch this task to `/plan` and retry instead of falling back silently"),
-    (r'\bvia `AskUserQuestion`\b', "via `request_user_input` (Plan mode)"),
-    (r'\bwith `AskUserQuestion`\b', "with `request_user_input` (Plan mode)"),
-    (r'\bvia AskUserQuestion\b', "via `request_user_input` (Plan mode)"),
-    (r'\bwith AskUserQuestion\b', "with `request_user_input` (Plan mode)"),
-    (r'\bthe `AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
-    (r'\b`AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
-    # Tool name references in running text
-    (r'\bAskUserQuestion\b', "`request_user_input` (Plan mode)"),
     (r'\bTodoWrite\b', 'update_plan'),
     (r'\bthe Task tool\b', 'spawn_agent'),
     (r'\bthe `Task` tool\b', 'spawn_agent'),
@@ -178,6 +161,44 @@ _CODEX_BODY_REPLACEMENTS = [
     # Hook references that are Claude-specific
     (r'\.claude/settings\.json', '.codex/hooks.json'),
 ]
+
+
+def codex_question_fallback_clause(interaction_mode):
+    if interaction_mode == "required":
+        return (
+            "if it is unavailable in the current surface, tell the user to "
+            "switch this task to `/plan` and retry so Codex can show the "
+            "interactive chooser"
+        )
+    return (
+        "if it is unavailable in the current surface, ask the same question "
+        "directly in the conversation, preserving the same options and the "
+        "same recommended choice"
+    )
+
+
+def codex_question_replacements(interaction_mode):
+    fallback = codex_question_fallback_clause(interaction_mode)
+    return [
+        (r'\buse the `AskUserQuestion` tool with options:\b',
+         f"use the `request_user_input` tool (Plan mode) with the same options; {fallback}:"),
+        (r'\buse the \*\*`AskUserQuestion`\*\* tool with a single question:\b',
+         f"use the **`request_user_input`** tool (Plan mode) for the same single question; {fallback}:"),
+        (r'\buse the \*\*`AskUserQuestion`\*\* tool to offer a health check:\b',
+         f"use the **`request_user_input`** tool (Plan mode) to offer the same health check; {fallback}:"),
+        (r'\buse `AskUserQuestion` for every question with a finite set of answers\b',
+         f"use the `request_user_input` tool (Plan mode) for every question with a finite set of answers; {fallback}"),
+        (r'\bvia `AskUserQuestion`\b', "via `request_user_input` (Plan mode)"),
+        (r'\bwith `AskUserQuestion`\b', "with `request_user_input` (Plan mode)"),
+        (r'\bvia AskUserQuestion\b', "via `request_user_input` (Plan mode)"),
+        (r'\bwith AskUserQuestion\b', "with `request_user_input` (Plan mode)"),
+        (r'\bthe `AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
+        (r'\b`AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
+        (r'\bAskUserQuestion\b', "`request_user_input` (Plan mode)"),
+        (r'\bthe `question` tool\b', "`request_user_input` (Plan mode)"),
+        (r'\b`question` tool\b', "`request_user_input` (Plan mode)"),
+        (r'\bquestion tool\b', "`request_user_input` (Plan mode)"),
+    ]
 
 
 def _slugify_identifier(text):
@@ -253,14 +274,15 @@ def rewrite_codex_question_blocks(body):
 
     return _CODEX_JSON_BLOCK_RE.sub(_replace, body)
 
-def apply_codex_body_rewrites(body):
+def apply_codex_body_rewrites(body, interaction_mode="optional"):
     """Apply all Codex-specific text replacements to the body.
     
     Runs BEFORE the preamble is prepended, so the body is self-contained
     and references only Codex-native tools and paths.
     """
     result = body
-    for pattern, replacement in _CODEX_BODY_REPLACEMENTS:
+    replacements = codex_question_replacements(interaction_mode) + _CODEX_BODY_REPLACEMENTS
+    for pattern, replacement in replacements:
         flags = re.IGNORECASE
         if r'\n' in pattern:
             flags |= re.DOTALL
@@ -410,7 +432,7 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
         model_id_short = model_id
     # Apply path rewrites and Codex body rewrites
     body = apply_path_rewrites(body, "codex", tool_map)
-    body = apply_codex_body_rewrites(body)
+    body = apply_codex_body_rewrites(body, "optional")
     # Last, so the banner's resolved values are authoritative over any rewrite.
     body = render_run_banner(body, model_id, effort, "codex")
     note = tool_conventions_note("codex", tool_map)
@@ -454,9 +476,10 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
 
 def render_command_codex(name, meta, body, model_id, effort, tool_map):
     note = tool_conventions_note("codex", tool_map)
+    interaction_mode = meta.get("interaction_mode", "optional")
     # Apply path rewrites, Codex body rewrites, and plan gate softening
     body = apply_path_rewrites(body, "codex", tool_map)
-    body = apply_codex_body_rewrites(body)
+    body = apply_codex_body_rewrites(body, interaction_mode)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     desc = meta.get("description", "")
     skill_content = (
@@ -464,6 +487,8 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
         f'name: "devteam-{name}"\n'
         f'description: "{desc}"\n'
         "---\n\n"
+        f"<!-- codex-plan-gate: {meta.get('plan_gate', 'conditional')} -->\n"
+        f"<!-- codex-interaction-mode: {interaction_mode} -->\n\n"
         + note + body
     )
     return {"path": f".codex/skills/devteam-{name}/SKILL.md", "content": skill_content}

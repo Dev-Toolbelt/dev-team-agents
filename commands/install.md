@@ -1,6 +1,6 @@
 ---
 description: Install and configure optional complementary tools (rg, fd, jq, ast-grep, tokei, delta, graphify)
-argument-hint: [tool1 tool2 ...|all|list]
+argument-hint: [tool1 tool2 ...|all|list] [--yes]
 model: haiku
 ---
 
@@ -104,6 +104,8 @@ Show the user the exact install command(s) that will run for each tool in `to_in
 On **No, cancel** → stop, report nothing was installed.
 
 On **Yes, install** → for each tool in `to_install` (in dependency order — `jq` before `graphify`), run its install command. If a command requires elevated privileges and fails, report the exact command and wait for the user's confirmation that they ran it before continuing (per the skill's "Elevated Privileges" section). After each install, re-run the tool's **Detect** command to verify.
+
+If `$ARGUMENTS` contains `--yes`, skip the confirmation question and proceed as if the user answered **Yes, install**.
 
 If `graphify` was installed and verified, hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 4 to finish project-level configuration (`graphify.json`, hooks, `.gitignore`, first build, `CLAUDE.md` injection).
 

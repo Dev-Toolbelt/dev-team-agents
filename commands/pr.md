@@ -1,6 +1,6 @@
 ---
 description: Draft and create a pull request
-argument-hint: [review] [draft] [base <branch>]
+argument-hint: [review] [draft] [base <branch>] [commit|skip-commit|abort-on-dirty]
 model: haiku
 ---
 
@@ -22,7 +22,11 @@ git diff --name-only            # unstaged modified files
 If either command returns output (there are staged or unstaged changes):
 
 1. Inform the user: "There are uncommitted changes in the working tree."
-2. Ask (via `AskUserQuestion`):
+2. Resolve the path in this order:
+   - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+   - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+   - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+   - Else ask (via `AskUserQuestion`):
 
    > "There are uncommitted changes. What would you like to do before creating the PR?"
    - **Commit them now** — run the full commit routine below, then continue to Step 0a
@@ -137,3 +141,6 @@ $ARGUMENTS options:
 - `review` — activate code-reviewer before creating
 - `draft` — create as draft PR
 - `base <branch>` — override the base branch
+- `commit` — when uncommitted changes exist, run the commit routine automatically before continuing
+- `skip-commit` — when uncommitted changes exist, continue without committing them first
+- `abort-on-dirty` — when uncommitted changes exist, stop instead of asking

@@ -1,6 +1,6 @@
 ---
 description: Check for and apply dev-team-agents updates
-argument-hint: [<version tag>]
+argument-hint: [<version tag>] [--yes] [--no] [--run-health-check|--skip-health-check]
 model: haiku
 ---
 
@@ -23,6 +23,10 @@ You are running the **`/devteam:update`** command.
 | Argument | Effect |
 |----------|--------|
 | _(none)_ | Check for updates and install if available |
+| `--yes` | Apply an available update without asking |
+| `--no` | Report an available update but do not apply it |
+| `--run-health-check` | After a successful update, run `/devteam:health-check` inline without asking |
+| `--skip-health-check` | After a successful update, skip the health-check question |
 | `--enable-auto` | Enable automatic updates |
 | `--disable-auto` | Disable automatic updates |
 | `vX.Y.Z` | Pin to a specific version |
@@ -117,6 +121,10 @@ Then immediately use the **`AskUserQuestion`** tool with a single question:
 
 Wait for the user's answer before proceeding.
 
+If `$ARGUMENTS` contains `--yes`, skip the question and proceed as if the user answered **Yes**.
+
+If `$ARGUMENTS` contains `--no`, skip the question and stop after printing `Update available: <current-version> → <latest-version>`.
+
 ---
 
 ## Step 5 — Apply the update (only if user said yes)
@@ -151,6 +159,10 @@ Then immediately use the **`AskUserQuestion`** tool to offer a health check:
 
 - If the user answers **Yes**: immediately execute the `/devteam:health-check` flow (`commands/health-check.md`) inline — Step 0 provider detection through Step 3 report — in this same turn. Do not stop after the answer and do not merely print a message describing the health check; run it.
 - If the user answers **No**: stop. Do not add anything else.
+
+If `$ARGUMENTS` contains `--run-health-check`, skip the question and run `/devteam:health-check` inline immediately after the update succeeds.
+
+If `$ARGUMENTS` contains `--skip-health-check`, skip the question and stop immediately after printing the update success line.
 
 ---
 

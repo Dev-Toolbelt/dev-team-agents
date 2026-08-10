@@ -1,6 +1,6 @@
 ---
 description: Push the current branch, with a CI-aware quiz if Actions is configured
-argument-hint: [all]
+argument-hint: [all] [commit|skip-commit|abort-on-dirty]
 model: haiku
 ---
 
@@ -20,7 +20,11 @@ git diff --name-only            # unstaged modified files
 If either command returns output (there are staged or unstaged changes):
 
 1. Inform the user: "There are uncommitted changes in the working tree."
-2. Ask (via `AskUserQuestion`):
+2. Resolve the path in this order:
+   - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
+   - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
+   - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
+   - Else ask (via `AskUserQuestion`):
 
    > "There are uncommitted changes. What would you like to do before pushing?"
    - **Commit them now** — run the commit routine below, then continue to Step 0
@@ -61,3 +65,6 @@ After the push completes (regardless of which quiz option was chosen), apply the
 
 $ARGUMENTS options:
 - `all` / `--all` — stage all changes before committing (only relevant if the commit routine runs)
+- `commit` — when uncommitted changes exist, run the commit routine automatically before pushing
+- `skip-commit` — when uncommitted changes exist, push without committing them first
+- `abort-on-dirty` — when uncommitted changes exist, stop instead of asking

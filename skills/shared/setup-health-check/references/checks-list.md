@@ -177,35 +177,46 @@ PY
 # Legacy project-local prompts from the pre-skills-first Codex layout
 find .codex/prompts -maxdepth 1 -type f -name 'devteam-*.md' 2>/dev/null | wc -l
 
-# Render-generation marker for structured quiz support on Codex
+# Render-generation marker for structured-choice policy on Codex
 python3 - <<'PY'
 from pathlib import Path
 
-skills = [
-    Path(".codex/skills/devteam-update/SKILL.md"),
-    Path(".codex/skills/devteam-commit/SKILL.md"),
-    Path(".codex/skills/devteam-explain/SKILL.md"),
+checks = [
+    (Path(".codex/skills/devteam-update/SKILL.md"), "optional"),
+    (Path(".codex/skills/devteam-commit/SKILL.md"), "optional"),
+    (Path(".codex/skills/devteam-explain/SKILL.md"), "optional"),
+    (Path(".codex/skills/devteam-plan/SKILL.md"), "required"),
 ]
 
 missing = []
-for path in skills:
+for path, expected_mode in checks:
     if not path.exists():
         missing.append(f"{path.name}:MISSING")
         continue
     text = path.read_text()
     has_request = "`request_user_input`" in text
-    has_plan_note = "/plan" in text
-    has_plaintext_degrade = "ask the user directly and present the same options as plain text" in text
-    if has_request and has_plan_note and not has_plaintext_degrade:
+    has_mode_marker = f"<!-- codex-interaction-mode: {expected_mode} -->" in text
+    has_direct_fallback = "ask the same question directly in the conversation, preserving the same options and the same recommended choice" in text
+    has_plan_retry = "switch this task to `/plan` and retry" in text
+    if (
+        has_request
+        and has_mode_marker
+        and ((expected_mode == "optional" and has_direct_fallback and not has_plan_retry)
+             or (expected_mode == "required" and has_plan_retry))
+    ):
         print(f"{path.parent.name}:OK")
     else:
         parts = []
         if not has_request:
             parts.append("missing_request_user_input")
-        if not has_plan_note:
+        if not has_mode_marker:
+            parts.append("missing_interaction_mode_marker")
+        if expected_mode == "optional" and not has_direct_fallback:
+            parts.append("missing_direct_fallback")
+        if expected_mode == "optional" and has_plan_retry:
+            parts.append("unexpected_plan_retry")
+        if expected_mode == "required" and not has_plan_retry:
             parts.append("missing_plan_mode_retry")
-        if has_plaintext_degrade:
-            parts.append("legacy_plain_text_degrade")
         print(f"{path.parent.name}:MISMATCH:{','.join(parts)}")
 
 for item in missing:
@@ -254,7 +265,7 @@ PY
 | Generated command skills present | Counts of `.codex/skills/devteam-*` dirs and `SKILL.md` files equal `find commands -maxdepth 1 -name '*.md'` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Generated command skill names match folder basenames | Every row ends in `:OK:name=devteam-*` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Legacy project-local prompt aliases absent | Count of `.codex/prompts/devteam-*.md` is `0` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
-| Rendered Codex quiz guidance is on the new `request_user_input` generation | `devteam-update:OK`, `devteam-commit:OK`, `devteam-explain:OK` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
+| Rendered Codex structured-choice policy matches command metadata | `devteam-update:OK`, `devteam-commit:OK`, `devteam-explain:OK`, `devteam-plan:OK` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 | Agent TOML `model`/`model_reasoning_effort` matches `tiers.json` | Every row ends in `:OK:` | Re-run `bash .dev-team-agents/scripts/install-codex.sh` |
 
 ## Category 5 — Graphify (skip if not enabled)
