@@ -112,6 +112,8 @@ if [[ $DRY_RUN -eq 0 ]]; then
   echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
+FRAMEWORK_SKILLS_DIR="$PROJECT_ROOT/.dev-team-agents/skills"
+
 # ── write into project .codex/ ────────────────────────────────────────
 CODEX_DIR="$PROJECT_ROOT/.codex"
 mkdir -p "$CODEX_DIR/agents" "$CODEX_DIR/skills"
@@ -135,7 +137,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
   # skills symlink
   SKILLS_LINK="$CODEX_DIR/skills/dev-team-agents"
   if [[ -L "$SKILLS_LINK" || -e "$SKILLS_LINK" ]]; then rm -rf "$SKILLS_LINK"; fi
-  ln -s "$SOURCE_DIR/skills" "$SKILLS_LINK"
+  ln -s "$FRAMEWORK_SKILLS_DIR" "$SKILLS_LINK"
   echo "  + symlinked skills/ -> $SKILLS_LINK"
 fi
 

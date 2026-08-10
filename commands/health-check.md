@@ -3,7 +3,7 @@ description: Validate and repair the dev-team-agents installation
 model: haiku
 ---
 
-You are running the **`/devteam:health-check`** command. Load `skills/shared/setup-health-check/SKILL.md` — it contains the 10 check categories, fix patterns, and output format. Load `skills/shared/output-format/SKILL.md` for the platform-agnostic output standard (pure markdown, no box-drawing Unicode, no decorative symbols). Apply it to ALL output produced by this command.
+You are running the **`/devteam:health-check`** command. Load `skills/shared/setup-health-check/SKILL.md` — it contains the 13 check categories, fix patterns, and output format. Load `skills/shared/output-format/SKILL.md` for the platform-agnostic output standard (pure markdown, no box-drawing Unicode, no decorative symbols). Apply it to ALL output produced by this command.
 
 ---
 
@@ -34,7 +34,7 @@ Running provider-agnostic checks only.
 
 ## Step 1 — Run health check categories
 
-Run the 10 health check categories from `setup-health-check/references/checks-list.md` **in order**, following the same flow:
+Run the 13 health check categories from `setup-health-check/references/checks-list.md` **in order**, following the same flow:
 
 1. Symlinks
 2. Scripts & Executability
@@ -46,6 +46,9 @@ Run the 10 health check categories from `setup-health-check/references/checks-li
 8. User Preferences
 9. Notifier
 10. Credentials
+11. Memory Artifacts
+12. Python Prerequisite
+13. Productivity & Token-Efficiency Tools
 
 For **Category 4**, adapt the check to the detected provider:
 

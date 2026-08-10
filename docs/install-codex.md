@@ -12,7 +12,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
 ```
 
-This downloads the latest source, renders 17 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`.
+This downloads the latest source, renders 18 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, and materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`.
 
 ## After install
 

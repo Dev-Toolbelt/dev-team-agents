@@ -10,7 +10,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode
 ```
 
-This downloads the latest source, renders the 17 agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/dev-team-agents/`, copies the hook adapter plugin to `.opencode/plugins/dev-team-agents.ts`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and deep-merges 22 `/devteam:<name>` command keys into `.opencode/opencode.json`.
+This downloads the latest source, renders the 18 agents into `.opencode/agents/`, symlinks skills into `.opencode/skills/dev-team-agents/`, copies the hook adapter plugin to `.opencode/plugins/dev-team-agents.ts`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and deep-merges 22 `/devteam:<name>` command keys into `.opencode/opencode.json`.
 
 ## After install
 
