@@ -245,6 +245,31 @@ print(f"  + wrote {len(MANAGED_EVENTS)} managed hook events to {os.path.relpath(
 PY
 fi
 
+# ── project AGENTS.md rule for visible SessionStart banner in Codex ─────────
+if [[ $DRY_RUN -eq 0 ]]; then
+  TARGET_AGENTS_MD="$PROJECT_ROOT/AGENTS.md"
+  DTA_CODEX_BANNER_MARKER="<!-- dev-team-agents: codex-session-banner -->"
+
+  if ! grep -qF "$DTA_CODEX_BANNER_MARKER" "$TARGET_AGENTS_MD" 2>/dev/null; then
+    cat >> "$TARGET_AGENTS_MD" <<'AGENTSEOF'
+
+<!-- dev-team-agents: codex-session-banner -->
+## Codex Session Banner
+
+When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the next three lines **verbatim, unmodified**, as the first thing in your **first reply of the session**.
+
+Rules:
+- Do not add any text before the banner.
+- Do not translate, summarize, or reformat it.
+- Do not fabricate the banner when the marker is absent.
+- This rule applies to normal conversation too, not only `$devteam-*` skills.
+AGENTSEOF
+    echo "  + injected Codex session-banner echo rule into AGENTS.md"
+  else
+    echo "  + Codex session-banner echo rule already present in AGENTS.md"
+  fi
+fi
+
 echo ""
 echo "install-codex: done."
 echo "  Next: restart Codex CLI."

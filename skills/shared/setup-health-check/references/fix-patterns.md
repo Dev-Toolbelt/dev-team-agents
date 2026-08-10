@@ -196,6 +196,29 @@ CLAUDEEOF
 fi
 ```
 
+## Auto-fix for missing Codex session-banner rule in AGENTS.md
+
+Append the managed rule block to `AGENTS.md` (idempotent — marker prevents duplicates):
+
+```bash
+_DTA_CODEX_BANNER_MARKER="<!-- dev-team-agents: codex-session-banner -->"
+if ! grep -qF "$_DTA_CODEX_BANNER_MARKER" AGENTS.md 2>/dev/null; then
+    cat >> AGENTS.md <<'AGENTSEOF'
+
+<!-- dev-team-agents: codex-session-banner -->
+## Codex Session Banner
+
+When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the next three lines **verbatim, unmodified**, as the first thing in your **first reply of the session**.
+
+Rules:
+- Do not add any text before the banner.
+- Do not translate, summarize, or reformat it.
+- Do not fabricate the banner when the marker is absent.
+- This rule applies to normal conversation too, not only `$devteam-*` skills.
+AGENTSEOF
+fi
+```
+
 ## Auto-fix for missing preferences.json fields
 
 Inject missing fields without overwriting existing values:
