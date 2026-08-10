@@ -50,7 +50,9 @@ is_full_suite() {
     esac
     case "$cmd" in
         *'cargo test'*)
-            [[ "$cmd" == *'cargo test' || "$cmd" == *'cargo test '&&* ]] && return 0 ;;
+            case "$cmd" in
+                *'cargo test'|*'cargo test &&'*|*'cargo test;'*) return 0 ;;
+            esac ;;
     esac
     case "$cmd" in
         *rspec*)

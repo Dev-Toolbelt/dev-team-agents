@@ -12,30 +12,13 @@ Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for
 
 ## Step 0 — Auto knowledge capture
 
-Before inspecting staged changes, run the `/devteam:learn` pass automatically.
-
-**Skip this step only if:**
-- `$ARGUMENTS` contains `--skip-learn`
-- The user explicitly wrote "skip learn", "don't learn", "sem learn", or similar in their prompt
-
-**To execute:**
-1. Run the `/devteam:learn` flow, Steps 1–4 exactly, with one override: in its Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents — no user confirmation is needed.
-2. Wait for all learn agents to complete before continuing.
-3. If the learn pass finds nothing to update (output "Nothing to capture"), proceed immediately.
-
-This ensures all session knowledge is captured in the project's knowledge base before changes are committed.
+Before inspecting staged changes, run `/devteam:learn` automatically unless `$ARGUMENTS` contains `--skip-learn` or the user explicitly asked to skip it. Run its Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", continue immediately.
 
 ---
 
 ## Step 0.5 — Worktree finalization quiz
 
-Check for an active worktree session:
-
-```bash
-cat .dev-team-agents/.worktree-session 2>/dev/null
-```
-
-If the file is absent, or reads `worktree=no ...`, skip this step entirely — commit normally.
+Check `.dev-team-agents/.worktree-session`. If the file is absent, or reads `worktree=no ...`, skip this step entirely.
 
 If it reads `worktree=yes branch=<b>`, resolve the post-commit action in this order:
 
@@ -56,9 +39,7 @@ If it reads `worktree=yes branch=<b>`, resolve the post-commit action in this or
 
 When the action is auto-resolved from `$ARGUMENTS` or `worktree_commit_action`, print one short line stating which path was selected, then continue without asking.
 
-Only if the action is still unresolved after that cascade, use `AskUserQuestion`:
-
-**Question:** "This work is in an isolated worktree (and Docker stack, if used). What should `/devteam:commit` do?"
+Only if the action is still unresolved after that cascade, use `AskUserQuestion` with: "This work is in an isolated worktree (and Docker stack, if used). What should `/devteam:commit` do?"
 
 | Option | Effect |
 |--------|--------|
@@ -67,27 +48,17 @@ Only if the action is still unresolved after that cascade, use `AskUserQuestion`
 | Commit only | Run Steps 1–5 as commits inside the worktree; leave rebase, merge, and teardown for later |
 | Other | Let the user describe a different flow in free text |
 
-Carry the selected option through to Step 5: after commits are executed, perform only the additional actions the user selected (rebase / merge / teardown), never more than what was chosen. For merge + teardown, load `skills/shared/worktree/SKILL.md` and follow its finalize step exactly, including the isolated-Docker-stack-only teardown rule.
+Carry the selected option through to Step 5: after commits are executed, perform only the chosen rebase / merge / teardown actions. For merge + teardown, load `skills/shared/worktree/SKILL.md` and follow its finalize step exactly, including the isolated-Docker-stack-only teardown rule.
 
 ---
 
 ## Step 1 — Detect the project's commit pattern
 
-Read the **target project's `CLAUDE.md`** (the one in the project root or `.claude/CLAUDE.md`, not the dev-team-agents one). Scan it for any explicit commit message rules, format examples, or references to a specific convention (e.g., Conventional Commits, GitHub-style `[type]`, Jira prefix, plain imperative, etc.).
-
-- If a project-specific pattern is documented → **follow it exclusively** and discard the Conventional Commits default.
-- If nothing is mentioned → **use Conventional Commits** as defined in the loaded skill.
-- If the user explicitly states a format in `$ARGUMENTS` (e.g., `format: plain`) → use that and skip detection entirely.
+Read the **target project's `CLAUDE.md`** (project root or `.claude/CLAUDE.md`, not the dev-team-agents one) and scan it for explicit commit rules or examples. If the user explicitly states a format in `$ARGUMENTS` (for example `format: plain`), use that and skip detection. Otherwise, follow any project-specific pattern exclusively; if none is documented, use Conventional Commits from the loaded skill.
 
 ## Step 2 — Inspect staged and unstaged changes
 
-Run these commands:
-
-```bash
-git status --short
-git diff --cached --stat
-git diff --stat
-```
+Run `git status --short`, `git diff --cached --stat`, and `git diff --stat`.
 
 - Identify which files are staged (`git diff --cached --name-only`)
 - Identify which files are unstaged but modified (`git diff --name-only`)
@@ -99,9 +70,7 @@ git diff --stat
 - `Just show the commit plan` — continue in preview mode as if `--dry-run` had been passed
 - `Abort` — stop without staging or committing anything
 
-If there are neither staged nor unstaged changes, output exactly `Nothing to commit.`
-
-Then stop.
+If there are neither staged nor unstaged changes, output exactly `Nothing to commit.` and stop.
 
 ## Step 2.5 — Unrelated unstaged changes quiz
 
@@ -120,7 +89,7 @@ Carry the chosen scope into Step 3.
 
 ## Step 3 — Group changes into logical commits
 
-Analyze the staged files and group them by layer or context using the **Layered Commits** ordering table in the `conventional-commits` skill loaded above — that table is the single source of truth for layer order and examples; do not restate it here. It ends at layer 7 (tests); this command continues with **8 — Config / CI** (build, ci, chore) and **9 — Docs** (documentation changes).
+Analyze the staged files and group them by layer or context using the **Layered Commits** ordering table in the loaded `conventional-commits` skill; it is the single source of truth for layer order and examples. It ends at layer 7 (tests); this command continues with **8 — Config / CI** (build, ci, chore) and **9 — Docs** (documentation changes).
 
 Rules for grouping:
 - Skip layers with no changes
@@ -134,7 +103,7 @@ Rules for grouping:
 chore(graphify): refresh dependency graph
 ```
 
-If `graphify-out/` changes are unstaged when the rest of the task's changes are staged, stage them separately for their own commit rather than leaving them out or folding them into `git add -A`.
+If `graphify-out/` changes are unstaged when the rest of the task's changes are staged, stage them separately for their own commit.
 
 ---
 
@@ -184,8 +153,6 @@ if [ -f ".dev-team-agents/scripts/validate-commit-msg.sh" ]; then
 fi
 ```
 
-This runs the `validate-commit-msg.sh` script (if present) to catch format violations before `git commit` is called. Skip if the project already has a `commit-msg` git hook configured.
-
 If any gate (lint, type-check, tests, or commit message validation) returns non-zero:
 - Show the output to the user
 - Ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**
@@ -195,15 +162,13 @@ If any gate (lint, type-check, tests, or commit message validation) returns non-
 
 ## Step 5 — Execute commits
 
-Present the proposed commit plan to the user:
-- List each commit with its message and the files it covers
-- If there is only one commit, show the full message
+Present the proposed commit plan to the user: list each commit with its message and covered files; if there is only one commit, show the full message.
 
 Then **execute the commits directly** using `git commit` unless:
 - `$ARGUMENTS` contains `dry-run` or `--dry-run` → show the plan only, do not commit
 - The user explicitly says not to execute (e.g., "just show me", "don't commit", "preview only")
 
-For multiple commits, stage each group individually with `git add <files>` before each `git commit -m`. Use a HEREDOC for multi-line messages: `git commit -m "$(cat <<'EOF'\ntype(scope): short description\n\nOptional body.\nEOF\n)"`.
+For multiple commits, stage each group individually with `git add <files>` before each `git commit -m`. Use a HEREDOC for multi-line messages.
 
 After all commits, run `git log --oneline -5` and show the output so the user can verify the result.
 
