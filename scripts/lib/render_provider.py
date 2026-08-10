@@ -461,6 +461,10 @@ def apply_codex_command_specialization(name, body):
                 ).strip(),
             ),
             (
+                "- **Current local branch** → proceed with the scope detected by `current-context`.",
+                "- **Current local branch** → proceed with the scope detected by `current-context`. If the active branch or its base branch cannot be resolved confidently on Codex, stop with an objective instruction asking the user to specify the branch, PR link, path, or scope explicitly.",
+            ),
+            (
                 dedent(
                     """\
                     Then use `AskUserQuestion` (single-select) to ask:
@@ -512,6 +516,32 @@ def apply_codex_command_specialization(name, body):
             (
                 "2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.",
                 "2. Present the report to the user and, on Codex, default to **Report only** unless the user explicitly asks to implement the plan now or to implement selected items.",
+            ),
+        ],
+        "rule": [
+            (
+                "If `$ARGUMENTS` is empty, ask the user for the rule description with `AskUserQuestion` (free-form — this is strict free-form input, not a finite choice) and stop until answered.",
+                "If `$ARGUMENTS` is empty, stop immediately on Codex with an objective instruction telling the user that `/devteam:rule` requires a rule description argument and does not run without one.",
+            ),
+        ],
+        "sync-rules": [
+            (
+                "If `$ARGUMENTS` already contains `--all` or `--yes`, skip this step and use all-mode. Otherwise, before scanning, ask the user with `AskUserQuestion`:",
+                "If `$ARGUMENTS` already contains `--all` or `--yes`, skip this step and use all-mode. Otherwise, on Codex, default to all-mode without asking.",
+            ),
+            (
+                "In review-mode (the default when the user picks it in Step 2), for each surviving candidate run **the exact routine in `commands/rule.md` Steps 2–6** (classify `type`, resolve `canonical_ref`, draft `detection`, confirm with `AskUserQuestion`, append on confirmation). Treat the recovered paragraph from Step 3 as that routine's `$ARGUMENTS`. Never batch-confirm multiple candidates behind a single question — one `AskUserQuestion` per row, so a user can accept some and decline others.",
+                "In review-mode (only when the user explicitly asks for it), for each surviving candidate run **the exact routine in `commands/rule.md` Steps 2–6** (classify `type`, resolve `canonical_ref`, draft `detection`, confirm with `AskUserQuestion`, append on confirmation). Treat the recovered paragraph from Step 3 as that routine's `$ARGUMENTS`. Never batch-confirm multiple candidates behind a single question — one `AskUserQuestion` per row, so a user can accept some and decline others.",
+            ),
+        ],
+        "relayout": [
+            (
+                "If only the target screen is ambiguous (references given, multiple plausible screens/routes match), ask with `AskUserQuestion` (single-select from the candidates found) instead of guessing. If no reference is given, do not proceed on the strength of a description alone — a reference image is mandatory, not optional.",
+                "If only the target screen is ambiguous (references given, multiple plausible screens/routes match), stop on Codex with an objective instruction telling the user to specify the exact target screen instead of guessing. If no reference is given, do not proceed on the strength of a description alone — a reference image is mandatory, not optional.",
+            ),
+            (
+                "- **Design system doc** — look in common locations (`docs/design-system.md`, `.claude/docs/ui/design-system.md`, a Storybook config, a Tailwind/theme config) for tokens: color palette, typography, spacing scale, component rules. If none is found, ask the user with `AskUserQuestion` whether to proceed using only inferred conventions from the existing UI code, or to point at the doc.",
+                "- **Design system doc** — look in common locations (`docs/design-system.md`, `.claude/docs/ui/design-system.md`, a Storybook config, a Tailwind/theme config) for tokens: color palette, typography, spacing scale, component rules. If none is found, stop on Codex with an objective instruction asking the user to point at the design-system documentation or confirm that the relayout should proceed using only inferred conventions from the existing UI code.",
             ),
         ],
         "update": [
