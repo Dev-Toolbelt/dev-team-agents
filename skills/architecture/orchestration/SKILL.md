@@ -244,13 +244,23 @@ above) — every other line it produced along the way is invisible to you but st
 to generate. That final message must be a **report**, not a transcript: what was done, key
 decisions, files touched, and the run banner. Nothing else.
 
-Every spawn prompt MUST instruct the subagent to close with a short, structured summary and
-explicitly forbid dumping full file contents, command output, or step-by-step narration into the
-final message. A rough shape to include in the prompt:
+Every spawn prompt MUST include this instruction **verbatim, as the literal closing line of the
+prompt text** — not a paraphrase, not a reference to a skill the subagent is trusted to recall:
 
-> End your final message with a concise report only: files changed (paths, no diffs), key
-> decisions and why, anything the user must know, and the run banner. Do not paste full file
-> contents, command logs, or a play-by-play of intermediate steps.
+> Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in
+> your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise
+> report only: files changed (paths, no diffs), key decisions and why, and anything the user must
+> know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps.
+
+Inlining it here, at spawn time, is not redundant with the same instruction already living in the
+subagent's own `## Before You Finish` section (per CLAUDE.md's Run Banner Rule). It is the fix for
+a specific, observed failure: `skills/shared/model-identity/SKILL.md` documents the closing banner
+being dropped in 6 out of 6 multi-message runs when the only copy of the instruction is the one the
+subagent read once, at the start of a long task, inside its own static definition. An instruction
+placed fresh in the spawn prompt — right next to the report-shape instruction the subagent is about
+to follow anyway — sits at the point of generation instead of buried behind everything the task did
+in between. Every `commands/*.md` file that spawns an agent carries this exact line inline in its
+`**MANDATORY:**` spawn instruction; do not add a new command that spawns via Task without it.
 
 This is not optional politeness — a verbose subagent report multiplies across every parallel spawn
 in a round, and the orchestrator's own consolidated summary compounds on top of it. Applying

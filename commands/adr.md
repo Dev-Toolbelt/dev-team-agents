@@ -31,6 +31,8 @@ Show the user the created file path.
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT fill the template in the main context — always delegate.
 
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
 - `software-architect` at `.claude/agents/dev-team/software-architect.md` — reads the generated ADR file, fills in Context, Decision, Consequences, and Alternatives using the current project context and the decision described in `$ARGUMENTS`. Changes status from `Proposed` to `Accepted` when the content is complete and the user approves.
 
 ---

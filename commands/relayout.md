@@ -48,6 +48,8 @@ Resolve per the canonical worktree decision cascade in root `CLAUDE.md` and `ski
 
 **MANDATORY:** Use the Task tool to delegate. Do NOT handle the relayout in the main context. The only exception is if the user explicitly asks not to use agents.
 
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
 | Phase | Agent | Tier | Role |
 |---|---|---|---|
 | Visual planning | `ui-ux-designer` | `frontend` | Reads the references, produces the visual spec, maps every region to design-system tokens and existing components, flags conflicts with the design system |

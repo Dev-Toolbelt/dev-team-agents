@@ -5,9 +5,7 @@ model: haiku
 
 Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
-
-You are running the **`/devteam:learn`** command.
-**Purpose:** Consolidate everything that happened in this session — decisions made, patterns established, conventions updated — into the project's persistent knowledge base. Run this at the end of any session where something non-obvious was learned, decided, or changed.
+You are running the **`/devteam:learn`** command. **Purpose:** consolidate everything that happened in this session — decisions made, patterns established, conventions updated — into the project's persistent knowledge base. Run this at the end of any session where something non-obvious was learned, decided, or changed.
 
 ## Step 1 — Gather session evidence
 
@@ -100,6 +98,8 @@ Then stop.
 ## Step 4 — Execute (after user approval)
 
 **MANDATORY:** Use the Task tool to spawn agents. Do NOT write files in the main context.
+
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
 ### Always spawn:
 

@@ -88,6 +88,8 @@ Wait for the exploration result before proceeding.
 
 **MANDATORY:** Use the Task tool to spawn the agents below in parallel. Do NOT analyze inline — always delegate. The only exception is if the user explicitly asks not to use agents.
 
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
 ### Phase 4a — Module analysis (spawn all in parallel)
 
 1. **`backend-developer`**

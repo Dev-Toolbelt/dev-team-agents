@@ -11,6 +11,8 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
 - `seo-specialist` — runs the full SEO Quality Gate (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) regardless of the project's Detection Signals posture, since this command is an explicit SEO request
 
 Also spawn if the task includes implementation of the fixes it finds (when $ARGUMENTS contains "implement", "fix", or "apply"):

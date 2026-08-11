@@ -11,6 +11,8 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **MANDATORY:** Use the Task tool to spawn the agents below in parallel. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
 - `database-specialist` — schema design, migrations, query optimization, indexing, replication
 - `software-architect` — architectural data modeling implications and cross-service impact
 
