@@ -12,6 +12,31 @@ with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
 PYEOF
 ```
 
+## Auto-fix for a missing `SessionStart` or `PreCompact` hook entry
+
+Same merge shape `install.sh` Step 7 uses (`_inject_hook`) — safe to re-run even if the entry is
+already present, since the check above only fires when it's confirmed missing:
+
+```bash
+python3 - .claude/settings.json <<'PYEOF'
+import sys, json
+f = sys.argv[1]
+with open(f) as fh: data = json.load(fh)
+hooks = data.setdefault('hooks', {})
+# Repeat this block once per missing hook_type: "SessionStart" -> session-start.sh,
+# "PreCompact" -> pre-compact.sh. Self-hosted (this repo) uses a bare
+# "scripts/hooks/<name>.sh" command; an installed project uses
+# "env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/<name>.sh" instead — match
+# whatever command form the existing Stop entry in the same file already uses.
+entries = hooks.setdefault('SessionStart', [])
+entries.append({"hooks": [{"type": "command", "command": "<matching-command-form>/scripts/hooks/session-start.sh"}]})
+with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
+PYEOF
+```
+
+Then `chmod +x` both scripts if the executable-bit check above also failed — a hook command
+pointing at a non-executable file fails exactly as silently as a missing entry.
+
 ## Auto-fix for missing symlinks
 
 Only when the path does **not** exist (MISSING). If the path exists as a plain

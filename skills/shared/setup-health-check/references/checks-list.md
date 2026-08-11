@@ -102,6 +102,9 @@ cat .opencode/opencode.json 2>/dev/null || echo "MISSING_OPENCODE"
 |-------|---------------|------------|
 | `hooks.PreToolUse` has exactly one dev-team entry | command = `…/scripts/hooks/pre-tool-use.sh`, matcher `.*` | Replace old entries (e.g. `update.sh --check`, inline graphify command) with dispatcher |
 | `hooks.Stop` has exactly one dev-team entry | command = `…/scripts/hooks/stop.sh` | Replace old entries (e.g. `session-summary-hook.sh`, `graphify-refresh.sh`) with dispatcher |
+| `hooks.SessionStart` has exactly one dev-team entry | command = `…/scripts/hooks/session-start.sh` | **Auto-fix, no confirmation needed for the addition itself** (see fix-patterns.md `_inject_hook` pattern) — this hook is silent-by-design when absent (see `CLAUDE-md/hooks.md` § Session Start Banner), so its absence produces no error anywhere else; a missing entry here is the only signal |
+| `hooks.PreCompact` has exactly one dev-team entry | command = `…/scripts/hooks/pre-compact.sh` | Same auto-fix pattern as `SessionStart` above |
+| `scripts/hooks/session-start.sh` and `scripts/hooks/pre-compact.sh` are executable | `-x` bit set | `chmod +x .dev-team-agents/scripts/hooks/session-start.sh .dev-team-agents/scripts/hooks/pre-compact.sh` — a registered hook pointing at a non-executable file fails silently, the same observable symptom as a missing entry |
 | No stale direct hook paths remain | No `update.sh --check`, `session-summary-hook.sh`, or `graphify-refresh.sh` as direct hook commands | Consolidate into dispatchers |
 | `includeCoAuthoredBy` is `false` | `"includeCoAuthoredBy": false` | Auto-fix: inject via python3 (see fix-patterns.md) |
 
