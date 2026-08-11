@@ -78,6 +78,22 @@ done
 for _stray in .dev-team-agents.old.* .dev-team-agents.new.*; do
   [ -d "$_stray" ] && echo "STRAY_SWAP_DIR: $_stray"
 done
+
+# Check for confirmed .pre-migration.bak files — safe to delete only when their
+# mapped key already holds a value in state.json (see fix-patterns.md State.json
+# marker migration for the exact mapping).
+source .dev-team-agents/scripts/lib/state.sh 2>/dev/null
+for _entry in ".installed-version.prev:installed_version_prev" ".installed-version:installed_version" \
+  ".last-health-check:last_health_check" ".last-update-check:last_update_check" \
+  ".update-check-interval:update_check_interval" ".graphify-last-run:graphify_last_run" \
+  ".session-id:session_id" ".session-head:session_head"; do
+  _fname="${_entry%%:*}"; _key="${_entry##*:}"
+  _bak=".dev-team-agents/user-data/${_fname}.pre-migration.bak"
+  if [ -f "$_bak" ]; then
+    _val="$(state_get "$_key" .dev-team-agents/user-data/state.json 2>/dev/null)"
+    if [ -n "$_val" ]; then echo "BAK_CONFIRMED: $_bak"; else echo "BAK_UNCONFIRMED: $_bak"; fi
+  fi
+done
 ```
 
 | Check | Auto-fix |
@@ -87,6 +103,8 @@ done
 | Any `LEGACY_MARKER` reported | **Migrate immediately**: `source .dev-team-agents/scripts/lib/state.sh && state_migrate_legacy .dev-team-agents/user-data` — imports each marker's value into `state.json` and renames the original to `<name>.pre-migration.bak` (never deleted, see fix-patterns.md State.json marker migration) |
 | Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration). Do NOT skip this step. Leftovers are `rmdir`'d only when empty, and quarantined otherwise — never `rm -rf` |
 | Memory artifacts present (`session-summary.md`, `docs/wiki/`, `docs/development/adrs/`, `docs/project.md`) | Adapt in place only — see Category 11. Never regenerate over an existing file |
+| `BAK_CONFIRMED` reported | `rm` the `.pre-migration.bak` — its value is already durably present in `state.json` (see fix-patterns.md State.json marker migration) |
+| `BAK_UNCONFIRMED` reported | WARN only, leave the `.bak` in place — its key is missing or empty in `state.json`, meaning the value was never actually migrated |
 | `.dev-team-agents.old.*` / `.dev-team-agents.new.*` present (`STRAY_SWAP_DIR`) | **Exception to the No-Destruction Rule, stated explicitly**: these are never user data — they are transient copies internal to the install/update swap (`scripts/install.sh` Step 2c) that only survive when a prior run was killed mid-swap. Safe to `rm -rf` outright. Report which path(s) were removed |
 
 ## Category 4 — settings.json / Provider Config

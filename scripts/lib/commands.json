@@ -47,6 +47,7 @@
     "install":           { "tier": "repetitive",  "agent": "technical-writer",    "description": "Install complementary tools from a closed allowlist (rg, fd, jq, ast-grep, tokei, delta, graphify).", "plan_gate": "opt_out", "interaction_mode": "optional" },
     "audit":             { "tier": "backend-exec", "agent": "code-reviewer",     "description": "Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan.", "plan_gate": "conditional", "interaction_mode": "optional" },
     "rule":              { "tier": "repetitive",  "agent": "technical-writer",    "description": "Catalog a mandatory reuse/standardization rule into docs/development/reuse-guidelines.md.", "plan_gate": "conditional", "interaction_mode": "optional" },
-    "sync-rules":        { "tier": "repetitive",  "agent": "technical-writer",    "description": "Scan docs/ for undocumented conventions and catalog them via /devteam:rule.", "plan_gate": "opt_out", "interaction_mode": "optional" }
+    "sync-rules":        { "tier": "repetitive",  "agent": "technical-writer",    "description": "Scan docs/ for undocumented conventions and catalog them via /devteam:rule.", "plan_gate": "opt_out", "interaction_mode": "optional" },
+    "version":           { "tier": "repetitive",  "agent": "technical-writer",    "description": "Print the installed dev-team-agents version, session-banner layout.",          "plan_gate": "opt_out",     "interaction_mode": "optional" }
   }
 }

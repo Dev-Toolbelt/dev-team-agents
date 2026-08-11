@@ -41,8 +41,9 @@ The health check runs unattended, on an installation it has just decided is brok
 | Config line replaced | Rewrite the line to its current form | Delete and re-add as two steps |
 | Content is unrecognized, orphaned, or ambiguous | `mv` to quarantine (below) | Delete as cleanup |
 | Directory left over and **empty** | `rmdir` without `-r` | `rm -rf` |
+| `<name>.pre-migration.bak` from `state_migrate_legacy`, confirmed | `rm` — only after Category 3 confirms the mapped key already holds a value in `state.json` | Delete before confirming, or on a mere assumption the migration ran |
 
-`rmdir` without `-r` is the only removal in the skill. It is permitted precisely because it fails by construction on a non-empty directory, so it cannot destroy data — the safety is in the tool, not in the check that ran before it.
+`rmdir` without `-r` and the confirmed-`.bak` `rm` are the only two removals in the skill. `rmdir` is permitted because it fails by construction on a non-empty directory. The `.bak` deletion is permitted because the value it would destroy was already durably copied into `state.json` by the same operation that created it — verified again, independently, by Category 3 before any `rm` runs. Everything else stays a move, never a delete, because the check cannot make that same guarantee about content it did not itself just write.
 
 ### Quarantine
 

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.41.0] - 2026-08-11
+
+### Added
+- **`/devteam:version` command**: prints the installed dev-team-agents version in the exact `[DEVTEAM:SESSION_BANNER]` layout `session-start.sh` shows at session start, on demand. Zero agent spawn, single bash call reading `installed_version` from `state.json` (same `CHANGELOG.md` fallback chain as the session banner) — built for minimum token cost, not routed through a subagent.
+
+### Changed
+- **Health-check No-Destruction Rule gained one narrow, canonical exception**: a `<name>.pre-migration.bak` file written by `state_migrate_legacy` may now be deleted, but only after Category 3 independently re-confirms its mapped key already holds a value in `state.json` (`BAK_CONFIRMED` vs `BAK_UNCONFIRMED`). Previously these accumulated forever in every project's `user-data/` root — the rule said "never deletes" with no path to clean up files that, by construction, had already had their sole piece of information durably copied elsewhere.
+
 ## [2.37.1] - 2026-08-09
 
 ### Fixed

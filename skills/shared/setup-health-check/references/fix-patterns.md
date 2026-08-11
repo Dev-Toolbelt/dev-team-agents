@@ -196,7 +196,19 @@ source .dev-team-agents/scripts/lib/state.sh
 state_migrate_legacy .dev-team-agents/user-data
 ```
 
-`state_migrate_legacy` is idempotent and additive under the **No-Destruction Rule**: it reads each present dotfile's value into the matching key in `state.json`, then renames the original to `<name>.pre-migration.bak` — it never deletes. Re-running it on a project that already migrated is a no-op (the dotfiles are gone, only the `.bak` files remain). Report which markers were migrated; leave the `.bak` files in place — they are not further cleanup for this check to perform.
+`state_migrate_legacy` is idempotent and additive under the **No-Destruction Rule**: it reads each present dotfile's value into the matching key in `state.json`, then renames the original to `<name>.pre-migration.bak` — it never deletes. Re-running it on a project that already migrated is a no-op (the dotfiles are gone, only the `.bak` files remain). Report which markers were migrated.
+
+### Confirmed `.pre-migration.bak` cleanup
+
+The one narrow exception to the No-Destruction Rule (see `SKILL.md` § No-Destruction Rule): once a `.pre-migration.bak`'s value is confirmed present in `state.json`, the `.bak` carries zero remaining information and may be deleted. Category 3 reports this as `BAK_CONFIRMED: <path>` — never re-derive the confirmation here, only act on what that check already reported:
+
+```bash
+for _bak in $(grep -oE 'BAK_CONFIRMED: .*' /dev/stdin | cut -d' ' -f2); do
+  rm -f "$_bak"
+done
+```
+
+`BAK_UNCONFIRMED` entries are left untouched and reported as a WARN — an empty or missing key means the value was never actually copied into `state.json`, so the `.bak` is the only remaining copy and deleting it would be data loss, not cleanup.
 
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
