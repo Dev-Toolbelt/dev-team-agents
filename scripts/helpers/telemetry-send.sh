@@ -65,20 +65,41 @@ else
 fi
 
 # ── Anonymous ID ───────────────────────────────────────────────────────────────
+# Persisted in state.json (survives a deleted/corrupted telemetry-queue.json),
+# with the queue file as a legacy fallback so an existing install's ID does
+# not change on upgrade. Always written back to state.json once resolved.
 _get_or_create_id() {
-    # Read from queue file if already generated
-    if [ -f "$QUEUE_FILE" ] && command -v python3 >/dev/null 2>&1; then
-        local existing
-        existing=$(python3 -c \
-            "import json; d=json.load(open('$QUEUE_FILE')); print(d.get('id',''))" \
-            2>/dev/null || echo "")
+    local existing
+
+    # 1. state.json — the durable home for this value
+    if command -v state_get >/dev/null 2>&1; then
+        existing="$(state_get telemetry_anon_id "$STATE_FILE")"
         if [ -n "$existing" ]; then
             echo "$existing"
             return
         fi
     fi
 
-    # Generate: SHA-256 of hostname + home dir (one-way, not reversible)
+    # 2. queue file — legacy location, kept as fallback for existing installs
+    if [ -f "$QUEUE_FILE" ] && command -v python3 >/dev/null 2>&1; then
+        existing=$(python3 - "$QUEUE_FILE" <<'PYEOF' 2>/dev/null || echo ""
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    print(d.get("id", ""))
+except (json.JSONDecodeError, IOError, FileNotFoundError):
+    print("")
+PYEOF
+)
+        if [ -n "$existing" ]; then
+            command -v state_set >/dev/null 2>&1 && state_set telemetry_anon_id "$existing" "$STATE_FILE"
+            echo "$existing"
+            return
+        fi
+    fi
+
+    # 3. Generate fresh: SHA-256 of hostname + home dir (one-way, not reversible)
     local raw="${HOSTNAME:-$(hostname 2>/dev/null || echo unknown)}:${HOME:-/unknown}"
     local hashed
     if command -v sha256sum >/dev/null 2>&1; then
@@ -88,6 +109,7 @@ _get_or_create_id() {
     else
         hashed="no-sha-$(date +%s)"
     fi
+    command -v state_set >/dev/null 2>&1 && state_set telemetry_anon_id "$hashed" "$STATE_FILE"
     echo "$hashed"
 }
 

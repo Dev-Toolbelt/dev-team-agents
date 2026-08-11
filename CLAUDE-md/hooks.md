@@ -82,8 +82,8 @@ The following sub-scripts are disabled by renaming them out of the dispatcher's 
 | Disabled file | Was | Status |
 |---|---|---|
 | `stop/_disabled-04-notifier.sh` | `04-notifier.sh` | Pending review — disabled 2026-08-06, no observed user-visible benefit relative to its per-Stop cost |
-| `pre-tool-use/_disabled-02b-telemetry.sh` | `02b-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization |
-| `stop/_disabled-05-telemetry.sh` | `05-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization |
+| `pre-tool-use/_disabled-02b-telemetry.sh` | `02b-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization. **Coupled with the row below — re-enable both together, never one alone** (queuing without a flush path silently fills the queue to its 100-event cap and drops the oldest entries; a flush path with nothing queued is a silent no-op) |
+| `stop/_disabled-05-telemetry.sh` | `05-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization. **Coupled with the row above** — see note there |
 | `pre-tool-use/_disabled-01-check-updates.sh` | `01-check-updates.sh` | Superseded — logic moved into `session-start.sh` so the check runs once per session instead of on every tool call |
 | `stop/_disabled-99-graphify-refresh.sh` | `99-graphify-refresh.sh` | Deliberate change — Graphify refresh is on-demand only now; run manually: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
 

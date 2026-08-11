@@ -25,8 +25,15 @@ _telemetry_enabled() {
     [ -f "$prefs" ] || return 1
     command -v python3 >/dev/null 2>&1 || return 1
     local val
-    val=$(python3 -c \
-        "import json; d=json.load(open('$prefs')); print(str(d.get('telemetry',False)).lower())" \
-        2>/dev/null || echo "false")
+    val=$(python3 - "$prefs" <<'PYEOF' 2>/dev/null || echo "false"
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    print(str(d.get("telemetry", False)).lower())
+except (json.JSONDecodeError, IOError, FileNotFoundError):
+    print("false")
+PYEOF
+)
     [ "$val" = "true" ]
 }

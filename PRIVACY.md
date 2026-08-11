@@ -42,9 +42,11 @@ Only when telemetry is enabled:
 | `first_install` | First-time installation | Installed version, OS (`darwin`/`linux`) |
 | `install` | Re-install or update via installer | Installed version, OS |
 | `update` | Manual update via `update.sh` | Previous version, new version, mode (`manual`) |
-| `agent_spawned` | Any time an agent is started via the `Task` tool | OS, installed version |
-| `command_invoked` | Any `/devteam:*` slash command executed | Command name (e.g. `plan`, `backend`), OS, version |
-| `session_end` | End of each CLI session (any supported provider) | Whether the stop hook was active, OS, version |
+| `agent_spawned` *(temporarily inactive)* | Any time an agent is started via the `Task` tool | OS, installed version |
+| `command_invoked` *(temporarily inactive)* | Any `/devteam:*` slash command executed | Command name (e.g. `plan`, `backend`), OS, version |
+| `session_end` *(temporarily inactive)* | End of each CLI session (any supported provider) | Whether the stop hook was active, OS, version |
+
+The three events marked *(temporarily inactive)* are implemented but their collection hooks are currently disabled pending review (see `CLAUDE-md/hooks.md` § Disabled Hooks in the source repository) — nothing is being sent for them right now, even with telemetry enabled. Only `first_install`, `install`, and `update` are active today.
 
 All events also include:
 - **`$lib`**: always `"dev-team-agents"` (identifies the source)

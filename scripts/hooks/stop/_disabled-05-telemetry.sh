@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # DISABLED (2026-08-06) — pending review, see CLAUDE-md/hooks.md § Disabled Hooks.
 # Rename back to 05-telemetry.sh to re-enable.
+# WARNING: re-enable together with pre-tool-use/_disabled-02b-telemetry.sh.
+# This is the only Stop-time flush path; re-enabling it alone means no
+# PreToolUse events are ever queued to flush, so it becomes a silent no-op.
 # Stop sub-script: queue a session_end telemetry event and flush if TTL reached.
 # Exits 0 always — telemetry must never block the Stop hook.
 set -euo pipefail
