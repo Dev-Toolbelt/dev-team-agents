@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.41.1] - 2026-08-11
+
+### Fixed
+- **`graphify-refresh.sh` failed on every installed project**: it sourced `state.sh` via `$PROJECT_ROOT/scripts/lib/state.sh`, a path that only resolves when the script runs inside this repo itself. Once installed under `.dev-team-agents/`, that path doesn't exist and the script errored on every run (`No such file or directory`), silently disabling graphify change-detection. Now resolves `state.sh` relative to the script's own location (`BASH_SOURCE`), matching the pattern `scripts/new-adr.sh` already used.
+- **Symlink repairs could silently recur on Windows**: `fix-symlinks.sh` could report "repaired" or "nothing to fix" while the underlying problem returned on the next `git checkout`/`pull`/`stash`/`reset --hard`, or on a teammate's fresh clone. Cause: when a `.claude/agents/dev-team`, `.claude/commands/devteam`, or `.claude/skills/<name>` symlink was first committed on a machine without native symlink support, its git blob stays mode `100644` (plain file) forever — `ln -s` fixes the working tree but never touches that committed blob. `fix-symlinks.sh` now detects this via `git ls-files -s` and prints `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` with the exact `git add`/`git commit` needed to make the fix permanent; `/devteam:symlinks` and the health-check docs surface it distinctly from a plain repair.
+
 ## [2.41.0] - 2026-08-11
 
 ### Added
