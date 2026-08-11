@@ -49,7 +49,7 @@ Load the matching skill when the task context applies:
 | GraphQL work — apply that skill's `## Detection Signals` table to decide when it applies | `skills/architecture/graphql/SKILL.md` |
 | Internationalization — locale detection, catalogs, pluralization, date/number formatting | `skills/architecture/i18n/SKILL.md` |
 | Caching — topology, key design, invalidation, TTL selection | `skills/architecture/caching/SKILL.md` |
-| Retries, circuit breakers, bulkheads, timeouts | `skills/architecture/resilience/SKILL.md` |
+| Retries, circuit breakers, bulkheads, timeouts, HTTP client connection pooling for outbound calls | `skills/architecture/resilience/SKILL.md` |
 | Creating branches, merge strategies, commit naming | `skills/shared/git-workflow/SKILL.md` |
 | Event-driven patterns, message queues (Kafka, RabbitMQ, SQS), sagas | `skills/architecture/event-driven/SKILL.md` |
 | Rate limiting middleware or API throttling | `skills/architecture/rate-limiting/SKILL.md` |

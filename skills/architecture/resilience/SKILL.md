@@ -13,6 +13,7 @@ description: Resilience — circuit breaker, retry, bulkhead, health checks.
 | Timeout | Prevents indefinite blocking on slow responses | Every network boundary |
 | Fallback | Provides a degraded but functional response on failure | Non-critical dependencies (recommendations, ads, enrichment) |
 | Rate Limiter | Protects services from traffic spikes and abuse | Inbound API endpoints, outbound third-party calls |
+| HTTP Connection Pooling | Reuses TCP/TLS connections instead of paying handshake cost per call | Any outbound HTTP client making repeated calls to the same host |
 
 ## Circuit Breaker
 
@@ -83,6 +84,36 @@ notification-service pool: max 5 threads, queue 10
   4. Return a clear error to the caller with enough context to retry later
 - Never swallow exceptions silently — log the original error even when serving a fallback
 - Mark fallback responses in the payload or headers so callers can distinguish real from degraded data
+
+## HTTP Client Connection Pooling
+
+Establishing a TCP connection (plus TLS handshake over HTTPS) is expensive relative to the request itself. A pooled HTTP client keeps connections open and reuses them across calls to the same host instead of opening a fresh one every time. This is a client-side concern — separate from the server-side pooling covered under Bulkhead above, and from database connection pooling (see `skills/integrations/database-production/SKILL.md`).
+
+**Use when:**
+- The service makes repeated outbound calls to the same host (internal microservice, third-party API, webhook target)
+- Call volume is high enough that per-request handshake latency shows up in p95/p99
+- The downstream supports HTTP keep-alive (virtually all modern HTTP/1.1+ and HTTP/2 servers do)
+
+**Skip or scope narrowly when:**
+- The call is a true one-off (cold start, cron job hitting a host once) — pooling adds idle-connection overhead with no reuse benefit
+- The target host rotates behind short-lived DNS (e.g. some load balancers) — see DNS caching pitfall below
+
+**Every HTTP client library exposes some form of this — names vary by stack, but the concepts don't:**
+
+| Concept | What it controls | Typical failure mode if misconfigured |
+|---|---|---|
+| Max connections per host | Ceiling on concurrent open connections to one downstream | Too low → requests queue/block waiting for a free connection under load; too high → downstream gets overwhelmed or hits its own connection limits |
+| Max idle connections | How many idle (kept-alive) connections stay open for reuse | Too low → connections keep getting closed and reopened, losing the reuse benefit; too high → resource waste, may exhaust downstream connection limits |
+| Idle timeout | How long an unused connection stays open before being closed | Too short → connections churn like no pooling was configured; too long → stale connections get used and fail (see below), or resources leak |
+| Connection timeout | Max time to wait establishing a new connection | Too long → slow failure detection, threads/goroutines pile up waiting; too short → false failures under normal network jitter |
+
+**Common pitfalls:**
+- **Stale connection reuse**: a pooled connection can be silently closed by the server or an intermediate proxy/load balancer while idle. Configure the client to validate or retry-once-on-connection-reset rather than surfacing it as a hard failure to the caller.
+- **DNS caching mismatch**: a pooled connection binds to a resolved IP. If the client also caches DNS aggressively, it can keep talking to a decommissioned backend after a deploy or failover. Keep idle timeout shorter than the downstream's DNS TTL when the target is behind a rotating load balancer.
+- **One pool per downstream, not one global pool**: mirror the Bulkhead pattern — size the pool for each downstream independently based on its expected concurrency and latency profile, so one saturated dependency doesn't starve connections meant for another.
+- **Missing pooling entirely**: the default HTTP client in many languages does *not* pool by default, or pools with a very small ceiling (e.g. 1–2 connections per host) — verify the actual default before assuming reuse is happening.
+
+Consult your stack's HTTP client documentation for the exact parameter names (e.g. `MaxIdleConnsPerHost`, `maxConnections`, `pool_maxsize`, `maxSockets`) — the concepts above map onto all of them.
 
 ## Rate Limiting
 
