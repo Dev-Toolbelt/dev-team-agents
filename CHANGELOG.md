@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.42.0] - 2026-08-11
+
+### Added
+- **`/devteam:status` command**: runs `git status`/`git diff`/`git log` in a single bash call and prints branch, worktree, unstaged/staged changes, last 5 commits, and totals as formatted markdown tables. Accepts an optional `<branch-name>` argument to inspect a branch other than the current one — full unstaged/staged tables when that branch has a linked worktree checked out, commit history only otherwise. No agent spawn, minimum token cost.
+
 ## [2.41.2] - 2026-08-11
 
 ### Changed
