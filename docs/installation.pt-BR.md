@@ -211,4 +211,11 @@ bash .dev-team-agents/scripts/fix-symlinks.sh
 
 Reinicie o Claude Code após o reparo para que ele reindexe comandos, agentes e skills. Ligar o Modo Desenvolvedor é a correção duradoura — ela também cobre clones futuros deste e de outros repos, sem nenhum passo de administrador.
 
+**Um reparo ainda pode ser desfeito pelo seu próximo `git checkout`.** O `fix-symlinks.sh` corrige a *working tree* com `ln -s`, mas se o link foi commitado pela primeira vez com os symlinks bloqueados, o blob commitado é ele mesmo um arquivo comum (modo git `100644` em vez de `120000`) — sem relação com o reparo local. Todo checkout, pull, stash ou reset posterior, e todo clone novo de um colega, restaura esse blob quebrado. O script detecta isso e imprime `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` com os comandos exatos — rode-os para tornar o reparo permanente:
+
+```bash
+git add .claude/agents/dev-team .claude/commands/devteam .claude/skills/<nome>
+git commit -m "fix: restore dev-team-agents symlinks (were committed as plain files)"
+```
+
 De dentro do Claude Code você pode rodar o mesmo reparo como comando — `/devteam:symlinks` — que detecta o SO, executa o helper e guia você pela correção do SO quando os symlinks nativos estão bloqueados. Se os links estiverem quebrados a ponto de os comandos `/devteam:` não carregarem, rode o script `fix-symlinks.sh` diretamente como mostrado acima.
