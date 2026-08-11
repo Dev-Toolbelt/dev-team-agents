@@ -203,6 +203,38 @@ Note the wall-clock time of each spawn. If the user asks for status and no retur
   re-derive the answer from what has actually been observed since the last checkpoint, not from
   what you last told them.
 
+### 5. Auto-reactivation — schedule the checkback, don't wait to be asked
+
+Check 4 fixes what the orchestrator *says* about liveness. It does not fix the underlying gap: with
+no poll/heartbeat primitive, a subagent that stalls or a round the user stopped watching stays
+silent until someone manually asks for status — in practice, the user re-prompting the orchestrator
+every time. That burden belongs to the orchestrator, not the user.
+
+**Whenever a delegation round leaves any subagent without a returned banner and the orchestrator's
+own turn is about to end**, schedule a follow-up instead of ending silently:
+
+- If `ScheduleWakeup` is available, call it before ending the turn: `delaySeconds` in the 1200–1800s
+  range for routine rounds (tighter, matched to expected duration, only for work with a known
+  short bound — see the tool's own guidance), `reason` naming which agent(s) are still outstanding.
+  Do not schedule a wakeup to poll something a `Monitor`-tracked task will already notify you about
+  — this is specifically for rounds with no other wake signal.
+- On that wakeup, call the actual status tool (`TaskList`/`TaskGet`/`TaskOutput`) before doing
+  anything else — same rule as check 4, no guessing.
+- If a subagent still shows no return and enough wall-clock time has passed for its task, resume it
+  directly (`SendMessage` to its agent id, per the Agent tool's continuation mechanism) with a short
+  nudge to continue and report — do not silently re-spawn a duplicate, and do not fabricate progress
+  in the meantime.
+- If it has returned, fold the result into the summary per check 3 and stop rescheduling for that
+  agent.
+- **Cap it.** Two reactivation attempts per stalled agent is the default ceiling — past that, stop
+  scheduling and surface it to the user as a real blocker ("`<agent>` has not reported back after two
+  checkbacks over `<elapsed>` — want me to re-spawn it or investigate directly?") rather than looping
+  indefinitely.
+
+If `ScheduleWakeup` is not available in the current context, this check cannot be satisfied — fall
+back to check 4's reactive behavior and say so if asked, rather than claiming a checkback is
+scheduled when none was.
+
 ---
 
 ## Subagent Report Economy
