@@ -28,7 +28,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh`, `03d-design-token-lint.sh`, `03e-adr-gap-check.sh` |
 | `04-` | User-facing notifications | _(disabled — see § Disabled Hooks)_ |
-| `05-` | External reporting (telemetry) | _(disabled — see § Disabled Hooks)_ |
+| `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | `99b-archive-index.sh` (graphify refresh disabled — see § Disabled Hooks) |
 
 Each sub-script must:
@@ -52,7 +52,7 @@ Sub-scripts in `scripts/hooks/pre-tool-use/` are run by `scripts/hooks/pre-tool-
 | Prefix | Reserved for | Current scripts |
 |--------|-------------|-----------------|
 | `01-` | Installation freshness | _(free — the update check moved to `SessionStart`, see below and § Disabled Hooks)_ |
-| `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; telemetry queueing disabled, see § Disabled Hooks; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
+| `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02b-telemetry.sh` — queues telemetry events for agent spawns and devteam commands; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
 
 > One script per bare number. `02-graphify-hint.sh` keeps `02-` because it is referenced externally; the telemetry script is `02b-telemetry.sh`. Two files sharing a bare prefix leaves execution order to an alphabetical tiebreak on the rest of the filename — never rely on that. Add a **lowercase letter suffix** (`02b-`, `02c-`, …) instead.
 
@@ -68,9 +68,9 @@ Each sub-script must:
 | Event | File | Dispatcher | Purpose |
 |-------|------|-----------|---------|
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
-| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, full-suite test guard (update checks and telemetry queue disabled, see § Disabled Hooks) |
+| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard (update checks disabled, see § Disabled Hooks) |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
-| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, archive rotation (notifications, telemetry, and graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
+| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, telemetry flush, archive rotation (notifications and graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |
 | — | `scripts/hooks/lib/touched-paths.sh` | Shared library | Not a hook. Sourced by `stop.sh` to compute the touched-path set once; sub-scripts `02`, `02b`, `03`, `03b` consume `DEVTEAM_TOUCHED_PATHS` instead of re-forking `git status` + `git log`, and fall back to computing it themselves when run standalone. |
 | — | `scripts/hooks/lib/update-check.sh` | Shared library | Not a hook. The update-check engine, now sourced directly by `session-start.sh`; also owns the auto-update path, which delegates the download to `scripts/lib/installer-fetch.sh` and **skips the upgrade entirely** when that library is absent rather than falling back to an unverified fetch. |
@@ -82,8 +82,6 @@ The following sub-scripts are disabled by renaming them out of the dispatcher's 
 | Disabled file | Was | Status |
 |---|---|---|
 | `stop/_disabled-04-notifier.sh` | `04-notifier.sh` | Pending review — disabled 2026-08-06, no observed user-visible benefit relative to its per-Stop cost |
-| `pre-tool-use/_disabled-02b-telemetry.sh` | `02b-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization. **Coupled with the row below — re-enable both together, never one alone** (queuing without a flush path silently fills the queue to its 100-event cap and drops the oldest entries; a flush path with nothing queued is a silent no-op) |
-| `stop/_disabled-05-telemetry.sh` | `05-telemetry.sh` | Pending review — disabled 2026-08-06, part of the telemetry module being reviewed for optimization. **Coupled with the row above** — see note there |
 | `pre-tool-use/_disabled-01-check-updates.sh` | `01-check-updates.sh` | Superseded — logic moved into `session-start.sh` so the check runs once per session instead of on every tool call |
 | `stop/_disabled-99-graphify-refresh.sh` | `99-graphify-refresh.sh` | Deliberate change — Graphify refresh is on-demand only now; run manually: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
 
