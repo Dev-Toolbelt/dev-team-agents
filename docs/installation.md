@@ -211,4 +211,11 @@ bash .dev-team-agents/scripts/fix-symlinks.sh
 
 Restart Claude Code after repairing so it re-indexes commands, agents, and skills. Enabling Developer Mode is the durable fix — it also covers future clones of this and other repos without any admin step.
 
+**A repair can still be undone by your next `git checkout`.** `fix-symlinks.sh` fixes the *working tree* with `ln -s`, but if the link was first committed while symlinks were blocked, the committed blob is itself a plain file (git mode `100644` instead of `120000`) — unaffected by the local fix. Every later checkout, pull, stash, or reset, and every fresh clone by a teammate, restores that broken blob. The script detects this and prints `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` with the exact commands — run them to make the fix permanent:
+
+```bash
+git add .claude/agents/dev-team .claude/commands/devteam .claude/skills/<name>
+git commit -m "fix: restore dev-team-agents symlinks (were committed as plain files)"
+```
+
 From inside Claude Code you can run the same repair as a command — `/devteam:symlinks` — which detects the OS, runs the helper, and walks you through the OS fix when native symlinks are blocked. If the links are broken enough that `/devteam:` commands don't load at all, run the `fix-symlinks.sh` script directly as shown above.

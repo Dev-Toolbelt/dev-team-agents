@@ -79,6 +79,29 @@ Behavior:
 After any successful repair, tell the user to restart their CLI so it
 re-indexes commands, agents, and skills.
 
+## Commit-required symlinks (fix is local only)
+
+`fix-symlinks.sh` also checks, for every link that currently works (whether it
+was already fine or was just repaired), whether the git blob tracked at that
+path is itself a symlink (mode `120000`) or a plain file (mode `100644`). A
+plain-file blob means the link was first committed on a machine where native
+symlinks were blocked — `ln -s` fixes the *working tree*, not the committed
+blob, so every later `git checkout`/`pull`/`stash`/`reset --hard`, and every
+fresh clone by a teammate, restores the broken plain file again.
+
+When the script output contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`, it also
+prints the exact fix — run it (or have the user run it) to make the repair
+durable:
+
+```bash
+git add <paths from the script output>
+git commit -m "fix: restore dev-team-agents symlinks (were committed as plain files)"
+```
+
+Report this distinctly from a plain repair — "fixed locally, but you must
+commit or it will recur" — never silently fold it into "nothing to fix" or
+"repaired".
+
 > `fix-symlinks.sh` inspects the `.claude/` tree only. On opencode and Codex
 > installs the `skills/` symlink under `.opencode/` or `.codex/` breaks the same
 > way — check it with `test -L <config-dir>/skills/dev-team-agents` and repair by

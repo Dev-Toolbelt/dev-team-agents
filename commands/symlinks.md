@@ -68,7 +68,7 @@ Read the final `EXIT:` line and branch on it in Step 3.
 All dev-team-agents symlinks are healthy. Nothing to fix.
 ```
 
-Then go to Step 6.
+Then check for `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` below before going to Step 6.
 
 **`EXIT:0` and the output contains `repaired`** → output exactly:
 
@@ -78,6 +78,17 @@ Restart <CLI> so it re-indexes commands, agents, and skills.
 ```
 
 (substituting the `<CLI>` bound in Step 1 — do not print the literal placeholder)
+
+Then check for `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` below before going to Step 6.
+
+**If the script output also contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`** (in either branch above) — the link(s) work locally but the git blob at that path is still committed as a plain file, not a symlink. Every future checkout/pull/stash/reset, and every teammate's fresh clone, will silently re-break it unless this is committed. Append this to the output above, substituting the `git add`/`git commit` command lines exactly as printed by the script:
+
+```
+⚠️  This fix is local only — the committed version is still a plain file.
+Commit it now so it doesn't recur on your next checkout or for teammates:
+
+<the exact `git add ...` and `git commit ...` lines from the script output>
+```
 
 Then go to Step 6.
 
@@ -139,6 +150,7 @@ git config core.symlinks true && git checkout -- <config-dir> && bash .dev-team-
   ```
   Symlinks repaired. Restart <CLI> so it re-indexes commands, agents, and skills.
   ```
+  If the output also contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`, append the same commit-required note as in Step 3.
 - **`EXIT:3`** → output exactly:
   ```
   Still blocked. Use the elevated-terminal or run-as-administrator option instead.

@@ -23,6 +23,7 @@ find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc
 | `.claude/commands/devteam` is a symlink | `-L` true → `../../.dev-team-agents/commands` | If MISSING: `ln -s ../../.dev-team-agents/commands .claude/commands/devteam` |
 | `.claude/skills/` entries are symlinks | Each skill dir linked | If MISSING: re-run skill linking loop from `install.sh` |
 | No link is **MATERIALIZED** (a plain file) | `find … ! -type l ! -type d` returns 0 | If any MATERIALIZED: **do not** `ln -s` (path exists). Run `bash .dev-team-agents/scripts/fix-symlinks.sh` — see fix-patterns.md |
+| Tracked links whose committed blob is a symlink, not a plain file | `git ls-files -s <path>` mode is `120000` for every tracked link | If mode is `100644` while the link works locally: **commit required**, not a filesystem fix — see fix-patterns.md |
 
 > **MATERIALIZED = the Windows condition.** git/MSYS wrote the link target
 > into a ~62-byte text file because native symlinks were unavailable
@@ -31,6 +32,16 @@ find .claude/skills -maxdepth 1 -mindepth 1 ! -type l ! -type d 2>/dev/null | wc
 > This is a `🔧 FIX` that cannot be auto-`ln -s`'d — route it through
 > `fix-symlinks.sh`, which repairs when possible and otherwise surfaces the
 > 3 remediation options for the user.
+
+> **A link can be fixed locally and still recur.** If the tracked git blob at
+> a link's path was first committed while symlinks were blocked, it has mode
+> `100644` (plain file) forever — until someone commits the fix. `ln -s`
+> repairing the *working tree* does not change that blob, so every later
+> `git checkout`/`pull`/`stash`/`reset --hard`, and every fresh clone by a
+> teammate, restores the broken plain file again. `fix-symlinks.sh` detects
+> this (`[DEVTEAM:SYMLINK_COMMIT_NEEDED]`) and prints the exact `git add` /
+> `git commit` to make the fix durable — this is the case behind "health
+> check says OK but it breaks again."
 
 ## Category 2 — Scripts & Executability
 

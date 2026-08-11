@@ -48,6 +48,9 @@ if [ -f "$_LEGACY_GRAPHIFY" ]; then
     echo "→ Removed legacy stop/02-graphify-refresh.sh (Stop-hook loop fix)."
 fi
 
+IN_GIT=false
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 && IN_GIT=true
+
 # ── A link is "materialized" when it exists, is NOT a symlink, and is NOT a
 #    directory — i.e. git/MSYS wrote the target path into a plain file. ──────
 _is_materialized() {
@@ -67,10 +70,54 @@ _collect_broken() {
     fi
 }
 
+# ── Detect a link that works locally but was committed as a plain file. ────
+# git never re-derives a tracked blob from the working tree: if a link's
+# blob mode isn't 120000 (symlink), every future checkout/pull/stash/reset,
+# and every fresh clone by a teammate, restores the same broken plain-file
+# content — even though the link is a real symlink right here, right now.
+_collect_commit_needed() {
+    COMMIT_NEEDED=()
+    [ "$IN_GIT" = true ] || return 0
+    local _paths=("$AGENTS_LINK" "$COMMANDS_LINK")
+    if [ -d "$SKILLS_DIR" ]; then
+        for _p in "$SKILLS_DIR"/*; do
+            [ -e "$_p" ] || continue
+            _paths+=("$_p")
+        done
+    fi
+    local _link _rel _mode
+    for _link in "${_paths[@]}"; do
+        [ -L "$_link" ] || continue
+        _rel="${_link#"$PROJECT_ROOT"/}"
+        git ls-files --error-unmatch "$_rel" >/dev/null 2>&1 || continue
+        _mode="$(git ls-files -s -- "$_rel" 2>/dev/null | awk '{print $1}')"
+        [ "$_mode" = "120000" ] && continue
+        COMMIT_NEEDED+=("$_rel")
+    done
+}
+
+_print_commit_needed() {
+    [ "${#COMMIT_NEEDED[@]}" -eq 0 ] && return 0
+    echo ""
+    echo "[DEVTEAM:SYMLINK_COMMIT_NEEDED] ${#COMMIT_NEEDED[@]} link(s)"
+    echo "These links work locally, but git still has them committed as plain"
+    echo "files (not symlinks) — likely because they were first committed on a"
+    echo "machine where native symlinks were blocked. Every future checkout,"
+    echo "pull, stash, or reset — and every fresh clone by a teammate — will"
+    echo "restore the broken plain-file content and undo this fix unless it is"
+    echo "committed now:"
+    echo ""
+    echo "  git add ${COMMIT_NEEDED[*]}"
+    echo "  git commit -m \"fix: restore dev-team-agents symlinks (were committed as plain files)\""
+    echo ""
+}
+
 # ── Detect ────────────────────────────────────────────────────────────────
 _collect_broken
 if [ "${#BROKEN[@]}" -eq 0 ]; then
     echo "→ No materialized (broken) dev-team-agents links found. Nothing to fix."
+    _collect_commit_needed
+    _print_commit_needed
     exit 0
 fi
 
@@ -79,9 +126,6 @@ echo "   This is the Windows 'no native symlink support' condition."
 echo ""
 
 # ── Attempt auto-fix ──────────────────────────────────────────────────────
-IN_GIT=false
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 && IN_GIT=true
-
 if [ "$IN_GIT" = true ]; then
     # core.symlinks=true tells git to write real symlinks on the next checkout.
     git config core.symlinks true 2>/dev/null || true
@@ -131,6 +175,8 @@ if [ "${#BROKEN[@]}" -eq 0 ]; then
     echo "✅ All dev-team-agents links repaired as native symlinks."
     echo ""
     echo "→ Restart Claude Code so it re-indexes commands, agents, and skills."
+    _collect_commit_needed
+    _print_commit_needed
     exit 0
 fi
 
