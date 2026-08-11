@@ -39,6 +39,11 @@ Pass the user JWT when creating the client (happens automatically if using `supa
 - Opening multiple WebSocket connections for the same channel — use a singleton or channel registry
 - Not handling `CHANNEL_ERROR` and `TIMED_OUT` statuses — the subscription silently stops working
 - Sending large payloads via broadcast — keep under 1 MB; use Postgres + Postgres Changes for larger data
+- Generic WebSocket: reconnecting on a fixed interval instead of exponential backoff with jitter — causes reconnect storms against a recovering server
+- Generic WebSocket: ignoring the `CloseEvent` code — `1000`/`1001` are intentional closes, everything else should trigger a reconnect
+- Generic WebSocket: no application-level heartbeat — a dead connection can sit in `OPEN` state for minutes before the OS notices
+- Generic WebSocket: using `ws://` on an HTTPS page — browsers block the mixed-content connection outright; always use `wss://`
+- Generic WebSocket: authorizing the connection by `Origin` header alone, or skipping token validation on the upgrade handshake
 
 ## Load on Demand
 
