@@ -562,3 +562,23 @@ When the user writes any prompt matching the intent of setting up the project wi
 ## Coexistence Rule (Core Principle)
 
 `dev-team-agents` is the base layer. Any rule in the target project's CLAUDE.md, README.md, AGENTS.md, or `.agents/` always takes precedence over these base standards. Agents must load and respect project context before acting on any task. This principle must be reinforced in every agent and command.
+
+<!-- dev-team-agents: pre-compact-auto-summary -->
+# Pre-compact Hook — Auto Session Summary
+When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
+
+1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
+   ```
+   ## YYYY-MM-DD HH:MM:SS | [brief task title]
+   **Done**: what was implemented or changed
+
+   **Decisions**: key choices made and why
+
+   **Next**: what remains or is recommended next
+
+   ---
+   ```
+   - Use today's date and current time
+   - Base the content on the current conversation context
+   - Always write in English
+2. After writing, tell the user: "Session summary written. Run `/compact` again to proceed."
