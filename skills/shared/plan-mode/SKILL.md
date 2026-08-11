@@ -52,12 +52,14 @@ Plans render as **pure markdown** — no box-drawing characters or decorative sy
 
 ## Approval Protocol
 
+**Formatting rule — the plan and the approval question are two separate messages, never one.** First, output the filled `plan-template.md` as plain markdown chat text — headings, tables, and line breaks intact. Only after that, if using `AskUserQuestion` to collect approval, send the short **"Plan approval gate"** pattern from `skills/shared/interaction-patterns/SKILL.md` (question: "Plan ready. Do you approve?", options: Approved / Adjust first / Cancel). Never paste the plan body — or any part of the Steps table — into the `question`, `header`, or option `description` fields; those fields collapse line breaks and render the plan as an unreadable wall of text.
+
 After presenting the plan:
 
 1. **Stop.** Do not execute any step.
-2. **Wait** for an explicit approval signal from the user.
-3. **Approval signals**: "approved", "go ahead", "proceed", "yes", "looks good", "do it"
-4. **Rejection signals**: any feedback, correction, question, or "no"
+2. **Wait** for an explicit approval signal from the user — either a plain-text reply or the "Plan approval gate" quiz above.
+3. **Approval signals**: "approved", "go ahead", "proceed", "yes", "looks good", "do it", or selecting "Approved — proceed"
+4. **Rejection signals**: any feedback, correction, question, "no", or selecting "Adjust first" / "Cancel"
 
 On **rejection**: acknowledge the feedback, adjust the plan, re-present the full plan. Never partially execute before replanning.
 
