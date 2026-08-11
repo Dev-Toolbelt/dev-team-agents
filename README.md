@@ -113,6 +113,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
 | `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
 | `/devteam:version` | Version check — prints the installed dev-team-agents version in the session-start banner layout; one bash call, no agent spawn, minimum token cost |
+| `/devteam:status` | Git status snapshot — branch/worktree, unstaged and staged changes, last 5 commits, and totals as formatted markdown tables; one bash call, no agent spawn, minimum token cost. `/devteam:status <branch-name>` inspects that branch instead of the current one |
 
 **Usage examples:**
 
