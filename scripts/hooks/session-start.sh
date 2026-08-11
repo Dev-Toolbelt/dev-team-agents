@@ -21,6 +21,15 @@ PREFS_FILE="${USER_DATA_DIR}/preferences.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFS_DEFAULTS_FILE="${SCRIPT_DIR}/../lib/preferences-defaults.json"
 
+# ── Consolidated state (state.json) ────────────────────────────────
+# Dir must exist before state_migrate_legacy can look for legacy dotfiles
+# to import, and before any state_set call can write state.json.
+mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
+# shellcheck source=scripts/lib/state.sh
+. "${SCRIPT_DIR}/../lib/state.sh"
+STATE_FILE="${USER_DATA_DIR}/state.json"
+[ -d "$USER_DATA_DIR" ] && state_migrate_legacy "$USER_DATA_DIR"
+
 # ── Health-check backfill ─────────────────────────────────────────
 # Ensure preferences.json has every key from the canonical default schema.
 # Missing keys are written with their defaults; existing user values are never
@@ -84,13 +93,13 @@ AUTO_UPDATE="${AUTO_UPDATE:-false}"
 WORKTREE_ACTIVE="${WORKTREE_ACTIVE:-false}"
 
 # ── Write session ID for the notifier turn counter ────────────────
-mkdir -p "$USER_DATA_DIR"
-date +%s > "${USER_DATA_DIR}/.session-id"
+state_set session_id "$(date +%s)" "$STATE_FILE"
 
 # ── Record the commit HEAD was at when this session started ───────
 # stop/_disabled-04-notifier.sh compares the current HEAD against this to
 # detect a session with real turn count but zero commits — see that script.
-git rev-parse HEAD > "${USER_DATA_DIR}/.session-head" 2>/dev/null || true
+_session_head_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+[ -n "$_session_head_sha" ] && state_set session_head "$_session_head_sha" "$STATE_FILE"
 
 # ── Update check (moved from pre-tool-use/01-check-updates.sh) ────
 # Runs once per session instead of on every tool call. TTL-gated internally —
@@ -103,21 +112,20 @@ if [ -f "$UC_LIB_FILE" ]; then
     . "$UC_LIB_FILE"
 
     UC_INSTALL_DIR="${MAIN_REPO_ROOT}/.dev-team-agents"
-    UC_LAST_CHECK_FILE="${USER_DATA_DIR}/.last-update-check"
-    UC_VERSION_FILE="${USER_DATA_DIR}/.installed-version"
-    UC_INTERVAL_CACHE_FILE="${USER_DATA_DIR}/.update-check-interval"
+    # last_update_check / installed_version / update_check_interval now live
+    # as keys in state.json (STATE_FILE) instead of standalone dotfiles.
     UC_ETAG_FILE="${USER_DATA_DIR}/.last-releases-etag"
     UC_VERSION_CACHE_FILE="${USER_DATA_DIR}/.last-releases-version"
     UC_GITHUB_API="https://api.github.com/repos/Dev-Toolbelt/dev-team-agents"
 
     UC_NOW=$(uc_now_epoch)
-    UC_INTERVAL_HOURS=$(uc_interval_hours "$PREFS_FILE" "$UC_INTERVAL_CACHE_FILE")
-    if ! uc_ttl_fresh "$UC_LAST_CHECK_FILE" "$UC_INTERVAL_HOURS" "$UC_NOW"; then
+    UC_INTERVAL_HOURS=$(uc_interval_hours "$PREFS_FILE" "$STATE_FILE")
+    if ! uc_ttl_fresh "$STATE_FILE" "$UC_INTERVAL_HOURS" "$UC_NOW"; then
         if uc_setup_http; then
-            mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
-            printf '%s\n' "$UC_NOW" > "$UC_LAST_CHECK_FILE" 2>/dev/null || true
+            state_set last_update_check "$UC_NOW" "$STATE_FILE"
             UC_LATEST=$(uc_fetch_latest "$UC_GITHUB_API" "$UC_ETAG_FILE" "$UC_VERSION_CACHE_FILE")
-            UC_CURRENT=$(cat "$UC_VERSION_FILE" 2>/dev/null || echo "unknown")
+            UC_CURRENT=$(state_get installed_version "$STATE_FILE")
+            [ -n "$UC_CURRENT" ] || UC_CURRENT="unknown"
             if [ -n "$UC_LATEST" ] && [ "$UC_LATEST" != "unknown" ] \
                 && [ "$UC_CURRENT" != "unknown" ] && [ "$UC_CURRENT" != "$UC_LATEST" ]; then
                 export UC_SUPPRESS="$SUPPRESS"
@@ -167,13 +175,11 @@ echo "[DEVTEAM:TEST_SCOPE_RULE] Run only tests covering touched code; full suite
 echo ""
 
 # ── Session banner (always shown, once per session) ───────────────
-# Fallback chain for version: an installed project has .installed-version;
-# this repo's own self-hosted install does not, so fall back to the first
-# released entry in CHANGELOG.md (the [Unreleased] header is skipped).
-DT_VERSION_FILE="${USER_DATA_DIR}/.installed-version"
-if [ -f "$DT_VERSION_FILE" ]; then
-    DT_VERSION="$(cat "$DT_VERSION_FILE" 2>/dev/null)"
-else
+# Fallback chain for version: an installed project has installed_version in
+# state.json; this repo's own self-hosted install does not, so fall back to
+# the first released entry in CHANGELOG.md (the [Unreleased] header is skipped).
+DT_VERSION="$(state_get installed_version "$STATE_FILE")"
+if [ -z "$DT_VERSION" ]; then
     DT_VERSION="$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "${PROJECT_ROOT}/CHANGELOG.md" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
 fi
 [ -n "$DT_VERSION" ] || DT_VERSION="unknown"
@@ -264,9 +270,9 @@ if [ -f "$SESSION_SUMMARY" ]; then
 fi
 
 # ── Check: health check staleness ─────────────────────────────────
-LAST_HEALTH_CHECK="${USER_DATA_DIR}/.last-health-check"
-if [ -f "$LAST_HEALTH_CHECK" ]; then
-    HC_DATE=$(head -1 "$LAST_HEALTH_CHECK" 2>/dev/null | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}" | head -1)
+LAST_HEALTH_CHECK="$(state_get last_health_check "$STATE_FILE")"
+if [ -n "$LAST_HEALTH_CHECK" ]; then
+    HC_DATE=$(printf '%s' "$LAST_HEALTH_CHECK" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}" | head -1)
     if [ -n "$HC_DATE" ]; then
         DAYS_SINCE_HC=$(_days_since_date_str "$HC_DATE")
         if [ "$DAYS_SINCE_HC" -gt "$STALE_DAYS" ]; then

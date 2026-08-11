@@ -152,13 +152,13 @@ Always create:
 
 `install.sh` handles this automatically. Verify three entries exist and add any that are missing: `.dev-team-agents/user-data/` (whole directory), `!.dev-team-agents/user-data/graphify.json` (exception — keep the graphify config tracked), and `.dev-team-agents/.worktree-session`.
 
-Remove legacy per-file entries under `.dev-team-agents/user-data/` if present (`session-summary.md`, `.last-update-check`, `.installed-version`, `.auto-update`) — the directory entry supersedes them.
+Remove legacy per-file entries under `.dev-team-agents/user-data/` if present (`session-summary.md`, `.auto-update`, or any of the eight pre-consolidation state dotfiles — `.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`) — the directory entry supersedes them, and `state_migrate_legacy` (`scripts/lib/state.sh`) already folds any leftover dotfile's value into `state.json` automatically.
 
 ---
 
 ### Step 8 — Confirm Setup Complete
 
-Read the installed version (`cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown"`) and output a completion summary listing all configured files. Close with the entry point for the project type:
+Read the installed version (`bash -c 'source .dev-team-agents/scripts/lib/state.sh; state_get installed_version .dev-team-agents/user-data/state.json' 2>/dev/null || echo "unknown"`) and output a completion summary listing all configured files. Close with the entry point for the project type:
 
 - **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"` (or run `/devteam:plan <goal>`)
 - **Inherited** → `"As the software-architect, help me onboard this inherited codebase"` (or run `/devteam:architect`)
@@ -174,7 +174,7 @@ procedure here; load it and follow it.
 | Trigger | Do this |
 |---------|---------|
 | "run a health check", "check the installation", "verify the setup", or REFRESH mode (Step 0) | Load `skills/shared/setup-health-check/SKILL.md` — categories, bash commands, auto-fix logic, and output format — plus `skills/shared/notifier/SKILL.md` for the notification format. This is the same flow as `/devteam:health-check`. |
-| "check for updates", "update dev-team-agents", or the update hook fires | Follow the `/devteam:update` flow: read `.dev-team-agents/user-data/.installed-version`, run `bash .dev-team-agents/scripts/check-updates.sh`, and offer `bash .dev-team-agents/scripts/update.sh latest` (or a pinned `vX.Y.Z`) only after the user approves. |
+| "check for updates", "update dev-team-agents", or the update hook fires | Follow the `/devteam:update` flow: read `installed_version` from `.dev-team-agents/user-data/state.json` (via `state_get`), run `bash .dev-team-agents/scripts/check-updates.sh`, and offer `bash .dev-team-agents/scripts/update.sh latest` (or a pinned `vX.Y.Z`) only after the user approves. |
 | The project shows v1 layout signals — agents as files in `.claude/agents/` rather than symlinks at `.claude/agents/dev-team/`, or a source tree at `.claude/dev-team-agents/` | Load `skills/shared/migration-v1-to-v2/SKILL.md` and follow it. The installer does **not** repoint v1 symlinks or hook paths; running it alone leaves the project on v1 with an unused v2 tree beside it, so migration is manual and must precede any other setup work. |
 
 Health-check output rules that always apply: one of `✅ OK` · `⚠️ WARN` · `🔧 FIX` per item;

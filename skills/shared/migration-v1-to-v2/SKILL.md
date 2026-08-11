@@ -210,7 +210,7 @@ mkdir -p .dev-team-agents/user-data
 |------|---------|
 | `preferences.json` | Language, worktree, project config |
 | `session-summary.md` | Session continuity |
-| `.installed-version` | Version tracking |
+| `state.json` | Consolidated state markers, including `installed_version` for version tracking |
 
 ### 6. Configure OpenCode provider (if applicable)
 
@@ -390,7 +390,8 @@ After a clean migration, `.claude/` holds only:
 ## Post-Migration Verification Checklist
 
 ```bash
-cat .dev-team-agents/user-data/.installed-version          # v2.x.y
+source .dev-team-agents/scripts/lib/state.sh
+state_get installed_version .dev-team-agents/user-data/state.json   # v2.x.y
 python3 -c "import json;json.load(open('.claude/settings.json'))"   # valid JSON
 grep -o '\.dev-team-agents/scripts/hooks/[a-z-]*\.sh' .claude/settings.json | sort -u   # 4 hooks → v2
 

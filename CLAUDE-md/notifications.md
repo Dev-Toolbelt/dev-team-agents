@@ -44,13 +44,13 @@ Set `suppress_notifications` in `preferences.json`:
 
 ### Health Check Staleness
 
-`session-start.sh` reads `.dev-team-agents/user-data/.last-health-check` — a plain `YYYY-MM-DD` marker that `/devteam:health-check` writes on every run (Step 4, `commands/health-check.md`; see also `setup-health-check/SKILL.md` § Flow). Two cases warn, both gated by `docs_stale_after_days`:
+`session-start.sh` reads the `last_health_check` key from `.dev-team-agents/user-data/state.json` — a plain `YYYY-MM-DD` marker that `/devteam:health-check` writes on every run (Step 4, `commands/health-check.md`; see also `setup-health-check/SKILL.md` § Flow). Two cases warn, both gated by `docs_stale_after_days`:
 - **Marker present but older than the threshold** — "Last health check was N days ago."
 - **No marker at all**, but the project is otherwise in motion (`docs/project.md` or `session-summary.md` already exists) — "No health check has been recorded." A brand-new install is exempt: it already goes through the setup flow.
 
 ### Uncommitted-Progress Warning
 
-`stop/04-notifier.sh` fires a `warning` at most once per session when all three hold: the turn count has reached `session_no_commit_turns` (default `8`), `git rev-parse HEAD` matches what `session-start.sh` recorded at session start (`.dev-team-agents/user-data/.session-head`), and `git status --porcelain` is non-empty. That combination is exactly "real work has piled up and nothing has been committed" — a crash, `/clear`, or context compaction loses the most right there. The notifier-state file (`.notifier-state`) gained a fifth `nocommit_warned` field so the warning fires once, not on every subsequent Stop.
+`stop/04-notifier.sh` fires a `warning` at most once per session when all three hold: the turn count has reached `session_no_commit_turns` (default `8`), `git rev-parse HEAD` matches what `session-start.sh` recorded at session start (the `session_head` key in `.dev-team-agents/user-data/state.json`), and `git status --porcelain` is non-empty. That combination is exactly "real work has piled up and nothing has been committed" — a crash, `/clear`, or context compaction loses the most right there. The notifier-state file (`.notifier-state`) gained a fifth `nocommit_warned` field so the warning fires once, not on every subsequent Stop.
 
 ### Tip of Session
 

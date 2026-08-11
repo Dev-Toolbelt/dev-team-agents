@@ -17,7 +17,8 @@ git log --oneline -20
 git status
 
 # Installed version
-cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "unknown"
+source .dev-team-agents/scripts/lib/state.sh 2>/dev/null
+state_get installed_version .dev-team-agents/user-data/state.json 2>/dev/null || echo "unknown"
 ```
 
 Read: `README.md`, `CLAUDE.md`, `AGENTS.md`, `.claude/` directory structure.

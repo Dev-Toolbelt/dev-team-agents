@@ -162,8 +162,7 @@ This repository uses semantic versioning via git tags (`v1.0.0`, `v1.1.0`, `v2.0
 │   ├── preferences.json        ← language, thresholds, notification settings (gitignored)
 │   ├── graphify.json           ← Graphify config — commit this one
 │   ├── session-summary.md      ← gitignored
-│   ├── .installed-version      ← gitignored
-│   └── .last-update-check      ← gitignored
+│   └── state.json              ← consolidated state markers (installed_version, last_update_check, etc.) — gitignored
 ├── agents/
 │   └── dev-team/           ← symlink → .dev-team-agents/agents/
 ├── skills/

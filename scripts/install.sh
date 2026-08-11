@@ -32,6 +32,24 @@ SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
 USER_DATA_DIR="$PROJECT_ROOT/.dev-team-agents/user-data"
 VERSION="${1:-latest}"
 
+# Source scripts/lib/state.sh for state.json read/write/migrate helpers.
+# Resolved relative to this script's own location (not BASH_SOURCE-only
+# reliant like strip-tarball.sh, which must come from the freshly-extracted
+# tarball): when install.sh is run as the installed
+# `.dev-team-agents/scripts/install.sh` copy (the common update path), this
+# file exists alongside it. Under a fresh `curl | bash` install it does not
+# exist yet, so fall back to no-op stubs — there is no prior state to read
+# or migrate in that case anyway.
+_INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_INSTALL_SH_DIR/lib/state.sh" ]; then
+    # shellcheck source=scripts/lib/state.sh
+    source "$_INSTALL_SH_DIR/lib/state.sh"
+else
+    state_get() { echo ""; }
+    state_set() { :; }
+    state_migrate_legacy() { :; }
+fi
+
 # Self-heal: remove any `.old.*` / `.new.*` swap-artifact directories left
 # behind by a previous run that was killed or crashed mid-swap (see Step 2c
 # below). These are always transient script-internal copies, never user
@@ -231,8 +249,9 @@ if [ "$_DL_RC" -ne 0 ]; then
     echo "ERROR: failed to download the release tarball (HTTP client exit $_DL_RC)." >&2
     echo "  URL: $TARBALL_URL" >&2
     _print_http_error "$_DL_ERR" "  "
-    if [ -f "$USER_DATA_DIR/.installed-version" ]; then
-        echo "→ Keeping the existing installation ($(cat "$USER_DATA_DIR/.installed-version" 2>/dev/null || echo unknown))." >&2
+    _EXISTING_VERSION="$(state_get installed_version "$USER_DATA_DIR/state.json")"
+    if [ -n "$_EXISTING_VERSION" ]; then
+        echo "→ Keeping the existing installation ($_EXISTING_VERSION)." >&2
         exit 0
     fi
     exit 1
@@ -256,7 +275,7 @@ fi
 
 # Preserve last-check timestamp across installs
 PREV_CHECK=""
-[ -f "$USER_DATA_DIR/.last-update-check" ] && PREV_CHECK=$(cat "$USER_DATA_DIR/.last-update-check")
+PREV_CHECK="$(state_get last_update_check "$USER_DATA_DIR/state.json")"
 
 # Replace existing installation (handles tarball and legacy git-clone installs).
 mkdir -p "$(dirname "$INSTALL_DIR")"
@@ -348,6 +367,9 @@ NEW_DIR=""
 # KEEP_ROOT allowlist strips it), so on a first install this directory does not
 # exist yet and the heredoc below would fail with "No such file or directory".
 mkdir -p "$USER_DATA_DIR"
+
+# One-shot, idempotent migration of legacy dotfile markers into state.json.
+[ -d "$USER_DATA_DIR" ] && state_migrate_legacy "$USER_DATA_DIR"
 
 CREDENTIALS_FILE="$USER_DATA_DIR/credentials.local.json"
 if [ ! -f "$CREDENTIALS_FILE" ]; then
@@ -711,17 +733,19 @@ fi
 
 # ── Step 9: Record installed version ─────────────────────────────
 mkdir -p "$USER_DATA_DIR"
-echo "$RESOLVED" > "$USER_DATA_DIR/.installed-version"
+state_set installed_version "$RESOLVED" "$USER_DATA_DIR/state.json"
 if [ -n "$PREV_CHECK" ]; then
-    echo "$PREV_CHECK" > "$USER_DATA_DIR/.last-update-check"
+    state_set last_update_check "$PREV_CHECK" "$USER_DATA_DIR/state.json"
 else
-    date +%s > "$USER_DATA_DIR/.last-update-check"
+    state_set last_update_check "$(date +%s)" "$USER_DATA_DIR/state.json"
 fi
 
 # ── Step 10: Ensure user-data dir and worktree session are gitignored ────────
 _GITIGNORE="$PROJECT_ROOT/.gitignore"
 
-# Remove legacy individual entries if present (migration to directory pattern)
+# Remove legacy individual entries if present (migration to directory pattern).
+# state.json needs no entry of its own — the directory-level pattern below
+# already covers everything under user-data/ except the graphify.json exception.
 _LEGACY_ENTRIES=(
     ".dev-team-agents/user-data/session-summary.md"
     ".dev-team-agents/user-data/.last-update-check"

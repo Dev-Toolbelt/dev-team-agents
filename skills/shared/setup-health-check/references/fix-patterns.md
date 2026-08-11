@@ -162,6 +162,17 @@ fi
 
 This path previously ran `rm -rf .claude/dev-team-agents`, unconditionally, on the line following `migrate-to-root.sh`. A migration that failed halfway therefore destroyed `user-data/` — session summaries, preferences, credentials — with no record that it had. Residue after a migration is evidence the migration is incomplete; it is never cleanup.
 
+## State.json marker migration
+
+If any `LEGACY_MARKER` was reported by Category 3 (a project still on the pre-consolidation dotfiles — `.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`):
+
+```bash
+source .dev-team-agents/scripts/lib/state.sh
+state_migrate_legacy .dev-team-agents/user-data
+```
+
+`state_migrate_legacy` is idempotent and additive under the **No-Destruction Rule**: it reads each present dotfile's value into the matching key in `state.json`, then renames the original to `<name>.pre-migration.bak` — it never deletes. Re-running it on a project that already migrated is a no-op (the dotfiles are gone, only the `.bak` files remain). Report which markers were migrated; leave the `.bak` files in place — they are not further cleanup for this check to perform.
+
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
 Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):

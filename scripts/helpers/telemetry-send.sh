@@ -39,7 +39,14 @@ INSTALL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 USER_DATA_DIR="${DEVTEAM_USER_DATA_DIR:-"$INSTALL_DIR/user-data"}"
 PREFS_FILE="$USER_DATA_DIR/preferences.json"
 QUEUE_FILE="$USER_DATA_DIR/telemetry-queue.json"
-VERSION_FILE="$USER_DATA_DIR/.installed-version"
+STATE_FILE="$USER_DATA_DIR/state.json"
+
+# shellcheck source=scripts/lib/state.sh
+if [ -f "$SCRIPT_DIR/../lib/state.sh" ]; then
+    . "$SCRIPT_DIR/../lib/state.sh"
+else
+    state_get() { echo ""; }
+fi
 
 FLUSH_TTL_HOURS=24
 QUEUE_MAX_EVENTS=100
@@ -92,7 +99,8 @@ _queue_event() {
     local anon_id
     anon_id=$(_get_or_create_id)
     local version
-    version=$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")
+    version="$(state_get installed_version "$STATE_FILE")"
+    [ -n "$version" ] || version="unknown"
     local os_name
     os_name=$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "unknown")
     local timestamp

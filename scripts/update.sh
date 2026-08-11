@@ -14,6 +14,10 @@ INSTALL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 USER_DATA_DIR="$INSTALL_DIR/user-data"
 AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
 
+# shellcheck source=scripts/lib/state.sh
+source "$SCRIPTS_DIR/lib/state.sh"
+STATE_FILE="$USER_DATA_DIR/state.json"
+
 # ── Silent check mode — delegates to hook sub-script ─────────────────────────
 
 if [[ "${1:-}" == "--check" ]]; then
@@ -59,10 +63,9 @@ fi
 VERSION_ARG="${1:-latest}"
 
 # Record the current version as the rollback target before the installer swaps it.
-CURRENT_VERSION_FILE="$USER_DATA_DIR/.installed-version"
-PREV_VERSION_FILE="$USER_DATA_DIR/.installed-version.prev"
-if [ -f "$CURRENT_VERSION_FILE" ]; then
-    cp "$CURRENT_VERSION_FILE" "$PREV_VERSION_FILE"
+_CURRENT_VERSION="$(state_get installed_version "$STATE_FILE")"
+if [ -n "$_CURRENT_VERSION" ]; then
+    state_set installed_version_prev "$_CURRENT_VERSION" "$STATE_FILE"
 fi
 
 TMP_INSTALLER=$(mktemp)
@@ -109,8 +112,10 @@ fi
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 
 # Send update telemetry event (silent — never blocks the update flow)
-_PREV_VER=$(cat "$PREV_VERSION_FILE" 2>/dev/null || echo "unknown")
-_NEW_VER=$(cat "$CURRENT_VERSION_FILE" 2>/dev/null || echo "unknown")
+_PREV_VER="$(state_get installed_version_prev "$STATE_FILE")"
+[ -n "$_PREV_VER" ] || _PREV_VER="unknown"
+_NEW_VER="$(state_get installed_version "$STATE_FILE")"
+[ -n "$_NEW_VER" ] || _NEW_VER="unknown"
 _TELEMETRY_SEND="$INSTALL_DIR/scripts/helpers/telemetry-send.sh"
 if [ -f "$_TELEMETRY_SEND" ]; then
     bash "$_TELEMETRY_SEND" --queue "update" \

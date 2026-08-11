@@ -57,7 +57,16 @@ done
 ```bash
 # Check new paths
 ls -la .dev-team-agents/user-data/ 2>/dev/null || echo "MISSING"
-cat .dev-team-agents/user-data/.installed-version 2>/dev/null || echo "MISSING"
+[ -f .dev-team-agents/user-data/state.json ] && echo "STATE_JSON_OK" || echo "STATE_JSON_MISSING"
+
+# Check for legacy per-file markers that predate state.json (see fix-patterns.md
+# State.json marker migration) — installed_version, last_health_check,
+# last_update_check, update_check_interval, graphify_last_run, session_id,
+# session_head, installed_version.prev
+for _legacy_marker in .installed-version .installed-version.prev .last-health-check \
+  .last-update-check .update-check-interval .graphify-last-run .session-id .session-head; do
+  [ -f ".dev-team-agents/user-data/$_legacy_marker" ] && echo "LEGACY_MARKER: $_legacy_marker"
+done
 
 # Check for legacy paths that should have been migrated
 for _legacy in .claude/user-data .claude/docs .claude/context .claude/tasks .claude/dev-team-agents; do
@@ -74,7 +83,8 @@ done
 | Check | Auto-fix |
 |-------|----------|
 | `.dev-team-agents/user-data/` directory exists | `mkdir -p .dev-team-agents/user-data/` (never `.claude/user-data/`) |
-| `.installed-version` exists | WARN only — re-run installer to populate |
+| `state.json` missing | WARN only — created automatically on next `install.sh`/`session-start.sh` run |
+| Any `LEGACY_MARKER` reported | **Migrate immediately**: `source .dev-team-agents/scripts/lib/state.sh && state_migrate_legacy .dev-team-agents/user-data` — imports each marker's value into `state.json` and renames the original to `<name>.pre-migration.bak` (never deleted, see fix-patterns.md State.json marker migration) |
 | Legacy `.claude/` dirs exist (user-data, docs, context, tasks, dev-team-agents) | **Migrate immediately**: move contents to new locations (see fix-patterns.md Legacy directory migration). Do NOT skip this step. Leftovers are `rmdir`'d only when empty, and quarantined otherwise — never `rm -rf` |
 | Memory artifacts present (`session-summary.md`, `docs/wiki/`, `docs/development/adrs/`, `docs/project.md`) | Adapt in place only — see Category 11. Never regenerate over an existing file |
 | `.dev-team-agents.old.*` / `.dev-team-agents.new.*` present (`STRAY_SWAP_DIR`) | **Exception to the No-Destruction Rule, stated explicitly**: these are never user data — they are transient copies internal to the install/update swap (`scripts/install.sh` Step 2c) that only survive when a prior run was killed mid-swap. Safe to `rm -rf` outright. Report which path(s) were removed |
@@ -498,17 +508,19 @@ EOF
 **Disabled by design** — `stop/04-notifier.sh` was renamed to `stop/_disabled-04-notifier.sh` (see `CLAUDE-md/hooks.md` § Disabled Hooks, pending review). Do not report the original filename as missing or attempt to `chmod +x` it back into the dispatch convention.
 
 ```bash
-[ -f .dev-team-agents/user-data/.session-id ] && echo "session-id: OK" || echo "session-id: MISSING (will be created on next session start)"
-[ -f .dev-team-agents/user-data/.session-head ] && echo "session-head: OK" || echo "session-head: MISSING (will be created on next session start)"
-[ -f .dev-team-agents/user-data/.last-health-check ] && echo "last-health-check: OK" || echo "last-health-check: MISSING (this run will create it — see Step 4 of /devteam:health-check)"
+source .dev-team-agents/scripts/lib/state.sh 2>/dev/null
+STATE=.dev-team-agents/user-data/state.json
+[ -n "$(state_get session_id "$STATE")" ] && echo "session_id: OK" || echo "session_id: MISSING (will be created on next session start)"
+[ -n "$(state_get session_head "$STATE")" ] && echo "session_head: OK" || echo "session_head: MISSING (will be created on next session start)"
+[ -n "$(state_get last_health_check "$STATE")" ] && echo "last_health_check: OK" || echo "last_health_check: MISSING (this run will create it — see Step 4 of /devteam:health-check)"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
 | `stop/04-notifier.sh` | Disabled by design — do not restore |
-| `.session-id` missing | OK — created automatically by `session-start.sh` on next session |
-| `.session-head` missing | OK — created automatically by `session-start.sh` on next session; until then the uncommitted-progress warning stays silent (no baseline HEAD to compare against) |
-| `.last-health-check` missing | OK — this very health check run writes it (Step 4 of `commands/health-check.md`); nothing to fix here |
+| `session_id` missing | OK — created automatically by `session-start.sh` on next session |
+| `session_head` missing | OK — created automatically by `session-start.sh` on next session; until then the uncommitted-progress warning stays silent (no baseline HEAD to compare against) |
+| `last_health_check` missing | OK — this very health check run writes it (Step 4 of `commands/health-check.md`); nothing to fix here |
 
 ## Category 10 — Credentials
 

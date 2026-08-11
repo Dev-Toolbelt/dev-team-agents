@@ -5,6 +5,14 @@
 #
 # Not a hook. Sourced by pre-tool-use/01-check-updates.sh only.
 
+# uc_ttl_fresh / uc_interval_hours read and write state.json via
+# state_get/state_set. Source defensively in case a caller other than
+# session-start.sh (which already sources it) pulls this file in directly.
+if ! command -v state_get >/dev/null 2>&1; then
+    # shellcheck source=scripts/lib/state.sh
+    . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/state.sh"
+fi
+
 UC_DEFAULT_INTERVAL_HOURS=24
 
 # ── Time ──────────────────────────────────────────────────────────────────────
@@ -35,44 +43,37 @@ uc_read_pref() {
     printf '%s' "$default" | tr -d "'"
 }
 
-# uc_interval_hours <prefs_file> <interval_cache_file>
-# Resolves update_check_interval_hours WITHOUT forking python3 on the hot path.
+# uc_interval_hours <prefs_file> <state_file>
+# Resolves update_check_interval_hours, mirroring the resolved value into
+# state.json's "update_check_interval" key for visibility.
 #
-# The interval is needed to decide whether the TTL cache is stale, so it cannot
-# simply be read after the early return. Instead the resolved value is mirrored
-# into a one-line sidecar cache, and preferences.json's mtime invalidates it:
-# `[ file -nt file ]` is a bash builtin, so a cache hit costs zero processes.
-# python3 is consulted only on first run and on the first check after the user
-# edits preferences.json — the cache then self-heals.
+# This used to cache the resolved value in a standalone sidecar file,
+# invalidated via `[ prefs_file -nt cache_file ]` — a bash builtin, zero forks
+# on a cache hit. That trick does not survive consolidation into state.json:
+# state.json is also touched by session_id/session_head on every session
+# start, so its mtime is effectively always "now" and the comparison would
+# almost always report the cache as fresh, silently pinning the interval to
+# whatever was first resolved. Since this whole block now runs once per
+# SessionStart (not once per tool call, which is what the original hot-path
+# optimization was guarding against), the extra python3 fork here is
+# negligible — so the cache is dropped and the preference is read directly.
 uc_interval_hours() {
-    local prefs_file="$1" cache_file="$2" hours=""
-
-    if [ -f "$cache_file" ] && [ ! "$prefs_file" -nt "$cache_file" ]; then
-        read -r hours < "$cache_file" 2>/dev/null || hours=""
-        case "$hours" in
-            ''|*[!0-9]*) hours="" ;;
-        esac
-        if [ -n "$hours" ]; then
-            printf '%s' "$hours"
-            return 0
-        fi
-    fi
+    local prefs_file="$1" state_file="$2" hours=""
 
     hours=$(uc_read_pref "$prefs_file" update_check_interval_hours "$UC_DEFAULT_INTERVAL_HOURS")
     case "$hours" in
         ''|*[!0-9]*) hours="$UC_DEFAULT_INTERVAL_HOURS" ;;
     esac
-    mkdir -p "$(dirname "$cache_file")" 2>/dev/null || true
-    printf '%s\n' "$hours" > "$cache_file" 2>/dev/null || true
+    state_set update_check_interval "$hours" "$state_file" 2>/dev/null || true
     printf '%s' "$hours"
 }
 
-# uc_ttl_fresh <last_check_file> <interval_hours> <now_epoch>
-# Returns 0 when the last check is still inside the TTL window (nothing to do).
+# uc_ttl_fresh <state_file> <interval_hours> <now_epoch>
+# Returns 0 when the last check (state.json "last_update_check") is still
+# inside the TTL window (nothing to do).
 uc_ttl_fresh() {
-    local last_check_file="$1" interval_hours="$2" now="$3" last=""
-    [ -f "$last_check_file" ] || return 1
-    read -r last < "$last_check_file" 2>/dev/null || return 1
+    local state_file="$1" interval_hours="$2" now="$3" last=""
+    last="$(state_get last_update_check "$state_file")"
     case "$last" in
         ''|*[!0-9]*) return 1 ;;
     esac

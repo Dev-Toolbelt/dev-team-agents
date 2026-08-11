@@ -110,6 +110,7 @@ Regardless of outcome, write today's date so `session-start.sh` stops warning th
 
 ```bash
 mkdir -p .dev-team-agents/user-data
-date +%Y-%m-%d > .dev-team-agents/user-data/.last-health-check
+source .dev-team-agents/scripts/lib/state.sh
+state_set last_health_check "$(date +%Y-%m-%d)" .dev-team-agents/user-data/state.json
 ```
 ```

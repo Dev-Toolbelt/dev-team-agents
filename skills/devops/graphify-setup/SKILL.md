@@ -155,7 +155,6 @@ Add the following entries to the project's `.gitignore`. Group them under a `# D
 ```bash
 GITIGNORE_ENTRIES=(
   "# Dev Team Agents"
-  ".dev-team-agents/user-data/.graphify-last-run"
   "graphify-out/cache"
   ".worktrees"
 )
@@ -165,9 +164,10 @@ for ENTRY in "${GITIGNORE_ENTRIES[@]}"; do
 done
 ```
 
-- `.dev-team-agents/user-data/.graphify-last-run` — build marker, project-specific, not shared
 - `graphify-out/cache` — Graphify internal cache, rebuilt automatically
 - `.worktrees` — worktree isolation directories, local only
+
+The build-run marker (`graphify_last_run`) lives in the consolidated `.dev-team-agents/user-data/state.json` (read/written via `scripts/lib/state.sh`'s `state_get graphify_last_run` / `state_set graphify_last_run <value>`), which the installer already gitignores entirely — no separate entry is needed.
 
 ---
 
@@ -217,7 +217,7 @@ Report to the user:
 ✅ Graphify is set up for this project.
 
   Knowledge graph : graphify-out/  (versioned)
-  Last-run marker : .dev-team-agents/user-data/.graphify-last-run  (gitignored)
+  Last-run marker : graphify_last_run key in .dev-team-agents/user-data/state.json  (gitignored)
   Config          : .dev-team-agents/user-data/graphify.json
   Auto-rebuild    : Stop hook → .dev-team-agents/scripts/graphify-refresh.sh
 

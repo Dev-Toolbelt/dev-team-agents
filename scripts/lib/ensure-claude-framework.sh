@@ -68,6 +68,10 @@ ensure_claude_framework() {
   # health-check. Hooks will overwrite these on first real use; touching them
   # here avoids a fresh Codex/opencode bootstrap looking partially incomplete.
   mkdir -p "$framework_dir/user-data"
-  touch "$framework_dir/user-data/.session-id"
+  # session_id used to live as a standalone .session-id dotfile placeholder;
+  # it is now a key in the consolidated state.json. Just ensure the file
+  # exists as valid JSON — do not set session_id itself here, so a value
+  # written by another hook is never clobbered.
+  [ -f "$framework_dir/user-data/state.json" ] || echo '{}' > "$framework_dir/user-data/state.json"
   touch "$framework_dir/user-data/.notifier-state"
 } 

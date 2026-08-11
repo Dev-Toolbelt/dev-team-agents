@@ -5,6 +5,9 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 cd "$PROJECT_ROOT"
 
+# shellcheck source=scripts/lib/state.sh
+. "$PROJECT_ROOT/scripts/lib/state.sh"
+
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "❌ Not inside a git repository." >&2
   exit 1
@@ -46,9 +49,8 @@ done < <(jq -r '.manifestPaths[]? // empty' "$CONFIG_FILE")
 
 # ── Change detection ──────────────────────────────────────────────────────────
 CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-LAST_RUN_FILE="$USER_DATA_DIR/.graphify-last-run"
-LAST_BUILD_COMMIT=""
-[ -f "$LAST_RUN_FILE" ] && LAST_BUILD_COMMIT="$(tr -d '[:space:]' < "$LAST_RUN_FILE")"
+STATE_FILE="$USER_DATA_DIR/state.json"
+LAST_BUILD_COMMIT="$(state_get graphify_last_run "$STATE_FILE")"
 
 # Returns 0 if the given filepath falls under any targetPath
 in_target_paths() {
@@ -161,7 +163,7 @@ rm -rf "$OUTPUT_PATH"
 mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 
 # Record the commit that triggered this build (used to skip redundant rebuilds)
-echo "$CURRENT_COMMIT" > "$LAST_RUN_FILE"
+state_set graphify_last_run "$CURRENT_COMMIT" "$STATE_FILE"
 
 echo "✅ Done!" >&2
 exit 0

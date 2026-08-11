@@ -10,12 +10,9 @@ When installed in a project, the installer creates two sibling directories under
 Files in `user-data/`:
 - `preferences.json` — user preferences (language, thresholds, notifications) (**gitignored** by installer)
 - `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
-- `.installed-version` — current installed version tag (**gitignored** by installer)
-- `.last-update-check` — Unix timestamp of last update check (**gitignored** by installer)
+- `state.json` — consolidated small scalar state markers, read/written via `scripts/lib/state.sh` (`state_get`/`state_set`). Holds `installed_version`, `installed_version_prev`, `last_health_check`, `last_update_check`, `update_check_interval`, `graphify_last_run`, `session_id`, `session_head` — one file replacing what used to be eight separate dotfiles (`.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`). Existing installs are migrated automatically and silently by `state_migrate_legacy`, called from `session-start.sh` and `install.sh` on every run; the old dotfiles are renamed to `<name>.pre-migration.bak`, never deleted (**gitignored** by installer)
 - `.last-releases-etag` / `.last-releases-version` — conditional-request ETag and the version string it resolved to, so a `304 Not Modified` still yields the latest tag (**gitignored** by installer)
-- `.update-check-interval` — one-line sidecar cache of `update_check_interval_hours`, invalidated by `preferences.json`'s mtime so the PreToolUse hook can read it with zero subprocesses (**gitignored** by installer)
 - `.last-archive-index` — date stamp gating `stop/99b-archive-index.sh` to at most one run per day (**gitignored** by installer)
-- `.session-id` — current session ID written by session-start hook (**gitignored** by installer)
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
 - `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events. Only written when `preferences.json` carries `"telemetry": true` — the gate in `scripts/lib/telemetry-guard.sh` fails closed (**gitignored** by installer)

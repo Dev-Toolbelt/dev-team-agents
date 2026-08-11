@@ -2,7 +2,7 @@
 # rollback.sh — Reinstall a previous version of dev-team-agents.
 #
 # Usage:
-#   bash rollback.sh              # roll back to last-known good version (.installed-version.prev)
+#   bash rollback.sh              # roll back to last-known good version (installed_version_prev in state.json)
 #   bash rollback.sh v1.2.3       # roll back to a specific version tag
 #
 # The script re-downloads the requested version via the same install path
@@ -12,8 +12,10 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 USER_DATA_DIR="$INSTALL_DIR/user-data"
-PREV_VERSION_FILE="$USER_DATA_DIR/.installed-version.prev"
-CURRENT_VERSION_FILE="$USER_DATA_DIR/.installed-version"
+
+# shellcheck source=scripts/lib/state.sh
+source "$SCRIPTS_DIR/lib/state.sh"
+STATE_FILE="$USER_DATA_DIR/state.json"
 
 # ── Shared installer-fetch logic ───────────────────────────────────────────────
 # HTTP tool detection, GitHub coordinates, ref pinning and payload verification
@@ -34,16 +36,15 @@ source "$INSTALLER_LIB"
 if [ -n "${1:-}" ]; then
     TARGET="$1"
 else
-    if [ ! -f "$PREV_VERSION_FILE" ]; then
-        echo "✗ No previous version recorded in $PREV_VERSION_FILE" >&2
+    TARGET="$(state_get installed_version_prev "$STATE_FILE")"
+    if [ -z "$TARGET" ]; then
+        echo "✗ No previous version recorded in $STATE_FILE" >&2
         echo "  Specify a version explicitly: bash rollback.sh v1.2.3" >&2
         exit 1
     fi
-    TARGET=$(cat "$PREV_VERSION_FILE")
 fi
 
-CURRENT=""
-[ -f "$CURRENT_VERSION_FILE" ] && CURRENT=$(cat "$CURRENT_VERSION_FILE")
+CURRENT="$(state_get installed_version "$STATE_FILE")"
 
 # ── Validate version format ──────────────────────────────────────────────────
 if [[ ! "$TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

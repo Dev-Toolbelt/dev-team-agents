@@ -14,7 +14,7 @@ labels: bug
 2. 
 
 **Environment**
-- dev-team-agents version (run `cat .dev-team-agents/user-data/.installed-version`):
+- dev-team-agents version (run `python3 -c "import json;print(json.load(open('.dev-team-agents/user-data/state.json'))['installed_version'])"`):
 - Provider / CLI (Claude Code, opencode, or Codex CLI) and its version:
 - OS:
 

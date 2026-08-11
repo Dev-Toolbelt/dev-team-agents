@@ -99,7 +99,7 @@ This is an estimate, not a precise measurement. Be conservative — warn slightl
 
 ## Context Window Heuristic (shell hooks)
 
-The stop hook increments a per-session turn counter stored at `.dev-team-agents/user-data/.notifier-state`. The session-start hook writes a session ID to `.dev-team-agents/user-data/.session-id`. When the state's session ID differs from the current session ID, the counter resets.
+The stop hook increments a per-session turn counter stored at `.dev-team-agents/user-data/.notifier-state`. The session-start hook writes a session ID to the `session_id` key in `.dev-team-agents/user-data/state.json`. When the state's session ID differs from the current session ID, the counter resets.
 
 Default turn thresholds (conservative mapping — agents should use `preferences.json` values):
 
