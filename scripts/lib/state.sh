@@ -38,9 +38,11 @@ PYEOF
         # No-python3 fallback: values in state.json are always flat scalars
         # (string or number), so a line-oriented grep is sufficient here —
         # this is not a general JSON parser.
-        grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$file" 2>/dev/null \
-            | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/' | head -n1
-        if [ -z "$(grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$file" 2>/dev/null)" ]; then
+        local str_match
+        str_match="$(grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$file" 2>/dev/null)"
+        if [ -n "$str_match" ]; then
+            echo "$str_match" | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/' | head -n1
+        else
             grep -o "\"$key\"[[:space:]]*:[[:space:]]*[0-9][0-9]*" "$file" 2>/dev/null \
                 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/' | head -n1
         fi
