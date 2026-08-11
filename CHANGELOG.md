@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.41.2] - 2026-08-11
+
+### Changed
+- **`/devteam:install` prioritizes native Windows installs over WSL**: `skills/devops/tool-installers/SKILL.md` previously routed every Windows install through WSL unconditionally. It now checks for `winget`/`choco`/`scoop` first and uses native per-tool commands (e.g. `winget install BurntSushi.ripgrep.MSVC`) when available, falling back to WSL only when no native manager is present or the native install fails. Added a short manual fallback (get `winget`/Scoop, or activate WSL) for when neither path works.
+
 ## [2.41.1] - 2026-08-11
 
 ### Fixed

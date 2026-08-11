@@ -7,7 +7,7 @@ description: Cross-OS install/verify knowledge base for the closed tool set /dev
 
 Cross-OS knowledge base backing `/devteam:install`. Covers **exactly** the tools in the table below — this is a closed list, not a general "install anything" reference. Adding a tool here is a deliberate change to the command's allowlist (`commands/install.md`), never an implicit one.
 
-Every entry follows the same shape: **detect** (already installed?) → **install** (per OS) → **verify** (re-run detect). Windows always routes through WSL — no native-Windows package manager commands are used for the dev-tool set, keeping one Linux code path instead of two.
+Every entry follows the same shape: **detect** (already installed?) → **install** (per OS) → **verify** (re-run detect). On Windows, **prefer native install first** (`winget`, falling back to `choco` or `scoop` if present) — no WSL round-trip, no `wsl bash -c` wrapper, nothing for the user to enable first. Fall back to WSL only when none of `winget`/`choco`/`scoop` are available or the native command fails.
 
 ---
 
@@ -37,14 +37,26 @@ uname -s
 | `Linux` | Linux or WSL |
 | `MINGW*` / `MSYS*` / other | Windows — see below |
 
-**Windows handling:** check for WSL first —
+**Windows handling:** check for a native package manager first, in this order —
 
 ```bash
-wsl --status 2>/dev/null || echo "WSL_NOT_FOUND"
+command -v winget >/dev/null 2>&1 && echo "winget" || \
+command -v choco  >/dev/null 2>&1 && echo "choco"  || \
+command -v scoop  >/dev/null 2>&1 && echo "scoop"  || echo "NONE"
 ```
 
-- **WSL active** → run every install/verify command inside it (`wsl bash -c "<command>"`); follow the Linux column below for everything.
-- **WSL not found** → stop and tell the user: "Windows without WSL is not supported for these installs. Activate WSL first: https://learn.microsoft.com/en-us/windows/wsl/install — then re-run `/devteam:install`."
+- **`winget`/`choco`/`scoop` found** → use the **Windows (native)** column in each tool's table below. This is the default path — do not suggest WSL when a native manager is available.
+- **None found, or the native command fails** → fall back to WSL:
+
+  ```bash
+  wsl --status 2>/dev/null || echo "WSL_NOT_FOUND"
+  ```
+
+  - **WSL active** → run the install/verify command inside it (`wsl bash -c "<command>"`), following the Linux column below.
+  - **WSL not found either** → stop and give the user this short manual path instead of attempting anything further:
+    1. Install a package manager — `winget` ships with Windows 10 1809+/Windows 11 (run `winget --version` to confirm), or install Scoop: https://scoop.sh
+    2. Re-run `/devteam:install <tool>` once one is available.
+    3. If neither is an option, activate WSL instead: https://learn.microsoft.com/en-us/windows/wsl/install — then re-run `/devteam:install`.
 
 Also distinguish Debian/Ubuntu (`apt`) from Fedora/RHEL (`dnf`) on Linux:
 
@@ -62,7 +74,8 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install ripgrep` |
-| Debian/Ubuntu (WSL incl.) | `sudo apt-get install -y ripgrep` |
+| Windows (native) | `winget install BurntSushi.ripgrep.MSVC` (or `choco install ripgrep`, or `scoop install ripgrep`) |
+| Debian/Ubuntu (WSL fallback) | `sudo apt-get install -y ripgrep` |
 | Fedora/RHEL | `sudo dnf install -y ripgrep` |
 
 - **Verify:** re-run detect.
@@ -75,10 +88,11 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install fd` |
-| Debian/Ubuntu (WSL incl.) | `sudo apt-get install -y fd-find` |
+| Windows (native) | `winget install sharkdp.fd` (or `choco install fd`, or `scoop install fd`) |
+| Debian/Ubuntu (WSL fallback) | `sudo apt-get install -y fd-find` |
 | Fedora/RHEL | `sudo dnf install -y fd-find` |
 
-- **Note:** apt/dnf install the binary as `fdfind`, not `fd` (name clash with an existing Debian package). After install, offer to create `~/.local/bin/fd` as a symlink to `fdfind` so it matches the tool's usual invocation: `mkdir -p ~/.local/bin && ln -s "$(command -v fdfind)" ~/.local/bin/fd` — ask before writing to the user's `PATH`-adjacent directory, do not do it silently.
+- **Note (WSL fallback only):** apt/dnf install the binary as `fdfind`, not `fd` (name clash with an existing Debian package). After install, offer to create `~/.local/bin/fd` as a symlink to `fdfind` so it matches the tool's usual invocation: `mkdir -p ~/.local/bin && ln -s "$(command -v fdfind)" ~/.local/bin/fd` — ask before writing to the user's `PATH`-adjacent directory, do not do it silently. The native Windows installs above do not have this problem — the binary is already named `fd`.
 - **Verify:** re-run detect.
 
 ## jq
@@ -89,7 +103,8 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install jq` |
-| Debian/Ubuntu (WSL incl.) | `sudo apt-get install -y jq` |
+| Windows (native) | `winget install jqlang.jq` (or `choco install jq`, or `scoop install jq`) |
+| Debian/Ubuntu (WSL fallback) | `sudo apt-get install -y jq` |
 | Fedora/RHEL | `sudo dnf install -y jq` |
 
 - **Verify:** re-run detect.
@@ -102,7 +117,8 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install ast-grep` |
-| Debian/Ubuntu (WSL incl.) | No apt package — `cargo install ast-grep --locked` (requires Rust/cargo; if missing, point the user at https://rustup.rs first and wait for confirmation) |
+| Windows (native) | `winget install ast-grep.ast-grep` (or `scoop install ast-grep`); if unavailable, `npm install -g @ast-grep/napi` works cross-platform including native Windows |
+| Debian/Ubuntu (WSL fallback) | No apt package — `cargo install ast-grep --locked` (requires Rust/cargo; if missing, point the user at https://rustup.rs first and wait for confirmation) |
 | Fedora/RHEL | No dnf package — same `cargo install ast-grep --locked` path |
 
 - **Verify:** re-run detect.
@@ -115,7 +131,8 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install tokei` |
-| Debian/Ubuntu 22.04+ (WSL incl.) | `sudo apt-get install -y tokei` — on older releases without the package, fall back to `cargo install tokei` |
+| Windows (native) | `winget install XAMPPRocky.tokei` (or `scoop install tokei`); if unavailable, `cargo install tokei` (requires Rust/cargo — https://rustup.rs) |
+| Debian/Ubuntu 22.04+ (WSL fallback) | `sudo apt-get install -y tokei` — on older releases without the package, fall back to `cargo install tokei` |
 | Fedora/RHEL | `sudo dnf install -y tokei` |
 
 - **Verify:** re-run detect.
@@ -128,7 +145,8 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install git-delta` |
-| Debian 12+ / Ubuntu 23.04+ (WSL incl.) | `sudo apt-get install -y git-delta` — on older releases, download the `.deb` from https://github.com/dandavison/delta/releases and `sudo dpkg -i <file>.deb` |
+| Windows (native) | `winget install dandavison.delta` (or `choco install delta`, or `scoop install delta`) |
+| Debian 12+ / Ubuntu 23.04+ (WSL fallback) | `sudo apt-get install -y git-delta` — on older releases, download the `.deb` from https://github.com/dandavison/delta/releases and `sudo dpkg -i <file>.deb` |
 | Fedora/RHEL | `sudo dnf install -y git-delta` |
 
 - **Post-install (optional):** offer to wire it into git — `git config --global core.pager delta` — but only after explicit confirmation, since it changes a global git setting outside the project.
@@ -142,6 +160,7 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 | OS | Command |
 |----|---------|
 | macOS | `brew install graphify` |
+| Windows (native) | `npm install -g graphify` — works directly on native Windows, no WSL needed; fallback `pip install graphify` if npm is unavailable |
 | Linux/WSL | `npm install -g graphify` — fallback `pip install graphify` if npm is unavailable |
 
 - **Dependency:** `jq` must also be installed (see above) — install it first if missing.
