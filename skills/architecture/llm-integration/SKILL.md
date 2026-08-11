@@ -73,6 +73,8 @@ Rules:
 - Cache embeddings keyed by `hash(text) + model + version`. Re-embedding unchanged content is pure waste.
 - Batch embedding calls at ingestion; concurrency at query time is latency, not throughput.
 
+See `references/provider-embeddings.md` for a model/feature comparison across OpenAI, Anthropic (Voyage AI), Google and Cohere, and for provider-specific RAG features (e.g. Contextual Retrieval, managed retrieval, rerank endpoints).
+
 ---
 
 ## Vector Store Selection
