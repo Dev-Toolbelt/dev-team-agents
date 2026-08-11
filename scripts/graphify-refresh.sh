@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 cd "$PROJECT_ROOT"
 
 # shellcheck source=scripts/lib/state.sh
-. "$PROJECT_ROOT/scripts/lib/state.sh"
+. "$SCRIPT_DIR/lib/state.sh"
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "❌ Not inside a git repository." >&2
