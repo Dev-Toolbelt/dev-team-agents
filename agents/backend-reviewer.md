@@ -84,6 +84,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 ### 7. API Contracts
 - HTTP methods used correctly (GET never mutates, PUT is idempotent, etc.)
 - HTTP status codes semantically correct (401 vs 403, 400 vs 422)
+- SSE endpoints — load `skills/architecture/sse-streaming/SKILL.md`; flag missing `id`/`Last-Event-ID` resume handling, missing keep-alive, or auth via a header `EventSource` cannot send
 - Response envelope matches the project-defined format (`api-contracts.md`)
 - Errors include a machine-readable `code` field alongside a human `message`
 - Paginated list endpoints — unbounded lists are a correctness and performance issue

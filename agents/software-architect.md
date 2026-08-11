@@ -51,6 +51,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 | Deciding which agents to invoke | `skills/shared/spawn-classifier/SKILL.md` |
 | Branch strategy / git conventions | `skills/shared/git-workflow/SKILL.md` |
 | Event-driven patterns / async messaging | `skills/architecture/event-driven/SKILL.md` |
+| Server-push streaming design (SSE, one-way server → client) | `skills/architecture/sse-streaming/SKILL.md` |
 | Rate limiting / API throttling | `skills/architecture/rate-limiting/SKILL.md` |
 | API versioning / breaking changes | `skills/architecture/api-versioning/SKILL.md` |
 | LLM or AI feature in the stack | `skills/architecture/llm-integration/SKILL.md` |
@@ -62,8 +63,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 
 After the user approves the plan and **before executing any step**, present the Execution Strategy
 Gate — the worktree / branch / current-branch quiz. When the user signals fully autonomous
-execution ("do it all without asking", "autonomous sprint", equivalents in any language), skip the
-quiz and follow the Autonomous Sprint Protocol instead.
+execution ("do it all without asking", "autonomous sprint", equivalents in any language), skip the quiz and follow the Autonomous Sprint Protocol instead.
 
 Both procedures — preference reading, quiz options, session-file write, and the autonomous review
 cycle — are defined in `skills/architecture/orchestration/SKILL.md`. Load it before the gate.

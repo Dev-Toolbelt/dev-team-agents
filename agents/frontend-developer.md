@@ -117,11 +117,11 @@ Load `skills/architecture/frontend-patterns/SKILL.md` for debounce, double-submi
 
 ---
 
-## Realtime & WebSocket
+## Realtime, SSE & WebSocket
 
 When the project uses live data push, collaborative features, or event streaming, load `skills/integrations/realtime/SKILL.md`.
 
-**Detection**: `supabase.channel()`, `socket.io` / `ably` / `pusher` dependency, `@supabase/supabase-js` with Realtime usage, or `ws://` / `wss://` connections.
+**Detection**: `supabase.channel()`, `socket.io` / `ably` / `pusher` dependency, `@supabase/supabase-js` with Realtime usage, or `ws://` / `wss://` connections. For one-way-only streaming (no client-to-server messages — notifications, feeds, progress), load `skills/architecture/sse-streaming/SKILL.md` instead; detect via `EventSource` / `text/event-stream` / `sse`.
 
 ---
 

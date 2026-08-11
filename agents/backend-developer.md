@@ -55,6 +55,7 @@ Load the matching skill when the task context applies:
 | Rate limiting middleware or API throttling | `skills/architecture/rate-limiting/SKILL.md` |
 | Changing public API contracts or designing versioned endpoints | `skills/architecture/api-versioning/SKILL.md` |
 | File upload — signals: `file`, `upload`, `attachment`, `presign`, `S3`, `storage`, `blob`, or any file > 5 MB | `skills/architecture/multipart-upload/SKILL.md` |
+| Server-push streaming — signals: `EventSource`, `text/event-stream`, `sse`, live notifications, progress feed, real-time dashboard (one-way, server → client only) | `skills/architecture/sse-streaming/SKILL.md` |
 
 ---
 
