@@ -476,6 +476,21 @@ bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 
 The script prints existing ADR titles and auto-numbers the file — see `skills/shared/adr/SKILL.md` § Check Before Creating before running it, so a decision doesn't get a second, duplicate ADR. Fill in the generated template and change the status from `Proposed` to `Accepted`.
 
+**Automated gap detection.** `scripts/hooks/stop/03e-adr-gap-check.sh` is a heuristic, non-blocking safety net for this rule: it warns when a session touched a dependency manifest, a schema migration, or a provider config file but added no new file under `docs/development/adrs/`. It never decides whether an ADR is actually warranted — that judgment stays with the triggers above — it only prevents the signal from being silently missed.
+
+### Correction Pattern Rule
+
+When the user corrects the same agent behavior **2 or more times in the same session** — pushing back on the same workflow choice, format, or default — that is a standing preference, not a one-off note for that task. Do not just comply silently a second time. Before continuing:
+
+1. State the pattern you noticed in one sentence ("You've asked twice this session not to spawn a worktree — want this to be the default going forward?").
+2. Check whether it maps to an existing field in `preferences.json` (see `skills/shared/user-preferences/SKILL.md` § Schema and Defaults) — most behavioral preferences already have one (`worktree_active`, `worktree_commit_action`, `qa_browser`, `language`, etc.).
+3. Ask via `AskUserQuestion` whether to persist it. **Never write to `preferences.json` without this confirmation** — a correction scoped to the current task is not consent to change a standing default.
+4. If confirmed, update the field and confirm the new value back to the user.
+
+If the correction does not map to any existing field, do not invent a new preferences.json key on the spot — say so, and suggest the user phrase it as an explicit instruction for this session instead.
+
+This rule does not replace the Session Summary Rule above — a corrected preference is still worth a line in **Decisions** if it shaped the session's work, even after being persisted to `preferences.json`.
+
 ### Stop Hook (Automated Enforcement)
 
 `install.sh` registers `scripts/hooks/stop.sh` as the `Stop` dispatcher in `.claude/settings.json`, running every sub-script in `scripts/hooks/stop/` in order — including `01-session-summary.sh`, which detects missing session-summary entries and prompts for one. No manual setup is required.

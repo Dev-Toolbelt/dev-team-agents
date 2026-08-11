@@ -107,6 +107,15 @@ considered complete, `qa-specialist` verifies:
 Report a mismatch as `[SPEC-DRIFT]` in the QA Report and treat it as a `[BLOCKER]` — deploy is
 blocked until the spec is corrected, not until the QA report is edited to match the code.
 
+**Accepted drift is not the end of the story.** A `[SPEC-DRIFT]` blocker resolves one of two ways:
+the code is changed to match the spec, or the user explicitly accepts the built behavior and the
+spec is amended to match it (Living Spec above). The second case is a standardization decision, not
+just a spec fix — if the accepted behavior represents a pattern the team wants to hold onto (a naming
+convention, a reusable shape, a path rule), route it to `skills/shared/reuse-guidelines/SKILL.md`
+(via `/devteam:rule` or its passive-capture path) in addition to the Amendment Log entry. The
+Amendment Log records that this spec changed; the registry is what stops the same drift from
+recurring silently in the next feature.
+
 ## Sprint Linkage
 
 Each `TASK-NNN` in a sprint file (`backlog-template` skill) carries a `**Spec**:` field pointing at

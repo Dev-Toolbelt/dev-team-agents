@@ -51,6 +51,16 @@ The file does not exist until a project creates one. Its absence means no rule i
 
 Never copy the registry's rows into the review output — reference the row's `name` and let the file be the source of truth.
 
+## Auto-detection During Review
+
+The Review Gate above catches deviations from rows that already exist. This is the earlier step: catching a deviation that has **no row yet**. When `code-reviewer`/`backend-reviewer`/`frontend-reviewer` finds the same pattern deviation (same underlying rule being broken, not merely the same file) appearing **2 or more times** in the changeset under review, treat it as a standardization candidate, not just a repeated finding:
+
+1. Report each occurrence normally in the review (`[SUGGESTION]` or `[BLOCKING]` per its own severity).
+2. In the review summary, add one line proposing the row: `name`, `type`, `rule`, and a draft `detection`/`canonical_ref` per the classify step in "Growing the Registry" below.
+3. Do not append the row yourself mid-review — hand the proposal to the user the same way `/devteam:rule` would, and let them confirm before it is written.
+
+A single occurrence is just a finding. Two or more in the same diff is a pattern the registry exists to stop from recurring next sprint.
+
 ## Hard Lint (CI / Stop hook)
 
 `scripts/reuse-lint.sh` runs the `code-pattern` and `path-convention` rows against `git diff` non-interactively and exits non-zero on any match. `design-rule` rows are parsed but never checked mechanically — they exist in the file for the review gate and for `/devteam:rule`'s traceability, not for the script. Degrades to exit 0 silently when the registry file is absent.

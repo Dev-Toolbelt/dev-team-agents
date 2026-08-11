@@ -73,6 +73,8 @@ This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore
 
 > For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.
 
+**Proposing a new value mid-session.** When the user repeatedly corrects the same behavior, `CLAUDE.md` § Correction Pattern Rule governs whether to propose persisting it here. That rule — not this file — owns the trigger (2+ corrections) and the confirmation step; this file only owns the schema the proposal must map to. Never write a field here without the `AskUserQuestion` confirmation that rule requires.
+
 ---
 
 ## Language Policy

@@ -45,7 +45,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Reviewer-specific additions after project-context loads:**
 
 - Load `skills/shared/reviewer-base/SKILL.md` — the canonical base review checklist shared with `backend-reviewer` and `frontend-reviewer`; it governs linter configs, diff scoping, and scanner detection
-- Load `skills/shared/reuse-guidelines/SKILL.md` — when `docs/development/reuse-guidelines.md` exists, check `code-pattern`/`path-convention` rows mechanically and walk every `design-rule` row by hand against the diff; a match on any type is `[BLOCKING]`
+- Load `skills/shared/reuse-guidelines/SKILL.md` — when `docs/development/reuse-guidelines.md` exists, check `code-pattern`/`path-convention` rows mechanically and walk every `design-rule` row by hand against the diff; a match on any type is `[BLOCKING]`. Also apply its Auto-detection During Review step: a deviation with no existing row that recurs 2+ times in this diff gets proposed as a new row in the summary, not just reported as a repeated finding
 - Read `docs/development/code-standards.md` — **this is your primary review guide**
 - Read `docs/development/architecture.md` — the architectural decisions to validate the changeset against
 - Run `git diff main...HEAD` (or `git diff HEAD~1` for a single commit) — every finding targets the changeset, never pre-existing code
