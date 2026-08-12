@@ -50,6 +50,7 @@ re-verified against the v2 tree with fresh evidence. The full v1 history remains
 | 2026-07-30 | 131 (consolidation, no new findings) | 131 | — |
 | 2026-07-31 | — (execution pass, no new findings) | 131 | **120 ✅ · 1 ⚠️ · 10 🔴** — throughput **92%** declarado |
 | 2026-07-31 | 11 (guardian audit pass) | 142 | Fase 1: **49 de 121 verificados** → 41 ✅ · 3 🟡 · 5 🔴 (**84% confirmado, 10% reaberto**) · Fase 1b: **0% de mortalidade** (0 de 10) |
+| 2026-08-12 | 1 (guardian audit pass) | 143 | Fase 1: **30 de 124 verificados** → 26 ✅ · 2 🟢 · **0 🔴 (0% reaberto)** · Fase 1b: **9% de mortalidade** (1 de 11 🟢) · delta de 187 arquivos |
 
 **v1 → v2 triage:** 334 candidates verified against `HEAD` = `7f85ed7` · 157 survived · 177 died
 (53% mortality) · 26 merged as cross-axis duplicates → **131 registered**.
@@ -143,7 +144,7 @@ breakdown.
 - `flow-stop-no-zombie-state-cleanup-discovery-lock-and-worktree-session-persist-across-sessions` — **MEDIUM** — Stop never cleans up zombie session state — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31 — 🔴 **Reaberto na verificação de 2026-07-31:** nenhum commit da janela tocou o alvo; `grep -rn 'worktree-session\|discovery-lock' scripts/hooks/` não retorna nada em `stop/`
 - `flow-stop-dispatcher-globs-all-sh-no-allowlist-or-per-subscript-toggle-any-dropped-file-auto-executes` — **MEDIUM** — The Stop dispatcher auto-executes any `.sh` dropped into `stop/` — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `flow-pre-tool-use-dispatcher-no-mention-of-sub-script-order-convention-asymmetric-with-stop-dispatcher` — **MEDIUM** — PreToolUse sub-script ordering is undocumented and already collides — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
-- `flow-telemetry-pre-tool-use-02-runs-on-every-tool-call-without-batching-or-deduplication-burns-200ms-per-burst-session` — **MEDIUM** — PreToolUse telemetry forks `python3` twice on every tool call before its own filter — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31 — 🔴 **Reaberto na verificação de 2026-07-31:** o diff da janela foi um rename (`02-`→`02b-`) mais a troca do guard de consentimento; nenhum batching e nenhuma dedup foram adicionados
+- `flow-telemetry-pre-tool-use-02-runs-on-every-tool-call-without-batching-or-deduplication-burns-200ms-per-burst-session` — **MEDIUM** — PreToolUse telemetry forks `python3` twice on every tool call before its own filter — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31 — 🔴 **Reaberto na verificação de 2026-07-31:** o diff da janela foi um rename (`02-`→`02b-`) mais a troca do guard de consentimento; nenhum batching e nenhuma dedup foram adicionados — 🟢 **Resolved:** 2026-08-12 — resolvido por `156771b`: `02b-telemetry.sh` agora enfileira eventos (flush no Stop) e faz early-exit por substring antes do fork `python3`
 - `token-pre-tool-use-01-check-updates-forks-python3-to-read-interval-before-ttl-early-exit-on-every-tool-call-burst-overhead` — **MEDIUM** — `01-check-updates.sh` forks `python3` before its own TTL early-return — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `flow-02b-orphan-template-scan-lacks-devteam-no-changes-fast-path-and-git-scoped-gate-runs-full-scan-every-stop` — **MEDIUM** — `02b-orphan-template-scan.sh` is the only Stop sub-script with no change gate — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `flow-orphan-template-scan-runs-in-stop-but-only-checks-references-not-resolvability-masks-templates-broken-by-relative-path` — **MEDIUM** — `orphan-template-scan.sh` proves a name is mentioned, not that the path resolves — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
@@ -172,7 +173,7 @@ breakdown.
 - `flow-commit-command-160-lines-pre-commit-gates-extractable-skill` — **LOW** — `commands/commit.md` duplicates the layered-commit table it already loads via a skill — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `flow-conventional-commits-validate-script-no-husky-or-commit-msg-hook-registration` — **LOW** — The installer never registers a `commit-msg` hook or Husky/Lefthook entry — [report](2026-07-30/02-fluxos-e-workflows.md) — 🔴 **Still open (2026-07-31):** no commit-msg hook or Husky/Lefthook registration in install.sh; a plain git commit still bypasses validation
 - `flow-hook-events-only-pretooluse-and-stop` — **LOW** — Three Claude Code hook events remain unregistered — [report](2026-07-30/02-fluxos-e-workflows.md) — 🔴 **Still open (2026-07-31):** UserPromptSubmit, SubagentStop and Notification are still unregistered
-- `gov-installer-rigor-asymmetry` — **LOW** — The repo installs four hook events into user projects but dogfoods only one — [report](2026-07-30/02-fluxos-e-workflows.md) — 🔴 **Still open (2026-07-31):** the repo self-registers only Stop; 3 of 4 dispatchers remain undogfooded
+- `gov-installer-rigor-asymmetry` — **LOW** — The repo installs four hook events into user projects but dogfoods only one — [report](2026-07-30/02-fluxos-e-workflows.md) — 🔴 **Still open (2026-07-31):** the repo self-registers only Stop; 3 of 4 dispatchers remain undogfooded — 🟢 **Resolved:** 2026-08-12 — resolvido por `872477b`+`ae77545`: `.claude/settings.json` agora registra Stop, PreToolUse, SessionStart e PreCompact
 - `flow-setup-slash-command` — **LOW** — There is still no `/devteam:setup` command — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `flow-commit-md-and-update-md-are-only-2-commands-without-current-context-load-but-both-touch-git-state` — **LOW** — `/devteam:health-check` is absent from every canonical list — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
 - `auto-no-skill-name-uniqueness-check` — **LOW** — No check for skill `name` collisions across categories — [report](2026-07-30/02-fluxos-e-workflows.md) — ✅ **Executed:** 2026-07-31
@@ -274,7 +275,7 @@ método, placar e candidatos descartados por duplicação.
 
 ### Fluxos e Comandos (`auto-*`, `flow-*`) — 2
 
-- `auto-commands-json-plan-gate-field-has-no-consumer-and-no-validator-architect-declared-required-but-body-carries-no-plan-step` — **MEDIUM-HIGH** — alvo: `scripts/lib/commands.json` — Metadado declarado canônico sem consumidor, já divergente em 1 dos 6 comandos `required` — [report](2026-07-31/03-fluxos-e-comandos.md)
+- `auto-commands-json-plan-gate-field-has-no-consumer-and-no-validator-architect-declared-required-but-body-carries-no-plan-step` — **MEDIUM-HIGH** — alvo: `scripts/lib/commands.json` — Metadado declarado canônico sem consumidor, já divergente em 1 dos 6 comandos `required` — [report](2026-07-31/03-fluxos-e-comandos.md) — 🟢 **Resolved:** 2026-08-12 — `scripts/lib/render_provider.py:105` `soften_plan_gate()` consome `meta.get("plan_gate")` (linhas 899, 921, 928)
 - `flow-pre-tool-use-02b-telemetry-reads-devteam-hook-payload-branch-that-only-stop-dispatcher-ever-sets-dead-path-in-pretooluse` — **LOW** — alvo: `scripts/hooks/pre-tool-use/02b-telemetry.sh` — Ramo morto de leitura de payload; contrato assimétrico entre os dois dispatchers — [report](2026-07-31/03-fluxos-e-comandos.md)
 
 ### Agentes e Skills (`skill-*`) — 1
@@ -284,3 +285,25 @@ método, placar e candidatos descartados por duplicação.
 ### Economia de Tokens (`token-*`) — 1
 
 - `token-interaction-patterns-209-lines-loaded-unconditionally-by-24-commands-and-2-agents-while-only-38-lines-are-the-rule-and-159-are-json-examples-and-recurring-patterns` — **MEDIUM-HIGH** — alvo: `skills/shared/interaction-patterns/SKILL.md` — 76% é catálogo de exemplos; extrair para `references/` economiza ≈4.130 linhas agregadas — [report](2026-07-31/05-economia-tokens.md)
+
+---
+
+## 2026-08-12 — Auditoria guardiã (verificação + 5 eixos)
+
+Segundo pass guardião sobre o banco v2, contra um delta grande (187 arquivos desde `f54569a`).
+Verificou 30 das 124 marcações ✅/⚠️ (100% dos HIGH/MEDIUM-HIGH e de todos os itens antes
+sinalizados) com **0% de reabertura**, revalidou os 11 achados abertos (**9% de mortalidade** — 1 🟢),
+detectou 2 marcações reabertas/abertas **fechadas de passagem** pelo delta, e produziu 1 achado
+original. Ver [o relatório do pass](2026-08-12/index.md) para método, placar e descartados por
+duplicação.
+
+### Agnosticismo de Stack (`flow-*`) — 1
+
+- `flow-relayout-design-discovery-names-storybook-tailwind` — **LOW-MEDIUM** — alvo: `commands/relayout.md` — A descoberta de contexto de design (seção obrigatória) nomeia Storybook e Tailwind como locais de tokens, acoplando o comando ao ecossistema JS/React — [report](2026-08-12/01-agnosticismo-de-stack.md)
+
+### Descartados por duplicação
+
+- `frontend-developer.md:96` nomeia TanStack/SWR/React/Vue — Porta 3 (semântica): alvo + causa-raiz coincidem com `agent-frontend-developer-body-92-102-data-fetching-section-hardcodes-usestate-useeffect-tanstack-query-swr…` (✅)
+- `CLAUDE.md` 586 linhas / `install.sh` 1085 / `CHANGELOG` 959 / `session-start.sh` 306 — Porta 5 (estado): itens já registrados e abertos
+- Sub-scripts `03c/03d/03e` "re-forkam git" — Porta 3: hipótese refutada por evidência (reusam `DEVTEAM_TOUCHED_PATHS`)
+- `_disabled-*` "auto-executam" — hipótese refutada (ambos dispatchers têm `SUBSCRIPT_RE` allowlist)
