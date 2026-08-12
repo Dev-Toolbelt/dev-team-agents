@@ -72,9 +72,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | `*.tf` files or `terraform/` / `infra/` directory | `skills/devops/iac-terraform/SKILL.md` |
 | `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md` |
 | `docker-compose.yml` with production config | `skills/devops/docker-prod/SKILL.md` |
-| `prometheus.yml`, `grafana/`, `alertmanager.yml`, or `monitoring/` directory | `skills/devops/monitoring/SKILL.md` |
-| `DD_API_KEY` env var, `datadog.yml`, or `datadog` service in compose | `skills/devops/monitoring/SKILL.md` |
-| `amazon-cloudwatch-agent.json` or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
+| `prometheus.yml`, `grafana/`, `alertmanager.yml`, `monitoring/` directory, `DD_API_KEY` env var, `datadog.yml`, `datadog` service in compose, `amazon-cloudwatch-agent.json`, or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
 | `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md` |
 | Task targets AWS resources | `skills/devops/aws/SKILL.md` |
 | Task targets GCP resources | `skills/devops/gcp/SKILL.md` |
@@ -83,6 +81,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
 | `SENTRY_DSN` env var, `@sentry/` in `package.json`, `sentry-sdk` in `requirements.txt`, or `sentry` service in compose | `skills/devops/sentry/SKILL.md` |
 | `vercel.json`, `.vercel/`, `VERCEL_TOKEN` env var, or Vercel-hosted project | `skills/devops/vercel/SKILL.md` |
+| Provisioning or scaling an inbound ingestion boundary (webhook receiver, telemetry collector, bulk-upload endpoint backed by a queue) | `skills/architecture/ingestion-api/SKILL.md` |
 
 When multiple signals are present, load all relevant skills.
 

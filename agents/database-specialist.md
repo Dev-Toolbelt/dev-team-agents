@@ -57,6 +57,7 @@ When the project shows these signals, load the corresponding skill before advisi
 | Planning or reviewing database migrations (any migration task) | `skills/database/migration-zero-downtime/SKILL.md` |
 | Supabase project (see backend-developer detection rules) | `skills/integrations/supabase/SKILL.md` |
 | Debugging slow queries or lock contention is involved | `skills/integrations/database-debug/SKILL.md` |
+| Storage design for an ingestion pipeline (idempotency keys, dedupe constraints, DLQ tables) | `skills/architecture/ingestion-api/SKILL.md` |
 
 **Per-engine skill load:** Load `skills/shared/stack-detection/SKILL.md` first to identify the primary stack, then identify the database engine from project signals (docker-compose.yml, package.json, prisma/schema.prisma, .env, composer.json, etc.) and load the matching skill:
 

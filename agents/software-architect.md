@@ -42,8 +42,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 | Authoring `code-standards.md` | `skills/architecture/design-patterns/SKILL.md` + `skills/architecture/single-action-controller/SKILL.md` + `skills/shared/comments-policy/SKILL.md` |
 | Reviewing or emitting code samples in any document | `skills/shared/comments-policy/SKILL.md` |
 | DI strategy / wiring / IoC container setup | `skills/architecture/design-patterns/SKILL.md` → Composition Root section |
-| Caching strategy | `skills/architecture/caching/SKILL.md` |
-| Fault tolerance / resilience | `skills/architecture/resilience/SKILL.md` |
+| Caching strategy, or fault tolerance / resilience | `skills/architecture/caching/SKILL.md` or `skills/architecture/resilience/SKILL.md` |
 | Monorepo project | `skills/architecture/monorepo-patterns/SKILL.md` |
 | SLOs / observability | `skills/architecture/observability-slo/SKILL.md` |
 | Feature flags | `skills/architecture/feature-flags/SKILL.md` |
@@ -51,6 +50,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 | Deciding which agents to invoke | `skills/shared/spawn-classifier/SKILL.md` |
 | Branch strategy / git conventions | `skills/shared/git-workflow/SKILL.md` |
 | Event-driven patterns / async messaging | `skills/architecture/event-driven/SKILL.md` |
+| Designing an inbound data boundary (webhooks, telemetry, bulk ingestion, partner feeds) | `skills/architecture/ingestion-api/SKILL.md` |
 | Server-push streaming design (SSE, one-way server → client) | `skills/architecture/sse-streaming/SKILL.md` |
 | Rate limiting / API throttling | `skills/architecture/rate-limiting/SKILL.md` |
 | API versioning / breaking changes | `skills/architecture/api-versioning/SKILL.md` |

@@ -56,6 +56,7 @@ Load the matching skill when the task context applies:
 | Changing public API contracts or designing versioned endpoints | `skills/architecture/api-versioning/SKILL.md` |
 | File upload — signals: `file`, `upload`, `attachment`, `presign`, `S3`, `storage`, `blob`, or any file > 5 MB | `skills/architecture/multipart-upload/SKILL.md` |
 | Server-push streaming — signals: `EventSource`, `text/event-stream`, `sse`, live notifications, progress feed, real-time dashboard (one-way, server → client only) | `skills/architecture/sse-streaming/SKILL.md` |
+| Implementing an inbound ingestion endpoint — signals: `ingest`, `collect`, `webhook`, `telemetry`, `beacon`, bulk file/CSV upload feeding a queue | `skills/architecture/ingestion-api/SKILL.md` |
 
 ---
 
