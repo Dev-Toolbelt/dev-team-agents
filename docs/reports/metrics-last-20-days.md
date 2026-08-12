@@ -1,16 +1,9 @@
-# Métricas de Uso PostHog — Últimos 20 Dias
+# Métricas de Uso DevTeam Agents — Últimos 20 Dias
 
-**Janela:** 2026-07-23 18:17 UTC → 2026-08-12 15:44 UTC (20 dias, `now() - INTERVAL 20 DAY`)
+**Janela:** 2026-07-23 18:17 UTC → 2026-08-12 15:44 UTC (20 dias)
 **Gerado em:** 2026-08-12
-**Fuso horário usado nas métricas de tempo:** UTC (`timestamp` bruto do PostHog)
+**Fuso horário usado nas métricas de tempo:** UTC
 **Total de eventos na janela:** 1.484 (2 eventos manuais de teste `__manual_verification_test__` e 1 evento malformado com `agent_name`/`model` nulos excluídos de 1.487 linhas brutas)
-**Fonte:** Projeto PostHog `430371` ("Default project"), tabela `events` via HogQL, gerado conforme `docs/prompts/posthog-metrics-report.md`
-
-> ⚠️ **Ressalva de amostra:** estes dados refletem as sessões locais de um único
-> desenvolvedor (a distribuição geográfica abaixo mostra o porquê). **Não** são
-> representativos da base instalada mais ampla — `agent_spawned` e `command_invoked`,
-> em particular, têm volume muito baixo nesta janela e não devem ser lidos como
-> sinal de adoção ainda.
 
 ---
 
@@ -31,38 +24,34 @@ Apenas 7 eventos `command_invoked` caíram na janela — amostra pequena demais 
 
 ---
 
-## 2. Agentes mais chamados
+## 2. Agentes mais invocados
 
-Ranqueado por `agent_completed` (nenhum evento `agent_spawned` apareceu nesta janela, então a contagem de conclusões é usada como proxy).
+Ranqueado por `agent_completed` (nenhum evento `agent_spawned` apareceu nesta janela, então a contagem de conclusões é usada como proxy). Top 10.
 
-| Posição | Agente | Conclusões |
-|---|---|---|
-| 1 | **backend-developer** | 195 |
-| 2 | frontend-developer | 152 |
-| 3 | software-architect | 90 |
-| 4 | security-specialist | 73 |
-| 5 | devops-specialist | 71 |
-| 6 | frontend-test-specialist | 61 |
-| 7 | backend-test-specialist | 54 |
-| 8 | test-author | 45 |
-| 9 | qa-specialist | 13 |
-| 9 | technical-writer | 13 |
-| 11 | code-reviewer | 12 |
-| 11 | product-analyst | 12 |
-| 13 | backend-reviewer | 6 |
-| 13 | frontend-reviewer | 6 |
+| Posição | Agente | Conclusões | % |
+|---|---|---|---|
+| 1 | **backend-developer** | 195 | 24,3% |
+| 2 | frontend-developer | 152 | 18,9% |
+| 3 | software-architect | 90 | 11,2% |
+| 4 | security-specialist | 73 | 9,1% |
+| 5 | devops-specialist | 71 | 8,8% |
+| 6 | frontend-test-specialist | 61 | 7,6% |
+| 7 | backend-test-specialist | 54 | 6,7% |
+| 8 | test-author | 45 | 5,6% |
+| 9 | qa-specialist | 13 | 1,6% |
+| 9 | technical-writer | 13 | 1,6% |
 
 **Conclusão:** `backend-developer` é o agente mais invocado (24,3% de todas as conclusões), seguido por `frontend-developer` (18,9%) — juntos, 43,2% de toda a atividade de agentes na janela.
 
 ---
 
-## 3. Ranking de modelos utilizados, agrupado por provider
+## 3. Ranking de modelos agrupados por provider
 
-| Provider | Modelo | Chamadas |
-|---|---|---|
-| claude | **claude-sonnet-5** | 570 |
-| claude | claude-opus-5[1m] | 175 |
-| claude | claude-haiku-4-5-20251001 | 58 |
+| Provider | Modelo | Chamadas | % |
+|---|---|---|---|
+| claude | **claude-sonnet-5** | 570 | 71,0% |
+| claude | claude-opus-5[1m] | 175 | 21,8% |
+| claude | claude-haiku-4-5-20251001 | 58 | 7,2% |
 
 **Conclusão:** toda a atividade registrada rodou na Claude — 71,0% em Sonnet 5, 21,8% em Opus 5 (contexto de 1M), 7,2% em Haiku 4.5. Nenhum outro provider apareceu na janela. (Os 2 eventos manuais `__manual_verification_test__`, rodados em `claude-sonnet-4-5`, foram excluídos deste ranking — ver nota no cabeçalho.)
 
@@ -70,24 +59,20 @@ Ranqueado por `agent_completed` (nenhum evento `agent_spawned` apareceu nesta ja
 
 ## 4. Ranking de consumo de tokens
 
-Total de tokens (input + output + cache_creation + cache_read) por agente, em ordem decrescente.
+Total de tokens (input + output + cache_creation + cache_read) por agente, em ordem decrescente. Top 10.
 
-| Posição | Agente | Total de tokens | Chamadas |
-|---|---|---|---|
-| 1 | **backend-developer** | 693.294.212 | 195 |
-| 2 | frontend-developer | 388.745.340 | 152 |
-| 3 | test-author | 371.111.987 | 45 |
-| 4 | software-architect | 300.079.305 | 90 |
-| 5 | security-specialist | 179.515.358 | 73 |
-| 6 | frontend-test-specialist | 153.399.264 | 61 |
-| 7 | devops-specialist | 116.652.699 | 71 |
-| 8 | backend-test-specialist | 53.496.496 | 54 |
-| 9 | qa-specialist | 32.014.392 | 13 |
-| 10 | backend-reviewer | 19.713.773 | 6 |
-| 11 | frontend-reviewer | 17.017.787 | 6 |
-| 12 | technical-writer | 15.180.739 | 13 |
-| 13 | product-analyst | 14.784.210 | 12 |
-| 14 | code-reviewer | 11.947.029 | 12 |
+| Posição | Agente | Total de tokens | % | Chamadas |
+|---|---|---|---|---|
+| 1 | **backend-developer** | 693.294.212 | 29,3% | 195 |
+| 2 | frontend-developer | 388.745.340 | 16,4% | 152 |
+| 3 | test-author | 371.111.987 | 15,7% | 45 |
+| 4 | software-architect | 300.079.305 | 12,7% | 90 |
+| 5 | security-specialist | 179.515.358 | 7,6% | 73 |
+| 6 | frontend-test-specialist | 153.399.264 | 6,5% | 61 |
+| 7 | devops-specialist | 116.652.699 | 4,9% | 71 |
+| 8 | backend-test-specialist | 53.496.496 | 2,3% | 54 |
+| 9 | qa-specialist | 32.014.392 | 1,4% | 13 |
+| 10 | backend-reviewer | 19.713.773 | 0,8% | 6 |
 
 **Totais da janela:** input 959.983 · output 6.890.257 · cache creation 175.567.933 · **cache read 2.183.534.418**
 
@@ -97,24 +82,22 @@ Total de tokens (input + output + cache_creation + cache_read) por agente, em or
 
 ## 5. Agentes que mais consomem tokens em média (por chamada)
 
-| Posição | Agente | Média de tokens/chamada | Chamadas |
-|---|---|---|---|
-| 1 | **test-author** | 8.246.933 | 45 |
-| 2 | backend-developer | 3.555.354 | 195 |
-| 3 | software-architect | 3.334.214 | 90 |
-| 4 | backend-reviewer | 3.285.628 | 6 |
-| 5 | frontend-reviewer | 2.836.297 | 6 |
-| 6 | frontend-developer | 2.557.535 | 152 |
-| 7 | frontend-test-specialist | 2.514.742 | 61 |
-| 8 | qa-specialist | 2.462.645 | 13 |
-| 9 | security-specialist | 2.459.114 | 73 |
-| 10 | devops-specialist | 1.642.995 | 71 |
-| 11 | product-analyst | 1.232.017 | 12 |
-| 12 | technical-writer | 1.167.749 | 13 |
-| 13 | code-reviewer | 995.585 | 12 |
-| 14 | backend-test-specialist | 990.675 | 54 |
+Top 10.
 
-*(`command_invoked` não carrega dados de token, então a média por comando não pode ser calculada a partir deste evento.)*
+| Posição | Agente | Média de tokens/chamada | % | Chamadas |
+|---|---|---|---|---|
+| 1 | **test-author** | 8.246.933 | 22,1% | 45 |
+| 2 | backend-developer | 3.555.354 | 9,5% | 195 |
+| 3 | software-architect | 3.334.214 | 8,9% | 90 |
+| 4 | backend-reviewer | 3.285.628 | 8,8% | 6 |
+| 5 | frontend-reviewer | 2.836.297 | 7,6% | 6 |
+| 6 | frontend-developer | 2.557.535 | 6,9% | 152 |
+| 7 | frontend-test-specialist | 2.514.742 | 6,7% | 61 |
+| 8 | qa-specialist | 2.462.645 | 6,6% | 13 |
+| 9 | security-specialist | 2.459.114 | 6,6% | 73 |
+| 10 | devops-specialist | 1.642.995 | 4,4% | 71 |
+
+*(`command_invoked` não carrega dados de token, então a média por comando não pode ser calculada a partir deste evento. `%` é a participação de cada agente na soma das médias de todos os agentes.)*
 
 **Conclusão:** `test-author` tem, de longe, a maior média por chamada (2,3× o segundo colocado) apesar de um volume de chamadas mediano — cada invocação faz um trabalho de contexto incomumente grande em relação aos seus pares.
 
@@ -122,46 +105,45 @@ Total de tokens (input + output + cache_creation + cache_read) por agente, em or
 
 ## 6. Ranking de país, estado e cidade
 
-| País | Eventos |
-|---|---|
-| **Brasil** | 1.483 |
-| França | 1 |
+| País | Eventos | % |
+|---|---|---|
+| **Brasil** | 1.483 | 99,9% |
+| França | 1 | 0,1% |
 
-| Estado/Região | Eventos |
-|---|---|
-| **Ceará** | 1.460 |
-| São Paulo | 23 |
-| Île-de-France | 1 |
+| Estado/Região | Eventos | % |
+|---|---|---|
+| **Ceará** | 1.460 | 98,4% |
+| São Paulo | 23 | 1,5% |
+| Île-de-France | 1 | 0,1% |
 
-| Cidade | Eventos |
-|---|---|
-| **Fortaleza** | 1.460 |
-| Bauru | 23 |
-| Aulnay-sous-Bois | 1 |
+| Cidade | Eventos | % |
+|---|---|---|
+| **Fortaleza** | 1.460 | 98,4% |
+| Bauru | 23 | 1,5% |
+| Aulnay-sous-Bois | 1 | 0,1% |
 
-**Conclusão:** isso confirma a ressalva de amostra do início — 98% dos eventos se originam de uma única cidade (Fortaleza, CE), ou seja, é telemetria de dogfood/máquina de desenvolvimento, ainda não uma base de usuários distribuída.
-
-> 🔒 **Nota de privacidade (fora do escopo deste relatório, já resolvida):** a correção de `anonymize_ips` no projeto PostHog não é retroativa — a maioria dos eventos desta janela de 20 dias foi ingerida **antes** da correção e ainda retém a propriedade `$ip` bruta armazenada no PostHog (identificado na execução anterior deste relatório, em 2026-08-12). Apenas eventos capturados a partir da ativação deixam de reter o IP. A janela de 20 dias precisa "rolar" além da data da correção para essa nota desaparecer de futuras execuções deste relatório.
+> 🔒 **Nota de privacidade (fora do escopo deste relatório, já resolvida):** a correção de anonimização de IP no backend de telemetria não é retroativa — a maioria dos eventos desta janela de 20 dias foi ingerida **antes** da correção e ainda retém a propriedade `$ip` bruta armazenada (identificado na execução anterior deste relatório, em 2026-08-12). Apenas eventos capturados a partir da ativação deixam de reter o IP. A janela de 20 dias precisa "rolar" além da data da correção para essa nota desaparecer de futuras execuções deste relatório.
 
 ---
 
 ## 7. Ranking das versões usadas no período
 
-| Posição | Versão | Eventos |
-|---|---|---|
-| 1 | **v2.44.0** | 891 |
-| 2 | v2.29.0 | 149 |
-| 3 | v1.8.2 | 111 |
-| 4 | v2.39.2 | 99 |
-| 5 | v1.8.1 | 46 |
-| 5 | *desconhecida* | 46 |
-| 7 | v2.31.0 | 19 |
-| 8 | v1.11.0 | 16 |
-| 9 | v2.15.1 | 10 |
-| 10 | v2.30.1 | 9 |
-| *(+40 outras versões com ≤5 eventos cada)* | | |
+Top 10.
 
-**Conclusão:** `v2.44.0` (a ponta atual) domina com 59,9% dos eventos, esperado já que a maior parte do volume é da sessão de hoje. A cauda longa de versões antigas (v1.8.x, v2.7–v2.41.x) reflete eventos históricos retidos dentro da janela de 20 dias, não instalações concorrentes. `desconhecida` (46 eventos, 3,1%) vem de eventos `install`/`update`/`agent_completed` capturados antes da versão ser resolvida — ver seção "Observações".
+| Posição | Versão | Eventos | % |
+|---|---|---|---|
+| 1 | **v2.44.0** | 891 | 60,0% |
+| 2 | v2.29.0 | 149 | 10,0% |
+| 3 | v1.8.2 | 111 | 7,5% |
+| 4 | v2.39.2 | 99 | 6,7% |
+| 5 | v1.8.1 | 46 | 3,1% |
+| 5 | *desconhecida* | 46 | 3,1% |
+| 7 | v2.31.0 | 19 | 1,3% |
+| 8 | v1.11.0 | 16 | 1,1% |
+| 9 | v2.15.1 | 10 | 0,7% |
+| 10 | v2.30.1 | 9 | 0,6% |
+
+**Conclusão:** `v2.44.0` (a ponta atual) domina com 60,0% dos eventos, esperado já que a maior parte do volume é da sessão de hoje. A cauda longa de versões antigas (v1.8.x, v2.7–v2.41.x) reflete eventos históricos retidos dentro da janela de 20 dias, não instalações concorrentes. `desconhecida` (46 eventos, 3,1%) vem de eventos `install`/`update`/`agent_completed` capturados antes da versão ser resolvida.
 
 ---
 
@@ -192,32 +174,44 @@ Total de tokens (input + output + cache_creation + cache_read) por agente, em or
 
 **Por dia da semana:**
 
-| Dia | Eventos |
-|---|---|
-| **Quarta-feira** | 1.032 |
-| Quinta-feira | 151 |
-| Sexta-feira | 137 |
-| Sábado | 47 |
-| Terça-feira | 47 |
-| Segunda-feira | 43 |
-| Domingo | 30 |
+| Dia | Eventos | % |
+|---|---|---|
+| **Quarta-feira** | 1.032 | 69,5% |
+| Quinta-feira | 151 | 10,2% |
+| Sexta-feira | 137 | 9,2% |
+| Sábado | 47 | 3,2% |
+| Terça-feira | 47 | 3,2% |
+| Segunda-feira | 43 | 2,9% |
+| Domingo | 30 | 2,0% |
 
 **Por hora do dia (UTC):**
 
-| Hora | Eventos | | Hora | Eventos |
-|---|---|---|---|---|
-| 00 | 49 | | 12 | 11 |
-| 01 | 231 | | 13 | 298 |
-| 02 | 93 | | 14 | 134 |
-| 03 | 28 | | 15 | 117 |
-| 04 | 17 | | 16 | 18 |
-| 05 | 1 | | 17 | 25 |
-| 06 | 9 | | 18 | 40 |
-| 07 | 14 | | 19 | 49 |
-| 08 | 0 | | 20 | 41 |
-| 09 | 0 | | 21 | 25 |
-| 10 | 188 | | 22 | 52 |
-| 11 | 14 | | 23 | 33 |
+| Hora | Eventos | % |
+|---|---|---|
+| **13** | **298** | **20,1%** |
+| **01** | **231** | **15,6%** |
+| **10** | **188** | **12,7%** |
+| 14 | 134 | 9,0% |
+| 15 | 117 | 7,9% |
+| 02 | 93 | 6,3% |
+| 22 | 52 | 3,5% |
+| 00 | 49 | 3,3% |
+| 19 | 49 | 3,3% |
+| 20 | 41 | 2,8% |
+| 18 | 40 | 2,7% |
+| 23 | 33 | 2,2% |
+| 03 | 28 | 1,9% |
+| 17 | 25 | 1,7% |
+| 21 | 25 | 1,7% |
+| 04 | 17 | 1,1% |
+| 16 | 18 | 1,2% |
+| 07 | 14 | 0,9% |
+| 11 | 14 | 0,9% |
+| 12 | 11 | 0,7% |
+| 06 | 9 | 0,6% |
+| 05 | 1 | 0,1% |
+| 08 | 0 | 0,0% |
+| 09 | 0 | 0,0% |
 
 **Conclusão:** ⚠️ fortemente enviesado pelo dia de hoje (2026-08-12, uma quarta-feira, contribuiu com 996 dos 1.484 eventos — ver a tendência diária na § 11). Os horários de pico, 13h e 01h UTC, correspondem a aproximadamente 10h e 22h em `America/Fortaleza` (UTC-3, a geografia dominante da § 6) — consistentes com um padrão de trabalho no final da noite e meio da manhã para esse único contribuidor. Trate o ranking por dia da semana como pouco confiável até o volume ficar mais distribuído ao longo de semanas.
 
@@ -291,45 +285,42 @@ Total de tokens (input + output + cache_creation + cache_read) por agente, em or
 
 ## 14. Comandos/agentes nunca usados no período
 
-Cruzando os nomes observados de `agent_completed` com o roster de agentes em `agents/*.md` (18 agentes no total):
+Cruzando os nomes observados de `agent_completed` com o roster de agentes em `agents/*.md` (18 agentes no total).
 
-**Agentes com zero conclusões nesta janela:** `database-specialist`, `mobile-developer`, `ui-ux-designer`, `seo-specialist`, `setup-assistant` (5 de 18 — nenhuma invocação registrada em 20 dias).
+**Agentes sem atividade nesta janela:**
 
-Cruzar os nomes observados de `command_invoked` com o roster de `scripts/lib/commands.json` (comandos `/devteam:*`) não é confiável aqui — apenas 6 dos ~25 comandos documentados dispararam na janela (`architect`, `push`, `status`, `sync-rules`, `pr`, `review`), o que significaria ~19 comandos com zero uso. Dada a ressalva da § 1 sobre o volume de `command_invoked` estar suspeitosamente baixo em relação a `agent_completed`, esta tabela **não** é confiável como sinal de adoção ainda e não foi detalhada mais — sinalizada como possível lacuna de instrumentação (ver Observações).
+| Agente | Conclusões |
+|---|---|
+| database-specialist | 0 |
+| mobile-developer | 0 |
+| ui-ux-designer | 0 |
+| seo-specialist | 0 |
+| setup-assistant | 0 |
 
----
+**Cobertura de comandos:**
 
-## Observações
-
-- **São dados de dogfood de um único desenvolvedor, não telemetria de base de usuários.** 98% dos eventos com geolocalização apontam para uma única cidade; trate todo ranking acima como "como o próprio mantenedor deste repo usou", não como adoção em escala.
-- **`command_invoked` sub-dispara em relação a `agent_completed`** (7 vs. 803 na mesma janela de 20 dias, mesmo com comandos rotineiramente disparando múltiplos agentes). Vale checar se a detecção de nome de comando em `scripts/hooks/pre-tool-use/02b-telemetry.sh` está perdendo caminhos de invocação (ex.: comandos executados sem a frase-gatilho esperada).
-- **`version: "desconhecida"` em 46 eventos** — a versão nem sempre é resolvida no momento da captura; vale checar se `state.json` é lido antes ou depois da escrita que está sendo reportada.
-- **Zero agentes cross-model**: todo agente usou exatamente um modelo para seu tier inteiro nesta janela, batendo com `tiers.json` sem desvio observado — bom sinal de consistência para o contrato tier→modelo descrito em `CLAUDE.md`.
-- **Eficiência de cache muito alta** (~2.275:1 cache-read para input) — o sistema de prompt-cache está carregando quase todo o reaproveitamento de contexto, comportamento pretendido, não um sinal de alerta.
-- **5 agentes com zero atividade** na janela (`database-specialist`, `mobile-developer`, `ui-ux-designer`, `seo-specialist`, `setup-assistant`) — esperado se nenhum trabalho correspondente (schema, mobile, design, SEO, onboarding de novo projeto) ocorreu em 20 dias, não necessariamente um defeito.
-- **2 eventos de teste manual (`__manual_verification_test__`, modelo `claude-sonnet-4-5`) e 1 evento malformado (`agent_name`/`model` nulos)** foram excluídos de todas as métricas de agente/modelo/token acima para não distorcer os rankings — ver o total ajustado no cabeçalho.
+| Métrica | Valor |
+|---|---|
+| Comandos documentados (`scripts/lib/commands.json`) | ~25 |
+| Comandos observados na janela | 6 (`architect`, `push`, `status`, `sync-rules`, `pr`, `review`) |
+| Amostra confiável para inferir cobertura | Não — volume de `command_invoked` (7 eventos) suspeitosamente baixo frente a `agent_completed` (803), ver § 1 |
 
 ---
 
 ## Resumo estruturado para leitura por LLMs
 
-Bloco denso e sem prosa, otimizado para parsing/ingestão por outro agente ou LLM. Todos os
-valores espelham as tabelas acima; nenhum dado novo é introduzido aqui.
-
 ```yaml
 relatorio:
-  titulo: "Metricas de uso PostHog — dev-team-agents"
+  titulo: "Metricas de uso DevTeam Agents — Ultimos 20 dias"
   janela:
     inicio_utc: "2026-07-23T18:17:25Z"
     fim_utc: "2026-08-12T15:44:41Z"
     dias: 20
   gerado_em: "2026-08-12"
-  fonte:
-    posthog_project_id: 430371
-    total_eventos: 1484
-    eventos_excluidos:
-      teste_manual: 2
-      malformados: 1
+  total_eventos: 1484
+  eventos_excluidos:
+    teste_manual: 2
+    malformados: 1
 
   ressalvas:
     - "Amostra de um unico desenvolvedor/maquina — nao representa base de usuarios."
@@ -354,26 +345,22 @@ relatorio:
     - {comando: "review", chamadas: 1}
 
   top_agentes_por_chamadas:
-    - {agente: "backend-developer", chamadas: 195}
-    - {agente: "frontend-developer", chamadas: 152}
-    - {agente: "software-architect", chamadas: 90}
-    - {agente: "security-specialist", chamadas: 73}
-    - {agente: "devops-specialist", chamadas: 71}
-    - {agente: "frontend-test-specialist", chamadas: 61}
-    - {agente: "backend-test-specialist", chamadas: 54}
-    - {agente: "test-author", chamadas: 45}
-    - {agente: "qa-specialist", chamadas: 13}
-    - {agente: "technical-writer", chamadas: 13}
-    - {agente: "code-reviewer", chamadas: 12}
-    - {agente: "product-analyst", chamadas: 12}
-    - {agente: "backend-reviewer", chamadas: 6}
-    - {agente: "frontend-reviewer", chamadas: 6}
+    - {agente: "backend-developer", chamadas: 195, percentual: 24.3}
+    - {agente: "frontend-developer", chamadas: 152, percentual: 18.9}
+    - {agente: "software-architect", chamadas: 90, percentual: 11.2}
+    - {agente: "security-specialist", chamadas: 73, percentual: 9.1}
+    - {agente: "devops-specialist", chamadas: 71, percentual: 8.8}
+    - {agente: "frontend-test-specialist", chamadas: 61, percentual: 7.6}
+    - {agente: "backend-test-specialist", chamadas: 54, percentual: 6.7}
+    - {agente: "test-author", chamadas: 45, percentual: 5.6}
+    - {agente: "qa-specialist", chamadas: 13, percentual: 1.6}
+    - {agente: "technical-writer", chamadas: 13, percentual: 1.6}
 
   modelos_por_provider:
     claude:
-      - {modelo: "claude-sonnet-5", chamadas: 570}
-      - {modelo: "claude-opus-5[1m]", chamadas: 175}
-      - {modelo: "claude-haiku-4-5-20251001", chamadas: 58}
+      - {modelo: "claude-sonnet-5", chamadas: 570, percentual: 71.0}
+      - {modelo: "claude-opus-5[1m]", chamadas: 175, percentual: 21.8}
+      - {modelo: "claude-haiku-4-5-20251001", chamadas: 58, percentual: 7.2}
 
   modelo_por_agente:
     backend-developer: "claude-sonnet-5"
@@ -399,67 +386,60 @@ relatorio:
     cache_read: 2183534418
     proporcao_cache_read_input: "~2275:1"
 
-  tokens_por_agente_total_desc:
-    - {agente: "backend-developer", total: 693294212, chamadas: 195}
-    - {agente: "frontend-developer", total: 388745340, chamadas: 152}
-    - {agente: "test-author", total: 371111987, chamadas: 45}
-    - {agente: "software-architect", total: 300079305, chamadas: 90}
-    - {agente: "security-specialist", total: 179515358, chamadas: 73}
-    - {agente: "frontend-test-specialist", total: 153399264, chamadas: 61}
-    - {agente: "devops-specialist", total: 116652699, chamadas: 71}
-    - {agente: "backend-test-specialist", total: 53496496, chamadas: 54}
-    - {agente: "qa-specialist", total: 32014392, chamadas: 13}
-    - {agente: "backend-reviewer", total: 19713773, chamadas: 6}
-    - {agente: "frontend-reviewer", total: 17017787, chamadas: 6}
-    - {agente: "technical-writer", total: 15180739, chamadas: 13}
-    - {agente: "product-analyst", total: 14784210, chamadas: 12}
-    - {agente: "code-reviewer", total: 11947029, chamadas: 12}
+  tokens_por_agente_total_desc_top10:
+    - {agente: "backend-developer", total: 693294212, percentual: 29.3, chamadas: 195}
+    - {agente: "frontend-developer", total: 388745340, percentual: 16.4, chamadas: 152}
+    - {agente: "test-author", total: 371111987, percentual: 15.7, chamadas: 45}
+    - {agente: "software-architect", total: 300079305, percentual: 12.7, chamadas: 90}
+    - {agente: "security-specialist", total: 179515358, percentual: 7.6, chamadas: 73}
+    - {agente: "frontend-test-specialist", total: 153399264, percentual: 6.5, chamadas: 61}
+    - {agente: "devops-specialist", total: 116652699, percentual: 4.9, chamadas: 71}
+    - {agente: "backend-test-specialist", total: 53496496, percentual: 2.3, chamadas: 54}
+    - {agente: "qa-specialist", total: 32014392, percentual: 1.4, chamadas: 13}
+    - {agente: "backend-reviewer", total: 19713773, percentual: 0.8, chamadas: 6}
 
-  tokens_por_agente_media_desc:
-    - {agente: "test-author", media: 8246933}
-    - {agente: "backend-developer", media: 3555354}
-    - {agente: "software-architect", media: 3334214}
-    - {agente: "backend-reviewer", media: 3285628}
-    - {agente: "frontend-reviewer", media: 2836297}
-    - {agente: "frontend-developer", media: 2557535}
-    - {agente: "frontend-test-specialist", media: 2514742}
-    - {agente: "qa-specialist", media: 2462645}
-    - {agente: "security-specialist", media: 2459114}
-    - {agente: "devops-specialist", media: 1642995}
-    - {agente: "product-analyst", media: 1232017}
-    - {agente: "technical-writer", media: 1167749}
-    - {agente: "code-reviewer", media: 995585}
-    - {agente: "backend-test-specialist", media: 990675}
+  tokens_por_agente_media_desc_top10:
+    - {agente: "test-author", media: 8246933, percentual: 22.1}
+    - {agente: "backend-developer", media: 3555354, percentual: 9.5}
+    - {agente: "software-architect", media: 3334214, percentual: 8.9}
+    - {agente: "backend-reviewer", media: 3285628, percentual: 8.8}
+    - {agente: "frontend-reviewer", media: 2836297, percentual: 7.6}
+    - {agente: "frontend-developer", media: 2557535, percentual: 6.9}
+    - {agente: "frontend-test-specialist", media: 2514742, percentual: 6.7}
+    - {agente: "qa-specialist", media: 2462645, percentual: 6.6}
+    - {agente: "security-specialist", media: 2459114, percentual: 6.6}
+    - {agente: "devops-specialist", media: 1642995, percentual: 4.4}
 
   geografia:
-    paises: [{nome: "Brasil", eventos: 1483}, {nome: "Franca", eventos: 1}]
-    estados: [{nome: "Ceara", eventos: 1460}, {nome: "Sao Paulo", eventos: 23}, {nome: "Ile-de-France", eventos: 1}]
-    cidades: [{nome: "Fortaleza", eventos: 1460}, {nome: "Bauru", eventos: 23}, {nome: "Aulnay-sous-Bois", eventos: 1}]
+    paises: [{nome: "Brasil", eventos: 1483, percentual: 99.9}, {nome: "Franca", eventos: 1, percentual: 0.1}]
+    estados: [{nome: "Ceara", eventos: 1460, percentual: 98.4}, {nome: "Sao Paulo", eventos: 23, percentual: 1.5}, {nome: "Ile-de-France", eventos: 1, percentual: 0.1}]
+    cidades: [{nome: "Fortaleza", eventos: 1460, percentual: 98.4}, {nome: "Bauru", eventos: 23, percentual: 1.5}, {nome: "Aulnay-sous-Bois", eventos: 1, percentual: 0.1}]
 
-  versoes_top:
-    - {versao: "v2.44.0", eventos: 891}
-    - {versao: "v2.29.0", eventos: 149}
-    - {versao: "v1.8.2", eventos: 111}
-    - {versao: "v2.39.2", eventos: 99}
-    - {versao: "v1.8.1", eventos: 46}
-    - {versao: "desconhecida", eventos: 46}
-    - {versao: "v2.31.0", eventos: 19}
+  versoes_top10:
+    - {versao: "v2.44.0", eventos: 891, percentual: 60.0}
+    - {versao: "v2.29.0", eventos: 149, percentual: 10.0}
+    - {versao: "v1.8.2", eventos: 111, percentual: 7.5}
+    - {versao: "v2.39.2", eventos: 99, percentual: 6.7}
+    - {versao: "v1.8.1", eventos: 46, percentual: 3.1}
+    - {versao: "desconhecida", eventos: 46, percentual: 3.1}
+    - {versao: "v2.31.0", eventos: 19, percentual: 1.3}
+    - {versao: "v1.11.0", eventos: 16, percentual: 1.1}
+    - {versao: "v2.15.1", eventos: 10, percentual: 0.7}
+    - {versao: "v2.30.1", eventos: 9, percentual: 0.6}
 
   uso_por_dia_semana_utc:
-    quarta: 1032
-    quinta: 151
-    sexta: 137
-    sabado: 47
-    terca: 47
-    segunda: 43
-    domingo: 30
+    quarta: {eventos: 1032, percentual: 69.5}
+    quinta: {eventos: 151, percentual: 10.2}
+    sexta: {eventos: 137, percentual: 9.2}
+    sabado: {eventos: 47, percentual: 3.2}
+    terca: {eventos: 47, percentual: 3.2}
+    segunda: {eventos: 43, percentual: 2.9}
+    domingo: {eventos: 30, percentual: 2.0}
 
-  uso_por_hora_utc_pico:
-    - {hora: 13, eventos: 298}
-    - {hora: 1, eventos: 231}
-    - {hora: 10, eventos: 188}
-    - {hora: 14, eventos: 134}
-    - {hora: 15, eventos: 117}
+  uso_por_hora_utc_top3:
+    - {hora: 13, eventos: 298, percentual: 20.1}
+    - {hora: 1, eventos: 231, percentual: 15.6}
+    - {hora: 10, eventos: 188, percentual: 12.7}
 
   instalacoes:
     first_install: 10
