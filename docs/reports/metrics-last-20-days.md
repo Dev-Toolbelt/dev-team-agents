@@ -188,30 +188,30 @@ Top 10.
 
 | Hora | Eventos | % |
 |---|---|---|
-| **13** | **298** | **20,1%** |
-| **01** | **231** | **15,6%** |
-| **10** | **188** | **12,7%** |
-| 14 | 134 | 9,0% |
-| 15 | 117 | 7,9% |
-| 02 | 93 | 6,3% |
-| 22 | 52 | 3,5% |
 | 00 | 49 | 3,3% |
-| 19 | 49 | 3,3% |
-| 20 | 41 | 2,8% |
-| 18 | 40 | 2,7% |
-| 23 | 33 | 2,2% |
+| **01** | **231** | **15,6%** |
+| 02 | 93 | 6,3% |
 | 03 | 28 | 1,9% |
-| 17 | 25 | 1,7% |
-| 21 | 25 | 1,7% |
 | 04 | 17 | 1,1% |
-| 16 | 18 | 1,2% |
-| 07 | 14 | 0,9% |
-| 11 | 14 | 0,9% |
-| 12 | 11 | 0,7% |
-| 06 | 9 | 0,6% |
 | 05 | 1 | 0,1% |
+| 06 | 9 | 0,6% |
+| 07 | 14 | 0,9% |
 | 08 | 0 | 0,0% |
 | 09 | 0 | 0,0% |
+| **10** | **188** | **12,7%** |
+| 11 | 14 | 0,9% |
+| 12 | 11 | 0,7% |
+| **13** | **298** | **20,1%** |
+| 14 | 134 | 9,0% |
+| 15 | 117 | 7,9% |
+| 16 | 18 | 1,2% |
+| 17 | 25 | 1,7% |
+| 18 | 40 | 2,7% |
+| 19 | 49 | 3,3% |
+| 20 | 41 | 2,8% |
+| 21 | 25 | 1,7% |
+| 22 | 52 | 3,5% |
+| 23 | 33 | 2,2% |
 
 **Conclusão:** ⚠️ fortemente enviesado pelo dia de hoje (2026-08-12, uma quarta-feira, contribuiu com 996 dos 1.484 eventos — ver a tendência diária na § 11). Os horários de pico, 13h e 01h UTC, correspondem a aproximadamente 10h e 22h em `America/Fortaleza` (UTC-3, a geografia dominante da § 6) — consistentes com um padrão de trabalho no final da noite e meio da manhã para esse único contribuidor. Trate o ranking por dia da semana como pouco confiável até o volume ficar mais distribuído ao longo de semanas.
 

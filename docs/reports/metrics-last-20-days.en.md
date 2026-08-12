@@ -188,30 +188,30 @@ Top 10.
 
 | Hour | Events | % |
 |---|---|---|
-| **13** | **298** | **20.1%** |
-| **01** | **231** | **15.6%** |
-| **10** | **188** | **12.7%** |
-| 14 | 134 | 9.0% |
-| 15 | 117 | 7.9% |
-| 02 | 93 | 6.3% |
-| 22 | 52 | 3.5% |
 | 00 | 49 | 3.3% |
-| 19 | 49 | 3.3% |
-| 20 | 41 | 2.8% |
-| 18 | 40 | 2.7% |
-| 23 | 33 | 2.2% |
+| **01** | **231** | **15.6%** |
+| 02 | 93 | 6.3% |
 | 03 | 28 | 1.9% |
-| 17 | 25 | 1.7% |
-| 21 | 25 | 1.7% |
 | 04 | 17 | 1.1% |
-| 16 | 18 | 1.2% |
-| 07 | 14 | 0.9% |
-| 11 | 14 | 0.9% |
-| 12 | 11 | 0.7% |
-| 06 | 9 | 0.6% |
 | 05 | 1 | 0.1% |
+| 06 | 9 | 0.6% |
+| 07 | 14 | 0.9% |
 | 08 | 0 | 0.0% |
 | 09 | 0 | 0.0% |
+| **10** | **188** | **12.7%** |
+| 11 | 14 | 0.9% |
+| 12 | 11 | 0.7% |
+| **13** | **298** | **20.1%** |
+| 14 | 134 | 9.0% |
+| 15 | 117 | 7.9% |
+| 16 | 18 | 1.2% |
+| 17 | 25 | 1.7% |
+| 18 | 40 | 2.7% |
+| 19 | 49 | 3.3% |
+| 20 | 41 | 2.8% |
+| 21 | 25 | 1.7% |
+| 22 | 52 | 3.5% |
+| 23 | 33 | 2.2% |
 
 **Takeaway:** ⚠️ heavily skewed by today (2026-08-12, a Wednesday, contributed 996 of 1,484 events — see the daily trend in § 11). The peak hours, 13h and 01h UTC, correspond to roughly 10am and 10pm in `America/Fortaleza` (UTC-3, the dominant geography from § 6) — consistent with a late-night and mid-morning work pattern for this single contributor. Treat the day-of-week ranking as unreliable until volume is more spread across weeks.
 
