@@ -60,9 +60,9 @@ known event vocabulary (from `PRIVACY.md`) is:
 All events also carry `$lib` (always `dev-team-agents`), `version`, `os`, and
 PostHog's own **geoip enrichment properties** (`$geoip_country_name`,
 `$geoip_subdivision_1_name` as state/region, `$geoip_city_name`) — these are derived
-server-side from the request IP, which is itself discarded at ingestion (see
-`PRIVACY.md` § "What we do NOT collect"), so no raw IP is ever exposed, only the
-resolved geography.
+server-side from the request IP. The PostHog project has `anonymize_ips` enabled (see
+`PRIVACY.md` § "What we do NOT collect"), so the raw IP is used only transiently by
+that transformation and is not persisted on the event — only the resolved geography is.
 
 Pull the full raw event set for the window (event name, timestamp, and all
 `properties.*` needed below) rather than pre-aggregating in the query, so all metrics
@@ -94,20 +94,39 @@ omitting the section silently.
 
 ### 5. Write the report
 
+**Write the entire report in Brazilian Portuguese (pt-BR)** — headers, table labels,
+takeaway sentences, and the Observations section. This is a standing requirement for
+this prompt, independent of the language used elsewhere in this repository (see
+`CLAUDE.md` § Language, which governs agent/skill/code content, not this
+user-facing analytical report).
+
 Create `docs/reports/metrics-last-[N]-days.md` (overwrite if it already exists for the
 same window) with this structure:
 
-- **Header**: report title, date range covered (explicit start/end dates), generation
-  timestamp, total event count, timezone used for time-based metrics.
+- **Header** (`Métricas de Uso PostHog — Últimos [N] Dias`): date range covered
+  (explicit start/end dates), generation timestamp, total event count, timezone used
+  for time-based metrics, PostHog project ID.
 - **One section per metric above**, each as a markdown table, ranked descending, with
-  a one-line takeaway sentence above or below the table (e.g. "X is the most-used
-  command, called N times, Y% of all command invocations").
-- **Closing "Observations" section**: 3-5 bullet points of notable patterns, anomalies,
+  a one-line "**Conclusão:**" sentence above or below the table (e.g. "X é o comando
+  mais usado, chamado N vezes, Y% de todas as invocações de comando").
+- **Closing "Observações" section**: 3-5 bullet points of notable patterns, anomalies,
   or gaps found (e.g. skewed adoption, unexpected model usage, a zero-usage command).
 - Use consistent, scannable formatting: tables over prose, bold on the top row of each
   ranking, no more than one paragraph of prose per section. Optimize for a human
-  skimming quickly and for an LLM re-reading it later as structured context — no
-  narrative fluff.
+  skimming quickly — no narrative fluff.
+
+### 5b. Add a machine-readable summary for LLMs
+
+Close the report with a final section titled `## Resumo estruturado para leitura por
+LLMs`, containing a single fenced ```yaml block that mirrors every metric already
+computed above — no prose, no new data, no metric that doesn't already have its own
+section. This block exists so another agent/LLM can ingest the report's numbers without
+re-parsing markdown tables. Structure it as nested keys matching the report's own
+sections (e.g. `top_agentes_por_chamadas`, `tokens_por_agente_total_desc`,
+`geografia`, `eficiencia_cache`, `achado_seguranca_privacidade` when applicable), using
+short pt-BR or transliterated (accent-free) keys for maximum parser compatibility.
+Include an `achado_seguranca_privacidade` or similarly-named entry only when this run
+actually surfaced a privacy/security finding worth flagging — do not fabricate one.
 
 ### 6. Do not leak the key
 
