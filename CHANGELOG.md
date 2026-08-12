@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.43.0] - 2026-08-11
+
+### Added
+- **`agent_completed` telemetry event**: queues per-agent token usage and the actually resolved model (not the `tiers.json` config) at Stop time. `scripts/hooks/lib/agent-usage.sh` incrementally scans the session transcript for `Agent` tool_use/toolUseResult pairs (same byte-offset-cache technique as the disabled notifier hook) and sums usage from each agent's own output file. Dedup is by transcript offset rather than confirmed agent completion, since the parent transcript's `toolUseResult` was never observed transitioning out of `async_launched` — a still-writing agent is undercounted and not retried later, a documented tradeoff rather than unverified completion detection. `effort` is intentionally not collected: no empirical evidence it is exposed anywhere in the transcript.
+- **`ingestion-api` skill**: new architecture skill wired into `backend-developer`, `database-specialist`, `devops-specialist`, and `software-architect`.
+- **`sse-streaming` skill**: new skill with Server-Sent Events guidance, wired into `backend-developer`, `backend-reviewer`, `frontend-developer`, and `software-architect`.
+- **HTTP client connection pooling guidance** added to the `resilience` skill, referenced from `backend-developer`.
+- **Generic WebSocket best practices** documented in the `realtime` skill's implementation reference.
+- **Provider embeddings/RAG comparison reference** added to the `llm-integration` skill.
+
+### Changed
+- **Re-enabled the `PreToolUse` telemetry queue and `Stop` telemetry flush hooks** (`02b-telemetry.sh`, `05-telemetry.sh`), disabled since 2026-08-06 pending review. `agent_spawned`, `command_invoked`, and `session_end` are collected again for any installation with `telemetry: true` — installations that already had it enabled do not need to re-consent, since `telemetry`/`auto_update` are never backfilled to `false` once explicitly set to `true`. `PRIVACY.md` and `CLAUDE-md/hooks.md` updated to match; both files now document the two hooks' coupling — re-enable together, never one alone, or events queue with nothing to flush them (or vice versa).
+
+### Fixed
+- **Telemetry queue was cleared even when delivery to PostHog failed**: `telemetry-send.sh`'s flush swallowed `curl`/`wget`'s exit status and unconditionally cleared the queue and bumped `last_flush` afterward, so a network failure during flush silently discarded events that were never actually sent. The real exit status is now captured, and the queue is only cleared on confirmed delivery.
+- **Telemetry doc/behavior drift and a few robustness gaps**: `PRIVACY.md` documented three events (`agent_spawned`, `command_invoked`, `session_end`) that weren't being collected at the time because their hooks were disabled; `scripts/lib/telemetry-guard.sh` interpolated the preferences path directly into a Python source string instead of passing it as an argument; the anonymous install ID lived only in `telemetry-queue.json` and was regenerated if that file was ever lost. Guard now reads the path via `sys.argv`; the ID is persisted in `state.json` with the queue file kept as a fallback for existing installs.
+
 ## [2.42.0] - 2026-08-11
 
 ### Added
