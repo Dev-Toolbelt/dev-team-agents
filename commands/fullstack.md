@@ -15,21 +15,24 @@ If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-g
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-Phase 1 — spawn in parallel:
-- `backend-developer` — implement server-side changes
-- `frontend-developer` — implement client-side changes
-- `database-specialist` — handle schema, migrations, queries (spawn only if the task involves database changes)
-- `ui-ux-designer` — design system and visual decisions (spawn only if the task involves visual design or UX decisions)
-- `seo-specialist` — SEO quality gate (spawn when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md` — public site, landing page, e-commerce, blog, or any indexable surface)
+**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
 
-Phase 2 — Tests (conditional) — spawn per track, not as a single barrier:
+**Frontend track** — always test-after, regardless of the gate below (visual/UX work does not benefit from test-first):
+- Phase 1 — spawn `frontend-developer` (implement client-side changes), `ui-ux-designer` (if visual/UX decisions are involved), `seo-specialist` (if the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md`)
+- Phase 2 — if `TESTS_REQUIRED=yes` (or absent), spawn `frontend-test-specialist` after `frontend-developer`/`ui-ux-designer`/`seo-specialist` complete
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialists below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
+**Backend track:**
 
-- `backend-test-specialist` — tests for backend changes; spawn as soon as `backend-developer` (and `database-specialist`, if it ran) complete — do not wait on the frontend track
-- `frontend-test-specialist` — tests for frontend changes; spawn as soon as `frontend-developer` (and `ui-ux-designer`/`seo-specialist`, if they ran) complete — do not wait on the backend track
+**If `TESTS_REQUIRED=no`:** Phase 1 — spawn `backend-developer` (+ `database-specialist` if DB changes are involved), in parallel with the frontend track above. Skip straight to Phase 3.
 
-Each test-specialist has no data dependency on the other track's output, so its own Phase-1 completion is the only gate — the two may run in parallel with each other and even overlap with a still-running Phase 1 agent on the other track.
+**If `TESTS_REQUIRED=yes` (or absent) AND the task links a spec (`docs/specs/<feature>.md`):** follow the loaded spec-gate skill's § Test-First Derivation — test-first, not test-after, for this track only:
+- Phase 1a — spawn `backend-test-specialist` alone: derive failing tests from the spec's Given/When/Then, commit them red.
+- Phase 1b — after Phase 1a completes, spawn `backend-developer` (+ `database-specialist` if DB changes are involved) to implement until the derived tests are green plus the rest of its scope.
+- This track's ordering does not block the frontend track — the two run independently in parallel.
+
+**If `TESTS_REQUIRED=yes` but no spec is linked:** Phase 1 — spawn `backend-developer` (+ `database-specialist` if DB changes are involved), in parallel with the frontend track. Phase 2 — spawn `backend-test-specialist` after Phase 1 completes.
+
+Each test-specialist has no data dependency on the other track's output — the two may run in parallel with each other and even overlap with a still-running agent on the other track.
 
 ## Phase 3 — Mandatory review handoff (automatic)
 

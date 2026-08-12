@@ -70,6 +70,17 @@ on" is not a valid end state at any severity — this holds even when the assump
 correct.
 </HARD-GATE>
 
+## Test-First Derivation (mechanical, not requested)
+
+When a command's test gate resolves to running tests (`TESTS_REQUIRED=yes` or the key absent) **and** the task links a spec, tests are written **before** the implementing developer agent runs, not after:
+
+1. The test-specialist (`backend-test-specialist` / `frontend-test-specialist`) reads the spec's `Given/When/Then` blocks — the same ones the developer will treat as the implementation boundary — and writes one failing test per criterion. No implementation exists yet; these tests assert against the interface described in the spec (and contract, if one exists), not against code.
+2. These tests are expected to fail (red) — that is the point. Commit them as-is; do not adjust assertions to make them pass against a stub.
+3. Only after the red tests exist does the developer agent implement, iterating until every derived test is green plus the rest of its own scope.
+4. If a `Given/When/Then` block cannot be turned into a concrete assertion (the criterion is genuinely ambiguous about expected output, not just under-specified on an edge case), that is the `<HARD-GATE>` in Scope Lock firing early — stop and ask, do not write a vague or tautological test to move forward.
+
+This does not replace the Scope Lock rule above — the developer still treats the spec as the boundary — it only moves the test-specialist's read of the spec to before the code instead of after. Commands without a linked spec, or with `TESTS_REQUIRED=no`, are unaffected and keep the existing test-after order.
+
 ## QA Validation
 
 `qa-specialist` validates behavior against the linked spec's `Given/When/Then` blocks — the same

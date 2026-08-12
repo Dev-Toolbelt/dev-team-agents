@@ -15,14 +15,24 @@ If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-g
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-Phase 1 — spawn in parallel:
+**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+
+**If `TESTS_REQUIRED=no`:** Phase 1 — spawn in parallel:
 - `backend-developer` — implement the backend changes
 - `database-specialist` — handle schema, migrations, and queries (spawn only if the task involves database changes)
 
-Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
+Skip straight to Phase 3.
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
+**If `TESTS_REQUIRED=yes` (or the key is absent — default to running tests) AND the task links a spec (`docs/specs/<feature>.md`):** follow the loaded spec-gate skill's § Test-First Derivation — this is test-first, not test-after:
 
+- Phase 1a — spawn `backend-test-specialist` alone: derive failing tests from the spec's Given/When/Then, commit them red.
+- Phase 1b — after Phase 1a completes, spawn `backend-developer` (+ `database-specialist` if DB changes are involved) to implement until the derived tests are green plus the rest of its scope.
+
+**If `TESTS_REQUIRED=yes` but no spec is linked:** Phase 1 — spawn in parallel:
+- `backend-developer` — implement the backend changes
+- `database-specialist` — handle schema, migrations, and queries (spawn only if the task involves database changes)
+
+Phase 2 — spawn after Phase 1 completes:
 - `backend-test-specialist` — write or update tests for the implemented changes
 
 ## Phase 3 — Mandatory review handoff (automatic)

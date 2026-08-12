@@ -9,25 +9,28 @@ Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $A
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
-If the bug links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — treat its Given/When/Then as the fix boundary and ask rather than assume when something isn't covered.
+If the bug links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — treat its Given/When/Then as the fix boundary and ask rather than assume when something isn't covered. This also loads its § Test-First Derivation rule, used below.
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-Phase 1 — spawn based on where the bug lives (in parallel if both apply):
+**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+
+**If `TESTS_REQUIRED=no`:** Phase 1 — spawn based on where the bug lives (in parallel if both apply):
 - `backend-developer` — fix backend issues (spawn if the bug is in server-side code)
 - `frontend-developer` — fix frontend issues (spawn if the bug is in client-side code)
+- `mobile-developer` — diagnose and fix bugs in mobile-specific code (spawn if the bug is in mobile code: ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart)
 
-Also spawn if the bug is in mobile code (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
-- `mobile-developer` — diagnose and fix bugs in mobile-specific code (React Native, Flutter, native iOS/Android)
+Skip tests entirely.
 
-Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
+**If `TESTS_REQUIRED=yes` (or the key is absent — default to running tests):** test-first — a failing regression test is written before the fix, per track:
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist(s) below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely**.
-
-- `backend-test-specialist` — add or update tests to cover the fix (spawn if backend was touched)
-- `frontend-test-specialist` — add or update tests to cover the fix (spawn if frontend was touched)
+- Phase 1a — spawn the test-specialist(s) for the touched track(s) (`backend-test-specialist` and/or `frontend-test-specialist`) to write a test that reproduces the bug and fails against the current (broken) code. Derive the repro from the bug description in `$ARGUMENTS` as an implicit Given (repro state) / When (triggering action) / Then (expected correct behavior) — or from the linked spec's Given/When/Then if one exists, per the loaded skill's Test-First Derivation rule. If the expected correct behavior is ambiguous from the description alone, stop and ask via `AskUserQuestion` rather than guessing an assertion.
+- Phase 1b — after Phase 1a's tests are committed red, spawn the matching developer agent(s) in parallel to fix the bug until those tests (and the rest of the suite) are green:
+  - `backend-developer` (if backend was touched)
+  - `frontend-developer` (if frontend was touched)
+  - `mobile-developer` (if mobile was touched — same detection signals as above)
 
 ---
 
