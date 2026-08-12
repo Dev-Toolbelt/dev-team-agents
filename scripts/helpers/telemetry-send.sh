@@ -254,7 +254,10 @@ PYEOF
         return 0
     fi
 
-    # Send to PostHog (silent on network failure)
+    # Send to PostHog. Exit status is captured (not swallowed) so a network
+    # failure leaves the queue untouched below instead of discarding events
+    # that were never actually delivered.
+    local send_ok=1
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL \
             --connect-timeout 5 \
@@ -263,19 +266,24 @@ PYEOF
             -H "Content-Type: application/json" \
             -d "$payload" \
             "${POSTHOG_ENDPOINT}/batch/" \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1
+        send_ok=$?
     elif command -v wget >/dev/null 2>&1; then
         wget -qO- \
             --timeout=10 \
             --post-data="$payload" \
             --header="Content-Type: application/json" \
             "${POSTHOG_ENDPOINT}/batch/" \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1
+        send_ok=$?
     else
         return 0
     fi
 
-    # Update last_flush timestamp and clear sent events
+    [ "$send_ok" -eq 0 ] || return 0
+
+    # Update last_flush timestamp and clear sent events — only reached on
+    # confirmed delivery (send_ok=0 above)
     python3 - "$QUEUE_FILE" <<'PYEOF'
 import sys, json, time
 
