@@ -16,7 +16,10 @@ esac
 
 # Pull the command string out of tool_input.command without a JSON parser —
 # consistent with 02-graphify-hint.sh's pure-bash approach on the hot path.
-COMMAND=$(printf '%s' "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' | head -1)
+# Greedy match to "...\?"$ so a command wrapped in nested quotes
+# (docker exec ... sh -c "pnpm test:run") is captured whole instead of being
+# cut at the first embedded double quote.
+COMMAND=$(printf '%s' "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*[,}].*/\1/p' | head -1)
 [ -n "$COMMAND" ] || exit 0
 
 # Each pattern below is a command shape with NO scope qualifier (no path,
@@ -27,6 +30,14 @@ is_full_suite() {
     case "$cmd" in
         *jest*)
             [[ "$cmd" != *--findRelatedTests* && "$cmd" != *.test.* && "$cmd" != *.spec.* ]] && return 0 ;;
+    esac
+    case "$cmd" in
+        *vitest*)
+            [[ "$cmd" != *--related* && "$cmd" != *.test.* && "$cmd" != *.spec.* && "$cmd" != *-t\ * && "$cmd" != *--testNamePattern* ]] && return 0 ;;
+    esac
+    case "$cmd" in
+        *pnpm\ test*|*npm\ test*|*npm\ run\ test*|*yarn\ test*|*bun\ test*)
+            [[ "$cmd" != *.test.* && "$cmd" != *.spec.* && "$cmd" != *--\ * && "$cmd" != *-t\ * && "$cmd" != *--filter* && "$cmd" != *--related* && "$cmd" != *--findRelatedTests* ]] && return 0 ;;
     esac
     case "$cmd" in
         *pytest*)
