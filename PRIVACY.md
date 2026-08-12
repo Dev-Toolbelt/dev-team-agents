@@ -61,7 +61,9 @@ All events also include:
 - Agent conversation content or prompts
 - Project names, repository names, or branch names
 - Your username, email address, or any personal identifier
-- IP addresses (stripped at the PostHog ingestion layer)
+- IP addresses — PostHog's `anonymize_ips` project setting is enabled, so the client IP
+  is used only transiently by transformations like GeoIP enrichment and then discarded;
+  it is not stored with the event.
 
 ---
 
