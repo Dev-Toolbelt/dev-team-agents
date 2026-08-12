@@ -15,6 +15,7 @@
   "worktree_active": true,
   "worktree_base_branch": null,
   "worktree_commit_action": "ask",
+  "auto_learn_before_commit": true,
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,

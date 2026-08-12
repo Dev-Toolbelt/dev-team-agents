@@ -12,7 +12,11 @@ Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for
 
 ## Step 0 — Auto knowledge capture
 
-Before inspecting staged changes, run `/devteam:learn` automatically unless `$ARGUMENTS` contains `--skip-learn` or the user explicitly asked to skip it. Run its Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", continue immediately.
+Skip this step entirely if `$ARGUMENTS` contains `--skip-learn`, the user explicitly asked to skip it, or `auto_learn_before_commit` in `.dev-team-agents/user-data/preferences.json` is `false` (default: `true`).
+
+**Session guard.** Before re-running the learn evidence gathering, check `.dev-team-agents/.learn-last-run` (format: `<unix-timestamp> <head-sha>`). Compare its `<head-sha>` against the current `git rev-parse HEAD`, and its timestamp against the mtime of `.dev-team-agents/user-data/session-summary.md`. If HEAD hasn't moved and the session summary hasn't changed since that run, skip straight to Step 1 of this command — nothing new exists to capture.
+
+Otherwise, run `/devteam:learn` Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", continue immediately.
 
 ---
 

@@ -150,7 +150,7 @@ Always create:
 
 ### Step 7 — Update .gitignore
 
-`install.sh` handles this automatically. Verify three entries exist and add any that are missing: `.dev-team-agents/user-data/` (whole directory), `!.dev-team-agents/user-data/graphify.json` (exception — keep the graphify config tracked), and `.dev-team-agents/.worktree-session`.
+`install.sh` handles this automatically. Verify four entries exist and add any that are missing: `.dev-team-agents/user-data/` (whole directory), `!.dev-team-agents/user-data/graphify.json` (exception — keep the graphify config tracked), `.dev-team-agents/.worktree-session`, and `.dev-team-agents/.learn-last-run`.
 
 Remove legacy per-file entries under `.dev-team-agents/user-data/` if present (`session-summary.md`, `.auto-update`, or any of the eight pre-consolidation state dotfiles — `.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`) — the directory entry supersedes them, and `state_migrate_legacy` (`scripts/lib/state.sh`) already folds any leftover dotfile's value into `state.json` automatically.
 

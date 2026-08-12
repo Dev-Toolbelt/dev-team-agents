@@ -71,9 +71,7 @@ Before spawning any agent, present the classified findings as a plan:
 
 ### Commit plan (auto-committed after execution)
 
-This command commits the knowledge-base updates automatically once the agents finish.
-Declare the commits up front — group the proposed updates by layer/type so each commit
-is atomic and conventional:
+This command commits the knowledge-base updates automatically once the agents finish. Declare the commits up front — group the proposed updates by layer/type so each commit is atomic and conventional:
 
 | Commit # | Type & scope | Files | Message |
 |----------|--------------|-------|---------|
@@ -93,7 +91,7 @@ If **nothing to update** was determined: output exactly:
 Nothing to capture — session knowledge is already up to date.
 ```
 
-Then stop.
+Record the run marker (see Step 4) and stop.
 
 ## Step 4 — Execute (after user approval)
 
@@ -164,6 +162,8 @@ Reuse rule candidates identified this session:
 
 For each confirmed row, output: "Catalogado em docs/development/reuse-guidelines.md — regra <name> (<type>)."
 ```
+
+Record the run marker (any outcome): `echo "$(git log -1 --format=%ct 2>/dev/null || date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — lets `/devteam:commit`'s session guard skip re-gathering evidence.
 
 ## Step 5 — Auto-commit
 

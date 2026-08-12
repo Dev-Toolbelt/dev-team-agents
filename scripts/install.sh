@@ -775,9 +775,10 @@ _add_gitignore ".dev-team-agents/user-data/"
 _add_gitignore "!.dev-team-agents/user-data/graphify.json"
 _add_gitignore ".dev-team-agents/user-data/credentials.local.json"
 _add_gitignore ".dev-team-agents/.worktree-session"
+_add_gitignore ".dev-team-agents/.learn-last-run"
 _add_gitignore ".worktrees/"
 
-echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + worktrees dir)"
+echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + learn-last-run + worktrees dir)"
 
 # ── Step 10b: Ensure project .gitattributes enforces LF for shell scripts ─────
 # Prevents Windows Git (core.autocrlf=true) from converting hook scripts to
