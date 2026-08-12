@@ -78,7 +78,7 @@ below can be computed from one consistent dataset.
 6. **Ranking de país, estado e cidade** — from `$geoip_country_name`, `$geoip_subdivision_1_name`, `$geoip_city_name`, each ranked by event count.
 7. **Ranking das versões usadas no período** — group all events by `properties.version`, ranked desc.
 8. **Lista de modelos utilizados agrupada por agente** — for each agent name, the distinct set of models it invoked (and their counts), to spot agents calling unexpected models.
-9. **Dias e horários de maior uso** — event count by day-of-week and by hour-of-day (use event `timestamp`, convert to a stated timezone — default UTC, note it explicitly in the report), to identify usage patterns.
+9. **Dias e horários de maior uso** — event count by day-of-week and by hour-of-day (use event `timestamp`, converted to **`America/Sao_Paulo`**), to identify usage patterns.
 
 **Suggested additional metrics** (include unless the user says otherwise):
 
@@ -103,6 +103,10 @@ user-facing analytical report).
 Create `docs/reports/metrics-last-[N]-days.md` (overwrite if it already exists for the
 same window) with this structure:
 
+- **Timezone:** convert every timestamp used anywhere in the report — the window's
+  start/end dates in the header, the daily-volume breakdown, and the day-of-week/
+  hour-of-day breakdown — to **`America/Sao_Paulo`**. State this explicitly in the
+  header. Do not mix UTC and `America/Sao_Paulo` values in the same report.
 - **Header** (`Métricas de Uso PostHog — Últimos [N] Dias`): date range covered
   (explicit start/end dates), generation timestamp, total event count, timezone used
   for time-based metrics, PostHog project ID.

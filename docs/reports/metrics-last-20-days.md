@@ -1,8 +1,8 @@
 # Métricas de Uso DevTeam Agents — Últimos 20 Dias
 
-**Janela:** 2026-07-23 18:17 UTC → 2026-08-12 15:44 UTC (20 dias)
+**Janela:** 2026-07-23 15:17 → 2026-08-12 12:44, horário de `America/Sao_Paulo` (20 dias)
 **Gerado em:** 2026-08-12
-**Fuso horário usado nas métricas de tempo:** UTC
+**Fuso horário usado nas métricas de tempo:** `America/Sao_Paulo` (UTC-3)
 **Total de eventos na janela:** 1.484 (2 eventos manuais de teste `__manual_verification_test__` e 1 evento malformado com `agent_name`/`model` nulos excluídos de 1.487 linhas brutas)
 
 ---
@@ -170,50 +170,50 @@ Top 10.
 
 ---
 
-## 9. Dias e horários de maior uso (UTC)
+## 9. Dias e horários de maior uso (`America/Sao_Paulo`)
 
 **Por dia da semana:**
 
 | Dia | Eventos | % |
 |---|---|---|
-| **Quarta-feira** | 1.032 | 69,5% |
-| Quinta-feira | 151 | 10,2% |
-| Sexta-feira | 137 | 9,2% |
-| Sábado | 47 | 3,2% |
-| Terça-feira | 47 | 3,2% |
-| Segunda-feira | 43 | 2,9% |
-| Domingo | 30 | 2,0% |
+| **Quarta-feira** | 770 | 51,9% |
+| Terça-feira | 318 | 21,4% |
+| Quinta-feira | 176 | 11,9% |
+| Sexta-feira | 115 | 7,7% |
+| Segunda-feira | 46 | 3,1% |
+| Domingo | 31 | 2,1% |
+| Sábado | 28 | 1,9% |
 
-**Por hora do dia (UTC):**
+**Por hora do dia:**
 
 | Hora | Eventos | % |
 |---|---|---|
-| 00 | 49 | 3,3% |
-| **01** | **231** | **15,6%** |
-| 02 | 93 | 6,3% |
-| 03 | 28 | 1,9% |
-| 04 | 17 | 1,1% |
-| 05 | 1 | 0,1% |
-| 06 | 9 | 0,6% |
-| 07 | 14 | 0,9% |
-| 08 | 0 | 0,0% |
-| 09 | 0 | 0,0% |
-| **10** | **188** | **12,7%** |
-| 11 | 14 | 0,9% |
-| 12 | 11 | 0,7% |
-| **13** | **298** | **20,1%** |
-| 14 | 134 | 9,0% |
-| 15 | 117 | 7,9% |
-| 16 | 18 | 1,2% |
-| 17 | 25 | 1,7% |
-| 18 | 40 | 2,7% |
-| 19 | 49 | 3,3% |
-| 20 | 41 | 2,8% |
-| 21 | 25 | 1,7% |
-| 22 | 52 | 3,5% |
-| 23 | 33 | 2,2% |
+| 00 | 28 | 1,9% |
+| 01 | 17 | 1,1% |
+| 02 | 1 | 0,1% |
+| 03 | 9 | 0,6% |
+| 04 | 14 | 0,9% |
+| 05 | 0 | 0,0% |
+| 06 | 0 | 0,0% |
+| **07** | **188** | **12,7%** |
+| 08 | 14 | 0,9% |
+| 09 | 11 | 0,7% |
+| **10** | **298** | **20,1%** |
+| 11 | 134 | 9,0% |
+| 12 | 117 | 7,9% |
+| 13 | 18 | 1,2% |
+| 14 | 25 | 1,7% |
+| 15 | 40 | 2,7% |
+| 16 | 49 | 3,3% |
+| 17 | 41 | 2,8% |
+| 18 | 25 | 1,7% |
+| 19 | 52 | 3,5% |
+| 20 | 33 | 2,2% |
+| 21 | 46 | 3,1% |
+| **22** | **231** | **15,6%** |
+| 23 | 93 | 6,3% |
 
-**Conclusão:** ⚠️ fortemente enviesado pelo dia de hoje (2026-08-12, uma quarta-feira, contribuiu com 996 dos 1.484 eventos — ver a tendência diária na § 11). Os horários de pico, 13h e 01h UTC, correspondem a aproximadamente 10h e 22h em `America/Fortaleza` (UTC-3, a geografia dominante da § 6) — consistentes com um padrão de trabalho no final da noite e meio da manhã para esse único contribuidor. Trate o ranking por dia da semana como pouco confiável até o volume ficar mais distribuído ao longo de semanas.
+**Conclusão:** ⚠️ fortemente enviesado pelo dia de hoje (2026-08-12, uma quarta-feira, contribuiu com 719 dos 1.484 eventos — ver a tendência diária na § 11). Os horários de pico em `America/Sao_Paulo`, 10h, 22h e 07h, consistentes com um padrão de trabalho no final da noite e meio da manhã para esse único contribuidor. Trate o ranking por dia da semana como pouco confiável até o volume ficar mais distribuído ao longo de semanas.
 
 ---
 
@@ -229,33 +229,33 @@ Top 10.
 
 ---
 
-## 11. Volume de eventos por dia
+## 11. Volume de eventos por dia (`America/Sao_Paulo`)
 
-| Data | Eventos |
-|---|---|
-| 2026-07-23 | 28 |
-| 2026-07-24 | 93 |
-| 2026-07-25 | 37 |
-| 2026-07-26 | 19 |
-| 2026-07-27 | 6 |
-| 2026-07-28 | 22 |
-| 2026-07-29 | 2 |
-| 2026-07-30 | 4 |
-| 2026-07-31 | 7 |
-| 2026-08-01 | 4 |
-| 2026-08-02 | 8 |
-| 2026-08-03 | 30 |
-| 2026-08-04 | 11 |
-| 2026-08-05 | 31 |
-| 2026-08-06 | 119 |
-| 2026-08-07 | 37 |
-| 2026-08-08 | 6 |
-| 2026-08-09 | 3 |
-| 2026-08-10 | 7 |
-| 2026-08-11 | 14 |
-| **2026-08-12** | **996** |
+| Data | Eventos | % |
+|---|---|---|
+| 2026-07-23 | 39 | 2,6% |
+| 2026-07-24 | 103 | 6,9% |
+| 2026-07-25 | 18 | 1,2% |
+| 2026-07-26 | 18 | 1,2% |
+| 2026-07-27 | 5 | 0,3% |
+| 2026-07-28 | 22 | 1,5% |
+| 2026-07-29 | 4 | 0,3% |
+| 2026-07-30 | 2 | 0,1% |
+| 2026-07-31 | 7 | 0,5% |
+| 2026-08-01 | 4 | 0,3% |
+| 2026-08-02 | 9 | 0,6% |
+| 2026-08-03 | 34 | 2,3% |
+| 2026-08-04 | 6 | 0,4% |
+| 2026-08-05 | 47 | 3,2% |
+| 2026-08-06 | 135 | 9,1% |
+| 2026-08-07 | 5 | 0,3% |
+| 2026-08-08 | 6 | 0,4% |
+| 2026-08-09 | 4 | 0,3% |
+| 2026-08-10 | 7 | 0,5% |
+| 2026-08-11 | 290 | 19,5% |
+| **2026-08-12** | **719** | **48,4%** |
 
-**Conclusão:** a janela é dominada pelo dia atual (67,1% do volume total) — consistente com este relatório sendo gerado no meio da sessão de 2026-08-12. Excluindo hoje, 2026-08-06 (119) e 2026-07-24 (93) foram os dias de maior volume seguintes.
+**Conclusão:** a janela é dominada pelo dia atual (48,4% do volume total) — consistente com este relatório sendo gerado no meio da sessão de 2026-08-12. Excluindo hoje, 2026-08-11 (290, arraste de eventos que caem cedo em UTC mas ainda no dia anterior em `America/Sao_Paulo`) e 2026-08-06 (135) foram os dias de maior volume seguintes.
 
 ---
 
@@ -313,9 +313,10 @@ Cruzando os nomes observados de `agent_completed` com o roster de agentes em `ag
 relatorio:
   titulo: "Metricas de uso DevTeam Agents — Ultimos 20 dias"
   janela:
-    inicio_utc: "2026-07-23T18:17:25Z"
-    fim_utc: "2026-08-12T15:44:41Z"
+    inicio_america_sao_paulo: "2026-07-23T15:17:25-03:00"
+    fim_america_sao_paulo: "2026-08-12T12:44:41-03:00"
     dias: 20
+    timezone: "America/Sao_Paulo"
   gerado_em: "2026-08-12"
   total_eventos: 1484
   eventos_excluidos:
@@ -325,7 +326,7 @@ relatorio:
   ressalvas:
     - "Amostra de um unico desenvolvedor/maquina — nao representa base de usuarios."
     - "command_invoked com volume muito baixo (7) frente a agent_completed (803) — possivel lacuna de instrumentacao."
-    - "67% do volume total concentrado no dia de geracao do relatorio (2026-08-12)."
+    - "48% do volume total concentrado no dia de geracao do relatorio (2026-08-12, America/Sao_Paulo)."
     - "Ranking por dia da semana pouco confiavel devido ao pico do dia atual."
 
   contagem_por_tipo_evento:
@@ -427,19 +428,19 @@ relatorio:
     - {versao: "v2.15.1", eventos: 10, percentual: 0.7}
     - {versao: "v2.30.1", eventos: 9, percentual: 0.6}
 
-  uso_por_dia_semana_utc:
-    quarta: {eventos: 1032, percentual: 69.5}
-    quinta: {eventos: 151, percentual: 10.2}
-    sexta: {eventos: 137, percentual: 9.2}
-    sabado: {eventos: 47, percentual: 3.2}
-    terca: {eventos: 47, percentual: 3.2}
-    segunda: {eventos: 43, percentual: 2.9}
-    domingo: {eventos: 30, percentual: 2.0}
+  uso_por_dia_semana_america_sao_paulo:
+    quarta: {eventos: 770, percentual: 51.9}
+    terca: {eventos: 318, percentual: 21.4}
+    quinta: {eventos: 176, percentual: 11.9}
+    sexta: {eventos: 115, percentual: 7.7}
+    segunda: {eventos: 46, percentual: 3.1}
+    domingo: {eventos: 31, percentual: 2.1}
+    sabado: {eventos: 28, percentual: 1.9}
 
-  uso_por_hora_utc_top3:
-    - {hora: 13, eventos: 298, percentual: 20.1}
-    - {hora: 1, eventos: 231, percentual: 15.6}
-    - {hora: 10, eventos: 188, percentual: 12.7}
+  uso_por_hora_america_sao_paulo_top3:
+    - {hora: 10, eventos: 298, percentual: 20.1}
+    - {hora: 22, eventos: 231, percentual: 15.6}
+    - {hora: 7, eventos: 188, percentual: 12.7}
 
   instalacoes:
     first_install: 10

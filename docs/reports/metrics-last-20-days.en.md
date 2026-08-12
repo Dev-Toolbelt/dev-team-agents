@@ -1,8 +1,8 @@
 # DevTeam Agents Usage Metrics — Last 20 Days
 
-**Window:** 2026-07-23 18:17 UTC → 2026-08-12 15:44 UTC (20 days)
+**Window:** 2026-07-23 15:17 → 2026-08-12 12:44, `America/Sao_Paulo` time (20 days)
 **Generated at:** 2026-08-12
-**Timezone used for time-based metrics:** UTC
+**Timezone used for time-based metrics:** `America/Sao_Paulo` (UTC-3)
 **Total events in window:** 1,484 (2 manual test events `__manual_verification_test__` and 1 malformed event with null `agent_name`/`model` excluded from 1,487 raw rows)
 
 ---
@@ -170,50 +170,50 @@ Top 10.
 
 ---
 
-## 9. Busiest days and hours (UTC)
+## 9. Busiest days and hours (`America/Sao_Paulo`)
 
 **By day of week:**
 
 | Day | Events | % |
 |---|---|---|
-| **Wednesday** | 1,032 | 69.5% |
-| Thursday | 151 | 10.2% |
-| Friday | 137 | 9.2% |
-| Saturday | 47 | 3.2% |
-| Tuesday | 47 | 3.2% |
-| Monday | 43 | 2.9% |
-| Sunday | 30 | 2.0% |
+| **Wednesday** | 770 | 51.9% |
+| Tuesday | 318 | 21.4% |
+| Thursday | 176 | 11.9% |
+| Friday | 115 | 7.7% |
+| Monday | 46 | 3.1% |
+| Sunday | 31 | 2.1% |
+| Saturday | 28 | 1.9% |
 
-**By hour of day (UTC):**
+**By hour of day:**
 
 | Hour | Events | % |
 |---|---|---|
-| 00 | 49 | 3.3% |
-| **01** | **231** | **15.6%** |
-| 02 | 93 | 6.3% |
-| 03 | 28 | 1.9% |
-| 04 | 17 | 1.1% |
-| 05 | 1 | 0.1% |
-| 06 | 9 | 0.6% |
-| 07 | 14 | 0.9% |
-| 08 | 0 | 0.0% |
-| 09 | 0 | 0.0% |
-| **10** | **188** | **12.7%** |
-| 11 | 14 | 0.9% |
-| 12 | 11 | 0.7% |
-| **13** | **298** | **20.1%** |
-| 14 | 134 | 9.0% |
-| 15 | 117 | 7.9% |
-| 16 | 18 | 1.2% |
-| 17 | 25 | 1.7% |
-| 18 | 40 | 2.7% |
-| 19 | 49 | 3.3% |
-| 20 | 41 | 2.8% |
-| 21 | 25 | 1.7% |
-| 22 | 52 | 3.5% |
-| 23 | 33 | 2.2% |
+| 00 | 28 | 1.9% |
+| 01 | 17 | 1.1% |
+| 02 | 1 | 0.1% |
+| 03 | 9 | 0.6% |
+| 04 | 14 | 0.9% |
+| 05 | 0 | 0.0% |
+| 06 | 0 | 0.0% |
+| **07** | **188** | **12.7%** |
+| 08 | 14 | 0.9% |
+| 09 | 11 | 0.7% |
+| **10** | **298** | **20.1%** |
+| 11 | 134 | 9.0% |
+| 12 | 117 | 7.9% |
+| 13 | 18 | 1.2% |
+| 14 | 25 | 1.7% |
+| 15 | 40 | 2.7% |
+| 16 | 49 | 3.3% |
+| 17 | 41 | 2.8% |
+| 18 | 25 | 1.7% |
+| 19 | 52 | 3.5% |
+| 20 | 33 | 2.2% |
+| 21 | 46 | 3.1% |
+| **22** | **231** | **15.6%** |
+| 23 | 93 | 6.3% |
 
-**Takeaway:** ⚠️ heavily skewed by today (2026-08-12, a Wednesday, contributed 996 of 1,484 events — see the daily trend in § 11). The peak hours, 13h and 01h UTC, correspond to roughly 10am and 10pm in `America/Fortaleza` (UTC-3, the dominant geography from § 6) — consistent with a late-night and mid-morning work pattern for this single contributor. Treat the day-of-week ranking as unreliable until volume is more spread across weeks.
+**Takeaway:** ⚠️ heavily skewed by today (2026-08-12, a Wednesday, contributed 719 of 1,484 events — see the daily trend in § 11). The peak hours in `America/Sao_Paulo`, 10am, 10pm, and 7am, are consistent with a late-night and mid-morning work pattern for this single contributor. Treat the day-of-week ranking as unreliable until volume is more spread across weeks.
 
 ---
 
@@ -229,33 +229,33 @@ Top 10.
 
 ---
 
-## 11. Daily event volume
+## 11. Daily event volume (`America/Sao_Paulo`)
 
-| Date | Events |
-|---|---|
-| 2026-07-23 | 28 |
-| 2026-07-24 | 93 |
-| 2026-07-25 | 37 |
-| 2026-07-26 | 19 |
-| 2026-07-27 | 6 |
-| 2026-07-28 | 22 |
-| 2026-07-29 | 2 |
-| 2026-07-30 | 4 |
-| 2026-07-31 | 7 |
-| 2026-08-01 | 4 |
-| 2026-08-02 | 8 |
-| 2026-08-03 | 30 |
-| 2026-08-04 | 11 |
-| 2026-08-05 | 31 |
-| 2026-08-06 | 119 |
-| 2026-08-07 | 37 |
-| 2026-08-08 | 6 |
-| 2026-08-09 | 3 |
-| 2026-08-10 | 7 |
-| 2026-08-11 | 14 |
-| **2026-08-12** | **996** |
+| Date | Events | % |
+|---|---|---|
+| 2026-07-23 | 39 | 2.6% |
+| 2026-07-24 | 103 | 6.9% |
+| 2026-07-25 | 18 | 1.2% |
+| 2026-07-26 | 18 | 1.2% |
+| 2026-07-27 | 5 | 0.3% |
+| 2026-07-28 | 22 | 1.5% |
+| 2026-07-29 | 4 | 0.3% |
+| 2026-07-30 | 2 | 0.1% |
+| 2026-07-31 | 7 | 0.5% |
+| 2026-08-01 | 4 | 0.3% |
+| 2026-08-02 | 9 | 0.6% |
+| 2026-08-03 | 34 | 2.3% |
+| 2026-08-04 | 6 | 0.4% |
+| 2026-08-05 | 47 | 3.2% |
+| 2026-08-06 | 135 | 9.1% |
+| 2026-08-07 | 5 | 0.3% |
+| 2026-08-08 | 6 | 0.4% |
+| 2026-08-09 | 4 | 0.3% |
+| 2026-08-10 | 7 | 0.5% |
+| 2026-08-11 | 290 | 19.5% |
+| **2026-08-12** | **719** | **48.4%** |
 
-**Takeaway:** the window is dominated by today (67.1% of total volume) — consistent with this report being generated mid-session on 2026-08-12. Excluding today, 2026-08-06 (119) and 2026-07-24 (93) were the next highest-volume days.
+**Takeaway:** the window is dominated by today (48.4% of total volume) — consistent with this report being generated mid-session on 2026-08-12. Excluding today, 2026-08-11 (290, a spillover of events that land early in UTC but still the previous day in `America/Sao_Paulo`) and 2026-08-06 (135) were the next highest-volume days.
 
 ---
 
@@ -313,9 +313,10 @@ Cross-referencing the observed `agent_completed` names against the agent roster 
 report:
   title: "DevTeam Agents usage metrics — last 20 days"
   window:
-    start_utc: "2026-07-23T18:17:25Z"
-    end_utc: "2026-08-12T15:44:41Z"
+    start_america_sao_paulo: "2026-07-23T15:17:25-03:00"
+    end_america_sao_paulo: "2026-08-12T12:44:41-03:00"
     days: 20
+    timezone: "America/Sao_Paulo"
   generated_at: "2026-08-12"
   total_events: 1484
   excluded_events:
@@ -325,7 +326,7 @@ report:
   caveats:
     - "Single developer/machine sample — not representative of the user base."
     - "command_invoked has very low volume (7) vs agent_completed (803) — possible instrumentation gap."
-    - "67% of total volume concentrated on the report's generation day (2026-08-12)."
+    - "48% of total volume concentrated on the report's generation day (2026-08-12, America/Sao_Paulo)."
     - "Day-of-week ranking unreliable due to today's spike."
 
   event_type_counts:
@@ -427,19 +428,19 @@ report:
     - {version: "v2.15.1", events: 10, percentage: 0.7}
     - {version: "v2.30.1", events: 9, percentage: 0.6}
 
-  usage_by_weekday_utc:
-    wednesday: {events: 1032, percentage: 69.5}
-    thursday: {events: 151, percentage: 10.2}
-    friday: {events: 137, percentage: 9.2}
-    saturday: {events: 47, percentage: 3.2}
-    tuesday: {events: 47, percentage: 3.2}
-    monday: {events: 43, percentage: 2.9}
-    sunday: {events: 30, percentage: 2.0}
+  usage_by_weekday_america_sao_paulo:
+    wednesday: {events: 770, percentage: 51.9}
+    tuesday: {events: 318, percentage: 21.4}
+    thursday: {events: 176, percentage: 11.9}
+    friday: {events: 115, percentage: 7.7}
+    monday: {events: 46, percentage: 3.1}
+    sunday: {events: 31, percentage: 2.1}
+    saturday: {events: 28, percentage: 1.9}
 
-  peak_usage_by_hour_utc_top3:
-    - {hour: 13, events: 298, percentage: 20.1}
-    - {hour: 1, events: 231, percentage: 15.6}
-    - {hour: 10, events: 188, percentage: 12.7}
+  peak_usage_by_hour_america_sao_paulo_top3:
+    - {hour: 10, events: 298, percentage: 20.1}
+    - {hour: 22, events: 231, percentage: 15.6}
+    - {hour: 7, events: 188, percentage: 12.7}
 
   installs:
     first_install: 10
