@@ -9,3 +9,4 @@
 .dev-team-agents/user-data/
 user-data/
 scripts/lib/__pycache__/
+credentials.local.json
