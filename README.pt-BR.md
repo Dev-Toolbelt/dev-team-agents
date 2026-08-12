@@ -75,6 +75,12 @@ O setup completo tipicamente leva de 5 a 10 minutos. Rodar novamente em um proje
 
 ---
 
+## Métricas de Uso
+
+Curioso sobre como os agentes e comandos são usados na prática? Veja o relatório mais recente de uso anônimo: [docs/reports/metrics-last-20-days.md](docs/reports/metrics-last-20-days.md).
+
+---
+
 ## Slash Commands
 
 Após a instalação, Claude Code e opencode expõem slash commands sob o namespace `/devteam:`. No Codex, o padrão local ao projeto é o caminho por skill `$devteam-<name>`. Cada entrypoint dispara os agentes corretos e limita automaticamente sua atuação à branch ou worktree atual do git.
