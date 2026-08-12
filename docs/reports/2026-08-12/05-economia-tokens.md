@@ -35,3 +35,27 @@ fingerprints:
 **Nenhum achado original neste eixo.** As dívidas de token materiais já estão no banco e foram
 revalidadas abertas; o delta não introduziu carregamento eager novo, skill sempre-carregada
 convertível, nem leitura de arquivo inteiro onde `grep`/`head` bastaria que não estivesse já coberto.
+
+---
+
+# Pass incremental — 2026-08-12 (2ª execução), baseline `3fbe371`
+
+O delta contém uma mudança **motivada por token** — `4734882`, cuja justificativa é literal:
+"/devteam:commit ran full /devteam:learn evidence gathering before every commit, spiking context
+usage in commit-heavy sessions". Ela entrega dois mecanismos:
+
+| Mecanismo | Estado verificado |
+|---|---|
+| Opt-out `auto_learn_before_commit` (`commands/commit.md:15`) | Funciona — o skip é incondicional quando a chave é `false` |
+| Guarda de sessão `.dev-team-agents/.learn-last-run` (`commands/commit.md:17`, `commands/learn.md:166`) | **Não dispara** — condição inalcançável |
+
+A guarda é o mecanismo que economizaria tokens **sem** exigir decisão do usuário, e é justamente
+o que não funciona. O achado está registrado no Eixo C como
+`flow-learn-run-marker-records-commit-time-not-run-time`
+— **não é recontado aqui** (Porta 3: alvo, causa raiz e remediação idênticos).
+
+Nenhum outro arquivo do delta altera volume de contexto carregado: os 8 arquivos restantes são
+documentação de repositório (`PRIVACY.md`, `README*.md`, `docs/reports/metrics-*`,
+`docs/prompts/`), que não entra no contexto de nenhum agente, e `.gitignore`.
+
+**Nenhum achado original neste eixo nesta execução.**

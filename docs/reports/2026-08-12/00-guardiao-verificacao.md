@@ -103,3 +103,49 @@ Os 11 achados originais do pass guardião de 2026-07-31 (sem marcador). Alvos re
 
 **Mortalidade da Fase 1b: 1 de 11 = 9%** (1 🟢 Resolvido, 0 ⚰️ Obsoleto, 10 reproduzem). Banco
 saudável — bem abaixo dos 53% da consolidação v1→v2.
+
+---
+
+# Pass incremental — 2026-08-12 (2ª execução)
+
+**Baseline:** `HEAD` = `3fbe371` · **Baseline anterior:** `07e0725` (o pass da manhã deste mesmo dia)
+
+O pass da manhã fechou em `07e0725`. Desde então entraram **11 commits / 23 arquivos**
+(+1.603 / −12), dos quais 8 são código ou documentação de comportamento. Esta execução
+**não repete** a amostragem de 30 itens já feita hoje — reverificá-la seis horas depois,
+contra um delta de 8 arquivos, não produziria informação. O escopo aqui é: (1) confirmar que
+as correções de marcação da manhã sobreviveram no `HEAD`, e (2) reverificar os fingerprints
+cujos alvos o novo delta tocou.
+
+## Fase 1 — Correções da manhã: sobrevivência no HEAD
+
+| Fingerprint | Marca aplicada de manhã | Estado em `3fbe371` |
+|---|---|---|
+| `auto-commands-json-plan-gate-field-has-no-consumer-…` | 🟢 Resolved | ✅ presente — `docs/reports/_index.md`, linha citando `soften_plan_gate()` |
+| `gov-installer-rigor-asymmetry` | 🟢 Resolved | ✅ presente — anotação `resolvido por 872477b+ae77545` intacta |
+
+Contagem de marcadores no banco em `3fbe371`: **122 ✅ · 4 🟢 · 5 🔴 · 3 🟡 · 2 ⚠️** sobre
+**144 fingerprints vivos**. Nenhuma marcação foi perdida ou sobrescrita pelos 11 commits.
+
+## Fase 1 — Fingerprints cujo alvo o delta tocou
+
+Alvos tocados por `07e0725..3fbe371` que possuem fingerprint registrado: `scripts/install.sh`
+e `commands/commit.md`.
+
+| Fingerprint | Marca | Verificação em `3fbe371` | Resultado |
+|---|---|---|---|
+| `token-install-sh-503-lines-…-13-functions-extractable` | 🔴 Still open | `wc -l scripts/install.sh` → **1086** (era 1085 no baseline da manhã) | 🔴 segue aberto — o delta adicionou 1 linha, não decompôs |
+| `flow-conventional-commits-validate-script-no-husky-or-commit-msg-hook-registration` | 🔴 Still open | `grep -c "commit-msg\|husky\|lefthook" scripts/install.sh` → **0** | 🔴 segue aberto |
+| `flow-cli-commit-validate-msg-script-skipped-silently-…` | 🔴 Reaberto (2026-07-31) | `commands/commit.md` mudou apenas nos Steps 0/0.5; o bloco de validação segue inalterado | 🔴 segue aberto |
+| `token-commands-commit-md-145-lines-…` | ✅ Executed | Arquivo cresceu com o Step 0 (guarda de sessão) mas segue dentro do teto de 200 (`size-limits: clean ✓`) | ✅ sobrevive |
+
+**Placar da 2ª execução: 3 ✅ (sobrevivem) · 0 🟡 · 0 🔴 novos.** Critério de escalonamento
+(>15% 🔴) não atingido.
+
+## Fase 1b — Achados abertos tocados pelo delta
+
+Os 10 abertos foram revalidados de manhã (9% de mortalidade). Dos 10, dois têm alvo dentro
+do delta (`install.sh` × 2, acima) e **ambos reproduzem no `HEAD`**. Os outros 8 não tiveram
+o alvo tocado por nenhum dos 11 commits — nada a reverificar.
+
+**Mortalidade da 2ª execução: 0% (0 de 2 revalidados).**

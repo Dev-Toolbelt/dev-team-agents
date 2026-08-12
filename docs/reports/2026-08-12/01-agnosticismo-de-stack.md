@@ -54,3 +54,29 @@ na Fase 1b, não são novos.
   exatamente Storybook+Tailwind — perde o exemplo concreto que ajuda o reconhecimento imediato. O
   ganho de agnosticismo supera esse custo, mas ele existe.
 - **Esforço:** Baixo
+
+---
+
+# Pass incremental — 2026-08-12 (2ª execução), baseline `3fbe371`
+
+Varredura semente reexecutada **integral** sobre `agents/` e `commands/`, conforme a regra
+("o Eixo A é sempre integral"): **121 candidatos**.
+
+Arquivos de `agents/` e `commands/` tocados pelo delta `07e0725..3fbe371`:
+`agents/setup-assistant.md`, `commands/commit.md`, `commands/learn.md` — **9 candidatos**
+entre os 121.
+
+| Candidato | Heading da seção | Veredito |
+|---|---|---|
+| `commands/commit.md:135` — "`package.json` with `lint` script → `npm run lint --silent`" | `## Step 4 — Pre-commit gates` (tabela de detecção) | Descartado — tabela de detecção, exceção explícita da regra |
+| `commands/commit.md:138` — "`phpcs.xml` … → `vendor/bin/phpcs`" | idem | Descartado — mesma tabela |
+| `commands/commit.md:46,50,55` — "Docker stack" | `## Step 0.5 — Worktree finalization quiz` | Descartado — refere-se ao stack Docker **isolado do worktree**, gated por `worktree_docker_isolate`; não presume Docker |
+| `agents/setup-assistant.md:26,66` — "Docker Compose command form" | `## Foundational Rule` / detecção de stack | Descartado — roteia para `skills/shared/stack-detection/SKILL.md`, que é o mecanismo agnóstico |
+| `agents/setup-assistant.md:146,147` — `Dockerfile`, `jest.config.*`, `pytest.ini`, `phpunit.xml` | `### Step 6 — …` (mapa de sinais → documento) | Descartado — lista de sinais de detecção, exceção explícita |
+
+**121 candidatos → 0 violações novas.** Os 9 candidatos do delta caem todos sob tabelas de
+detecção, listas de sinais ou condicionais gated — as três classes que a regra manda descartar.
+
+**Nenhum achado original neste eixo nesta execução.** A única violação do dia
+(`flow-relayout-design-discovery-names-storybook-tailwind`) já foi registrada pelo pass da manhã
+e não é redescoberta aqui.

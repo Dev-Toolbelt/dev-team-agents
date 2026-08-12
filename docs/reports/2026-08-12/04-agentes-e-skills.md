@@ -26,3 +26,23 @@ Foco no delta: agente novo `seo-specialist`, 11 skills novas, e o crescimento de
 (`skill-shared-migration-v1-to-v2` 438 linhas, `token-foundational-rule` duplicada) já estão no banco;
 a de migração foi revalidada aberta na Fase 1b. O delta adicionou superfície nova sem introduzir
 duplicação de regra nem estouro de limite.
+
+---
+
+# Pass incremental — 2026-08-12 (2ª execução), baseline `3fbe371`
+
+Superfície do delta neste eixo: `agents/setup-assistant.md` (1 linha alterada — Step 7 passou de
+"three entries" para "four entries" no `.gitignore`) e `skills/shared/user-preferences/SKILL.md`
+(2 linhas — a nova chave no schema e na tabela de campos). Nenhuma skill criada, removida ou
+movida; nenhuma regra nova candidata a casa canônica.
+
+Gates de tamanho e identidade em `3fbe371`: `size-limits: clean ✓` · `agent-lint: clean ✓` —
+nenhum agente acima de 205 linhas, nenhum comando acima de 200, nenhuma skill acima de 500,
+`name:` == basename em todas, sem duplicata entre categorias.
+
+Os dois espelhos de documentação exigidos pela regra de `preferences.json` que **pertencem a este
+eixo** foram atualizados corretamente no mesmo commit (`4734882`):
+`skills/shared/user-preferences/SKILL.md:40` (schema) e `:70` (tabela de campos). O espelho que
+**não** foi atualizado é o heredoc do `install.sh`, reportado no Eixo C.
+
+**Nenhum achado original neste eixo.**

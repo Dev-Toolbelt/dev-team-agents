@@ -51,6 +51,7 @@ re-verified against the v2 tree with fresh evidence. The full v1 history remains
 | 2026-07-31 | — (execution pass, no new findings) | 131 | **120 ✅ · 1 ⚠️ · 10 🔴** — throughput **92%** declarado |
 | 2026-07-31 | 11 (guardian audit pass) | 142 | Fase 1: **49 de 121 verificados** → 41 ✅ · 3 🟡 · 5 🔴 (**84% confirmado, 10% reaberto**) · Fase 1b: **0% de mortalidade** (0 de 10) |
 | 2026-08-12 | 1 (guardian audit pass) | 143 | Fase 1: **30 de 124 verificados** → 26 ✅ · 2 🟢 · **0 🔴 (0% reaberto)** · Fase 1b: **9% de mortalidade** (1 de 11 🟢) · delta de 187 arquivos |
+| 2026-08-12 | 5 (guardian audit pass, 2ª execução) | 148 | Fase 1: **6 verificados** (2 marcações da manhã + 4 alvos no delta) → 3 ✅ · **0 🔴** · Fase 1b: **0% de mortalidade** (0 de 2) · delta de 23 arquivos desde `07e0725` |
 
 **v1 → v2 triage:** 334 candidates verified against `HEAD` = `7f85ed7` · 157 survived · 177 died
 (53% mortality) · 26 merged as cross-axis duplicates → **131 registered**.
@@ -307,3 +308,33 @@ duplicação.
 - `CLAUDE.md` 586 linhas / `install.sh` 1085 / `CHANGELOG` 959 / `session-start.sh` 306 — Porta 5 (estado): itens já registrados e abertos
 - Sub-scripts `03c/03d/03e` "re-forkam git" — Porta 3: hipótese refutada por evidência (reusam `DEVTEAM_TOUCHED_PATHS`)
 - `_disabled-*` "auto-executam" — hipótese refutada (ambos dispatchers têm `SUBSCRIPT_RE` allowlist)
+
+---
+
+## 2026-08-12 — Auditoria guardiã, 2ª execução (delta pós-`07e0725`)
+
+Segunda execução do pass guardião no mesmo dia, contra os 11 commits que entraram depois do
+baseline da manhã (`07e0725` → `3fbe371`, 23 arquivos, +1.603/−12). Sem nova amostragem da Fase 1
+— a de manhã vale para o dia; verificou a sobrevivência das 2 marcações 🟢 aplicadas de manhã e
+os 4 fingerprints cujo alvo o delta tocou (**3 ✅ · 0 🟡 · 0 🔴 novos**), e revalidou os 2 abertos
+com alvo no delta (**0% de mortalidade**). O delta trouxe 3 mudanças de comportamento e as 3 têm
+defeito verificado — todos os gates automáticos seguem verdes e nenhum cobre esta classe.
+Ver [o relatório do pass](2026-08-12/index.md).
+
+### Fluxos e Comandos (`auto-*`, `flow-*`, `docs-sync-*`) — 4
+
+- `auto-full-suite-guard-sed-absorbs-sibling-json-keys` — **MEDIUM-HIGH** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — Captura gulosa do `sed` (linha 22) absorve `description` e demais chaves irmãs do payload; prosa contendo `.test.`/`.spec.`/`--filter` desliga o nudge silenciosamente — reproduzido com dois payloads de comando idêntico — [report](2026-08-12/03-fluxos-e-comandos.md)
+- `flow-learn-run-marker-records-commit-time-not-run-time` — **MEDIUM-HIGH** — alvo: `commands/learn.md` — O marcador `.learn-last-run` grava `git log -1 --format=%ct` (commit timestamp do HEAD) e é escrito antes do auto-commit do Step 5; a condição de skip de `commands/commit.md:17` é inalcançável e a economia de contexto que justifica `4734882` não se materializa — [report](2026-08-12/03-fluxos-e-comandos.md)
+- `auto-install-heredoc-omits-auto-learn-before-commit` — **MEDIUM-HIGH** — alvo: `scripts/install.sh` — O heredoc de fallback sem `python3` (linhas 1022-1025) não recebeu a chave que `4734882` adicionou ao canônico, apesar de o commit ter tocado o arquivo e de o aviso "the two drifted once already" estar na linha 1003; segunda ocorrência da mesma drift, sem gate — [report](2026-08-12/03-fluxos-e-comandos.md)
+- `docs-sync-02c-comment-cites-graphify-hint-as-sed-precedent` — **LOW-MEDIUM** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — O comentário da linha 18 invoca `02-graphify-hint.sh` como precedente de "pure-bash approach on the hot path", enquanto aquele arquivo (linha 11) documenta ter evitado `grep|sed` justamente para poupar 2 forks — [report](2026-08-12/03-fluxos-e-comandos.md)
+
+### Referências e Consistência (`gov-*`) — 1
+
+- `gov-repo-gitignore-omits-three-installer-written-entries` — **MEDIUM** — alvo: `.gitignore` — O repo dogfooda a instalação mas seu `.gitignore` tem 1 das 4 entradas que `install.sh:774-779` escreve e que `agents/setup-assistant.md:153` declara obrigatórias; `.learn-last-run` e `.worktree-session` ficam untracked e não ignorados — [report](2026-08-12/02-referencias-e-consistencia.md)
+
+### Descartados por duplicação
+
+- `CLAUDE.md` File Structure não lista `docs/prompts/` (criado hoje por `d10d541`) — Porta 3 (semântica): alvo, causa raiz e remediação coincidem com 3 fingerprints ✅ Executed da família `ref-claude-md-file-structure-*`
+- Economia de tokens da guarda de sessão que não dispara — Porta 3: mesmo alvo, causa e remediação de `flow-learn-run-marker-records-commit-time-not-run-time`
+- `install.sh` com 1086 linhas · sem registro de `commit-msg` hook — Porta 5 (estado): pertencem ao conjunto aberto
+- Hits de stack em `commands/commit.md:135-138` (npm/phpcs) e `agents/setup-assistant.md:146-147` (jest/pytest/phpunit) — Eixo A, regra de descarte: tabelas de detecção e listas de sinais
