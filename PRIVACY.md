@@ -45,6 +45,7 @@ Only when telemetry is enabled:
 | `agent_spawned` | Any time an agent is started via the `Task` tool | OS, installed version |
 | `command_invoked` | Any `/devteam:*` slash command executed | Command name (e.g. `plan`, `backend`), OS, version |
 | `session_end` | End of each CLI session (any supported provider) | Whether the stop hook was active, OS, version |
+| `agent_completed` | An agent invocation finishes | Agent name, the actual resolved model it ran on, token counts (input/output/cache), provider |
 
 All events also include:
 - **`$lib`**: always `"dev-team-agents"` (identifies the source)

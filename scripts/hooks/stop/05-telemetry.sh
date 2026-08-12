@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Stop sub-script: queue a session_end telemetry event and flush if TTL reached.
+# Stop sub-script: queue a session_end telemetry event, queue per-agent token/
+# model usage (see ../lib/agent-usage.sh), and flush if TTL reached.
 # Coupled with pre-tool-use/02b-telemetry.sh — this is the only Stop-time
 # flush path. Do not disable one without the other: disabling this alone
 # leaves PreToolUse events queued with nothing to flush them.
@@ -51,6 +52,14 @@ fi
 # Queue session_end event
 PROPS="{\"stop_hook_active\": $( [ "$STOP_REASON" = "True" ] && echo "true" || echo "false" )}"
 bash "$TELEMETRY_SEND" --queue "session_end" "$PROPS" 2>/dev/null || true
+
+# Queue per-agent token/model usage — see lib/agent-usage.sh for the
+# transcript-scan approach and its documented dedup tradeoff.
+if [ -f "$SCRIPT_DIR/../lib/agent-usage.sh" ] && [ -f "${DEVTEAM_HOOK_PAYLOAD:-}" ]; then
+    # shellcheck source=scripts/hooks/lib/agent-usage.sh
+    . "$SCRIPT_DIR/../lib/agent-usage.sh"
+    devteam_queue_agent_usage "$DEVTEAM_HOOK_PAYLOAD" "$USER_DATA_DIR" "$TELEMETRY_SEND" 2>/dev/null || true
+fi
 
 # Flush if TTL reached or queue is full
 bash "$TELEMETRY_SEND" --flush 2>/dev/null || true
