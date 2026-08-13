@@ -150,3 +150,51 @@ key is a **read-scoped Personal API Key** — treat it as a secret throughout th
   auth scheme) at execution time, adapt using PostHog's current API docs — this
   prompt reflects the schema known as of this repo's `scripts/helpers/telemetry-send.sh`
   and `PRIVACY.md` at authoring time and may drift as new telemetry events are added.
+
+### 7. Commit and push the report
+
+After the two report files are written, commit **only** them and push to `main`.
+This environment has **no `gh` CLI, no SSH key, and no ssh-agent**, so pushing over
+the SSH `origin` remote will fail with `Permission denied (publickey)`. Push over
+**HTTPS** using a GitHub token read from `credentials.local.json` (`github.token`,
+gitignored — same file as the PostHog key).
+
+Rules:
+- **Never print the token**, never write it into a committed file, never store it in
+  `.git/config`. Read it into a shell variable and embed it only in the push URL,
+  sanitizing command output with `sed`.
+- Commit with GPG signing **disabled** (`gpg` is not available here).
+- If `github.token` is missing from `credentials.local.json`, **stop** and report that
+  the report was generated and committed but could not be pushed (missing token).
+
+Run exactly:
+
+```bash
+cd <repo-root>
+
+# stage ONLY the two report files
+git add docs/reports/metrics-last-20-days.md docs/reports/metrics-last-20-days.en.md
+
+# nothing to commit? skip cleanly
+if git diff --cached --quiet; then
+  echo "No report changes to commit — skipping commit/push."
+else
+  git -c commit.gpgsign=false commit --no-gpg-sign -m "docs(reports): metrics reports updates"
+
+  TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+  if [ -z "$TOKEN" ]; then
+    echo "ERROR: github.token missing in credentials.local.json — commit made, push skipped."
+  else
+    git push "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" main 2>&1 \
+      | sed "s/${TOKEN}/<REDACTED>/g"
+  fi
+fi
+```
+
+Verify the push landed (should print the local HEAD SHA on `refs/heads/main`):
+
+```bash
+TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+git ls-remote "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" refs/heads/main \
+  | sed "s/${TOKEN}/<REDACTED>/g"
+```

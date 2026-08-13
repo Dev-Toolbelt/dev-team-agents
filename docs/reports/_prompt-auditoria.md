@@ -316,3 +316,51 @@ justificativa explícita — se você não consegue nomear o custo, você não e
 Responda no chat apenas com: cobertura da Fase 1 (`N de M`), placar ✅/🟡/🔴, mortalidade da
 Fase 1b, achados originais por eixo, candidatos descartados por duplicação, e os 3 achados mais
 graves. Nada além disso.
+
+### Commit and push the report
+
+After the two report files are written, commit **only** them and push to `main`.
+This environment has **no `gh` CLI, no SSH key, and no ssh-agent**, so pushing over
+the SSH `origin` remote will fail with `Permission denied (publickey)`. Push over
+**HTTPS** using a GitHub token read from `credentials.local.json` (`github.token`,
+gitignored — same file as the PostHog key).
+
+Rules:
+- **Never print the token**, never write it into a committed file, never store it in
+  `.git/config`. Read it into a shell variable and embed it only in the push URL,
+  sanitizing command output with `sed`.
+- Commit with GPG signing **disabled** (`gpg` is not available here).
+- If `github.token` is missing from `credentials.local.json`, **stop** and report that
+  the report was generated and committed but could not be pushed (missing token).
+
+Run exactly:
+
+```bash
+cd <repo-root>
+
+# stage files
+git add file1 file2 ....
+
+# nothing to commit? skip cleanly
+if git diff --cached --quiet; then
+  echo "No report changes to commit — skipping commit/push."
+else
+  git -c commit.gpgsign=false commit --no-gpg-sign -m "docs(reports): metrics reports updates"
+
+  TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+  if [ -z "$TOKEN" ]; then
+    echo "ERROR: github.token missing in credentials.local.json — commit made, push skipped."
+  else
+    git push "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" main 2>&1 \
+      | sed "s/${TOKEN}/<REDACTED>/g"
+  fi
+fi
+```
+
+Verify the push landed (should print the local HEAD SHA on `refs/heads/main`):
+
+```bash
+TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+git ls-remote "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" refs/heads/main \
+  | sed "s/${TOKEN}/<REDACTED>/g"
+```
