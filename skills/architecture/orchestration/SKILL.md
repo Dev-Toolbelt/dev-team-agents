@@ -237,6 +237,26 @@ scheduled when none was.
 
 ---
 
+## Background Process Discipline
+
+Bash commands run with `run_in_background: true` are a different asynchronous primitive than Task
+spawns, but the same failure mode applies: a background command nobody is watching produces the
+same stalled-looking pile as an un-followed-up subagent.
+
+- **Never open a new `sleep`/poll-loop Bash command to re-check something already being waited
+  on.** A background command already running (a build, a test suite, a migration) has exactly one
+  legitimate way to be watched: `Monitor` on that same command. Do not start a second
+  `run_in_background` shell whose only job is to poll the first one's state.
+- **Before starting any new background wait, check whether one is already outstanding for the same
+  purpose** (recent tool calls this turn/session). If one exists, `Monitor` it instead of starting
+  another.
+- **A background command is not fire-and-forget.** Once started, either await it inline (if the
+  answer is needed before continuing) or call `Monitor` so its completion produces a notification.
+  Starting it and moving on without either is the Bash-side version of the gap Spawn Integrity
+  check 5 closes for subagents.
+
+---
+
 ## Subagent Report Economy
 
 A subagent's final message is the only thing that reaches the orchestrator's context (see check 3

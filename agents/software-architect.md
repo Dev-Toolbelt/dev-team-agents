@@ -83,10 +83,10 @@ classification table, spawn prompt contract, parallelism rules, and the consolid
 Non-negotiable spawn invariants:
 
 - The worktree or branch MUST exist **before** the first subagent is spawned — subagents have no shell access
-- Every spawn prompt carries `WORKTREE_PATH` and `BRANCH`, and forbids writing outside that path
-- Independent agents are spawned in parallel; dependent ones in sequence
+- Every spawn prompt carries `WORKTREE_PATH` and `BRANCH`, and forbids writing outside that path; independent agents are spawned in parallel, dependent ones in sequence
 - After all agents complete, present one consolidated summary and point the user at `/devteam:review`
 - **On a status question, call `TaskList`/`TaskGet`/`TaskOutput` first** — never answer from the plan or a prior message (orchestration skill, Spawn Integrity check 4, Liveness)
+- **Before ending a turn with an unreturned spawn, call `ScheduleWakeup`** instead of going silent (Spawn Integrity check 5, Auto-reactivation). On wakeup, check `TaskList`/`TaskGet`/`TaskOutput` first; if still no return, resume with `SendMessage` rather than re-spawning or fabricating progress. Cap two attempts per agent, then surface it to the user as a blocker.
 
 ---
 
