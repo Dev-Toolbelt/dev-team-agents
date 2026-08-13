@@ -95,17 +95,34 @@ fi
 
 bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 
-# For opencode projects, re-render agents and merge command snippets
+# For opencode projects, re-render agents and merge command snippets.
+# Slim Claude installs don't bundle the cross-CLI plumbing (stripped by
+# scripts/lib/strip-tarball.sh), so install-opencode.sh would abort with
+# exit 3 and — under set -euo pipefail — take the whole update down with it,
+# even though the core Claude Code update above already succeeded. Check for
+# the plumbing first and degrade to guidance instead of a hard failure.
 if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
-    echo "→ opencode config detected, re-running install-opencode.sh..."
-    bash .dev-team-agents/scripts/install-opencode.sh
+    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/opencode/plugin/dev-team-agents.ts" ]; then
+        echo "→ opencode config detected, re-running install-opencode.sh..."
+        bash .dev-team-agents/scripts/install-opencode.sh
+    else
+        echo "⚠ opencode config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
+        echo "  Skipping automatic opencode re-render. To refresh opencode support, run:" >&2
+        echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode" >&2
+    fi
 fi
 
 # For Codex projects, re-render agents, migrate legacy prompt layouts, and
-# refresh project-local command skills.
+# refresh project-local command skills. Same slim-install gap as above.
 if [ -f ".codex/hooks.json" ] || [ -d ".codex" ]; then
-    echo "→ Codex config detected, re-running install-codex.sh..."
-    bash .dev-team-agents/scripts/install-codex.sh
+    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/agents/product-analyst.md" ]; then
+        echo "→ Codex config detected, re-running install-codex.sh..."
+        bash .dev-team-agents/scripts/install-codex.sh
+    else
+        echo "⚠ Codex config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
+        echo "  Skipping automatic Codex re-render. To refresh Codex support, run:" >&2
+        echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex" >&2
+    fi
 fi
 
 # Invalidate context cache after version change

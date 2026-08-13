@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`update.sh` aborted the whole update on slim installs with opencode/Codex configured**: after a successful core update, it unconditionally re-ran `install-opencode.sh`/`install-codex.sh`, which abort with `exit 3` when the cross-CLI plumbing isn't bundled (slim installs strip it — see `scripts/lib/strip-tarball.sh`). Under `set -euo pipefail` that exit took down the entire update script, even though the Claude Code update itself had already succeeded. `update.sh` now checks for the plumbing first and, when it's missing, skips the provider re-render and prints the `install-provider.sh` bootstrap command instead of failing.
+
 ## [2.43.0] - 2026-08-11
 
 ### Added
