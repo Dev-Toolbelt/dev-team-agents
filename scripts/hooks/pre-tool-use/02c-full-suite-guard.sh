@@ -69,6 +69,24 @@ is_full_suite() {
         *rspec*)
             [[ "$cmd" != *:[0-9]* ]] && return 0 ;;
     esac
+    # `make <target>` and `composer test:*` are opaque wrappers around a real
+    # runner (Docker exec, phpunit, etc.) — the literal command string never
+    # contains a runner name for the patterns above to match, so a project
+    # routing everything through Make/Composer sails past this guard entirely
+    # unless checked here. A scoped invocation passes TESTPATH=/FILTER=/-- args
+    # through to the wrapped composer script; a bare target name does not.
+    case "$cmd" in
+        *make\ *test*|*make\ *-e2e*)
+            [[ "$cmd" != *TESTPATH=* && "$cmd" != *FILTER=* && "$cmd" != *--\ * ]] && return 0 ;;
+    esac
+    case "$cmd" in
+        *composer\ test:*)
+            [[ "$cmd" != *--filter* && "$cmd" != *--\ * ]] && return 0 ;;
+    esac
+    case "$cmd" in
+        *composer\ test*)
+            [[ "$cmd" != *test:* ]] && return 0 ;;
+    esac
     return 1
 }
 

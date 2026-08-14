@@ -60,6 +60,12 @@ When the project defines its own scoped script in `CLAUDE.md`, `package.json`, o
 
 ---
 
+## Run Independent Verification Commands in Parallel
+
+Tests, linters, and static analysis are independent of each other — none depends on another's output. When a task needs more than one (e.g. a scoped test run and a lint pass), issue them as **separate Bash tool calls in the same message**, not chained in one shell with `;`/`&&`. Chaining serializes work that has no dependency, and hides per-command failures behind a single combined output. This is the same "no dependency → parallel tool calls" rule this repo already applies to agent spawning; it applies equally to your own Bash calls within one task.
+
+---
+
 ## Coverage Runs
 
 Coverage reports (SonarQube quality gates, LCOV artifacts) are **CI artifacts**. Generate coverage locally only when the user asks, or when a scoped run is already producing it for free. A quality-gate threshold is never a reason to trigger a full local run.
