@@ -24,11 +24,15 @@ if [ -n "$EXISTING" ]; then
     echo
 fi
 
-# Find the next sequential number
-LAST=$(for f in "$ADR_DIR"/adr-[0-9]*.md; do
+# Find the next sequential number. The pipeline legitimately produces no
+# output on a fresh project with no existing ADRs — `grep` then exits 1,
+# which under `set -o pipefail` would abort the whole script before the
+# first ADR is ever written. `|| true` tolerates that empty case; LAST
+# falls back to 0 via the ${LAST:-0} default below.
+LAST=$( (for f in "$ADR_DIR"/adr-[0-9]*.md; do
     [ -f "$f" ] || continue
     basename "$f"
-done 2>/dev/null | grep -oE 'adr-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1)
+done 2>/dev/null | grep -oE 'adr-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) || true)
 NEXT=$(printf "%03d" $(( ${LAST:-0} + 1 )))
 
 # Build a URL-safe slug from the title

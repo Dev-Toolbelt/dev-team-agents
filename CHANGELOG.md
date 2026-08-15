@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **`new-adr.sh` failed on a project's first ADR**: the `LAST=$(...)` pipeline that scans `docs/development/adrs/` for the highest existing ADR number ran `grep -oE 'adr-[0-9]+'` over an empty candidate list when no `adr-*.md` files exist yet. `grep` exits 1 on no match, and under `set -euo pipefail` that aborted the script before the template was ever written — so a fresh project could never create its first ADR. The pipeline is now wrapped with `|| true` so the empty case is tolerated and `LAST` falls back to `0` via the existing `${LAST:-0}` default.
+
 ## [2.44.4] - 2026-08-15
 
 ### Fixed
