@@ -36,17 +36,102 @@ VERSION="${1:-latest}"
 # Resolved relative to this script's own location (not BASH_SOURCE-only
 # reliant like strip-tarball.sh, which must come from the freshly-extracted
 # tarball): when install.sh is run as the installed
-# `.dev-team-agents/scripts/install.sh` copy (the common update path), this
-# file exists alongside it. Under a fresh `curl | bash` install it does not
-# exist yet, so fall back to no-op stubs — there is no prior state to read
-# or migrate in that case anyway.
+# `.dev-team-agents/scripts/install.sh` copy, this file exists alongside it.
+# Under the far more common path — a fresh `curl | bash` install, or
+# update.sh's mktemp-downloaded copy of install.sh — it does not exist
+# alongside the script, since only install.sh itself is fetched. That path
+# still needs a WORKING state_set (Step 9 below writes installed_version
+# through it on every run), so the fallback must not be a no-op stub —
+# it previously was, and installed_version silently never got written on
+# any real install or update.
 _INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$_INSTALL_SH_DIR/lib/state.sh" ]; then
     # shellcheck source=scripts/lib/state.sh
     source "$_INSTALL_SH_DIR/lib/state.sh"
 else
-    state_get() { echo ""; }
-    state_set() { :; }
+    state_get() {
+        local key="$1"
+        local file="${2:-${STATE_FILE:-${USER_DATA_DIR:-.}/state.json}}"
+        [ -f "$file" ] || { echo ""; return 0; }
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$file" "$key" <<'PYEOF'
+import sys, json
+file_path, key = sys.argv[1], sys.argv[2]
+try:
+    with open(file_path) as f:
+        data = json.load(f)
+    val = data.get(key, "")
+    print("" if val is None else val)
+except (json.JSONDecodeError, IOError, FileNotFoundError):
+    print("")
+PYEOF
+        else
+            local str_match
+            str_match="$(grep -o "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$file" 2>/dev/null)"
+            if [ -n "$str_match" ]; then
+                echo "$str_match" | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/' | head -n1
+            else
+                grep -o "\"$key\"[[:space:]]*:[[:space:]]*[0-9][0-9]*" "$file" 2>/dev/null \
+                    | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/' | head -n1
+            fi
+        fi
+    }
+    state_set() {
+        local key="$1"
+        local value="$2"
+        local file="${3:-${STATE_FILE:-${USER_DATA_DIR:-.}/state.json}}"
+        mkdir -p "$(dirname "$file")"
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$file" "$key" "$value" <<'PYEOF'
+import sys, json, os
+file_path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+data = {}
+if os.path.exists(file_path):
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        data = {}
+if value.isdigit():
+    data[key] = int(value)
+else:
+    data[key] = value
+with open(file_path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PYEOF
+        else
+            local tmp
+            tmp="$(mktemp)"
+            declare -A kv
+            if [ -f "$file" ]; then
+                while IFS=': ' read -r k v; do
+                    k="${k//\"/}"
+                    v="${v%,}"
+                    v="${v//\"/}"
+                    [ -n "$k" ] && kv["$k"]="$v"
+                done < <(grep -o '"[^"]*"[[:space:]]*:[[:space:]]*[^,}]*' "$file" 2>/dev/null)
+            fi
+            kv["$key"]="$value"
+            {
+                echo "{"
+                local first=true
+                for k in "${!kv[@]}"; do
+                    local v="${kv[$k]}"
+                    $first || echo ","
+                    first=false
+                    if [[ "$v" =~ ^[0-9]+$ ]]; then
+                        printf '  "%s": %s' "$k" "$v"
+                    else
+                        printf '  "%s": "%s"' "$k" "$v"
+                    fi
+                done
+                echo ""
+                echo "}"
+            } > "$tmp"
+            mv "$tmp" "$file"
+        fi
+    }
     state_migrate_legacy() { :; }
 fi
 

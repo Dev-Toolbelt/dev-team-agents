@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.44.4] - 2026-08-15
 
 ### Fixed
 - **`update.sh` aborted the whole update on slim installs with opencode/Codex configured**: after a successful core update, it unconditionally re-ran `install-opencode.sh`/`install-codex.sh`, which abort with `exit 3` when the cross-CLI plumbing isn't bundled (slim installs strip it — see `scripts/lib/strip-tarball.sh`). Under `set -euo pipefail` that exit took down the entire update script, even though the Claude Code update itself had already succeeded. `update.sh` now checks for the plumbing first and, when it's missing, skips the provider re-render and prints the `install-provider.sh` bootstrap command instead of failing.
+- **`installed_version` was never actually persisted through a normal install or update**: `install.sh` sources `scripts/lib/state.sh` for its `state_get`/`state_set` helpers only when that file happens to sit next to it on disk — true only when re-running the already-installed `.dev-team-agents/scripts/install.sh` copy directly. The far more common paths (a fresh `curl | bash` install, and every run through `update.sh`, which downloads `install.sh` alone to a `mktemp` file) don't have `lib/state.sh` alongside, so they fell back to no-op stubs: `state_set() { :; }`. Step 9's `state_set installed_version "$RESOLVED" ...` silently did nothing, so `state.json` kept reporting the old version forever — `/devteam:update` and the update-check hook would report an update available even right after a successful update completed. The fallback now embeds working `state_get`/`state_set` implementations (same JSON logic as `lib/state.sh`) instead of stubs.
 
 ## [2.43.0] - 2026-08-11
 
