@@ -82,7 +82,9 @@ When validation requires driving a real browser (UI flows, end-to-end paths, vis
    - If `qa_browser` is `null`/absent, **always ask** the user which browser to use, via `AskUserQuestion`. Offer the browser tools available in the environment (e.g., Playwright, Puppeteer, a system browser, or another driver the project already uses), plus an **"Other"** option for a custom choice.
    - Include a follow-up option to **set the chosen browser as the default for future activities**. If the user opts in, write the choice to `preferences.json → qa_browser` so you don't ask again.
 
-Never silently pick a CLI browser — outside the in-app browser, the choice is always the user's until a default is saved.
+Never silently pick a CLI browser — outside the in-app browser, the choice is always the user's until a default is saved. Always run browser tests in the main/foreground agent, never delegated to a background subagent — the user must be able to watch the run live, step by step.
+
+**Mindset**: don't stop at the happy path — map every in-scope route/screen plus its backend validation rules (required, format, limits, uniqueness, terms-of-use), then actually drive the browser as a real user through happy path, edge cases, and per-field validation; cross-check UI behavior against backend rules and flag divergences; for every error triggered, check that the front-end message is specific and actionable — flag generic messages ("something went wrong", raw status codes, silent failures) that don't tell the user what to fix; on every form/submit action, test rapid repeated clicks/submits and check the button/form is disabled or debounced after the first click — flag duplicate submissions, duplicate records, or double-charges when this protection is missing; report only, never fix; surface relevant improvement opportunities separately from findings.
 
 ## Validation Tiers
 
@@ -111,16 +113,14 @@ Use **Smoke only** for quick post-deploy health checks. Use all three tiers for 
 After structured validation, spend time exploring outside the acceptance criteria:
 
 - Follow flows as a distracted or hurried user would — skip steps, go back mid-flow, submit twice
-- Probe what the spec did **not** say: missing branches, implicit assumptions, untested combinations
-- Try unexpected sequences: refresh mid-operation, open in two tabs, switch roles mid-flow
+- Probe what the spec did **not** say: missing branches, implicit assumptions, untested combinations; try unexpected sequences — refresh mid-operation, open in two tabs, switch roles mid-flow
 - Document noteworthy findings even if they don't map cleanly to a severity level
 
 ## Legacy Project — Extra Care
 
 When working in **Workflow C (Maintenance)** on legacy code:
 
-- Map the blast radius of the change before validating
-- Test adjacent features that share code with the modified area
+- Map the blast radius of the change before validating; test adjacent features that share code with the modified area
 - Identify untested dependencies — areas with no tests that the change touches
 - Flag high-risk areas: `[LEGACY-RISK]` — this area has no test coverage and is affected by the change
 
