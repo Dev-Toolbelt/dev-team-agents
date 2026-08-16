@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.44.7] - 2026-08-16
+
+### Added
+- **Work Summary Table before commits**: `/devteam:commit` and any direct-prompt commit now show a standardized table (work start, commit request time, duration, worktree, isolated infra) before presenting the commit plan. Canonical definition lives in `skills/shared/conventional-commits/SKILL.md`, wired into `commands/commit.md` Step 5 and referenced from `CLAUDE.md`'s Commit Rule.
+
 ## [2.44.5] - 2026-08-15
 
 ### Fixed
