@@ -130,6 +130,33 @@ Exits 0 when valid, 1 with a plain-English error message when not. Use in git ho
 
 ---
 
+## Work Summary Table
+
+Before executing (or, in a plan, before presenting) any commit, show a standardized summary table of the work session that produced the change. This applies whether the commit is triggered by `/devteam:commit`, another command that commits, or a direct user request in prompt.
+
+Build the table from:
+- **Work start** — timestamp of the first file touched this session (earliest tool-call timestamp available), or the start time of today's entry in `.dev-team-agents/user-data/session-summary.md` if no earlier signal exists
+- **Commit request** — timestamp of the current moment (when the commit was requested)
+- **Duration** — difference between the two, formatted `Xh Ym Zs` (omit leading zero units, e.g. `12m 04s` if under an hour)
+- **Worktree** — `Main` if operating on the primary branch, or the worktree branch name if `.dev-team-agents/.worktree-session` reads `worktree=yes branch=<b>`
+- **Isolated infra** — `Yes` if an isolated Docker stack was created for this worktree, `No` otherwise (see `skills/shared/worktree/SKILL.md`)
+
+Render as a markdown table immediately above the commit plan:
+
+```
+| Field | Value |
+|-------|-------|
+| Work started | 2026-08-16 09:12:03 |
+| Commit requested | 2026-08-16 12:32:15 |
+| Duration | 3h 20m 12s |
+| Worktree | Main |
+| Isolated infra | No |
+```
+
+Add extra rows only for information genuinely relevant to this commit (e.g. number of commits/layers produced, files touched, or which agents contributed) — do not pad the table with filler rows.
+
+---
+
 ## Changelog Generation
 
 Group commits by type for changelog:

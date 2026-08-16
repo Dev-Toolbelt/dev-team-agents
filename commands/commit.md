@@ -166,6 +166,8 @@ If any gate (lint, type-check, tests, or commit message validation) returns non-
 
 ## Step 5 — Execute commits
 
+Before presenting the plan, build and show the **Work Summary Table** described in the loaded `conventional-commits` skill.
+
 Present the proposed commit plan to the user: list each commit with its message and covered files; if there is only one commit, show the full message.
 
 Then **execute the commits directly** using `git commit` unless:
