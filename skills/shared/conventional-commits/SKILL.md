@@ -135,7 +135,7 @@ Exits 0 when valid, 1 with a plain-English error message when not. Use in git ho
 Before executing (or, in a plan, before presenting) any commit, show a standardized summary table of the work session that produced the change. This applies whether the commit is triggered by `/devteam:commit`, another command that commits, or a direct user request in prompt.
 
 Build the table from:
-- **Work start** — timestamp of the first file touched this session (earliest tool-call timestamp available), or the start time of today's entry in `.dev-team-agents/user-data/session-summary.md` if no earlier signal exists
+- **Work start** — timestamp of the first file touched this session (earliest tool-call timestamp available), or the start time of today's entry in `.dev-team-agents/user-data/session-summary.md` if no earlier signal exists. If the seconds component is unknown, use `00` as the fallback rather than omitting or guessing it
 - **Commit request** — timestamp of the current moment (when the commit was requested)
 - **Duration** — difference between the two, formatted `Xh Ym Zs` (omit leading zero units, e.g. `12m 04s` if under an hour)
 - **Branch** — current branch name, from `git branch --show-current`
