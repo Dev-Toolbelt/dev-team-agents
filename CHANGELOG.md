@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.45.0] - 2026-08-17
+
+### Added
+- **Commit Rule now ships to installed projects**: the Work Summary Table + skill-load + no-attribution rules previously only reached `/devteam:commit` (wired directly into `commands/commit.md`, which is shipped) — a direct-prompt commit in an installed project had no shipped file telling it to load `conventional-commits` or show the table, because the rule lived only in this source repo's own root `CLAUDE.md`, which `install.sh` never copies. `install.sh` Step 8b now injects the same rule into the target project's `CLAUDE.md`, mirroring the existing pre-compact-auto-summary injection exactly (marker-guarded append). Since `update.sh` re-runs `install.sh`, this backfills existing installs on update. `setup-health-check` Category 6 gained the matching detection + auto-fix for projects that update via health-check instead of re-running `install.sh`.
+
+### Fixed
+- **Unscoped full-suite test runs now blocked, not just nudged**: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` previously only injected an `additionalContext` reminder, which was easy to ignore in practice. It now hard-blocks (`exit 2`) the narrow case where a command looks like a full test suite run **and** nothing has been touched yet this session (clean working tree, no commits today) — there is no scope to derive from and no in-flight work the run could belong to. A `DEVTEAM_FULL_SUITE_CONFIRMED=1` command prefix lets an explicitly user-requested full run through. All other cases keep the existing nudge.
+- **Graphify hint no longer spams every Glob/Grep**: `02-graphify-hint.sh` re-injected the same `additionalContext` block on every single Glob/Grep call for the whole session, compounding in the retained transcript — a confirmed contributor to "Prompt is too long" failures on long sessions. It now fires once per session via a `user-data/.graphify-hint-shown` marker, cleared by `session-start.sh` at the start of the next session.
+- **Reviewer and PR flows no longer pull unscoped full diffs into context**: `skills/shared/reviewer-base/SKILL.md` and `commands/pr.md` pulled a full `git diff` into context regardless of size — another contributor to prompt-size overflow on sessions with large diffs. Both now check `git diff --stat` first and fall back to targeted per-file diffs above a size threshold.
+- **Work Summary Table row/fallback fixes**: added a branch-name row and a `00`-seconds fallback when the seconds component of the work-start timestamp is unknown.
+
 ## [2.44.7] - 2026-08-16
 
 ### Added
