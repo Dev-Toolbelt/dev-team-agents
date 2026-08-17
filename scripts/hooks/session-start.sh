@@ -25,6 +25,10 @@ PREFS_DEFAULTS_FILE="${SCRIPT_DIR}/../lib/preferences-defaults.json"
 # Dir must exist before state_migrate_legacy can look for legacy dotfiles
 # to import, and before any state_set call can write state.json.
 mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
+# Reset the once-per-session graphify-hint marker (see
+# scripts/hooks/pre-tool-use/02-graphify-hint.sh) so the hint fires again at
+# the start of this session instead of staying suppressed from a prior one.
+rm -f "${USER_DATA_DIR}/.graphify-hint-shown" 2>/dev/null || true
 # shellcheck source=scripts/lib/state.sh
 . "${SCRIPT_DIR}/../lib/state.sh"
 STATE_FILE="${USER_DATA_DIR}/state.json"
