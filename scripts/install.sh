@@ -816,6 +816,32 @@ else
     echo "→ Pre-compact auto-summary rule already present in CLAUDE.md (skipped)"
 fi
 
+# ── Step 8b: Inject Commit Rule into project CLAUDE.md ───────────────────────
+# Without this, the Work Summary Table + skill-load + no-attribution rules
+# from the framework's own CLAUDE.md only apply to /devteam:commit (wired
+# directly into commands/commit.md, which IS shipped) — a direct-prompt
+# commit ("commit this") in an installed project has no shipped file telling
+# it to load conventional-commits or show the table. This mirrors Step 8's
+# injection mechanism exactly (same marker-guarded append, same file).
+_DTA_COMMIT_MARKER="<!-- dev-team-agents: commit-rule -->"
+
+if ! grep -qF "$_DTA_COMMIT_MARKER" "$_TARGET_CLAUDE_MD" 2>/dev/null; then
+    cat >> "$_TARGET_CLAUDE_MD" <<'CLAUDEEOF'
+
+<!-- dev-team-agents: commit-rule -->
+## Commit Rule (dev-team-agents)
+When making a git commit for any task — whether triggered by `/devteam:commit` or a direct prompt request — apply these rules:
+
+1. Load `.dev-team-agents/skills/shared/conventional-commits/SKILL.md` before writing the commit message
+2. Defer to the project's own pattern first: run `git log --oneline -10` and check whether the existing history follows Conventional Commits or a different format (e.g., GitHub-style `[feature]`, plain imperative, Jira ticket prefix). If a project-specific pattern is clearly in use, follow it instead
+3. Never include AI attribution: no `Co-Authored-By: Claude`, no `🤖 Generated with Claude Code`, no AI tooling references in commit messages, PR titles, or PR bodies
+4. Show the **Work Summary Table** from the loaded skill's § Work Summary Table before presenting the commit plan — whether the commit is planned or executed directly
+CLAUDEEOF
+    echo "→ Injected commit rule into CLAUDE.md"
+else
+    echo "→ Commit rule already present in CLAUDE.md (skipped)"
+fi
+
 # ── Step 9: Record installed version ─────────────────────────────
 mkdir -p "$USER_DATA_DIR"
 state_set installed_version "$RESOLVED" "$USER_DATA_DIR/state.json"

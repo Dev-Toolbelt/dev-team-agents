@@ -267,6 +267,27 @@ CLAUDEEOF
 fi
 ```
 
+## Auto-fix for missing commit-rule marker in CLAUDE.md
+
+Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates). Mirrors the pre-compact block above exactly — same file, same append-only mechanism:
+
+```bash
+_DTA_COMMIT_MARKER="<!-- dev-team-agents: commit-rule -->"
+if ! grep -qF "$_DTA_COMMIT_MARKER" CLAUDE.md 2>/dev/null; then
+    cat >> CLAUDE.md <<'CLAUDEEOF'
+
+<!-- dev-team-agents: commit-rule -->
+## Commit Rule (dev-team-agents)
+When making a git commit for any task — whether triggered by `/devteam:commit` or a direct prompt request — apply these rules:
+
+1. Load `.dev-team-agents/skills/shared/conventional-commits/SKILL.md` before writing the commit message
+2. Defer to the project's own pattern first: run `git log --oneline -10` and check whether the existing history follows Conventional Commits or a different format (e.g., GitHub-style `[feature]`, plain imperative, Jira ticket prefix). If a project-specific pattern is clearly in use, follow it instead
+3. Never include AI attribution: no `Co-Authored-By: Claude`, no `🤖 Generated with Claude Code`, no AI tooling references in commit messages, PR titles, or PR bodies
+4. Show the **Work Summary Table** from the loaded skill's § Work Summary Table before presenting the commit plan — whether the commit is planned or executed directly
+CLAUDEEOF
+fi
+```
+
 ## Auto-fix for missing Codex session-banner rule in AGENTS.md
 
 Append the managed rule block to `AGENTS.md` (idempotent — marker prevents duplicates):
