@@ -9,7 +9,7 @@ description: Code reviewer shared rules — context, SonarQube, commit style.
 
 2. Additionally for review sessions:
    - Read linter configs (`.eslintrc*`, `pyproject.toml`, `.rubocop.yml`, `phpcs.xml`, `golangci.yml`) — source of truth for style
-   - Run `git diff main...HEAD` to scope the review to what changed; focus all findings here, not pre-existing code
+   - Run `git diff main...HEAD --stat` first to see the size and shape of the change. Under ~15 files / ~800 lines, follow with a single `git diff main...HEAD` for full content. Above that, do not pull the whole diff into context in one call — review file-by-file with targeted `git diff main...HEAD -- <path>` calls (or batches of a few related files), so one oversized diff never inflates a single turn enough to risk a context/prompt-size failure. Either way, focus all findings on what changed, not pre-existing code
    - Load `skills/shared/comments-policy/SKILL.md`
    - Load `skills/shared/conventional-commits/SKILL.md`
    - Load `skills/shared/scoped-test-execution/SKILL.md` **before running any test command** — a review that verifies behaviour runs the tests covering the diff, never the project's full suite. Reviewing is not one of the signals that authorize a full run

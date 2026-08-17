@@ -96,7 +96,7 @@ Before drafting the PR body:
 2. If it exists:
    - Read it
    - Use it as the scaffold for the PR body
-   - Fill each section with content derived from `git diff ${DEFAULT_BRANCH}...HEAD` and recent commits
+   - Fill each section from `git diff ${DEFAULT_BRANCH}...HEAD --stat`, `git log ${DEFAULT_BRANCH}...HEAD`, and recent commits. Do not pull the full unscoped diff into context — a PR body is a summary, not a diff reproduction. Pull a targeted `git diff ${DEFAULT_BRANCH}...HEAD -- <path>` only for the handful of files whose specific content the template section actually needs (e.g. a "breaking changes" section quoting an API signature)
    - Preserve the template structure exactly (checklist items, headers, HTML comments)
    - Auto-check checklist items that are verifiably true (e.g., "✅ Updated docs" if diff touches `docs/`)
 3. If it does not exist:
