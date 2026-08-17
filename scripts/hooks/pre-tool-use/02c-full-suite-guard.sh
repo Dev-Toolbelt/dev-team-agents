@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# PreToolUse sub-script: nudges Claude when a Bash command looks like an
-# unscoped full-suite test run. Does not block — see "Exit 0 in all normal
-# paths" in CLAUDE-md/hooks.md — it only injects a reminder of
-# skills/shared/scoped-test-execution/SKILL.md at the moment the command is
-# about to run, as a safety net for sessions where that skill was never
-# loaded (e.g. main-loop work outside /devteam:* routing).
+# PreToolUse sub-script: guards against an unscoped full-suite test run.
+# Documented, narrow exception to "Exit 0 in all normal paths" in
+# CLAUDE-md/hooks.md § PreToolUse Hook Sub-script Convention: when the
+# command looks like a full suite AND nothing has been touched yet this
+# session (clean working tree, no commits today), there is no scope to
+# derive from and no plausible "user asked for this" context either — the
+# session hasn't done anything yet. That combination is blocked (exit 2)
+# instead of just nudged, because it is the one case cheap enough to detect
+# reliably (git status is fast, no network) without false-positiving on
+# legitimate mid-task or explicitly-requested full runs, which still only
+# get the additionalContext nudge as before.
 set -euo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
+# shellcheck source=../lib/touched-paths.sh
+source "$HOOK_DIR/touched-paths.sh"
 
 INPUT=$(cat)
 
@@ -21,6 +30,17 @@ esac
 # cut at the first embedded double quote.
 COMMAND=$(printf '%s' "$INPUT" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*[,}].*/\1/p' | head -1)
 [ -n "$COMMAND" ] || exit 0
+
+# Explicit escape hatch for the block path only: the touched-files check below
+# cannot see conversation history, so it cannot tell an explicitly-requested
+# full run (e.g. "run the whole suite as a baseline" at session start, before
+# anything is touched) from an unprompted one. Prefixing the command with this
+# marker is how the block message tells the agent/user to reissue it — an
+# inline env var assignment, no state file, no bypass for the untouched-files
+# case being wrong by default.
+case "$COMMAND" in
+    DEVTEAM_FULL_SUITE_CONFIRMED=1\ *) exit 0 ;;
+esac
 
 # Each pattern below is a command shape with NO scope qualifier (no path,
 # no --filter/-k/--tests/-only-testing/-run), matching the "Scoped command"
@@ -91,6 +111,18 @@ is_full_suite() {
 }
 
 if is_full_suite "$COMMAND"; then
+    TOUCHED="$(devteam_compute_touched_paths || true)"
+    if [ -z "$TOUCHED" ]; then
+        # Nothing changed yet this session — there is no blast radius to scope
+        # to, and no in-flight work that a "the user asked for this" full run
+        # could plausibly belong to. Block instead of nudge.
+        {
+            echo "scoped-test-execution: BLOCKED — unscoped full test suite run with no touched files this session."
+            echo "Per skills/shared/scoped-test-execution/SKILL.md, the full suite runs only when the user explicitly asked for it in THIS session."
+            echo "Nothing has been changed yet, so there is nothing to scope this run to. If the user explicitly asked for a full run this session, reissue the command prefixed with DEVTEAM_FULL_SUITE_CONFIRMED=1 (e.g. 'DEVTEAM_FULL_SUITE_CONFIRMED=1 npm test'). Otherwise wait until there is a diff to scope tests to."
+        } >&2
+        exit 2
+    fi
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"scoped-test-execution: this command looks like an UNSCOPED full test suite run. Per skills/shared/scoped-test-execution/SKILL.md, the full suite runs only when the user explicitly asked for it in THIS session. If that is not the case, stop and scope this run to the files touched (git diff --name-only) plus their tests instead."}}\n'
 fi
 
