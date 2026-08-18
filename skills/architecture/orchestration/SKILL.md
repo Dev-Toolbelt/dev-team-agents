@@ -55,6 +55,13 @@ In this mode the Execution Strategy Gate quiz is **skipped entirely** — resolv
      (`skills/shared/worktree/SKILL.md`, full setup)
    - `worktree_active` is `false` → create a new branch: suggest a name, `git checkout -b <name>`
 
+   **Announce the resolution immediately after, in one line, before spawning anything** — silent
+   resolution is not silent execution: `"Isolated worktree at <worktree_path> on branch <branch>,
+   Docker stack isolated."` or `"New branch <branch>, no worktree isolation (worktree_active=false)."`
+   This is the autonomous-mode equivalent of Execution Strategy Gate step 5 (*Announce the chosen
+   strategy*) — the mode being unattended is why the decision needs to be visible, not why it can be
+   skipped.
+
 2. **Write the session file BEFORE spawning any subagent**:
    ```bash
    echo "worktree=<yes|no> branch=<branch>" > .dev-team-agents/.worktree-session
