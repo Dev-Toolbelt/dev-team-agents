@@ -235,6 +235,13 @@ If `ScheduleWakeup` is not available in the current context, this check cannot b
 back to check 4's reactive behavior and say so if asked, rather than claiming a checkback is
 scheduled when none was.
 
+### 5. Periodic status table
+
+While background sub-agents are working, load `skills/shared/work-feedback/SKILL.md` and follow it
+for the check-in cadence and table format — gated entirely by `credentials.local.json`
+(`work_feedback_active`, `work_feedback_interval_minutes`). Do not restate its gate check, loop
+mechanics, or table format here.
+
 ---
 
 ## Background Process Discipline

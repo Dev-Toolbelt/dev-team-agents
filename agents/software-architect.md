@@ -35,7 +35,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 | Task context | Skill |
 |---|---|
 | Writing or reviewing any architecture document | `skills/architecture/architecture-docs/SKILL.md` |
-| Delegating implementation to subagents | `skills/architecture/orchestration/SKILL.md` |
+| Delegating implementation to subagents (background runs also need `skills/shared/work-feedback/SKILL.md`) | `skills/architecture/orchestration/SKILL.md` |
 | Producing any ADR | `skills/shared/adr/SKILL.md` |
 | DISCOVERY phase | `skills/shared/discovery-mode/SKILL.md` |
 | Authoring `api-contracts.md` | `skills/architecture/api-design/SKILL.md` |
