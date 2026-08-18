@@ -379,13 +379,16 @@ chmod 600 "$CRED_FILE"
 
 ## Auto-fix for missing top-level keys in credentials.local.json
 
-Inject missing keys (`devops`, `app`) with defaults without overwriting existing data:
+Inject missing keys (`devops`, `app`, `work_feedback_active`, `work_feedback_interval_minutes`) with
+defaults without overwriting existing data:
 
 ```python
 import json
 
 path = ".dev-team-agents/user-data/credentials.local.json"
 template = {
+    "work_feedback_active": True,
+    "work_feedback_interval_minutes": 5,
     "devops": {
         "agents": ["software-architect", "devops-specialist", "security-specialist"],
         "staging": {"ssh": {"user": "", "host": "", "privateKeyPath": "", "path": ""}, "database": []},

@@ -570,7 +570,7 @@ if [ -f .dev-team-agents/user-data/credentials.local.json ]; then
 import json
 with open('.dev-team-agents/user-data/credentials.local.json') as f:
     d = json.load(f)
-missing = [k for k in ['devops', 'app'] if k not in d]
+missing = [k for k in ['devops', 'app', 'work_feedback_active', 'work_feedback_interval_minutes'] if k not in d]
 if missing:
     print('MISSING_KEYS: ' + ', '.join(missing))
 else:
@@ -589,6 +589,7 @@ grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/n
 |-------|--------|----------|
 | `credentials.local.json` exists | Required | Create with default template if missing |
 | Top-level keys (`devops`, `app`) present | Required | Add missing keys with defaults (never remove existing data) |
+| `work_feedback_active` / `work_feedback_interval_minutes` present | Required | Add missing keys only (`true` / `5`), never overwrite an existing value — see `skills/shared/work-feedback/SKILL.md` |
 | No root-level `credentials.local.json` | Required (migrate) | Move to `.dev-team-agents/user-data/credentials.local.json` (see fix-patterns.md) |
 | `.gitignore` entry present | Required | Append `.dev-team-agents/user-data/credentials.local.json` with a strong comment |
 
