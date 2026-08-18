@@ -460,6 +460,8 @@ CREDENTIALS_FILE="$USER_DATA_DIR/credentials.local.json"
 if [ ! -f "$CREDENTIALS_FILE" ]; then
     cat > "$CREDENTIALS_FILE" <<'JSONEOF'
 {
+  "work_feedback_active": true,
+  "work_feedback_interval_minutes": 5,
   "devops": {
     "agents": ["software-architect", "devops-specialist", "security-specialist"],
     "staging": {
@@ -519,6 +521,47 @@ JSONEOF
     echo "→ Credentials template: $CREDENTIALS_FILE"
 else
     echo "→ Credentials file exists: $CREDENTIALS_FILE (kept)"
+    # Additive-only backfill: an install predating work_feedback_* never had
+    # a chance to see these keys. Never rewrite devops/app or any existing
+    # value — only insert the two keys if they are absent.
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$CREDENTIALS_FILE" <<'PYEOF'
+import sys, json
+path = sys.argv[1]
+with open(path) as f:
+    data = json.load(f)
+changed = False
+if "work_feedback_active" not in data:
+    data["work_feedback_active"] = True
+    changed = True
+if "work_feedback_interval_minutes" not in data:
+    data["work_feedback_interval_minutes"] = 5
+    changed = True
+if changed:
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+PYEOF
+    else
+        # No python3: text-based additive insert, only when both keys are absent
+        # from the raw file content. Mirrors the preferences.json no-python3
+        # fallback — hand-maintained, keep in sync with the heredoc above.
+        if ! grep -q '"work_feedback_active"' "$CREDENTIALS_FILE" && \
+           ! grep -q '"work_feedback_interval_minutes"' "$CREDENTIALS_FILE"; then
+            TMP_CREDS="$(mktemp)"
+            awk '
+                NR==1 && /^\{[[:space:]]*$/ {
+                    print
+                    print "  \"work_feedback_active\": true,"
+                    print "  \"work_feedback_interval_minutes\": 5,"
+                    next
+                }
+                { print }
+            ' "$CREDENTIALS_FILE" > "$TMP_CREDS"
+            mv "$TMP_CREDS" "$CREDENTIALS_FILE"
+            chmod 600 "$CREDENTIALS_FILE"
+        fi
+    fi
 fi
 
 # ── Step 2c: Migrate root-level credentials.local.json if present ──
