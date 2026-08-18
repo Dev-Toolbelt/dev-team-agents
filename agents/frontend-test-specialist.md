@@ -129,6 +129,8 @@ When the frontend is a separate deployable consuming an API it does not own, loa
 ## Test Quality Standards
 
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **No external agents in unit/component tests**: never let a unit or component test make a real network call, hit a real API, or touch real browser storage (`localStorage`, `IndexedDB`, cookies) — this is a hard rule, not a preference, enforced by the Hard rule in `skills/testing/test-pyramid/SKILL.md`. Mock the network layer (MSW, per the Integration Tests section below, applies here too) and mock/stub storage APIs. If the flow genuinely needs a real backend to be meaningfully verified, that's an E2E test against a real/test stack, not a unit or component test
+- **Realistic mocks**: MSW handlers and storage stubs should mirror the real API/storage contract — success, error, empty, and edge-case responses — not just the happy path a component expects
 
 ---
 

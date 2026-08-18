@@ -119,6 +119,7 @@ Apply whatever type discipline the project has adopted — a type system, a runt
 - YAGNI violations: inputs added "for future use", generic components with one consumer
 - DRY: duplicated fetch logic, repeated style blocks, copy-pasted component logic
 - Naming: load `skills/architecture/naming-conventions/SKILL.md` for component, hook/composable, and file naming standards
+- **Unit/component tests that make a real network call or touch real browser storage** — flag as `[BLOCKING]` per the Hard rule in `skills/testing/test-pyramid/SKILL.md`; mock the network layer (MSW) and storage APIs, or reclassify the test as E2E
 
 ### 12. Comments
 Apply the loaded comments policy:

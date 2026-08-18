@@ -91,6 +91,8 @@ Load contextually based on the task:
 ## Test Quality Standards
 
 - **Code comments**: follow `skills/shared/comments-policy/SKILL.md`. In tests the AAA pattern (`// Arrange`, `// Act`, `// Assert`) is mandatory — all other comments apply the default "only when WHY is non-obvious" rule
+- **No external agents in unit tests**: a unit test never touches a real database, external API, filesystem, queue, or cache — this is a hard rule, not a preference, enforced by the Hard rule in `skills/testing/test-pyramid/SKILL.md`. If the layer decision (this file's Test Layers section) puts a test at the unit level, mock every out-of-process dependency; if the code genuinely needs a real dependency to be meaningfully tested, write it as an integration test instead, never as a unit test with a live connection
+- **Realistic mocks**: mock the dependency's actual interface (method signatures, error types, not-found/timeout/validation-failure responses) — not just the happy path. A mock that only ever succeeds hides the bugs the real dependency would surface
 - Tests must be **deterministic**: same result every run, no sleep(), no random data without seed
 - Tests must be **isolated**: no shared state between tests, each owns its setup and teardown
 - **Meaningful assertions**: assert the outcome that matters, not just "it didn't throw"

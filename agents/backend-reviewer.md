@@ -100,6 +100,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 - KISS violations: unnecessary indirection, abstractions with a single implementation
 - YAGNI violations: unused parameters added "for future use", speculative features
 - DRY: duplicated validation rules, repeated query patterns, copy-pasted logic across services
+- **Unit tests that touch a real database, external API, filesystem, queue, or cache** — flag as `[BLOCKING]` per the Hard rule in `skills/testing/test-pyramid/SKILL.md`; the dependency must be mocked, or the test reclassified as integration
 
 ### 9. Performance
 - Algorithmic complexity: O(n²) where O(n) is achievable

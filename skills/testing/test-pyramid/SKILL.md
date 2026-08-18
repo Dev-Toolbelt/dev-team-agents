@@ -40,8 +40,13 @@ function test_calculateDiscount_vipCustomer_gets15Percent() {
 }
 ```
 
+### Hard rule — no external agents
+A unit test **never** touches a real database, external API, filesystem, message queue, cache server, or any other out-of-process dependency — not even a test/staging instance of one. If the code under test depends on one of these, inject the dependency and replace it with a mock/stub/fake in the test. A test that needs a running database or network call to pass is an integration test by definition, no matter which folder it lives in — move it to `tests/integration/` (see below).
+
+**Mocks must model the real contract, not just return canned values**: mirror the dependency's actual method signatures, error types, and edge-case responses (not-found, timeout, validation failure) — a mock that only ever returns the happy path hides bugs the real dependency would surface. Prefer typed fakes or in-memory implementations of a repository/client interface over ad-hoc stub objects when the interaction has more than one or two call sites.
+
 ### Common pitfalls
-- Using real databases in unit tests (use mocks/stubs for I/O)
+- Using real databases, external APIs, or other I/O in unit tests (use mocks/stubs instead — see Hard rule above)
 - Mocking the class under test
 - Testing private methods directly — test through public interface
 - Tests that pass only in a specific order (test isolation broken)

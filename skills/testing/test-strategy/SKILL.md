@@ -34,7 +34,7 @@ Before writing a test, ask:
 
 ### Unit Tests
 - Test a single function/method in isolation
-- No database, no network, no filesystem
+- **No database, no network, no filesystem, no external API or storage — ever, including test/staging instances.** Inject and mock any such dependency; see the Hard rule in `skills/testing/test-pyramid/SKILL.md`
 - Fast: < 10ms each
 - Write when: pure business logic, complex algorithms, edge cases in a function
 
