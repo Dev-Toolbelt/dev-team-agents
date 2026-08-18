@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.46.0] - 2026-08-18
+
+### Added
+- **Periodic work-feedback status table**: while background sub-agents work, the main agent now polls every N minutes (default 5) and prints a table-only status check-in — steps in planned order, ✅/⏳/🕐 status. New `skills/shared/work-feedback/SKILL.md` is the canonical home for the config gate, `ScheduleWakeup` loop mechanics, and table format; wired into `skills/architecture/orchestration/SKILL.md` § Spawn Integrity as check 5. Gated entirely by two new `credentials.local.json` keys, `work_feedback_active` (default `true`) and `work_feedback_interval_minutes` (default `5`) — `install.sh` writes them on fresh installs and additively backfills existing files, and `/devteam:health-check` Category 10 detects and fixes missing keys.
+- **Unit-test isolation is now a hard rule**: `skills/testing/test-pyramid/SKILL.md` gained an explicit "no external agents" rule for unit tests (no DB, external API, filesystem, queue, or cache — even test/staging instances), mirrored into `backend-test-specialist`/`frontend-test-specialist`'s Test Quality Standards and enforced with a `[BLOCKING]` check in `backend-reviewer`/`frontend-reviewer`.
+
 ## [2.45.1] - 2026-08-17
 
 ### Fixed
