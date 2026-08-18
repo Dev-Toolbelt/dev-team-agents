@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.46.1] - 2026-08-18
+
+### Fixed
+- **Autonomous Sprint Protocol resolved the worktree/branch decision silently, with no visible confirmation**: the manual Execution Strategy Gate has a step 5 ("Announce the chosen strategy, then proceed to execution"), but the autonomous-mode auto-resolve path (`skills/architecture/orchestration/SKILL.md`) had no equivalent — it read `worktree_active`, acted on it, and moved straight to spawning subagents, so the user had no way to confirm whether an isolated worktree was actually created before file writes started. The protocol now requires a one-line announcement of the resolved worktree/branch decision immediately after auto-resolving and before any subagent is spawned.
+
 ## [2.46.0] - 2026-08-18
 
 ### Added
