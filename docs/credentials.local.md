@@ -40,6 +40,8 @@ The installer creates it on first install and sets restrictive permissions with 
 
 ```json
 {
+  "work_feedback_active": true,
+  "work_feedback_interval_minutes": 5,
   "devops": {
     "agents": ["software-architect", "devops-specialist", "security-specialist"],
     "staging": {
@@ -113,6 +115,8 @@ The installer creates it on first install and sets restrictive permissions with 
 
 | Key | Purpose |
 |-----|---------|
+| `work_feedback_active` | Enables/disables the periodic status-table check-in while background sub-agents work (`skills/shared/work-feedback/SKILL.md`). Default `true` |
+| `work_feedback_interval_minutes` | Interval, in minutes, between status-table check-ins. Default `5` |
 | `devops` | Infrastructure-level access for servers, databases, and operational tasks |
 | `app` | Application-level access for logging into staging or production environments |
 

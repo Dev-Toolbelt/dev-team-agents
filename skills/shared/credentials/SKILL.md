@@ -15,10 +15,12 @@ This file is **gitignored** and **never committed**. It is created automatically
 
 ## Structure
 
-The file follows a category → environment → credential pattern. Two top-level categories are provided by default; users may add more:
+The file follows a category → environment → credential pattern. Two top-level categories are provided by default; users may add more. It also carries two flat top-level settings unrelated to credentials — `work_feedback_active` and `work_feedback_interval_minutes`, consumed by `skills/shared/work-feedback/SKILL.md`, not by this skill:
 
 ```json
 {
+  "work_feedback_active": true,
+  "work_feedback_interval_minutes": 5,
   "devops": {
     "agents": ["software-architect", "devops-specialist", "security-specialist"],
     "staging": {
