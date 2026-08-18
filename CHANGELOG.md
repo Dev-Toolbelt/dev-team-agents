@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.45.1] - 2026-08-17
+
+### Fixed
+- **`/devteam:commit` could silently skip documenting a commit**: Step 0 ("Auto knowledge capture") ran `/devteam:learn`'s evidence gathering *before* the commit was made, so its `git log`/`git diff` evidence never saw the commit about to happen, and the session-guard marker (`.dev-team-agents/.learn-last-run`) recorded the **pre-commit** HEAD. A later `/devteam:commit` call in the same session would then see "HEAD unchanged" and skip learn entirely, leaving that commit's work undocumented. The step now runs as Step 6, after commits (and any worktree rebase/merge) complete, so the marker reflects the post-commit HEAD.
+
 ## [2.45.0] - 2026-08-17
 
 ### Added
