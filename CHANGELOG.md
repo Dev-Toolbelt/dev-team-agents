@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.47.0] - 2026-08-18
+
+### Added
+- **`/devteam:merge` command**: wraps `git merge` with target-branch detection (stops if already on the default branch), an isolated worktree/infra-aware quiz — commit + rebase + merge + teardown (recommended, delegated to `skills/shared/worktree/SKILL.md`'s existing finalize routine) vs. commit + merge only vs. merge only — and a nudge toward `/devteam:learn` when its `.learn-last-run` marker is stale relative to the current commit. `opt_out` plan gate, no agent spawn (thin wrapper), same pattern as `/devteam:push`.
+
 ## [2.46.1] - 2026-08-18
 
 ### Fixed
