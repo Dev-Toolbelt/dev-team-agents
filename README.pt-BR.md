@@ -109,6 +109,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:docs` | Documentação — technical-writer |
 | `/devteam:pr` | Pull request — rascunha título + descrição, pede confirmação antes de criar; antes do push, pergunta com um quiz sensível a CI/CD (acompanhar Actions vs. só o push) quando o GitHub Actions está configurado |
 | `/devteam:push` | Push — pergunta com um quiz sensível a CI/CD (acompanhar CI + auto-correção vs. só o push vs. outro) quando o GitHub Actions está configurado; faz push normalmente caso contrário |
+| `/devteam:merge` | Merge — detecta um branch de trabalho fora do padrão e pergunta o alvo; detecta worktree/infra isolada e oferece commit + rebase + merge + teardown (recomendado) vs. commit + merge apenas vs. merge apenas; reforça rodar `/devteam:learn` caso ele não tenha sido executado desde o último commit |
 | `/devteam:commit` | Commit — lê mudanças staged, agrupa por camada, escreve e executa commits |
 | `/devteam:learn` | Captura de conhecimento — consolida decisões, padrões e descobertas da sessão em docs, wiki e ADRs, e então faz o commit automaticamente (declara o manifesto de commits no plano) |
 | `/devteam:rule` | Padronização — cataloga uma regra obrigatória de reuso (ex.: `/devteam:rule use o componente XPTO em todo o projeto`) em `docs/development/reuse-guidelines.md`, para que trabalhos futuros nunca a ignorem. Classificada como `code-pattern`, `path-convention` ou `design-rule`; aplicada pelo gate de review e, para os tipos mecanizáveis, por um lint no Stop hook |
