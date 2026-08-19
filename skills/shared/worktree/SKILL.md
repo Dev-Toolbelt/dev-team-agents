@@ -64,6 +64,8 @@ Load `references/branch-flow.md` for the complete step-by-step flow:
 
 Examples: `auth/add-oauth-provider`, `payments/fix-refund-calculation`, `api/add-rate-limiting`
 
+Both parts must be real, spelled-out words describing the task — never an invented acronym or letter code (e.g. `bsi`, `dkey`). A human unfamiliar with the task must be able to tell what it's about from the name alone.
+
 For the full naming table, see `references/branch-flow.md` → Naming quick-reference.
 
 ---

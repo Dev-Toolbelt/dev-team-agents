@@ -30,6 +30,7 @@ Rules:
 - `context` = domain or module (e.g. `auth`, `payments`, `notifications`, `api`, `infra`)
 - `brief-title` = imperative, hyphenated, English, ≤ 5 words (e.g. `fix-token-expiry`, `add-export-endpoint`)
 - All lowercase, no spaces, no underscores
+- Both `context` and `brief-title` must be **real, spelled-out words describing the task** — never an invented acronym, initialism, random letter code, or abbreviation (e.g. `bsi`, `dkey`, `ghs`). A human unfamiliar with the task must be able to tell what it's about from the name alone. Abbreviate only well-known, unambiguous terms (`api`, `db`, `ui`) — never compress a task description into letters.
 
 Examples: `auth/add-oauth-provider`, `payments/fix-refund-calculation`, `api/add-rate-limiting`
 

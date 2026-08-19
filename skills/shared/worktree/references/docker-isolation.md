@@ -51,6 +51,11 @@ Example: repo `myapp`, worktree `auth/add-oauth` →
 and volumes `myapp-wt-auth-add-oauth_<volume>` — instantly identifiable and fully
 separate from the main stack.
 
+> This name is derived directly from the `<context>/<brief-title>` worktree slug
+> (see `../SKILL.md` → Name Format). Never shorten it into an acronym or letter
+> code — an isolated stack whose name doesn't say what task it belongs to defeats
+> the point of this section.
+
 Export it for every command in this worktree:
 
 ```bash
