@@ -482,6 +482,19 @@ The script prints existing ADR titles and auto-numbers the file — see `skills/
 
 **Automated gap detection.** `scripts/hooks/stop/03e-adr-gap-check.sh` is a heuristic, non-blocking safety net for this rule: it warns when a session touched a dependency manifest, a schema migration, or a provider config file but added no new file under `docs/development/adrs/`. It never decides whether an ADR is actually warranted — that judgment stays with the triggers above — it only prevents the signal from being silently missed.
 
+### Learn Trigger Rule
+
+`/devteam:learn` should not be treated as an end-of-session-only command — any point where work is about to leave the current session's context is a finalization signal worth checking. The canonical nudge implementation is `commands/merge.md` § Step 4 (checks `.dev-team-agents/.learn-last-run` against current `HEAD`, asks via `AskUserQuestion`). The following commands carry the same check at their own closing point — patch all of them together if the mechanism ever changes:
+
+| Command | Finalization point |
+|---------|--------------------|
+| `/devteam:merge` | Merging the working branch into the target (canonical implementation) |
+| `/devteam:pr` | After `gh pr create` succeeds |
+| `/devteam:refactor` | Session close, alongside the session-summary step |
+| `/devteam:audit` | After the report is written, even on **Report only** |
+
+Not every finalization point has a mechanical nudge — some triggers (recurring findings across sessions, a bug that took many iterations to isolate, a first-time integration with an external service) are real signals but have no persistent cross-session store to detect them from today. Do not invent one ad hoc inside a single command; that is a harness-level feature, not a per-command patch.
+
 ### Correction Pattern Rule
 
 When the user corrects the same agent behavior **2 or more times in the same session** — pushing back on the same workflow choice, format, or default — that is a standing preference, not a one-off note for that task. Do not just comply silently a second time. Before continuing:

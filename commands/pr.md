@@ -137,6 +137,20 @@ Creating a PR pushes the branch, which counts as an explicit push. Before `gh pr
 
 After `gh pr create` succeeds, apply the Session Summary Rule from `CLAUDE.md` right now rather than waiting for session end: check `git status --porcelain`, `git diff --cached`, and today's commits — the same detection `scripts/hooks/lib/session-summary-detect.sh` uses. If there is a signal and `.dev-team-agents/user-data/session-summary.md` has no entry for today, write one (Done/Decisions/Next, in English) before finishing the command.
 
+## Post-create — Nudge `/devteam:learn` if not run this session
+
+Check for the marker `/devteam:learn` writes:
+
+```bash
+cat .dev-team-agents/.learn-last-run 2>/dev/null
+```
+
+If the marker is absent, or its recorded commit hash is not an ancestor of the current `HEAD` (i.e. commits landed since the last learn run), tell the user before finishing:
+
+> "This session hasn't run `/devteam:learn` since its last recorded commit — consider running it to capture decisions from this branch before they're lost. Run `/devteam:learn` now?"
+
+Ask via `AskUserQuestion` (Yes / No). If yes, hand off by telling the user to invoke `/devteam:learn` (do not spawn it inline — it is a separate command with its own plan gate).
+
 ---
 
 $ARGUMENTS options:

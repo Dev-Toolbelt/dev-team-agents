@@ -159,7 +159,8 @@ Fast track still requires user approval of the plan before any implementation be
 After the phases above complete — including any resolution agents:
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
-2. **Hand off** — Phase 3 already committed the test and refactoring blocks. Close with one line naming the next step: `/devteam:pr` to open the pull request (use the technical-writer's PR body), or `/devteam:commit` first if anything is still uncommitted.
+2. **Nudge `/devteam:learn`** — check `cat .dev-team-agents/.learn-last-run 2>/dev/null`. If the marker is absent, or its recorded commit hash is not an ancestor of the current `HEAD`, ask via `AskUserQuestion` (Yes / No): "This session hasn't run `/devteam:learn` since its last recorded commit — consider running it to capture decisions from this refactor before they're lost. Run `/devteam:learn` now?" If yes, tell the user to invoke it (do not spawn it inline — separate command, own plan gate).
+3. **Hand off** — Phase 3 already committed the test and refactoring blocks. Close with one line naming the next step: `/devteam:pr` to open the pull request (use the technical-writer's PR body), or `/devteam:commit` first if anything is still uncommitted.
 
 ---
 
