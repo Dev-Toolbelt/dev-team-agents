@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.47.1] - 2026-08-20
+
+### Fixed
+- **Comments policy had no length cap**: `skills/shared/comments-policy/SKILL.md` allowed WHY comments but didn't bound how long they could be, letting agents produce large documentation-style blocks in code and config files (observed in nginx config). Added a hard limit — max 3 lines per comment, max 3 comments per contiguous block — extended explicitly to config/infra files, not just source code.
+
 ## [2.47.0] - 2026-08-18
 
 ### Added

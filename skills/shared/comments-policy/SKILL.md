@@ -56,6 +56,20 @@ See `references/type-annotations.md` and `references/aaa-pattern.md` for full ex
 
 ---
 
+## Length Rule — Brief and Direct, Never a Block
+
+When a comment is warranted (WHY, not WHAT), it must be **short**: 1 line as the default, 2–3 only when the constraint genuinely cannot be stated in one. State the rule/workaround/reference and stop — no restating of the surrounding code, no walkthrough of alternatives considered, no multi-paragraph rationale.
+
+Hard limit: **max 3 lines per comment, max 3 comments per contiguous block** (e.g. per config section, per function). A comment that needs more than 3 lines to justify itself belongs in an ADR (`docs/development/adrs/`) or a commit message, referenced by a single short line — not inlined. This applies everywhere, not only source code: config files (nginx, YAML, Dockerfiles), infra scripts, and templates follow the same limit.
+
+| Anti-pattern | Fix |
+|---|---|
+| Multi-line header block above a config section explaining history/context | One line stating the constraint; move the rest to an ADR or commit message |
+| Walking through what was tried before landing on this line | Delete — Git history already has this |
+| Repeating the same WHY across several adjacent lines | State it once, near the first line it applies to |
+
+---
+
 ## Quick Reference
 
 ```
