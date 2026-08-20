@@ -3,10 +3,9 @@
 .DS_Store
 .idea/
 .claude/settings.local.json
-.claude/user-data/session-summary.md
-.claude/user-data/.notifier-state
 .codex/
 .dev-team-agents/user-data/
+.dev-team-agents/.worktree-session
 user-data/
 scripts/lib/__pycache__/
 credentials.local.json
