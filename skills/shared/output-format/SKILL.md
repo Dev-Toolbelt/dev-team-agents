@@ -7,6 +7,19 @@ description: Pure-markdown output rules for plans, reports, reviews, and any str
 
 Use this format for ALL structured output — plans, reports, reviews, diagnostics, conformance reports, post-implementation reviews, and any other agent-produced documents. It renders cleanly on any platform (Claude Code, opencode, Codex CLI, ChatGPT, any terminal or web UI).
 
+## Readability Rule (Main Window)
+
+Everything this skill governs is read directly by a human in the main chat window — not a file on disk. Write for light, fast reading, not dense prose:
+
+- **Short paragraphs** — 2–4 lines max. Break up anything longer.
+- **Lead with the point** — conclusion or answer first, supporting detail after.
+- **Bullets and tables over prose** whenever there are 3+ related items, options, or steps.
+- **No padding** — cut restated context and filler transitions ("It's worth noting that…").
+- **Headers only when the content needs navigation** — a two-paragraph answer doesn't need section headers.
+- **One idea per sentence.**
+
+This also cuts output tokens: a padded answer costs more to generate than a tight one saying the same thing. Does not apply to files written to disk (code, docs, ADRs) — those follow their own format's conventions.
+
 ## Core Rules
 
 - **Pure markdown only** — no HTML, no raw ANSI, no escape sequences
