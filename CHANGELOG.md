@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.47.2] - 2026-08-21
+
+### Added
+- **Readability rule for main-window output**: `skills/shared/output-format/SKILL.md` now requires short paragraphs, lead-with-the-point answers, and bullets/tables over prose for anything an agent writes directly to the chat window (plans, explanations, reviews) — loaded by reviewers, `software-architect`, `qa-specialist`, `security-specialist`, `plan-mode`, and `/devteam:explain`. Reduces output tokens as a side effect.
+
 ## [2.47.1] - 2026-08-20
 
 ### Fixed
