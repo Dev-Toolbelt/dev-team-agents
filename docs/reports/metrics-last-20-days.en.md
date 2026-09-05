@@ -1,594 +1,737 @@
-# DevTeam Agents Usage Metrics — Last 20 Days
+# PostHog Usage Metrics — Last 20 Days
 
-**Window:** 2026-07-25 22:07 → 2026-08-14 22:07, `America/Sao_Paulo` time (20 days)
-**First event observed in window:** 2026-07-26 09:34 (`America/Sao_Paulo`)
-**Generated:** 2026-08-14 22:07 (`America/Sao_Paulo`)
-**Timezone used for time-based metrics:** `America/Sao_Paulo` (UTC−3)
-**Total events in window:** 2,947 (agent metrics computed over 1,659 valid `agent_completed` — 3 manual test events `__manual_verification_test__` excluded from 1,662)
+**Window:** 2026-08-15 22:07 → 2026-09-04 22:07, `America/Sao_Paulo` time (20 days)  
+**First event in window:** 2026-08-15 22:51  
+**Last event in window:** 2026-09-04 16:48  
+**Generated:** 2026-09-04 22:07 (`America/Sao_Paulo`)  
+**Timezone used for all time-based metrics:** `America/Sao_Paulo` (UTC−3)  
+**Total events in window:** 5,563  
+**Distinct installs (anonymous IDs):** 6  
 **PostHog project ID:** 430371
+
+> **Coverage notice:** the geography section (country/state/city) **could not be computed**
+> in this run — the environment executing the report blocked queries against the `$geoip_*`
+> properties. Every other metric in the prompt was computed normally. See § 6.
 
 ---
 
 ## 0. Event type distribution
 
-**Conclusion:** `agent_completed` dominates with 1,662 events (56.4%); `command_invoked` accounts for only 11 (0.4%), matching the pattern seen in the previous report — work is driven by direct agent spawns, not the slash-command layer.
+**Conclusion:** `session_end` dominates with 3,460 events (62.2%), followed by `agent_completed` with 2,051 (36.9%); `command_invoked` accounts for only 11 events (0.2%) — work is still driven by direct agent spawns, not the slash-command layer.
 
-| Event | Occurrences | % |
-|---|---:|---:|
-| **`agent_completed`** | **1,662** | **56.4%** |
-| `session_end` | 1,140 | 38.7% |
-| `install` | 92 | 3.1% |
-| `update` | 35 | 1.2% |
-| `command_invoked` | 11 | 0.4% |
-| `first_install` | 7 | 0.2% |
-| `agent_spawned` | 0 | 0.0% |
+| Event | Occurrences | % | Distinct installs |
+|---|---:|---:|---:|
+| **`session_end`** | **3,460** | **62.2%** | 6 |
+| `agent_completed` | 2,051 | 36.9% | 2 |
+| `install` | 28 | 0.5% | 4 |
+| `update` | 13 | 0.2% | 3 |
+| `command_invoked` | 11 | 0.2% | 2 |
+| **Total** | **5,563** | **100.0%** | 6 |
 
-> `agent_spawned` **never fired** in the window. All agent metrics use `agent_completed` as a proxy.
+> `agent_spawned` and `first_install` **did not occur** in this window — both exist in the
+> project history (26 `first_install` over the last 120 days). The "most-invoked agents" metric
+> is therefore derived exclusively from `agent_completed` (§ 2).
 
-## 1. Most-called commands
+---
 
-**Conclusion:** `status` leads with 3 invocations out of only 11 total — too small a sample for a meaningful ranking, but the data point itself is the finding: 27 of 34 canonical commands recorded zero invocations (see section 14).
+## 1. Most-invoked commands
 
-| Command | Calls |
-|---|---:|
-| **`status`** | **3** |
-| `architect` | 2 |
-| `review` | 2 |
-| `install` | 1 |
-| `pr` | 1 |
-| `push` | 1 |
-| `sync-rules` | 1 |
+**Conclusion:** `/devteam:learn` and `/devteam:status` tie for the lead with 4 invocations each (36.4% of the window's 11 command invocations); absolute volume is very low — 11 invocations against 2,051 agent runs.
+
+| # | Command | Invocations | % |
+|---:|---|---:|---:|
+| 1 | **`/devteam:learn`** | **4** | **36.4%** |
+| 2 | **`/devteam:status`** | **4** | **36.4%** |
+| 3 | `/devteam:commit` | 1 | 9.1% |
+| 4 | `/devteam:review` | 1 | 9.1% |
+| 5 | `/devteam:sync-rules` | 1 | 9.1% |
+| | **Total** | **11** | **100.0%** |
+
+---
 
 ## 2. Most-invoked agents
 
-**Conclusion:** `software-architect` leads with 325 completions (19.6% of 1,659), closely followed by `frontend-developer` (288) and `backend-developer` (232) — the three sum to 51.0% of all agent activity.
+**Conclusion:** `software-architect` is by far the most-run agent, with 733 runs — 35.7% of all 2,051 runs in the window, more than triple the runner-up.
 
-| Agent | Completions | % |
-|---|---:|---:|
-| **`software-architect`** | **325** | **19.6%** |
-| `frontend-developer` | 288 | 17.4% |
-| `backend-developer` | 232 | 14.0% |
-| `devops-specialist` | 119 | 7.2% |
-| `security-specialist` | 111 | 6.7% |
-| `frontend-test-specialist` | 106 | 6.4% |
-| `backend-test-specialist` | 93 | 5.6% |
-| `nextjs-spa-specialist` ⚠️ | 66 | 4.0% |
-| `qa-specialist` | 63 | 3.8% |
-| `code-reviewer` | 60 | 3.6% |
-| `test-author` ⚠️ | 45 | 2.7% |
-| `database-specialist` | 41 | 2.5% |
-| `product-analyst` | 40 | 2.4% |
-| `technical-writer` | 21 | 1.3% |
-| `laravel-specialist` ⚠️ | 15 | 0.9% |
-| `Explore` ⚠️ | 12 | 0.7% |
-| `frontend-reviewer` | 10 | 0.6% |
-| `backend-reviewer` | 8 | 0.5% |
-| `ui-ux-designer` | 2 | 0.1% |
-| `unknown` ⚠️ | 2 | 0.1% |
+| # | Agent | Runs | % |
+|---:|---|---:|---:|
+| 1 | **`software-architect`** | **733** | **35.7%** |
+| 2 | `backend-developer` | 210 | 10.2% |
+| 3 | `qa-specialist` | 190 | 9.3% |
+| 4 | `code-reviewer` | 185 | 9.0% |
+| 5 | `security-specialist` | 183 | 8.9% |
+| 6 | `Explore` | 104 | 5.1% |
+| 7 | `frontend-developer` | 102 | 5.0% |
+| 8 | `database-specialist` | 72 | 3.5% |
+| 9 | `devops-specialist` | 71 | 3.5% |
+| 10 | `technical-writer` | 59 | 2.9% |
+| 11 | `laravel-specialist` | 44 | 2.1% |
+| 12 | `backend-test-specialist` | 28 | 1.4% |
+| 13 | `general-purpose` | 23 | 1.1% |
+| 14 | `frontend-test-specialist` | 18 | 0.9% |
+| 15 | `product-analyst` | 16 | 0.8% |
+| 16 | `unknown` | 4 | 0.2% |
+| 17 | `frontend-reviewer` | 4 | 0.2% |
+| 18 | `nextjs-spa-specialist` | 4 | 0.2% |
+| 19 | `devops-deploy` | 1 | 0.0% |
+| | **Total** | **2,051** | **100.0%** |
 
-> ⚠️ = name outside the canonical `agents/*.md` roster. `nextjs-spa-specialist`, `laravel-specialist` and `test-author` are project-local or legacy agent names; `Explore` is a native Claude Code subagent; `unknown` marks an event with an unresolved `agent_name`.
+> Names outside the dev-team-agents roster (`Explore`, `general-purpose`, `laravel-specialist`,
+> `nextjs-spa-specialist`, `devops-deploy`, `unknown`) are Claude Code native agents or
+> project-local agents on installs that report telemetry — see § 14.
+
+---
 
 ## 3. Model ranking, grouped by provider
 
-**Conclusion:** 100% of completions came from the `claude` provider; `claude-sonnet-5` accounts for 62.4% of runs, and no `opencode` or `codex` event appeared in the window.
+**Conclusion:** 100% of runs come from the `claude` provider; `claude-sonnet-5` leads with 1,009 runs (49.2%), closely followed by `claude-opus-5[1m]` with 907 (44.2%).
 
-| Provider | Model | Runs | % |
-|---|---|---:|---:|
-| **`claude`** | **`claude-sonnet-5`** | **1,036** | **62.4%** |
-| `claude` | `claude-opus-5[1m]` | 476 | 28.7% |
-| `claude` | `claude-haiku-4-5-20251001` | 147 | 8.9% |
+| # | Provider | Model | Runs | % |
+|---:|---|---|---:|---:|
+| 1 | `claude` | **`claude-sonnet-5`** | **1,009** | **49.2%** |
+| 2 | `claude` | `claude-opus-5[1m]` | 907 | 44.2% |
+| 3 | `claude` | `claude-haiku-4-5-20251001` | 110 | 5.4% |
+| 4 | `claude` | `claude-opus-5` | 25 | 1.2% |
+
+> `claude-opus-5[1m]` and `claude-opus-5` are the **same model**: the `[1m]` suffix marks the
+> 1M-token context window. Combined, Opus accounts for 932 runs (45.4%).
+
+---
 
 ## 4. Token consumption ranking (total per agent)
 
-**Conclusion:** `software-architect` consumed 11.18M tokens — 44.1% of the window's 25.35M total, more than the next three agents combined.
+**Conclusion:** `software-architect` burns 3,838,820,406 tokens — 42.7% of the window's 8,980,194,025 tokens, more than the next four agents combined.
 
-| Agent | Total tokens | % | Input | Output |
-|---|---:|---:|---:|---:|
-| **`software-architect`** | **11,179,267** | **44.1%** | 520,623 | 10,658,644 |
-| `frontend-developer` | 3,171,037 | 12.5% | 950,606 | 2,220,431 |
-| `backend-developer` | 2,511,268 | 9.9% | 50,570 | 2,460,698 |
-| `nextjs-spa-specialist` | 1,467,016 | 5.8% | 75,966 | 1,391,050 |
-| `test-author` | 1,139,704 | 4.5% | 47,292 | 1,092,412 |
-| `security-specialist` | 939,014 | 3.7% | 16,685 | 922,329 |
-| `frontend-test-specialist` | 931,701 | 3.7% | 43,332 | 888,369 |
-| `backend-test-specialist` | 860,049 | 3.4% | 71,586 | 788,463 |
-| `qa-specialist` | 660,552 | 2.6% | 74,319 | 586,233 |
-| `devops-specialist` | 655,532 | 2.6% | 83,001 | 572,531 |
-| `product-analyst` | 462,980 | 1.8% | 1,440 | 461,540 |
-| `database-specialist` | 430,124 | 1.7% | 3,040 | 427,084 |
-| `laravel-specialist` | 398,472 | 1.6% | 17,908 | 380,564 |
-| `code-reviewer` | 242,239 | 1.0% | 22,877 | 219,362 |
-| `technical-writer` | 110,639 | 0.4% | 23,616 | 87,023 |
-| `ui-ux-designer` | 64,708 | 0.3% | 40,596 | 24,112 |
-| `backend-reviewer` | 59,268 | 0.2% | 482 | 58,786 |
-| `frontend-reviewer` | 36,596 | 0.1% | 372 | 36,224 |
-| `Explore` | 26,140 | 0.1% | 204 | 25,936 |
-| `unknown` | 2,940 | 0.0% | 24 | 2,916 |
-| **Total** | **25,349,246** | **100%** | **2,044,539** | **23,304,707** |
+| # | Agent | Runs | Total tokens | % | Input | Output | Cache write | Cache read |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | **`software-architect`** | 733 | **3,838,820,406** | **42.7%** | 564,073 | 15,477,887 | 576,179,185 | 3,246,599,261 |
+| 2 | `backend-developer` | 210 | 1,714,251,132 | 19.1% | 511,022 | 4,902,642 | 51,526,859 | 1,657,310,609 |
+| 3 | `frontend-developer` | 102 | 977,907,232 | 10.9% | 88,216 | 1,802,198 | 28,097,664 | 947,919,154 |
+| 4 | `qa-specialist` | 190 | 781,024,141 | 8.7% | 100,640 | 1,956,823 | 33,403,147 | 745,563,531 |
+| 5 | `security-specialist` | 183 | 330,725,990 | 3.7% | 257,866 | 2,004,359 | 34,694,592 | 293,769,173 |
+| 6 | `code-reviewer` | 185 | 305,923,830 | 3.4% | 113,243 | 1,543,237 | 33,840,160 | 270,427,190 |
+| 7 | `laravel-specialist` | 44 | 253,823,909 | 2.8% | 37,754 | 731,683 | 10,868,882 | 242,185,590 |
+| 8 | `devops-specialist` | 71 | 202,943,124 | 2.3% | 114,598 | 802,141 | 12,874,075 | 189,152,310 |
+| 9 | `database-specialist` | 72 | 133,138,236 | 1.5% | 14,034 | 459,341 | 11,147,311 | 121,517,550 |
+| 10 | `backend-test-specialist` | 28 | 117,356,533 | 1.3% | 39,448 | 397,519 | 5,716,385 | 111,203,181 |
+| 11 | `frontend-test-specialist` | 18 | 83,340,498 | 0.9% | 2,006 | 246,611 | 3,423,837 | 79,668,044 |
+| 12 | `technical-writer` | 59 | 81,611,998 | 0.9% | 35,614 | 365,922 | 9,695,633 | 71,514,829 |
+| 13 | `Explore` | 104 | 75,546,199 | 0.8% | 219,576 | 517,225 | 10,527,654 | 64,281,744 |
+| 14 | `nextjs-spa-specialist` | 4 | 38,872,022 | 0.4% | 4,528 | 86,964 | 2,596,931 | 36,183,599 |
+| 15 | `product-analyst` | 16 | 17,672,756 | 0.2% | 524 | 92,060 | 2,711,468 | 14,868,704 |
+| 16 | `frontend-reviewer` | 4 | 14,376,696 | 0.2% | 31,127 | 63,656 | 871,235 | 13,410,678 |
+| 17 | `general-purpose` | 23 | 10,051,923 | 0.1% | 266 | 17,129 | 3,369,945 | 6,664,583 |
+| 18 | `unknown` | 4 | 2,773,240 | 0.0% | 464 | 11,194 | 601,234 | 2,160,348 |
+| 19 | `devops-deploy` | 1 | 34,160 | 0.0% | 20 | 6 | 34,134 | 0 |
+| | **Total** | **2,051** | **8,980,194,025** | **100.0%** | **2,135,019** | **31,478,597** | **832,180,331** | **8,114,400,078** |
 
-> **Data anomaly:** output accounts for 91.9% of total tokens and input only 8.1% — inverted relative to the expected consumption of a coding agent (input typically dominates). See Observations.
+---
 
-## 5. Agents with the highest average token use (per invocation)
+## 5. Agents with the highest average token cost per run
 
-**Conclusion:** `software-architect` also leads on average, at 34,398 tokens per invocation — 2.3× the global average of 15,281 tokens/run.
+**Conclusion:** `nextjs-spa-specialist` has the highest average per run (9,718,006 tokens), but over only 4 runs; among agents with meaningful volume, `frontend-developer` (9,587,326 tokens over 102 runs) and `backend-developer` (8,163,101 over 210) are the most expensive per invocation.
 
-| Agent | Avg tokens/run | Runs |
-|---|---:|---:|
-| **`software-architect`** | **34,398** | 325 |
-| `ui-ux-designer` | 32,354 | 2 ⚠️ low sample |
-| `laravel-specialist` | 26,565 | 15 |
-| `test-author` | 25,327 | 45 |
-| `nextjs-spa-specialist` | 22,227 | 66 |
-| `product-analyst` | 11,575 | 40 |
-| `frontend-developer` | 11,011 | 288 |
-| `backend-developer` | 10,824 | 232 |
-| `database-specialist` | 10,491 | 41 |
-| `qa-specialist` | 10,485 | 63 |
-| `backend-test-specialist` | 9,248 | 93 |
-| `frontend-test-specialist` | 8,790 | 106 |
-| `security-specialist` | 8,460 | 111 |
-| `backend-reviewer` | 7,409 | 8 |
-| `devops-specialist` | 5,509 | 119 |
-| `technical-writer` | 5,269 | 21 |
-| `code-reviewer` | 4,037 | 60 |
-| `frontend-reviewer` | 3,660 | 10 |
-| `Explore` | 2,178 | 12 |
-| `unknown` | 1,470 | 2 |
+| # | Agent | Runs | Total tokens | Avg per run |
+|---:|---|---:|---:|---:|
+| 1 | **`nextjs-spa-specialist`** | 4 | 38,872,022 | **9,718,006** |
+| 2 | `frontend-developer` | 102 | 977,907,232 | 9,587,326 |
+| 3 | `backend-developer` | 210 | 1,714,251,132 | 8,163,101 |
+| 4 | `laravel-specialist` | 44 | 253,823,909 | 5,768,725 |
+| 5 | `software-architect` | 733 | 3,838,820,406 | 5,237,136 |
+| 6 | `frontend-test-specialist` | 18 | 83,340,498 | 4,630,028 |
+| 7 | `backend-test-specialist` | 28 | 117,356,533 | 4,191,305 |
+| 8 | `qa-specialist` | 190 | 781,024,141 | 4,110,653 |
+| 9 | `frontend-reviewer` | 4 | 14,376,696 | 3,594,174 |
+| 10 | `devops-specialist` | 71 | 202,943,124 | 2,858,354 |
+| 11 | `database-specialist` | 72 | 133,138,236 | 1,849,142 |
+| 12 | `security-specialist` | 183 | 330,725,990 | 1,807,246 |
+| 13 | `code-reviewer` | 185 | 305,923,830 | 1,653,642 |
+| 14 | `technical-writer` | 59 | 81,611,998 | 1,383,254 |
+| 15 | `product-analyst` | 16 | 17,672,756 | 1,104,547 |
+| 16 | `Explore` | 104 | 75,546,199 | 726,406 |
+| 17 | `unknown` | 4 | 2,773,240 | 693,310 |
+| 18 | `general-purpose` | 23 | 10,051,923 | 437,040 |
+| 19 | `devops-deploy` | 1 | 34,160 | 34,160 |
+| | **Overall average** | **2,051** | **8,980,194,025** | **4,378,447** |
 
-> **Per command: not computable.** The `command_invoked` event carries no token counters, and there is no correlation key linking a `command_invoked` to the `agent_completed` events it spawned. Per-command averages stay unavailable until telemetry emits a shared session/run identifier.
+> **Per command:** token consumption per command cannot be derived. The `command_invoked`
+> event carries no token counters and `agent_completed` carries no originating command — there
+> is no join key between the two. Reported as non-computable.
+
+---
 
 ## 6. Country, state and city ranking
 
-**Conclusion:** 100% of events came from Brazil, and 99.4% from Fortaleza/CE — the install base active in this window is essentially a single operator, which limits any "adoption" reading of the other rankings.
+**Conclusion:** metric **not computed in this run**. The `$geoip_*` properties are present and populated on events (confirmed by schema inspection — see § 15), but the environment running this report blocked the queries that read them. No geography data was collected, and nothing was estimated or inferred to fill the gap.
 
-### Country
+| Dimension | Property | Status |
+|---|---|---|
+| Country | `$geoip_country_name` | Not computed — query blocked |
+| State / region | `$geoip_subdivision_1_name` | Not computed — query blocked |
+| City | `$geoip_city_name` | Not computed — query blocked |
 
-| Country | Events | % |
-|---|---:|---:|
-| **Brazil** | **2,947** | **100.0%** |
+> To obtain this section, run the three `$geoip_*` aggregation queries in an environment
+> without that restriction. The previous report (Aug 14) holds the historical geography series.
 
-### State
-
-| State | Events | % |
-|---|---:|---:|
-| **Ceará** | **2,928** | **99.4%** |
-| São Paulo | 19 | 0.6% |
-
-### City
-
-| City | Events | % |
-|---|---:|---:|
-| **Fortaleza** | **2,928** | **99.4%** |
-| Bauru | 19 | 0.6% |
+---
 
 ## 7. Version ranking for the period
 
-**Conclusion:** `v2.44.0` and `v2.44.1` concentrate 63.6% of events — the active base is current, but 370 events (12.6%) reported `version: unknown`, an instrumentation gap.
+**Conclusion:** `v2.47.2` leads with 2,314 events (41.6%); the whole `v2.47.x` line sums to 3,874 events (69.6%), showing fast adoption of the current release — but 962 events still come from the `v2.44.x` line.
 
-| Version | Events | % |
-|---|---:|---:|
-| **`v2.44.0`** | **951** | **32.3%** |
-| `v2.44.1` | 922 | 31.3% |
-| `unknown` ⚠️ | 370 | 12.6% |
-| `v2.44.2` | 228 | 7.7% |
-| `v2.29.0` | 149 | 5.1% |
-| `v2.39.2` | 133 | 4.5% |
-| `v2.31.0` | 48 | 1.6% |
-| `v2.17.3` | 20 | 0.7% |
-| `v1.8.1` | 13 | 0.4% |
-| `v2.15.1` | 10 | 0.3% |
-| `v2.30.1` | 9 | 0.3% |
-| `v1.8.2` | 8 | 0.3% |
-| Other 42 versions | 86 | 2.9% |
+| # | Version | Events | % |
+|---:|---|---:|---:|
+| 1 | **`v2.47.2`** | **2,314** | **41.6%** |
+| 2 | `v2.47.0` | 1,055 | 19.0% |
+| 3 | `v2.44.7` | 573 | 10.3% |
+| 4 | `v2.47.1` | 505 | 9.1% |
+| 5 | `v2.44.4` | 389 | 7.0% |
+| 6 | `v2.46.0` | 341 | 6.1% |
+| 7 | `v2.45.0` | 273 | 4.9% |
+| 8 | `unknown` | 69 | 1.2% |
+| 9 | `v1.9.2` | 39 | 0.7% |
+| 10 | `main` | 4 | 0.1% |
+| 11 | `v1.10.0` | 1 | 0.0% |
+| | **Total** | **5,563** | **100.0%** |
+
+---
 
 ## 8. Models used, grouped by agent
 
-**Conclusion:** no agent invoked more than one model in the window — the tier → model mapping is consistent. The three agents on Haiku (`test-author`, `laravel-specialist`, `nextjs-spa-specialist`) are all names outside the canonical roster.
+**Conclusion:** the tier → model mapping is **consistent** — `software-architect`, `security-specialist` and `product-analyst` on Opus (`reasoning`), executors on Sonnet, `technical-writer` on Haiku (`repetitive`). The only anomaly is `unknown`, which appears under two models because it is a bucket for agents not identified in the transcript.
 
-| Agent | Model(s) | Runs |
+| Agent | Model | Runs |
 |---|---|---:|
-| `software-architect` | `claude-opus-5[1m]` | 325 |
-| `security-specialist` | `claude-opus-5[1m]` | 111 |
-| `product-analyst` | `claude-opus-5[1m]` | 40 |
-| `frontend-developer` | `claude-sonnet-5` | 288 |
-| `backend-developer` | `claude-sonnet-5` | 232 |
-| `devops-specialist` | `claude-sonnet-5` | 119 |
-| `frontend-test-specialist` | `claude-sonnet-5` | 106 |
-| `backend-test-specialist` | `claude-sonnet-5` | 93 |
-| `qa-specialist` | `claude-sonnet-5` | 63 |
-| `code-reviewer` | `claude-sonnet-5` | 60 |
-| `database-specialist` | `claude-sonnet-5` | 41 |
-| `Explore` | `claude-sonnet-5` | 12 |
-| `frontend-reviewer` | `claude-sonnet-5` | 10 |
-| `backend-reviewer` | `claude-sonnet-5` | 8 |
-| `ui-ux-designer` | `claude-sonnet-5` | 2 |
+| `Explore` | `claude-sonnet-5` | 104 |
+| `backend-developer` | `claude-sonnet-5` | 210 |
+| `backend-test-specialist` | `claude-sonnet-5` | 28 |
+| `code-reviewer` | `claude-sonnet-5` | 185 |
+| `database-specialist` | `claude-sonnet-5` | 72 |
+| `devops-deploy` | `claude-haiku-4-5-20251001` | 1 |
+| `devops-specialist` | `claude-sonnet-5` | 71 |
+| `frontend-developer` | `claude-sonnet-5` | 102 |
+| `frontend-reviewer` | `claude-sonnet-5` | 4 |
+| `frontend-test-specialist` | `claude-sonnet-5` | 18 |
+| `general-purpose` | `claude-sonnet-5` | 23 |
+| `laravel-specialist` | `claude-haiku-4-5-20251001` | 44 |
+| `nextjs-spa-specialist` | `claude-haiku-4-5-20251001` | 4 |
+| `product-analyst` | `claude-opus-5[1m]` | 16 |
+| `qa-specialist` | `claude-sonnet-5` | 190 |
+| `security-specialist` | `claude-opus-5[1m]` | 171 |
+|  | `claude-opus-5` | 12 |
+| `software-architect` | `claude-opus-5[1m]` | 720 |
+|  | `claude-opus-5` | 13 |
+| `technical-writer` | `claude-haiku-4-5-20251001` | 59 |
 | `unknown` | `claude-sonnet-5` | 2 |
-| `nextjs-spa-specialist` ⚠️ | `claude-haiku-4-5-20251001` | 66 |
-| `test-author` ⚠️ | `claude-haiku-4-5-20251001` | 45 |
-| `technical-writer` | `claude-haiku-4-5-20251001` | 21 |
-| `laravel-specialist` ⚠️ | `claude-haiku-4-5-20251001` | 15 |
+|  | `claude-haiku-4-5-20251001` | 2 |
+
+> Agents that invoked more than one model: `security-specialist`, `software-architect`, `unknown`. For
+> `software-architect` and `security-specialist` this is only the `[1m]` variant of the same Opus.
+
+---
 
 ## 9. Peak days and hours
 
-**Conclusion:** usage is heavily concentrated on Wednesday and Thursday (73.4% of events) and peaks at 10:00; weekends are nearly idle (41 events, 1.4%).
+**Conclusion:** usage is concentrated on weekdays — Monday leads with 1,204 events (21.6%) and Saturday is near-zero (19 events); the hourly peak is **16:00** (742 events), with the 15:00–18:00 block holding 40.1% of volume.
 
-### By day of week
+### 9.1 By day of week
 
-| Day | Events | % |
+| # | Day | Events | % |
+|---:|---|---:|---:|
+| 1 | **Monday** | **1,204** | **21.6%** |
+| 2 | Tuesday | 1,092 | 19.6% |
+| 3 | Wednesday | 1,032 | 18.6% |
+| 4 | Sunday | 875 | 15.7% |
+| 5 | Friday | 725 | 13.0% |
+| 6 | Thursday | 616 | 11.1% |
+| 7 | Saturday | 19 | 0.3% |
+
+### 9.2 By hour of day
+
+| Hour | Events | % |
 |---|---:|---:|
-| **Wednesday** | **1,130** | **38.3%** |
-| Thursday | 1,033 | 35.1% |
-| Friday | 375 | 12.7% |
-| Tuesday | 322 | 10.9% |
-| Monday | 46 | 1.6% |
-| Sunday | 31 | 1.1% |
-| Saturday | 10 | 0.3% |
+| 00:00 | 210 | 3.8% |
+| 01:00 | 56 | 1.0% |
+| 02:00 | 4 | 0.1% |
+| 07:00 | 66 | 1.2% |
+| 08:00 | 57 | 1.0% |
+| 09:00 | 167 | 3.0% |
+| 10:00 | 459 | 8.3% |
+| 11:00 | 276 | 5.0% |
+| 12:00 | 227 | 4.1% |
+| 13:00 | 180 | 3.2% |
+| 14:00 | 219 | 3.9% |
+| 15:00 | 403 | 7.2% |
+| **16:00** | **742** | **13.3%** |
+| 17:00 | 688 | 12.4% |
+| 18:00 | 399 | 7.2% |
+| 19:00 | 145 | 2.6% |
+| 20:00 | 418 | 7.5% |
+| 21:00 | 237 | 4.3% |
+| 22:00 | 271 | 4.9% |
+| 23:00 | 339 | 6.1% |
 
-### By hour of day (`America/Sao_Paulo`)
+> Hours with no events in the window: 03, 04, 05, 06h — the 03:00–06:00 band is the only
+> fully inactive block.
 
-| Hour | Events | Hour | Events |
-|---|---:|---|---:|
-| **10h** | **376** | 18h | 100 |
-| 12h | 313 | 13h | 99 |
-| 15h | 256 | 23h | 97 |
-| 14h | 240 | 20h | 72 |
-| 17h | 224 | 21h | 69 |
-| 22h | 221 | 00h | 36 |
-| 07h | 188 | 08h | 29 |
-| 11h | 187 | 01h | 17 |
-| 16h | 166 | 04h | 14 |
-| 19h | 122 | 03h | 9 |
-| 09h | 111 | 02h | 1 |
-| — | — | 05h–06h | 0 |
+---
 
-## 10. New installs vs updates
+## 10. New installs vs updates rate
 
-**Conclusion:** only 7 of the 134 install-family events (5.2%) were `first_install` — the window is dominated by reinstalls and updates of the existing base, not new acquisition.
+**Conclusion:** **no `first_install`** in the window — all 28 `install` events are reinstalls/repairs over existing installations, against 13 `update`. The install:update ratio is 2.15:1, and 100% of updates were `mode=manual` — no auto-update fired in the period.
 
-| Event | Occurrences | % of family |
+| Event type | Occurrences | Distinct installs |
 |---|---:|---:|
-| **`install`** | **92** | **68.7%** |
-| `update` | 35 | 26.1% |
-| `first_install` | 7 | 5.2% |
+| `first_install` | **0** | 0 |
+| **`install`** | **28** | 4 |
+| `update` | 13 | 3 |
 
-All 35 `update` events reported `mode: manual` — **the auto-update path never fired in the window.**
+### 10.1 Update paths (`from_version` → `to_version`)
+
+| From | To | Occurrences |
+|---|---|---:|
+| **`v2.47.2`** | **`v2.47.2`** | **2** |
+| **`unknown`** | **`v2.47.2`** | **2** |
+| `v2.47.1` | `v2.47.2` | 1 |
+| `v2.45.0` | `v2.47.0` | 1 |
+| `v1.10.0` | `v1.10.0` | 1 |
+| `v2.45.0` | `v2.45.0` | 1 |
+| `v2.39.2` | `v2.45.0` | 1 |
+| `v2.47.0` | `v2.47.1` | 1 |
+| `unknown` | `v2.47.0` | 1 |
+| `v2.47.0` | `v2.47.2` | 1 |
+| `v2.32.0` | `v2.46.0` | 1 |
+
+> Four updates have `from_version == to_version` (re-runs of `update.sh` with no version
+> change) and three start from `unknown` — cases where `state.json` had no `installed_version`
+> before the update. Two long jumps appear: `v2.32.0 → v2.46.0` and `v2.39.2 → v2.45.0`.
+
+---
 
 ## 11. Daily event volume
 
-**Conclusion:** 2,614 of 2,947 events (88.7%) fall in just 4 days (Aug 11–14); the first 16 days of the window total 333 events.
+**Conclusion:** the peak was **2026-08-16** with 875 events (15.7% of the window); the distribution is heavily uneven — 9 days hold 89.3% of volume, and 3 days recorded no events at all.
 
-| Date | Events | Date | Events |
-|---|---:|---|---:|
-| 2026-07-26 | 18 | 2026-08-05 | 47 |
-| 2026-07-27 | 5 | 2026-08-06 | 136 |
-| 2026-07-28 | 22 | 2026-08-07 | 22 |
-| 2026-07-29 | 4 | 2026-08-08 | 6 |
-| 2026-07-30 | 2 | 2026-08-09 | 4 |
-| 2026-07-31 | 7 | 2026-08-10 | 7 |
-| 2026-08-01 | 4 | 2026-08-11 | 294 |
-| 2026-08-02 | 9 | **2026-08-12** | **1,079** |
-| 2026-08-03 | 34 | 2026-08-13 | 895 |
-| 2026-08-04 | 6 | 2026-08-14 | 346 |
+| Date | Events | % |
+|---|---:|---:|
+| 2026-08-15 | 7 | 0.1% |
+| **2026-08-16** | **875** | **15.7%** |
+| 2026-08-17 | 164 | 2.9% |
+| 2026-08-18 | 682 | 12.3% |
+| 2026-08-19 | 633 | 11.4% |
+| 2026-08-20 | 524 | 9.4% |
+| 2026-08-21 | 526 | 9.5% |
+| 2026-08-22 | 12 | 0.2% |
+| 2026-08-24 | 700 | 12.6% |
+| 2026-08-25 | 36 | 0.6% |
+| 2026-08-26 | 86 | 1.5% |
+| 2026-08-27 | 36 | 0.6% |
+| 2026-08-28 | 174 | 3.1% |
+| 2026-08-31 | 340 | 6.1% |
+| 2026-09-01 | 374 | 6.7% |
+| 2026-09-02 | 313 | 5.6% |
+| 2026-09-03 | 56 | 1.0% |
+| 2026-09-04 | 25 | 0.4% |
+| **Total** | **5,563** | **100.0%** |
+
+> Days with no events in the window: 2026-08-23, 2026-08-29, 2026-08-30.
+
+---
 
 ## 12. Cache efficiency
 
-**Conclusion: not computable in this window.** The `cache_creation_tokens` and `cache_read_tokens` fields are **null on 100% of the 1,662 `agent_completed` events** — no event reported a cache value, zero or otherwise.
+**Conclusion:** cache carries virtually the entire context load — 8,114,400,078 `cache_read` tokens are 90.4% of the total, against only 2,135,019 non-cached input tokens (0.0%). The aggregate `cache_read / input` ratio is **3,801:1**, indicating extremely high context reuse.
 
-| Metric | Value |
-|---|---:|
-| `agent_completed` events with cache fields populated | 0 of 1,662 |
-| Aggregate `cache_read_tokens` | — (unavailable) |
-| Aggregate `cache_creation_tokens` | — (unavailable) |
-| `cache_read` / `input` ratio | — (unavailable) |
+| Component | Tokens | % of total |
+|---|---:|---:|
+| **Cache read** | **8,114,400,078** | **90.4%** |
+| Cache write (creation) | 832,180,331 | 9.3% |
+| Output | 31,478,597 | 0.4% |
+| Input (non-cached) | 2,135,019 | 0.0% |
+
+### 12.1 Per agent (top 10 by `cache_read`)
+
+| # | Agent | Cache read | % of agent's tokens | cache_read / input ratio |
+|---:|---|---:|---:|---:|
+| 1 | **`software-architect`** | **3,246,599,261** | **84.6%** | **5,756:1** |
+| 2 | `backend-developer` | 1,657,310,609 | 96.7% | 3,243:1 |
+| 3 | `frontend-developer` | 947,919,154 | 96.9% | 10,745:1 |
+| 4 | `qa-specialist` | 745,563,531 | 95.5% | 7,408:1 |
+| 5 | `security-specialist` | 293,769,173 | 88.8% | 1,139:1 |
+| 6 | `code-reviewer` | 270,427,190 | 88.4% | 2,388:1 |
+| 7 | `laravel-specialist` | 242,185,590 | 95.4% | 6,415:1 |
+| 8 | `devops-specialist` | 189,152,310 | 93.2% | 1,651:1 |
+| 9 | `database-specialist` | 121,517,550 | 91.3% | 8,659:1 |
+| 10 | `backend-test-specialist` | 111,203,181 | 94.8% | 2,819:1 |
+
+> `devops-deploy` is the only agent with `cache_read = 0` (a single run, no reuse possible).
+
+---
 
 ## 13. Session-end distribution
 
-**Conclusion:** 97.7% of `session_end` events reported `stop_hook_active=false` — the stop hook is rarely active at the moment of termination.
+**Conclusion:** 95.8% of the 3,460 `session_end` events have `stop_hook_active=false` — the `Stop` hook fired in normal mode in the overwhelming majority of sessions; only 146 (4.2%) were re-entries with the hook already active.
 
-| `stop_hook_active` | Events | % |
+| `stop_hook_active` | Occurrences | % |
 |---|---:|---:|
-| **`false`** | **1,114** | **97.7%** |
-| `true` | 26 | 2.3% |
+| **`false`** | **3,314** | **95.8%** |
+| `true` | 146 | 4.2% |
+| **Total** | **3,460** | **100.0%** |
+
+---
 
 ## 14. Commands and agents never used in the period
 
-**Conclusion:** 27 of 34 canonical commands (79.4%) and 3 of 18 canonical agents recorded not a single invocation in the window — command-surface coverage is the project's largest usage gap.
+**Conclusion:** 30 of the 35 canonical commands (85.7%) had **zero** invocations in the window, including the core `/devteam:plan`, `/devteam:backend` and `/devteam:frontend` flows — the coverage gap is in the command layer, not the agents, of which 13 out of 18 were exercised.
 
-### Commands with zero invocations (27 of 34)
+### 14.1 Commands with zero usage
 
-`adr` · `audit` · `backend` · `commit` · `dba` · `design` · `devops` · `docs` · `explain` · `fix` · `frontend` · `fullstack` · `health-check` · `learn` · `mobile` · `plan` · `qa` · `refactor` · `relayout` · `rule` · `security` · `seo` · `setup` · `symlinks` · `tester` · `update` · `version`
+| Commands with no invocation in the window |
+|---|
+| `/devteam:adr`, `/devteam:architect`, `/devteam:audit`, `/devteam:backend`, `/devteam:dba` |
+| `/devteam:design`, `/devteam:devops`, `/devteam:docs`, `/devteam:explain`, `/devteam:fix` |
+| `/devteam:frontend`, `/devteam:fullstack`, `/devteam:health-check`, `/devteam:install`, `/devteam:merge` |
+| `/devteam:mobile`, `/devteam:plan`, `/devteam:pr`, `/devteam:push`, `/devteam:qa` |
+| `/devteam:refactor`, `/devteam:relayout`, `/devteam:rule`, `/devteam:security`, `/devteam:seo` |
+| `/devteam:setup`, `/devteam:symlinks`, `/devteam:tester`, `/devteam:update`, `/devteam:version` |
 
-### Canonical agents with zero runs (3 of 18)
+> Used in the window (5): `/devteam:learn`, `/devteam:status`, `/devteam:commit`, `/devteam:review`, `/devteam:sync-rules`.
 
-`mobile-developer` · `seo-specialist` · `setup-assistant`
+### 14.2 Roster agents with zero usage
 
-### Names observed outside the canonical roster (5)
+| Agent | Role |
+|---|---|
+| `backend-reviewer` | Backend reviewer (only reached via `/devteam:review` routing) |
+| `mobile-developer` | Mobile implementation |
+| `seo-specialist` | SEO quality gate |
+| `setup-assistant` | Project onboarding |
+| `ui-ux-designer` | Design system and UX flows |
 
-| Name | Runs | Likely nature |
-|---|---:|---|
-| `nextjs-spa-specialist` | 66 | project-local agent |
-| `test-author` | 45 | legacy name (agent removed from roster) |
-| `laravel-specialist` | 15 | project-local agent |
-| `Explore` | 12 | native Claude Code subagent |
-| `unknown` | 2 | `agent_name` unresolved at emission |
+### 14.3 Agent names outside the canonical roster
 
-## Operating system (supplementary)
+| Observed name | Likely origin |
+|---|---|
+| `Explore` | Claude Code native agent |
+| `devops-deploy` | Project-local agent |
+| `general-purpose` | Claude Code native agent |
+| `laravel-specialist` | Project-local agent |
+| `nextjs-spa-specialist` | Project-local agent |
+| `unknown` | Fallback bucket — name not resolved in the transcript |
 
-| OS | Events | % |
-|---|---:|---:|
-| **`darwin`** | **2,735** | **92.8%** |
-| `mingw64_nt-10.0-26200` | 191 | 6.5% |
-| `linux` | 21 | 0.7% |
+> These 6 names sum to 180 runs (8.8% of the window) — a meaningful volume that is **not** from the dev-team-agents roster and should not be read as harness usage.
+
+---
+
+## 15. Privacy finding — persisted geolocation properties
+
+**Conclusion:** schema inspection shows PostHog's GeoIP enrichment persists **latitude, longitude, postal code and accuracy radius** on events, on top of country/state/city. `PRIVACY.md` documents only that the IP is discarded — it does not mention that coordinates and postal code are stored on the event.
+
+| Persisted property | Documented in `PRIVACY.md`? |
+|---|---|
+| `$geoip_country_name` | Yes |
+| `$geoip_subdivision_1_name` | Yes |
+| `$geoip_city_name` | Yes |
+| `$geoip_latitude` | **No** |
+| `$geoip_longitude` | **No** |
+| `$geoip_postal_code` | **No** |
+| `$geoip_accuracy_radius` | **No** |
+| `$geoip_time_zone` | **No** |
+
+> **Recommendation:** either disable the coordinate/postal-code properties in the PostHog
+> project's GeoIP transformation, or declare them explicitly in `PRIVACY.md`. The "What we do NOT
+> collect" section currently states no personal identifier is collected, and a latitude/longitude
+> pair with a postal code is substantially more precise than "country/state/city" suggests.
+
+---
+
+## 16. Operating system distribution
+
+**Conclusion:** `darwin` (macOS) leads with 3,396 events (61.0%), but Windows via MSYS/Git Bash already accounts for 2,166 (38.9%) — a Windows base large enough to make the symlink path (`/devteam:symlinks`) a real operational risk.
+
+| # | OS | Events | % |
+|---:|---|---:|---:|
+| 1 | **`darwin`** | **3,396** | **61.0%** |
+| 2 | `mingw64_nt-10.0-26200` | 2,166 | 38.9% |
+| 3 | `linux` | 1 | 0.0% |
 
 ---
 
 ## Observations
 
-- **Inverted input/output ratio.** Output accounts for 23.3M of the 25.35M tokens (91.9%) against 2.04M input (8.1%). A real coding agent reads far more than it writes — this ratio suggests `input_tokens` is undercounted (or `output_tokens` is aggregating the total) in `scripts/helpers/telemetry-send.sh`. Until that is verified, all absolute token figures should be read as order-of-magnitude, not actual cost.
-- **Cache telemetry entirely absent.** `cache_creation_tokens` and `cache_read_tokens` arrived null on 1,662 of 1,662 events. The cache-efficiency metric — the most direct signal of context reuse — has been blind since instrumentation, not for lack of cache usage.
-- **The slash-command layer is nearly invisible in telemetry.** 11 `command_invoked` against 1,662 `agent_completed` (0.66%), and `agent_spawned` at zero events. Either the commands genuinely aren't used, or `command_invoked`/`agent_spawned` under-fire. The two hypotheses have very different consequences and the current data does not separate them.
-- **Extreme concentration in origin and time.** 99.4% of events come from a single city and 88.7% from just 4 consecutive days (Aug 11–14). The rankings in this report describe one operator's work pattern during an intense sprint — not product adoption.
-- **Off-roster names totalled 138 runs (8.3%).** `test-author` (45) still fires despite no longer existing in `agents/*.md`, and `nextjs-spa-specialist`/`laravel-specialist` (81) are project-local agents. The `agent_name` field does not distinguish framework agents from project agents, which pollutes every per-agent ranking.
-- **`version: unknown` on 12.6% of events** and 100% of updates in `mode: manual` — the auto-update path produced not a single event in the window.
+- **The slash-command layer is essentially unused.** 11 `command_invoked` events against 2,051 agent runs — a 1:186 ratio. 30 of 35 commands were never called, including `/devteam:plan`, `/devteam:backend`, `/devteam:frontend` and `/devteam:fullstack`. Agents are being spawned directly, bypassing the orchestration wrappers that carry the gates (plan gate, scope-lock, spec sync).
+- **`software-architect` dominates both runs and cost.** 733 runs (35.7%) and 3,838,820,406 tokens (42.7% of total). Running on Opus in the `reasoning` tier, it is simultaneously the most expensive per token and the most frequent — the combination that weighs most on the bill.
+- **Cache is doing nearly all the context work.** 90.4% of tokens are `cache_read` and only 0.0% are non-cached input — an aggregate 3,801:1 ratio. A healthy reuse signal, but it also means the harness's real cost is dominated by context re-reading, not new work.
+- **8.8% of runs are not from the roster.** 180 of 2,051 runs come from names outside `agents/` (`Explore`, `general-purpose`, `laravel-specialist`, `nextjs-spa-specialist`, `devops-deploy`, `unknown`). Any reading of "dev-team-agents usage" from raw `agent_completed` is inflated by that proportion.
+- **No new installations in the window.** Zero `first_install` against 28 `install` and 13 `update`, all `mode=manual`, across 6 anonymous IDs. The period's telemetry reflects recurring internal use, not adoption — and no auto-update fired.
+- **Privacy finding (§ 15).** GeoIP enrichment persists latitude, longitude and postal code on events; `PRIVACY.md` does not declare those three properties. Requires either a fix in the PostHog project transformation or a documentation update.
+- **Data gap in this run.** The geography section could not be computed (§ 6) because the environment blocked `$geoip_*` queries. No value was estimated in its place.
 
 ---
 
 ## Structured summary for LLM consumption
 
 ```yaml
-window:
-  start: "2026-07-25T22:07:00-03:00"
-  end: "2026-08-14T22:07:00-03:00"
-  first_event_observed: "2026-07-26T09:34:00-03:00"
-  days: 20
+janela:
+  inicio: "2026-08-15 22:07"
+  fim: "2026-09-04 22:07"
+  primeiro_evento: "2026-08-15 22:51"
+  ultimo_evento: "2026-09-04 16:48"
   timezone: "America/Sao_Paulo"
-  posthog_project: 430371
-  total_events: 2947
-  valid_agent_completed: 1659
-  excluded_manual_test: 3
-
-events_by_type:
-  agent_completed: 1662
-  session_end: 1140
-  install: 92
-  update: 35
+  dias: 20
+  projeto_posthog: 430371
+total_eventos: 5563
+instalacoes_distintas: 6
+eventos_por_tipo:
+  session_end: 3460
+  agent_completed: 2051
+  install: 28
+  update: 13
   command_invoked: 11
-  first_install: 7
+  first_install: 0
   agent_spawned: 0
-
-top_commands_by_calls:
-  status: 3
-  architect: 2
-  review: 2
-  install: 1
-  pr: 1
-  push: 1
-  sync-rules: 1
-
-top_agents_by_calls:
-  software-architect: 325
-  frontend-developer: 288
-  backend-developer: 232
-  devops-specialist: 119
-  security-specialist: 111
-  frontend-test-specialist: 106
-  backend-test-specialist: 93
-  nextjs-spa-specialist: 66
-  qa-specialist: 63
-  code-reviewer: 60
-  test-author: 45
-  database-specialist: 41
-  product-analyst: 40
-  technical-writer: 21
-  laravel-specialist: 15
-  Explore: 12
-  frontend-reviewer: 10
-  backend-reviewer: 8
-  ui-ux-designer: 2
-  unknown: 2
-
-models_by_provider:
-  claude:
-    claude-sonnet-5: 1036
-    claude-opus-5[1m]: 476
-    claude-haiku-4-5-20251001: 147
-
-total_tokens:
-  total: 25349246
-  input: 2044539
-  output: 23304707
-  cache_creation: null
-  cache_read: null
-  avg_per_run: 15281
-
-tokens_by_agent_total_desc:
-  software-architect: 11179267
-  frontend-developer: 3171037
-  backend-developer: 2511268
-  nextjs-spa-specialist: 1467016
-  test-author: 1139704
-  security-specialist: 939014
-  frontend-test-specialist: 931701
-  backend-test-specialist: 860049
-  qa-specialist: 660552
-  devops-specialist: 655532
-  product-analyst: 462980
-  database-specialist: 430124
-  laravel-specialist: 398472
-  code-reviewer: 242239
-  technical-writer: 110639
-  ui-ux-designer: 64708
-  backend-reviewer: 59268
-  frontend-reviewer: 36596
-  Explore: 26140
-  unknown: 2940
-
-avg_tokens_per_run_desc:
-  software-architect: 34398
-  ui-ux-designer: 32354
-  laravel-specialist: 26565
-  test-author: 25327
-  nextjs-spa-specialist: 22227
-  product-analyst: 11575
-  frontend-developer: 11011
-  backend-developer: 10824
-  database-specialist: 10491
-  qa-specialist: 10485
-  backend-test-specialist: 9248
-  frontend-test-specialist: 8790
-  security-specialist: 8460
-  backend-reviewer: 7409
-  devops-specialist: 5509
-  technical-writer: 5269
-  code-reviewer: 4037
-  frontend-reviewer: 3660
-  Explore: 2178
-  unknown: 1470
-
-avg_tokens_per_command: not_computable_no_correlation_key
-
-geography:
-  countries:
-    Brazil: 2947
-  states:
-    Ceara: 2928
-    Sao Paulo: 19
-  cities:
-    Fortaleza: 2928
-    Bauru: 19
-
-versions_desc:
-  v2.44.0: 951
-  v2.44.1: 922
-  unknown: 370
-  v2.44.2: 228
-  v2.29.0: 149
-  v2.39.2: 133
-  v2.31.0: 48
-  v2.17.3: 20
-  v1.8.1: 13
-  v2.15.1: 10
-  v2.30.1: 9
-  v1.8.2: 8
-  other_42_versions: 86
-
-models_by_agent:
-  software-architect: [claude-opus-5[1m]]
-  security-specialist: [claude-opus-5[1m]]
-  product-analyst: [claude-opus-5[1m]]
-  frontend-developer: [claude-sonnet-5]
-  backend-developer: [claude-sonnet-5]
-  devops-specialist: [claude-sonnet-5]
-  frontend-test-specialist: [claude-sonnet-5]
-  backend-test-specialist: [claude-sonnet-5]
-  qa-specialist: [claude-sonnet-5]
-  code-reviewer: [claude-sonnet-5]
-  database-specialist: [claude-sonnet-5]
-  Explore: [claude-sonnet-5]
-  frontend-reviewer: [claude-sonnet-5]
-  backend-reviewer: [claude-sonnet-5]
-  ui-ux-designer: [claude-sonnet-5]
-  unknown: [claude-sonnet-5]
-  nextjs-spa-specialist: [claude-haiku-4-5-20251001]
-  test-author: [claude-haiku-4-5-20251001]
-  technical-writer: [claude-haiku-4-5-20251001]
-  laravel-specialist: [claude-haiku-4-5-20251001]
-
-usage_by_weekday:
-  wednesday: 1130
-  thursday: 1033
-  friday: 375
-  tuesday: 322
-  monday: 46
-  sunday: 31
-  saturday: 10
-
-usage_by_local_hour:
-  "10": 376
-  "12": 313
-  "15": 256
-  "14": 240
-  "17": 224
-  "22": 221
-  "07": 188
-  "11": 187
-  "16": 166
-  "19": 122
-  "09": 111
-  "18": 100
-  "13": 99
-  "23": 97
-  "20": 72
-  "21": 69
-  "00": 36
-  "08": 29
-  "01": 17
-  "04": 14
-  "03": 9
-  "02": 1
-  "05": 0
-  "06": 0
-
-volume_by_day:
-  "2026-07-26": 18
-  "2026-07-27": 5
-  "2026-07-28": 22
-  "2026-07-29": 4
-  "2026-07-30": 2
-  "2026-07-31": 7
-  "2026-08-01": 4
-  "2026-08-02": 9
-  "2026-08-03": 34
-  "2026-08-04": 6
-  "2026-08-05": 47
-  "2026-08-06": 136
-  "2026-08-07": 22
-  "2026-08-08": 6
-  "2026-08-09": 4
-  "2026-08-10": 7
-  "2026-08-11": 294
-  "2026-08-12": 1079
-  "2026-08-13": 895
-  "2026-08-14": 346
-
-installs_vs_updates:
-  install: 92
-  update: 35
-  first_install: 7
-  new_install_rate: 0.052
-  update_modes:
-    manual: 35
-    auto: 0
-
-cache_efficiency: not_computable_fields_null_on_1662_of_1662_events
-
-session_end:
-  stop_hook_active_false: 1114
-  stop_hook_active_true: 26
-
-operating_system:
-  darwin: 2735
-  mingw64_nt-10.0-26200: 191
-  linux: 21
-
-coverage:
-  canonical_commands: 34
-  commands_used: 7
-  commands_unused: [adr, audit, backend, commit, dba, design, devops, docs, explain, fix, frontend, fullstack, health-check, learn, mobile, plan, qa, refactor, relayout, rule, security, seo, setup, symlinks, tester, update, version]
-  canonical_agents: 18
-  agents_used: 15
-  agents_unused: [mobile-developer, seo-specialist, setup-assistant]
-  off_roster_names:
-    nextjs-spa-specialist: 66
-    test-author: 45
-    laravel-specialist: 15
-    Explore: 12
-    unknown: 2
-
-data_anomalies:
-  - inverted_output_input_ratio: {output_pct: 0.919, input_pct: 0.081}
-  - missing_cache_tokens: {affected_events: 1662, total: 1662}
-  - command_invoked_suspected_underfire: {command_invoked: 11, agent_completed: 1662}
-  - agent_spawned_zero_events: true
-  - version_unknown: {events: 370, pct: 0.126}
+top_comandos_por_invocacoes:
+  - {comando: "learn", invocacoes: 4}
+  - {comando: "status", invocacoes: 4}
+  - {comando: "commit", invocacoes: 1}
+  - {comando: "review", invocacoes: 1}
+  - {comando: "sync-rules", invocacoes: 1}
+total_invocacoes_comando: 11
+top_agentes_por_execucoes:
+  - {agente: "software-architect", execucoes: 733}
+  - {agente: "backend-developer", execucoes: 210}
+  - {agente: "qa-specialist", execucoes: 190}
+  - {agente: "code-reviewer", execucoes: 185}
+  - {agente: "security-specialist", execucoes: 183}
+  - {agente: "Explore", execucoes: 104}
+  - {agente: "frontend-developer", execucoes: 102}
+  - {agente: "database-specialist", execucoes: 72}
+  - {agente: "devops-specialist", execucoes: 71}
+  - {agente: "technical-writer", execucoes: 59}
+  - {agente: "laravel-specialist", execucoes: 44}
+  - {agente: "backend-test-specialist", execucoes: 28}
+  - {agente: "general-purpose", execucoes: 23}
+  - {agente: "frontend-test-specialist", execucoes: 18}
+  - {agente: "product-analyst", execucoes: 16}
+  - {agente: "unknown", execucoes: 4}
+  - {agente: "frontend-reviewer", execucoes: 4}
+  - {agente: "nextjs-spa-specialist", execucoes: 4}
+  - {agente: "devops-deploy", execucoes: 1}
+total_execucoes_agente: 2051
+modelos_por_provider:
+  - {provider: "claude", modelo: "claude-sonnet-5", execucoes: 1009}
+  - {provider: "claude", modelo: "claude-opus-5[1m]", execucoes: 907}
+  - {provider: "claude", modelo: "claude-haiku-4-5-20251001", execucoes: 110}
+  - {provider: "claude", modelo: "claude-opus-5", execucoes: 25}
+tokens_totais:
+  total: 8980194025
+  input: 2135019
+  output: 31478597
+  cache_creation: 832180331
+  cache_read: 8114400078
+tokens_por_agente_total_desc:
+  - {agente: "software-architect", execucoes: 733, total: 3838820406, input: 564073, output: 15477887, cache_creation: 576179185, cache_read: 3246599261}
+  - {agente: "backend-developer", execucoes: 210, total: 1714251132, input: 511022, output: 4902642, cache_creation: 51526859, cache_read: 1657310609}
+  - {agente: "frontend-developer", execucoes: 102, total: 977907232, input: 88216, output: 1802198, cache_creation: 28097664, cache_read: 947919154}
+  - {agente: "qa-specialist", execucoes: 190, total: 781024141, input: 100640, output: 1956823, cache_creation: 33403147, cache_read: 745563531}
+  - {agente: "security-specialist", execucoes: 183, total: 330725990, input: 257866, output: 2004359, cache_creation: 34694592, cache_read: 293769173}
+  - {agente: "code-reviewer", execucoes: 185, total: 305923830, input: 113243, output: 1543237, cache_creation: 33840160, cache_read: 270427190}
+  - {agente: "laravel-specialist", execucoes: 44, total: 253823909, input: 37754, output: 731683, cache_creation: 10868882, cache_read: 242185590}
+  - {agente: "devops-specialist", execucoes: 71, total: 202943124, input: 114598, output: 802141, cache_creation: 12874075, cache_read: 189152310}
+  - {agente: "database-specialist", execucoes: 72, total: 133138236, input: 14034, output: 459341, cache_creation: 11147311, cache_read: 121517550}
+  - {agente: "backend-test-specialist", execucoes: 28, total: 117356533, input: 39448, output: 397519, cache_creation: 5716385, cache_read: 111203181}
+  - {agente: "frontend-test-specialist", execucoes: 18, total: 83340498, input: 2006, output: 246611, cache_creation: 3423837, cache_read: 79668044}
+  - {agente: "technical-writer", execucoes: 59, total: 81611998, input: 35614, output: 365922, cache_creation: 9695633, cache_read: 71514829}
+  - {agente: "Explore", execucoes: 104, total: 75546199, input: 219576, output: 517225, cache_creation: 10527654, cache_read: 64281744}
+  - {agente: "nextjs-spa-specialist", execucoes: 4, total: 38872022, input: 4528, output: 86964, cache_creation: 2596931, cache_read: 36183599}
+  - {agente: "product-analyst", execucoes: 16, total: 17672756, input: 524, output: 92060, cache_creation: 2711468, cache_read: 14868704}
+  - {agente: "frontend-reviewer", execucoes: 4, total: 14376696, input: 31127, output: 63656, cache_creation: 871235, cache_read: 13410678}
+  - {agente: "general-purpose", execucoes: 23, total: 10051923, input: 266, output: 17129, cache_creation: 3369945, cache_read: 6664583}
+  - {agente: "unknown", execucoes: 4, total: 2773240, input: 464, output: 11194, cache_creation: 601234, cache_read: 2160348}
+  - {agente: "devops-deploy", execucoes: 1, total: 34160, input: 20, output: 6, cache_creation: 34134, cache_read: 0}
+media_tokens_por_execucao_desc:
+  - {agente: "nextjs-spa-specialist", execucoes: 4, media: 9718006}
+  - {agente: "frontend-developer", execucoes: 102, media: 9587326}
+  - {agente: "backend-developer", execucoes: 210, media: 8163101}
+  - {agente: "laravel-specialist", execucoes: 44, media: 5768725}
+  - {agente: "software-architect", execucoes: 733, media: 5237136}
+  - {agente: "frontend-test-specialist", execucoes: 18, media: 4630028}
+  - {agente: "backend-test-specialist", execucoes: 28, media: 4191305}
+  - {agente: "qa-specialist", execucoes: 190, media: 4110653}
+  - {agente: "frontend-reviewer", execucoes: 4, media: 3594174}
+  - {agente: "devops-specialist", execucoes: 71, media: 2858354}
+  - {agente: "database-specialist", execucoes: 72, media: 1849142}
+  - {agente: "security-specialist", execucoes: 183, media: 1807246}
+  - {agente: "code-reviewer", execucoes: 185, media: 1653642}
+  - {agente: "technical-writer", execucoes: 59, media: 1383254}
+  - {agente: "product-analyst", execucoes: 16, media: 1104547}
+  - {agente: "Explore", execucoes: 104, media: 726406}
+  - {agente: "unknown", execucoes: 4, media: 693310}
+  - {agente: "general-purpose", execucoes: 23, media: 437040}
+  - {agente: "devops-deploy", execucoes: 1, media: 34160}
+media_tokens_geral: 4378447
+media_tokens_por_comando: nao_computavel  # command_invoked nao carrega contadores de token
+geografia:
+  status: nao_computado
+  motivo: "ambiente bloqueou consultas as propriedades $geoip_*"
+  pais: null
+  estado: null
+  cidade: null
+versoes_por_eventos_desc:
+  - {versao: "v2.47.2", eventos: 2314}
+  - {versao: "v2.47.0", eventos: 1055}
+  - {versao: "v2.44.7", eventos: 573}
+  - {versao: "v2.47.1", eventos: 505}
+  - {versao: "v2.44.4", eventos: 389}
+  - {versao: "v2.46.0", eventos: 341}
+  - {versao: "v2.45.0", eventos: 273}
+  - {versao: "unknown", eventos: 69}
+  - {versao: "v1.9.2", eventos: 39}
+  - {versao: "main", eventos: 4}
+  - {versao: "v1.10.0", eventos: 1}
+modelos_por_agente:
+  Explore:
+    - {modelo: "claude-sonnet-5", execucoes: 104}
+  backend-developer:
+    - {modelo: "claude-sonnet-5", execucoes: 210}
+  backend-test-specialist:
+    - {modelo: "claude-sonnet-5", execucoes: 28}
+  code-reviewer:
+    - {modelo: "claude-sonnet-5", execucoes: 185}
+  database-specialist:
+    - {modelo: "claude-sonnet-5", execucoes: 72}
+  devops-deploy:
+    - {modelo: "claude-haiku-4-5-20251001", execucoes: 1}
+  devops-specialist:
+    - {modelo: "claude-sonnet-5", execucoes: 71}
+  frontend-developer:
+    - {modelo: "claude-sonnet-5", execucoes: 102}
+  frontend-reviewer:
+    - {modelo: "claude-sonnet-5", execucoes: 4}
+  frontend-test-specialist:
+    - {modelo: "claude-sonnet-5", execucoes: 18}
+  general-purpose:
+    - {modelo: "claude-sonnet-5", execucoes: 23}
+  laravel-specialist:
+    - {modelo: "claude-haiku-4-5-20251001", execucoes: 44}
+  nextjs-spa-specialist:
+    - {modelo: "claude-haiku-4-5-20251001", execucoes: 4}
+  product-analyst:
+    - {modelo: "claude-opus-5[1m]", execucoes: 16}
+  qa-specialist:
+    - {modelo: "claude-sonnet-5", execucoes: 190}
+  security-specialist:
+    - {modelo: "claude-opus-5[1m]", execucoes: 171}
+    - {modelo: "claude-opus-5", execucoes: 12}
+  software-architect:
+    - {modelo: "claude-opus-5[1m]", execucoes: 720}
+    - {modelo: "claude-opus-5", execucoes: 13}
+  technical-writer:
+    - {modelo: "claude-haiku-4-5-20251001", execucoes: 59}
+  unknown:
+    - {modelo: "claude-sonnet-5", execucoes: 2}
+    - {modelo: "claude-haiku-4-5-20251001", execucoes: 2}
+uso_por_dia_da_semana:
+  segunda: 1204
+  terca: 1092
+  quarta: 1032
+  quinta: 616
+  sexta: 725
+  sabado: 19
+  domingo: 875
+uso_por_hora:
+  "00": 210
+  "01": 56
+  "02": 4
+  "07": 66
+  "08": 57
+  "09": 167
+  "10": 459
+  "11": 276
+  "12": 227
+  "13": 180
+  "14": 219
+  "15": 403
+  "16": 742
+  "17": 688
+  "18": 399
+  "19": 145
+  "20": 418
+  "21": 237
+  "22": 271
+  "23": 339
+volume_por_dia:
+  "2026-08-15": 7
+  "2026-08-16": 875
+  "2026-08-17": 164
+  "2026-08-18": 682
+  "2026-08-19": 633
+  "2026-08-20": 524
+  "2026-08-21": 526
+  "2026-08-22": 12
+  "2026-08-24": 700
+  "2026-08-25": 36
+  "2026-08-26": 86
+  "2026-08-27": 36
+  "2026-08-28": 174
+  "2026-08-31": 340
+  "2026-09-01": 374
+  "2026-09-02": 313
+  "2026-09-03": 56
+  "2026-09-04": 25
+  dias_sem_eventos: ["2026-08-23", "2026-08-29", "2026-08-30"]
+instalacoes_vs_atualizacoes:
+  first_install: 0
+  install: 28
+  update: 13
+  update_modes: {manual: 13}
+  caminhos_update:
+    - {de: "v2.47.2", para: "v2.47.2", ocorrencias: 2}
+    - {de: "unknown", para: "v2.47.2", ocorrencias: 2}
+    - {de: "v2.47.1", para: "v2.47.2", ocorrencias: 1}
+    - {de: "v2.45.0", para: "v2.47.0", ocorrencias: 1}
+    - {de: "v1.10.0", para: "v1.10.0", ocorrencias: 1}
+    - {de: "v2.45.0", para: "v2.45.0", ocorrencias: 1}
+    - {de: "v2.39.2", para: "v2.45.0", ocorrencias: 1}
+    - {de: "v2.47.0", para: "v2.47.1", ocorrencias: 1}
+    - {de: "unknown", para: "v2.47.0", ocorrencias: 1}
+    - {de: "v2.47.0", para: "v2.47.2", ocorrencias: 1}
+    - {de: "v2.32.0", para: "v2.46.0", ocorrencias: 1}
+eficiencia_cache:
+  cache_read_pct_do_total: 90.36
+  input_pct_do_total: 0.0238
+  razao_cache_read_por_input: 3801
+  por_agente_top10:
+    - {agente: "software-architect", cache_read: 3246599261, pct_dos_tokens_do_agente: 84.57, razao_cache_read_por_input: 5756}
+    - {agente: "backend-developer", cache_read: 1657310609, pct_dos_tokens_do_agente: 96.68, razao_cache_read_por_input: 3243}
+    - {agente: "frontend-developer", cache_read: 947919154, pct_dos_tokens_do_agente: 96.93, razao_cache_read_por_input: 10745}
+    - {agente: "qa-specialist", cache_read: 745563531, pct_dos_tokens_do_agente: 95.46, razao_cache_read_por_input: 7408}
+    - {agente: "security-specialist", cache_read: 293769173, pct_dos_tokens_do_agente: 88.83, razao_cache_read_por_input: 1139}
+    - {agente: "code-reviewer", cache_read: 270427190, pct_dos_tokens_do_agente: 88.4, razao_cache_read_por_input: 2388}
+    - {agente: "laravel-specialist", cache_read: 242185590, pct_dos_tokens_do_agente: 95.41, razao_cache_read_por_input: 6415}
+    - {agente: "devops-specialist", cache_read: 189152310, pct_dos_tokens_do_agente: 93.2, razao_cache_read_por_input: 1651}
+    - {agente: "database-specialist", cache_read: 121517550, pct_dos_tokens_do_agente: 91.27, razao_cache_read_por_input: 8659}
+    - {agente: "backend-test-specialist", cache_read: 111203181, pct_dos_tokens_do_agente: 94.76, razao_cache_read_por_input: 2819}
+fim_de_sessao:
+  stop_hook_active_false: 3314
+  stop_hook_active_true: 146
+cobertura_zero_uso:
+  comandos_canonicos_total: 35
+  comandos_sem_uso_total: 30
+  comandos_sem_uso: ["adr", "architect", "audit", "backend", "dba", "design", "devops", "docs", "explain", "fix", "frontend", "fullstack", "health-check", "install", "merge", "mobile", "plan", "pr", "push", "qa", "refactor", "relayout", "rule", "security", "seo", "setup", "symlinks", "tester", "update", "version"]
+  comandos_usados: ["learn", "status", "commit", "review", "sync-rules"]
+  agentes_roster_total: 18
+  agentes_roster_sem_uso: ["backend-reviewer", "mobile-developer", "seo-specialist", "setup-assistant", "ui-ux-designer"]
+  agentes_fora_do_roster: ["Explore", "devops-deploy", "general-purpose", "laravel-specialist", "nextjs-spa-specialist", "unknown"]
+  execucoes_fora_do_roster: 180
+  execucoes_fora_do_roster_pct: 8.78
+sistema_operacional:
+  "darwin": 3396
+  "mingw64_nt-10.0-26200": 2166
+  "linux": 1
+achado_seguranca_privacidade:
+  tipo: geolocalizacao_persistida_nao_documentada
+  propriedades_nao_documentadas: ["$geoip_latitude", "$geoip_longitude", "$geoip_postal_code", "$geoip_accuracy_radius", "$geoip_time_zone"]
+  documento_afetado: "PRIVACY.md"
+  severidade: media
+  acao_recomendada: "desabilitar coordenadas/CEP na transformacao GeoIP do projeto PostHog ou declara-las em PRIVACY.md"
 ```
