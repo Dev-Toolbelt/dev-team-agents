@@ -33,7 +33,10 @@ LAST=$( (for f in "$ADR_DIR"/adr-[0-9]*.md; do
     [ -f "$f" ] || continue
     basename "$f"
 done 2>/dev/null | grep -oE 'adr-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) || true)
-NEXT=$(printf "%03d" $(( ${LAST:-0} + 1 )))
+# 10# forces base-10 interpretation — without it, a zero-padded value like
+# "008" is parsed as octal by bash arithmetic and 8/9 are invalid octal
+# digits, aborting the script from ADR-008 onward.
+NEXT=$(printf "%03d" $(( 10#${LAST:-0} + 1 )))
 
 # Build a URL-safe slug from the title
 SLUG=$(echo "$TITLE" \

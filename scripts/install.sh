@@ -44,7 +44,11 @@ VERSION="${1:-latest}"
 # through it on every run), so the fallback must not be a no-op stub —
 # it previously was, and installed_version silently never got written on
 # any real install or update.
-_INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ${BASH_SOURCE[0]:-$0} — when the script is piped straight into bash
+# (`curl ... | bash`), there is no source file and BASH_SOURCE is empty;
+# under `set -u` that made `${BASH_SOURCE[0]}` an unbound-variable error
+# before this fell back to $0.
+_INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 if [ -f "$_INSTALL_SH_DIR/lib/state.sh" ]; then
     # shellcheck source=scripts/lib/state.sh
     source "$_INSTALL_SH_DIR/lib/state.sh"
