@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.48.0] - 2026-09-23
+
+### Added
+- **Progress Reporting rule in `plan-mode`**: `skills/shared/plan-mode/SKILL.md` now mandates a per-step status update after each approved-plan step completes — a checklist of done/pending steps with elapsed time per step, plus a closing summary with total time when the plan finishes. Applies whether the plan's steps came from the agent or from a checklist the user handed over directly (still subject to the existing mandatory-plan trigger for multi-step tasks). Cross-referenced with `skills/shared/work-feedback/SKILL.md` so the two check-in mechanisms — periodic polling within a background step vs. one report between steps — don't appear to compete.
+
 ## [2.47.2] - 2026-08-21
 
 ### Added
