@@ -50,6 +50,8 @@ Applies only when sub-agents are running **in the background** and the task has 
 
 Never fire more than one wake-up cycle per interval, and never shorten the interval to "check sooner" — the interval is a user-controlled setting, not a suggestion.
 
+**Relationship to `skills/shared/plan-mode/SKILL.md`'s Progress Reporting**: the two report at different granularities and do not replace each other. This skill fires **within** a plan step, on its own interval, only while that step's work is delegated to background subagents — it says nothing about the plan's other steps. Progress Reporting fires **between** steps, once per step, when a step finishes. A single background step can produce several of this skill's tables before it completes and produces exactly one Progress Reporting update. Keep emitting this skill's table on schedule even if a Progress Reporting update was just sent for an adjacent step — they are separate messages for separate audiences of the same work.
+
 ---
 
 ## Table Format

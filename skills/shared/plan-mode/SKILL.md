@@ -63,7 +63,46 @@ After presenting the plan:
 
 On **rejection**: acknowledge the feedback, adjust the plan, re-present the full plan. Never partially execute before replanning.
 
-On **approval**: execute steps in order (agents with Execution Strategy Gate enabled MUST present the gate before executing). Report progress after each step. If execution reveals a problem that changes the plan, **stop and replan** before continuing.
+On **approval**: execute steps in order (agents with Execution Strategy Gate enabled MUST present the gate before executing). Report progress after each step per the **Progress Reporting** rule below. If execution reveals a problem that changes the plan, **stop and replan** before continuing.
+
+---
+
+## Progress Reporting
+
+After finishing each step of an approved plan — whether executed directly or delegated to a subagent — send the user a short status update as its own chat message, in the user's preferred language from `preferences.json` → `language`. Pure markdown, no box-drawing characters, per `skills/shared/output-format/SKILL.md`.
+
+A plan's steps are not only ones the agent drafts on its own: when the user hands over their own itemized list of activities (e.g. "do X, Y, Z"), that list falls under the "Multi-step implementations" trigger in *When a Plan Is Required* above — it still must be formalized into `plan-template.md`'s Steps table before execution, with the user's items becoming the steps. Once formalized and approved, this Progress Reporting rule applies exactly the same regardless of whether the steps originated from the agent's own plan or the user's own checklist.
+
+Format (per-step update):
+
+```
+✅ Step {step_number}/{step_total} done: {step title/description from the plan}
+⏱️ Time spent: {duration for this step, e.g. "3m 42s"}
+
+Pending {done_total}/{steps_total}:
+  [x] {completed step title} ({its time spent})
+  [x] {completed step title} ({its time spent})
+  [] {not-yet-done step title}
+  [] {not-yet-done step title}
+```
+
+Closing format (after the last step):
+
+```
+✅ Plan complete
+⏱️ Total time: {sum of every step's time spent}
+
+All {step_total} steps done. Nothing pending.
+```
+
+Rules:
+
+- Track each step's start time when execution begins and compute the duration when it finishes — do not guess or omit it.
+- The checklist under `Pending {done_total}/{steps_total}` always lists **every** step in plan order, not just what remains: `[x]` with its elapsed time for steps already done, `[]` for steps not yet done. `done_total` is the count of `[x]` lines; `steps_total` equals `step_total`.
+- Send this update immediately after each step completes, before starting the next one. Do not batch multiple steps into a single update.
+- When the last step finishes, send the closing format instead of the per-step format — never a checklist on the closing message.
+- In multi-agent execution, this reporting duty belongs to the orchestrating (main) agent, not each subagent — a subagent's own completion is one input to the main agent's update, not a separate message to the user. This is independent of, and does not replace, the periodic check-in on background subagents defined in `skills/shared/work-feedback/SKILL.md`.
+- **Relationship to `work-feedback`**: the two do not compete — they report at different granularities. Progress Reporting fires **between** steps, once per step, when a step finishes. `work-feedback` fires **within** a step, on its own interval, only while that step's work is delegated to background subagents. A single background step can produce several `work-feedback` tables (one per poll tick) before it completes and produces exactly one Progress Reporting update. Never substitute one for the other, and never suppress a step's Progress Reporting update because `work-feedback` already reported on it — they are separate messages for separate audiences of the same work.
 
 ---
 
