@@ -516,6 +516,7 @@ This rule does not replace the Session Summary Rule above — a corrected prefer
 
 ---
 
+<!-- dev-team-agents: commit-rule -->
 ## Commit Rule
 
 When making a git commit for any task:
