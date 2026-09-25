@@ -9,3 +9,4 @@
 user-data/
 scripts/lib/__pycache__/
 credentials.local.json
+!.dev-team-agents/user-data/graphify.json
