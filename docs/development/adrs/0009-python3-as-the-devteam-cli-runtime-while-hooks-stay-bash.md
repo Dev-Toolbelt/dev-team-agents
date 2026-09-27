@@ -33,8 +33,15 @@ v2 code paths that already tolerate its absence — `state.sh`, the `install.sh`
 fallback heredoc — keep their fallbacks for one deprecation cycle, per the Immutability
 Contract.
 
+**The floor is python 3.9**, checked in `scripts/cli/devteam` before the first import so an older
+interpreter gets a one-line message instead of a SyntaxError from a library module, and tested
+explicitly in CI. Testing only the newest interpreter is not equivalent: it hid a real defect
+once — `tarfile`'s extraction filter defaults to `data` only from 3.14, which masked an
+unsafe-member bug on every version a user is likely to have.
+
 Only the standard library is used: `json`, `pathlib`, `os`, `shutil`, `urllib`, `argparse`,
-`uuid`, `unittest`. No third-party dependency, no virtualenv, no lockfile. That keeps the
+`uuid`, `secrets`, `hashlib`, `ssl`, `tarfile`, `unittest`. No third-party dependency, no
+virtualenv, no lockfile. That keeps the
 install surface identical to what brew and winget can express in a single dependency line.
 
 The CLI also owns the `--json` contract every command must honour, because the Electron app is

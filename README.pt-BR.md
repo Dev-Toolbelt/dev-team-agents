@@ -55,19 +55,20 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ## Instalação global (prévia da v3)
 
-O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona; o tap do Homebrew, o pacote winget e o app desktop chegam nos marcos seguintes.
+O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona; o tap do Homebrew, o pacote winget e o app desktop chegam nos marcos seguintes. Até lá o CLI roda de um clone, e **python 3.9+ é obrigatório** para ele (não há modo degradado: sem python3 o comando `devteam` simplesmente não roda).
 
 | Passo | Comando |
 |-------|---------|
 | Colocar uma versão no store | `python3 scripts/cli/devteam store install --from .` |
+| Colocar o `devteam` no PATH | `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam` |
 | Vincular um projeto | `devteam bind /caminho/do/projeto` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
 | Converter uma instalação v2 existente | `devteam migrate --apply` |
 
-Um projeto vinculado guarda apenas um `.dev-team-agents/project.json` commitado — sua identidade e suas pastas de conhecimento. Nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
+No Windows, chame o CLI como `py -3 scripts\cli\devteam …` — o shebang do arquivo sem extensão não executa lá. Um projeto vinculado guarda um `.dev-team-agents/project.json` commitado (sua identidade e suas pastas de conhecimento) e um ponteiro `core` para o store; nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
 
-> Layout do store, modos de bind, contrato `--json` e códigos de saída: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
+> Layout do store, modos de bind, registro de hooks, contrato `--json` e códigos de saída: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
 
 ---
 

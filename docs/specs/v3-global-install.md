@@ -37,6 +37,22 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - And no copy of `agents/`, `commands/` or `skills/` exists inside the project
 - And the project appears in `registry.json` with its path, providers, mode and null pin
 
+**Scenario: a bound project can reach the framework by a project-relative path**
+- Given a project bound in `link` or `copy` mode
+- When any shipped command or skill resolves `.dev-team-agents/core/scripts/…` or
+  `.dev-team-agents/core/templates/…`
+- Then the path exists and resolves into the version that project is bound to
+- And `bash .dev-team-agents/core/scripts/new-adr.sh "<title>"` creates an ADR
+
+**Scenario: binding registers the hook dispatchers**
+- Given a project being bound for a provider that uses them
+- When the bind completes
+- Then `.claude/settings.json` carries one entry each for `SessionStart`, `Stop`, `PreCompact`
+  and `PreToolUse`, pointing through the core pointer
+- And every other key in that file is unchanged
+- And a second bind neither duplicates an entry nor rewrites an unrelated one
+- And `unbind` removes those four entries and leaves the file and its other keys in place
+
 **Scenario: binding is idempotent**
 - Given a project already bound
 - When `devteam bind` runs again with the same arguments
@@ -57,6 +73,32 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - Then the artifacts are materialised as copies
 - And `registry.json` records `mode: "copy"` for that project
 - And `devteam list` shows the mode, so the fallback is never silent
+
+**Scenario: a plain re-bind does not change a pin**
+- Given a project pinned to a version
+- When `devteam bind` runs again with no `--pin`
+- Then the pin is unchanged and the project still resolves to the pinned version
+- And only `devteam pin --release` clears it
+
+**Scenario: retiring an artifact never destroys content**
+- Given a project bound in `copy` or `vendored` mode, with a file the user added inside an
+  artifact directory
+- When `devteam sync`, `devteam bind` or `devteam unbind` retires that directory
+- Then the directory is moved into `data/quarantine/<date>/<project_id>/`
+- And the user's file is readable at its quarantined location
+- And a symlink artifact is simply unlinked, since `sync` recreates it
+
+**Scenario: a path resolving outside the project is refused**
+- Given a project where `.claude` or `.dev-team-agents` is a symlink pointing elsewhere
+- When any command would write or remove an artifact through it
+- Then the command fails with a conflict and writes nothing outside the project
+
+**Scenario: a linked worktree is not a fork**
+- Given a bound repository whose `project.json` is committed, and a linked worktree of it
+- When the worktree is bound
+- Then it reuses the same `project_id` and the registry still holds one entry
+- And the entry lists the worktree, and `sync` refreshes both checkouts
+- And unbinding the worktree leaves the shared ignore block intact for the other checkout
 
 **Scenario: one update, every project**
 - Given three bound projects, none pinned, all following `current`
@@ -111,11 +153,14 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - And the report states that the vendored tree was tracked by git and must be removed from the index by an explicit commit
 
 **Scenario: every command answers machine-readably**
-- Given any subcommand
+- Given any subcommand, including one rejected for bad arguments
 - When it is invoked with `--json`
 - Then stdout is a single valid JSON document and carries an `ok` field
+- And `ok` is false whenever the command reports a problem, including a `warn`-level one
 - And human-formatted text appears on stdout only without `--json`
 - And a usage error exits 2, an environment error exits 3, and a conflict or lock failure exits 4
+- And a command that ran but reported an unfixed problem exits 1 — `doctor` with any finding,
+  and `sync` or `update` with any per-project failure
 
 **Scenario: concurrent writes to the store do not interleave**
 - Given two processes mutating `registry.json` at the same time
@@ -144,6 +189,13 @@ relocation, the preference cascade, credentials and the desktop app are later mi
   teammate needs. `.git/info/exclude` is local to the clone, which is exactly the scope of a
   bind. The scenario "bind artifacts are gitignored between managed markers" still holds; the
   file it holds in is the local exclude.
+- 2026-09-27 | review | Added the `core` pointer, hook-dispatcher, pin-preservation,
+  quarantine, containment, worktree and exit-code scenarios above. | The M1 review found that
+  the bind produced provider content but neither the in-project runtime root that 116 shipped
+  references need nor the hook dispatchers that make the framework self-enforcing; that three
+  code paths deleted user content instead of quarantining it; that no write path checked
+  containment; and that a plain re-bind silently released a pin. Each was invisible to the
+  criteria as written, so the criteria were wrong, not just the code.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

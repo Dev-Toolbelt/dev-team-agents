@@ -367,8 +367,9 @@ store, durable state lives in a separate **data** store, and each project carrie
 writes one version and `devteam sync --all` re-points every project that is not pinned.
 
 The CLI is python3 (`scripts/cli/devteam`, implementation in `scripts/lib/devteam/`); hooks stay
-bash. Two rules bind contributors working in that tree: **nothing is deleted** — retired content is
-moved to `data/quarantine/` — and **every store mutation is locked and written atomically**.
+bash. Contributors working in that tree are bound by the **No-Destruction Rule** — canonical home
+and its one named CLI exception in `skills/shared/setup-health-check/SKILL.md` — and by the rule
+that **every store mutation is locked and written atomically**.
 
 → See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) for the store layout, bind modes, the command table,
 the `--json` contract and exit codes, and the contributor rules.

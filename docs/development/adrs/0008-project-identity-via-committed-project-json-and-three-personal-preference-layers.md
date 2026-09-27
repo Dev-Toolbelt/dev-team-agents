@@ -4,6 +4,12 @@
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
 
+> **Status of the memory claims below: PENDING, not delivered.** Milestone M1 implements the
+> identity and the preference layers; `user-data/` is still in the project and still gitignored,
+> so the v2 behaviour of losing it on a fresh clone is unchanged for now. The paragraphs about
+> memory describe what the identity is *for* and what the relocation milestone will do with it.
+> `docs/specs/v3-global-install.md` § Out of Scope is authoritative on what M1 shipped.
+
 ## Context
 
 ADR-0007 moves per-project memory (`session-summary.md`, `state.json`, audit log) out of the
@@ -65,8 +71,9 @@ pre-existing one, because that file's owner never saw a prompt for a key added l
 ## Consequences
 
 ### Positive
-- Memory survives move, rename, re-clone and machine change — which it did not in v2, where
-  `session-summary.md` was gitignored and lost on every fresh clone.
+- Memory will survive move, rename, re-clone and machine change — which it did not in v2, where
+  `session-summary.md` was gitignored and lost on every fresh clone. The identity that makes this
+  possible ships in M1; the relocation itself does not (see the status note above).
 - Linked worktrees resolve to the same `project_id` as the main checkout, matching what
   `scripts/hooks/lib/session-summary-detect.sh` already does with `--git-common-dir`.
 - Agents read one resolved file; the cascade cannot drift into 18 divergent implementations.
