@@ -136,7 +136,14 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - **Blocks**: memory relocation, preference cascade, credentials, desktop app
 
 ### Amendment Log
-- (empty)
+- 2026-09-27 | implementation | Bind artifacts are excluded through `.git/info/exclude`, not
+  `.gitignore`; `.gitignore` keeps only the short, project-level managed block (memory, resolved
+  preferences, markers, `.worktrees/`). | A bind links one entry per skill — 152 in the current
+  tree — and those are per-developer, per-clone paths. Writing them into the committed
+  `.gitignore` would add ~155 generated lines to every product repository for information no
+  teammate needs. `.git/info/exclude` is local to the clone, which is exactly the scope of a
+  bind. The scenario "bind artifacts are gitignored between managed markers" still holds; the
+  file it holds in is the local exclude.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

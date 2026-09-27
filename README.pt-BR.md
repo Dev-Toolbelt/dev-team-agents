@@ -53,6 +53,24 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ---
 
+## Instalação global (prévia da v3)
+
+O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona; o tap do Homebrew, o pacote winget e o app desktop chegam nos marcos seguintes.
+
+| Passo | Comando |
+|-------|---------|
+| Colocar uma versão no store | `python3 scripts/cli/devteam store install --from .` |
+| Vincular um projeto | `devteam bind /caminho/do/projeto` |
+| Atualizar todos os projetos de uma vez | `devteam update` |
+| Manter um projeto numa versão | `devteam pin 3.0.0` |
+| Converter uma instalação v2 existente | `devteam migrate --apply` |
+
+Um projeto vinculado guarda apenas um `.dev-team-agents/project.json` commitado — sua identidade e suas pastas de conhecimento. Nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
+
+> Layout do store, modos de bind, contrato `--json` e códigos de saída: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
+
+---
+
 ## Primeiros Passos
 
 Após instalar, inicie o fluxo de setup dizendo ao seu CLI:

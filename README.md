@@ -53,6 +53,24 @@ Help me set up this project with dev-team-agents
 
 ---
 
+## Global Install (v3 preview)
+
+`devteam` installs the framework **once per machine** and binds each project to it, so an update is applied once instead of once per project. Milestone M1 — store, bind, version pinning and v2 migration — works today; the Homebrew tap, the winget package and the desktop app land in later milestones.
+
+| Step | Command |
+|------|---------|
+| Put a version in the store | `python3 scripts/cli/devteam store install --from .` |
+| Bind a project | `devteam bind /path/to/project` |
+| Update every bound project at once | `devteam update` |
+| Hold one project on a version | `devteam pin 3.0.0` |
+| Convert an existing v2 install | `devteam migrate --apply` |
+
+A bound project keeps only a committed `.dev-team-agents/project.json` — its identity and its knowledge folders. No copy of the framework, and no framework diffs in your product repository.
+
+> Store layout, bind modes, the `--json` contract and exit codes: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
+
+---
+
 ## Getting Started
 
 After installing, start the setup flow by telling your CLI:

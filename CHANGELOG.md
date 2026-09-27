@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **v3 milestone M1 — global core/data store, project bind and the `devteam` CLI.** The framework is installed once per machine instead of vendored into every project (325 files, ~2.3 MB, previously committed per repository). `scripts/cli/devteam` (python3, stdlib only) with the implementation in `scripts/lib/devteam/`: `path`, `version`, `store list|install|use|gc`, `bind`, `unbind`, `list`, `sync`, `pin`, `update`, `migrate`, `doctor`. Decisions recorded in ADR-0007 through ADR-0011; acceptance criteria in `docs/specs/v3-global-install.md`; reference in `CLAUDE-md/cli.md`.
+- **Two stores with different lifetimes.** `core` holds `versions/<X.Y.Z>/` and a plain-text `current` pointer (not a symlink — that would put the Windows materialisation failure at the most load-bearing path in the design). `data` holds the registry, preferences, per-project directories and quarantine, and survives uninstall — on Windows it lives in the roaming profile. `$DEVTEAM_HOME` overrides both and is the test seam.
+- **Per-project version pinning.** A project with no pin follows `current`; a pinned project stays put until released, so one `devteam update` can move nine projects and leave the tenth alone. `store gc` never removes `current` or a pinned version, and previews by default.
+- **Three bind modes**, recorded in `registry.json` so a fallback is never silent: `link` (macOS/Linux), `copy` (Windows without native symlink support — `auto` probes rather than guessing from the platform name), and `vendored` (v2 behaviour, opt-in for CI, containers and air-gapped repos).
+- **Committed project identity.** `.dev-team-agents/project.json` carries `schema`, `project_id` (UUID) and `context_paths`, so identity survives a re-clone, a directory move and a machine change. `devteam doctor` re-points a moved project by its identity, and **reports** rather than merges the fork case where two checkouts share one `project_id`.
+- **`devteam migrate`** converts a v2 vendored install into a bind: previews unless `--apply`, moves the vendored trees into `data/quarantine/<date>/<project_id>/v2-install/` (never deletes), leaves `user-data/` and `docs/` untouched, and reports the `git rm -r --cached` the user must commit themselves.
+- **`scripts/lib/devteam/quarantine.py`** — the No-Destruction Rule in code. Only symlinks (regenerable) are unlinked; every real file or directory dev-team-agents would otherwise remove is moved to a dated quarantine under the data store.
+- **Python CI gate** (`.github/scripts/ci/03-python.sh`, blocking): byte-compile plus 78 unit tests. The repository previously had **no** python check at all — `01-lint.sh` runs shellcheck, which does not read `*.py`, and the most complex logic in the tree is now python.
+- **`tests/`** — stdlib `unittest` suite for the CLI, stripped from the installed package by `scripts/lib/strip-tarball.sh`.
+
+### Changed
+- **Every skill is now linked, at either supported depth.** The v2 installer's two-level loop (`install.sh:599`) iterated `skills/<category>/<name>/` only, so `skills/skill-creator/SKILL.md` — one level up — was never linked into `.claude/skills/`. The bind engine covers both layouts.
+- **`CLAUDE.md` split further.** The command table and the per-key frontmatter rules moved to `CLAUDE-md/commands.md`, and the v3 store/CLI reference is in `CLAUDE-md/cli.md`. Content is unchanged — a move, not a rewrite. This is the extraction four consecutive audit passes reported as open (`token-claude-md-…-monolithic`).
+
+### Fixed
+- **`helpers/size-limits.sh` failed the build on its own warning.** The `CLAUDE.md` advisory threshold (600 lines, hard limit 700) pushed its finding into the same `VIOLATIONS` array as real violations, so the script exited 1 — and `01-lint.sh` wraps it as `blocking`, whose stated policy is "zero known violations in the tree today". CI was red on `main` for a file the script only warns about. Warnings are now tracked and printed separately, and do not fail the gate.
+- **`scripts/new-adr.sh` restarted ADR numbering.** It scanned `adr-[0-9]*.md` while this repository's only ADR is `0006-mobile-pipeline-architecture.md`, so the next ADR would have been `adr-001-…` beside `0006` — two files claiming different numbers under two conventions. Both naming schemes are scanned now, and new files are emitted as `NNNN-slug.md` with four digits.
+
+---
+
 ## [2.48.0] - 2026-09-23
 
 ### Added
