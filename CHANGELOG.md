@@ -20,6 +20,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Python CI gate** (`.github/scripts/ci/03-python.sh`, blocking): byte-compile plus 78 unit tests. The repository previously had **no** python check at all — `01-lint.sh` runs shellcheck, which does not read `*.py`, and the most complex logic in the tree is now python.
 - **`tests/`** — stdlib `unittest` suite for the CLI, stripped from the installed package by `scripts/lib/strip-tarball.sh`.
 
+### Added — v3 milestone M2
+
+- **Preference cascade in three personal layers**: shipped defaults → global user
+  (`data/preferences.json`) → this project (`data/projects/<id>/preferences.json`). Resolved **on
+  write** into `.dev-team-agents/resolved/preferences.json`, so agents keep doing one file read and no
+  merge logic enters any agent body. `devteam prefs list|get|set|unset` reads and writes the layers —
+  `list` names the layer each value came from, and writes never touch the projection.
+- **Consent keys are withheld, not defaulted.** `telemetry` and `auto_update` resolve to `false`
+  whenever no layer sets them, reported as `consent-withheld` rather than `defaults`, so "the user
+  was never asked" stays distinguishable from "the user accepted the default". Carries over the v2
+  `CONSENT_KEYS` rule into the cascade.
+- **`layout` in `project.json`, and `devteam upgrade`** — a consented structure upgrade that moves a
+  project's memory into the data store and leaves the project clean. `layout` is distinct from
+  `schema`: `schema` is the file's format, `layout` is where the project's state lives. **No other
+  command relocates memory**: `bind`, `sync`, `update` and `migrate` report a stale layout and stop.
+  The upgrade previews unless `--apply`, copies every file, verifies each by sha256, and only then
+  retires the original to quarantine; a populated destination aborts before anything is copied.
+  Decision and the alternatives in ADR-0012.
+- **A new project is born clean.** A bind that finds no `user-data/` creates the project on the
+  current layout, so only projects that actually carry v2 memory ever have an upgrade to run.
+- **`.dev-team-agents/state-dir`** — a one-line pointer with the absolute path of the project's state
+  directory. `scripts/lib/state.sh` resolves it with a single file read, because asking the CLI would
+  put a python subprocess inside every hook invocation.
+- **`installed_version` is stamped by the bind.** `/devteam:version`, the session banner and
+  telemetry read it from `state.json` and no v3 path wrote it, so a migrated project reported its v2
+  number forever. Retiring the key and repointing those four readers stays open (ADR-0007); this
+  makes them truthful now, without losing other keys in the file.
+- **`context_paths` reaches the context loading order.** The first entry is the write root (`docs` by
+  default); any additional entry is an extra knowledge folder, **read-only**. Documented in
+  `skills/shared/project-context/SKILL.md` § Context Loading Order alongside how to resolve `layout`.
+- **Store portability**: `devteam export` archives the data store (quarantine included) with a
+  manifest stating that the registry holds machine-local absolute paths; `devteam import` restores it,
+  refusing a populated store without `--force` and rejecting unsafe archive members; `devteam
+  uninstall` removes the core and **keeps** the data store unless given `--purge --yes`.
+- **Upgrade visibility**: `devteam doctor` reports a stale layout, a missing or wrong state pointer
+  and a missing preference projection as `warn` findings; the session banner says the same thing with
+  an observable test (a bound project whose `user-data/` still exists) and no JSON parsing.
+- 31 new tests (158 total), including the upgrade's verify-before-retire ordering, the collision
+  refusal, consent-key withholding, layer precedence, and an export/import round trip.
+
+### Changed
+- **37 markdown references now read the projection**, not the v2 source file. The five documents that
+  describe the *source* layer — the canonical `user-preferences` skill, first-time setup, both
+  health-check references and `CLAUDE-md/preferences.md` — keep naming `user-data/preferences.json`,
+  because that is what they are about. `skills/shared/user-preferences/SKILL.md` now states the read
+  path, the one-level fallback for an unbound project, and that writes go through `devteam prefs set`.
+
 ### Fixed — M1 review findings
 
 A five-role review (backend, security, architecture, devops, QA) of the milestone found 43

@@ -4,11 +4,11 @@
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
 
-> **Status of the memory claims below: PENDING, not delivered.** Milestone M1 implements the
-> identity and the preference layers; `user-data/` is still in the project and still gitignored,
-> so the v2 behaviour of losing it on a fresh clone is unchanged for now. The paragraphs about
-> memory describe what the identity is *for* and what the relocation milestone will do with it.
-> `docs/specs/v3-global-install.md` § Out of Scope is authoritative on what M1 shipped.
+> **Status: delivered in M2, behind a consented upgrade.** M1 shipped the identity and the
+> preference layers. M2 relocates memory into `data/projects/<project_id>/`, but only when the user
+> runs `devteam upgrade` — a project records its `layout` and nothing moves on its own. See
+> [ADR-0012](0012-project-layout-version-and-a-consented-structure-upgrade.md). A project still on
+> layout 1 keeps the v2 behaviour, including losing its memory on a fresh clone, until it upgrades.
 
 ## Context
 
@@ -45,11 +45,15 @@ two paths (the fork case) instead of silently merging two projects' memory.
 
 **Preferences: three layers, all personal.**
 
-| Layer | Location | Example keys |
-|-------|----------|--------------|
-| Defaults | `core/versions/<v>/scripts/lib/preferences-defaults.json` | every key, canonical schema |
-| Global user | `data/preferences.json` | `language`, `auto_update`, `telemetry` |
-| Project | `data/projects/<id>/preferences.json` | `worktree_active`, `qa_browser` for this project |
+| Layer | Location | Set it with |
+|-------|----------|-------------|
+| Defaults | `core/versions/<v>/scripts/lib/preferences-defaults.json` | ships; not writable |
+| Global user | `data/preferences.json` | `devteam prefs set <key> <value>` |
+| Project | `data/projects/<id>/preferences.json` | `devteam prefs set <key> <value> --scope project` |
+
+The projection lands at `.dev-team-agents/resolved/preferences.json`, and `devteam prefs list`
+reports the layer each value came from. Consent keys resolve to `false` when no layer sets them —
+reported as `consent-withheld`, so "never asked" is distinguishable from "defaulted".
 
 Nothing about a **preference** is committed. The cascade is resolved **on write**, not on read:
 `devteam sync` materialises the merged result at `<project>/.dev-team-agents/resolved/preferences.json`
@@ -71,9 +75,9 @@ pre-existing one, because that file's owner never saw a prompt for a key added l
 ## Consequences
 
 ### Positive
-- Memory will survive move, rename, re-clone and machine change — which it did not in v2, where
-  `session-summary.md` was gitignored and lost on every fresh clone. The identity that makes this
-  possible ships in M1; the relocation itself does not (see the status note above).
+- Memory survives move, rename, re-clone and machine change once the project is on layout 2 — which
+  it did not in v2, where `session-summary.md` was gitignored and lost on every fresh clone. The
+  identity that makes it possible shipped in M1; the relocation is M2's `devteam upgrade`.
 - Linked worktrees resolve to the same `project_id` as the main checkout, matching what
   `scripts/hooks/lib/session-summary-detect.sh` already does with `--git-common-dir`.
 - Agents read one resolved file; the cascade cannot drift into 18 divergent implementations.

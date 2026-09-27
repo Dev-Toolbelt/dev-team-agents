@@ -168,17 +168,58 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - Then the file is valid JSON containing both mutations
 - And no partially written file is ever observable
 
+**Scenario: a project declares which layout it is on**
+- Given a project being bound for the first time
+- When it has no in-project memory directory
+- Then it is created on the current layout and no upgrade is offered
+- And when it does have one, it is created on layout 1 and an upgrade is reported
+
+**Scenario: nothing relocates memory except the upgrade command**
+- Given a bound project on layout 1
+- When `devteam bind`, `devteam sync`, `devteam update` or `devteam migrate` runs
+- Then the in-project memory is untouched
+- And each of them reports that an upgrade is available
+
+**Scenario: the upgrade previews, verifies, and retires rather than deletes**
+- Given a project on layout 1 with memory files, including nested ones
+- When `devteam upgrade` runs without `--apply`
+- Then nothing on disk changes
+- And when it runs with `--apply`, every file is copied to the data store and verified by sha256
+- And only then is the original directory moved to quarantine
+- And `layout` becomes 2, the state pointer names the new directory, and the managed `.gitignore`
+  block drops its `user-data` entries
+- And a second run is refused, and a populated destination aborts before anything is copied
+
+**Scenario: preferences resolve in three personal layers**
+- Given the shipped defaults, a global layer and a project layer
+- When any of them sets a key
+- Then the later layer wins and `devteam prefs list` names the layer each value came from
+- And a consent key that no layer sets resolves to `false`, reported as `consent-withheld`
+- And the merged result is written to one file the agents read, which no agent merges
+
+**Scenario: extra knowledge folders are read-only**
+- Given `context_paths` listing a folder beyond the default write root
+- When context is loaded for a task
+- Then that folder is read when the task's subject matter is there, and never written to
+
+**Scenario: the data store can move to another machine**
+- Given a populated data store
+- When it is exported and imported on another machine
+- Then the registry and every project's memory are present
+- And the import refuses to overwrite a populated store unless forced, and rejects an unsafe archive
+- And `devteam uninstall` keeps the data store unless `--purge --yes` is given
+
 ### Out of Scope
-- Moving project memory (`session-summary.md`, `state.json`) into the data store — later milestone
-- The preference cascade and its resolved projection — later milestone
 - Credential storage, `devteam cred`, and the PreToolUse guard — later milestone
+- Retiring `state.json:installed_version` and repointing its four readers — later milestone;
+  the bind stamps the key so they report the truth in the meantime
 - The Electron app, the Homebrew tap and the winget package — later milestone
 - Making the harness write root (`docs/`) configurable; only additional read-only context paths are planned, and not in M1
 - Linux as a release target
 
 ### Dependencies
-- **Depends on**: ADR-0007, ADR-0008, ADR-0009
-- **Blocks**: memory relocation, preference cascade, credentials, desktop app
+- **Depends on**: ADR-0007, ADR-0008, ADR-0009, ADR-0012
+- **Blocks**: credentials, desktop app
 
 ### Amendment Log
 - 2026-09-27 | implementation | Bind artifacts are excluded through `.git/info/exclude`, not
@@ -196,6 +237,11 @@ relocation, the preference cascade, credentials and the desktop app are later mi
   code paths deleted user content instead of quarantining it; that no write path checked
   containment; and that a plain re-bind silently released a pin. Each was invisible to the
   criteria as written, so the criteria were wrong, not just the code.
+- 2026-09-27 | M2 | Added the layout, upgrade, preference-cascade, context-path and store-portability
+  scenarios; moved memory relocation and the preference cascade out of Out of Scope. | M2 implements
+  them. Memory relocation landed behind an explicit `devteam upgrade` rather than as a side effect of
+  `sync`, which changed the shape of the criteria: the guarantee worth asserting is that **no other
+  command moves it**, not merely that it ends up in the store. Recorded in ADR-0012.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

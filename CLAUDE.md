@@ -113,7 +113,7 @@ The source copy holds Claude's values because Claude is the identity case; `rend
 1. `.dev-team-agents/.worktree-session` present → follow the stored decision silently:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
-2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/resolved/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), `git checkout -b <name>`, write `worktree=no branch=<name>`
 3. Key absent (legacy install) → ask the user once with `AskUserQuestion` (Yes/No), then follow the matching path from step 2.
@@ -363,8 +363,13 @@ When a rule or script path references "helpers", state which of the two it means
 
 One installation per machine, many bound projects: the canonical tree lives in a versioned **core**
 store, durable state lives in a separate **data** store, and each project carries only a committed
-`project.json` (identity + `context_paths`) plus excluded, regenerable bind artifacts. An update
-writes one version and `devteam sync --all` re-points every project that is not pinned.
+`project.json` (identity, `layout`, `context_paths`) plus excluded, regenerable bind artifacts. An
+update writes one version and `devteam sync --all` re-points every project that is not pinned.
+
+A project's memory moves into the store only when the user runs **`devteam upgrade`** — `bind`,
+`sync`, `update` and `migrate` report a stale `layout` and change nothing. Preferences cascade in
+three personal layers and are resolved on write into `.dev-team-agents/resolved/preferences.json`,
+which is the one file agents read; `context_paths` is committed topology, not a preference.
 
 The CLI is python3 (`scripts/cli/devteam`, implementation in `scripts/lib/devteam/`); hooks stay
 bash. Contributors working in that tree are bound by the **No-Destruction Rule** — canonical home

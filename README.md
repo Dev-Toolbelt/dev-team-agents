@@ -65,6 +65,7 @@ Help me set up this project with dev-team-agents
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
 | Convert an existing v2 install | `devteam migrate --apply` |
+| Move a project's memory into the store | `devteam upgrade --apply` |
 
 On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionless file's shebang does not execute there. A bound project keeps a committed `.dev-team-agents/project.json` (its identity and knowledge folders) and a `core` pointer to the store; no copy of the framework, and no framework diffs in your product repository.
 
