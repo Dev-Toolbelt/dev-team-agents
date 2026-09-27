@@ -38,6 +38,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
 import { writeFile, mkdtemp, rm } from "node:fs/promises"
+import { existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -47,7 +48,11 @@ const execAsync = promisify(exec)
 const HOOK_TIMEOUT_MS = 5000
 
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
-  const HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
+  // A v3 bind exposes the framework through `.dev-team-agents/core`; a v2
+  // install vendors it directly. Prefer the pointer, fall back to the old path.
+  const CORE_HOOKS = `${directory}/.dev-team-agents/core/scripts/hooks`
+  const LEGACY_HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
+  const HOOKS = existsSync(CORE_HOOKS) ? CORE_HOOKS : LEGACY_HOOKS
 
   const runHook = async (script: string, stdin?: string): Promise<string> => {
     try {

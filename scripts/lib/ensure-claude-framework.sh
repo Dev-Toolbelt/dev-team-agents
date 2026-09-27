@@ -29,7 +29,15 @@ ensure_claude_framework() {
   # case copying back into itself only raises "identical" cp errors and does no
   # useful work; skip the mirror pass and keep only the state-file bootstrap
   # below.
-  if [[ "$source_abs" != "$framework_abs" ]]; then
+  # A v3 bind puts a `core` pointer at <project>/.dev-team-agents/core, which
+  # already resolves every project-relative framework path the hooks and the
+  # provider plugins use. Mirroring the tree on top of that copied 2.3 MB of
+  # framework back into the project — the exact thing the v3 store exists to
+  # eliminate, and untracked-but-not-ignored, so the next `git add -A` committed
+  # it. When the pointer is present, only the state bootstrap below runs.
+  if [[ -e "$framework_dir/core" ]]; then
+    :
+  elif [[ "$source_abs" != "$framework_abs" ]]; then
     # Copy the runtime subset only (no .git, no .github, no .opencode, no .codex,
     # no helpers/ which is dev-only, no opencode/ plumbing dir from the repo,
     # no scripts/install-*.sh cross-CLI scripts — those are bootstrap-time only).
