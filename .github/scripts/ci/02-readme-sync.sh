@@ -49,6 +49,15 @@ KNOWN_DRIFT=(
 
 is_known_drift() {
   local key="$1" entry
+  # The baseline is intentionally empty on a healthy tree, and under `set -u`
+  # bash < 4.4 treats "${arr[@]}" on an empty array as an unbound variable —
+  # macOS still ships 3.2.57. Without this guard the gate died with
+  # `KNOWN_DRIFT[@]: unbound variable` on the FIRST drift it found, before
+  # naming which check broke and before checking the remaining pairs. CI runs a
+  # newer bash, so the damage was confined to contributors running the gate
+  # locally before pushing, which is exactly what it is for. `${#arr[@]}` is
+  # safe on an empty array in 3.2; the expansion below is not.
+  [ "${#KNOWN_DRIFT[@]}" -eq 0 ] && return 1
   for entry in "${KNOWN_DRIFT[@]}"; do
     [ "$entry" = "$key" ] && return 0
   done
@@ -102,6 +111,16 @@ compare_exact() {
   return 1
 }
 
+# The five fail_* flags below are read through indirect expansion — section 3
+# builds `local var="fail_$check"` and reads `${!var}` — which shellcheck cannot
+# trace, so it reports each assignment as unused. The flags ARE read and the gate
+# DOES fail on drift: verified against a pt-BR mirror carrying two extra table
+# rows, which exits 1 with `'tables' parity broken`. The directive is scoped to
+# this function, and it is here rather than on the declaration because the
+# findings are raised at the assignment sites. Do not "resolve" SC2034 by
+# deleting the flags — that would turn every per-section comparison into a
+# message with no effect on the exit status.
+# shellcheck disable=SC2034
 check_pair() {
   local en="$1" ptbr="$2"
   local fail_headings=0 fail_lines=0 fail_fences=0 fail_tables=0 fail_links=0
