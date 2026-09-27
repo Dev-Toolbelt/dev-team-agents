@@ -18,7 +18,11 @@ python3 -m py_compile scripts/cli/devteam
 echo "  compiled OK"
 
 echo "─ python: unit tests ───────────────────────────────────────"
-python3 -m unittest discover -s tests -t tests -v 2>&1 | tail -20
+# Neither -v nor a `tail` window: with -v the per-test lines fill any window, and
+# a truncated log drops exactly the traceback an operator needs. unittest's
+# default output is already compact and puts every failure at the end.
+python3 --version
+python3 -m unittest discover -s tests -t tests
 
 echo ""
 echo "python OK ✓"
