@@ -17,7 +17,7 @@ mkdir -p "$ADR_DIR"
 # Surface existing ADR titles first — the caller is responsible for checking
 # this list isn't already covering the same decision before a new file is
 # created (see skills/shared/adr/SKILL.md § Check Before Creating).
-EXISTING=$(grep -h '^# ' "$ADR_DIR"/adr-[0-9]*.md 2>/dev/null || true)
+EXISTING=$(grep -h '^# ' "$ADR_DIR"/adr-[0-9]*.md "$ADR_DIR"/[0-9]*.md 2>/dev/null || true)
 if [ -n "$EXISTING" ]; then
     echo "Existing ADRs — confirm this decision isn't already covered:"
     echo "$EXISTING"
@@ -29,14 +29,18 @@ fi
 # which under `set -o pipefail` would abort the whole script before the
 # first ADR is ever written. `|| true` tolerates that empty case; LAST
 # falls back to 0 via the ${LAST:-0} default below.
-LAST=$( (for f in "$ADR_DIR"/adr-[0-9]*.md; do
+# Both naming schemes are scanned: the historical `adr-NNN-slug.md` this script
+# used to emit, and the prefix-less `NNNN-slug.md` form the repository actually
+# carries. Scanning only one of them restarts numbering at 001 next to an
+# existing 0006 — two files claiming different numbers under two conventions.
+LAST=$( (for f in "$ADR_DIR"/adr-[0-9]*.md "$ADR_DIR"/[0-9]*.md; do
     [ -f "$f" ] || continue
     basename "$f"
-done 2>/dev/null | grep -oE 'adr-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) || true)
+done 2>/dev/null | grep -oE '^(adr-)?[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) || true)
 # 10# forces base-10 interpretation — without it, a zero-padded value like
 # "008" is parsed as octal by bash arithmetic and 8/9 are invalid octal
 # digits, aborting the script from ADR-008 onward.
-NEXT=$(printf "%03d" $(( 10#${LAST:-0} + 1 )))
+NEXT=$(printf "%04d" $(( 10#${LAST:-0} + 1 )))
 
 # Build a URL-safe slug from the title
 SLUG=$(echo "$TITLE" \
@@ -44,7 +48,7 @@ SLUG=$(echo "$TITLE" \
     | tr -cs 'a-z0-9' '-' \
     | sed 's/^-//;s/-$//')
 
-FILENAME="$ADR_DIR/adr-${NEXT}-${SLUG}.md"
+FILENAME="$ADR_DIR/${NEXT}-${SLUG}.md"
 TODAY=$(date +%Y-%m-%d)
 
 # Locate the template relative to this script

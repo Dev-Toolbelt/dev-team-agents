@@ -209,59 +209,7 @@ Slash commands installed to `.claude/commands/devteam/` and invoked as `/devteam
 
 Commands are subject to the same authoring discipline as agents: **max ~200 lines each**, enforced by `helpers/size-limits.sh`, and the **Quiz-first Rule** below, enforced by `helpers/agent-lint.sh`. A command is a thin orchestration wrapper — it must never restate a skill it already loads.
 
-| Command | Agents invoked | Use when… |
-|---------|---------------|-----------|
-| `/devteam:setup` | setup-assistant | Onboarding a project into dev-team-agents — detects `FIRST_RUN` vs `REFRESH` (`docs/project.md` present), then delegates the full setup flow |
-| `/devteam:plan` | **product-analyst (protagonist)** + software-architect¹ | Planning a feature — product-analyst leads, produces a business-only requirements doc ready for sprints; software-architect joins only on explicit technical request |
-| `/devteam:backend` | backend-developer + database-specialist¹ → backend-test-specialist² → code-reviewer + qa-specialist | Implementing backend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
-| `/devteam:frontend` | frontend-developer + ui-ux-designer¹ → frontend-test-specialist² → code-reviewer + qa-specialist | Implementing frontend changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
-| `/devteam:fullstack` | backend + frontend + database¹ + ui-ux¹ → both test-specialists² → code-reviewer + qa-specialist | Implementing full-stack changes (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
-| `/devteam:mobile` | mobile-developer + ui-ux-designer¹ → tests² → code-reviewer + qa-specialist | Implementing mobile features (tests only if `TESTS_REQUIRED=yes`; mandatory code-review + qa handoff, consolidated summary) |
-| `/devteam:design` | ui-ux-designer | Design system, UX flows, visual decisions |
-| `/devteam:relayout` | ui-ux-designer + frontend-developer¹ → frontend-reviewer + qa-specialist | Redesigning an existing screen to faithfully match one or more visual references; mandatory input gate blocks execution if no reference image or unambiguous target screen is given; reuses the project's design system and component library, isolated worktree, automatic post-execution review |
-| `/devteam:seo` | seo-specialist | SEO quality gate — technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness; auto-spawned by `/devteam:frontend` and `/devteam:fullstack` when the project matches a public-site/landing/e-commerce/blog Detection Signal |
-| `/devteam:fix` | backend-developer¹ + frontend-developer¹ + mobile-developer¹ → test-specialist² | Fixing a bug (tests only if `TESTS_REQUIRED=yes`) |
-| `/devteam:refactor` | software-architect → backend/frontend-test-specialist² + database-specialist¹ + security-specialist → backend-developer¹ + frontend-developer¹ → code-reviewer + qa-specialist | Structured refactoring; test-first coverage only if `TESTS_REQUIRED=yes` (else refactor without a test net), dependency mapping, consolidated plan, ordered commit blocks |
-| `/devteam:architect` | software-architect | Architecture decisions, ADRs, trade-offs; specialized handling for refactor/design/mobile/fullstack/review scope requests routes through the matching `/devteam:<scope>` command, otherwise built-in behavior (new project, bug fix, security, inherited, maintenance) |
-| `/devteam:adr` | runs `scripts/new-adr.sh` → software-architect fills template | Creating a new Architecture Decision Record |
-| `/devteam:audit` | explore → backend-developer + frontend-developer + security-specialist + devops-specialist → backend-test-specialist² + frontend-test-specialist² | Deep analysis of a module/area — silent bugs, test gaps, edge cases, security, infra, and improvement plan; saves report to `docs/audit/` |
-| `/devteam:review` | code-reviewer + software-architect + security-specialist + qa-specialist + database¹ + mobile-developer¹ | Code review before merge; with no args, asks a dynamic quiz (current branch / other local branch / PR link / other) to pick the target |
-| `/devteam:qa` | qa-specialist | Validating feature behavior and acceptance criteria |
-| `/devteam:security` | security-specialist + software-architect | Security audit or vulnerability analysis |
-| `/devteam:dba` | database-specialist + software-architect | Schema design, query optimization, migrations |
-| `/devteam:devops` | devops-specialist | CI/CD, Docker, infra, deploy scripts |
-| `/devteam:tester` | backend-test-specialist + frontend-test-specialist¹ + mobile-developer¹ | Writing or updating tests only |
-| `/devteam:docs` | technical-writer | Docs, changelogs, runbooks, release notes |
-| `/devteam:pr` | technical-writer (+ code-reviewer if `review` in args) | Drafting and creating a pull request; before creating (which pushes), loads `skills/shared/github-actions/SKILL.md`, which asks a CI/CD-aware quiz when GitHub Actions is configured, then watches Actions and auto-fixes failures if the user opted in |
-| `/devteam:push` | none — thin wrapper around `skills/shared/github-actions/SKILL.md` | Pushing the current branch; asks a CI/CD-aware quiz (watch CI vs. push-only vs. other) when GitHub Actions is configured, otherwise pushes normally |
-| `/devteam:merge` | none — thin wrapper around `skills/shared/current-context/SKILL.md` and `skills/shared/worktree/SKILL.md` | Merging the current working branch into a target branch; if on the default branch, stops (nothing to merge); if on a working branch, asks the target branch, detects an isolated worktree/infra and offers commit + rebase + merge + teardown (recommended) vs. commit + merge only vs. merge only, then nudges `/devteam:learn` if it hasn't run since the last commit |
-| `/devteam:commit` | reads staged changes, groups by layer, writes and runs commits | Committing changes with the project's or Conventional Commits pattern |
-| `/devteam:learn` | technical-writer + software-architect¹ | Consolidating session decisions, patterns, and discoveries into docs, wiki, and ADRs |
-| `/devteam:rule` | technical-writer | Cataloging a mandatory reuse/standardization rule (`/devteam:rule use o componente XPTO em todo o projeto`) into `docs/development/reuse-guidelines.md`, classified as `code-pattern` / `path-convention` / `design-rule` |
-| `/devteam:sync-rules` | technical-writer | Scanning `docs/` for conventions never cataloged as reuse rules, then running `/devteam:rule`'s classify → propose → confirm → append routine per candidate — the fix for a rule living only in prose while the registry and its gates stay empty |
-| `/devteam:version` | none — reads `installed_version` from `state.json` and prints the session-start banner layout | Checking the installed dev-team-agents version on demand; single bash call, no agent spawn, minimum token cost |
-| `/devteam:status` | none — runs `git status`/`git diff`/`git log` and prints formatted tables | Checking branch/worktree, unstaged/staged changes, last 5 commits, and totals on demand; single bash call, no agent spawn, minimum token cost. `/devteam:status <branch-name>` inspects that branch instead of the current one — full unstaged/staged tables if it has a linked worktree checked out, commit history only otherwise |
-| `/devteam:explain` | none — answers in the main context | Explaining a term, acronym or piece of jargon seen in the session (`/devteam:explain SPA` or `/devteam:explain SPA, SSR, tenant`); short by design — expands every acronym, states the problem the term solves, gives one example, draws a `mermaid` diagram only when the term is a shape (flow, exchange, hierarchy, lifecycle), and always closes by offering an interactive quiz |
-| `/devteam:update` | runs `update.sh` (which delegates freshness check to `hooks/pre-tool-use/01-check-updates.sh`) | Checking for and applying dev-team-agents updates |
-| `/devteam:symlinks` | runs `fix-symlinks.sh` (detects OS, repairs materialized `.claude/` links, guides the OS fix on exit 3) | Diagnosing and repairing broken dev-team-agents symlinks (Windows without native symlink support) |
-| `/devteam:health-check` | loads `skills/shared/setup-health-check/SKILL.md` and `skills/shared/output-format/SKILL.md`; no agents spawned | Diagnosing an installation — detects the active provider (`claude` / `opencode` / `codex`), runs the 13 check categories (symlinks, scripts, user data, provider config, graphify, CLAUDE.md/AGENTS.md, .gitignore, preferences, notifier, credentials, memory artifacts, python prerequisite, productivity tools) and applies auto-fixes — never deletions, per its No-Destruction Rule |
-| `/devteam:install` | loads `skills/devops/tool-installers/SKILL.md`; no agents spawned | Installing/configuring a complementary tool from the closed allowlist — `rg`, `fd`, `jq`, `ast-grep`, `tokei`, `delta`, `graphify`. No argument (or an invalid one) lists all supported tools with their gain and install status; accepts one or more tool names, or `all`; always confirms before running an install command. The single entrypoint for tool installs — `graphify-setup` and health-check's Category 13 both delegate here instead of duplicating install commands |
-
-¹ conditional — spawned only when the task context involves that scope. ² test-gated — spawned only when the project's `CLAUDE.md` `## dev-team-agents` section has `TESTS_REQUIRED=yes` (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, the test phase is skipped entirely.
-
-> **Exception — commands that do NOT load `current-context`:** `/devteam:commit` (operates on the staging area, not a branch scope), `/devteam:update` (operates on the local installation), `/devteam:health-check` (operates on the local installation), `/devteam:learn` (operates on session evidence, not a branch scope), `/devteam:rule` (catalogs a user-stated rule into `docs/development/reuse-guidelines.md`, not scoped to a branch or diff), and `/devteam:sync-rules` (scans `docs/` for the same registry, not scoped to a branch or diff). These six are the complete list — verify with `grep -L current-context commands/*.md`. `/devteam:symlinks`, `/devteam:install`, `/devteam:explain`, `/devteam:version` and `/devteam:status` also do not load it, but each names it in prose to record that it does not apply, so none of the five appears in that grep.
-
-> **Exception — commands that do NOT require Plan Gate:** the canonical per-command `plan_gate` value lives in `scripts/lib/commands.json` (`required` / `conditional` / `opt_out`). Only `/devteam:update`, `/devteam:symlinks`, `/devteam:health-check`, `/devteam:install`, `/devteam:push`, `/devteam:merge`, `/devteam:sync-rules`, `/devteam:version`, and `/devteam:status` are `opt_out` — thin script/skill runners with their own interactive guardrails; `sync-rules` gates each catalog write with its own per-candidate `AskUserQuestion` instead of an upfront plan, and `install` gates each install batch with its own yes/no confirmation. `/devteam:review` and `/devteam:explain` are `conditional` and read-only by design (neither body carries a plan-gate step — review reads the diff and delegates; explain answers a question and writes nothing), so in practice both execute directly.
-
-**Command tier mirrors its lead agent's tier.** Each row in `scripts/lib/commands.json` carries a `tier` and an `agent`, and the two are **not** independent knobs: on opencode the snippet's `agent` makes the command run *as* that agent while `model` is resolved from the **command's** tier, so a divergence runs an agent on a model that is not its own. `helpers/agent-lint.sh` (`check_command_roster`) fails on any mismatch, and on an `agent` with no file in `agents/`. The CI contract checker validates rendered output and only catches a dangling ref — the source-side rule is the lint's.
-
-`/devteam:update`, `/devteam:symlinks`, `/devteam:health-check`, `/devteam:install`, `/devteam:explain`, `/devteam:version` and `/devteam:status` spawn **no** agent; their `agent` field is filler the renderer still requires. The first four are thin script/skill runners; `explain` answers in the main context on purpose, because the terms it explains come from the live session and a subagent receives only the prompt; `version` and `status` answer in the main context for the same latency/token reason — a subagent round-trip would cost more than the one-liner each runs. All seven name `technical-writer`, which keeps the filler consistent and resolves the rule above to `repetitive` — what that class of work actually is. Do not read those seven rows as a delegation target.
-
-**Command frontmatter — `model:` pins the body's model on Claude Code, and only there.** `commands/<name>.md` may open with a YAML block; Claude Code reads it, and it is the **only** route by which a command's tier reaches Claude, which symlinks the body and never passes it through the renderer. `render_provider.py` strips the block before emitting the opencode `template` and the Codex prompt (both resolve the model from `commands.json` `tier`), and `render_command_claude` re-reads the source file so Claude still receives it byte-identical — the CI contract checker enforces that. The key is permitted on the **`repetitive` tier alone**, with exactly the argument that keeps `effort:` sparse: it **overrides the session's model**, so pinning a `reasoning` command to `opus` would silently undo someone who lowered the session for cost, while a `haiku` pin can never raise what the user chose. `check_command_roster` in `helpers/agent-lint.sh` fails on a pin outside `repetitive` and on a value that is not `tiers.json.repetitive.claude`. Presence is **permitted, not required**: `/devteam:explain` is `repetitive` and deliberately carries no pin, because its output is a teaching explanation grounded in the user's own code and the session model is the one they picked for that.
-
-**Command frontmatter — `argument-hint` (and `description`) are Claude-only too, for a different reason than `model:`.** Both keys may appear on any command regardless of tier — unlike `model:`, they don't override anything the user chose, so the `repetitive`-only restriction does not apply. `argument-hint` is what puts the dim usage hint (e.g. `[low|medium|high] [--fix] [target]`) next to a command in Claude Code's slash-menu; `description` is the one-line summary shown beside it. Both should read as a quick, friendly reminder of how to call the command, not a spec. Neither extends to the other providers, and not for the same mechanism: opencode has no shipped support at all — `argument-hint` frontmatter is still an open feature request upstream ([anomalyco/opencode#17586](https://github.com/anomalyco/opencode/issues/17586)); Codex *has* an `argument-hint` mechanism, but only on "Custom Prompts," a path OpenAI has already deprecated in favor of Skills, and one that lives user-locally under `~/.codex` rather than per-repo. This repo's Codex surface is `.codex/skills/devteam-*/SKILL.md`, and Skills carry no argument-hint field — they're invoked by name or picked implicitly, never shown with a parameter hint. Do not add either key to `commands.json` or `render_provider.py` expecting it to reach opencode or Codex — `render_command_claude` re-reads the source file so only Claude receives the block; the other two renderers discard the whole frontmatter block already (`parse_frontmatter` splits it off and only `commands.json` metadata is used downstream).
-
-**Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. Before anything else it loads `skills/shared/review-router/SKILL.md`, which classifies the git diff as `BACKEND`, `FRONTEND`, or `BOTH`. It then proceeds as `backend-reviewer` (`BACKEND`), as `frontend-reviewer` (`FRONTEND`), or emits the parallel routing message and stops (`BOTH`). An explicit argument (`/review backend`, `/review frontend`, `/review both`) overrides classification. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
+→ See [`CLAUDE-md/commands.md`](CLAUDE-md/commands.md) for the full command → agents table, the conditional/test-gated spawn markers, the `current-context` and Plan-Gate exception lists, the command-tier mirror rule, the Claude-only frontmatter keys (`model:`, `argument-hint`, `description`), and the Code Reviewer router roles.
 
 ### Templates (`templates/*.md`)
 
@@ -298,7 +246,8 @@ dev-team-agents/
 │   └── ui-libraries/ ← UI component library reference skills
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
 ├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
-├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data, versioning)
+├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data,
+│                      versioning, hooks, commands, cli)
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
 │   ├── agents.md · agents.pt-BR.md            ← canonical agent reference
 │   ├── installation.md · installation.pt-BR.md ← installation and advanced options guide
@@ -318,6 +267,7 @@ dev-team-agents/
 ├── opencode/        ← opencode provider plugin source (plugin/dev-team-agents.ts); stripped at install,
 │                      fetched on demand by install-opencode.sh / install-provider.sh
 ├── scripts/
+│   ├── cli/devteam  ← v3 CLI entry point (python3); see CLAUDE-md/cli.md
 │   ├── install.sh · update.sh · rollback.sh   ← install / update / rollback lifecycle
 │   ├── install-provider.sh · install-opencode.sh · install-codex.sh ← multi-provider installers
 │   ├── render-provider.sh         ← renders the canonical source into a provider-specific tree
@@ -325,7 +275,10 @@ dev-team-agents/
 │   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
 │   ├── fix-symlinks.sh · check-updates.sh (shim) · new-adr.sh
 │   ├── graphify-refresh.sh · validate-commit-msg.sh · reuse-lint.sh · design-token-lint.sh
-│   ├── lib/         ← render-engine data and shared install logic
+│   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
+│   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
+│   │   │              versions · providers · gitignore · bind · migrate · doctor ·
+│   │   │              quarantine · update · output · errors · cli
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
 │   │   ├── preferences-defaults.json ← defaults written into user-data/preferences.json
@@ -346,6 +299,7 @@ dev-team-agents/
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
 │           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
 ├── .github/         ← CI workflows, issue/PR templates, CODEOWNERS, scripts/ci/ — stripped at install
+├── tests/           ← devteam CLI test suite (stdlib unittest); DEV-ONLY, stripped from the package
 ├── user-data/       ← runtime state of this repo's own self-install; gitignored and untracked
 ├── README.md
 ├── README.pt-BR.md
@@ -402,6 +356,23 @@ When a rule or script path references "helpers", state which of the two it means
 ## Versioning
 
 → See [`CLAUDE-md/versioning.md`](CLAUDE-md/versioning.md) for the semantic versioning policy.
+
+---
+
+## v3 — Global Store, Project Bind and the `devteam` CLI
+
+One installation per machine, many bound projects: the canonical tree lives in a versioned **core**
+store, durable state lives in a separate **data** store, and each project carries only a committed
+`project.json` (identity + `context_paths`) plus excluded, regenerable bind artifacts. An update
+writes one version and `devteam sync --all` re-points every project that is not pinned.
+
+The CLI is python3 (`scripts/cli/devteam`, implementation in `scripts/lib/devteam/`); hooks stay
+bash. Contributors working in that tree are bound by the **No-Destruction Rule** — canonical home
+and its one named CLI exception in `skills/shared/setup-health-check/SKILL.md` — and by the rule
+that **every store mutation is locked and written atomically**.
+
+→ See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) for the store layout, bind modes, the command table,
+the `--json` contract and exit codes, and the contributor rules.
 
 ---
 

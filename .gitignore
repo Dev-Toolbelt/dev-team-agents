@@ -7,7 +7,8 @@
 .dev-team-agents/user-data/
 .dev-team-agents/.worktree-session
 user-data/
-scripts/lib/__pycache__/
+__pycache__/
+*.pyc
 credentials.local.json
 !.dev-team-agents/user-data/graphify.json
 .worktrees/

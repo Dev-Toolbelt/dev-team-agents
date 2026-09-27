@@ -43,7 +43,16 @@ The health check runs unattended, on an installation it has just decided is brok
 | Directory left over and **empty** | `rmdir` without `-r` | `rm -rf` |
 | `<name>.pre-migration.bak` from `state_migrate_legacy`, confirmed | `rm` — only after Category 3 confirms the mapped key already holds a value in `state.json` | Delete before confirming, or on a mere assumption the migration ran |
 
+| A bind artifact that is a **symlink**, retired by the `devteam` CLI | `unlink` — the link holds no content and `devteam sync` recreates it | `rmtree` the directory it points at |
+
 `rmdir` without `-r` and the confirmed-`.bak` `rm` are the only two removals in the skill. `rmdir` is permitted because it fails by construction on a non-empty directory. The `.bak` deletion is permitted because the value it would destroy was already durably copied into `state.json` by the same operation that created it — verified again, independently, by Category 3 before any `rm` runs. Everything else stays a move, never a delete, because the check cannot make that same guarantee about content it did not itself just write.
+
+> **Named exception — the `devteam` CLI.** `scripts/lib/devteam/quarantine.py` implements this
+> rule for the v3 CLI, with exactly one carve-out: an artifact that is a **symlink** is unlinked
+> rather than moved, because a symlink carries no content and `devteam sync` regenerates it from
+> the store. Every real file or directory the CLI would otherwise remove is moved here instead —
+> including in `copy` and `vendored` modes, where an artifact directory can contain files the
+> user added. This is the only exception; `CLAUDE-md/cli.md` cites it rather than restating it.
 
 ### Quarantine
 

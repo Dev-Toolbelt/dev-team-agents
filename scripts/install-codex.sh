@@ -164,7 +164,12 @@ if [[ $DRY_RUN -eq 0 ]]; then
   HOOKS_FILE="$CODEX_DIR/hooks.json"
   # Codex runs hook commands from the session cwd (the project root), so
   # project-relative paths are stable across machines (no baked-in user paths).
-  HOOKS_DIR_REL=".dev-team-agents/scripts/hooks"
+  # Prefer the v3 core pointer; fall back to the v2 vendored layout.
+  if [[ -e "$PROJECT_ROOT/.dev-team-agents/core" ]]; then
+    HOOKS_DIR_REL=".dev-team-agents/core/scripts/hooks"
+  else
+    HOOKS_DIR_REL=".dev-team-agents/scripts/hooks"
+  fi
 
   python3 - "$HOOKS_FILE" "$HOOKS_DIR_REL" <<'PY'
 import json, os, sys

@@ -7,6 +7,161 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **v3 milestone M1 — global core/data store, project bind and the `devteam` CLI.** The framework is installed once per machine instead of vendored into every project (325 files, ~2.3 MB, previously committed per repository). `scripts/cli/devteam` (python3, stdlib only) with the implementation in `scripts/lib/devteam/`: `path`, `version`, `store list|install|use|gc`, `bind`, `unbind`, `list`, `sync`, `pin`, `update`, `migrate`, `doctor`. Decisions recorded in ADR-0007 through ADR-0011; acceptance criteria in `docs/specs/v3-global-install.md`; reference in `CLAUDE-md/cli.md`.
+- **Two stores with different lifetimes.** `core` holds `versions/<X.Y.Z>/` and a plain-text `current` pointer (not a symlink — that would put the Windows materialisation failure at the most load-bearing path in the design). `data` holds the registry, preferences, per-project directories and quarantine, and survives uninstall — on Windows it lives in the roaming profile. `$DEVTEAM_HOME` overrides both and is the test seam.
+- **Per-project version pinning.** A project with no pin follows `current`; a pinned project stays put until released, so one `devteam update` can move nine projects and leave the tenth alone. `store gc` never removes `current` or a pinned version, and previews by default.
+- **Three bind modes**, recorded in `registry.json` so a fallback is never silent: `link` (macOS/Linux), `copy` (Windows without native symlink support — `auto` probes rather than guessing from the platform name), and `vendored` (v2 behaviour, opt-in for CI, containers and air-gapped repos).
+- **Committed project identity.** `.dev-team-agents/project.json` carries `schema`, `project_id` (UUID) and `context_paths`, so identity survives a re-clone, a directory move and a machine change. `devteam doctor` re-points a moved project by its identity, and **reports** rather than merges the fork case where two checkouts share one `project_id`.
+- **`devteam migrate`** converts a v2 vendored install into a bind: previews unless `--apply`, moves the vendored trees into `data/quarantine/<date>/<project_id>/v2-install/` (never deletes), leaves `user-data/` and `docs/` untouched, and reports the `git rm -r --cached` the user must commit themselves.
+- **`scripts/lib/devteam/quarantine.py`** — the No-Destruction Rule in code. Only symlinks (regenerable) are unlinked; every real file or directory dev-team-agents would otherwise remove is moved to a dated quarantine under the data store.
+- **Python CI gate** (`.github/scripts/ci/03-python.sh`, blocking): byte-compile plus 78 unit tests. The repository previously had **no** python check at all — `01-lint.sh` runs shellcheck, which does not read `*.py`, and the most complex logic in the tree is now python.
+- **`tests/`** — stdlib `unittest` suite for the CLI, stripped from the installed package by `scripts/lib/strip-tarball.sh`.
+
+### Fixed — M1 review findings
+
+A five-role review (backend, security, architecture, devops, QA) of the milestone found 43
+findings. Every one is resolved below or recorded as a deferred decision; each has a test named
+after the failure it prevents.
+
+- **Data loss: three code paths deleted content instead of quarantining it.** `unbind`, a re-`sync`
+  and a re-bind in `copy` or `vendored` mode called `rmtree` on real artifact directories — which
+  in those modes can hold files the user added. Reproduced with planted files: 0 of 5 survived, and
+  the routine `sync --all` after an update was enough to trigger it. Only symlinks are unlinked
+  now (they hold no content and `sync` recreates them); everything real goes to
+  `data/quarantine/<date>/<project_id>/` via the new `scripts/lib/devteam/quarantine.py`.
+- **Data loss: a manifest entry with no `path` deleted the whole project.** `Path(root) / ""` is
+  the project root, and the removal helper then took its directory branch — destroying source code
+  before crashing on the missing key. `_prune_stale` already guarded this; `unbind` and `doctor`
+  did not.
+- **Path containment was never checked.** `_is_inside` existed, was correct, and no write path
+  called it. A repository that commits `.claude` or `.dev-team-agents` as a symlink relocated the
+  whole bind outside the project, and a vendored bind deleted the link's target — reproduced
+  against a synthetic `~/Documents/scripts`. `require_inside` is now called before every write and
+  every removal, directories are created one component at a time, and the check resolves the
+  artifact's **parent** rather than following the artifact into the store.
+- **CRITICAL: tarball extraction could write outside the extraction directory.** The member filter
+  validated `member.name` and never `member.linkname`, and `extractall` was called with no
+  `filter=` — so on any interpreter below 3.14 a symlink or hardlink member redirected every later
+  member. Now `filter="data"` where available, plus an explicit floor that rejects absolute and
+  escaping link targets, device and FIFO members. Four attack classes are covered by tests.
+- **No integrity check on the downloaded release**, while `scripts/lib/installer-fetch.sh` has
+  verified the v2 installer against a published digest all along. `devteam update --sha256` pins
+  out of band, `DEVTEAM_TARBALL_SHA256` does the same from the environment, and the absence of any
+  digest is now reported in the output rather than passed over silently. The store also copies
+  trees with `symlinks=False`, so an archive symlink can never land in a version that
+  `providers` executes scripts from.
+- **`--ref` was interpolated into the download URL unvalidated**, where `../` segments retargeted
+  the fetch at another repository — and the semver check ran only after the archive had been
+  extracted. Refs are validated against `vX.Y.Z` before the first request, quoted into the URL,
+  and every request (including redirects) is restricted to GitHub over https with a response-size
+  cap.
+- **A bound project had no hook dispatchers at all.** `.claude/settings.json` was never written, so
+  the session banner, the `Stop` dispatcher (session-summary enforcement, orphan-skill scan, agent
+  lint, ADR-gap check), the `PreCompact` gate and the update check ran nowhere. `hooks.py` now
+  merges the four entries into the project's own file, rewrites a stale v2 path in place instead of
+  duplicating it, and removes only its own entries on `unbind`.
+- **116 shipped path references did not resolve in a bound project** — 103 to
+  `.dev-team-agents/scripts/…`, 13 to `.dev-team-agents/templates/…`, including `CLAUDE.md`'s own
+  `bash .dev-team-agents/scripts/new-adr.sh`. The bind now creates a `.dev-team-agents/core`
+  pointer to the resolved version, recorded in the manifest like any other artifact.
+- **`devteam bind --provider opencode` could never succeed**: `install-opencode.sh` hard-requires
+  `opencode/plugin/dev-team-agents.ts`, which `CORE_TREES` did not copy — and `providers.detect`
+  selects opencode automatically for any project with an `.opencode/` directory. `opencode` and
+  `CLAUDE-md` (whose absence left every companion link in the stored `CLAUDE.md` dangling) are now
+  copied into each version.
+- **`devteam bind --provider codex` vendored 2.3 MB of framework back into the project**, via
+  `ensure_claude_framework`, untracked and not ignored — so the next `git add -A` committed it,
+  and `migrate` then classified the bind's own output as a v2 install. The mirror pass is skipped
+  when the `core` pointer exists, and both the Codex hook path and the opencode plugin resolve
+  through the pointer with a v2 fallback.
+- **Bash-installer output was invisible to the manifest**, so `unbind` reported "removed 0
+  artifact(s)" while leaving 93 entries under `.codex/`. Delegated paths are recorded as
+  `kind: "delegated"` in the same list every lifecycle operation walks. Files the installers
+  *merge into* — `.claude/settings.json`, `.opencode/opencode.json`, `AGENTS.md` — are reported as
+  project-owned instead, and are neither ignored nor removed.
+- **A partial bind left artifacts nothing could clean up.** A missing `jq` surfaced from inside the
+  opencode installer after 154 symlinks already existed and before the manifest, registry entry or
+  exclude block recorded them. Tool checks and the identity-collision check now run before the
+  first write.
+- **A plain `devteam bind` silently released an existing pin** and moved the project to `current`.
+  `pin=None` means "unchanged"; only `devteam pin --release` clears it.
+- **`store gc` could delete a pinned version.** The keep-set was computed outside the lock, and
+  `gc` took the `core` lock while `pin` took `registry`, so the two could not serialize. Both locks
+  are taken, registry-then-core, with the computation inside them.
+- **A stolen lock let two writers proceed, and the victim's `release()` freed the thief's lock.**
+  `owner.json` now carries a nonce that `release` verifies, a holder whose pid is alive is never
+  judged stale, and a caller that lost its lock is told.
+- **`.gitignore` with CRLF was rewritten to LF across the whole file**, producing a whole-file diff
+  in a committed file on every bind — in exactly the Windows repositories most likely to use `copy`
+  mode. The managed block now reads and writes without newline translation and renders itself with
+  the file's dominant terminator.
+- **`store use` accepted an empty or partial version directory** as `current`, after which every
+  bind failed with "core is missing …/agents". Activation applies the same tree validation as
+  installation, a `<v>.incoming` staging directory is no longer listed as a version, and a failed
+  `--force` install no longer removes the previous tree before its replacement is complete.
+- **`migrate --apply` reversed a deliberate `--mode=vendored` bind**, which on disk is
+  indistinguishable from a v2 install. It now checks the registry first and refuses with a pointer
+  to `devteam bind --mode link`.
+- **A linked worktree of a bound repository could not be bound.** It carries the same committed
+  `project_id`, which read as a fork collision — and following that advice would have written a new
+  identity into a tracked file on a feature branch, renaming the main checkout's identity on merge.
+  Same-repository checkouts are now recognised, recorded on the entry, refreshed by `sync`, and
+  unbinding one no longer clears the ignore block the others share. (Verified empirically: git
+  reads only `$GIT_COMMON_DIR/info/exclude` for a linked worktree, so a per-worktree exclude file —
+  the other candidate fix — does not work.)
+- **The `--json` contract broke on every argparse-level error**: `devteam teleport --json`,
+  `--mode bogus`, `--provider bogus` and a missing `--from` printed usage on stderr and nothing on
+  stdout. The parser now routes its own errors through the emitter, an unexpected exception is
+  rendered as one document instead of a traceback, and `OSError` in `sync --all` becomes a
+  per-project problem rather than aborting the remaining projects with zero bytes on stdout.
+- **Exit codes contradicted the documented contract.** `doctor` returned 0 for `warn`-level
+  findings and emitted `ok: true` beside `status: warn`; `update` returned 0 while reporting
+  projects it had failed to sync. Both now exit 1, `ok` is derived from the outcome, and `update`
+  lists the failures in its human output.
+- **`doctor` discarded every finding it had collected** when the store was broken — the case it
+  exists for. It now reports that as a finding, detects drift in `copy` mode (where it previously
+  detected none, on the platform that mode exists for), compares link targets by path components
+  instead of substring, distinguishes a broken symlink from a stale one, and checks that the hook
+  dispatchers are registered.
+- **Store files and directories were world-readable** (0755 directories, and JSON at 0600 only by
+  accident of `NamedTemporaryFile`). Modes are explicit now: 0700 for store directories, 0600 for
+  store files, and 0644 for the committed `project.json` and `settings.json`, which were being
+  written 0600.
+- **`project_id` validation accepted a trailing newline** (`$` matches before one), which would
+  have produced a directory name with an embedded newline under `data/projects/`.
+- **Installer subprocesses inherited the whole environment**; they now get a minimal one with an
+  explicitly resolved `bash`, an actionable message naming Git for Windows when it is missing, and
+  a truncated stderr in the `--json` hint.
+- **CI had no python gate for the floor it supports.** The `python` job is a matrix over 3.9 (the
+  declared floor, now enforced in `scripts/cli/devteam`) and `3.x`; testing only the newest
+  interpreter is what hid the tarfile defect, since `filter="data"` is the default from 3.14.
+  `__pycache__` is ignored at every level and stripped from the package, and the test log is no
+  longer truncated to 20 lines.
+
+### Deferred, recorded rather than fixed
+- `registry.json` and the per-project manifests hold absolute paths, so the `data/` tree is not
+  portable across machines even though the memory in it is. ADR-0007 now says so instead of
+  implying otherwise; splitting bind state per host is a later decision.
+- `state.json:installed_version` is still read by `/devteam:version`, the session banner and
+  telemetry, and no v3 path writes it. Recorded in ADR-0007 as the open state-ownership question.
+- ADR-0008's memory-survival claims are marked **pending**: identity ships in M1, relocation does
+  not.
+- Extending shellcheck to `.github/scripts` waits on the `SC2034` work on branch
+  `ci/readme-sync-empty-baseline`, to keep the two changes from colliding in `01-lint.sh`.
+
+### Changed
+- **Every skill is now linked, at either supported depth.** The v2 installer's two-level loop (`install.sh:599`) iterated `skills/<category>/<name>/` only, so `skills/skill-creator/SKILL.md` — one level up — was never linked into `.claude/skills/`. The bind engine covers both layouts.
+- **`CLAUDE.md` split further.** The command table and the per-key frontmatter rules moved to `CLAUDE-md/commands.md`, and the v3 store/CLI reference is in `CLAUDE-md/cli.md`. Content is unchanged — a move, not a rewrite. This is the extraction four consecutive audit passes reported as open (`token-claude-md-…-monolithic`).
+
+### Fixed
+- **`helpers/size-limits.sh` failed the build on its own warning.** The `CLAUDE.md` advisory threshold (600 lines, hard limit 700) pushed its finding into the same `VIOLATIONS` array as real violations, so the script exited 1 — and `01-lint.sh` wraps it as `blocking`, whose stated policy is "zero known violations in the tree today". CI was red on `main` for a file the script only warns about. Warnings are now tracked and printed separately, and do not fail the gate.
+- **`scripts/new-adr.sh` restarted ADR numbering.** It scanned `adr-[0-9]*.md` while this repository's only ADR is `0006-mobile-pipeline-architecture.md`, so the next ADR would have been `adr-001-…` beside `0006` — two files claiming different numbers under two conventions. Both naming schemes are scanned now, and new files are emitted as `NNNN-slug.md` with four digits.
+
+---
+
 ## [2.48.0] - 2026-09-23
 
 ### Added

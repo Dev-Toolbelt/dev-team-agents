@@ -11,9 +11,9 @@ ADRs document significant architectural decisions — the context, what was deci
 
 ```
 docs/development/adrs/
-  adr-001-database-choice.md
-  adr-002-api-design-approach.md
-  adr-003-authentication-strategy.md
+  0001-database-choice.md
+  0002-api-design-approach.md
+  0003-authentication-strategy.md
 ```
 
 ## MADR Format

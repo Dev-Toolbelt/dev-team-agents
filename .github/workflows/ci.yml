@@ -68,6 +68,28 @@ jobs:
       - name: README / docs sync check (EN ↔ pt-BR)
         run: bash .github/scripts/ci/02-readme-sync.sh
 
+  python:
+    name: Python ${{ matrix.python }} (devteam CLI)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor is tested explicitly. Testing only the newest interpreter hid
+        # a real defect once already: tarfile's extraction filter defaults to
+        # `data` from 3.14 on, which masked an unsafe-member bug on every version
+        # a user is actually likely to run.
+        python: ["3.9", "3.x"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Byte-compile and run the unit tests
+        run: bash .github/scripts/ci/03-python.sh
+
   provider-contracts:
     name: Provider contract (${{ matrix.provider }})
     runs-on: ubuntu-latest
