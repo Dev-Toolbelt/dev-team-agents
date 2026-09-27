@@ -21,6 +21,7 @@ apply_strip() {
   rm -rf "$extracted/.claude"               # repo-level Claude config — not for user projects
   rm -rf "$extracted/.github"               # repo-level GitHub templates/CODEOWNERS — not for users
   rm -rf "$extracted/helpers"               # dev-only authoring tools — not for user projects
+  rm -rf "$extracted/tests"                 # CLI test suite — dev-only, never shipped
   rm -rf "$extracted/opencode"              # provider-plugin dir — fetched on demand via install-provider.sh
   rm -f  "$extracted/.gitignore"            # repo-level gitignore — not for user projects
   rm -f  "$extracted/scripts/install.sh"    # accessed via curl; never bundled in the package

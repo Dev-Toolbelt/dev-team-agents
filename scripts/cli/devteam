@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""dev-team-agents CLI entry point.
+
+Kept deliberately thin: it puts ``scripts/lib`` on the path and delegates, so the
+logic stays importable by the test suite and by the desktop app's contract tests.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from devteam.cli import main  # noqa: E402  (import follows the path bootstrap)
+
+if __name__ == "__main__":
+    sys.exit(main())
