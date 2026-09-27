@@ -86,16 +86,29 @@ CLAUDE_MD_LINES=$(wc -l < "$REPO_ROOT/CLAUDE.md" 2>/dev/null || echo 0)
 CLAUDE_MD_WARN=600
 CLAUDE_MD_FAIL=700
 
+# A warning is not a violation. Both used to land in VIOLATIONS, so crossing the
+# 600-line advisory threshold exited 1 — and 01-lint.sh wraps this check as
+# `blocking`, whose stated policy is "zero known violations in the tree today".
+# The result was a red build on a file the script itself only warns about.
+WARNINGS=()
 if [ "$CLAUDE_MD_LINES" -ge "$CLAUDE_MD_FAIL" ]; then
     VIOLATIONS+=("  · CLAUDE.md: $CLAUDE_MD_LINES lines (limit: $CLAUDE_MD_FAIL)")
 elif [ "$CLAUDE_MD_LINES" -ge "$CLAUDE_MD_WARN" ]; then
-    VIOLATIONS+=("  ⚠ CLAUDE.md: $CLAUDE_MD_LINES lines (warning threshold: $CLAUDE_MD_WARN)")
+    WARNINGS+=("  ⚠ CLAUDE.md: $CLAUDE_MD_LINES lines (warning threshold: $CLAUDE_MD_WARN, fails at $CLAUDE_MD_FAIL)")
 fi
 
 # ── Output ────────────────────────────────────────────────────────────────────
 SEPARATOR="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ ${#VIOLATIONS[@]} -eq 0 ]; then
+  if [ ${#WARNINGS[@]} -gt 0 ] && [ "$QUIET" = false ]; then
+    echo ""
+    echo " WARN — advisory thresholds crossed (non-blocking):"
+    for w in "${WARNINGS[@]}"; do
+      echo "$w"
+    done
+    echo ""
+  fi
   [ "$QUIET" = false ] && echo "size-limits: clean ✓"
   exit 0
 fi
@@ -112,6 +125,9 @@ else
 fi
 for v in "${VIOLATIONS[@]}"; do
   echo "$v"
+done
+for w in "${WARNINGS[@]:-}"; do
+  [ -n "$w" ] && echo "$w"
 done
 echo ""
 echo " Agents: max $AGENT_LIMIT lines | Skills: max $SKILL_LIMIT lines | Commands: max $COMMAND_LIMIT lines"

@@ -68,6 +68,9 @@ jobs:
       - name: README / docs sync check (EN ↔ pt-BR)
         run: bash .github/scripts/ci/02-readme-sync.sh
 
+      - name: Python — byte-compile and unit tests (devteam CLI)
+        run: bash .github/scripts/ci/03-python.sh
+
   provider-contracts:
     name: Provider contract (${{ matrix.provider }})
     runs-on: ubuntu-latest

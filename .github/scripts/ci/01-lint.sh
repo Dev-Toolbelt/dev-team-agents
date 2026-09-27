@@ -87,10 +87,17 @@ blocking "check-fingerprint-uniqueness" bash helpers/check-fingerprint-uniquenes
 # extract to a skill, which is what the cap exists to force.
 blocking "size-limits" bash helpers/size-limits.sh
 
-# Shell correctness across shipped scripts. Blocking: the tree is clean and a
-# shellcheck finding in an installer or hook is a real runtime hazard.
+# Shell correctness across shipped scripts. Blocking: the tree is clean and any
+# finding in an installer or hook is a real runtime hazard. (Do not start a
+# comment line with the tool's own name followed by a space — shellcheck parses
+# that as a directive and errors out, silently disabling checks in this file.)
+# --source-path=SCRIPTDIR makes shellcheck resolve a `source=` directive relative
+# to the sourcing script rather than to the invocation's working directory. Without
+# it, every hook sub-script that sources ../lib/ raises SC1091 for a file that is
+# right there on disk — and any finding, even info-level, exits non-zero. That was
+# a red build caused by the checker's path resolution, not by the tree.
 blocking "shellcheck scripts + helpers" \
-  find scripts helpers -name '*.sh' -exec shellcheck -x {} +
+  find scripts helpers -name '*.sh' -exec shellcheck -x --source-path=SCRIPTDIR {} +
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 if [ ${#ADVISORY_HITS[@]} -gt 0 ]; then
