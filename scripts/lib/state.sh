@@ -13,8 +13,38 @@
 #                                              # legacy dotfiles into state.json
 set -uo pipefail
 
+# Resolution order: an explicit STATE_FILE, then USER_DATA_DIR, then the project's
+# recorded state directory, then the v2 in-project location.
+#
+# `.dev-team-agents/state-dir` is a pointer the v3 bind writes with the absolute
+# path of this project's state directory, which is the data store once the project
+# has been upgraded. It is read as a single file read on purpose: asking the CLI
+# would mean a python subprocess on every `state_get`, and these run inside hooks.
+_state_dir_pointer() {
+    local root="${DEVTEAM_PROJECT_ROOT:-.}"
+    local pointer="$root/.dev-team-agents/state-dir"
+    [ -f "$pointer" ] || return 1
+    local resolved
+    resolved="$(tr -d '\r\n' < "$pointer")"
+    [ -n "$resolved" ] || return 1
+    echo "$resolved"
+}
+
 _state_default_file() {
-    echo "${STATE_FILE:-${USER_DATA_DIR:-.}/state.json}"
+    if [ -n "${STATE_FILE:-}" ]; then
+        echo "$STATE_FILE"
+        return 0
+    fi
+    if [ -n "${USER_DATA_DIR:-}" ]; then
+        echo "$USER_DATA_DIR/state.json"
+        return 0
+    fi
+    local from_pointer
+    if from_pointer="$(_state_dir_pointer)"; then
+        echo "$from_pointer/state.json"
+        return 0
+    fi
+    echo "./state.json"
 }
 
 state_get() {

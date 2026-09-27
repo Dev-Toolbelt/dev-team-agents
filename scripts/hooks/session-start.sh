@@ -295,6 +295,16 @@ else
     fi
 fi
 
+# ── Structure upgrade available ───────────────────────────────────
+# Observable test, no JSON parsing: a bound project (project.json present) whose
+# memory is still inside the project has an upgrade pending. Nothing is ever moved
+# automatically — this only tells the user the command exists.
+if [ -f "$PROJECT_ROOT/.dev-team-agents/project.json" ] \
+   && [ -d "$PROJECT_ROOT/.dev-team-agents/user-data" ]; then
+    WARN=1
+    MESSAGES+=("⚠️  This project still keeps its memory in .dev-team-agents/user-data — run \`devteam upgrade\` to move it into the store and leave the project clean. Nothing moves until you do.")
+fi
+
 # ── Emit stale-docs notification ──────────────────────────────────
 if [ "$WARN" -eq 1 ] && ! _is_suppressed "warning"; then
     echo ""

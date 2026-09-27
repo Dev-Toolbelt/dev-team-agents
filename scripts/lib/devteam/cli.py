@@ -11,7 +11,7 @@ import argparse
 from pathlib import Path
 
 from . import bind as bind_module
-from . import doctor, migrate, paths, project, providers, registry, update, versions
+from . import doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
 from .errors import DevteamError, EnvError, UsageError
 from .output import Emitter
 
@@ -329,6 +329,134 @@ def cmd_doctor(args, emitter):
     return result, "\n".join(lines)
 
 
+
+def _bound_project(path=None, required=True):
+    """``(root, project_id)`` for a path, or ``(root, None)`` when unbound."""
+    root = project.resolve_root(path)
+    data = project.load(root)
+    if data is None:
+        if required:
+            raise UsageError(
+                "{} is not a bound project".format(root), hint="Run `devteam bind` first."
+            )
+        return root, None
+    return root, data["project_id"]
+
+
+def cmd_prefs_list(args, emitter):
+    root, project_id = _bound_project(args.path, required=False)
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    resolved = prefs.resolve(project_id, version)
+    rows = [
+        (key, str(resolved["values"][key]), resolved["origin"].get(key, "?"))
+        for key in sorted(resolved["values"])
+    ]
+    payload = {
+        "project_id": project_id,
+        "version": version,
+        "values": resolved["values"],
+        "origin": resolved["origin"],
+        "unknown": resolved["unknown"],
+    }
+    human = _table(rows, ["KEY", "VALUE", "FROM"])
+    if resolved["unknown"]:
+        human += "\n\nunknown key(s) carried through: {}".format(", ".join(resolved["unknown"]))
+    return payload, human
+
+
+def cmd_prefs_get(args, emitter):
+    root, project_id = _bound_project(args.path, required=False)
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    result = prefs.get(project_id, version, key=args.key)
+    return result, "{} = {}  (from {})".format(result["key"], result["value"], result["origin"])
+
+
+def cmd_prefs_set(args, emitter):
+    root, project_id = _bound_project(args.path, required=args.scope == "project")
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    result = prefs.set_value(
+        args.key, args.value, version, scope=args.scope, project_id=project_id
+    )
+    if project_id:
+        prefs.materialize(root, project_id, version)
+    return result, "{} = {} in the {} layer".format(result["key"], result["value"], result["scope"])
+
+
+def cmd_prefs_unset(args, emitter):
+    root, project_id = _bound_project(args.path, required=args.scope == "project")
+    result = prefs.unset(args.key, scope=args.scope, project_id=project_id)
+    if project_id:
+        version = versions.resolve((registry.get(project_id) or {}).get("pin"))
+        prefs.materialize(root, project_id, version)
+    human = "{} {} from the {} layer".format(
+        "removed" if result["removed"] else "was not set in", result["key"], result["scope"]
+    )
+    return result, human
+
+
+def cmd_upgrade(args, emitter):
+    if args.apply:
+        result = upgrade.apply(args.path, emitter=emitter)
+        lines = [
+            "upgraded {}".format(result["path"]),
+            "  layout      {} -> {}".format(result["from_layout"], result["to_layout"]),
+            "  copied      {} file(s) to {}".format(result["copied"], result["destination"]),
+            "  quarantine  {}".format(result["quarantined"] or "(nothing to move)"),
+            "  pointer     {}".format(result["state_pointer"]),
+        ]
+        if result["git_tracked"]:
+            lines.append(
+                "  git         commit the removal: git rm -r --cached {}".format(
+                    " ".join(result["git_tracked"])
+                )
+            )
+        return result, "\n".join(lines)
+
+    result = upgrade.plan(args.path)
+    lines = [
+        "upgrade plan for {} (nothing changed)".format(result["path"]),
+        "  layout {} -> {}".format(result["from_layout"], result["to_layout"]),
+    ]
+    lines.extend("  - {}".format(action) for action in result["actions"])
+    lines.append("  run again with --apply to execute")
+    return result, "\n".join(lines)
+
+
+
+def cmd_export(args, emitter):
+    result = store.export(args.to)
+    return result, "exported {} file(s) to {} ({:.1f} MB)".format(
+        result["files"], result["archive"], result["bytes"] / (1024 * 1024)
+    )
+
+
+def cmd_import(args, emitter):
+    result = store.import_archive(args.archive, force=args.force)
+    lines = ["imported {} into {}".format(result["archive"], result["data_dir"])]
+    if result["previous_kept_at"]:
+        lines.append("  previous store kept at {}".format(result["previous_kept_at"]))
+    lines.append("  next: {}".format(result["next"]))
+    return result, "\n".join(lines)
+
+
+def cmd_uninstall(args, emitter):
+    if args.purge and not args.yes:
+        raise UsageError(
+            "--purge deletes your data store: every project's memory, preferences and "
+            "credential references",
+            hint="Run `devteam export` first, then repeat with --purge --yes.",
+        )
+    result = store.uninstall(purge=args.purge)
+    lines = ["removed {} path(s)".format(len(result["removed"]))]
+    for path in result["removed"]:
+        lines.append("  {}".format(path))
+    if result["data_kept"]:
+        lines.append("  kept your data store at {} (pass --purge to remove it too)".format(result["data_kept"]))
+    elif result["purged"]:
+        lines.append("  data store purged")
+    return result, "\n".join(lines)
+
+
 def build_parser():
     # `--json` is declared on a parent parser and attached to every subcommand as
     # well as the root, so both `devteam --json path` and `devteam path --json`
@@ -428,6 +556,53 @@ def build_parser():
     migrate_parser.add_argument("--pin")
     migrate_parser.set_defaults(func=cmd_migrate)
 
+    prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
+        dest="prefs_cmd"
+    )
+    prefs_list = leaf(prefs_parser, "list", help="every key, its value and which layer set it")
+    prefs_list.add_argument("--path")
+    prefs_list.set_defaults(func=cmd_prefs_list)
+    prefs_get = leaf(prefs_parser, "get", help="one key")
+    prefs_get.add_argument("key")
+    prefs_get.add_argument("--path")
+    prefs_get.set_defaults(func=cmd_prefs_get)
+    prefs_set = leaf(prefs_parser, "set", help="write a key into a layer")
+    prefs_set.add_argument("key")
+    prefs_set.add_argument("value")
+    prefs_set.add_argument("--scope", default="global", choices=prefs.SCOPES)
+    prefs_set.add_argument("--path")
+    prefs_set.set_defaults(func=cmd_prefs_set)
+    prefs_unset = leaf(prefs_parser, "unset", help="drop a key so the layer below applies")
+    prefs_unset.add_argument("key")
+    prefs_unset.add_argument("--scope", default="global", choices=prefs.SCOPES)
+    prefs_unset.add_argument("--path")
+    prefs_unset.set_defaults(func=cmd_prefs_unset)
+
+    upgrade_parser = leaf(
+        sub, "upgrade", help="move this project's memory into the store (asks first)"
+    )
+    upgrade_parser.add_argument("path", nargs="?")
+    upgrade_parser.add_argument("--apply", action="store_true", help="execute (default: preview)")
+    upgrade_parser.set_defaults(func=cmd_upgrade)
+
+    export_parser = leaf(sub, "export", help="archive the data store for another machine")
+    export_parser.add_argument("--to", help="destination file or directory")
+    export_parser.set_defaults(func=cmd_export)
+
+    import_parser = leaf(sub, "import", help="restore a data store from an archive")
+    import_parser.add_argument("archive")
+    import_parser.add_argument("--force", action="store_true", help="replace a populated store")
+    import_parser.set_defaults(func=cmd_import)
+
+    uninstall_parser = leaf(sub, "uninstall", help="remove the core; keeps your data store")
+    uninstall_parser.add_argument(
+        "--purge", action="store_true", help="ALSO delete the data store — memory included"
+    )
+    uninstall_parser.add_argument(
+        "--yes", action="store_true", help="required alongside --purge; there is no undo"
+    )
+    uninstall_parser.set_defaults(func=cmd_uninstall)
+
     doctor_parser = leaf(sub, "doctor", help="diagnose the store and this project's bind")
     doctor_parser.add_argument("path", nargs="?")
     doctor_parser.add_argument(
@@ -463,6 +638,8 @@ def main(argv=None, stdout=None, stderr=None):
     if not getattr(args, "command", None) or not hasattr(args, "func"):
         if getattr(args, "command", None) == "store":
             return emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
+        if getattr(args, "command", None) == "prefs":
+            return emitter.fail(UsageError("prefs needs a subcommand: list, get, set, unset"))
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:

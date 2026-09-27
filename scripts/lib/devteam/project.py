@@ -24,6 +24,24 @@ PROJECT_FILE = "project.json"
 SCHEMA = 1
 DEFAULT_CONTEXT_PATHS = ["docs"]
 
+#: Where the project's own state lives. Distinct from ``schema``, which describes
+#: this file's format: a project can be on the current schema and an older layout.
+#:
+#: 1 — memory in the project (``.dev-team-agents/user-data/``), the v2 and M1 shape
+#: 2 — memory in the data store (``data/projects/<project_id>/``), project clean
+#:
+#: A project is **never** moved between layouts automatically. The CLI reports that
+#: an upgrade is available and `devteam upgrade` performs it with confirmation, so
+#: the fallback is scoped by an explicit recorded version rather than living
+#: indefinitely in the readers.
+LAYOUT_MEMORY_IN_PROJECT = 1
+LAYOUT_MEMORY_IN_STORE = 2
+CURRENT_LAYOUT = LAYOUT_MEMORY_IN_STORE
+#: The pointer the bash hooks read to find the state directory in one file read,
+#: instead of a subprocess per `state_get`.
+STATE_DIR_POINTER = "state-dir"
+LEGACY_MEMORY_DIR = "user-data"
+
 # `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
 # project_id carrying one passed validation and then became a directory name
 # with an embedded newline under data/projects/.
@@ -83,6 +101,17 @@ def validate(data, source="project.json"):
     if not isinstance(pid, str) or not _UUID_RE.fullmatch(pid):
         raise EnvError("{}: 'project_id' must be a lowercase UUID string".format(source))
 
+    layout_value = data.get("layout", LAYOUT_MEMORY_IN_PROJECT)
+    if not isinstance(layout_value, int) or isinstance(layout_value, bool) or layout_value < 1:
+        raise EnvError("{}: 'layout' must be a positive integer".format(source))
+    if layout_value > CURRENT_LAYOUT:
+        raise EnvError(
+            "{}: layout {} is newer than this CLI understands (max {})".format(
+                source, layout_value, CURRENT_LAYOUT
+            ),
+            hint="Update dev-team-agents.",
+        )
+
     paths_value = data.get("context_paths", DEFAULT_CONTEXT_PATHS)
     if not isinstance(paths_value, list) or not paths_value:
         raise EnvError("{}: 'context_paths' must be a non-empty list".format(source))
@@ -132,9 +161,16 @@ def ensure(root, context_paths=None):
                 )
         return existing, False
 
+    # A project that already carries in-project memory starts on layout 1 and needs
+    # an explicit `devteam upgrade`; one that never had a v2 install is born on the
+    # current layout, so it is clean from the first bind and has nothing to move.
+    born_layout = (
+        LAYOUT_MEMORY_IN_PROJECT if legacy_memory_dir(root).is_dir() else CURRENT_LAYOUT
+    )
     data = {
         "schema": SCHEMA,
         "project_id": str(uuid.uuid4()),
+        "layout": born_layout,
         "context_paths": list(context_paths or DEFAULT_CONTEXT_PATHS),
     }
     validate(data, source=str(project_file(root)))
@@ -167,3 +203,68 @@ def context_paths(root):
     if data is None:
         return list(DEFAULT_CONTEXT_PATHS)
     return list(data.get("context_paths", DEFAULT_CONTEXT_PATHS))
+
+
+def layout(root):
+    """The recorded layout, defaulting to 1 for a project that predates the key."""
+    data = load(root)
+    if data is None:
+        return LAYOUT_MEMORY_IN_PROJECT
+    return int(data.get("layout", LAYOUT_MEMORY_IN_PROJECT))
+
+
+def set_layout(root, value):
+    data = load(root)
+    if data is None:
+        raise UsageError("{} is not a bound project".format(root))
+    data["layout"] = int(value)
+    validate(data, source=str(project_file(root)))
+    jsonio.write_json_atomic(
+        project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None
+    )
+    return data
+
+
+def legacy_memory_dir(root):
+    """The in-project memory directory, whether or not it is still in use."""
+    return Path(root) / PROJECT_DIR / LEGACY_MEMORY_DIR
+
+
+def memory_dir(root, project_id=None):
+    """Where this project's memory lives, according to its recorded layout."""
+    from . import paths
+
+    if layout(root) >= LAYOUT_MEMORY_IN_STORE:
+        pid = project_id
+        if pid is None:
+            data = load(root)
+            pid = data["project_id"] if data else None
+        if not pid:
+            raise EnvError("cannot resolve the memory directory without a project_id")
+        return paths.project_data_dir(pid)
+    return legacy_memory_dir(root)
+
+
+def memory_dir_for_layout(root, project_id, target_layout):
+    """Where memory lives under a given layout — used to plan a move between them."""
+    from . import paths
+
+    if target_layout >= LAYOUT_MEMORY_IN_STORE:
+        return paths.project_data_dir(project_id)
+    return legacy_memory_dir(root)
+
+
+def write_state_pointer(root, project_id=None):
+    """Record the resolved memory directory for the bash hooks to read."""
+    target = Path(root) / PROJECT_DIR / STATE_DIR_POINTER
+    resolved = memory_dir(root, project_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".tmp")
+    tmp.write_text(str(resolved) + "\n", encoding="utf-8")
+    tmp.replace(target)
+    return {"path": str(Path(PROJECT_DIR) / STATE_DIR_POINTER), "kind": "pointer"}
+
+
+def upgrade_available(root):
+    """True when this project is on an older layout than the CLI implements."""
+    return layout(root) < CURRENT_LAYOUT

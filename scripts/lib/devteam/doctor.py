@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import bind as bind_module
 from .errors import EnvError
-from . import hooks, paths, project, registry, versions
+from . import hooks, paths, prefs, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
@@ -205,6 +205,59 @@ def check_project(project_root):
             findings.append(
                 _finding(OK, "identity", "registry re-pointed from {} to {}".format(previous, now))
             )
+
+    if project.upgrade_available(root):
+        findings.append(
+            _finding(
+                WARN,
+                "layout",
+                "project is on layout {} (current is {}) — memory still lives in {}/{}".format(
+                    project.layout(root),
+                    project.CURRENT_LAYOUT,
+                    project.PROJECT_DIR,
+                    project.LEGACY_MEMORY_DIR,
+                ),
+                "Run `devteam upgrade` to move it into the store. Nothing moves until you do.",
+            )
+        )
+    else:
+        findings.append(_finding(OK, "layout", "layout {}".format(project.layout(root))))
+
+    pointer = root / project.PROJECT_DIR / project.STATE_DIR_POINTER
+    expected_state_dir = str(project.memory_dir(root, project_id))
+    if not pointer.is_file():
+        findings.append(
+            _finding(
+                WARN,
+                "layout",
+                "state pointer {} is missing — bash hooks cannot find the state directory".format(
+                    pointer.name
+                ),
+                "Run `devteam sync`.",
+            )
+        )
+    elif pointer.read_text(encoding="utf-8").strip() != expected_state_dir:
+        findings.append(
+            _finding(
+                WARN,
+                "layout",
+                "state pointer names a different directory than this layout resolves to",
+                "Run `devteam sync`.",
+            )
+        )
+
+    resolved_prefs = root / prefs.RESOLVED_FILE
+    if not resolved_prefs.is_file():
+        findings.append(
+            _finding(
+                WARN,
+                "preferences",
+                "{} is missing — agents have no resolved preferences to read".format(
+                    prefs.RESOLVED_FILE
+                ),
+                "Run `devteam sync`.",
+            )
+        )
 
     manifest = bind_module.read_manifest(project_id)
     try:
