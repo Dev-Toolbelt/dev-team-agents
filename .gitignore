@@ -6,6 +6,7 @@
 .codex/
 .dev-team-agents/user-data/
 .dev-team-agents/.worktree-session
+.dev-team-agents/.learn-last-run
 user-data/
 __pycache__/
 *.pyc
