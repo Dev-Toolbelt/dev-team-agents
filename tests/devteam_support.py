@@ -33,6 +33,14 @@ def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "t
     (root / "templates" / "plan-template.md").write_text("# template\n", encoding="utf-8")
     (root / "scripts").mkdir(parents=True, exist_ok=True)
     (root / "scripts" / "noop.sh").write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")
+    (root / "scripts" / "new-adr.sh").write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")
+    # The hook dispatchers a bind registers in settings.json must exist in the
+    # version, or a test cannot tell a wired path from a dangling one.
+    (root / "scripts" / "hooks").mkdir(parents=True, exist_ok=True)
+    for script in ("pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"):
+        (root / "scripts" / "hooks" / script).write_text(
+            "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8"
+        )
     for rel in skills:
         skill_dir = root / "skills" / rel
         skill_dir.mkdir(parents=True, exist_ok=True)

@@ -83,7 +83,7 @@ class MigrationTest(StoreTestCase):
         )
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["project.json", "user-data"],
+            ["core", "project.json", "user-data"],
         )
         moved = {item["from"] for item in result["quarantined"]}
         self.assertIn(".dev-team-agents/agents", moved)

@@ -22,10 +22,14 @@ class BindTest(StoreTestCase):
         self.assertTrue(result["identity_created"])
         self.assertTrue((root / ".claude" / "agents" / "dev-team").exists())
         self.assertTrue((root / ".claude" / "commands" / "devteam").exists())
-        # The project holds identity only — no vendored tree.
+        # The project holds identity plus the runtime-root pointer — no vendored tree.
         self.assertEqual(
-            sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()), ["project.json"]
+            sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
+            ["core", "project.json"],
         )
+        pointer = root / project.PROJECT_DIR / "core"
+        self.assertTrue((pointer / "scripts").is_dir())
+        self.assertTrue((pointer / "templates").is_dir())
         entry = registry.get(result["project_id"])
         self.assertEqual(entry["mode"], result["mode"])
         self.assertIsNone(entry["pin"])
@@ -155,7 +159,8 @@ class BindTest(StoreTestCase):
         self.assertTrue((root / project.PROJECT_DIR / "project.json").is_file())
         self.assertEqual((memory / "session-summary.md").read_text(encoding="utf-8"), "keep me\n")
         self.assertIsNone(registry.get(result["project_id"]))
-        self.assertGreater(len(report["removed"]), 0)
+        self.assertGreater(len(report["unlinked"]), 0)
+        self.assertEqual(report["problems"], [])
 
     def test_stale_real_directories_are_quarantined_never_deleted(self):
         """A vendored bind followed by a link bind must not destroy the trees."""
