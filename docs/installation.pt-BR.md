@@ -219,3 +219,19 @@ git commit -m "fix: restore dev-team-agents symlinks (were committed as plain fi
 ```
 
 De dentro do Claude Code você pode rodar o mesmo reparo como comando — `/devteam:symlinks` — que detecta o SO, executa o helper e guia você pela correção do SO quando os symlinks nativos estão bloqueados. Se os links estiverem quebrados a ponto de os comandos `/devteam:` não carregarem, rode o script `fix-symlinks.sh` diretamente como mostrado acima.
+---
+
+## v3 — Uma instalação por máquina (prévia)
+
+Tudo acima descreve a **instalação v2 por projeto**, que continua funcionando e é o que o `install.sh` ainda faz. A v3 substitui isso por uma única instalação por máquina à qual cada projeto se vincula, então uma atualização é aplicada uma vez em vez de uma vez por projeto.
+
+| v2 (este guia) | v3 |
+|----------------|----|
+| Framework copiado dentro de cada projeto | Um store versionado por máquina, projetos guardam um ponteiro `core` |
+| `bash .dev-team-agents/scripts/update.sh` por projeto | `devteam update` uma vez, depois `devteam sync --all` |
+| Todos os projetos andam juntos | Pin e rollback de versão por projeto |
+| Arquivos do framework commitados no repo do produto | Só o `.dev-team-agents/project.json` é commitado |
+
+O marco M1 — store, bind, pin e migração do v2 — está implementado; o tap do Homebrew, o pacote winget e o app desktop são marcos posteriores. Um projeto v2 existente converte com `devteam migrate` (que previsualiza antes, e move a árvore vendorizada para quarentena em vez de apagar).
+
+> Layout do store, modos de bind, registro de hooks, contrato `--json` e códigos de saída: [../CLAUDE-md/cli.md](../CLAUDE-md/cli.md)
