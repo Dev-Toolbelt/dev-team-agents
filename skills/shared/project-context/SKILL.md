@@ -44,13 +44,13 @@ This applies to:
 
 ### Conversation — User's Preferred Language
 
-**All responses directed at the user — including plans presented for approval, explanations, questions, confirmations, and notifications — must use the language in `.dev-team-agents/user-data/preferences.json` → `language` field.**
+**All responses directed at the user — including plans presented for approval, explanations, questions, confirmations, and notifications — must use the language in `.dev-team-agents/resolved/preferences.json` → `language` field.**
 
 Read this value at the start of every session:
 
 ```bash
 python3 -c \
-  "import json; d=json.load(open('.dev-team-agents/user-data/preferences.json')); print(d.get('language','en'))" \
+  "import json; d=json.load(open('.dev-team-agents/resolved/preferences.json')); print(d.get('language','en'))" \
   2>/dev/null || echo "en"
 ```
 
@@ -103,8 +103,8 @@ Before starting any task, load context in this order (read what exists — skip 
 2. CLAUDE.md                              ← Claude-specific rules (highest precedence)
 3. docs/project.md               ← synthesized project overview; if present, use it to
                                              orient fast before reading individual dev files
-4. .dev-team-agents/user-data/session-summary.md            ← last session's decisions and next steps;
-                                             read the most recent entry (top of file)
+4. <state-dir>/session-summary.md         ← last session's decisions and next steps; read the
+                                             most recent entry (top of file). See `layout` below
 5. docs/development/adrs/        ← list ADR files and read any relevant to the task
 6. AGENTS.md                             ← agent-specific instructions for this project
 7. .claude/settings.json                 ← Claude Code configuration
@@ -113,7 +113,29 @@ Before starting any task, load context in this order (read what exists — skip 
 10. docs/backlog/                ← current sprint and task context
 11. docs/wiki/README.md          ← retrieval index; grep it for the task's keywords and
                                              open only the entries that match
+12. extra context_paths                   ← additional knowledge folders this project declares;
+                                             read-only, and only what the task needs
 ```
+
+**Steps 4 and 12 resolve through the project's own configuration, not a fixed path.**
+
+`.dev-team-agents/project.json` (committed) declares where this project's knowledge lives:
+
+```json
+{ "schema": 1, "project_id": "…", "layout": 2, "context_paths": ["docs", "rfcs"] }
+```
+
+- **`context_paths`** — the first entry is the write root (`docs` by default, which is what every
+  path above assumes). Any additional entry is an **extra knowledge folder, read-only**: read from
+  it when the task's subject matter is there, and never write to it. A folder that is not listed is
+  not project knowledge, however suggestive its name.
+- **`layout`** — where the project's own state lives. `1` means `.dev-team-agents/user-data/`, the
+  path written above. `2` means the data store, and the absolute path is in
+  `.dev-team-agents/state-dir`, a single-line pointer file. Read that file rather than guessing;
+  `scripts/lib/state.sh` already resolves it for every bash caller.
+
+`context_paths` is topology, not preference — it is committed so every developer on the project
+reads the same folders. Preferences are personal and never committed; see § User Preferences.
 
 **When `docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
 

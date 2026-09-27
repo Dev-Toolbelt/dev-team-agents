@@ -45,7 +45,7 @@ Pass the detected mode (`FIRST_RUN` / `REFRESH`) and `$ARGUMENTS` to the agent a
 ---
 
 **PLAN GATE — mandatory for the spawned agent:**
-1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user. If the file does not exist yet, ask the user for their language first and create it.
+1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user. If the file does not exist yet, ask the user for their language first and create it.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before creating or modifying any file.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 

@@ -78,7 +78,7 @@ When validation requires driving a real browser (UI flows, end-to-end paths, vis
 
 1. **Prefer the Claude app browser.** If the in-app browser tools are available (`mcp__Claude_Browser__*`), use them **by default** — no need to ask. This is the priority option.
 2. **CLI (in-app browser unavailable) → always ask.** If you are running in the Claude CLI and the in-app browser is not available:
-   - First read `.dev-team-agents/user-data/preferences.json` → `qa_browser`. If it holds a saved choice, use it **without asking**.
+   - First read `.dev-team-agents/resolved/preferences.json` → `qa_browser`. If it holds a saved choice, use it **without asking**.
    - If `qa_browser` is `null`/absent, **always ask** the user which browser to use, via `AskUserQuestion`. Offer the browser tools available in the environment (e.g., Playwright, Puppeteer, a system browser, or another driver the project already uses), plus an **"Other"** option for a custom choice.
    - Include a follow-up option to **set the chosen browser as the default for future activities**. If the user opts in, write the choice to `preferences.json → qa_browser` so you don't ask again.
 

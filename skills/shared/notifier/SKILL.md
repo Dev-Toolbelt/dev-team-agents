@@ -26,7 +26,7 @@ description: Dev Team Agents notifications — format, types, conditions, rotati
 
 ## Language
 
-Read the user's preferred language from `.dev-team-agents/user-data/preferences.json` → `language` field. Emit the notification message in that language. Default to English if the file is absent or unreadable.
+Read the user's preferred language from `.dev-team-agents/resolved/preferences.json` → `language` field. Emit the notification message in that language. Default to English if the file is absent or unreadable.
 
 ---
 

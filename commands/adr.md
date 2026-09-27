@@ -38,7 +38,7 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 ---
 
 **PLAN GATE — mandatory for the spawned agent:**
-1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before writing to the ADR file.
 3. Do not execute and then explain — plan first, execute second.
 

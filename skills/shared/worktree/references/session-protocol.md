@@ -42,10 +42,10 @@ cat .dev-team-agents/.worktree-session 2>/dev/null
 
 ## Preferences default (when session file is absent)
 
-Read the worktree keys from `.dev-team-agents/user-data/preferences.json`:
+Read the worktree keys from `.dev-team-agents/resolved/preferences.json`:
 
 ```bash
-python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(d.get('worktree_active',False), d.get('worktree_base_branch') or '', d.get('worktree_path','.worktrees'), d.get('worktree_docker_isolate',True))" 2>/dev/null
+python3 -c "import json;d=json.load(open('.dev-team-agents/resolved/preferences.json'));print(d.get('worktree_active',False), d.get('worktree_base_branch') or '', d.get('worktree_path','.worktrees'), d.get('worktree_docker_isolate',True))" 2>/dev/null
 ```
 
 - `worktree_active == true` → resolve the base branch (see below), then write
