@@ -153,3 +153,25 @@ def remove(project_id):
         removed = data.get("projects", {}).pop(project_id, None)
         save(data)
         return removed
+
+
+def add_worktree(project_id, path, version):
+    """Record an extra live checkout (a linked worktree) of a bound project.
+
+    The registry stays keyed by ``project_id`` — one entry per repository — and
+    ``path`` keeps pointing at the checkout that was bound first. Worktrees are
+    listed so ``sync`` can refresh their artifacts too.
+    """
+    resolved = str(Path(path).resolve())
+    with store_lock("registry"):
+        data = load()
+        entry = data.get("projects", {}).get(project_id)
+        if entry is None:
+            raise EnvError("project {} is not bound".format(project_id))
+        worktrees = [w for w in entry.get("worktrees", []) if w != resolved]
+        worktrees.append(resolved)
+        entry["worktrees"] = sorted(worktrees)
+        entry["last_sync"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        entry["last_synced_version"] = version
+        save(data)
+        return entry

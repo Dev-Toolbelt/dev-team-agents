@@ -11,11 +11,28 @@ import os
 from pathlib import Path
 
 from . import bind as bind_module
-from . import paths, project, registry, versions
+from .errors import EnvError
+from . import hooks, paths, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
 FAIL = "fail"
+
+
+def _points_into(target, version):
+    """True when a link target lives inside ``versions/<version>/``.
+
+    A substring test (`version not in target`) false-negatives whenever the store
+    path itself contains the version string, so compare by path components.
+    """
+    expected_root = paths.version_dir(version)
+    try:
+        resolved = Path(os.path.realpath(str(target)))
+        root = Path(os.path.realpath(str(expected_root)))
+        resolved.relative_to(root)
+        return True
+    except (ValueError, OSError):
+        return False
 
 
 def _finding(level, category, message, hint=None):
@@ -127,6 +144,11 @@ def check_project(project_root):
     findings = []
     actions = []
     root = Path(project_root)
+    if not root.is_dir():
+        raise EnvError(
+            "no such directory: {}".format(root),
+            hint="Pass a path that exists, or run doctor with --no-project.",
+        )
     data = project.load(root)
     if data is None:
         findings.append(
@@ -148,9 +170,24 @@ def check_project(project_root):
         return findings, actions
 
     registered = Path(entry.get("path", ""))
-    if registered.resolve() != root.resolve():
+    known_paths = {registered.resolve()} | {
+        Path(w).resolve() for w in entry.get("worktrees", [])
+    }
+    if root.resolve() not in known_paths:
         other = project.load(registered) if registered.is_dir() else None
-        if other is not None and other.get("project_id") == project_id:
+        if (
+            other is not None
+            and other.get("project_id") == project_id
+            and bind_module._same_git_repository(registered, root)
+        ):
+            findings.append(
+                _finding(
+                    OK,
+                    "identity",
+                    "{} is a linked worktree of the bound checkout at {}".format(root, registered),
+                )
+            )
+        elif other is not None and other.get("project_id") == project_id:
             findings.append(
                 _finding(
                     FAIL,
@@ -170,18 +207,67 @@ def check_project(project_root):
             )
 
     manifest = bind_module.read_manifest(project_id)
-    expected_version = versions.resolve(entry.get("pin"))
+    try:
+        expected_version = versions.resolve(entry.get("pin"))
+    except EnvError as exc:
+        # The store being broken is the case doctor exists for. Aborting here with
+        # exit 3 threw away every finding already collected, including the store
+        # FAIL that explains the problem.
+        findings.append(
+            _finding(
+                FAIL,
+                "bind",
+                "cannot resolve this project's version: {}".format(exc.message),
+                exc.hint,
+            )
+        )
+        return findings, actions
+
     missing = []
+    broken = []
     wrong_version = []
     for item in manifest.get("artifacts", []):
-        candidate = root / item.get("path", "")
-        if not (candidate.exists() or candidate.is_symlink()):
-            missing.append(item["path"])
+        rel = item.get("path")
+        if not rel:
+            findings.append(
+                _finding(FAIL, "bind", "manifest has an artifact entry with no path")
+            )
+            continue
+        candidate = root / rel
+        if candidate.is_symlink() and not candidate.exists():
+            broken.append(rel)
+            continue
+        if not candidate.exists():
+            missing.append(rel)
             continue
         if item.get("kind") == "link" and candidate.is_symlink():
-            target = os.readlink(str(candidate))
-            if expected_version not in target:
-                wrong_version.append(item["path"])
+            target = Path(os.readlink(str(candidate)))
+            if not _points_into(target, expected_version):
+                wrong_version.append(rel)
+
+    # A copy-mode artifact carries no target to inspect, so the manifest's own
+    # version is the only record — and `copy` is the mode Windows uses, where
+    # drift went completely undetected before.
+    if manifest.get("version") and manifest["version"] != expected_version:
+        findings.append(
+            _finding(
+                WARN,
+                "bind",
+                "artifacts were built from {} but this project resolves to {}".format(
+                    manifest["version"], expected_version
+                ),
+                "Run `devteam sync`.",
+            )
+        )
+    if broken:
+        findings.append(
+            _finding(
+                WARN,
+                "bind",
+                "{} artifact(s) are broken symlinks".format(len(broken)),
+                "Run `devteam sync`.",
+            )
+        )
     if missing:
         findings.append(
             _finding(
@@ -210,6 +296,26 @@ def check_project(project_root):
                 "{} artifact(s) resolve to {}".format(len(manifest["artifacts"]), expected_version),
             )
         )
+    settings = root / hooks.SETTINGS_FILE
+    if manifest.get("mode") != "vendored":
+        registered = hooks.registered_events(root)
+        expected_events = [event for event, _ in hooks.EVENTS]
+        absent = [event for event in expected_events if event not in registered]
+        if absent:
+            findings.append(
+                _finding(
+                    WARN,
+                    "hooks",
+                    "{} not registered in {}".format(", ".join(absent), hooks.SETTINGS_FILE),
+                    "Run `devteam sync` — without them the Stop, SessionStart and "
+                    "PreCompact enforcement does not run in this project.",
+                )
+            )
+        elif settings.is_file():
+            findings.append(
+                _finding(OK, "hooks", "4 dispatchers registered in {}".format(hooks.SETTINGS_FILE))
+            )
+
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:
         findings.append(
             _finding(

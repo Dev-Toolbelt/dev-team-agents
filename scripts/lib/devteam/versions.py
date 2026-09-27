@@ -12,7 +12,15 @@ from .lock import store_lock
 
 #: Trees copied into ``core/versions/<v>/``. Everything an agent, command or
 #: script needs at runtime, and nothing that only matters in the repository.
+#:
+#: ``opencode`` carries the provider plugin that ``install-opencode.sh:88`` hard
+#: requires — without it ``devteam bind --provider opencode`` could never succeed,
+#: and `providers.detect` selects that provider automatically for any project with
+#: an `.opencode/` directory. ``CLAUDE-md`` holds the companion sections that the
+#: copied ``CLAUDE.md`` links to; without it every one of those links dangles.
 CORE_TREES = ("agents", "commands", "skills", "scripts", "templates")
+#: Required for a tree to be a valid source; ``OPTIONAL_TREES`` are copied when present.
+OPTIONAL_TREES = ("opencode", "CLAUDE-md")
 
 _SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 _CHANGELOG_RE = re.compile(r"^##\s*\[(\d+\.\d+\.\d+)\]", re.MULTILINE)
@@ -35,7 +43,10 @@ def installed():
     root = paths.versions_dir()
     if not root.is_dir():
         return []
-    found = [p.name for p in root.iterdir() if p.is_dir()]
+    # Only semver directories are versions. A `<v>.incoming` staging directory
+    # left by a killed install would otherwise be listed as installed, and
+    # `set_current` would happily activate it.
+    found = [p.name for p in root.iterdir() if p.is_dir() and parse_semver(p.name)]
     return sorted(found, key=sort_key)
 
 
@@ -56,6 +67,15 @@ def set_current(version):
         raise EnvError(
             "version {} is not installed in the core".format(version),
             hint="Run `devteam store list` to see what is available.",
+        )
+    # A hand-made or half-copied directory used to be accepted here, after which
+    # every bind failed with "core is missing .../agents". The install path
+    # already validates a tree; activation has to apply the same test.
+    missing = [name for name in CORE_TREES if not (version_dir(version) / name).is_dir()]
+    if missing:
+        raise EnvError(
+            "version {} is incomplete (missing: {})".format(version, ", ".join(missing)),
+            hint="Re-install it with `devteam store install --from <tree> --force`.",
         )
     marker = paths.current_file()
     marker.parent.mkdir(parents=True, exist_ok=True)
@@ -136,22 +156,29 @@ def install_from_tree(src, version=None, force=False, make_current=None):
 
     with store_lock("core"):
         target = version_dir(resolved_version)
-        if target.exists():
-            if not force:
-                raise ConflictError(
-                    "version {} is already installed".format(resolved_version),
-                    hint="Pass --force to replace it.",
-                    details={"version": resolved_version, "path": str(target)},
-                )
-            shutil.rmtree(str(target))
+        if target.exists() and not force:
+            raise ConflictError(
+                "version {} is already installed".format(resolved_version),
+                hint="Pass --force to replace it.",
+                details={"version": resolved_version, "path": str(target)},
+            )
 
+        # Staging is built BEFORE the old tree is touched. Removing it up front
+        # meant a failed copy left `current` pointing at a version that no longer
+        # existed on disk.
         staging = target.with_name(target.name + ".incoming")
         if staging.exists():
             shutil.rmtree(str(staging))
         staging.mkdir(parents=True)
         try:
             for name in CORE_TREES:
-                shutil.copytree(str(source / name), str(staging / name), symlinks=True)
+                # symlinks=False: a symlink inside a downloaded archive would be
+                # preserved into the store, and `providers` executes scripts from
+                # there. Copy content, never links.
+                shutil.copytree(str(source / name), str(staging / name), symlinks=False)
+            for name in OPTIONAL_TREES:
+                if (source / name).is_dir():
+                    shutil.copytree(str(source / name), str(staging / name), symlinks=False)
             for name in ("CHANGELOG.md", "CLAUDE.md"):
                 candidate = source / name
                 if candidate.is_file():
@@ -159,6 +186,8 @@ def install_from_tree(src, version=None, force=False, make_current=None):
             (staging / "VERSION").write_text(resolved_version + "\n", encoding="utf-8")
             # Only now is the tree complete: promote it in one move so a killed
             # copy never leaves a half-populated version for bind to resolve.
+            if target.exists():
+                shutil.rmtree(str(target))
             staging.replace(target)
         except Exception:
             if staging.exists():
@@ -182,17 +211,27 @@ def pinned_versions():
 
 
 def gc(dry_run=True):
-    """Remove versions that are neither ``current`` nor pinned by any project."""
-    keep = set(pinned_versions())
-    active = current()
-    if active:
-        keep.add(active)
-    removable = [v for v in installed() if v not in keep]
-    if dry_run:
-        return {"removed": [], "would_remove": removable, "kept": sorted(keep)}
-    removed = []
-    with store_lock("core"):
-        for version in removable:
-            shutil.rmtree(str(version_dir(version)), ignore_errors=True)
-            removed.append(version)
+    """Remove versions that are neither ``current`` nor pinned by any project.
+
+    The keep-set is computed **inside** the locks that protect the state it reads.
+    Computing it outside let a `devteam pin` land between the read and the
+    `rmtree`, deleting the version a project had just pinned itself to — after
+    which every `sync` for that project failed.
+
+    Lock order is registry-then-core everywhere, which is what keeps this from
+    deadlocking against a bind.
+    """
+    with store_lock("registry"):
+        with store_lock("core"):
+            keep = set(pinned_versions())
+            active = current()
+            if active:
+                keep.add(active)
+            removable = [v for v in installed() if v not in keep]
+            if dry_run:
+                return {"removed": [], "would_remove": removable, "kept": sorted(keep)}
+            removed = []
+            for version in removable:
+                shutil.rmtree(str(version_dir(version)), ignore_errors=True)
+                removed.append(version)
     return {"removed": removed, "would_remove": [], "kept": sorted(keep)}

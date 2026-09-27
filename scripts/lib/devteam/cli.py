@@ -12,10 +12,32 @@ from pathlib import Path
 
 from . import bind as bind_module
 from . import doctor, migrate, paths, project, providers, registry, update, versions
-from .errors import DevteamError, UsageError
+from .errors import DevteamError, EnvError, UsageError
 from .output import Emitter
 
 PROGRAM = "devteam"
+
+
+class _Parser(argparse.ArgumentParser):
+    """An ``ArgumentParser`` that routes its own errors through the CLI contract.
+
+    argparse calls ``sys.exit(2)`` itself, so a bad flag printed usage text on
+    stderr and **nothing** on stdout — breaking the documented promise that
+    ``--json`` always emits exactly one document, on the paths a client is most
+    likely to hit (`--mode bogus`, `--provider bogus`, a missing `--from`).
+    """
+
+    def error(self, message):
+        raise UsageError(message, hint="Run `devteam --help` or `devteam <command> --help`.")
+
+    def exit(self, status=0, message=None):
+        if status:
+            raise UsageError((message or "").strip() or "invalid arguments")
+        raise _HelpRequested()
+
+
+class _HelpRequested(Exception):
+    """``--help`` printed its text; exit cleanly without an error payload."""
 
 
 def _short(project_id):
@@ -109,6 +131,25 @@ def cmd_bind(args, emitter):
             "  providers {}".format(", ".join(result["providers"])),
             "  artifacts {}".format(result["artifacts"]),
         ]
+        + (
+            ["  pin       {}".format(result["pin"])] if result.get("pin") else []
+        )
+        + (
+            [
+                "  retired   {} path(s) moved to quarantine".format(len(result["retired"])),
+            ]
+            if result.get("retired")
+            else []
+        )
+        + (
+            [
+                "  merged    {} — project config, commit these yourself".format(
+                    ", ".join(result["merged_project_files"])
+                ),
+            ]
+            if result.get("merged_project_files")
+            else []
+        )
     )
     return result, human
 
@@ -117,10 +158,17 @@ def cmd_unbind(args, emitter):
     result = bind_module.unbind(
         args.path, project_id=args.project_id, keep_artifacts=args.keep_artifacts
     )
-    human = "unbound {}\n  removed {} artifact(s)\n  kept    {}".format(
-        result["path"], len(result["removed"]), ", ".join(result["kept"])
-    )
-    return result, human
+    lines = [
+        "unbound {}".format(result["path"]),
+        "  unlinked    {}".format(len(result["unlinked"])),
+        "  quarantined {}".format(len(result["quarantined"])),
+        "  kept        {}".format(", ".join(result["kept"])),
+    ]
+    if result["quarantined"]:
+        lines.append("  quarantine  {}".format(result["quarantined"][0]["to"]))
+    if result["problems"]:
+        lines.append("  problems    {}".format(len(result["problems"])))
+    return result, "\n".join(lines)
 
 
 def cmd_list(args, emitter):
@@ -215,15 +263,27 @@ def cmd_update(args, emitter):
         activate=not args.no_activate,
         sync=not args.no_sync,
         force=args.force,
+        sha256=args.sha256,
         emitter=emitter,
     )
-    human = "{} {} | current: {} | synced {} project(s)".format(
-        "installed" if result["installed_now"] else "already present:",
-        result["version"],
-        result["activated"] or versions.current(),
-        result["synced"],
-    )
-    return result, human
+    lines = [
+        "{} {} | current: {} | synced {} project(s)".format(
+            "installed" if result["installed_now"] else "already present:",
+            result["version"],
+            result["activated"] or versions.current(),
+            result["synced"],
+        )
+    ]
+    integrity = result.get("integrity")
+    if integrity and not integrity.get("verified"):
+        lines.append(
+            "  integrity NOT verified (no digest pinned) — sha256 {}".format(integrity["sha256"])
+        )
+    if result["problems"]:
+        lines.append("  {} project(s) failed to sync:".format(len(result["problems"])))
+        for problem in result["problems"]:
+            lines.append("    {}: {}".format(problem["project_id"], problem["error"]))
+    return result, "\n".join(lines)
 
 
 def cmd_migrate(args, emitter):
@@ -282,7 +342,7 @@ def build_parser():
         help="emit a single JSON document on stdout",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog=PROGRAM,
         parents=[common],
         description="dev-team-agents — one install, many bound projects",
@@ -290,6 +350,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="command")
 
     def leaf(action, name, **kwargs):
+        # `add_subparsers` sets parser_class from the parser it is called on, so
+        # every subcommand is a _Parser and its errors honour the contract too.
         kwargs.setdefault("parents", [common])
         return action.add_parser(name, **kwargs)
 
@@ -351,6 +413,9 @@ def build_parser():
     update_parser.add_argument("--no-activate", action="store_true")
     update_parser.add_argument("--no-sync", action="store_true")
     update_parser.add_argument("--force", action="store_true")
+    update_parser.add_argument(
+        "--sha256", help="expected sha256 of the release archive (out-of-band pinning)"
+    )
     update_parser.set_defaults(func=cmd_update)
 
     migrate_parser = leaf(sub, "migrate", help="convert a v2 vendored install into a bind")
@@ -379,16 +444,26 @@ def build_parser():
 
 
 def main(argv=None, stdout=None, stderr=None):
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    emitter = Emitter(as_json=getattr(args, "json", False), stdout=stdout, stderr=stderr)
+    # The emitter is built before parsing so a parse error can still honour
+    # `--json`; argv is scanned directly because argparse has not run yet.
+    argv_list = list(argv) if argv is not None else None
+    raw = argv_list if argv_list is not None else __import__("sys").argv[1:]
+    emitter = Emitter(as_json="--json" in raw, stdout=stdout, stderr=stderr)
+
+    try:
+        parser = build_parser()
+        args = parser.parse_args(argv_list)
+    except _HelpRequested:
+        return 0
+    except DevteamError as exc:
+        return emitter.fail(exc)
+
+    emitter.as_json = getattr(args, "json", emitter.as_json)
 
     if not getattr(args, "command", None) or not hasattr(args, "func"):
         if getattr(args, "command", None) == "store":
-            emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
-            return 2
-        emitter.fail(UsageError("no command given — run `devteam --help`"))
-        return 2
+            return emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
+        return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:
         payload, human = args.func(args, emitter)
@@ -397,10 +472,40 @@ def main(argv=None, stdout=None, stderr=None):
     except KeyboardInterrupt:
         emitter.warn("interrupted")
         return 130
+    except OSError as exc:
+        return emitter.fail(
+            EnvError(
+                "{}: {}".format(type(exc).__name__, exc),
+                hint="Check permissions and that every path involved is reachable.",
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - the contract outranks a clean traceback
+        # An unexpected exception used to reach the shell as a traceback with an
+        # empty stdout under --json, which a client cannot tell from a findings
+        # result. One document always goes out.
+        return emitter.fail(
+            EnvError(
+                "unexpected {}: {}".format(type(exc).__name__, exc),
+                hint="This is a bug in dev-team-agents; please report it.",
+            )
+        )
 
+    ok = True
+    exit_code = 0
+    if args.command == "doctor":
+        # `1` is "ran and reported a problem it did not fix" — a WARN finding is
+        # exactly that, and returning 0 made every recoverable problem look like
+        # success to a client reading only the exit code.
+        if payload.get("status") in ("warn", "fail"):
+            ok = False
+            exit_code = 1
+    elif payload.get("problems"):
+        # Applies to sync AND update: an update that activates a version but fails
+        # to sync N projects is not a success.
+        ok = False
+        exit_code = 1
+
+    payload = dict(payload)
+    payload["ok"] = ok
     emitter.emit(payload, human)
-    if args.command == "doctor" and payload.get("status") == "fail":
-        return 1
-    if args.command == "sync" and payload.get("problems"):
-        return 1
-    return 0
+    return exit_code

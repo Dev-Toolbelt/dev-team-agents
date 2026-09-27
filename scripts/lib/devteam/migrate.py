@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 from . import bind as bind_module
-from . import project, providers, quarantine, versions
+from . import project, providers, quarantine, registry, versions
 from .errors import UsageError
 
 #: Everything a v2 install placed under ``.dev-team-agents/`` that a bind
@@ -82,6 +82,23 @@ def plan(root=None, provider_names=None, mode="auto"):
             "{} has no vendored v2 install to migrate".format(project_root),
             hint="Use `devteam bind` for a project that was never installed.",
         )
+
+    # A v3 `--mode=vendored` bind looks exactly like a v2 install on disk: the
+    # same trees in the same place. Without this check, migrating one silently
+    # reversed the mode the user chose — and `vendored` exists precisely for CI,
+    # containers and air-gapped repos where `link` into a per-developer absolute
+    # path does not work.
+    identity = project.load(project_root)
+    if identity is not None:
+        entry = registry.get(identity["project_id"])
+        if entry is not None and entry.get("mode") == "vendored":
+            raise UsageError(
+                "{} is already bound in vendored mode, not a v2 install".format(project_root),
+                hint=(
+                    "Nothing to migrate. To change modes run "
+                    "`devteam bind --mode link` (or --mode copy) instead."
+                ),
+            )
 
     selected = list(provider_names) if provider_names else providers.detect(project_root)
     tracked = [

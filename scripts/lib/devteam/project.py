@@ -24,7 +24,10 @@ PROJECT_FILE = "project.json"
 SCHEMA = 1
 DEFAULT_CONTEXT_PATHS = ["docs"]
 
-_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+# `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
+# project_id carrying one passed validation and then became a directory name
+# with an embedded newline under data/projects/.
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 def project_file(root):
@@ -77,7 +80,7 @@ def validate(data, source="project.json"):
         )
 
     pid = data.get("project_id")
-    if not isinstance(pid, str) or not _UUID_RE.match(pid):
+    if not isinstance(pid, str) or not _UUID_RE.fullmatch(pid):
         raise EnvError("{}: 'project_id' must be a lowercase UUID string".format(source))
 
     paths_value = data.get("context_paths", DEFAULT_CONTEXT_PATHS)
@@ -124,7 +127,9 @@ def ensure(root, context_paths=None):
             if merged != existing.get("context_paths"):
                 existing["context_paths"] = merged
                 validate(existing, source=str(project_file(root)))
-                jsonio.write_json_atomic(project_file(root), existing)
+                jsonio.write_json_atomic(
+                    project_file(root), existing, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None
+                )
         return existing, False
 
     data = {
@@ -133,7 +138,9 @@ def ensure(root, context_paths=None):
         "context_paths": list(context_paths or DEFAULT_CONTEXT_PATHS),
     }
     validate(data, source=str(project_file(root)))
-    jsonio.write_json_atomic(project_file(root), data)
+    jsonio.write_json_atomic(
+        project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None
+    )
     return data, True
 
 
@@ -149,7 +156,9 @@ def reassign_identity(root):
         raise UsageError("{} has no {} to reassign".format(root, PROJECT_FILE))
     previous = data["project_id"]
     data["project_id"] = str(uuid.uuid4())
-    jsonio.write_json_atomic(project_file(root), data)
+    jsonio.write_json_atomic(
+        project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None
+    )
     return previous, data["project_id"]
 
 

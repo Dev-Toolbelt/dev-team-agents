@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import socket
 import time
 from pathlib import Path
@@ -33,6 +34,8 @@ class Lock:
         self.stale_after = stale_after
         self._held = False
         self.stolen_from = None
+        self.lost = False
+        self._token = None
 
     @property
     def _owner_file(self):
@@ -43,6 +46,10 @@ class Lock:
             "pid": os.getpid(),
             "host": socket.gethostname(),
             "acquired_at": time.time(),
+            # A nonce, so `release` can tell "my lock" from "the lock someone else
+            # took after mine was judged stale". Without it, the victim's release
+            # tore down the new holder's directory and admitted a third writer.
+            "token": self._token,
         }
         try:
             with self._owner_file.open("w", encoding="utf-8") as handle:
@@ -67,9 +74,40 @@ class Lock:
             return None
         return max(0.0, time.time() - acquired)
 
+    def _owner_field(self, name):
+        try:
+            with self._owner_file.open("r", encoding="utf-8") as handle:
+                return json.load(handle).get(name)
+        except (OSError, ValueError):
+            return None
+
+    def _holder_is_alive(self):
+        """True when the recorded pid is a live process on this host.
+
+        A lock whose owner is still running is never stale, however long it has
+        been held — `install_from_tree` legitimately holds `core` for a full tree
+        copy, and `update` holds it across a download.
+        """
+        if self._owner_field("host") != socket.gethostname():
+            return False
+        pid = self._owner_field("pid")
+        if not isinstance(pid, int):
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
     def _break_if_stale(self):
         age = self._owner_age()
         if age is None or age < self.stale_after:
+            return False
+        if self._holder_is_alive():
             return False
         try:
             if self._owner_file.exists():
@@ -81,7 +119,10 @@ class Lock:
         return True
 
     def acquire(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._token = secrets.token_hex(16)
+        from . import jsonio
+
+        jsonio.ensure_dir(self.path.parent)
         deadline = time.monotonic() + self.timeout
         while True:
             try:
@@ -110,7 +151,19 @@ class Lock:
             return self
 
     def release(self):
+        """Release only if this instance still owns the lock.
+
+        If the token no longer matches, the lock was broken and re-taken while we
+        held it: removing it here would free a lock someone else is holding. The
+        caller is told through :attr:`lost` so it can abort instead of continuing
+        to write.
+        """
         if not self._held:
+            return
+        current_token = self._owner_field("token")
+        if current_token is not None and current_token != self._token:
+            self.lost = True
+            self._held = False
             return
         try:
             if self._owner_file.exists():
@@ -119,6 +172,18 @@ class Lock:
         except OSError:
             pass
         self._held = False
+
+    def check_still_held(self):
+        """Raise when the lock was stolen mid-operation."""
+        if not self._held:
+            return
+        current_token = self._owner_field("token")
+        if current_token is not None and current_token != self._token:
+            self.lost = True
+            raise ConflictError(
+                "lock {} was taken over by another process".format(self.path),
+                hint="Re-run the command; this run stopped before writing further.",
+            )
 
     def __enter__(self):
         return self.acquire()

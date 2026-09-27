@@ -36,10 +36,41 @@ def read_json(path, default=None):
         raise EnvError("cannot read {}: {}".format(p, exc)) from exc
 
 
-def write_json_atomic(path, data):
+#: Store files may end up holding credential references (ADR-0010), so they are
+#: owner-only. Project files like `project.json` and `.claude/settings.json` are
+#: committed and must be readable by anyone who checks the repository out —
+#: relying on NamedTemporaryFile's 0600 made every file the CLI wrote 0600,
+#: including those two.
+STORE_FILE_MODE = 0o600
+PROJECT_FILE_MODE = 0o644
+STORE_DIR_MODE = 0o700
+
+
+def ensure_dir(path, mode=STORE_DIR_MODE):
+    """Create ``path`` and its missing parents, each with ``mode`` when given."""
+    target = Path(path)
+    missing = []
+    current = target
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    target.mkdir(parents=True, exist_ok=True)
+    if mode is not None:
+        for created in missing:
+            try:
+                os.chmod(str(created), mode)
+            except OSError:
+                # A directory we could create but not chmod is still usable.
+                pass
+    return target
+
+
+def write_json_atomic(path, data, mode=STORE_FILE_MODE, dir_mode=STORE_DIR_MODE):
     """Write ``data`` as pretty JSON, atomically, creating parent directories."""
     p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(p.parent, mode=dir_mode)
     payload = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     handle = tempfile.NamedTemporaryFile(
         "w",
@@ -55,6 +86,8 @@ def write_json_atomic(path, data):
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
+        if mode is not None:
+            os.chmod(tmp_name, mode)
         os.replace(tmp_name, str(p))
     except OSError as exc:
         try:

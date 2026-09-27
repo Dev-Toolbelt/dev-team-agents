@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
-from . import gitignore, jsonio, paths, project, providers, quarantine, registry, versions
+from . import gitignore, hooks, jsonio, paths, project, providers, quarantine, registry, versions
 from .errors import ConflictError, EnvError, UsageError
 
 MODES = ("auto", "link", "copy", "vendored")
@@ -154,19 +155,104 @@ def _is_inside(candidate, root):
         return False
 
 
-def _remove_artifact(path):
-    if path.is_symlink() or path.is_file():
+def _resolved_location(path):
+    """Where ``path`` lives, with its parents resolved but the leaf not followed."""
+    path = Path(path)
+    try:
+        parent = Path(os.path.realpath(str(path.parent)))
+    except OSError:
+        parent = path.parent
+    return parent / path.name
+
+
+def require_inside(candidate, project_root, what="path"):
+    """Refuse to touch anything that resolves outside the project.
+
+    A repository can commit ``.dev-team-agents`` or ``.claude`` as a **symlink**
+    — git tracks symlinks natively — and every write below used to follow it,
+    because ``mkdir(parents=True)`` and ``rmtree`` traverse links. A clone of a
+    hostile or merely careless repo could therefore have its bind land anywhere,
+    and a vendored bind could delete a directory in the user's home.
+
+    ``_is_inside`` already compared paths correctly and simply was not called on
+    this question. This is that call.
+    """
+    # Resolve the PARENT, then re-attach the name. Resolving the artifact itself
+    # would follow it: a bind artifact is a symlink into the store, so its
+    # realpath is legitimately outside the project and every check would refuse
+    # the very paths dev-team-agents created. Resolving the parent still catches
+    # the case that matters — a symlinked `.claude` or `.dev-team-agents`
+    # relocating the write out of the tree.
+    # Compared directly rather than through `_is_inside`, which resolves the whole
+    # candidate — and resolving a bind artifact follows it into the store.
+    located = _resolved_location(candidate)
+    try:
+        root = Path(os.path.realpath(str(project_root)))
+        located.relative_to(root)
+        return Path(candidate)
+    except (ValueError, OSError):
+        pass
+    raise ConflictError(
+        "{} resolves outside the project: {}".format(what, candidate),
+        hint=(
+            "A path inside the project (or one of its parents) is a symlink pointing "
+            "elsewhere. dev-team-agents will not write or delete through it."
+        ),
+        details={"path": str(candidate), "project_root": str(project_root)},
+    )
+
+
+def _mkdir_within(directory, project_root):
+    """Create ``directory`` one component at a time, never through a symlink."""
+    directory = Path(directory)
+    require_inside(directory, project_root, what="artifact parent")
+    root = Path(project_root).resolve()
+    try:
+        relative = directory.resolve().relative_to(root)
+    except ValueError as exc:  # pragma: no cover - require_inside already checked
+        raise ConflictError("cannot create {} outside the project".format(directory)) from exc
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ConflictError(
+                "{} is a symlink; refusing to create artifacts through it".format(current),
+                hint="Remove or repoint that link, then run `devteam sync` again.",
+            )
+        if not current.exists():
+            current.mkdir()
+    return current
+
+
+def _retire_artifact(path, project_id, project_root, group="replaced"):
+    """Retire one artifact. Symlinks are unlinked; real content is quarantined.
+
+    A symlink holds no content and ``sync`` recreates it, so unlinking is free.
+    A real file or directory is the only copy of whatever is inside it — in
+    ``copy`` and ``vendored`` modes that includes anything the user added — so it
+    is **moved**, never deleted. Returns ``("unlinked", None)`` or
+    ``("quarantined", destination)``.
+    """
+    path = Path(path)
+    require_inside(path, project_root, what="artifact")
+    if path.is_symlink():
         path.unlink()
-    elif path.is_dir():
-        shutil.rmtree(str(path))
+        return "unlinked", None
+    destination = quarantine.move(path, project_id, group=group)
+    return "quarantined", destination
 
 
-def _materialize(source, dest, mode, previous_paths, rel, project_root):
-    """Create one artifact, returning ``link`` or ``copy``."""
+def _materialize(source, dest, mode, previous_paths, rel, project_root, project_id, retired):
+    """Create one artifact, returning ``link`` or ``copy``.
+
+    ``retired`` collects anything moved to quarantine, so a caller can report it.
+    """
     source = Path(source)
     dest = Path(dest)
     if not source.exists():
         raise EnvError("core is missing {}".format(source))
+
+    require_inside(dest, project_root, what="artifact")
 
     if dest.exists() or dest.is_symlink():
         if not _is_managed_path(rel, dest, previous_paths, project_root):
@@ -175,22 +261,38 @@ def _materialize(source, dest, mode, previous_paths, rel, project_root):
                 hint="Move or remove it, then run `devteam sync` again.",
                 details={"path": str(dest)},
             )
-        _remove_artifact(dest)
+        action, destination = _retire_artifact(dest, project_id, project_root)
+        if action == "quarantined":
+            retired.append({"path": rel, "to": str(destination)})
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if mode == "link":
-        os.symlink(str(source), str(dest), target_is_directory=source.is_dir())
-        return "link"
-    if source.is_dir():
-        shutil.copytree(str(source), str(dest), symlinks=False)
-    else:
-        shutil.copy2(str(source), str(dest))
+    _mkdir_within(dest.parent, project_root)
+    try:
+        if mode == "link":
+            os.symlink(str(source), str(dest), target_is_directory=source.is_dir())
+            return "link"
+        if source.is_dir():
+            shutil.copytree(str(source), str(dest), symlinks=False)
+        else:
+            shutil.copy2(str(source), str(dest))
+    except OSError as exc:
+        raise EnvError(
+            "cannot create {}: {}".format(dest, exc),
+            hint="Check permissions on the project directory.",
+        ) from exc
     return "copy"
 
 
-def _vendored_tree(version_dir, project_root, previous_paths):
-    """v2 layout: the framework inside the project, with relative links."""
+def _vendored_tree(version_dir, project_root, previous_paths, project_id, retired):
+    """v2 layout: the framework inside the project, with relative links.
+
+    Every existing tree is **quarantined**, never deleted. The previous code had
+    a delete branch justified as "a v2 install being re-vendored is the
+    documented update" — which is exactly the judgment call the No-Destruction
+    Rule says not to make: a hand-written agent sitting in that directory is
+    indistinguishable from a framework file, and it was destroyed.
+    """
     install_dir = Path(project_root) / project.PROJECT_DIR
+    require_inside(install_dir, project_root, what="install directory")
     created = []
     for name in versions.CORE_TREES:
         source = Path(version_dir) / name
@@ -199,21 +301,24 @@ def _vendored_tree(version_dir, project_root, previous_paths):
         dest = install_dir / name
         rel = str(Path(project.PROJECT_DIR) / name)
         if dest.exists() or dest.is_symlink():
-            if rel not in previous_paths and not dest.is_symlink():
-                # A v2 install being re-vendored: replacing the framework tree
-                # with the same trees from the store is the documented update.
-                shutil.rmtree(str(dest))
-            else:
-                _remove_artifact(dest)
+            action, destination = _retire_artifact(
+                dest, project_id, project_root, group="revendored"
+            )
+            if action == "quarantined":
+                retired.append({"path": rel, "to": str(destination)})
+        _mkdir_within(dest.parent, project_root)
         shutil.copytree(str(source), str(dest), symlinks=False)
         created.append({"path": rel, "kind": "copy"})
 
     for rel_path, source in providers.claude_artifacts(install_dir):
         dest = Path(project_root) / rel_path
         rel = str(rel_path)
+        require_inside(dest, project_root, what="artifact")
         if dest.exists() or dest.is_symlink():
-            _remove_artifact(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
+            action, destination = _retire_artifact(dest, project_id, project_root)
+            if action == "quarantined":
+                retired.append({"path": rel, "to": str(destination)})
+        _mkdir_within(dest.parent, project_root)
         depth = len(rel_path.parts) - 1
         relative_target = Path(*([".."] * depth)) / source.relative_to(Path(project_root))
         os.symlink(str(relative_target), str(dest), target_is_directory=True)
@@ -221,14 +326,93 @@ def _vendored_tree(version_dir, project_root, previous_paths):
     return created
 
 
+def _other_checkouts_bound(project_id, project_root):
+    """True when another live checkout of the same repository is still bound."""
+    entry = registry.get(project_id) or {}
+    candidates = [entry.get("path")] + list(entry.get("worktrees", []))
+    target = str(Path(project_root).resolve())
+    for candidate in candidates:
+        if not candidate or candidate == target:
+            continue
+        if Path(candidate).is_dir():
+            return True
+    return False
+
+
+def _git_common_dir(path):
+    """The shared git directory for ``path``, or ``None`` outside a repository."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=str(path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    raw = result.stdout.decode("utf-8", "replace").strip()
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = Path(path) / candidate
+    try:
+        return Path(os.path.realpath(str(candidate)))
+    except OSError:
+        return None
+
+
+def _same_git_repository(path_a, path_b):
+    """True when both paths are checkouts of one repository (a linked worktree).
+
+    A worktree of a bound repository carries the **committed** ``project.json``,
+    so it presents the same ``project_id`` at a second path — which is exactly the
+    shape of the fork collision. Telling the two apart matters because this
+    repository's own CLAUDE.md mandates worktrees: treating one as a fork told the
+    user to reassign an identity in a tracked file on a feature branch, which on
+    merge would rename the main checkout's identity and orphan its memory.
+    """
+    common_a = _git_common_dir(path_a)
+    common_b = _git_common_dir(path_b)
+    return common_a is not None and common_a == common_b
+
+
+def _runtime_root(version_dir, project_root, mode, previous_paths, project_id, retired):
+    """Give the project an in-tree path to the resolved core version.
+
+    116 shipped references — `.dev-team-agents/scripts/...` in 6 commands and 14
+    skills, `.dev-team-agents/templates/...` in 13 places, and `CLAUDE.md`'s own
+    `bash .dev-team-agents/scripts/new-adr.sh` — assume the framework is reachable
+    from inside the project. A link-mode bind left `.dev-team-agents/` holding
+    `project.json` alone, so every one of them broke.
+
+    One pointer fixes all of them without a copy, and it is the same path the bash
+    installers' `ensure_claude_framework` was faking by vendoring 2.3 MB back in.
+    """
+    rel_path = Path(project.PROJECT_DIR) / "core"
+    rel = str(rel_path)
+    dest = Path(project_root) / rel_path
+    kind = _materialize(
+        Path(version_dir),
+        dest,
+        "link" if mode != "copy" else "copy",
+        previous_paths,
+        rel,
+        project_root,
+        project_id,
+        retired,
+    )
+    return [{"path": rel, "kind": kind}]
+
+
 def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     """Bind ``root`` to the store. Idempotent, and safe to re-run."""
     project_root = project.resolve_root(root)
     if not project_root.is_dir():
         raise UsageError("not a directory: {}".format(project_root))
-
-    version = versions.resolve(pin)
-    version_dir = versions.require(version)
 
     requested = list(provider_names) if provider_names else providers.detect(project_root)
     unknown = [p for p in requested if p not in providers.ALL_PROVIDERS]
@@ -240,6 +424,14 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         )
     selected = [p for p in providers.ALL_PROVIDERS if p in set(requested)]
 
+    # Everything that can refuse the bind runs BEFORE the first write. A missing
+    # `jq` used to surface from inside the opencode installer, after 154 Claude
+    # symlinks already existed and before the manifest, registry entry or exclude
+    # block recorded them — leaving artifacts nothing could clean up and nothing
+    # kept out of git.
+    for provider_name in selected:
+        providers.require_tools(provider_name)
+
     resolved_mode, fallback_reason = resolve_mode(mode, project_root)
     if fallback_reason and emitter:
         emitter.warn("mode=copy: {}".format(fallback_reason))
@@ -247,12 +439,49 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     data, created_identity = project.ensure(project_root)
     project_id = data["project_id"]
 
+    # `pin=None` means "leave the pin alone", not "clear it". Reading the stored
+    # pin here is what stops a bare `devteam bind` from silently moving a pinned
+    # project to `current` — the spec calls bind idempotent, and it is the one
+    # command a user re-runs casually.
+    existing = registry.get(project_id)
+    effective_pin = pin if pin is not None else (existing or {}).get("pin")
+
+    # The registry collision check must also precede the writes, so a refused
+    # bind (a fork inheriting an identity) leaves nothing behind.
+    is_worktree_of_bound = False
+    if existing and existing.get("path") != str(project_root.resolve()):
+        other = Path(existing["path"])
+        if other.exists():
+            if _same_git_repository(other, project_root):
+                # A linked worktree of an already-bound repository. It carries the
+                # same committed project_id, which used to be read as a fork
+                # collision — and following that advice would have written a new
+                # identity into a tracked file on a feature branch, renaming the
+                # main checkout's identity on merge.
+                is_worktree_of_bound = True
+            else:
+                raise ConflictError(
+                    "project_id {} is already bound to {}".format(project_id, other),
+                    hint=(
+                        "Two checkouts share one identity. Run `devteam doctor "
+                        "--reassign-identity` in the copy that should get a new one."
+                    ),
+                    details={"project_id": project_id, "bound_path": str(other)},
+                )
+
+    version = versions.resolve(effective_pin)
+    version_dir = versions.require(version)
+
     previous = read_manifest(project_id)
     previous_paths = {item.get("path") for item in previous.get("artifacts", [])}
 
     artifacts = []
+    retired = []
+    merged = []
     if resolved_mode == "vendored":
-        artifacts.extend(_vendored_tree(version_dir, project_root, previous_paths))
+        artifacts.extend(
+            _vendored_tree(version_dir, project_root, previous_paths, project_id, retired)
+        )
     elif "claude" in selected:
         for rel_path, source in providers.claude_artifacts(version_dir):
             rel = str(rel_path)
@@ -263,17 +492,26 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
                 previous_paths,
                 rel,
                 project_root,
+                project_id,
+                retired,
             )
             artifacts.append({"path": rel, "kind": kind})
 
-    delegated = []
+    if "claude" in selected or resolved_mode == "vendored":
+        artifacts.extend(
+            _runtime_root(version_dir, project_root, resolved_mode, previous_paths, project_id, retired)
+        )
+        artifacts.extend(hooks.wire(project_root, emitter=emitter))
+
     if resolved_mode != "vendored":
         if "opencode" in selected:
             providers.install_opencode(version_dir, project_root)
-            delegated.extend(providers.DELEGATED_ARTIFACTS["opencode"])
+            artifacts.extend(providers.delegated_artifacts("opencode", project_root))
+            merged.extend(providers.merged_project_files("opencode", project_root))
         if "codex" in selected:
             providers.install_codex(version_dir, project_root)
-            delegated.extend(providers.DELEGATED_ARTIFACTS["codex"])
+            artifacts.extend(providers.delegated_artifacts("codex", project_root))
+            merged.extend(providers.merged_project_files("codex", project_root))
 
     stale = _prune_stale(
         project_root, previous, {item["path"] for item in artifacts}, project_id
@@ -287,18 +525,20 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         "mode": resolved_mode,
         "providers": selected,
         "artifacts": artifacts,
-        "delegated": delegated,
     }
     jsonio.write_json_atomic(manifest_file(project_id), manifest)
 
-    registry.upsert(
-        project_id,
-        project_root,
-        selected,
-        resolved_mode,
-        pin=pin,
-        extra={"last_synced_version": version},
-    )
+    if is_worktree_of_bound:
+        registry.add_worktree(project_id, project_root, version)
+    else:
+        registry.upsert(
+            project_id,
+            project_root,
+            selected,
+            resolved_mode,
+            pin=effective_pin,
+            extra={"last_synced_version": version},
+        )
 
     ignore_changed, ignore_action = gitignore.apply_managed_block(
         Path(project_root) / ".gitignore", list(PROJECT_GITIGNORE_ENTRIES)
@@ -307,8 +547,12 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     exclude_action = "skipped"
     exclude_file = _local_exclude_file(project_root)
     if exclude_file is not None and resolved_mode != "vendored":
-        entries = sorted({item["path"] for item in artifacts} | set(delegated))
+        entries = sorted({item["path"] for item in artifacts})
         _, exclude_action = gitignore.apply_managed_block(exclude_file, entries)
+    elif exclude_file is None and emitter:
+        emitter.warn(
+            "not a git repository: bind artifacts were not added to any ignore file"
+        )
 
     return {
         "project_id": project_id,
@@ -317,7 +561,9 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         "mode": resolved_mode,
         "providers": selected,
         "artifacts": len(artifacts),
-        "delegated": delegated,
+        "retired": retired,
+        "merged_project_files": sorted(set(merged)),
+        "pin": effective_pin,
         "identity_created": created_identity,
         "pruned": stale,
         "gitignore": ignore_action if ignore_changed else "unchanged",
@@ -327,13 +573,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
 
 
 def _prune_stale(project_root, previous, current_paths, project_id):
-    """Retire artifacts a previous bind made that this one no longer needs.
-
-    A symlink is unlinked: it holds no content and ``sync`` recreates it. A real
-    directory or file is **moved to quarantine**, never deleted — a previous bind
-    in ``vendored`` mode produced real trees, and deleting them here would
-    destroy the only copy before a migration could set it aside.
-    """
+    """Retire artifacts a previous bind made that this one no longer needs."""
     unlinked = []
     quarantined = []
     for item in previous.get("artifacts", []):
@@ -344,15 +584,15 @@ def _prune_stale(project_root, previous, current_paths, project_id):
         if not (candidate.exists() or candidate.is_symlink()):
             continue
         try:
-            if candidate.is_symlink():
-                candidate.unlink()
-                unlinked.append(rel)
-            else:
-                destination = quarantine.move(candidate, project_id, group="pruned")
-                if destination is not None:
-                    quarantined.append({"path": rel, "to": str(destination)})
-        except OSError:
+            action, destination = _retire_artifact(
+                candidate, project_id, project_root, group="pruned"
+            )
+        except (OSError, ConflictError):
             continue
+        if action == "unlinked":
+            unlinked.append(rel)
+        elif destination is not None:
+            quarantined.append({"path": rel, "to": str(destination)})
     return {"unlinked": unlinked, "quarantined": quarantined}
 
 
@@ -373,6 +613,21 @@ def sync_project(project_id, emitter=None):
         pin=entry.get("pin"),
         emitter=emitter,
     )
+    # Linked worktrees of the same repository carry their own artifacts and are
+    # refreshed alongside the checkout that owns the registry entry.
+    refreshed = []
+    for worktree in entry.get("worktrees", []):
+        if not Path(worktree).is_dir():
+            continue
+        bind(
+            worktree,
+            provider_names=entry.get("providers"),
+            mode=entry.get("mode", "auto"),
+            pin=entry.get("pin"),
+            emitter=emitter,
+        )
+        refreshed.append(worktree)
+    result["worktrees"] = refreshed
     registry.touch_sync(project_id, result["version"])
     return result
 
@@ -387,6 +642,15 @@ def sync_all(emitter=None):
             problems.append({"project_id": project_id, "error": exc.message})
             if emitter:
                 emitter.warn("{}: {}".format(project_id, exc.message))
+        except OSError as exc:
+            # A read-only mount, an unmounted volume or a permission change is the
+            # likeliest failure across many projects. Escaping as a traceback
+            # aborted every project after this one and emitted zero bytes on
+            # stdout, breaking the --json contract.
+            message = "{}: {}".format(type(exc).__name__, exc)
+            problems.append({"project_id": project_id, "error": message})
+            if emitter:
+                emitter.warn("{}: {}".format(project_id, message))
     return {"synced": results, "problems": problems}
 
 
@@ -394,7 +658,9 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
     """Remove bind artifacts and the registry entry.
 
     ``project.json`` and everything under ``user-data/`` stay: identity and
-    memory are never collateral damage of an unbind.
+    memory are never collateral damage of an unbind. Real directories — which in
+    ``copy`` and ``vendored`` modes may contain files the user added — are moved
+    to quarantine rather than deleted.
     """
     if project_id is None:
         project_root = project.resolve_root(root)
@@ -406,27 +672,67 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
         entry = registry.get(project_id)
         if entry is None:
             raise EnvError("project {} is not bound".format(project_id))
-        project_root = Path(entry["path"])
+        bound_path = entry.get("path")
+        if not bound_path:
+            raise EnvError(
+                "registry entry for {} has no path".format(project_id),
+                hint="Remove the entry by hand, or re-bind the project.",
+            )
+        project_root = Path(bound_path)
 
     manifest = read_manifest(project_id)
-    removed = []
+    unlinked = []
+    quarantined = []
+    problems = []
     if not keep_artifacts:
         for item in manifest.get("artifacts", []):
-            candidate = Path(project_root) / item.get("path", "")
-            if candidate.exists() or candidate.is_symlink():
+            rel = item.get("path")
+            # An entry with no path used to become `Path(project_root) / ""`,
+            # which IS the project root — and the removal helper then deleted the
+            # whole project, source code included, before crashing on the missing
+            # key. `_prune_stale` already guarded this; unbind did not.
+            if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+                problems.append({"path": rel, "error": "not a relative artifact path"})
+                continue
+            if item.get("kind") == "settings":
+                # `.claude/settings.json` belongs to the project and may be
+                # committed. Remove only the hook entries we registered.
                 try:
-                    _remove_artifact(candidate)
-                    removed.append(item["path"])
-                except OSError:
-                    continue
+                    events = hooks.unwire(project_root)
+                except (OSError, EnvError) as exc:
+                    problems.append({"path": rel, "error": str(exc)})
+                else:
+                    if events:
+                        unlinked.append("{} (hooks: {})".format(rel, ", ".join(events)))
+                continue
+            candidate = Path(project_root) / rel
+            if not (candidate.exists() or candidate.is_symlink()):
+                continue
+            try:
+                action, destination = _retire_artifact(
+                    candidate, project_id, project_root, group="unbound"
+                )
+            except (OSError, ConflictError) as exc:
+                problems.append({"path": rel, "error": str(exc)})
+                continue
+            if action == "unlinked":
+                unlinked.append(rel)
+            elif destination is not None:
+                quarantined.append({"path": rel, "to": str(destination)})
         exclude_file = _local_exclude_file(project_root)
-        if exclude_file is not None:
+        if exclude_file is not None and not _other_checkouts_bound(project_id, project_root):
+            # git reads only $GIT_COMMON_DIR/info/exclude for a linked worktree —
+            # verified, the per-worktree file is ignored — so the block is shared
+            # by every checkout of the repository. Clearing it while another
+            # worktree is still bound would un-ignore that worktree's artifacts.
             gitignore.apply_managed_block(exclude_file, [])
 
     registry.remove(project_id)
     return {
         "project_id": project_id,
         "path": str(project_root),
-        "removed": removed,
+        "unlinked": unlinked,
+        "quarantined": quarantined,
+        "problems": problems,
         "kept": ["project.json", "user-data/"],
     }

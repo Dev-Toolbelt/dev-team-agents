@@ -6,7 +6,20 @@ logic stays importable by the test suite and by the desktop app's contract tests
 """
 
 import sys
-from pathlib import Path
+
+# Declared floor, checked before the first import that could fail on syntax.
+# Without this an older interpreter reported a SyntaxError from a library module,
+# which reads as a bug in dev-team-agents rather than an unsupported python.
+MINIMUM_PYTHON = (3, 9)
+if sys.version_info < MINIMUM_PYTHON:
+    sys.stderr.write(
+        "devteam: python {}.{}+ is required, found {}.{}\n".format(
+            MINIMUM_PYTHON[0], MINIMUM_PYTHON[1], *sys.version_info[:2]
+        )
+    )
+    raise SystemExit(3)
+
+from pathlib import Path  # noqa: E402  (import follows the version gate)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
