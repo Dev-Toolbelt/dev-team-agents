@@ -25,7 +25,7 @@ class BindTest(StoreTestCase):
         # The project holds identity plus the runtime-root pointer — no vendored tree.
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "project.json"],
+            ["core", "project.json", "resolved", "state-dir"],
         )
         pointer = root / project.PROJECT_DIR / "core"
         self.assertTrue((pointer / "scripts").is_dir())
