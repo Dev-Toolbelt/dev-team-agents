@@ -35,11 +35,20 @@ POSTHOG_ENDPOINT="${DEVTEAM_POSTHOG_ENDPOINT:-https://us.i.posthog.com}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Go up two levels: helpers/ -> scripts/ -> dev-team-agents/ (the install root)
 INSTALL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-# DEVTEAM_USER_DATA_DIR can be set by tests or CI to override the default path
+# DEVTEAM_USER_DATA_DIR can be set by tests or CI to override the default path.
+# QUEUE_FILE and STATE_FILE are machine-local (ADR-0013) and always live under
+# this one directory.
 USER_DATA_DIR="${DEVTEAM_USER_DATA_DIR:-"$INSTALL_DIR/user-data"}"
-PREFS_FILE="$USER_DATA_DIR/preferences.json"
 QUEUE_FILE="$USER_DATA_DIR/telemetry-queue.json"
 STATE_FILE="$USER_DATA_DIR/state.json"
+# PREFS_FILE has its OWN override, separate from USER_DATA_DIR: preferences.json
+# is a portable record, not a machine-local one, and on a project that has run
+# `devteam bind`/`sync` it lives at the resolved cascade projection
+# (.dev-team-agents/resolved/preferences.json), not co-located with the queue/
+# state files. Callers that resolve that projection (pre-tool-use/02b-telemetry.sh,
+# stop/05-telemetry.sh) set DEVTEAM_PREFS_FILE explicitly; a caller that only
+# sets DEVTEAM_USER_DATA_DIR (existing tests/CI) keeps the old co-located default.
+PREFS_FILE="${DEVTEAM_PREFS_FILE:-"$USER_DATA_DIR/preferences.json"}"
 
 # shellcheck source=scripts/lib/state.sh
 if [ -f "$SCRIPT_DIR/../lib/state.sh" ]; then

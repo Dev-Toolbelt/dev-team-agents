@@ -23,7 +23,15 @@ SCRIPT="$REPO_ROOT/helpers/archive-index.sh"
 [ -f "$REPO_ROOT/docs/reports/_index.md" ] || exit 0
 
 # ── Once-per-day gate ─────────────────────────────────────────────────────────
-STAMP_DIR="$REPO_ROOT/.dev-team-agents/user-data"
+# The stamp is a machine-local marker (ADR-0013): resolve it through the
+# state-dir pointer, read from the MAIN checkout (not this worktree's own
+# --show-toplevel) since that pointer, like user-data/ before it, lives only
+# there.
+MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+[ -n "$MAIN_REPO_ROOT" ] || MAIN_REPO_ROOT="$REPO_ROOT"
+# shellcheck source=scripts/hooks/lib/data-dirs.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/data-dirs.sh"
+STAMP_DIR="$(devteam_state_dir "$MAIN_REPO_ROOT")"
 STAMP_FILE="$STAMP_DIR/.last-archive-index"
 TODAY="$(date +%Y-%m-%d)"
 if [ -f "$STAMP_FILE" ]; then

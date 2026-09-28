@@ -12,7 +12,9 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 # shellcheck source=scripts/hooks/lib/session-summary-detect.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/session-summary-detect.sh"
 
-SUMMARY_FILE="${REPO_ROOT:-.}/.dev-team-agents/user-data/session-summary.md"
+# SUMMARY_FILE is exported by session-summary-detect.sh, resolved through the
+# `memory-dir` pointer (ADR-0013) — layout 1's user-data/ or layout 2's
+# portable project directory in the store.
 
 # Warn when there are uncommitted/staged changes OR commits were made today.
 if [ "$HAS_CHANGES" = true ]; then

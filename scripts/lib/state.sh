@@ -20,14 +20,27 @@ set -uo pipefail
 # path of this project's state directory, which is the data store once the project
 # has been upgraded. It is read as a single file read on purpose: asking the CLI
 # would mean a python subprocess on every `state_get`, and these run inside hooks.
-_state_dir_pointer() {
-    local root="${DEVTEAM_PROJECT_ROOT:-.}"
-    local pointer="$root/.dev-team-agents/state-dir"
+#
+# state_read_pointer <root> <pointer_name>
+# Generic one-file-read for either of the two ADR-0013 pointers a v3 bind
+# writes under <root>/.dev-team-agents/ — "state-dir" (machine-local) or its
+# sibling "memory-dir" (portable). Prints the resolved absolute path; returns 1
+# when the pointer is absent or empty so the caller can fall through to its own
+# default. Shared with scripts/hooks/lib/data-dirs.sh, which resolves
+# "memory-dir" the same way for the hooks that need the portable directory —
+# do not re-derive this one-file-read anywhere else.
+state_read_pointer() {
+    local root="$1" name="$2"
+    local pointer="$root/.dev-team-agents/$name"
     [ -f "$pointer" ] || return 1
     local resolved
     resolved="$(tr -d '\r\n' < "$pointer")"
     [ -n "$resolved" ] || return 1
     echo "$resolved"
+}
+
+_state_dir_pointer() {
+    state_read_pointer "${DEVTEAM_PROJECT_ROOT:-.}" "state-dir"
 }
 
 _state_default_file() {

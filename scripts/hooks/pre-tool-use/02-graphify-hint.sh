@@ -4,9 +4,9 @@
 # only ONCE per session. Without the marker below this used to re-inject the
 # same additionalContext block on every single Glob/Grep call, which compounds
 # in the retained transcript over a long exploration-heavy session and was a
-# confirmed contributor to "Prompt is too long" failures. The marker lives
-# under user-data/ (mirroring session-start.sh's resolution so a linked
-# worktree shares it with the main checkout) and is cleared by
+# confirmed contributor to "Prompt is too long" failures. The marker lives in
+# the resolved state-dir (ADR-0013 — mirroring session-start.sh's resolution so
+# a linked worktree shares it with the main checkout) and is cleared by
 # session-start.sh so the hint fires again at the start of the next session.
 set -euo pipefail
 
@@ -16,7 +16,9 @@ GRAPH="graphify-out/graph.json"
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || PROJECT_ROOT="$(pwd)"
 MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -n "$MAIN_REPO_ROOT" ] || MAIN_REPO_ROOT="$PROJECT_ROOT"
-MARKER="${MAIN_REPO_ROOT}/.dev-team-agents/user-data/.graphify-hint-shown"
+# shellcheck source=scripts/hooks/lib/data-dirs.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/data-dirs.sh"
+MARKER="$(devteam_state_dir "$MAIN_REPO_ROOT")/.graphify-hint-shown"
 [ -f "$MARKER" ] && exit 0
 
 INPUT=$(cat)

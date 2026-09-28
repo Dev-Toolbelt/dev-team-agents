@@ -11,16 +11,19 @@ set -euo pipefail
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
-# Skip if dev-team-agents user-data directory is not set up yet
+# Skip if this project's memory directory is not set up yet.
 # Only act when there is something to summarise.
 # shellcheck source=scripts/hooks/lib/session-summary-detect.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/session-summary-detect.sh"
 
-[ -d "${REPO_ROOT:-.}/.dev-team-agents/user-data" ] || exit 0
+# MEMORY_DIR is exported by session-summary-detect.sh, resolved through the
+# `memory-dir` pointer (ADR-0013): layout 1's user-data/ or layout 2's
+# portable project directory in the store. Gating on it (instead of the old
+# hardcoded user-data/ check) is what keeps this hook working after
+# `devteam upgrade` — the previous guard disabled it silently on layout 2.
+[ -d "$MEMORY_DIR" ] || exit 0
 
 [ "$HAS_CHANGES" = false ] && exit 0
-
-SUMMARY_FILE="${REPO_ROOT:-.}/.dev-team-agents/user-data/session-summary.md"
 
 if [ ! -f "$SUMMARY_FILE" ] || ! grep -q "^## $TODAY" "$SUMMARY_FILE" 2>/dev/null; then
     cat >&2 <<EOF
