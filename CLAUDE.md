@@ -298,7 +298,8 @@ dev-team-agents/
 │           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
 │           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
-├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/ — stripped at install
+├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
+│                      (incl. 04-packaging.sh) + scripts/release/bump-homebrew-formula.sh — stripped at install
 ├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
 │                      and the operator runbook. UNRELEASED — see packaging/README.md for what each
 │                      placeholder needs. Never reaches a user project: install.sh's KEEP_ROOT

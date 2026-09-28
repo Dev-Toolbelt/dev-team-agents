@@ -13,10 +13,12 @@ this sprint**. One-off preferences do not.
 | devteam_store_write | design-rule | Every store mutation goes through jsonio.write_json_atomic inside a store_lock, in registry-then-core order | (review-only — no regex; the lock and the write are in different statements and the order only matters across functions) | scripts/lib/devteam/jsonio.py |
 | devteam_record_class | design-rule | Every caller asks paths.is_machine_local_record or paths.path_is_machine_local which subtree a record belongs in; no caller re-derives the classification from a basename, a dot prefix or a first path component | (review-only — no regex; the failure is the absence of a call, and the ad-hoc test that replaces it is indistinguishable from ordinary path handling) | scripts/lib/devteam/paths.py |
 | devteam_credential_read | design-rule | Every read of a credential value goes through creds.get_value, which resolves the layer, checks scope and audits; no caller loads a reference file and resolves the value itself, and no output path carries a value or anything derived from one | (review-only — no regex; the backend read is legitimate inside the resolver and forbidden everywhere else, which no pattern can tell apart; pinned by tests/test_review_regressions.py::DesignRuleTest) | scripts/lib/devteam/creds.py |
+| placeholder_anchor | design-rule | A check for a placeholder value anchors on the directive or assignment that holds it, never a whole-file grep, because a file's own comments name its placeholder on purpose and a whole-file match keeps firing after the value goes real | (review-only — no regex; the anchored check and the whole-file grep both contain the placeholder literal, so any pattern that finds one finds the other) | .github/scripts/ci/04-packaging.sh |
 
-All five are `design-rule`, deliberately: each one's violation is the *absence* of a call, or an
-ordering across functions, and a regex that tried to catch either would fire on the legitimate uses
-in `versions.py` and `lock.py`. A noisy rule gets disabled; a review-only rule gets read. The
+All six are `design-rule`, deliberately. For the five `devteam_*` rows, each one's violation is the
+*absence* of a call, or an ordering across functions, and a regex that tried to catch either would
+fire on the legitimate uses in `versions.py` and `lock.py`. A noisy rule gets disabled; a
+review-only rule gets read. The
 enforcement is the review gate in `skills/shared/reuse-guidelines/SKILL.md`. The first three rows
 are each covered by a named test in `tests/test_review_regressions.py`; `devteam_record_class` is
 covered by `tests/test_machine_layout.py::test_every_machine_local_resolver_agrees_on_the_subtree`,
@@ -42,3 +44,26 @@ export filter testing only the first path component let a plaintext `credentials
 a quarantined memory directory into a **default** archive, and the upgrade's own
 `_destination_for` classified `env/credentials.local.json` as portable for the same reason. Both
 read as correct path handling. Only "did this caller ask `paths`?" separates them.
+
+`placeholder_anchor` earns its row on evidence from one session, in both directions.
+`.github/scripts/ci/04-packaging.sh`'s sha256 advisory grepped the whole of
+`packaging/homebrew/devteam.rb` for `REPLACE_WITH_SHA256_OF_RELEASE_TARBALL` — a string that
+formula's header comment names deliberately, as part of a documented decision to use a loud non-hex
+placeholder so an unset or stale digest fails loudly instead of quietly verifying the wrong bytes.
+Running the real bump script against a copy left the advisory firing while the directive held a real
+tag and a real digest, and under that script's own `PROMOTE WHEN` instruction, promoting a permanent
+false positive to blocking would have made the build permanently red. The url half of the same check
+was correct by accident: `tags/vX.Y.Z.tar.gz` only ever appears on the url line, so one file held a
+correct and an incorrect instance of the same check side by side. `packaging/verify-formula-locally.sh`
+had already documented the trap and avoided it with the same awk — knowledge that existed in this
+repository, in the same session, and did not reach the other file, which is the argument for a
+registry row rather than a comment. The shape recurs: `packaging/homebrew/devteam-app.rb` pairs the
+identical header comment with `NO_RELEASE_SHA256_DOES_NOT_EXIST_YET`.
+
+Review-only for the reason the rule itself states. The correct check and the defective one both
+contain the placeholder literal, so any regex that finds a whole-file grep also finds the anchored
+comparison beside it and the header comment that explains both — the rule's own failure mode,
+applied to its detection. Nor are the literals enumerable in advance; each new manifest invents its
+own. A pattern aimed at the grep call instead would fire on `winget_scaffold`'s legitimate
+`grep -rq 'vX\.Y\.Z'` over `packaging/winget/`, which is safe today only because nothing there names
+that string in a comment — so the regex would be noisy exactly where the rule is not violated.
