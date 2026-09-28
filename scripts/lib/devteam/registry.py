@@ -1,8 +1,10 @@
-"""``data/registry.json`` — the list of bound projects.
+"""``data/machines/<machine-id>/registry.json`` — the list of bound projects.
 
-Keyed by ``project_id``, so a project that moves keeps its entry and its memory.
-Every mutation runs under the store lock, because two sessions in two projects
-can bind or sync at the same time.
+Machine-local (ADR-0013), not portable: every entry's ``path`` is an absolute path
+on this machine, and an absolute path from one machine means nothing on another —
+exactly the confusion that ADR exists to prevent. Keyed by ``project_id``, so a
+project that moves keeps its entry and its memory. Every mutation runs under the
+store lock, because two sessions in two projects can bind or sync at the same time.
 """
 
 from __future__ import annotations
@@ -23,12 +25,20 @@ def _empty():
 
 
 def load():
-    data = jsonio.read_json(paths.registry_file(), default=None)
+    # `create=False`, and the id threaded in explicitly: reading the registry must not
+    # mint a machine identity. `registry_file()` with no argument resolves through
+    # `machine_dir()`, which creates one — so `devteam doctor` on a machine with no
+    # installation was creating the store it had just reported missing. No identity
+    # means no machine subtree, which means no bound projects.
+    machine = paths.machine_id(create=False)
+    if machine is None:
+        return _empty()
+    data = jsonio.read_json(paths.registry_file(machine), default=None)
     if data is None:
         return _empty()
     if not isinstance(data, dict) or not isinstance(data.get("projects"), dict):
         raise EnvError(
-            "{} is not a valid registry".format(paths.registry_file()),
+            "{} is not a valid registry".format(paths.registry_file(machine)),
             hint="Fix or move the file by hand; dev-team-agents will not overwrite it.",
         )
     schema = data.get("schema")

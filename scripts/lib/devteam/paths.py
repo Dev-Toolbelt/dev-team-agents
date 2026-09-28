@@ -20,8 +20,10 @@ suite uses, so no test touches a real user directory.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import socket
 import sys
 import uuid
 from pathlib import Path
@@ -144,13 +146,33 @@ def machine_id_file():
     return data_dir() / MACHINE_ID_FILE
 
 
-def machine_id():
-    """This machine's id, creating it on first use.
+def machine_host():
+    """A stable-enough name for this host, used to detect a store that travelled."""
+    for key in ("DEVTEAM_HOSTNAME", "COMPUTERNAME", "HOSTNAME"):
+        value = os.environ.get(key)
+        if value and value.strip():
+            return value.strip()
+    try:
+        return socket.gethostname() or "unknown"
+    except OSError:
+        return "unknown"
 
-    Concurrent first uses converge on one value: the file is created with
-    ``O_EXCL``, and the process that loses the race reads the winner's id rather
-    than overwriting it. No lock is taken here on purpose — ``locks_dir()``
-    resolves through this function, so locking would be circular.
+
+def machine_id(create=True):
+    """This machine's id, creating it on first use unless ``create`` is false.
+
+    The id is recorded **with the host that created it**, and a mismatch re-issues a
+    new one. Without that, the id identifies the *store* rather than the machine, and
+    the store is reachable from two machines in cases this design actively invites:
+    ADR-0007 deliberately places ``data/`` in the Windows **roaming** profile, which
+    is replicated between machines by policy — so the documented Windows layout would
+    otherwise guarantee that two machines answer with one id. A restored disk image, a
+    VM clone and a shared ``$DEVTEAM_HOME`` on a network mount are the same failure.
+
+    Concurrent first uses converge on one value: the file is created with ``O_EXCL``,
+    and the process that loses the race reads the winner's id rather than overwriting
+    it. No lock is taken here on purpose — ``locks_dir()`` resolves through this
+    function, so locking would be circular.
     """
     override = os.environ.get(MACHINE_ID_ENV)
     if override:
@@ -167,44 +189,105 @@ def machine_id():
     cached = _MACHINE_ID_CACHE.get(key)
     if cached:
         return cached
-    value = _read_machine_id(path) or _create_machine_id(path)
+    recorded, host = _read_machine_id(path)
+    if recorded and host is None:
+        # A bare-UUID record from before the host was tracked. It cannot be judged to
+        # have travelled, so it is adopted, not re-issued — re-issuing would orphan the
+        # records this id already names. The host is filled in so the next open can
+        # judge it.
+        if create:
+            try:
+                _write_machine_record(path, recorded, exclusive=False)
+            except OSError:
+                pass
+        _MACHINE_ID_CACHE[key] = recorded
+        return recorded
+    if recorded and host == machine_host():
+        _MACHINE_ID_CACHE[key] = recorded
+        return recorded
+    if not create:
+        # A read-only caller gets the recorded id even when the host does not match;
+        # it must not mint one as a side effect of being asked a question.
+        return recorded
+    value = _reissue_machine_id(path, previous=recorded, previous_host=host)
     _MACHINE_ID_CACHE[key] = value
     return value
 
 
+def reset_machine_id_cache():
+    """Forget the resolved id. Called after anything replaces the data store."""
+    _MACHINE_ID_CACHE.clear()
+
+
 def _read_machine_id(path):
+    """``(id, host)`` from the record, or ``(None, None)``.
+
+    Reads both the current object form and the bare-UUID form the first
+    implementation wrote, so a store created by it keeps its id.
+    """
     try:
         raw = path.read_text(encoding="utf-8").strip()
     except OSError:
-        return None
-    return raw if _MACHINE_ID_RE.fullmatch(raw) else None
+        return None, None
+    if not raw:
+        return None, None
+    if raw.startswith("{"):
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return None, None
+        if not isinstance(data, dict):
+            return None, None
+        value = str(data.get("id", "")).strip()
+        host = data.get("created_on")
+        return (value if _MACHINE_ID_RE.fullmatch(value) else None), host
+    # Bare UUID: no host was recorded, so it cannot be judged to have travelled.
+    return (raw if _MACHINE_ID_RE.fullmatch(raw) else None), None
 
 
-def _create_machine_id(path):
-    _mkdir_owner_only(path.parent)
-    value = str(uuid.uuid4())
-    try:
-        handle = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError:
-        # Another process got there first, or the file holds something unparseable.
-        existing = _read_machine_id(path)
-        if existing:
-            return existing
-        raise EnvError(
-            "{} exists but does not hold a UUID".format(path),
-            hint=(
-                "Fix or move the file by hand. dev-team-agents will not replace it: a new id "
-                "would point at a machine subtree your existing records are not in."
-            ),
-        )
+def _write_machine_record(path, value, exclusive):
+    payload = json.dumps(
+        {"id": value, "created_on": machine_host()}, indent=2, sort_keys=True
+    ) + "\n"
+    flags = os.O_CREAT | os.O_WRONLY | (os.O_EXCL if exclusive else os.O_TRUNC)
+    handle = os.open(str(path), flags, 0o600)
     with os.fdopen(handle, "w", encoding="utf-8") as fh:
-        fh.write(value + "\n")
+        fh.write(payload)
     try:
         # os.open's mode is masked by umask; the store's files are owner-only by
         # contract (jsonio.STORE_FILE_MODE), not by whatever the shell was set to.
         os.chmod(str(path), 0o600)
     except OSError:
         pass
+
+
+def _reissue_machine_id(path, previous=None, previous_host=None):
+    _mkdir_owner_only(path.parent)
+    if previous is None and path.exists():
+        raise EnvError(
+            "{} exists but does not hold a machine record".format(path),
+            hint=(
+                "Fix or move the file by hand. dev-team-agents will not replace it: a "
+                "new id would point at a machine subtree your existing records are not in."
+            ),
+        )
+    value = str(uuid.uuid4())
+    if previous is None:
+        try:
+            _write_machine_record(path, value, exclusive=True)
+        except FileExistsError:
+            existing, _ = _read_machine_id(path)
+            if existing:
+                return existing
+            raise EnvError(
+                "{} exists but does not hold a machine record".format(path),
+                hint="Fix or move the file by hand.",
+            )
+        return value
+    # The record came from another host: this machine takes a new identity rather
+    # than adopting records that describe a different one. Nothing is deleted — the
+    # other host's subtree stays where it is, inert.
+    _write_machine_record(path, value, exclusive=False)
     return value
 
 
@@ -276,18 +359,45 @@ MACHINE_LOCAL_RECORDS = (
     "credentials.local.json",
 )
 
+#: Records that belong to the **project**, not to the user's personal memory:
+#: committed, shared by every developer on the repository, and therefore not moved
+#: into a per-user store at all. `graphify.json` carries its own gitignore exception
+#: (`!.dev-team-agents/user-data/graphify.json`) precisely so the team shares one.
+PROJECT_OWNED_RECORDS = ("graphify.json",)
+
 #: Top-level entries of ``data/`` that never leave this machine.
 MACHINE_LOCAL_STORE_ENTRIES = (MACHINE_ID_FILE, MACHINES_DIR, "locks")
 
+#: Portable by content, but not part of a portable export: an unbounded recovery bin
+#: that is also where both the upgrade and the relocation deposit retired
+#: machine-local records — secrets included. `--all` takes it; the default does not.
+LOCAL_ONLY_STORE_ENTRIES = ("quarantine",)
+
 
 def is_machine_local_record(name):
-    """True for a per-project record that belongs in the machine subtree.
+    """True for a record that belongs in the machine subtree.
 
     Dot-prefixed names are machine-local as a class: every one of them is a cache,
     an ETag, a once-per-day stamp or a session marker — state this machine observed.
+
+    Takes the **basename**, case-folded, so the answer cannot depend on where the
+    caller found the file or on how the user typed it. Both mattered: a review found
+    that `Credentials.local.json` classified as portable while macOS APFS and Windows
+    hand the very same file to anything opening `credentials.local.json`, and that a
+    record nested one directory deeper escaped the check entirely.
     """
-    base = str(name)
+    base = os.path.basename(str(name)).lower()
     return base.startswith(".") or base in MACHINE_LOCAL_RECORDS
+
+
+def path_is_machine_local(relative):
+    """True when **any** component of a relative path is a machine-local record.
+
+    The single answer for a path rather than a name: a machine-local directory makes
+    everything under it machine-local, which is what keeps `.cache/state.json` and
+    `env/credentials.local.json` on the right side.
+    """
+    return any(is_machine_local_record(part) for part in Path(relative).parts)
 
 
 # ── portable records ─────────────────────────────────────────────────────────
@@ -319,7 +429,8 @@ def render_cache_dir(version, provider):
 
 
 def describe():
-    """Everything ``devteam path`` reports, as plain strings."""
+    """Everything ``devteam path`` reports, as plain strings. Creates nothing."""
+    _reported = machine_id(create=False) or "<unassigned>"
     return {
         "platform": platform_key(),
         "devteam_home": str(devteam_home()) if devteam_home() else None,
@@ -328,9 +439,13 @@ def describe():
         "cache": str(cache_dir()),
         "versions": str(versions_dir()),
         "current_file": str(current_file()),
-        "machine_id": machine_id(),
-        "machine": str(machine_dir()),
-        "registry": str(registry_file()),
+        # `create=False`, and the resolved id is threaded into every machine-local
+        # path below: `devteam path` and `devteam doctor` are questions, and a
+        # diagnostic that mutates what it diagnoses reports on a world it just made.
+        # `registry_file()` with no argument would mint one through `machine_dir()`.
+        "machine_id": _reported,
+        "machine": str(machine_dir(_reported)),
+        "registry": str(registry_file(_reported)),
         "global_preferences": str(global_preferences_file()),
         "credentials": str(credentials_dir()),
         "projects": str(projects_dir()),
