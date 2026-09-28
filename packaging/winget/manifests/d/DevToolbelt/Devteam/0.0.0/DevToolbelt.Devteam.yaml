@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+
+# DevToolbelt.Devteam.yaml — version manifest for the `devteam` CLI (ADR-0011).
+#
+# UNRELEASED SCAFFOLD. PackageVersion "0.0.0" is a placeholder — no Windows
+# installer has been built, so no real version exists to publish. The version
+# folder this file lives in (0.0.0) must be renamed to the real release
+# version before this is submitted anywhere.
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 by fetching
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.version.1.12.0.json
+# from the microsoft/winget-cli repository (the schema source winget-pkgs
+# manifests declare via $schema) and reading its declared $id and required
+# fields directly, rather than assuming a version. See packaging/README.md
+# for the confirmation trail covering all three manifest files.
+
+PackageIdentifier: DevToolbelt.Devteam
+PackageVersion: 0.0.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.12.0

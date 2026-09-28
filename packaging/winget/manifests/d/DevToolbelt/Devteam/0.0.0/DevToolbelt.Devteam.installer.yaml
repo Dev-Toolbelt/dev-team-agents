@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+# DevToolbelt.Devteam.installer.yaml — installer manifest for the `devteam` CLI.
+#
+# UNRELEASED SCAFFOLD — every value under Installers is a placeholder:
+#   InstallerUrl     points at a release asset that does not exist (no
+#                    Windows build has ever been produced).
+#   InstallerSha256  64 zeros — an obviously-fake digest, never a
+#                    plausible-looking fake one. winget refuses to install
+#                    against a hash that does not match the downloaded
+#                    bytes, so this value fails loudly, the same intent as
+#                    the Homebrew formula's REPLACE_WITH_SHA256 placeholder.
+#   InstallerType    "exe" assumes a signed installer executable wrapping the
+#                    python payload (the CLI needs a code-signing certificate
+#                    per packaging/README.md) — this is a design placeholder,
+#                    not a decided packaging tool. Whatever builds the .exe
+#                    (e.g. a PyInstaller/pynsist-produced bundle, or a thin
+#                    launcher requiring a system python3) is undecided; pick
+#                    it when the Windows build actually gets built and update
+#                    InstallerType/Switches/Dependencies together.
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.installer.1.12.0.json
+# (microsoft/winget-cli repo) — required top level: PackageIdentifier,
+# PackageVersion, Installers, ManifestType, ManifestVersion; required per
+# Installer entry: Architecture, InstallerUrl, InstallerSha256.
+
+PackageIdentifier: DevToolbelt.Devteam
+PackageVersion: 0.0.0
+InstallerType: exe
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+Scope: user
+Commands:
+  - devteam
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-x64.exe
+    InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  - Architecture: arm64
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-arm64.exe
+    InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+ManifestType: installer
+ManifestVersion: 1.12.0
