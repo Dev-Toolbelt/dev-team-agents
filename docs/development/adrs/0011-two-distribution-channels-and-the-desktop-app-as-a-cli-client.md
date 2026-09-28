@@ -224,6 +224,88 @@ hypothetical.
 | **The Windows CLI has no decided packaging shape.** `InstallerType: exe` assumes a signed executable wrapping the python payload; whether that is PyInstaller, pynsist, or a thin launcher requiring a system python3 is undecided, and the choice changes `InstallerSwitches`, `Dependencies`, and whether the CLI's python floor is satisfied at all. | The manifest comment states it is a design placeholder rather than a decision, and `packaging/README.md` lists "a decided Windows packaging shape" as a prerequisite ahead of the certificate. | The macOS channel can go live while this is open, which means Windows silently becomes the second-class target this ADR chose winget specifically to avoid. |
 | **`release.yml` has never run.** Its tag validation, download-with-retry, digest check and anchored `sed` bump are all unexercised against real GitHub behaviour. | It opens a PR rather than pushing to `main`, so a maintainer reviews the two changed lines; it asserts the digest is 64 hex characters and verifies its own edit landed before committing; the logic was dry-run locally against a copy of the formula. | A dry run is not an Actions run. The first real release is the test, and a failure there happens at the moment a version is being cut. |
 
+> **Amended by implementation (the client write gate) — the framework can now refuse, three statements
+> in the table above were *false when that table was written*, and the `--client-schemas` alternative
+> below was *narrowed* rather than reversed.**
+>
+> Decided and recorded in
+> [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md),
+> which narrows this ADR without touching its Decision. Reference for the surface:
+> `CLAUDE-md/cli.md` § *The client write gate*; the code is `scripts/lib/devteam/compat.py`
+> (`client_declaration`, `MUTATING`/`READ_ONLY`, `NEEDS_MACHINE_LAYOUT`, `is_mutating`, `gate`) wired from
+> `cli.main`, asserted by `tests/test_client_gate.py` (52 tests, in a suite of 396).
+>
+> **What shipped.** A caller may declare the shapes it understands, through the global
+> `--client-schemas <PATH>` or `DEVTEAM_CLIENT_SCHEMAS` (the flag wins; an empty variable is *unset*).
+> A caller that declares is refused every **mutating** command it cannot understand — exit **4**, before
+> `store.adopt_machine_layout()` and before any handler, so the store is byte-identical after a refusal —
+> a position now asserted by a fabricated pre-split-store fixture, across the whole mutating table, rather
+> than resting on a comment. Read-only commands, `compat` among them, are never refused **as writes**:
+> this ADR's rule is that an incompatible client *degrades to read-only*, so read-only is precisely what
+> must keep working.
+>
+> **One narrow exception, and it serves that rule rather than qualifying it.** The one-time relocation of a
+> pre-ADR-0013 store rewrites `registry` and `bind_manifest` — exactly the shapes an incompatible client
+> declared it cannot read — so it is **suppressed** for that caller; a terminal invocation, an anonymous
+> caller and a compatible client all still perform it. With the move skipped, every read-only command still
+> answers correctly except `devteam list`, which resolves the registry only at the post-split path and
+> therefore reported every bound project as unbound at exit **0**. `compat.NEEDS_MACHINE_LAYOUT` names it —
+> measured by running every read-only leaf on both layouts, not reasoned about — and it is refused at exit
+> **3**, an environment that is not ready rather than a write that is declined, carrying the refusal's seven
+> `details` keys plus `machine_layout_pending: true`. A wrong read is not a degraded read: a client told
+> `projects: []` would offer to bind a project that is already bound. `compat`, `version` and `path` are
+> asserted to answer on that store, so the client can still learn why.
+>
+> **Why this narrows the Alternatives row below rather than contradicting it.** That row rejects
+> *"Have the CLI refuse writes from a client that has **not declared** its schemas"*, on the ground that
+> *"A flag every write needs would make the CLI hostile to its primary user"*. The shipped gate refuses
+> the opposite population: a client that **has** declared and declared itself behind. A caller that
+> declares nothing is affected in no way and retains the entire pre-gate write surface — no flag is
+> needed by any write, no detection is attempted, and omitting the declaration is a complete bypass. The
+> row's stated objection is therefore untouched, and ADR-0014 § 3 ratifies it explicitly, adding the
+> reason this ADR did not give: identification is not authentication, so a mandatory flag would guard
+> only against the well-behaved client. **The row's revisit condition was not met, and the gate was
+> built anyway.** That condition is *"Revisit when the app ships and 'which CLI does the app invoke' is
+> decided — not before, because the answer determines whether the gate is needed at all"*: a **reason**,
+> not a schedule note. Neither half of it holds. The app has not shipped. And `depends_on formula:
+> "devteam"` does not decide which binary the app invokes — it guarantees the formula is *installed*,
+> which the cask's own comment states as making the question "answerable", not answered; that line is
+> also older than the condition it is sometimes offered against (`06fd509`, an ancestor of `ed87507`),
+> and nothing in this change touched `packaging/`. The deviation is deliberate and the motive is the
+> one this ADR already supplies for its own sequencing: retrofitting a refusal path around a released
+> client means changing behaviour that client already depends on, so the refusal was built while the
+> contract was still being written rather than after.
+>
+> **Three statements — spread across two rows, not three — in the Risks table above were false when
+> that table was written, not overtaken since. They are corrected here rather than rewritten there.**
+> The *A client reads `compat` and writes anyway* row supplies two of the three. All three artifacts
+> existed at `ed87507`, the commit that wrote the rows, having arrived in `4818176`, `06fd509` and
+> `95fa346` respectively — every one of them an ancestor of it.
+>
+> | Row | False statement | Correction |
+> |---|---|---|
+> | *A client reads `compat` and writes anyway* | "`unsupported_by()` has no caller outside its tests" | Already false at `ed87507`: `git show ed87507:scripts/lib/devteam/cli.py` has `cmd_compat()` calling `compat.unsupported_by()` and `compat_parser.set_defaults(func=cmd_compat)` wiring it, both added by `4818176`. There are now two production callers — `cli.cmd_compat()` and `compat.gate()`. The CLI still does not ask who is calling it — that part stands — but it **can** now refuse a caller that has told it |
+> | *A client reads `compat` and writes anyway* | "the cask declares no dependency on the formula … which `devteam` the app invokes is undecided" | The first clause was already false: `git show ed87507:packaging/homebrew/devteam-app.rb` carries `depends_on formula: "devteam"` at line 52, added by `06fd509`. The second clause **still stands** — the dependency guarantees the formula is installed, not which binary the app invokes, and the cask's comment says so in those words. A bundled CLI shipped outside Homebrew is equally undecided, and is the case the gate catches whenever that CLI declares its shapes |
+> | *The JSON contract is public API with no deprecation mechanism* | "no test enumerates one [a command's field set]" | Already false at `ed87507`: `git show ed87507:tests/test_json_contract.py` carries `AppFacingKeySetContractTest` with its `EXPECTED` already holding 16 app-facing commands and 5 per-record shapes, added by `95fa346`. Its docstring cites the `project_id`-from-`bind --json` regression this row describes as unmitigated. The rest of that row stands: `EXPECTED` is hand-maintained with no completeness assertion against the parser walk, and the deprecation policy itself is now ADR-0014 § 2 — decided, with its marker mechanism still unbuilt |
+>
+> Note the shape of all three: the artifact was in the tree, and the row described the tree as it had
+> been some commits earlier. "Stale" would have been the flattering word for it, and it is the wrong
+> one — nothing decayed. It is the same defect as the leaf count below, which this amendment had already
+> framed correctly ("wrong when it was written rather than overtaken since") while calling these three
+> stale in the same breath.
+>
+> One count is wrong in two places and is corrected here rather than in either: the parser walk is
+> described as reaching *"34 invocable leaves and 4 groups today"* (M4.1 amendment, inside
+> `## Decision`) and the sweep as covering *"all 34 commands"* (first Risks row). It reaches **35
+> leaves** and 4 groups. No command was added by the write gate — `--client-schemas` is a global flag,
+> not a leaf — and running the discovery walk at commit `ed87507`, the commit that wrote "34", also
+> returns 35, so the number was wrong when it was written rather than overtaken since.
+>
+> The fourth row — *`min_app_version` and `store_schemas()` both answer "may this client write?"* — is
+> no longer undecided either: ADR-0014 § 1 makes `store_schemas()` normative, confines
+> `min_app_version` to a kill switch, and records `minFrameworkVersion` as advisory. The residual it
+> names survives unchanged: nothing in the code marks the field as advisory, only an ADR does.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
