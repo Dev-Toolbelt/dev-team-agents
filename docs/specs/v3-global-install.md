@@ -202,14 +202,31 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - When context is loaded for a task
 - Then that folder is read when the task's subject matter is there, and never written to
 
+**Scenario: the data store separates what the user authored from what this machine observed**
+- Given a bound project
+- Then the registry, the bind manifest and `state.json` live under `data/machines/<machine-id>/`
+- And no record in the portable subtree names an absolute path
+- And reading the same store as a different machine yields no registry entries and no manifest,
+  while the portable preferences and memory are unchanged
+- And a store written before the split is relocated once, before any command reads the registry,
+  moving nothing inside any project
+
 **Scenario: the data store can move to another machine**
 - Given a populated data store
 - When it is exported and imported on another machine
-- Then the registry and every project's memory are present
+- Then every project's memory and preferences are present, and the archive carries no absolute path
+  from the exporting machine
+- And running `devteam bind` in each project restores its registry entry and manifest under the
+  receiving machine's own identity
+- And `devteam export --all` instead carries this machine's registry and manifests, for a backup
+  of this machine
+- And an import that carries no machine subtree keeps the receiving machine's own registry
 - And the import refuses to overwrite a populated store unless forced, and rejects an unsafe archive
 - And `devteam uninstall` keeps the data store unless `--purge --yes` is given
 
 ### Out of Scope
+- Any synchronisation mechanism — no daemon, no cloud, no conflict resolution. ADR-0013 makes one
+  possible; nothing in this spec starts one, and `export`/`import` stay explicit and manual
 - Credential storage, `devteam cred`, and the PreToolUse guard — later milestone
 - Retiring `state.json:installed_version` and repointing its four readers — later milestone;
   the bind stamps the key so they report the truth in the meantime
@@ -218,7 +235,7 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 - Linux as a release target
 
 ### Dependencies
-- **Depends on**: ADR-0007, ADR-0008, ADR-0009, ADR-0012
+- **Depends on**: ADR-0007, ADR-0008, ADR-0009, ADR-0012, ADR-0013
 - **Blocks**: credentials, desktop app
 
 ### Amendment Log
@@ -245,3 +262,12 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
+- 2026-09-27 | M2.1 | Split the data store into a portable subtree and `data/machines/<machine-id>/`,
+  and made `devteam export` portable by default. | The inventory of a populated store found exactly
+  two record types carrying absolute paths (`registry.json`, `bind-manifest.json`) plus `state.json`
+  carrying this machine's own observations, while memory and preferences were already portable — so
+  the criterion "the registry and every project's memory are present" after an import was asserting
+  the wrong thing: a registry full of another machine's paths is worse than no registry. What a
+  restore must guarantee is that `project.json` plus the portable records rebuild the bind. Done now
+  because v3 is unreleased and a machine id cannot be assigned retroactively; after release it would
+  be a second consented layout migration. Recorded in ADR-0013, which amends ADR-0007.

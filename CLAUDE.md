@@ -366,6 +366,12 @@ store, durable state lives in a separate **data** store, and each project carrie
 `project.json` (identity, `layout`, `context_paths`) plus excluded, regenerable bind artifacts. An
 update writes one version and `devteam sync --all` re-points every project that is not pinned.
 
+**`data/` is split by what a record says** (ADR-0013): what the user authored or decided is portable
+and stays at the top of the store; what this machine observed or built — the registry, the bind
+manifests, `state.json`, locks, caches and credential *values* — lives under
+`data/machines/<machine-id>/`. `paths.is_machine_local_record()` is the single answer to which side a
+record belongs on; never re-derive that rule at a call site. No synchronisation exists or is implied.
+
 A project's memory moves into the store only when the user runs **`devteam upgrade`** — `bind`,
 `sync`, `update` and `migrate` report a stale `layout` and change nothing. Preferences cascade in
 three personal layers and are resolved on write into `.dev-team-agents/resolved/preferences.json`,

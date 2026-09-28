@@ -26,6 +26,8 @@ Other directories under `.claude/` created by agents:
 
 **Rule:** any file that must survive an update must live in `.dev-team-agents/user-data/`, not inside `.dev-team-agents/`. Never store user config or state inside the package directory.
 
+**Under v3 layout 2 this directory is gone, and its contents are split in two** (ADR-0013). `devteam upgrade` copies `preferences.json`, `session-summary.md` and `graphify.json` into the portable subtree (`data/projects/<project_id>/`), and `state.json`, every dot-marker, `telemetry-queue.json` and `credentials.local.json` into the machine subtree (`data/machines/<machine-id>/projects/<project_id>/`). The rule for adding a file therefore becomes: decide whether it is something the **user authored** or something **this machine observed**, and if it is the latter, add its name to `paths.MACHINE_LOCAL_RECORDS` — or give it a leading dot, which classifies it as machine-local by convention. A new file that is neither is a sign it does not belong in memory at all. `credentials.local.json` is machine-local because it holds values; the references that replace it (ADR-0010) are portable precisely because they do not.
+
 **Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
 
 | Stripped path | Mechanism | Reason |

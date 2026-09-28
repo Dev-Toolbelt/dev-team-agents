@@ -46,10 +46,12 @@ macOS    ~/Library/Application Support/dev-team-agents/data/
 Windows  %APPDATA%\dev-team-agents\data\      (covered by profile backup)
 
 data/
-├── registry.json            bound projects: id, path, providers, mode, pin, timestamps
+├── machine-id               this machine's identity (ADR-0013)
 ├── preferences.json         global user preferences
 ├── credentials/             references only, never a secret value (see ADR-0010)
-└── projects/<project_id>/   per-project memory, preferences, audit log
+├── projects/<project_id>/   per-project portable memory and preferences
+└── machines/<machine-id>/   machine-local records: registry.json, locks/, per-project
+                             bind-manifest.json and state.json (ADR-0013)
 ```
 
 `$DEVTEAM_HOME`, when set, overrides the OS convention and places `core/`, `cache/` and
@@ -92,11 +94,15 @@ place rather than adding a second entry, and removes only its own entries on `un
 
 **`registry.json` and the per-project manifests are machine-local.** They hold absolute paths
 from one machine, so restoring a roaming profile onto a new machine produces a registry that
-names directories which do not exist there. Memory is portable; bind state is not, and they
-share the `data/` tree. `devteam doctor` reconciles a single moved project, and `devteam sync`
-rebuilds artifacts — a wholesale restore is expected to need both, not to work untouched. This
-is stated rather than fixed because splitting the tree per host is a later decision; silence
-here would read as a promise the store does not keep.
+names directories which do not exist there. Memory is portable; bind state is not.
+
+> **Amended by [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md).** This ADR
+> originally left the two kinds of record sharing one `data/` tree and said so rather than fixing
+> it. They no longer share it: machine-local records live under `data/machines/<machine-id>/`,
+> `devteam export` is portable by default, and a portable archive plus each project's committed
+> `project.json` is enough to rebuild a bind on another machine. `devteam doctor` still reconciles
+> a single moved project and `devteam sync` still rebuilds artifacts; what changed is that a
+> wholesale restore is no longer expected to arrive holding another machine's paths.
 
 Bind artifacts are **gitignored**, written between managed markers in `.gitignore`, because an
 absolute path to one developer's `$HOME` cannot be committed. `devteam bind` recreates them,

@@ -50,15 +50,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`context_paths` reaches the context loading order.** The first entry is the write root (`docs` by
   default); any additional entry is an extra knowledge folder, **read-only**. Documented in
   `skills/shared/project-context/SKILL.md` § Context Loading Order alongside how to resolve `layout`.
-- **Store portability**: `devteam export` archives the data store (quarantine included) with a
-  manifest stating that the registry holds machine-local absolute paths; `devteam import` restores it,
-  refusing a populated store without `--force` and rejecting unsafe archive members; `devteam
-  uninstall` removes the core and **keeps** the data store unless given `--purge --yes`.
+- **Store portability**: `devteam export` archives the data store (quarantine included);
+  `devteam import` restores it, refusing a populated store without `--force` and rejecting unsafe
+  archive members; `devteam uninstall` removes the core and **keeps** the data store unless given
+  `--purge --yes`.
+- **`data/` is split into a portable subtree and `data/machines/<machine-id>/` (ADR-0013).** An
+  inventory of a populated store found exactly two record types carrying absolute paths —
+  `registry.json` and `bind-manifest.json` — plus `state.json` carrying facts true only of the
+  machine that wrote them (`installed_version` is *this* machine's core version). Those move under
+  the machine subtree, together with `locks/` (a lock names a pid), the dot-markers (caches, ETags,
+  day stamps) and `credentials.local.json` (values, not references — a secret that rides along in a
+  routine export is a secret in one more place). What the user authored stays portable: preferences,
+  session summaries, credential references, quarantine. `paths.is_machine_local_record()` is the one
+  answer to which side a record belongs on.
+- **`devteam export` is portable by default; `--all` includes this machine's records.** A portable
+  archive plus each project's committed `project.json` is enough to rebuild a bind elsewhere with
+  `devteam bind` — the registry and manifests are regenerated under the receiving machine's own
+  identity instead of arriving full of paths that do not exist there. An import that carries no
+  machine subtree keeps the receiving machine's own `machine-id` and `machines/`; promoting it
+  verbatim would have left every bound project reading as unbound.
+- **`devteam upgrade` splits the v2 memory directory as it copies** — `session-summary.md` and the
+  project preferences to the portable subtree, `state.json`, the dot-markers and the secrets to the
+  machine subtree. `.dev-team-agents/state-dir` names the machine one, because `state.json` is what
+  reads through it.
+- **`data/machine-id`** — one UUID per machine, created on first use with `O_EXCL` so concurrent first
+  uses converge on one value. `DEVTEAM_MACHINE_ID` overrides it and is the seam that lets a test open
+  the same store as another machine. Reported by `devteam path` and `devteam doctor`.
+- **A store written before the split is relocated once**, from `cli.main` before any command reads the
+  registry — otherwise every bound project would have read as unbound. Idempotent, `os.replace` per
+  file so a record is never in neither place, and it quarantines rather than overwriting an occupied
+  destination. It moves nothing inside any project.
+- **No synchronisation exists or is implied.** ADR-0013 makes one possible; `export`/`import` stay
+  explicit and manual.
 - **Upgrade visibility**: `devteam doctor` reports a stale layout, a missing or wrong state pointer
   and a missing preference projection as `warn` findings; the session banner says the same thing with
   an observable test (a bound project whose `user-data/` still exists) and no JSON parsing.
-- 31 new tests (158 total), including the upgrade's verify-before-retire ordering, the collision
-  refusal, consent-key withholding, layer precedence, and an export/import round trip.
+- 47 new tests (174 total), including the upgrade's verify-before-retire ordering, the collision
+  refusal, consent-key withholding, layer precedence, that no portable record names an absolute path,
+  that the same store read as a second machine yields no registry entries while the memory is
+  unchanged, and the pre-split relocation's idempotence and refusal to overwrite.
 
 ### Changed
 - **37 markdown references now read the projection**, not the v2 source file. The five documents that

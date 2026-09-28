@@ -18,7 +18,7 @@ working for one deprecation cycle.
 | Store | Holds | Lifetime |
 |-------|-------|----------|
 | **core** | `versions/<X.Y.Z>/` (agents, commands, skills, scripts, templates) + the `current` pointer | Disposable — an uninstall may remove it, `devteam update` rebuilds it |
-| **data** | `registry.json`, `preferences.json`, `credentials/`, `projects/<project_id>/`, `quarantine/` | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
+| **data** | `machine-id`, `preferences.json`, `credentials/`, `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
 
 ```
 macOS    core  ~/Library/Application Support/dev-team-agents/core
@@ -34,6 +34,37 @@ the test suite uses — no test touches a real user directory.
 
 **`core/current` is a plain text file, not a symlink.** A symlink there would put the Windows
 materialisation failure at the most load-bearing path in the design.
+
+### `data/` is split by what a record says ([ADR-0013](../docs/development/adrs/0013-portable-and-machine-local-split-of-the-data-store.md))
+
+```
+data/machine-id                                    this machine's UUID, created once
+data/preferences.json                              PORTABLE — the global preference layer
+data/projects/<project_id>/preferences.json        PORTABLE — the project preference layer
+data/projects/<project_id>/session-summary.md      PORTABLE — the user's own memory
+data/credentials/                                  PORTABLE — references only, no values
+data/quarantine/<date>/<project_id>/               PORTABLE
+data/machines/<machine-id>/registry.json           MACHINE-LOCAL — absolute paths
+data/machines/<machine-id>/locks/                  MACHINE-LOCAL — a lock names a pid
+data/machines/<machine-id>/projects/<id>/…         MACHINE-LOCAL — bind-manifest.json, state.json,
+                                                   and the dot-markers (caches, ETags, day stamps)
+```
+
+**Portable = what the user authored or decided. Machine-local = what this machine observed or
+built.** `paths.is_machine_local_record(name)` is the single answer to which side a per-project
+record belongs on — dot-prefixed names are machine-local as a class, and so are `state.json`,
+`bind-manifest.json`, `telemetry-queue.json` and `credentials.local.json` (values, not references).
+Never re-derive that rule at a call site.
+
+`devteam export` archives the portable subtree only; `--all` adds the machine subtree for a backup
+of *this* machine. A portable archive restored elsewhere is completed with `devteam bind` per
+project — the committed `project.json` reconnects it to its memory, and the registry and manifests
+are rebuilt locally. An import that carries no machine subtree keeps the receiving machine's own
+`machine-id` and `machines/`, or every bound project there would read as unbound.
+
+`store.adopt_machine_layout()` relocates a store written before the split, once, from `cli.main`
+before any command reads the registry. **No synchronisation exists or is implied** — the split is
+what makes one possible later.
 
 ## What a bound project contains
 
@@ -95,7 +126,7 @@ preferences, markers, `.worktrees/`), between managed markers.
 | `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply` |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
-| `devteam export [--to <path>]` / `devteam import <archive> [--force]` | Move the data store to another machine |
+| `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
 | `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
 | `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout |
 
@@ -117,8 +148,10 @@ desktop app is a client of the CLI (ADR-0011), so an output shape change is a br
 
 `project.json` carries **`layout`**, distinct from `schema`: `schema` is the file's format, `layout`
 is where the project's own state lives. `1` means `.dev-team-agents/user-data/` (every v2 and M1
-project); `2` means `data/projects/<project_id>/`. A bind that finds no `user-data/` creates the
-project on the current layout, so a new project is clean from the start.
+project); `2` means the data store — portable memory in `data/projects/<project_id>/` and machine-local state
+in `data/machines/<machine-id>/projects/<project_id>/`. A bind that finds no `user-data/` creates the
+project on the current layout, so a new project is clean from the start. `devteam upgrade` splits the
+v2 directory between the two as it copies.
 
 **Nothing relocates memory except `devteam upgrade`.** `bind`, `sync`, `update` and `migrate` report
 a stale layout and stop. The upgrade is copy → verify by sha256 → retire the original to quarantine,
@@ -126,7 +159,10 @@ and it refuses a populated destination before copying anything. See
 [ADR-0012](../docs/development/adrs/0012-project-layout-version-and-a-consented-structure-upgrade.md).
 
 `.dev-team-agents/state-dir` holds the absolute path of the state directory so `scripts/lib/state.sh`
-resolves it in one file read — a CLI call would put a python subprocess inside every hook.
+resolves it in one file read — a CLI call would put a python subprocess inside every hook. It names
+the **machine-local** directory (`project.state_dir()`), because `state.json` is what reads through
+it; `project.memory_dir()` is the portable sibling and has no pointer, since nothing in bash reads
+it yet.
 
 **Preferences cascade in three personal layers** (defaults → global → project) and are resolved on
 write into `.dev-team-agents/resolved/preferences.json`. Agents read that one file; nothing merges at
