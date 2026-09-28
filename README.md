@@ -252,7 +252,7 @@ Agents start each session with no memory of previous ones. Five layers minimize 
 | Layer | Where | Holds | Lifespan |
 |-------|-------|-------|----------|
 | Structural | `docs/project.md`, `docs/development/` | Stack, architecture, standards | Rewritten — always describes now |
-| Episodic | `.dev-team-agents/user-data/session-summary.md` | What happened, in order | Decays after ~30 days |
+| Episodic | `<memory-dir>/session-summary.md` (pointer in `.dev-team-agents/memory-dir`) | What happened, in order | Decays after ~30 days |
 | Semantic | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
 | Decisional | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
 | Mechanical | `graphify-out/graph.json` | Where things are in the code | Regenerated |

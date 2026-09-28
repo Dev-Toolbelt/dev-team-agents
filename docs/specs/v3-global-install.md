@@ -205,11 +205,54 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 **Scenario: the data store separates what the user authored from what this machine observed**
 - Given a bound project
 - Then the registry, the bind manifest and `state.json` live under `data/machines/<machine-id>/`
-- And no record in the portable subtree names an absolute path
+- And every caller that has to decide which subtree a record belongs in asks
+  `paths.is_machine_local_record` / `paths.path_is_machine_local` rather than re-deriving it
+- And a portable export carries no record naming an absolute path from the exporting machine: it
+  excludes `machine-id`, `machines/`, `locks/` and `quarantine/`, plus any machine-local record
+  matched by basename at **every** path depth
+- And `data/quarantine/` is *not* asserted to be free of absolute paths — it is in the portable
+  subtree and the upgrade and the relocation both retire absolute-path records into it, which is
+  exactly why the default export excludes it and `--all` is the only mode that carries it
 - And reading the same store as a different machine yields no registry entries and no manifest,
   while the portable preferences and memory are unchanged
 - And a store written before the split is relocated once, before any command reads the registry,
-  moving nothing inside any project
+  moving no content into or out of any project
+
+**Scenario: the machine identity is re-issued when the store is opened on another host**
+- Given a data store whose `machine-id` record names the host that created it
+- When the same store is opened on a host with a different name — a roaming profile, a shared
+  `$DEVTEAM_HOME`, a restored image or a VM clone
+- Then a new id is issued and recorded with the new host, and this machine's records go under its
+  own `machines/<new-id>/`
+- And the previous machine's subtree is left in place, unread and unmodified
+- And `devteam doctor` reports every other record set it finds as a `warn`, not as `ok`
+- And `$DEVTEAM_MACHINE_ID` overrides the recorded id, and is rejected unless it is a lowercase UUID
+
+**Scenario: `devteam path` and `devteam doctor` create nothing**
+- Given a data store with no `machine-id` recorded yet
+- When `devteam path` or `devteam doctor` runs
+- Then no identity is minted, no machine subtree is created, and the report says the identity is
+  unassigned
+- And running either twice in a row reports the same store both times
+
+**Scenario: an import does not inherit the sending machine's consent**
+- Given an archive whose `preferences.json` sets `telemetry` or `auto_update`
+- When it is imported
+- Then those keys are stripped from the incoming layer before it is promoted
+- And the cascade resolves both to `false`, reported as `consent-withheld`
+- And the import result names which keys were withheld
+- And every member of the archive is validated before extraction — including a symlink or hardlink
+  `linkname` — on the declared python floor, not only where `filter="data"` exists
+
+**Scenario: the relocation refreshes the pointers it invalidates**
+- Given a pre-split store and a bound project on the current layout
+- When the relocation moves that project's `state.json` into the machine subtree
+- Then `.dev-team-agents/state-dir` and `.dev-team-agents/memory-dir` are rewritten to the machine
+  and portable directories the records now live in
+- And a project whose directory is gone, or whose `project.json` is unreadable, is skipped rather
+  than failing the relocation
+- And `devteam doctor` checks both pointers against what the layout resolves to, and rewrites a
+  missing or stale one in place rather than only reporting it
 
 **Scenario: the data store can move to another machine**
 - Given a populated data store
@@ -259,9 +302,6 @@ relocation, the preference cascade, credentials and the desktop app are later mi
   them. Memory relocation landed behind an explicit `devteam upgrade` rather than as a side effect of
   `sync`, which changed the shape of the criteria: the guarantee worth asserting is that **no other
   command moves it**, not merely that it ends up in the store. Recorded in ADR-0012.
-
----
-Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
 - 2026-09-27 | M2.1 | Split the data store into a portable subtree and `data/machines/<machine-id>/`,
   and made `devteam export` portable by default. | The inventory of a populated store found exactly
   two record types carrying absolute paths (`registry.json`, `bind-manifest.json`) plus `state.json`
@@ -271,3 +311,24 @@ Review the criteria above — tell me if anything needs to change before this be
   restore must guarantee is that `project.json` plus the portable records rebuild the bind. Done now
   because v3 is unreleased and a machine id cannot be assigned retroactively; after release it would
   be a second consented layout migration. Recorded in ADR-0013, which amends ADR-0007.
+- 2026-09-27 | review | A five-agent review of M2.1 found two CRITICAL defects and a
+  plaintext-credential leak, none of them visible to the criteria as written. (1) `import` routed
+  its members through a filter that never inspected `linkname`, and relied on `filter="data"` —
+  which does not exist on the declared python floor (3.9), where `extractall` defaults to
+  `fully_trusted`: on the interpreter the CLI is required to support, a symlink or hardlink member
+  was an arbitrary write and a read-any-file primitive. (2) The relocation moved `state.json` out
+  from under `.dev-team-agents/state-dir` without repointing it, so `state_get` returned an empty
+  string for every key — installed version, session id, health-check marker — silently, with no
+  error anywhere. (3) `devteam upgrade` quarantines the whole legacy `user-data/` directory,
+  `credentials.local.json` included, and `quarantine/` was both portable and included in the
+  default export: a reviewer extracted a plaintext database password from a default archive. | The
+  criteria said the portable subtree names no absolute path and that the relocation moves nothing
+  inside a project. Both were false, and being false is how the defects passed: quarantine *is* in
+  the portable subtree and *does* hold absolute-path records, and a regenerated pointer is
+  something the relocation must move. The criteria now assert what the export excludes rather than
+  what a subtree contains, assert that the relocation refreshes the pointers it invalidates, and
+  add the machine re-issue, consent-withholding, archive-member validation, and the
+  `path`/`doctor`-create-nothing guarantees that had no criterion at all.
+
+---
+Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

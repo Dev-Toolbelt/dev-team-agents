@@ -252,7 +252,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Cinco camadas minimiza
 | Camada | Onde | Guarda | Vida útil |
 |--------|------|--------|-----------|
 | Estrutural | `docs/project.md`, `docs/development/` | Stack, arquitetura, padrões | Reescrita — sempre descreve o agora |
-| Episódica | `.dev-team-agents/user-data/session-summary.md` | O que aconteceu, em ordem | Expira em ~30 dias |
+| Episódica | `<memory-dir>/session-summary.md` (pointer em `.dev-team-agents/memory-dir`) | O que aconteceu, em ordem | Expira em ~30 dias |
 | Semântica | `docs/wiki/` | O que não dá para deduzir do código | Permanente; substituída, nunca apagada |
 | Decisional | `docs/development/adrs/` | Por que uma escolha difícil de reverter foi feita | Permanente e imutável |
 | Mecânica | `graphify-out/graph.json` | Onde as coisas estão no código | Regenerada |

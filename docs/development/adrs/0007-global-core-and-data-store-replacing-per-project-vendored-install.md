@@ -46,12 +46,10 @@ macOS    ~/Library/Application Support/dev-team-agents/data/
 Windows  %APPDATA%\dev-team-agents\data\      (covered by profile backup)
 
 data/
-├── machine-id               this machine's identity (ADR-0013)
+├── registry.json            bound projects: id, path, providers, mode, pin, timestamps
 ├── preferences.json         global user preferences
 ├── credentials/             references only, never a secret value (see ADR-0010)
-├── projects/<project_id>/   per-project portable memory and preferences
-└── machines/<machine-id>/   machine-local records: registry.json, locks/, per-project
-                             bind-manifest.json and state.json (ADR-0013)
+└── projects/<project_id>/   per-project memory, preferences, audit log
 ```
 
 `$DEVTEAM_HOME`, when set, overrides the OS convention and places `core/`, `cache/` and
@@ -94,15 +92,26 @@ place rather than adding a second entry, and removes only its own entries on `un
 
 **`registry.json` and the per-project manifests are machine-local.** They hold absolute paths
 from one machine, so restoring a roaming profile onto a new machine produces a registry that
-names directories which do not exist there. Memory is portable; bind state is not.
+names directories which do not exist there. Memory is portable; bind state is not, and they
+share the `data/` tree. `devteam doctor` reconciles a single moved project, and `devteam sync`
+rebuilds artifacts — a wholesale restore is expected to need both, not to work untouched. This
+is stated rather than fixed because splitting the tree per host is a later decision; silence
+here would read as a promise the store does not keep.
 
-> **Amended by [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md).** This ADR
-> originally left the two kinds of record sharing one `data/` tree and said so rather than fixing
-> it. They no longer share it: machine-local records live under `data/machines/<machine-id>/`,
-> `devteam export` is portable by default, and a portable archive plus each project's committed
-> `project.json` is enough to rebuild a bind on another machine. `devteam doctor` still reconciles
-> a single moved project and `devteam sync` still rebuilds artifacts; what changed is that a
+> **Amended by [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md).** The two
+> kinds of record no longer share the `data/` tree: machine-local records live under
+> `data/machines/<machine-id>/`, keyed by an id that is re-issued when the store is opened on a host
+> other than the one that recorded it, and `devteam export` is portable by default — it excludes
+> `machine-id`, `machines/`, `locks/`, `quarantine/` and any machine-local record at every path
+> depth, while `--all` takes everything but `locks/`. A portable archive plus each project's
+> committed `project.json` is enough to rebuild a bind on another machine, and an import withholds
+> the consent keys so the receiving machine is asked again. `devteam doctor` still reconciles a
+> single moved project and `devteam sync` still rebuilds artifacts; what changed is that a
 > wholesale restore is no longer expected to arrive holding another machine's paths.
+>
+> **The tree above is left as ADR-0007 decided it** — `docs/development/adrs/` is the decisional
+> layer, and a reader has to be able to see what was decided here rather than a later shape
+> back-written into it. For the current tree, read ADR-0013.
 
 Bind artifacts are **gitignored**, written between managed markers in `.gitignore`, because an
 absolute path to one developer's `$HOME` cannot be committed. `devteam bind` recreates them,

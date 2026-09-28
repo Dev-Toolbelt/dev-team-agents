@@ -339,6 +339,19 @@ When a rule or script path references "helpers", state which of the two it means
 
 **Defaults apply only to a file that does not exist.** `preferences.json` and `credentials.local.json` are both created when absent and never rewritten: install merges with existing values winning, and the session-start backfill only adds missing keys. **`telemetry` and `auto_update` are `CONSENT_KEYS`** — both default to `true` in a fresh file, but are backfilled as `false` into a pre-existing one, because that file's owner never saw a prompt for a field added after they installed. The lists live in `scripts/install.sh` and `scripts/hooks/session-start.sh`; keep them in sync.
 
+### Machine-Local Records
+
+**`scripts/lib/devteam/paths.py:MACHINE_LOCAL_RECORDS` is the single source of truth** for what a project's state belongs in the machine-local subtree. When adding a machine-local record, add its **basename** (case-insensitive) to that tuple and mirror it in every place it is mentioned:
+
+| Mirror | Purpose |
+|--------|---------|
+| `scripts/lib/devteam/paths.py` — `MACHINE_LOCAL_RECORDS` | Canonical classifier, read by `is_machine_local_record(name)` |
+| `CLAUDE-md/cli.md` — `data/machines/<machine-id>/projects/<id>/…` section | Documentation; enumerate what lives in the machine subtree |
+| `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
+| `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
+
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references) plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+
 ---
 
 ## Notification System
@@ -403,7 +416,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 
 ### Session Summary Rule
 
-**At the end of any session where files were created or modified**, write a new entry at the top of `.dev-team-agents/user-data/session-summary.md`:
+**At the end of any session where files were created or modified**, write a new entry at the top of the session summary file. Read `.dev-team-agents/memory-dir` (a one-line pointer) to find the absolute path; on layout 1 it resolves to `.dev-team-agents/user-data/session-summary.md`, and on layout 2 to `data/projects/<project_id>/session-summary.md` in the global store. Write the entry in the format:
 
 ```
 ## YYYY-MM-DD HH:MM:SS | [brief task title]
@@ -568,7 +581,7 @@ When the user writes any prompt matching the intent of setting up the project wi
 # Pre-compact Hook — Auto Session Summary
 When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
 
-1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
+1. Read `.dev-team-agents/memory-dir` to find the session summary path (resolves to `.dev-team-agents/user-data/session-summary.md` on layout 1, `data/projects/<project_id>/session-summary.md` on layout 2). Write a new entry at the top using this format:
    ```
    ## YYYY-MM-DD HH:MM:SS | [brief task title]
    **Done**: what was implemented or changed
