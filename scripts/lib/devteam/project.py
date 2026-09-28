@@ -7,6 +7,12 @@ The file holds identity and topology, never a preference:
 It is committed so the identity survives a re-clone, a directory move and a
 machine change — the three events that would otherwise orphan the project's
 memory in ``data/projects/<project_id>/``.
+
+Under layout 2 the project's state is split in two (ADR-0013): portable memory in
+``data/projects/<project_id>/`` and machine-local state in
+``data/machines/<machine-id>/projects/<project_id>/``. Together with this committed
+file they are enough to rebuild a bind from scratch, which is what makes a store
+restored on a second machine usable.
 """
 
 from __future__ import annotations
@@ -230,23 +236,44 @@ def legacy_memory_dir(root):
     return Path(root) / PROJECT_DIR / LEGACY_MEMORY_DIR
 
 
+def _require_id(root, project_id):
+    pid = project_id
+    if pid is None:
+        data = load(root)
+        pid = data["project_id"] if data else None
+    if not pid:
+        raise EnvError("cannot resolve the memory directory without a project_id")
+    return pid
+
+
 def memory_dir(root, project_id=None):
-    """Where this project's memory lives, according to its recorded layout."""
+    """Where this project's **portable** memory lives, per its recorded layout.
+
+    Session summary, project preferences — what the user wrote. Under layout 1 this
+    is the same directory as :func:`state_dir`, because v2 kept both together.
+    """
     from . import paths
 
     if layout(root) >= LAYOUT_MEMORY_IN_STORE:
-        pid = project_id
-        if pid is None:
-            data = load(root)
-            pid = data["project_id"] if data else None
-        if not pid:
-            raise EnvError("cannot resolve the memory directory without a project_id")
-        return paths.project_data_dir(pid)
+        return paths.project_data_dir(_require_id(root, project_id))
+    return legacy_memory_dir(root)
+
+
+def state_dir(root, project_id=None):
+    """Where this project's **machine-local** state lives (ADR-0013).
+
+    ``state.json`` and the dot-markers: the installed version, the session id, the
+    last update check — facts about this machine, not about the project.
+    """
+    from . import paths
+
+    if layout(root) >= LAYOUT_MEMORY_IN_STORE:
+        return paths.machine_project_dir(_require_id(root, project_id))
     return legacy_memory_dir(root)
 
 
 def memory_dir_for_layout(root, project_id, target_layout):
-    """Where memory lives under a given layout — used to plan a move between them."""
+    """Where portable memory lives under a given layout — used to plan a move."""
     from . import paths
 
     if target_layout >= LAYOUT_MEMORY_IN_STORE:
@@ -254,10 +281,23 @@ def memory_dir_for_layout(root, project_id, target_layout):
     return legacy_memory_dir(root)
 
 
+def state_dir_for_layout(root, project_id, target_layout):
+    """Where machine-local state lives under a given layout."""
+    from . import paths
+
+    if target_layout >= LAYOUT_MEMORY_IN_STORE:
+        return paths.machine_project_dir(project_id)
+    return legacy_memory_dir(root)
+
+
 def write_state_pointer(root, project_id=None):
-    """Record the resolved memory directory for the bash hooks to read."""
+    """Record the resolved state directory for the bash hooks to read.
+
+    It points at :func:`state_dir`, not the portable one: ``state.sh`` resolves
+    ``state.json`` through this pointer and nothing else.
+    """
     target = Path(root) / PROJECT_DIR / STATE_DIR_POINTER
-    resolved = memory_dir(root, project_id)
+    resolved = state_dir(root, project_id)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(".tmp")
     tmp.write_text(str(resolved) + "\n", encoding="utf-8")
