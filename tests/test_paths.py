@@ -18,6 +18,12 @@ class PlatformLayoutTest(unittest.TestCase):
                 "APPDATA",
                 "LOCALAPPDATA",
                 "DEVTEAM_MACHINE_ID",
+                # Saved because `test_linux_follows_xdg` sets XDG_DATA_HOME, and
+                # `paths.cache_dir()` reads XDG_CACHE_HOME on linux. `tearDown`
+                # restores what the developer had; popping instead would silently
+                # delete a real value from the session that ran the suite.
+                "XDG_DATA_HOME",
+                "XDG_CACHE_HOME",
             )
         }
         os.environ.pop("DEVTEAM_HOME", None)
@@ -47,7 +53,7 @@ class PlatformLayoutTest(unittest.TestCase):
     def test_linux_follows_xdg(self):
         os.environ["DEVTEAM_PLATFORM"] = "linux"
         os.environ["XDG_DATA_HOME"] = "/tmp/xdg-data"
-        self.addCleanup(os.environ.pop, "XDG_DATA_HOME", None)
+        # No per-test cleanup: `tearDown` restores this key from `self._saved`.
         self.assertEqual(str(paths.core_dir()), "/tmp/xdg-data/dev-team-agents/core")
 
     def test_devteam_home_overrides_every_platform(self):
