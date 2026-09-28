@@ -8,10 +8,11 @@ cannot be broken by a stray ``print``.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from . import bind as bind_module
-from . import creds, doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import catalog, compat, creds, doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -66,15 +67,118 @@ def cmd_path(args, emitter):
 
 
 def cmd_version(args, emitter):
+    # The `compat` block is what ADR-0011's "compatibility is declared, not assumed"
+    # costs: a client — the desktop app is the first — reads the shape numbers before
+    # it writes, and degrades to read-only when the store carries one it does not
+    # understand. It lives on `version` because that is the call a client makes first.
     payload = {
         "current": versions.current(),
         "installed": versions.installed(),
         "core": str(paths.core_dir()),
+        "compat": compat.describe(),
     }
-    human = "current: {}\ninstalled: {}".format(
-        payload["current"] or "(none)", ", ".join(payload["installed"]) or "(none)"
+    schemas = payload["compat"]["store_schemas"]
+    human = "\n".join(
+        [
+            "current: {}".format(payload["current"] or "(none)"),
+            "installed: {}".format(", ".join(payload["installed"]) or "(none)"),
+            "json contract: {}".format(payload["compat"]["json_contract"]),
+            "store shapes: {}".format(
+                ", ".join("{}={}".format(k, schemas[k]) for k in sorted(schemas))
+            ),
+        ]
     )
     return payload, human
+
+
+def cmd_compat(args, emitter):
+    # ADR-0011 named this the missing enforcement point: `compat.unsupported_by()`
+    # implemented the comparison but had no caller outside its tests, so "the app
+    # degrades to read-only" had nothing that actually asked the question. This is
+    # that caller — a client states what it understands and gets back a boolean it
+    # can branch on, computed by the framework rather than re-derived per client.
+    description = compat.describe()
+    payload = {
+        "json_contract": description["json_contract"],
+        "min_app_version": description["min_app_version"],
+        "store_schemas": description["store_schemas"],
+        "client_schemas": None,
+        "may_write": None,
+        "unsupported": {},
+    }
+
+    unsupported = {}
+    if args.client is not None or args.client_file is not None:
+        raw = args.client
+        if args.client_file is not None:
+            try:
+                raw = Path(args.client_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                raise UsageError(
+                    "--client-file {} could not be read: {}".format(args.client_file, exc),
+                    hint="Pass a path to a readable JSON file, or use --client '<json>' instead.",
+                )
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise UsageError(
+                "client schemas are not valid JSON: {}".format(exc),
+                hint="Pass a JSON object, e.g. --client '{\"project\": 1}'.",
+            )
+
+        # `unsupported_by` treats an *absent* key as silence — a client honestly
+        # saying "I don't know this shape" — and that is a legitimate answer, not a
+        # mistake. A *present* value of the wrong type (a string, a float, `true`)
+        # is a different thing: the client meant to claim something and got the
+        # claim wrong. Catching that here, before it reaches `unsupported_by`, keeps
+        # that function's leniency for other callers while giving this boundary a
+        # message that names the exact key and value at fault.
+        if isinstance(parsed, dict):
+            for name, value in parsed.items():
+                if not isinstance(value, int) or isinstance(value, bool):
+                    raise UsageError(
+                        "client value for '{}' is not an integer: {!r}".format(name, value),
+                        hint="Each shape must map to a plain integer schema version, or be left "
+                        "out entirely to mean \"unknown\".",
+                    )
+
+        try:
+            unsupported = compat.unsupported_by(parsed)
+        except TypeError as exc:
+            # Not a mapping at all (a JSON array, string, or number) — `unsupported_by`
+            # already says exactly what is wrong; just route it through the contract
+            # as a usage error instead of letting it escape as unexpected.
+            raise UsageError(str(exc))
+
+        payload["client_schemas"] = parsed
+        payload["unsupported"] = unsupported
+        # A boolean the client can branch on directly, rather than inferring the
+        # verdict from whether `unsupported` happens to be empty — inference is how
+        # a client gets exactly this backwards.
+        payload["may_write"] = not unsupported
+
+    lines = [
+        "json contract: {}".format(payload["json_contract"]),
+        "min app version: {}".format(payload["min_app_version"] or "(none asserted)"),
+        "store shapes: {}".format(
+            ", ".join(
+                "{}={}".format(k, payload["store_schemas"][k])
+                for k in sorted(payload["store_schemas"])
+            )
+        ),
+    ]
+    if payload["client_schemas"] is not None:
+        if payload["may_write"]:
+            lines.append("may_write: yes — this client understands every shape the store uses")
+        else:
+            lines.append("may_write: no — upgrade the client before it writes to this store")
+            for name in sorted(unsupported):
+                info = unsupported[name]
+                lines.append(
+                    "  {:<16} store={} client={}".format(name, info["store"], info["client"])
+                )
+    return payload, "\n".join(lines)
 
 
 def cmd_store_list(args, emitter):
@@ -344,6 +448,108 @@ def _bound_project(path=None, required=True):
     return root, data["project_id"]
 
 
+def _catalog_version(args):
+    """This project's pin, else the active version — same resolution as ``prefs``."""
+    _root, project_id = _bound_project(getattr(args, "path", None), required=False)
+    pin = (registry.get(project_id) or {}).get("pin") if project_id else None
+    return versions.resolve(pin), project_id
+
+
+def _catalog_row(kind, entry):
+    if entry.get("malformed"):
+        note = "MALFORMED: {}".format(entry["error"])
+        if kind == "agents":
+            return (entry["name"], "-", "-", entry["path"], note)
+        if kind == "skills":
+            return (entry["name"], entry.get("category") or "-", entry["path"], note)
+        return (entry["name"], entry["path"], note)
+    if kind == "agents":
+        return (
+            entry["name"],
+            entry.get("tier") or "-",
+            entry.get("model") or "-",
+            entry["path"],
+            entry.get("description") or "-",
+        )
+    if kind == "skills":
+        return (entry["name"], entry.get("category") or "-", entry["path"], entry.get("description") or "-")
+    return (entry["name"], entry["path"], entry.get("description") or "-")
+
+
+_CATALOG_HEADERS = {
+    "agents": ["NAME", "TIER", "MODEL", "PATH", "DESCRIPTION"],
+    "skills": ["NAME", "CATEGORY", "PATH", "DESCRIPTION"],
+    "commands": ["NAME", "PATH", "DESCRIPTION"],
+}
+
+
+def cmd_catalog(args, emitter):
+    version, project_id = _catalog_version(args)
+    result = catalog.summary(version)
+    payload = {
+        "version": version,
+        "project_id": project_id,
+        "counts": result["counts"],
+        "malformed": result["malformed"],
+    }
+    lines = ["version: {}".format(version)]
+    if project_id:
+        lines.append("project: {}".format(_short(project_id)))
+    for kind in catalog.KINDS:
+        note = (
+            "  ({} malformed)".format(result["malformed"][kind]) if result["malformed"][kind] else ""
+        )
+        lines.append("{:<10} {}{}".format(kind, result["counts"][kind], note))
+    return payload, "\n".join(lines)
+
+
+def _cmd_catalog_kind(kind):
+    def handler(args, emitter):
+        version, project_id = _catalog_version(args)
+        entries = catalog.list_kind(kind, version)
+        rows = [_catalog_row(kind, entry) for entry in entries]
+        payload = {
+            "version": version,
+            "project_id": project_id,
+            kind: entries,
+            "count": len(entries),
+        }
+        human = (
+            _table(rows, _CATALOG_HEADERS[kind])
+            if rows
+            else "no {} found in version {}".format(kind, version)
+        )
+        return payload, human
+
+    return handler
+
+
+cmd_catalog_agents = _cmd_catalog_kind("agents")
+cmd_catalog_skills = _cmd_catalog_kind("skills")
+cmd_catalog_commands = _cmd_catalog_kind("commands")
+
+
+def cmd_catalog_show(args, emitter):
+    version, project_id = _catalog_version(args)
+    result = catalog.show(args.name, version)
+    payload = dict(result)
+    payload["project_id"] = project_id
+    lines = ["{} ({})".format(result["name"], result["kind"])]
+    lines.append("  path      {}".format(result["path"]))
+    lines.append("  version   {}".format(result["version"]))
+    if result.get("tier"):
+        lines.append("  tier      {}".format(result["tier"]))
+    if result.get("model"):
+        lines.append("  model     {}".format(result["model"]))
+    if result.get("category"):
+        lines.append("  category  {}".format(result["category"]))
+    if result.get("description"):
+        lines.append("  {}".format(result["description"]))
+    lines.append("")
+    lines.append(result["body"])
+    return payload, "\n".join(lines)
+
+
 def cmd_prefs_list(args, emitter):
     root, project_id = _bound_project(args.path, required=False)
     version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
@@ -545,13 +751,19 @@ def cmd_cred_backends(args, emitter):
 def cmd_cred_check(args, emitter):
     project_id = _cred_project_id(args)
     findings = creds.check(project_id)
+    # `problems` is always present, empty list included. It used to appear only on the
+    # findings branch — it exists to trigger `main()`'s exit-1 path, and that check is
+    # truthiness-based so `[]` still means success — but a key that comes and goes with
+    # the data makes the payload's shape depend on state, and ADR-0011 makes this shape
+    # public API. A client doing `payload.problems.length` would have worked until the
+    # day everything was fine. Found by the app-facing key-set tests.
+    payload = {"project_id": project_id, "findings": findings, "problems": findings}
     if not findings:
-        return {"project_id": project_id, "findings": []}, "every declared credential resolves"
+        return payload, "every declared credential resolves"
     rows = [
         (f["issue"], f["key"], f["layer"], str(f.get("detail") or ""))
         for f in findings
     ]
-    payload = {"project_id": project_id, "findings": findings, "problems": findings}
     return payload, _table(rows, ["ISSUE", "KEY", "LAYER", "DETAIL"])
 
 
@@ -675,6 +887,16 @@ def build_parser():
 
     leaf(sub, "path", help="show resolved store locations").set_defaults(func=cmd_path)
     leaf(sub, "version", help="show core versions").set_defaults(func=cmd_version)
+
+    # No `--path`/`--global`: this describes the *store*, not a project — same
+    # discipline as `path`/`catalog`. Creates nothing, including no machine identity.
+    compat_parser = leaf(
+        sub, "compat", help="what this store requires, or whether a client's shapes can write to it"
+    )
+    compat_group = compat_parser.add_mutually_exclusive_group()
+    compat_group.add_argument("--client", help="JSON object: shape name -> integer schema version")
+    compat_group.add_argument("--client-file", help="path to a file containing the same JSON object")
+    compat_parser.set_defaults(func=cmd_compat)
 
     store = leaf(sub, "store", help="manage the versioned core").add_subparsers(dest="store_cmd")
     leaf(store, "list", help="list installed versions").set_defaults(func=cmd_store_list)
@@ -862,6 +1084,35 @@ def build_parser():
     )
     doctor_parser.set_defaults(func=cmd_doctor)
 
+    # Unlike `store`/`prefs`/`cred`, `catalog` alone is a valid, meaningful call
+    # (the summary) — so `func` is set on the parent parser itself, not only on
+    # its subcommands. A subparsers action only overwrites `func` on the shared
+    # namespace when a subcommand is actually chosen, so this default survives a
+    # bare `devteam catalog`.
+    catalog_parser = leaf(
+        sub, "catalog", help="browse the resolved version's agents, skills and commands (read-only)"
+    )
+    catalog_parser.add_argument("--path", help="project directory (default: the current one)")
+    catalog_parser.set_defaults(func=cmd_catalog)
+    catalog_sub = catalog_parser.add_subparsers(dest="catalog_cmd")
+
+    catalog_agents = leaf(catalog_sub, "agents", help="every agent in the resolved version")
+    catalog_agents.add_argument("--path", help="project directory (default: the current one)")
+    catalog_agents.set_defaults(func=cmd_catalog_agents)
+
+    catalog_skills = leaf(catalog_sub, "skills", help="every skill in the resolved version")
+    catalog_skills.add_argument("--path", help="project directory (default: the current one)")
+    catalog_skills.set_defaults(func=cmd_catalog_skills)
+
+    catalog_commands = leaf(catalog_sub, "commands", help="every command in the resolved version")
+    catalog_commands.add_argument("--path", help="project directory (default: the current one)")
+    catalog_commands.set_defaults(func=cmd_catalog_commands)
+
+    catalog_show = leaf(catalog_sub, "show", help="one entry's metadata and its body")
+    catalog_show.add_argument("name", help="a bare agent, skill or command name")
+    catalog_show.add_argument("--path", help="project directory (default: the current one)")
+    catalog_show.set_defaults(func=cmd_catalog_show)
+
     return parser
 
 
@@ -944,6 +1195,20 @@ def main(argv=None, stdout=None, stderr=None):
         # exactly that, and returning 0 made every recoverable problem look like
         # success to a client reading only the exit code.
         if payload.get("status") in ("warn", "fail"):
+            ok = False
+            exit_code = 1
+    elif args.command == "compat":
+        # `1`, not `2` and not `3`: an incompatible client is a real, well-formed
+        # answer to a well-formed question — the store and the client both parsed
+        # fine, there is just a shape neither side can paper over. That is exactly
+        # what exit 1 means elsewhere in this CLI ("ran and reported a problem it
+        # did not fix"), so a caller already branching on `$?` for `cred check` or
+        # `sync` gets the same signal here instead of a third meaning to learn. `2`
+        # is reserved for a malformed question (bad JSON, wrong type) — those raise
+        # `UsageError` above and never reach this branch. A bare `devteam compat`
+        # with no `--client` has `may_write is None` and stays a clean `0`: nothing
+        # was asked, so nothing can be incompatible.
+        if payload.get("may_write") is False:
             ok = False
             exit_code = 1
     elif payload.get("problems"):

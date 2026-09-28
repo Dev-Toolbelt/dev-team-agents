@@ -1,0 +1,177 @@
+name: Release
+
+# Triggered by pushing a version tag (vX.Y.Z, same convention CI's `tag-name`
+# job validates — see .github/workflows/ci.yml). This workflow does NOT build
+# a bespoke release artifact: scripts/install.sh and scripts/lib/installer-fetch.sh
+# already install from GitHub's own auto-generated source archive for the tag
+# (`https://github.com/<owner>/<repo>/archive/refs/tags/<tag>.tar.gz`), which
+# GitHub materialises automatically the moment the tag exists — no upload step
+# needed. The Homebrew formula (packaging/homebrew/devteam.rb) points at that
+# SAME url, so there is exactly one artifact shape end to end, not a second
+# one only Homebrew users get. This job's only job is to download that exact
+# URL after the tag lands and hash the bytes it actually receives.
+#
+# Why not `git archive` locally: GitHub's codeload tarballs are not guaranteed
+# byte-identical to a local `git archive` of the same commit (gzip parameters
+# and timestamps can differ), so a locally-computed hash can silently mismatch
+# what Homebrew downloads. Hashing the real download is the only way the
+# sha256 in the formula is guaranteed correct.
+#
+# What this workflow does NOT do (see packaging/README.md for the manual
+# steps and why they cannot be automated here):
+#   - publish to a Homebrew tap (no `homebrew-devteam` repository exists yet)
+#   - touch packaging/homebrew/devteam-app.rb (the app has no build/release)
+#   - touch packaging/winget/ (no Windows installer exists to hash, and
+#     winget publication is itself a reviewed PR to microsoft/winget-pkgs)
+#
+# It opens a PR in THIS repository with the formula's url/sha256 updated, so a
+# maintainer reviews the diff before it lands — never pushes to main directly.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-homebrew-formula:
+    name: Compute release sha256 and update the Homebrew formula
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate tag matches vX.Y.Z
+        # Mirrors ci.yml's `tag-name` job. Duplicated rather than shared
+        # because these are two independent workflow files triggered by the
+        # same push — this workflow must not act on a malformed tag even if
+        # CI's own job also rejects it.
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' does not match ^v[0-9]+\.[0-9]+\.[0-9]+$ — refusing to bump the formula."
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download the release tarball (the same URL Homebrew and scripts/install.sh use)
+        run: |
+          set -euo pipefail
+          URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
+          echo "Downloading: $URL"
+          # GitHub can take a few seconds to materialise a tag's codeload
+          # archive right after the tag ref is created; retry rather than
+          # fail the whole release on a timing race.
+          for attempt in 1 2 3 4 5; do
+            if curl -fSL --retry 3 --retry-delay 3 -o release.tar.gz "$URL"; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Could not download $URL after 5 attempts."
+              exit 1
+            fi
+            echo "Attempt $attempt failed, retrying in 10s…"
+            sleep 10
+          done
+          [ -s release.tar.gz ] || { echo "::error::Downloaded tarball is empty."; exit 1; }
+
+      - name: Compute sha256 of the downloaded tarball
+        run: |
+          set -euo pipefail
+          SHA256="$(sha256sum release.tar.gz | awk '{print $1}')"
+          if ! printf '%s' "$SHA256" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::Computed sha256 does not look like a 64-char hex digest: $SHA256"
+            exit 1
+          fi
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          echo "Tag $TAG → sha256 $SHA256"
+
+      - name: Update packaging/homebrew/devteam.rb
+        run: |
+          set -euo pipefail
+          FORMULA="packaging/homebrew/devteam.rb"
+
+          # Replace the url line's tag placeholder (or a previous real tag)
+          # and the sha256 line's placeholder (or a previous real digest).
+          # Anchored on the literal `url "..."` / `sha256 "..."` line shape
+          # this formula uses, so a change to unrelated lines is never touched.
+          sed -i.bak -E \
+            -e "s#(url \"https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/)[^\"]+(\.tar\.gz\")#\\1${TAG}\\2#" \
+            -e "s#(sha256 \")[^\"]+(\")#\\1${SHA256}\\2#" \
+            "$FORMULA"
+          rm -f "${FORMULA}.bak"
+
+          echo "── Updated formula ──"
+          grep -nE '^\s*(url|sha256) ' "$FORMULA"
+
+      - name: Verify the edit landed correctly
+        run: |
+          set -euo pipefail
+          FORMULA="packaging/homebrew/devteam.rb"
+          grep -qF "archive/refs/tags/${TAG}.tar.gz" "$FORMULA" || {
+            echo "::error::url line was not updated to tag ${TAG}."; exit 1;
+          }
+          grep -qF "sha256 \"${SHA256}\"" "$FORMULA" || {
+            echo "::error::sha256 line was not updated to the computed digest."; exit 1;
+          }
+
+      - name: Set up Ruby (formula syntax check)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: ruby -c on both formulas (this one changed, the cask did not)
+        run: |
+          set -euo pipefail
+          ruby -c packaging/homebrew/devteam.rb
+          ruby -c packaging/homebrew/devteam-app.rb
+
+      - name: Open a PR with the formula bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="release/homebrew-formula-${TAG}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- packaging/homebrew/devteam.rb; then
+            echo "Formula already up to date for ${TAG}; nothing to open a PR for."
+            exit 0
+          fi
+
+          git checkout -b "$BRANCH"
+          git add packaging/homebrew/devteam.rb
+          git commit -m "chore(packaging): bump devteam formula to ${TAG}"
+          git push origin "$BRANCH" --force
+
+          # Written with printf (one call per line, all inside the YAML
+          # block scalar at its own indentation) rather than a literal
+          # multi-line string — a raw newline inside a quoted string here
+          # would dedent to column 0 and terminate the YAML `run: |` block
+          # early, corrupting the rest of this step.
+          PR_BODY_FILE="$(mktemp)"
+          {
+            printf '%s\n' "Automated by .github/workflows/release.yml after ${TAG} was pushed."
+            printf '\n'
+            printf '%s\n' "Updates \`packaging/homebrew/devteam.rb\`:"
+            printf '%s\n' "- \`url\` → the \`${TAG}\` release tarball (GitHub's own tag archive)"
+            printf '%s\n' "- \`sha256\` → computed from that exact downloaded artifact, never hand-written"
+            printf '\n'
+            printf '%s\n' "Still manual after this merges (see packaging/README.md):"
+            printf '%s\n' "- publishing this formula to a \`homebrew-devteam\` tap (no tap repo exists yet)"
+            printf '%s\n' "- everything winget (no Windows installer artifact exists to hash)"
+            printf '%s\n' "- everything for \`devteam-app.rb\` (no app build exists yet)"
+          } > "$PR_BODY_FILE"
+
+          gh pr create \
+            --title "chore(packaging): bump Homebrew formula to ${TAG}" \
+            --body-file "$PR_BODY_FILE" \
+            --base main \
+            --head "$BRANCH"

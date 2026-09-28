@@ -155,6 +155,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the credential cannot be used at all; a value in the plaintext backend is a `warn` because it works
   and the user may have no alternative on their platform.
 
+### Added — v3 milestone M4.1 (the contract the desktop app needs)
+
+ADR-0011 makes the desktop app a **client of the CLI**: every screen invokes
+`devteam <command> --json` and nothing about bind, preferences or credentials is
+reimplemented in the app. The ADR states the price plainly — "a stable JSON contract on
+every subcommand, with contract tests in CI" — and that contract was not tested, so M4
+is split and the contract lands before the client. Building a pure client against an
+unverified contract is building on sand.
+
+- **`devteam catalog`** — `catalog` for a summary (valid with no subcommand, unlike
+  `store`/`prefs`/`cred`), `catalog agents|skills|commands` for the entries, and
+  `catalog show <name>` for one entry's metadata and body. It is the command behind the
+  app's read-only browse screen, which had no command behind it at all, and it answers a
+  question a terminal user also asks: which agents does this project actually have, and
+  from which version. Three deliberate behaviours: it reads from the version the project
+  is **bound to** rather than whatever tree you are standing in; it **creates nothing**,
+  including not minting a machine identity; and a file with malformed frontmatter comes
+  back flagged with its path instead of killing the listing, because a catalog that dies
+  on one bad file is useless for finding the bad file. Frontmatter is read by a ~20-line
+  stdlib reader rather than by adding a YAML dependency.
+- **`devteam version --json` carries a `compat` block** —
+  `{"json_contract", "min_app_version", "store_schemas"}`. ADR-0011's "compatibility is
+  declared, not assumed": a client reads it before writing and degrades to read-only when
+  the store carries a shape it does not understand. It **surfaces the schema numbers that
+  already exist** (`project`, `project_layout`, `registry`, `bind_manifest`,
+  `credentials`) rather than inventing a second versioning scheme beside them, and reads
+  each from the module that owns it so no copy can go stale in the direction that tells a
+  client it is safe to write. `unsupported_by()` treats a shape the client is **silent**
+  about as unsupported: silence is not a claim of support, and treating it as one is how a
+  client writes a structure it has never seen. `min_app_version` is `null` until an app
+  ships — the field exists now so the first app can rely on reading it.
+- **The `--json` contract is swept across the whole command surface**
+  (`tests/test_json_contract.py`), with the commands **discovered from the parser** rather
+  than a hardcoded list — a hardcoded list goes stale the moment someone adds a command,
+  which is the exact failure the sweep exists to prevent, so the walk asserts its own
+  integrity too. Every command, in three store states, must exit in {0,1,2,3,4}, put
+  either nothing or exactly one parseable document on stdout, carry `ok`, and keep
+  warnings on stderr in both modes. `update` and `uninstall` are excluded by name with a
+  stated reason. `cred get`'s refusal of `--json` is pinned as **conforming** so nobody
+  later "fixes" the sweep by making it emit the value. No violations were found.
+- **`devteam compat`** — the reader the published numbers were missing. Bare, it reports what the
+  store requires; with `--client '<json>'` or `--client-file <path>` it returns an explicit
+  `may_write` boolean plus, when false, the blocking shapes with both numbers. An architecture review
+  found that `compat.unsupported_by()` had no caller and no CLI surface, which matters more than it
+  looks: if the framework only publishes schema numbers and leaves the comparison to the app, the
+  compatibility rule **is** reimplemented in TypeScript — in the one place where getting it wrong
+  means writing a structure the client does not understand. ADR-0011 forbids exactly that for bind,
+  preferences and credentials; compatibility is not a special case. Incompatibility exits **1**,
+  because a well-formed question with a real negative answer is "findings", the same meaning the code
+  already carries for `doctor` and `sync`; malformed client input exits 2, a different failure class
+  that must never read as a real "no". A client claiming a shape *higher* than the store's may write —
+  a newer client on an older store is the direction that works.
+- **The app-facing payload shapes are pinned key by key.** The sweep proved every command emits one
+  well-formed document with `ok`; it did not prove the document still has the fields a client reads,
+  so dropping `project_id` from `bind --json` passed every check — the exact regression ADR-0011 calls
+  breaking. Fifteen commands now have their top-level key set pinned exactly, plus the record shape
+  for the four list-shaped ones, because that is what a table in the UI binds to. A failure names what
+  was added and what was removed separately and says that the decision is whether the change is
+  breaking, not whether to update the expected value.
+- **The Homebrew cask now depends on the formula.** The review found the two were independent
+  installs, so nothing decided which `devteam` the app invokes — an older CLI writing a newer store is
+  precisely the case `compat` exists to detect and the one nothing was preventing. The app must still
+  call `devteam compat` before it writes, because a user can upgrade the store from a terminal without
+  touching the app.
+- **`cred check`'s payload no longer changes shape with the data.** `problems` appeared only when
+  there were findings, so a client doing `payload.problems.length` would have worked until the day
+  everything was fine. It is now always present, empty list included — `main()`'s exit-1 check is
+  truthiness-based, so an empty list still means success. Found by the key-set pins on their first run,
+  which is the whole point of having them.
+- **`packaging/`** — a Homebrew formula for the CLI, a cask for the app, winget manifests
+  (manifestVersion 1.12.0, confirmed against the schema files in `microsoft/winget-cli`
+  rather than guessed), `.github/workflows/release.yml` which computes the tarball's
+  `sha256` from the artifact rather than carrying a hand-written one, and
+  `packaging/README.md` as the operator runbook.
+
+  **None of it is verified, and it is labelled as such rather than presented as working.**
+  macOS signing and notarisation need an Apple Developer ID; the Windows installer needs a
+  code-signing certificate; a tap needs a published `homebrew-*` repository; winget
+  publication is a reviewed pull request to `microsoft/winget-pkgs`; and there is no
+  release tarball, so no real `sha256` exists. Placeholders are deliberately impossible to
+  mistake for real values, because a plausible-looking fake hash ships without anyone
+  noticing: Homebrew carries non-hex strings, and winget carries 64 literal zeros because
+  its schema enforces a hex pattern and an unparseable string there would fail for the
+  wrong reason. The runbook lists every placeholder and where its real value comes from.
+
+  The formula's install set was verified by running the CLI from only the files it
+  installs: the entry point plus the 25 python modules, with no other part of the
+  framework present.
+
+**The Electron app itself is not built.** It is M4.3, and it is blocked on signing
+credentials the repository owner holds — not on anything in this repository.
+
 ### Changed
 - **37 markdown references now read the projection**, not the v2 source file. The five documents that
   describe the *source* layer — the canonical `user-preferences` skill, first-time setup, both

@@ -17,8 +17,9 @@ durable **data** store; ADR-0008 gives each project a committed identity and res
 preferences on write; ADR-0009 makes the CLI python3. This spec covers milestone **M1** only:
 store, CLI, identity, bind, versions/pin, and migration of an existing v2 install. Memory
 relocation and the preference cascade arrived in M2/M2.1 and are asserted below; credentials
-arrived in M3 and are specified separately in [`v3-credentials.md`](v3-credentials.md); the desktop
-app is a later milestone.
+arrived in M3 and are specified separately in [`v3-credentials.md`](v3-credentials.md); the client
+contract, the distribution channels and the desktop app are M4, specified separately in
+[`v4-app-and-distribution.md`](v4-app-and-distribution.md) and only partly built.
 
 ### Acceptance Criteria
 
@@ -278,13 +279,23 @@ app is a later milestone.
   that spec
 - Retiring `state.json:installed_version` and repointing its four readers — later milestone;
   the bind stamps the key so they report the truth in the meantime
-- The Electron app, the Homebrew tap and the winget package — later milestone
+- The Electron app, the Homebrew tap and the winget package — **milestone M4, specified in
+  [`v4-app-and-distribution.md`](v4-app-and-distribution.md)**, which owns those criteria. That
+  milestone is **partially done**: the client contract the app depends on is built and tested
+  (`devteam catalog`, the `compat` block on `version --json`, and a `--json` sweep across every
+  command discovered from the parser), and the Homebrew formula and cask, the winget manifests and
+  the release workflow exist as **unverified scaffolding** — nothing has been published, installed,
+  brew-audited or accepted anywhere, and the app itself is not built. Out of scope *here* either
+  way: this spec asserts nothing about them, and each criterion in that spec is marked met,
+  unverifiable-without-credentials, or unbuilt
 - Making the harness write root (`docs/`) configurable; only additional read-only context paths are planned, and not in M1
 - Linux as a release target
 
 ### Dependencies
 - **Depends on**: ADR-0007, ADR-0008, ADR-0009, ADR-0012, ADR-0013
-- **Blocks**: [`v3-credentials.md`](v3-credentials.md) (M3, now built), desktop app
+- **Blocks**: [`v3-credentials.md`](v3-credentials.md) (M3, now built),
+  [`v4-app-and-distribution.md`](v4-app-and-distribution.md) (M4, partially built — contract yes,
+  channels and app no)
 
 ### Amendment Log
 - 2026-09-27 | implementation | Bind artifacts are excluded through `.git/info/exclude`, not
@@ -341,6 +352,14 @@ app is a later milestone.
   one document whose scope is "v3", which is not a boundary anyone can check a change against. The
   line in Out of Scope now says which spec owns them rather than that they do not exist — a stale
   "later milestone" reads as "not built" and is how a reviewer concludes a surface is unspecified.
+- 2026-09-28 | software-architect | Pointed the Electron-app / Homebrew / winget Out of Scope entry at
+  the new [`v4-app-and-distribution.md`](v4-app-and-distribution.md), and stated that M4 is *partially*
+  done — the client contract is built and tested, the packaging is unverified scaffolding, the app does
+  not exist. | Same reasoning as the M3 entry above, with one addition that matters more here: M4 was
+  split, so "later milestone" is now wrong in both directions. It understates the contract, which is
+  built and green, and it would overstate the channels if the entry simply said M4 shipped. The pointer
+  names the owning spec; the marked criteria in that spec carry the distinction, and none of it moves
+  into this spec's own criteria.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

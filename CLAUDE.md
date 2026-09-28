@@ -298,7 +298,11 @@ dev-team-agents/
 │           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
 │           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
-├── .github/         ← CI workflows, issue/PR templates, CODEOWNERS, scripts/ci/ — stripped at install
+├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/ — stripped at install
+├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
+│                      and the operator runbook. UNRELEASED — see packaging/README.md for what each
+│                      placeholder needs. Never reaches a user project: install.sh's KEEP_ROOT
+│                      allowlist drops it
 ├── tests/           ← devteam CLI test suite (stdlib unittest); DEV-ONLY, stripped from the package
 ├── user-data/       ← runtime state of this repo's own self-install; gitignored and untracked
 ├── README.md
@@ -400,6 +404,10 @@ The CLI is python3 (`scripts/cli/devteam`, implementation in `scripts/lib/devtea
 bash. Contributors working in that tree are bound by the **No-Destruction Rule** — canonical home
 and its one named CLI exception in `skills/shared/setup-health-check/SKILL.md` — and by the rule
 that **every store mutation is locked and written atomically**.
+
+The CLI's `--json` output is the desktop app's public API (ADR-0011); an output shape change is a
+breaking change. The contract is swept across every subcommand by `tests/test_json_contract.py`,
+discovering commands from the real parser rather than a hardcoded list.
 
 → See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) for the store layout, bind modes, the command table,
 the `--json` contract and exit codes, and the contributor rules.

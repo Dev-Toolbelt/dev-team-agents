@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+# DevToolbelt.Devteam.locale.en-US.yaml — default locale manifest for the
+# `devteam` CLI. Metadata only (no hashes, no URLs to a release asset), so
+# unlike the installer manifest this file has no placeholder values that
+# would fail at install time — it is accurate as written, just attached to
+# an unreleased PackageVersion (see the version and installer manifests in
+# this same directory).
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.defaultLocale.1.12.0.json
+# (microsoft/winget-cli repo) — required fields: PackageIdentifier,
+# PackageVersion, PackageLocale, Publisher, PackageName, License,
+# ShortDescription, ManifestType, ManifestVersion.
+
+PackageIdentifier: DevToolbelt.Devteam
+PackageVersion: 0.0.0
+PackageLocale: en-US
+Publisher: Dev-Toolbelt
+PublisherUrl: https://github.com/Dev-Toolbelt
+PublisherSupportUrl: https://github.com/Dev-Toolbelt/dev-team-agents/issues
+PackageName: devteam
+PackageUrl: https://github.com/Dev-Toolbelt/dev-team-agents
+License: MIT
+LicenseUrl: https://github.com/Dev-Toolbelt/dev-team-agents/blob/main/LICENSE
+ShortDescription: CLI for the dev-team-agents multi-agent development harness
+Description: >-
+  devteam is the command-line interface for dev-team-agents, a multi-agent
+  development harness. It manages the versioned core store and per-machine
+  data store, binds projects to a resolved core version, and resolves the
+  three-layer preference cascade. See CLAUDE-md/cli.md in the project
+  repository for the full command reference.
+Moniker: devteam
+Tags:
+  - cli
+  - developer-tools
+  - ai-agents
+  - automation
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
