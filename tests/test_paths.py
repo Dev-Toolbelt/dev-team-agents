@@ -10,8 +10,18 @@ from devteam import paths
 
 class PlatformLayoutTest(unittest.TestCase):
     def setUp(self):
-        self._saved = {k: os.environ.get(k) for k in ("DEVTEAM_HOME", "DEVTEAM_PLATFORM", "APPDATA", "LOCALAPPDATA")}
+        self._saved = {
+            k: os.environ.get(k)
+            for k in (
+                "DEVTEAM_HOME",
+                "DEVTEAM_PLATFORM",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "DEVTEAM_MACHINE_ID",
+            )
+        }
         os.environ.pop("DEVTEAM_HOME", None)
+        os.environ.pop("DEVTEAM_MACHINE_ID", None)
 
     def tearDown(self):
         for key, value in self._saved.items():
@@ -51,6 +61,58 @@ class PlatformLayoutTest(unittest.TestCase):
     def test_current_is_a_file_not_a_symlink_path(self):
         os.environ["DEVTEAM_HOME"] = "/tmp/explicit"
         self.assertEqual(str(paths.current_file()), "/tmp/explicit/core/current")
+
+    def test_machine_local_paths_resolve_inside_data_dir_on_every_platform(self):
+        # `DEVTEAM_MACHINE_ID` short-circuits `machine_id()` before any file I/O, so
+        # this can run against the real per-platform `data_dir()` (no `$DEVTEAM_HOME`
+        # override) without ever touching a real user directory.
+        fixed_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        os.environ[paths.MACHINE_ID_ENV] = fixed_id
+        for platform in ("darwin", "win32", "linux"):
+            os.environ["DEVTEAM_PLATFORM"] = platform
+            if platform == "win32":
+                os.environ["APPDATA"] = r"C:\Users\t\AppData\Roaming"
+                os.environ["LOCALAPPDATA"] = r"C:\Users\t\AppData\Local"
+            data_parts = paths.data_dir().parts
+            for resolved in (
+                paths.machine_id_file(),
+                paths.machine_dir(fixed_id),
+                paths.registry_file(fixed_id),
+                paths.machine_project_dir("pid", fixed_id),
+                paths.locks_dir(),
+            ):
+                self.assertEqual(
+                    resolved.parts[: len(data_parts)], data_parts, (platform, resolved)
+                )
+
+
+class MachineLocalClassifierTest(unittest.TestCase):
+    """`is_machine_local_record` / `path_is_machine_local` — the one place that
+    decides which side of the portable/machine-local split a record belongs on.
+    """
+
+    def test_is_machine_local_record_is_basename_and_case_folded(self):
+        # A review found `Credentials.local.json` classified as portable, even
+        # though macOS APFS and Windows hand the very same file to anything that
+        # opens `credentials.local.json`.
+        self.assertTrue(paths.is_machine_local_record("credentials.local.json"))
+        self.assertTrue(paths.is_machine_local_record("Credentials.local.json"))
+        self.assertTrue(paths.is_machine_local_record("CREDENTIALS.LOCAL.JSON"))
+        self.assertTrue(paths.is_machine_local_record(".notifier-state"))
+        self.assertTrue(paths.is_machine_local_record("state.json"))
+        self.assertFalse(paths.is_machine_local_record("session-summary.md"))
+        self.assertFalse(paths.is_machine_local_record("graphify.json"))
+
+    def test_path_is_machine_local_matches_any_component_not_just_the_first(self):
+        # A review found that checking only `Path(rel).parts[0]` sent
+        # `env/credentials.local.json` to the portable subtree, because `"env"`
+        # itself isn't a machine-local name — only its child is.
+        self.assertTrue(paths.path_is_machine_local("env/credentials.local.json"))
+        self.assertTrue(paths.path_is_machine_local(".cache/state.json"))
+        self.assertTrue(paths.path_is_machine_local("credentials.local.json"))
+        self.assertFalse(paths.path_is_machine_local("session-summary.md"))
+        self.assertFalse(paths.path_is_machine_local("graphify.json"))
+        self.assertFalse(paths.path_is_machine_local("notes/session-summary.md"))
 
 
 if __name__ == "__main__":

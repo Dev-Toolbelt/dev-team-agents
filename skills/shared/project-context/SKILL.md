@@ -44,13 +44,13 @@ This applies to:
 
 ### Conversation — User's Preferred Language
 
-**All responses directed at the user — including plans presented for approval, explanations, questions, confirmations, and notifications — must use the language in `.dev-team-agents/user-data/preferences.json` → `language` field.**
+**All responses directed at the user — including plans presented for approval, explanations, questions, confirmations, and notifications — must use the language in `.dev-team-agents/resolved/preferences.json` → `language` field.**
 
 Read this value at the start of every session:
 
 ```bash
 python3 -c \
-  "import json; d=json.load(open('.dev-team-agents/user-data/preferences.json')); print(d.get('language','en'))" \
+  "import json; d=json.load(open('.dev-team-agents/resolved/preferences.json')); print(d.get('language','en'))" \
   2>/dev/null || echo "en"
 ```
 
@@ -75,7 +75,7 @@ When emitting system notifications (context window warnings, missing config, tip
 | Layer | Artifact | Holds | Lifespan |
 |-------|----------|-------|----------|
 | **Structural** | `docs/project.md`, `docs/development/*.md` | Current state: stack, architecture, standards | Rewritten in place — always describes now |
-| **Episodic** | `.dev-team-agents/user-data/session-summary.md` | What happened, in order | Decays (rotation policy below) |
+| **Episodic** | `<memory-dir>/session-summary.md` (`.dev-team-agents/memory-dir` pointer → portable memory) | What happened, in order | Decays (rotation policy below) |
 | **Semantic** | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
 | **Decisional** | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
 | **Mechanical** | `graphify-out/graph.json` | Where things are in the code | Regenerated — never hand-written |
@@ -103,8 +103,8 @@ Before starting any task, load context in this order (read what exists — skip 
 2. CLAUDE.md                              ← Claude-specific rules (highest precedence)
 3. docs/project.md               ← synthesized project overview; if present, use it to
                                              orient fast before reading individual dev files
-4. .dev-team-agents/user-data/session-summary.md            ← last session's decisions and next steps;
-                                             read the most recent entry (top of file)
+4. <memory-dir>/session-summary.md        ← last session's decisions and next steps; read the
+                                             most recent entry (top of file). See `layout` below
 5. docs/development/adrs/        ← list ADR files and read any relevant to the task
 6. AGENTS.md                             ← agent-specific instructions for this project
 7. .claude/settings.json                 ← Claude Code configuration
@@ -113,7 +113,30 @@ Before starting any task, load context in this order (read what exists — skip 
 10. docs/backlog/                ← current sprint and task context
 11. docs/wiki/README.md          ← retrieval index; grep it for the task's keywords and
                                              open only the entries that match
+12. extra context_paths                   ← additional knowledge folders this project declares;
+                                             read-only, and only what the task needs
 ```
+
+**Steps 4 and 12 resolve through the project's own configuration, not a fixed path.**
+
+`.dev-team-agents/project.json` (committed) declares where this project's knowledge lives:
+
+```json
+{ "schema": 1, "project_id": "…", "layout": 2, "context_paths": ["docs", "rfcs"] }
+```
+
+- **`context_paths`** — the first entry is the write root (`docs` by default, which is what every
+  path above assumes). Any additional entry is an **extra knowledge folder, read-only**: read from
+  it when the task's subject matter is there, and never write to it. A folder that is not listed is
+  not project knowledge, however suggestive its name.
+- **`layout`** — where the project's own state lives. Layout 1 means `.dev-team-agents/user-data/`
+  (both machine-local state and portable memory together). Layout 2 means the data store, with two
+  one-line pointer files: `.dev-team-agents/state-dir` (machine-local state directory)
+  and `.dev-team-agents/memory-dir` (portable memory directory). Read the pointers rather than
+  guessing paths; `scripts/lib/state.sh` already resolves them for every bash caller.
+
+`context_paths` is topology, not preference — it is committed so every developer on the project
+reads the same folders. Preferences are personal and never committed; see § User Preferences.
 
 **When `docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
 
@@ -121,7 +144,7 @@ After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` fiel
 
 > ⚠️ `project.md` may be stale (last updated: YYYY-MM-DD). Consider running `setup-assistant` in REFRESH mode to bring it up to date.
 
-**When `.dev-team-agents/user-data/session-summary.md` exists**, read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
+**When `<memory-dir>/session-summary.md` exists** (path resolved via `.dev-team-agents/memory-dir` pointer on layout 2, or `.dev-team-agents/user-data/` on layout 1), read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
 
 **When `docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
 
@@ -137,7 +160,7 @@ Read each file that exists. Combine the information into a unified understanding
 
 ## Session Summary — Write Rules
 
-**Trigger: you are about to write or trim `.dev-team-agents/user-data/session-summary.md`.** Load
+**Trigger: you are about to write or trim the session summary file (resolved via `.dev-team-agents/memory-dir`).** Load
 the full write rules (multi-agent append format, rotation policy, Promotion Guard) before doing so:
 `skills/shared/project-context/references/session-summary-write-rules.md`
 

@@ -8,6 +8,7 @@ CI time for no extra coverage.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -36,6 +37,24 @@ def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "t
     (root / "scripts" / "new-adr.sh").write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")
     # The hook dispatchers a bind registers in settings.json must exist in the
     # version, or a test cannot tell a wired path from a dangling one.
+    # The canonical preference schema: every bind resolves the cascade against it.
+    (root / "scripts" / "lib").mkdir(parents=True, exist_ok=True)
+    (root / "scripts" / "lib" / "preferences-defaults.json").write_text(
+        json.dumps(
+            {
+                "language": "pt-BR",
+                "auto_update": True,
+                "telemetry": True,
+                "worktree_active": True,
+                "worktree_base_branch": None,
+                "session_summary_max_days": 30,
+                "qa_browser": None,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (root / "scripts" / "hooks").mkdir(parents=True, exist_ok=True)
     for script in ("pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"):
         (root / "scripts" / "hooks" / script).write_text(
@@ -76,10 +95,22 @@ class StoreTestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, str(self.tmp), True)
         self.home = self.tmp / "store"
         self._saved_env = {
-            key: os.environ.get(key) for key in ("DEVTEAM_HOME", "DEVTEAM_PLATFORM")
+            key: os.environ.get(key)
+            for key in (
+                "DEVTEAM_HOME",
+                "DEVTEAM_PLATFORM",
+                "DEVTEAM_MACHINE_ID",
+                "DEVTEAM_HOSTNAME",
+            )
         }
         os.environ["DEVTEAM_HOME"] = str(self.home)
         os.environ.pop("DEVTEAM_PLATFORM", None)
+        # A machine-id override leaking out of one test would silently give the next
+        # one a store whose registry it cannot see.
+        os.environ.pop("DEVTEAM_MACHINE_ID", None)
+        # Likewise a spoofed hostname: it decides whether a recorded machine-id is
+        # adopted or re-issued, so it must not survive past the test that set it.
+        os.environ.pop("DEVTEAM_HOSTNAME", None)
         self.addCleanup(self._restore_env)
         self.source = make_source_tree(self.tmp / "source")
 

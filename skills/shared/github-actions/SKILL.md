@@ -10,7 +10,7 @@ Load this skill **only when the user explicitly asks to push** (e.g., "push", "f
 ## Preconditions (check in order, stop if any fails)
 
 1. `gh auth status` succeeds → the GitHub CLI is configured and authenticated.
-2. The repo has at least one workflow: `.github/workflows/*.yml` or `*.yaml` exists. Use the cached `ci_cd_detected` field in `.dev-team-agents/user-data/preferences.json` instead of re-scanning every time:
+2. The repo has at least one workflow: `.github/workflows/*.yml` or `*.yaml` exists. Use the cached `ci_cd_detected` field in `.dev-team-agents/resolved/preferences.json` instead of re-scanning every time:
    - `true` → trust it, skip the scan.
    - `null` or `false` → scan `.github/workflows/*.yml`/`*.yaml`, then write the result back to `ci_cd_detected`. A cached `false` is always rechecked (cheap, and workflows get added over time); a cached `true` never is.
 

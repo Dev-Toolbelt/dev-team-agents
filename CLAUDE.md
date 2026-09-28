@@ -113,7 +113,7 @@ The source copy holds Claude's values because Claude is the identity case; `rend
 1. `.dev-team-agents/.worktree-session` present → follow the stored decision silently:
    - `worktree=no branch=<b>` → operate on branch `<b>`; do not load the worktree skill
    - `worktree=yes branch=<b>` → load `skills/shared/worktree/SKILL.md` using base branch `<b>`
-2. Session file absent → read `worktree_active` from `.dev-team-agents/user-data/preferences.json`:
+2. Session file absent → read `worktree_active` from `.dev-team-agents/resolved/preferences.json`:
    - `true` → set up a worktree **without asking**: resolve base branch (`worktree_base_branch` → project config → auto-detected default branch), write `worktree=yes branch=<base>`, load the skill
    - `false` → do **not** show the worktree yes/no prompt; ask only for a new branch name (suggest `<context>/<brief-title>`), `git checkout -b <name>`, write `worktree=no branch=<name>`
 3. Key absent (legacy install) → ask the user once with `AskUserQuestion` (Yes/No), then follow the matching path from step 2.
@@ -339,6 +339,19 @@ When a rule or script path references "helpers", state which of the two it means
 
 **Defaults apply only to a file that does not exist.** `preferences.json` and `credentials.local.json` are both created when absent and never rewritten: install merges with existing values winning, and the session-start backfill only adds missing keys. **`telemetry` and `auto_update` are `CONSENT_KEYS`** — both default to `true` in a fresh file, but are backfilled as `false` into a pre-existing one, because that file's owner never saw a prompt for a field added after they installed. The lists live in `scripts/install.sh` and `scripts/hooks/session-start.sh`; keep them in sync.
 
+### Machine-Local Records
+
+**`scripts/lib/devteam/paths.py:MACHINE_LOCAL_RECORDS` is the single source of truth** for what a project's state belongs in the machine-local subtree. When adding a machine-local record, add its **basename** (case-insensitive) to that tuple and mirror it in every place it is mentioned:
+
+| Mirror | Purpose |
+|--------|---------|
+| `scripts/lib/devteam/paths.py` — `MACHINE_LOCAL_RECORDS` | Canonical classifier, read by `is_machine_local_record(name)` |
+| `CLAUDE-md/cli.md` — `data/machines/<machine-id>/projects/<id>/…` section | Documentation; enumerate what lives in the machine subtree |
+| `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
+| `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
+
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references) plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+
 ---
 
 ## Notification System
@@ -363,8 +376,19 @@ When a rule or script path references "helpers", state which of the two it means
 
 One installation per machine, many bound projects: the canonical tree lives in a versioned **core**
 store, durable state lives in a separate **data** store, and each project carries only a committed
-`project.json` (identity + `context_paths`) plus excluded, regenerable bind artifacts. An update
-writes one version and `devteam sync --all` re-points every project that is not pinned.
+`project.json` (identity, `layout`, `context_paths`) plus excluded, regenerable bind artifacts. An
+update writes one version and `devteam sync --all` re-points every project that is not pinned.
+
+**`data/` is split by what a record says** (ADR-0013): what the user authored or decided is portable
+and stays at the top of the store; what this machine observed or built — the registry, the bind
+manifests, `state.json`, locks, caches and credential *values* — lives under
+`data/machines/<machine-id>/`. `paths.is_machine_local_record()` is the single answer to which side a
+record belongs on; never re-derive that rule at a call site. No synchronisation exists or is implied.
+
+A project's memory moves into the store only when the user runs **`devteam upgrade`** — `bind`,
+`sync`, `update` and `migrate` report a stale `layout` and change nothing. Preferences cascade in
+three personal layers and are resolved on write into `.dev-team-agents/resolved/preferences.json`,
+which is the one file agents read; `context_paths` is committed topology, not a preference.
 
 The CLI is python3 (`scripts/cli/devteam`, implementation in `scripts/lib/devteam/`); hooks stay
 bash. Contributors working in that tree are bound by the **No-Destruction Rule** — canonical home
@@ -392,7 +416,7 @@ Three mechanisms work together to minimize context loss between sessions. All th
 
 ### Session Summary Rule
 
-**At the end of any session where files were created or modified**, write a new entry at the top of `.dev-team-agents/user-data/session-summary.md`:
+**At the end of any session where files were created or modified**, write a new entry at the top of the session summary file. Read `.dev-team-agents/memory-dir` (a one-line pointer) to find the absolute path; on layout 1 it resolves to `.dev-team-agents/user-data/session-summary.md`, and on layout 2 to `data/projects/<project_id>/session-summary.md` in the global store. Write the entry in the format:
 
 ```
 ## YYYY-MM-DD HH:MM:SS | [brief task title]
@@ -557,7 +581,7 @@ When the user writes any prompt matching the intent of setting up the project wi
 # Pre-compact Hook — Auto Session Summary
 When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
 
-1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
+1. Read `.dev-team-agents/memory-dir` to find the session summary path (resolves to `.dev-team-agents/user-data/session-summary.md` on layout 1, `data/projects/<project_id>/session-summary.md` on layout 2). Write a new entry at the top using this format:
    ```
    ## YYYY-MM-DD HH:MM:SS | [brief task title]
    **Done**: what was implemented or changed

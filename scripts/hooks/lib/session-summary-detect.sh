@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # Shared detection logic for session-summary hooks.
-# Source this file; it exports: TODAY, NOW, HAS_CHANGES, TODAY_COMMITS, REPO_ROOT.
+# Source this file; it exports: TODAY, NOW, HAS_CHANGES, TODAY_COMMITS,
+# REPO_ROOT, MEMORY_DIR, SUMMARY_FILE.
 # Assumes git repo check has already been done by the caller.
 
 TODAY=$(date +%Y-%m-%d)
 NOW=$(date +%Y-%m-%d\ %H:%M:%S)
 
-# user-data/ is shared state that lives only in the main worktree, never in a
-# linked worktree's own tree. Resolve --git-common-dir (the shared .git dir)
-# and take its parent so a hook running with cwd inside .worktrees/<name>/
-# still reads/writes the same session-summary.md as the main checkout.
+# The project's memory (session-summary.md) is shared state that lives only in
+# the main worktree, never in a linked worktree's own tree. Resolve
+# --git-common-dir (the shared .git dir) and take its parent so a hook running
+# with cwd inside .worktrees/<name>/ still reads/writes the same
+# session-summary.md as the main checkout — the `memory-dir` pointer itself
+# (see data-dirs.sh) also lives only there.
 REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -n "$REPO_ROOT" ] || REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+
+# shellcheck source=scripts/hooks/lib/data-dirs.sh
+. "$(dirname "${BASH_SOURCE[0]}")/data-dirs.sh"
+MEMORY_DIR="$(devteam_memory_dir "${REPO_ROOT:-.}")"
+SUMMARY_FILE="${MEMORY_DIR}/session-summary.md"
 
 TODAY_COMMITS=$(git log --since="${TODAY} 00:00:00" --oneline 2>/dev/null || true)
 
@@ -21,4 +29,4 @@ if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || 
     HAS_CHANGES=true
 fi
 
-export TODAY NOW HAS_CHANGES TODAY_COMMITS REPO_ROOT
+export TODAY NOW HAS_CHANGES TODAY_COMMITS REPO_ROOT MEMORY_DIR SUMMARY_FILE

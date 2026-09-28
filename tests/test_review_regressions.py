@@ -315,10 +315,17 @@ class FileModeTest(StoreTestCase):
 
         project_mode = (root / project.PROJECT_DIR / "project.json").stat().st_mode & 0o777
         self.assertEqual(project_mode, 0o644)
-        registry_mode = (self.home / "data" / "registry.json").stat().st_mode & 0o777
+        registry_mode = paths.registry_file().stat().st_mode & 0o777
         self.assertEqual(registry_mode, 0o600)
         data_mode = (self.home / "data").stat().st_mode & 0o777
         self.assertEqual(data_mode, 0o700)
+        # The machine subtree is created on the same terms as the rest of the store:
+        # it holds the registry, so a group-readable directory would expose the list
+        # of every project on the machine.
+        machine_mode = paths.machine_dir().stat().st_mode & 0o777
+        self.assertEqual(machine_mode, 0o700)
+        machine_id_mode = paths.machine_id_file().stat().st_mode & 0o777
+        self.assertEqual(machine_id_mode, 0o600)
 
 
 class WorktreeTest(StoreTestCase):

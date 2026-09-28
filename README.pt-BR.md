@@ -65,6 +65,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
 | Converter uma instalação v2 existente | `devteam migrate --apply` |
+| Mover a memória de um projeto para o store | `devteam upgrade --apply` |
 
 No Windows, chame o CLI como `py -3 scripts\cli\devteam …` — o shebang do arquivo sem extensão não executa lá. Um projeto vinculado guarda um `.dev-team-agents/project.json` commitado (sua identidade e suas pastas de conhecimento) e um ponteiro `core` para o store; nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
 
@@ -251,7 +252,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Cinco camadas minimiza
 | Camada | Onde | Guarda | Vida útil |
 |--------|------|--------|-----------|
 | Estrutural | `docs/project.md`, `docs/development/` | Stack, arquitetura, padrões | Reescrita — sempre descreve o agora |
-| Episódica | `.dev-team-agents/user-data/session-summary.md` | O que aconteceu, em ordem | Expira em ~30 dias |
+| Episódica | `<memory-dir>/session-summary.md` (pointer em `.dev-team-agents/memory-dir`) | O que aconteceu, em ordem | Expira em ~30 dias |
 | Semântica | `docs/wiki/` | O que não dá para deduzir do código | Permanente; substituída, nunca apagada |
 | Decisional | `docs/development/adrs/` | Por que uma escolha difícil de reverter foi feita | Permanente e imutável |
 | Mecânica | `graphify-out/graph.json` | Onde as coisas estão no código | Regenerada |

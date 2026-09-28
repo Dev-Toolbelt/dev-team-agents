@@ -18,7 +18,7 @@ If no entry exists for today, create one with the agent name as the first sub-he
 
 ## Rotation Policy
 
-After writing a new entry, trim entries according to `.dev-team-agents/user-data/preferences.json`:
+After writing a new entry, trim entries according to `.dev-team-agents/resolved/preferences.json`:
 - `session_summary_max_days` (default: 30) — remove entries older than this many days
 - `session_summary_max_entries` (default: 30) — keep at most this many entries total
 

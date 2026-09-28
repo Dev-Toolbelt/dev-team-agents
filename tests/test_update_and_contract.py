@@ -30,7 +30,7 @@ class ArchiveSafetyTest(StoreTestCase):
 
     def _members(self, archive):
         with tarfile.open(str(archive)) as tar:
-            return list(update._safe_members(tar))
+            return list(update.safe_members(tar))
 
     def test_rejects_a_symlink_with_an_absolute_target(self):
         member = tarfile.TarInfo("root/escape")

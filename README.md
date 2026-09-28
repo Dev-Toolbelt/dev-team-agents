@@ -65,6 +65,7 @@ Help me set up this project with dev-team-agents
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
 | Convert an existing v2 install | `devteam migrate --apply` |
+| Move a project's memory into the store | `devteam upgrade --apply` |
 
 On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionless file's shebang does not execute there. A bound project keeps a committed `.dev-team-agents/project.json` (its identity and knowledge folders) and a `core` pointer to the store; no copy of the framework, and no framework diffs in your product repository.
 
@@ -251,7 +252,7 @@ Agents start each session with no memory of previous ones. Five layers minimize 
 | Layer | Where | Holds | Lifespan |
 |-------|-------|-------|----------|
 | Structural | `docs/project.md`, `docs/development/` | Stack, architecture, standards | Rewritten — always describes now |
-| Episodic | `.dev-team-agents/user-data/session-summary.md` | What happened, in order | Decays after ~30 days |
+| Episodic | `<memory-dir>/session-summary.md` (pointer in `.dev-team-agents/memory-dir`) | What happened, in order | Decays after ~30 days |
 | Semantic | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
 | Decisional | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
 | Mechanical | `graphify-out/graph.json` | Where things are in the code | Regenerated |

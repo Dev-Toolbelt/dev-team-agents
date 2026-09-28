@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import bind as bind_module
 from .errors import EnvError
-from . import hooks, paths, project, registry, versions
+from . import hooks, paths, prefs, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
@@ -90,6 +90,54 @@ def check_store():
                 WARN,
                 "store",
                 "version {} has no VERSION marker — it may be a partial copy".format(version),
+            )
+        )
+    return findings
+
+
+def check_machine():
+    """Report the machine identity and where its records live (ADR-0013)."""
+    # `create=False`: doctor reports, it does not mint an identity as a side effect
+    # of being run — otherwise a second `doctor` sees a different world than the first.
+    current = paths.machine_id(create=False)
+    if current is None:
+        findings = [
+            _finding(
+                OK,
+                "machine",
+                "no machine identity recorded yet — the first command that writes to "
+                "the store will create one",
+            )
+        ]
+    else:
+        findings = [
+            _finding(
+                OK,
+                "machine",
+                "machine {} on host {} — machine-local records in {}".format(
+                    current, paths.machine_host(), paths.machine_dir(current)
+                ),
+            )
+        ]
+    other = [
+        entry.name
+        for entry in sorted(paths.machines_dir().glob("*"))
+        if entry.is_dir() and entry.name != current
+    ]
+    if other:
+        # Inert is not the same as expected. A second record set means the store was
+        # restored from elsewhere, or is reachable from more than one machine — a
+        # shared $DEVTEAM_HOME, a roaming profile, a restored image, a VM clone. None
+        # of it is read, and none of it is touched, but it is worth looking at.
+        findings.append(
+            _finding(
+                WARN,
+                "machine",
+                "{} other machine record set(s) in {}: {}".format(
+                    len(other), paths.machines_dir(), ", ".join(other)
+                ),
+                "Nothing reads them. If this store is shared between machines or was "
+                "restored from another one, expect each machine to keep its own set.",
             )
         )
     return findings
@@ -205,6 +253,77 @@ def check_project(project_root):
             findings.append(
                 _finding(OK, "identity", "registry re-pointed from {} to {}".format(previous, now))
             )
+
+    if project.upgrade_available(root):
+        findings.append(
+            _finding(
+                WARN,
+                "layout",
+                "project is on layout {} (current is {}) — memory still lives in {}/{}".format(
+                    project.layout(root),
+                    project.CURRENT_LAYOUT,
+                    project.PROJECT_DIR,
+                    project.LEGACY_MEMORY_DIR,
+                ),
+                "Run `devteam upgrade` to move it into the store. Nothing moves until you do.",
+            )
+        )
+    else:
+        findings.append(_finding(OK, "layout", "layout {}".format(project.layout(root))))
+
+    # Both pointers, and repaired rather than only reported: a pointer is a
+    # regenerated projection that every bind and sync rewrites, so rewriting it here is
+    # the same additive repair doctor already performs on a moved registry entry. The
+    # alternative — reporting and waiting — is what made a stale `state-dir` hand every
+    # hook an empty `state.json` until someone happened to run `devteam sync`.
+    expected = (
+        (project.STATE_DIR_POINTER, str(project.state_dir(root, project_id))),
+        (project.MEMORY_DIR_POINTER, str(project.memory_dir(root, project_id))),
+    )
+    stale = []
+    for name, want in expected:
+        pointer = root / project.PROJECT_DIR / name
+        if not pointer.is_file():
+            stale.append((name, "missing"))
+        elif pointer.read_text(encoding="utf-8").strip() != want:
+            stale.append((name, "naming a directory this layout does not resolve to"))
+    if stale:
+        try:
+            project.write_pointers(root, project_id)
+        except (EnvError, OSError) as exc:
+            findings.append(
+                _finding(
+                    FAIL,
+                    "layout",
+                    "cannot rewrite the directory pointers: {}".format(exc),
+                    "Check permissions on {}/.".format(project.PROJECT_DIR),
+                )
+            )
+        else:
+            for name, why in stale:
+                actions.append({"action": "repointed", "pointer": name})
+                findings.append(
+                    _finding(
+                        OK,
+                        "layout",
+                        "pointer {} was {}; rewritten".format(name, why),
+                    )
+                )
+    else:
+        findings.append(_finding(OK, "layout", "both directory pointers resolve correctly"))
+
+    resolved_prefs = root / prefs.RESOLVED_FILE
+    if not resolved_prefs.is_file():
+        findings.append(
+            _finding(
+                WARN,
+                "preferences",
+                "{} is missing — agents have no resolved preferences to read".format(
+                    prefs.RESOLVED_FILE
+                ),
+                "Run `devteam sync`.",
+            )
+        )
 
     manifest = bind_module.read_manifest(project_id)
     try:
@@ -332,6 +451,7 @@ def check_project(project_root):
 
 def run(project_root=None, reassign_identity=False):
     findings = list(check_store())
+    findings.extend(check_machine())
     registry_findings, _ = check_registry()
     findings.extend(registry_findings)
 

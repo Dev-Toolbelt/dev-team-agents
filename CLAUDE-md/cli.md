@@ -6,9 +6,10 @@ Companion to [`CLAUDE.md`](../CLAUDE.md). Decisions behind this layout:
 (identity and preference layers), [ADR-0009](../docs/development/adrs/0009-python3-as-the-devteam-cli-runtime-while-hooks-stay-bash.md)
 (python3 CLI). Acceptance criteria: [`docs/specs/v3-global-install.md`](../docs/specs/v3-global-install.md).
 
-**Milestone status.** M1 — store, CLI, identity, bind, versions/pin, migration — is implemented.
-Memory relocation, the preference cascade, credentials and the desktop app are later milestones.
-The v2 `install.sh` path keeps working for one deprecation cycle.
+**Milestone status.** M1 (store, CLI, identity, bind, versions/pin, migration) and M2 (preference
+cascade, memory relocation behind a consented upgrade, `context_paths`, store portability) are
+implemented. Credentials and the desktop app are later milestones. The v2 `install.sh` path keeps
+working for one deprecation cycle.
 
 ---
 
@@ -17,7 +18,7 @@ The v2 `install.sh` path keeps working for one deprecation cycle.
 | Store | Holds | Lifetime |
 |-------|-------|----------|
 | **core** | `versions/<X.Y.Z>/` (agents, commands, skills, scripts, templates) + the `current` pointer | Disposable — an uninstall may remove it, `devteam update` rebuilds it |
-| **data** | `registry.json`, `preferences.json`, `credentials/`, `projects/<project_id>/`, `quarantine/` | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
+| **data** | `machine-id`, `preferences.json`, `credentials/`, `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
 
 ```
 macOS    core  ~/Library/Application Support/dev-team-agents/core
@@ -34,12 +35,50 @@ the test suite uses — no test touches a real user directory.
 **`core/current` is a plain text file, not a symlink.** A symlink there would put the Windows
 materialisation failure at the most load-bearing path in the design.
 
+### `data/` is split by what a record says ([ADR-0013](../docs/development/adrs/0013-portable-and-machine-local-split-of-the-data-store.md))
+
+```
+data/machine-id                                    this machine's UUID, created once
+data/preferences.json                              PORTABLE — the global preference layer
+data/projects/<project_id>/preferences.json        PORTABLE — the project preference layer
+data/projects/<project_id>/session-summary.md      PORTABLE — the user's own memory
+data/credentials/                                  PORTABLE — references only, no values
+data/quarantine/<date>/<project_id>/               PORTABLE
+data/machines/<machine-id>/registry.json           MACHINE-LOCAL — absolute paths
+data/machines/<machine-id>/locks/                  MACHINE-LOCAL — a lock names a pid
+data/machines/<machine-id>/projects/<id>/…         MACHINE-LOCAL — bind-manifest.json, state.json,
+                                                   and the dot-markers (caches, ETags, day stamps)
+```
+
+**Portable = what the user authored or decided. Machine-local = what this machine observed or
+built.** `paths.is_machine_local_record(name)` is the single answer to which side a per-project
+record belongs on — dot-prefixed names are machine-local as a class, and so are `state.json`,
+`bind-manifest.json`, `telemetry-queue.json` and `credentials.local.json` (values, not references).
+Never re-derive that rule at a call site.
+
+`devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
+`locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
+machine subtree for a full-machine backup. Default destination is `$cache/exports/<stamp>.tar.gz`
+with mode `0600` (owner-only). A portable archive restored elsewhere is completed with
+`devteam bind` per project — the committed `project.json` reconnects it to its memory, and the
+registry and manifests are rebuilt locally. An import that carries no machine subtree keeps the
+receiving machine's own `machine-id` and `machines/`, or every bound project there would read as
+unbound. `devteam import` strips the consent keys (`telemetry`, `auto_update`) from any incoming
+`preferences.json`.
+
+`store.adopt_machine_layout()` relocates a store written before the split, once, from `cli.main`
+before any command reads the registry. **No synchronisation exists or is implied** — the split is
+what makes one possible later.
+
 ## What a bound project contains
 
 ```
-<project>/.dev-team-agents/project.json   COMMITTED — schema, project_id, context_paths
+<project>/.dev-team-agents/project.json   COMMITTED — schema, project_id, layout, context_paths
 <project>/.dev-team-agents/core           pointer to the resolved core version
-<project>/.dev-team-agents/user-data/     project memory (still the v2 location in M1)
+<project>/.dev-team-agents/resolved/      generated: preferences.json (the cascade's projection)
+<project>/.dev-team-agents/state-dir      generated: one line, absolute path of the machine-local state directory
+<project>/.dev-team-agents/memory-dir     generated: one line, absolute path of the portable memory directory
+<project>/.dev-team-agents/user-data/     project memory — layout 1 only; gone after `devteam upgrade`
 <project>/.claude/settings.json           hook dispatchers, merged — project-owned, committed
 <project>/.claude/… .opencode/… .codex/…  bind artifacts — excluded, regenerated by sync
 ```
@@ -90,7 +129,11 @@ preferences, markers, `.worktrees/`), between managed markers.
 | `devteam pin <v> \| --release` | Hold a project on a version, or return it to `current` |
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
 | `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply` |
-| `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project |
+| `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
+| `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
+| `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
+| `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
+| `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout |
 
 ## The `--json` contract
 
@@ -105,6 +148,32 @@ desktop app is a client of the CLI (ADR-0011), so an output shape change is a br
 | 2 | usage error |
 | 3 | environment error (no store, no version, unreadable directory) |
 | 4 | conflict (lock timeout, identity collision, refusing to overwrite) |
+
+## Layout, memory and preferences
+
+`project.json` carries **`layout`**, distinct from `schema`: `schema` is the file's format, `layout`
+is where the project's own state lives. `1` means `.dev-team-agents/user-data/` (every v2 and M1
+project); `2` means the data store — portable memory in `data/projects/<project_id>/` and machine-local state
+in `data/machines/<machine-id>/projects/<project_id>/`. A bind that finds no `user-data/` creates the
+project on the current layout, so a new project is clean from the start. `devteam upgrade` splits the
+v2 directory between the two as it copies.
+
+**Nothing relocates memory except `devteam upgrade`.** `bind`, `sync`, `update` and `migrate` report
+a stale layout and stop. The upgrade is copy → verify by sha256 → retire the original to quarantine,
+and it refuses a populated destination before copying anything. See
+[ADR-0012](../docs/development/adrs/0012-project-layout-version-and-a-consented-structure-upgrade.md).
+
+`.dev-team-agents/state-dir` holds the absolute path of the state directory so `scripts/lib/state.sh`
+resolves it in one file read — a CLI call would put a python subprocess inside every hook. It names
+the **machine-local** directory (`project.state_dir()`), because `state.json` is what reads through
+it; `project.memory_dir()` is the portable sibling and has no pointer, since nothing in bash reads
+it yet.
+
+**Preferences cascade in three personal layers** (defaults → global → project) and are resolved on
+write into `.dev-team-agents/resolved/preferences.json`. Agents read that one file; nothing merges at
+read time. Canonical contract: `skills/shared/user-preferences/SKILL.md`. `context_paths` is **not**
+a preference — it is committed topology in `project.json`, read per
+`skills/shared/project-context/SKILL.md` § Context Loading Order.
 
 ## Rules for contributors
 

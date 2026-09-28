@@ -7,7 +7,7 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
-Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 
 ---
 
@@ -190,7 +190,7 @@ Then:
 ---
 
 **PLAN GATE:** Steps 3 and 4 are read-only exploration/analysis — the agents there report findings, they do not touch files, so no plan-and-wait cycle applies to them. The gate applies only when the user picks **Implement the plan now** or **Implement selected items** in Step 5:
-1. Read `.dev-team-agents/user-data/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
 2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 

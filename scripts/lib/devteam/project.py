@@ -7,6 +7,12 @@ The file holds identity and topology, never a preference:
 It is committed so the identity survives a re-clone, a directory move and a
 machine change — the three events that would otherwise orphan the project's
 memory in ``data/projects/<project_id>/``.
+
+Under layout 2 the project's state is split in two (ADR-0013): portable memory in
+``data/projects/<project_id>/`` and machine-local state in
+``data/machines/<machine-id>/projects/<project_id>/``. Together with this committed
+file they are enough to rebuild a bind from scratch, which is what makes a store
+restored on a second machine usable.
 """
 
 from __future__ import annotations
@@ -23,6 +29,32 @@ PROJECT_DIR = ".dev-team-agents"
 PROJECT_FILE = "project.json"
 SCHEMA = 1
 DEFAULT_CONTEXT_PATHS = ["docs"]
+
+#: Where the project's own state lives. Distinct from ``schema``, which describes
+#: this file's format: a project can be on the current schema and an older layout.
+#:
+#: 1 — memory in the project (``.dev-team-agents/user-data/``), the v2 and M1 shape
+#: 2 — memory in the data store (``data/projects/<project_id>/``), project clean
+#:
+#: A project is **never** moved between layouts automatically. The CLI reports that
+#: an upgrade is available and `devteam upgrade` performs it with confirmation, so
+#: the fallback is scoped by an explicit recorded version rather than living
+#: indefinitely in the readers.
+LAYOUT_MEMORY_IN_PROJECT = 1
+LAYOUT_MEMORY_IN_STORE = 2
+CURRENT_LAYOUT = LAYOUT_MEMORY_IN_STORE
+#: The pointers the bash hooks and the agent context order read, each in one file
+#: read instead of a subprocess per lookup. Two, because layout 2 has two
+#: directories: `state-dir` names the machine-local one (`state.json`, the markers)
+#: and `memory-dir` names the portable one (`session-summary.md`).
+#:
+#: `memory-dir` is not speculative: `skills/shared/project-context/SKILL.md` step 4 is
+#: `<state-dir>/session-summary.md`, so every agent in the framework was reading a
+#: pointer to find the episodic layer. Repointing `state-dir` at the machine subtree
+#: without adding this one left them all looking in a directory that has no summary.
+STATE_DIR_POINTER = "state-dir"
+MEMORY_DIR_POINTER = "memory-dir"
+LEGACY_MEMORY_DIR = "user-data"
 
 # `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
 # project_id carrying one passed validation and then became a directory name
@@ -83,6 +115,17 @@ def validate(data, source="project.json"):
     if not isinstance(pid, str) or not _UUID_RE.fullmatch(pid):
         raise EnvError("{}: 'project_id' must be a lowercase UUID string".format(source))
 
+    layout_value = data.get("layout", LAYOUT_MEMORY_IN_PROJECT)
+    if not isinstance(layout_value, int) or isinstance(layout_value, bool) or layout_value < 1:
+        raise EnvError("{}: 'layout' must be a positive integer".format(source))
+    if layout_value > CURRENT_LAYOUT:
+        raise EnvError(
+            "{}: layout {} is newer than this CLI understands (max {})".format(
+                source, layout_value, CURRENT_LAYOUT
+            ),
+            hint="Update dev-team-agents.",
+        )
+
     paths_value = data.get("context_paths", DEFAULT_CONTEXT_PATHS)
     if not isinstance(paths_value, list) or not paths_value:
         raise EnvError("{}: 'context_paths' must be a non-empty list".format(source))
@@ -132,9 +175,16 @@ def ensure(root, context_paths=None):
                 )
         return existing, False
 
+    # A project that already carries in-project memory starts on layout 1 and needs
+    # an explicit `devteam upgrade`; one that never had a v2 install is born on the
+    # current layout, so it is clean from the first bind and has nothing to move.
+    born_layout = (
+        LAYOUT_MEMORY_IN_PROJECT if legacy_memory_dir(root).is_dir() else CURRENT_LAYOUT
+    )
     data = {
         "schema": SCHEMA,
         "project_id": str(uuid.uuid4()),
+        "layout": born_layout,
         "context_paths": list(context_paths or DEFAULT_CONTEXT_PATHS),
     }
     validate(data, source=str(project_file(root)))
@@ -167,3 +217,122 @@ def context_paths(root):
     if data is None:
         return list(DEFAULT_CONTEXT_PATHS)
     return list(data.get("context_paths", DEFAULT_CONTEXT_PATHS))
+
+
+def layout(root):
+    """The recorded layout, defaulting to 1 for a project that predates the key."""
+    data = load(root)
+    if data is None:
+        return LAYOUT_MEMORY_IN_PROJECT
+    return int(data.get("layout", LAYOUT_MEMORY_IN_PROJECT))
+
+
+def set_layout(root, value):
+    data = load(root)
+    if data is None:
+        raise UsageError("{} is not a bound project".format(root))
+    data["layout"] = int(value)
+    validate(data, source=str(project_file(root)))
+    jsonio.write_json_atomic(
+        project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None
+    )
+    return data
+
+
+def legacy_memory_dir(root):
+    """The in-project memory directory, whether or not it is still in use."""
+    return Path(root) / PROJECT_DIR / LEGACY_MEMORY_DIR
+
+
+def _require_id(root, project_id):
+    pid = project_id
+    if pid is None:
+        data = load(root)
+        pid = data["project_id"] if data else None
+    if not pid:
+        raise EnvError("cannot resolve the memory directory without a project_id")
+    return pid
+
+
+def memory_dir(root, project_id=None):
+    """Where this project's **portable** memory lives, per its recorded layout.
+
+    Session summary, project preferences — what the user wrote. Under layout 1 this
+    is the same directory as :func:`state_dir`, because v2 kept both together.
+    """
+    from . import paths
+
+    if layout(root) >= LAYOUT_MEMORY_IN_STORE:
+        return paths.project_data_dir(_require_id(root, project_id))
+    return legacy_memory_dir(root)
+
+
+def state_dir(root, project_id=None):
+    """Where this project's **machine-local** state lives (ADR-0013).
+
+    ``state.json`` and the dot-markers: the installed version, the session id, the
+    last update check — facts about this machine, not about the project.
+    """
+    from . import paths
+
+    if layout(root) >= LAYOUT_MEMORY_IN_STORE:
+        return paths.machine_project_dir(_require_id(root, project_id))
+    return legacy_memory_dir(root)
+
+
+def memory_dir_for_layout(root, project_id, target_layout):
+    """Where portable memory lives under a given layout — used to plan a move."""
+    from . import paths
+
+    if target_layout >= LAYOUT_MEMORY_IN_STORE:
+        return paths.project_data_dir(project_id)
+    return legacy_memory_dir(root)
+
+
+def state_dir_for_layout(root, project_id, target_layout):
+    """Where machine-local state lives under a given layout."""
+    from . import paths
+
+    if target_layout >= LAYOUT_MEMORY_IN_STORE:
+        return paths.machine_project_dir(project_id)
+    return legacy_memory_dir(root)
+
+
+def _write_pointer(root, name, resolved):
+    target = Path(root) / PROJECT_DIR / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # `with_name`, not `with_suffix`: `state-dir` has no suffix, but `memory-dir`
+    # would have had `-dir` replaced rather than `.tmp` appended.
+    tmp = target.with_name(name + ".tmp")
+    tmp.write_text(str(resolved) + "\n", encoding="utf-8")
+    tmp.replace(target)
+    return {"path": str(Path(PROJECT_DIR) / name), "kind": "pointer"}
+
+
+def write_pointers(root, project_id=None):
+    """Record both resolved directories, for the hooks and the agent context order.
+
+    `state-dir` names :func:`state_dir` because `scripts/lib/state.sh` resolves
+    `state.json` through it; `memory-dir` names :func:`memory_dir` because the
+    canonical context-loading order reads the session summary through it.
+
+    Returns one manifest record per pointer. Both are projections of state that lives
+    elsewhere, so a stale one is a bug rather than a user edit to preserve — which is
+    why **every** path that changes where either directory resolves must call this.
+    Missing that call from the store relocation made `state_get` return an empty
+    string for every key, silently.
+    """
+    return [
+        _write_pointer(root, STATE_DIR_POINTER, state_dir(root, project_id)),
+        _write_pointer(root, MEMORY_DIR_POINTER, memory_dir(root, project_id)),
+    ]
+
+
+def write_state_pointer(root, project_id=None):
+    """Backwards-compatible single-record form. Writes both pointers."""
+    return write_pointers(root, project_id)[0]
+
+
+def upgrade_available(root):
+    """True when this project is on an older layout than the CLI implements."""
+    return layout(root) < CURRENT_LAYOUT

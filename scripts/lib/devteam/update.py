@@ -137,7 +137,7 @@ def check():
     }
 
 
-def _safe_members(tar):
+def safe_members(tar):
     """Yield only members that cannot write outside the extraction directory.
 
     The previous filter checked ``member.name`` and stopped there. Three classes
@@ -211,11 +211,11 @@ def _download_tree(ref, workdir, expected_sha256=None, emitter=None):
     extract_to = Path(workdir) / "extracted"
     extract_to.mkdir()
     with tarfile.open(str(archive), "r:gz") as tar:
-        members = list(_safe_members(tar))
+        members = list(safe_members(tar))
         try:
             tar.extractall(str(extract_to), members=members, filter="data")
         except TypeError:
-            # Python < 3.12 has no `filter=`; _safe_members is the floor there.
+            # Python < 3.12 has no `filter=`; safe_members is the floor there.
             tar.extractall(str(extract_to), members=members)
     roots = [child for child in extract_to.iterdir() if child.is_dir()]
     if len(roots) != 1:

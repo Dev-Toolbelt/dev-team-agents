@@ -20,6 +20,224 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Python CI gate** (`.github/scripts/ci/03-python.sh`, blocking): byte-compile plus 78 unit tests. The repository previously had **no** python check at all — `01-lint.sh` runs shellcheck, which does not read `*.py`, and the most complex logic in the tree is now python.
 - **`tests/`** — stdlib `unittest` suite for the CLI, stripped from the installed package by `scripts/lib/strip-tarball.sh`.
 
+### Added — v3 milestone M2
+
+- **Preference cascade in three personal layers**: shipped defaults → global user
+  (`data/preferences.json`) → this project (`data/projects/<id>/preferences.json`). Resolved **on
+  write** into `.dev-team-agents/resolved/preferences.json`, so agents keep doing one file read and no
+  merge logic enters any agent body. `devteam prefs list|get|set|unset` reads and writes the layers —
+  `list` names the layer each value came from, and writes never touch the projection.
+- **Consent keys are withheld, not defaulted.** `telemetry` and `auto_update` resolve to `false`
+  whenever no layer sets them, reported as `consent-withheld` rather than `defaults`, so "the user
+  was never asked" stays distinguishable from "the user accepted the default". Carries over the v2
+  `CONSENT_KEYS` rule into the cascade.
+- **`layout` in `project.json`, and `devteam upgrade`** — a consented structure upgrade that moves a
+  project's memory into the data store and leaves the project clean. `layout` is distinct from
+  `schema`: `schema` is the file's format, `layout` is where the project's state lives. **No other
+  command relocates memory**: `bind`, `sync`, `update` and `migrate` report a stale layout and stop.
+  The upgrade previews unless `--apply`, copies every file, verifies each by sha256, and only then
+  retires the original to quarantine; a populated destination aborts before anything is copied.
+  Decision and the alternatives in ADR-0012.
+- **A new project is born clean.** A bind that finds no `user-data/` creates the project on the
+  current layout, so only projects that actually carry v2 memory ever have an upgrade to run.
+- **`.dev-team-agents/state-dir`** — a one-line pointer with the absolute path of the project's state
+  directory. `scripts/lib/state.sh` resolves it with a single file read, because asking the CLI would
+  put a python subprocess inside every hook invocation.
+- **`installed_version` is stamped by the bind.** `/devteam:version`, the session banner and
+  telemetry read it from `state.json` and no v3 path wrote it, so a migrated project reported its v2
+  number forever. Retiring the key and repointing those four readers stays open (ADR-0007); this
+  makes them truthful now, without losing other keys in the file.
+- **`context_paths` reaches the context loading order.** The first entry is the write root (`docs` by
+  default); any additional entry is an extra knowledge folder, **read-only**. Documented in
+  `skills/shared/project-context/SKILL.md` § Context Loading Order alongside how to resolve `layout`.
+- **Store portability**: `devteam export` archives the data store (quarantine included);
+  `devteam import` restores it, refusing a populated store without `--force` and rejecting unsafe
+  archive members; `devteam uninstall` removes the core and **keeps** the data store unless given
+  `--purge --yes`.
+- **`data/` is split into a portable subtree and `data/machines/<machine-id>/` (ADR-0013).** An
+  inventory of a populated store found exactly two record types carrying absolute paths —
+  `registry.json` and `bind-manifest.json` — plus `state.json` carrying facts true only of the
+  machine that wrote them (`installed_version` is *this* machine's core version). Those move under
+  the machine subtree, together with `locks/` (a lock names a pid), the dot-markers (caches, ETags,
+  day stamps) and `credentials.local.json` (values, not references — a secret that rides along in a
+  routine export is a secret in one more place). What the user authored stays portable: preferences,
+  session summaries, credential references, quarantine. `paths.is_machine_local_record()` is the one
+  answer to which side a record belongs on.
+- **`devteam export` is portable by default; `--all` includes this machine's records.** A portable
+  archive plus each project's committed `project.json` is enough to rebuild a bind elsewhere with
+  `devteam bind` — the registry and manifests are regenerated under the receiving machine's own
+  identity instead of arriving full of paths that do not exist there. An import that carries no
+  machine subtree keeps the receiving machine's own `machine-id` and `machines/`; promoting it
+  verbatim would have left every bound project reading as unbound.
+- **`devteam upgrade` splits the v2 memory directory as it copies** — `session-summary.md` and the
+  project preferences to the portable subtree, `state.json`, the dot-markers and the secrets to the
+  machine subtree. `.dev-team-agents/state-dir` names the machine one, because `state.json` is what
+  reads through it.
+- **`data/machine-id`** — one UUID per machine, created on first use with `O_EXCL` so concurrent first
+  uses converge on one value. `DEVTEAM_MACHINE_ID` overrides it and is the seam that lets a test open
+  the same store as another machine. Reported by `devteam path` and `devteam doctor`.
+- **A store written before the split is relocated once**, from `cli.main` before any command reads the
+  registry — otherwise every bound project would have read as unbound. Idempotent, `os.replace` per
+  file so a record is never in neither place, and it quarantines rather than overwriting an occupied
+  destination. It moves nothing inside any project.
+- **No synchronisation exists or is implied.** ADR-0013 makes one possible; `export`/`import` stay
+  explicit and manual.
+
+### Changed
+- **37 markdown references now read the projection**, not the v2 source file. The five documents that
+  describe the *source* layer — the canonical `user-preferences` skill, first-time setup, both
+  health-check references and `CLAUDE-md/preferences.md` — keep naming `user-data/preferences.json`,
+  because that is what they are about. `skills/shared/user-preferences/SKILL.md` now states the read
+  path, the one-level fallback for an unbound project, and that writes go through `devteam prefs set`.
+
+### Fixed — independent of the split
+
+- **The two telemetry hooks wrote into the shared, versioned core store.**
+  `scripts/hooks/pre-tool-use/02b-telemetry.sh` and `scripts/hooks/stop/05-telemetry.sh` derived the
+  project root by counting `..` hops from `SCRIPT_DIR`, which assumes the flat v2 vendored layout. The
+  default v3 bind modes (`link` on macOS/Linux, `copy` on Windows) insert a `core/` segment, so the
+  count landed one level short at `.dev-team-agents/core/user-data`. `cd`+`pwd` keeps that logical
+  path, but an actual write follows the symlink — verified: it resolves to
+  `<store>/core/versions/<version>/user-data/`. Every bound project on the machine would have written
+  its `telemetry-queue.json` and `state.json` into one shared directory inside the tree `devteam
+  update` replaces wholesale and `store gc` can remove. Only the opt-in `vendored` mode, which has no
+  `core/` indirection, happened to work. Both hooks now resolve the root via `git rev-parse
+  --git-common-dir` like every other hook. Root cause predates the ADR-0013 split and is unrelated to
+  it; `pre-tool-use/02-graphify-hint.sh` was never affected because it already resolved via git.
+
+### Fixed — M2.1 review round
+
+A five-agent review of the split (backend, security, architecture, tests, docs) returned 28 findings.
+Two were CRITICAL and both are closed.
+
+- **`devteam import` extracted a hostile archive unchecked on the declared python floor.**
+  `store.py` had its own member loop that validated `member.name` and stopped there, then relied on
+  `extractall(..., filter="data")` with an `except TypeError` fallback. `filter=` does not exist on
+  python 3.9 — the interpreter the CLI is *required* to support, and the system python on macOS — so
+  the fallback extracted with `extractall`'s `fully_trusted` default and nothing ever inspected
+  `member.linkname`. A symlink member with an absolute target, or a hardlink whose target climbed
+  out, was a write outside the store and a read-any-file-then-exfiltrate chain. `update.py` already
+  had the correct validator; the duplicate loop is how it went unchecked. Both paths now share
+  `update.safe_members`, promoted from `_safe_members` because an underscore invites a third weaker
+  copy.
+- **The store relocation stranded every layout-2 project's state pointer.** Moving `state.json` into
+  the machine subtree without rewriting `.dev-team-agents/state-dir` made `state_get` return an
+  empty string for **every** key — installed version, session id, session head, health-check marker,
+  update-check throttle — with no error anywhere. The relocation now rewrites both pointers for every
+  bound project it can resolve, and `devteam doctor` repairs a missing or stale pointer in place
+  rather than only reporting it. The ADR's claim that the relocation "moves nothing inside a project"
+  was exactly why it was incomplete; it now says it moves no *content* there.
+- **A portable export shipped plaintext credentials.** `devteam upgrade` retires the whole legacy
+  `user-data/` directory to `data/quarantine/`, secrets included, and quarantine was portable and
+  included in the default archive — a reviewer extracted a database password from one. Quarantine is
+  now `paths.LOCAL_ONLY_STORE_ENTRIES`: portable by content, never in a default export. The export
+  filter also classifies by **basename at every path depth**, so a nested or differently-cased
+  secret (`env/Credentials.local.json`) cannot escape either.
+- **`devteam export --all` packed the live lock directory.** The exclusion tested only the first path
+  component, and locks moved to `machines/<id>/locks/` — whose first component is `machines`. A
+  restored lock names a pid that does not exist on the receiving machine, and `_break_if_stale`'s
+  300-second floor meant the next command polled and then failed with a confusing `ConflictError`.
+  Components are now matched at every depth, and the filter and the file count are **one** predicate
+  so they cannot drift.
+- **The export landed in the repository, world-readable.** The default destination was `Path.cwd()`
+  with mode `0644` and no gitignore entry — one `git add -A` from committing an archive of the data
+  store. It now defaults to `cache_dir()/exports/`, is `chmod 0600`, and `devteam-data-*.tar.gz` is
+  in the managed project gitignore block for the `--to .` case.
+- **`machine-id` identified the store, not the machine.** ADR-0007 deliberately places `data/` in the
+  Windows **roaming** profile and presents that as a backup feature — and a roaming profile is
+  replicated between machines by policy, so the documented Windows layout guaranteed two machines
+  answering with one id. Same for a restored disk image, a VM clone, and `$DEVTEAM_HOME` on a network
+  mount. The record is now `{"id": …, "created_on": <host>}` and a host mismatch **re-issues** a new
+  id and subtree rather than adopting records that describe another machine. A legacy bare-UUID
+  record is adopted and annotated, never re-issued — re-issuing would have orphaned the records that
+  id already named.
+- **Consent travelled with a portable export.** `telemetry` and `auto_update` are `CONSENT_KEYS`
+  precisely because consent belongs to one installation, and the existing backfill only adds keys
+  that are *missing* — so an imported `preferences.json` already saying `true` silently enabled
+  telemetry on a machine whose owner was never asked. `devteam import` now strips both keys, so the
+  cascade resolves them as `consent-withheld`.
+- **A portable import could take the receiving machine's registry out of the active store.** Promoting
+  an archive that carries no machine subtree moved the live `machines/` aside with it, and every bound
+  project read as unbound. The local records are carried across first, `machines/` before
+  `machine-id` so a failure cannot orphan the identity from the records it names, with rollback and
+  staging cleanup on error. A `data/machines` member that is not a directory — a dangling symlink made
+  `exists()` false — is now refused instead of misread as a portable archive.
+- **`devteam path` and `devteam doctor` wrote to disk.** Both minted `data/machine-id` as a side
+  effect of being asked a question, so a second `doctor` diagnosed a world the first one created.
+  Both now resolve the identity read-only. `doctor` also reports another machine's record set as
+  `warn` rather than `ok` — inert is not the same as expected.
+- **`graphify.json` was moved into a per-user store.** It is committed, shared by every developer
+  through a deliberate gitignore exception, and `scripts/graphify-refresh.sh` reads it at the
+  in-project path. `devteam upgrade` copied it into `data/projects/<id>/` and retired the exception
+  that kept it tracked, so graph refresh would have stopped working for everyone else on the next
+  pull. `paths.PROJECT_OWNED_RECORDS` is now a third class that stays in the project, and the
+  exception survives the gitignore rewrite. If the file cannot be put back after the legacy directory
+  is quarantined, the staged copy is kept and named rather than cleaned up.
+- **The classifier was case-sensitive and one level deep.** `Credentials.local.json` classified as
+  portable while macOS APFS and Windows hand the same file to anything opening the lowercase name,
+  and `env/credentials.local.json` escaped the check entirely. `paths.is_machine_local_record()` now
+  takes a case-folded basename and `paths.path_is_machine_local()` answers for a whole path.
+- **Quarantine was the one part of the store that was not owner-only.** Its directories were `0755`
+  holding `0644` files, so containment rested entirely on `data/` being `0700`. Quarantine now goes
+  through `jsonio.ensure_dir` (`0700`) and files the upgrade copies are `chmod 0600`.
+- **The export manifest disclosed the absolute store path**, and therefore the OS username and home
+  layout, to whoever received the archive. Removed.
+- **`devteam upgrade` never said to commit the layout change.** `layout` lives in the committed
+  `project.json`, so an uncommitted upgrade is invisible to a fresh clone: it comes back on layout 1
+  and asks to upgrade again. Observed in an end-to-end run, not reported by the review. The command's
+  output now names the file to commit, and also reports both pointers and any project-owned file it
+  kept in place.
+- **Two defects the round's own fixes introduced, caught by the regression tests written for them.**
+  `devteam doctor` still minted a machine identity on a store with no installation: `check_machine()`
+  resolved read-only but `check_registry()` reached `registry_file()` through `machine_dir()`, which
+  creates one — so `doctor` created the store it had just reported missing. Registry **reads** now
+  thread an explicitly read-only id, and no identity means no bound projects. And the guard that
+  refuses a non-directory `data/machines` member tested `exists() and not is_dir()`, but
+  `Path.exists()` follows the link and is `False` for a **dangling** symlink, which is precisely the
+  case the guard was written for; `is_symlink()` is now checked first.
+- **The relocation was invisible to a `--json` client.** ADR-0011 makes the desktop app a client of
+  this CLI, so a store mutation it could not observe in the document was a contract gap. The result
+  now carries `store_relocation`.
+- **Every bash hook was blind to layout 2.** They all hardcoded `.dev-team-agents/user-data/`, so an
+  upgraded project lost the framework's own enforcement and the upgrade actively fought itself:
+  `session-start.sh` recreated the retired directory on every session, which then re-tripped the
+  "run `devteam upgrade`" nag permanently for an upgrade that had already run and would refuse to run
+  again; `stop/01-session-summary.sh` instructed the agent to recreate the summary in the project,
+  re-splitting the episodic layer; and `pre-compact.sh`'s `[ -d user-data ]` guard silently disabled
+  the PreCompact summary gate. A shared resolver (`scripts/hooks/lib/data-dirs.sh`) now answers for
+  both pointers with the in-project path as the layout-1 fallback, so one code path serves both
+  layouts, and the nag fires only when the directory holds something other than a
+  `paths.PROJECT_OWNED_RECORDS` entry.
+- **The hooks read a preferences file that layout 2 does not have.** They read the v2 source layer
+  directly instead of `.dev-team-agents/resolved/preferences.json`, the projection the M2 cascade
+  writes and that agents already read — so on layout 2 the session banner reported defaults and the
+  telemetry consent check failed closed against a missing file. The hooks now resolve the projection,
+  and `session-start.sh`'s key backfill is gated to genuine layout 1 so it never writes into a
+  generated file.
+- **`skills/shared/project-context/SKILL.md` step 4 pointed at the wrong directory.** The canonical
+  context-loading order every agent follows read the session summary through `state-dir`, which now
+  names the machine subtree. The justification for not writing a second pointer — "nothing reads it
+  yet" — counted only CLI and bash readers and missed the largest reader class: an agent following a
+  skill. Both pointers are now written and the skill reads `memory-dir`.
+- **Upgrade visibility**: `devteam doctor` reports a stale layout, a missing or wrong state pointer
+  and a missing preference projection as `warn` findings; the session banner says the same thing with
+  an observable test (a bound project whose `user-data/` still exists) and no JSON parsing.
+- 75 new tests (202 total). Beyond the cascade and upgrade coverage, there is now one regression test
+  per finding from the review round, each naming the defect it pins: the store import path refusing an
+  absolute-target symlink, an escaping hardlink and a device member; a default export carrying no
+  secret planted at the top of the legacy memory directory, nested one level down, or spelled with
+  different case; `--all` excluding locks at any depth while still carrying the registry and the
+  manifests; the machine identity re-issued on a host mismatch but **adopted** for a legacy
+  bare-UUID record; consent keys resolving as `consent-withheld` after an import; `graphify.json`
+  surviving an upgrade in the project with its gitignore exception intact; quarantine at `0700` with
+  copied files at `0600`; and `devteam path` and `doctor` creating nothing on an empty store. The
+  export file count and the archive filter are asserted against each other, because they are one
+  predicate and a drift between them was previously invisible. `test_paths.py` now exercises every
+  machine-local resolver under `darwin`, `win32` and `linux`.
+- One behaviour is recorded as **uncovered** rather than tested with a contorted fixture:
+  `upgrade.apply`'s keep-the-staged-copy path when a project-owned file cannot be restored needs a
+  reliably unwritable directory, which is permission-bit dependent and flaky under CI.
+
 ### Fixed — M1 review findings
 
 A five-role review (backend, security, architecture, devops, QA) of the milestone found 43
@@ -142,9 +360,10 @@ after the failure it prevents.
   longer truncated to 20 lines.
 
 ### Deferred, recorded rather than fixed
-- `registry.json` and the per-project manifests hold absolute paths, so the `data/` tree is not
-  portable across machines even though the memory in it is. ADR-0007 now says so instead of
-  implying otherwise; splitting bind state per host is a later decision.
+- ~~`registry.json` and the per-project manifests hold absolute paths, so the `data/` tree is not
+  portable across machines even though the memory in it is.~~ **Resolved in M2.1** — the tree is
+  split per machine and a portable export plus each project's committed `project.json` rebuilds a
+  bind elsewhere. ADR-0013 amends ADR-0007.
 - `state.json:installed_version` is still read by `/devteam:version`, the session banner and
   telemetry, and no v3 path writes it. Recorded in ADR-0007 as the open state-ownership question.
 - ADR-0008's memory-survival claims are marked **pending**: identity ships in M1, relocation does

@@ -19,7 +19,7 @@ If it reads `worktree=yes branch=<b>`, resolve the post-commit action in this or
 1. If `$ARGUMENTS` contains `finalize`, `merge`, or `teardown`, set the action to **Commit + rebase + merge + teardown**
 2. Else if `$ARGUMENTS` contains `rebase`, set the action to **Commit + rebase**
 3. Else if `$ARGUMENTS` contains `commit-only`, `only`, or `keep-worktree`, set the action to **Commit only**
-4. Else read `.dev-team-agents/user-data/preferences.json` and check `worktree_commit_action`
+4. Else read `.dev-team-agents/resolved/preferences.json` and check `worktree_commit_action`
 5. If that preference is absent or equals `ask`, use `AskUserQuestion` before staging or committing anything
 
 `worktree_commit_action` accepts these values:
@@ -174,7 +174,7 @@ If Step 0.5 selected a worktree finalize action (rebase, or rebase + merge + tea
 
 ## Step 6 — Auto knowledge capture
 
-Skip this step entirely if `$ARGUMENTS` contained `dry-run`/`--dry-run`, no commit was actually made (e.g., the user chose "just show me" / aborted), `$ARGUMENTS` contains `--skip-learn`, the user explicitly asked to skip it, or `auto_learn_before_commit` in `.dev-team-agents/user-data/preferences.json` is `false` (default: `true`).
+Skip this step entirely if `$ARGUMENTS` contained `dry-run`/`--dry-run`, no commit was actually made (e.g., the user chose "just show me" / aborted), `$ARGUMENTS` contains `--skip-learn`, the user explicitly asked to skip it, or `auto_learn_before_commit` in `.dev-team-agents/resolved/preferences.json` is `false` (default: `true`).
 
 **Session guard.** Check `.dev-team-agents/.learn-last-run` (format: `<unix-timestamp> <head-sha>`). Compare its `<head-sha>` against the current `git rev-parse HEAD` (now reflecting the commits just made, and any worktree rebase/merge), and its timestamp against the mtime of `.dev-team-agents/user-data/session-summary.md`. If HEAD hasn't moved since that marker was written and the session summary hasn't changed, skip — nothing new exists to capture.
 

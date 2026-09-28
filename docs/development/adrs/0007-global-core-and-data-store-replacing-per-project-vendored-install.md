@@ -98,6 +98,21 @@ rebuilds artifacts — a wholesale restore is expected to need both, not to work
 is stated rather than fixed because splitting the tree per host is a later decision; silence
 here would read as a promise the store does not keep.
 
+> **Amended by [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md).** The two
+> kinds of record no longer share the `data/` tree: machine-local records live under
+> `data/machines/<machine-id>/`, keyed by an id that is re-issued when the store is opened on a host
+> other than the one that recorded it, and `devteam export` is portable by default — it excludes
+> `machine-id`, `machines/`, `locks/`, `quarantine/` and any machine-local record at every path
+> depth, while `--all` takes everything but `locks/`. A portable archive plus each project's
+> committed `project.json` is enough to rebuild a bind on another machine, and an import withholds
+> the consent keys so the receiving machine is asked again. `devteam doctor` still reconciles a
+> single moved project and `devteam sync` still rebuilds artifacts; what changed is that a
+> wholesale restore is no longer expected to arrive holding another machine's paths.
+>
+> **The tree above is left as ADR-0007 decided it** — `docs/development/adrs/` is the decisional
+> layer, and a reader has to be able to see what was decided here rather than a later shape
+> back-written into it. For the current tree, read ADR-0013.
+
 Bind artifacts are **gitignored**, written between managed markers in `.gitignore`, because an
 absolute path to one developer's `$HOME` cannot be committed. `devteam bind` recreates them,
 and `devteam sync` refreshes them after an update or a config change.

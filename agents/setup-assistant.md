@@ -100,7 +100,7 @@ Ask all relevant questions in a single message:
 
 **Maintenance only:** issue tracker (see tracker MCP table in the loaded setup-scan skill)
 
-**Language preference (FIRST_RUN only, or REFRESH if the field is absent):** ask which language agents should converse in (documents and technical output stay English) only when `.dev-team-agents/user-data/preferences.json` has no `language` field. Follow `skills/shared/user-preferences/SKILL.md` for the schema, the language policy, and how to seed or backfill the file from `.dev-team-agents/scripts/lib/preferences-defaults.json` without overwriting existing values.
+**Language preference (FIRST_RUN only, or REFRESH if the field is absent):** ask which language agents should converse in (documents and technical output stay English) only when `.dev-team-agents/resolved/preferences.json` has no `language` field. Follow `skills/shared/user-preferences/SKILL.md` for the schema, the language policy, and how to seed or backfill the file from `.dev-team-agents/scripts/lib/preferences-defaults.json` without overwriting existing values.
 
 **Graphify (ask last):** tell the user Graphify builds a knowledge graph of the codebase — typically **60–80% fewer tokens**, faster responses, richer cross-session context — then ask "Set up Graphify now?" via `AskUserQuestion` [Yes, No].
 

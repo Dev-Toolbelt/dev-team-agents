@@ -8,7 +8,7 @@ never touches the main project's containers, volumes, networks, or host ports.
 > both built from the same `<context>/<brief-title>` slug.
 
 Applies only when **both** hold:
-- `worktree_docker_isolate` is `true` in `.dev-team-agents/user-data/preferences.json`, and
+- `worktree_docker_isolate` is `true` in `.dev-team-agents/resolved/preferences.json`, and
 - the project uses Docker Compose (a compose file exists and `docker` is running).
 
 The isolation primitive is Docker Compose's **project name** (`-p` /

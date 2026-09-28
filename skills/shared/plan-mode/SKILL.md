@@ -34,7 +34,7 @@ When in doubt: **write the plan**.
 
 ## Plan Format
 
-**Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.dev-team-agents/user-data/preferences.json` → `language` (default: English).
+**Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.dev-team-agents/resolved/preferences.json` → `language` (default: English).
 
 Load `.dev-team-agents/templates/plan-template.md` and fill it in. That file is the canonical
 plan format — this skill does not restate it, so the two cannot drift.
@@ -116,9 +116,9 @@ After the user signals approval ("approved", "go ahead", "proceed", "yes", "look
 
 ### Procedure
 
-1. Read the worktree preferences from `.dev-team-agents/user-data/preferences.json`:
+1. Read the worktree preferences from `.dev-team-agents/resolved/preferences.json`:
    ```bash
-   python3 -c "import json;d=json.load(open('.dev-team-agents/user-data/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
+   python3 -c "import json;d=json.load(open('.dev-team-agents/resolved/preferences.json'));print(json.dumps({k:d.get(k) for k in['worktree_active','worktree_base_branch','worktree_path','worktree_docker_isolate']}))" 2>/dev/null
    ```
    If the file is unreadable or keys are absent, assume defaults: `worktree_active=true`, `worktree_base_branch` = auto-detected default, `worktree_path=.worktrees`, `worktree_docker_isolate=true`.
 

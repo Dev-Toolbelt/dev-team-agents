@@ -5,13 +5,42 @@ description: User preferences — language and settings from preferences.json.
 
 # User Preferences
 
-All user-level preferences for dev-team-agents are stored in a single file:
+## Read one file; never merge
 
 ```
-.dev-team-agents/user-data/preferences.json
+.dev-team-agents/resolved/preferences.json      ← read THIS
 ```
 
-This file is gitignored (covered by `.dev-team-agents/user-data/` in `.gitignore`).
+It is the resolved view of three layers, written by `devteam bind` and `devteam sync`. Read it and
+stop: no agent merges layers, and no agent reads a source layer to answer "what is the language?".
+
+**Fallback, one level only:** if that file does not exist, the project is not bound (or predates
+v3) — read `.dev-team-agents/user-data/preferences.json`, the v2 location. Nothing else.
+
+The resolved file carries a `_generated_by` key naming the command that writes it. Editing it by
+hand works until the next sync silently discards the edit, which is why writes go elsewhere.
+
+## Write through a layer, never the projection
+
+```
+shipped defaults  ->  global user  ->  this project      (later layers win)
+```
+
+| Layer | Where | Set it with |
+|-------|-------|-------------|
+| Defaults | `<core version>/scripts/lib/preferences-defaults.json` | Not writable — it ships |
+| Global user | `<data store>/preferences.json` | `devteam prefs set <key> <value>` |
+| This project | `<data store>/projects/<project_id>/preferences.json` | `devteam prefs set <key> <value> --scope project` |
+
+`devteam prefs list` shows every key with the layer it came from; `devteam prefs unset <key>` drops
+it from a layer so the one below applies again. All three layers are **personal** and none is
+committed — see `project.json` § `context_paths` in `skills/shared/project-context/SKILL.md` for the
+topology that *is* committed, and why it is not a preference.
+
+**Consent keys — `telemetry` and `auto_update` — resolve to `false` when no layer sets them.** The
+shipped default is `true` because the installer prompts there; an absent value anywhere else means
+the user never saw a prompt, and that reads as "no". `devteam prefs list` reports those as
+`consent-withheld` rather than `defaults`, so the distinction is visible.
 
 ---
 

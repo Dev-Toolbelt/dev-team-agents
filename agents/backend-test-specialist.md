@@ -34,7 +34,7 @@ If none of these indicate tests are required, respond:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → Worktree Isolation: `.dev-team-agents/.worktree-session` → `worktree_active` in `.dev-team-agents/user-data/preferences.json` → ask once via `AskUserQuestion`.
+Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → Worktree Isolation: `.dev-team-agents/.worktree-session` → `worktree_active` in `.dev-team-agents/resolved/preferences.json` → ask once via `AskUserQuestion`.
 
 When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` and use the stored base branch. The session file makes the decision resolve exactly once per task.
 

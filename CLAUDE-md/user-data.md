@@ -1,22 +1,35 @@
 ## User Data Directory
 
-When installed in a project, the installer creates two sibling directories under `.claude/`:
+**Layout 1 (legacy)** — When a project is installed with layout 1, the installer creates two sibling directories:
 
 | Directory | Purpose |
 |-----------|---------|
 | `.dev-team-agents/` | Package files — replaced entirely on every update |
 | `.dev-team-agents/user-data/` | User state and config — **never touched by the installer** |
 
-Files in `user-data/`:
+**Layout 2 (current)** — After `devteam upgrade`, user data is split into two parts stored in the global data store, accessible via pointer files:
+
+| Pointer | Resolves to | Holds |
+|---------|-------------|-------|
+| `.dev-team-agents/state-dir` | `data/machines/<machine-id>/projects/<project_id>/` | Machine-local state: `state.json`, dot-markers, caches, `telemetry-queue.json`, `credentials.local.json` |
+| `.dev-team-agents/memory-dir` | `data/projects/<project_id>/` | Portable memory: `preferences.json`, `session-summary.md` |
+
+On layout 1, both pointers resolve to `.dev-team-agents/user-data/` for backward compatibility.
+
+**Files in `user-data/` (layout 1 only; on layout 2 they live in the store under the pointers above):**
+
+Portable (migrated to `data/projects/<project_id>/` on upgrade):
 - `preferences.json` — user preferences (language, thresholds, notifications) (**gitignored** by installer)
 - `session-summary.md` — per-session notes written by agents (**gitignored** by installer)
+- `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
+
+Machine-local (migrated to `data/machines/<machine-id>/projects/<project_id>/` on upgrade):
 - `state.json` — consolidated small scalar state markers, read/written via `scripts/lib/state.sh` (`state_get`/`state_set`). Holds `installed_version`, `installed_version_prev`, `last_health_check`, `last_update_check`, `update_check_interval`, `graphify_last_run`, `session_id`, `session_head` — one file replacing what used to be eight separate dotfiles (`.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`). Existing installs are migrated automatically and silently by `state_migrate_legacy`, called from `session-start.sh` and `install.sh` on every run; the old dotfiles are renamed to `<name>.pre-migration.bak`, never deleted (**gitignored** by installer)
 - `.last-releases-etag` / `.last-releases-version` — conditional-request ETag and the version string it resolved to, so a `304 Not Modified` still yields the latest tag (**gitignored** by installer)
 - `.last-archive-index` — date stamp gating `stop/99b-archive-index.sh` to at most one run per day (**gitignored** by installer)
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
 - `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events. Only written when `preferences.json` carries `"telemetry": true` — the gate in `scripts/lib/telemetry-guard.sh` fails closed (**gitignored** by installer)
-- `graphify.json` — Graphify config (created by `graphify-setup`; should be committed)
 - `credentials.local.json` — remote environment credentials (SSH, database, app URLs, tokens). Created by installer with empty defaults. Agents use this to access staging/production in read-only mode by default. (**gitignored** by installer — **NEVER commit this file**)
 
 Other directories under `.claude/` created by agents:
@@ -25,6 +38,18 @@ Other directories under `.claude/` created by agents:
 `install.sh` adds `.dev-team-agents/user-data/` (entire directory) and `!.dev-team-agents/user-data/graphify.json` (exception) to `.gitignore` — this ignores all user-data files except `graphify.json`. It also adds `.dev-team-agents/.worktree-session` to `.gitignore`. Projects with the old per-file entries will be migrated automatically by the health check or next installer run.
 
 **Rule:** any file that must survive an update must live in `.dev-team-agents/user-data/`, not inside `.dev-team-agents/`. Never store user config or state inside the package directory.
+
+**Under v3 layout 2 this directory's contents are split three ways** (ADR-0013). `devteam upgrade` copies `preferences.json` and `session-summary.md` into the portable subtree (`data/projects/<project_id>/`), and `state.json`, every dot-marker, `telemetry-queue.json` and `credentials.local.json` into the machine subtree (`data/machines/<machine-id>/projects/<project_id>/`). **`graphify.json` goes nowhere** — it stays at `.dev-team-agents/user-data/graphify.json`, so that one file is why the directory still exists after an upgrade. It is committed, `scripts/graphify-refresh.sh` reads it at that path, and its `!.dev-team-agents/user-data/graphify.json` gitignore exception survives the upgrade's rewrite; copying it into a per-user store would have silently broken graph refresh for every other developer on the repository.
+
+The rule for adding a file therefore has three answers, not two, and `scripts/lib/devteam/paths.py` holds all of them:
+
+| The file is… | Where it goes | How to declare it |
+|---|---|---|
+| something the **project** owns — committed, shared by the whole team | stays in the project | add it to `paths.PROJECT_OWNED_RECORDS` |
+| something **this machine observed or built** | machine subtree | add it to `paths.MACHINE_LOCAL_RECORDS`, or give it a leading dot, which classifies it machine-local as a class |
+| something the **user authored** | portable subtree | nothing — portable is the default |
+
+A file that is none of the three is a sign it does not belong in memory at all. `credentials.local.json` is machine-local because it holds values; the references that replace it (ADR-0010) are portable precisely because they do not.
 
 **Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
 

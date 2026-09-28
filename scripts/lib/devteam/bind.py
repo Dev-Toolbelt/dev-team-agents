@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import gitignore, hooks, jsonio, paths, project, providers, quarantine, registry, versions
+from . import gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
 from .errors import ConflictError, EnvError, UsageError
 
 MODES = ("auto", "link", "copy", "vendored")
@@ -34,11 +34,17 @@ PROJECT_GITIGNORE_ENTRIES = (
     ".dev-team-agents/.worktree-session",
     ".dev-team-agents/.learn-last-run",
     ".worktrees/",
+    # `devteam export` defaults to the cache directory, but `--to .` is one keystroke
+    # away and the archive can hold credential references and a quarantined
+    # pre-upgrade memory directory. Never a thing to commit.
+    "devteam-data-*.tar.gz",
 )
 
 
 def manifest_file(project_id):
-    return paths.project_data_dir(project_id) / "bind-manifest.json"
+    # Machine-local (ADR-0013): every artifact path in it is absolute, and two
+    # machines binding the same repository produce two different manifests.
+    return paths.machine_project_dir(project_id) / "bind-manifest.json"
 
 
 def read_manifest(project_id):
@@ -326,6 +332,27 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
     return created
 
 
+def _stamp_installed_version(project_root, project_id, version):
+    """Record the resolved version where the v2 readers already look.
+
+    `/devteam:version`, the session banner and telemetry all read
+    `installed_version` from `state.json`, and no v3 path wrote it — so a migrated
+    project reported its v2 number forever. Retiring the key and repointing those
+    four readers is a later decision; stamping it is what makes them truthful now.
+    """
+    state_file = project.state_dir(project_root, project_id) / "state.json"
+    state = jsonio.read_json(state_file, default=None)
+    if state is None:
+        state = {}
+    if not isinstance(state, dict):
+        return None
+    if state.get("installed_version") == version:
+        return state_file
+    state["installed_version"] = version
+    jsonio.write_json_atomic(state_file, state)
+    return state_file
+
+
 def _other_checkouts_bound(project_id, project_root):
     """True when another live checkout of the same repository is still bound."""
     entry = registry.get(project_id) or {}
@@ -502,6 +529,21 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             _runtime_root(version_dir, project_root, resolved_mode, previous_paths, project_id, retired)
         )
         artifacts.extend(hooks.wire(project_root, emitter=emitter))
+
+    # Resolved preferences and the state pointer are written on every bind and
+    # every sync: both are projections of state that lives elsewhere, so a stale
+    # one is a bug rather than a user edit to preserve.
+    artifacts.append(prefs.materialize(project_root, project_id, version))
+    artifacts.extend(project.write_pointers(project_root, project_id))
+    _stamp_installed_version(project_root, project_id, version)
+
+    if project.upgrade_available(project_root) and emitter is not None:
+        emitter.warn(
+            "this project still keeps its memory in {}/{} — run `devteam upgrade` to move it "
+            "into the store and leave the project clean".format(
+                project.PROJECT_DIR, project.LEGACY_MEMORY_DIR
+            )
+        )
 
     if resolved_mode != "vendored":
         if "opencode" in selected:
@@ -693,6 +735,17 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
             # key. `_prune_stale` already guarded this; unbind did not.
             if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
                 problems.append({"path": rel, "error": "not a relative artifact path"})
+                continue
+            if item.get("kind") in ("resolved", "pointer"):
+                # Generated projections: unlink and move on. They carry no state
+                # of their own — the layers they project from are untouched.
+                candidate = Path(project_root) / rel
+                if candidate.exists():
+                    try:
+                        candidate.unlink()
+                        unlinked.append(rel)
+                    except OSError as exc:
+                        problems.append({"path": rel, "error": str(exc)})
                 continue
             if item.get("kind") == "settings":
                 # `.claude/settings.json` belongs to the project and may be
