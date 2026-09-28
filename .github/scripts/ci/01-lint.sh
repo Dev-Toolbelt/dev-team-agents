@@ -96,6 +96,15 @@ blocking "size-limits" bash helpers/size-limits.sh
 # it, every hook sub-script that sources ../lib/ raises SC1091 for a file that is
 # right there on disk — and any finding, even info-level, exits non-zero. That was
 # a red build caused by the checker's path resolution, not by the tree.
+#
+# The version is printed because this gate's verdict depends on it and nothing pins it:
+# CI uses whatever shellcheck the runner image ships, a contributor uses whatever their
+# machine has, and the two disagree. That is not hypothetical — a clean local run and a
+# red CI on the same commit were traced to 0.11.0 no longer emitting an SC2317 false
+# positive that the runner's older build still does. Until the version is pinned, the
+# log is what makes the next divergence diagnosable in one look instead of one bisect.
+echo "─ shellcheck version ──────────────────────────────────────────"
+shellcheck --version | sed -n 's/^version: /  shellcheck /p'
 blocking "shellcheck scripts + helpers" \
   find scripts helpers -name '*.sh' -exec shellcheck -x --source-path=SCRIPTDIR {} +
 

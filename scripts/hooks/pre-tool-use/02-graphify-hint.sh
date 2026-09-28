@@ -32,5 +32,7 @@ case "$INPUT" in
     *) exit 0 ;;
 esac
 
-mkdir -p "$(dirname "$MARKER")" 2>/dev/null && : > "$MARKER" 2>/dev/null || true
+# Grouped: `A && B || C` would run `true` when the mkdir succeeded and the truncate
+# failed, which reads as if-then-else but is not. The marker is best-effort either way.
+{ mkdir -p "$(dirname "$MARKER")" && : > "$MARKER"; } 2>/dev/null || true
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"graphify: Knowledge graph exists. First consult graphify-out/GRAPH_REPORT.md and graphify-out/graph.json to understand structure and relationships. Only search raw files if those two layers are insufficient."}}\n'

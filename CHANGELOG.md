@@ -256,6 +256,22 @@ credentials the repository owner holds — not on anything in this repository.
 
 ### Fixed — independent of the split
 
+- **A clean local lint and a red CI on the same commit.** `01-lint.sh` runs the identical
+  shellcheck command in both places, but nothing pins the version: CI uses whatever the runner
+  image ships and a contributor uses whatever their machine has. Traced to shellcheck 0.11.0 no
+  longer emitting an SC2317 "unreachable" false positive that the runner's older build still
+  does — for a function invoked by an `EXIT` trap, which shellcheck cannot see is called. The
+  three findings are fixed at the source rather than silenced: the trap-invoked function's
+  directive now covers the check reported from the other side, and two `A && B || C` chains are
+  grouped so the shell reads what they mean — `C` was reachable when `A` succeeded and `B`
+  failed, which is not if-then-else. The gate now prints the shellcheck version, because the
+  next divergence should cost one look at the log instead of a bisect.
+
+  **The version is still not pinned**, and until it is, a runner image bump can turn this gate
+  red on an unchanged tree. Recorded rather than fixed here: pinning means fetching a specific
+  release in CI, which is a build-infrastructure change and does not belong in a
+  make-CI-green commit.
+
 - **The mandated duplicate-ADR check could never find an ADR.**
   `skills/shared/adr/SKILL.md` § Check Before Creating told the reader to list existing titles with
   `grep -h '^# ' docs/development/adrs/adr-*.md`. No file in that directory has ever matched that

@@ -47,7 +47,10 @@
 set -uo pipefail
 
 VERDICT=""
-# shellcheck disable=SC2329  # invoked indirectly, by the EXIT trap below
+# shellcheck disable=SC2329,SC2317  # invoked indirectly, by the EXIT trap below.
+# SC2317 (body unreachable) is the same false positive seen from the other side, and
+# only older shellcheck emits it — CI's runner image has one, 0.11.0 does not, which
+# is how this passed locally and failed in CI.
 _cred_guard_exit() {
     if [ "${VERDICT:-}" = "refuse" ]; then
         exit 2
@@ -186,7 +189,7 @@ done
 if [ -z "$POINTER" ]; then
     GIT_COMMON="$(git rev-parse --git-common-dir 2>/dev/null || true)"
     if [ -n "$GIT_COMMON" ]; then
-        MAIN_ROOT="$(cd "$GIT_COMMON/.." 2>/dev/null && pwd || true)"
+        MAIN_ROOT="$( (cd "$GIT_COMMON/.." 2>/dev/null && pwd) || true )"
         [ -n "$MAIN_ROOT" ] && [ -f "$MAIN_ROOT/.dev-team-agents/state-dir" ] && \
             POINTER="$MAIN_ROOT/.dev-team-agents/state-dir"
     fi
