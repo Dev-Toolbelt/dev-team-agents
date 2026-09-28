@@ -81,9 +81,12 @@ class MigrationTest(StoreTestCase):
         self.assertEqual(
             (root / "docs" / "note.md").read_text(encoding="utf-8"), "project knowledge\n"
         )
+        # Two pointers, not one: layout 2 splits a project's own state into a
+        # machine-local directory (`state-dir`) and a portable one (`memory-dir`),
+        # and the bind this migration performs writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "project.json", "resolved", "state-dir", "user-data"],
+            ["core", "memory-dir", "project.json", "resolved", "state-dir", "user-data"],
         )
         moved = {item["from"] for item in result["quarantined"]}
         self.assertIn(".dev-team-agents/agents", moved)

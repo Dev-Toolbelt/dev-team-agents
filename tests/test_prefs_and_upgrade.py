@@ -1,8 +1,10 @@
 """M2: the preference cascade, the layout upgrade, and store portability."""
 
+import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import tarfile
 import unittest
@@ -145,9 +147,12 @@ class UpgradeTest(StoreTestCase):
         self.assertEqual(result["copied"], 5)
         self.assertEqual(project.layout(root), project.CURRENT_LAYOUT)
         self.assertFalse(project.legacy_memory_dir(root).exists())
+        # Two pointers, not one: layout 2 splits a project's own state into a
+        # machine-local directory (`state-dir`) and a portable one (`memory-dir`),
+        # and the upgrade writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "project.json", "resolved", "state-dir"],
+            ["core", "memory-dir", "project.json", "resolved", "state-dir"],
         )
 
         destination = Path(result["destination"])
@@ -173,6 +178,29 @@ class UpgradeTest(StoreTestCase):
         self.assertTrue(quarantined.is_dir())
         self.assertTrue((quarantined / "session-summary.md").is_file())
 
+    def test_quarantine_and_upgraded_files_are_owner_only(self):
+        """Containment used to rest entirely on `data/` itself never being loosened
+        (0700). Quarantine can hold a retired `credentials.local.json` verbatim, and
+        `shutil.copy2` otherwise preserves a checkout's source mode (often 0644) —
+        both must be forced to owner-only independently of that.
+        """
+        root, _ = self._v2_bound()
+        result = upgrade.apply(root)
+
+        # `quarantined` itself is the moved directory (`user-data/`) and keeps
+        # whatever mode it already had — it's the quarantine *structure* around it
+        # (built fresh by `ensure_dir`) that must be owner-only.
+        quarantined = Path(result["quarantined"])
+        self.assertEqual(stat.S_IMODE(quarantined.parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(quarantined.parent.parent.stat().st_mode), 0o700)
+
+        for base in (Path(result["destination"]), Path(result["state_destination"])):
+            for item in base.rglob("*"):
+                if item.is_file():
+                    self.assertEqual(
+                        stat.S_IMODE(item.stat().st_mode), 0o600, str(item)
+                    )
+
     def test_the_state_pointer_resolves_to_the_new_location(self):
         root, pid = self._v2_bound()
         upgrade.apply(root)
@@ -193,6 +221,32 @@ class UpgradeTest(StoreTestCase):
         after = gitignore.read_managed_entries(root / ".gitignore")
         self.assertNotIn(".dev-team-agents/user-data/", after)
         self.assertIn(".worktrees/", after)
+
+    def test_graphify_json_stays_in_the_project_through_upgrade(self):
+        """`graphify.json` is committed, shared project config, not personal memory
+        — it must never travel into the per-user store, even though it lives right
+        next to files that do.
+        """
+        root, _ = self._v2_bound()
+        memory = project.legacy_memory_dir(root)
+        graphify_content = json.dumps({"nodes": []}, indent=2) + "\n"
+        (memory / "graphify.json").write_text(graphify_content, encoding="utf-8")
+
+        preview = upgrade.plan(root)
+        self.assertIn("graphify.json", preview["retained"])
+
+        result = upgrade.apply(root)
+        self.assertIn("graphify.json", result["retained"])
+
+        graphify_path = memory / "graphify.json"
+        self.assertTrue(graphify_path.is_file())
+        self.assertEqual(graphify_path.read_text(encoding="utf-8"), graphify_content)
+        self.assertFalse((Path(result["destination"]) / "graphify.json").exists())
+        self.assertFalse((Path(result["state_destination"]) / "graphify.json").exists())
+
+        after = gitignore.read_managed_entries(root / ".gitignore")
+        self.assertIn("!.dev-team-agents/user-data/graphify.json", after)
+        self.assertNotIn(".dev-team-agents/user-data/", after)
 
     def test_a_second_upgrade_is_refused(self):
         root, _ = self._v2_bound()
@@ -266,16 +320,37 @@ class DoctorLayoutTest(StoreTestCase):
         self.assertTrue(any(f["level"] == "warn" for f in layout_findings))
         self.assertTrue(any("devteam upgrade" in (f.get("hint") or "") for f in layout_findings))
 
-    def test_a_missing_state_pointer_is_reported(self):
+    def test_a_missing_pointer_is_repaired_not_just_reported(self):
         from devteam import doctor
 
         root = self.new_project()
         bind.bind(root, provider_names=["claude"])
-        (root / project.PROJECT_DIR / project.STATE_DIR_POINTER).unlink()
+        project_id = project.load(root)["project_id"]
+        pointer_path = root / project.PROJECT_DIR / project.STATE_DIR_POINTER
+        pointer_path.unlink()
 
         report = doctor.run(project_root=root)
-        self.assertTrue(
-            any("state pointer" in f["message"] for f in report["findings"]), report["findings"]
+
+        # `doctor` no longer just reports a missing/stale pointer as a WARN: it
+        # rewrites it on the spot, the same additive repair it already performs on a
+        # moved registry entry. The alternative — report and wait — is what made a
+        # stale `state-dir` hand every hook an empty `state.json` until someone
+        # happened to run `devteam sync`.
+        repaired = [
+            f
+            for f in report["findings"]
+            if f["category"] == "layout" and "was missing; rewritten" in f["message"]
+        ]
+        self.assertTrue(repaired, report["findings"])
+        self.assertEqual(repaired[0]["level"], "ok")
+        self.assertIn(project.STATE_DIR_POINTER, repaired[0]["message"])
+        self.assertIn(
+            {"action": "repointed", "pointer": project.STATE_DIR_POINTER}, report["actions"]
+        )
+        self.assertTrue(pointer_path.is_file())
+        self.assertEqual(
+            pointer_path.read_text(encoding="utf-8").strip(),
+            str(project.state_dir(root, project_id)),
         )
 
 
@@ -355,7 +430,10 @@ class StorePortabilityTest(StoreTestCase):
         # the live registry out of the active store and make every bound project
         # read as unbound.
         imported = store.import_archive(archive, force=True)
-        self.assertEqual(imported["machine_records_kept"], ["machine-id", "machines"])
+        # `machines/` moves first and `machine-id` last: if the second move fails,
+        # the identity is still where the records that name it are, rather than
+        # being orphaned from them.
+        self.assertEqual(imported["machine_records_kept"], ["machines", "machine-id"])
         self.assertIn(result["project_id"], registry.entries())
         # This machine already knew the project, so reconciling is the next step —
         # a freshly installed machine would be told to bind instead.
@@ -410,6 +488,238 @@ class StorePortabilityTest(StoreTestCase):
         shutil.rmtree(str(self.home / "data"), ignore_errors=True)
         with self.assertRaises(EnvError):
             store.import_archive(bad)
+
+    def _write_archive(self, path, members):
+        with tarfile.open(str(path), "w:gz") as tar:
+            for member, data in members:
+                if data is None:
+                    tar.addfile(member)
+                else:
+                    member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+        return path
+
+    def test_import_rejects_a_symlink_with_an_absolute_target(self):
+        """`store.import_archive` must route every member through
+        `update.safe_members` on its own — `filter="data"` does not exist on the
+        declared python 3.9 floor, so the bare `except TypeError` fallback used to
+        extract unchecked. Covered here on the `store` import path specifically;
+        `update`'s own extraction already had coverage.
+        """
+        member = tarfile.TarInfo("data/escape")
+        member.type = tarfile.SYMTYPE
+        member.linkname = "/etc/passwd"
+        archive = self._write_archive(self.tmp / "sym-abs.tar.gz", [(member, None)])
+        with self.assertRaises(EnvError):
+            store.import_archive(archive)
+
+    def test_import_rejects_a_hardlink_escaping_the_tree(self):
+        # Three levels of ".." from a member two directories deep (`data/nested/`)
+        # is what actually climbs outside the extraction root; two levels merely
+        # cancels the nesting and lands back inside it.
+        member = tarfile.TarInfo("data/nested/link")
+        member.type = tarfile.LNKTYPE
+        member.linkname = "../../../victim.txt"
+        archive = self._write_archive(self.tmp / "hardlink-escape.tar.gz", [(member, None)])
+        with self.assertRaises(EnvError):
+            store.import_archive(archive)
+
+    def test_import_rejects_device_and_fifo_members(self):
+        for kind, name in ((tarfile.CHRTYPE, "dev"), (tarfile.FIFOTYPE, "fifo")):
+            member = tarfile.TarInfo("data/" + name)
+            member.type = kind
+            archive = self._write_archive(self.tmp / "{}.tar.gz".format(name), [(member, None)])
+            with self.assertRaises(EnvError):
+                store.import_archive(archive)
+
+    def test_import_refuses_an_archive_whose_machines_entry_is_not_a_directory(self):
+        # REGRESSION: the guard tested `exists() and not is_dir()`, but `Path.exists()`
+        # follows the link and is False for a **dangling** symlink — exactly the case it
+        # was written for. The archive was then misread as portable, this machine's
+        # identity was carried into it, the move failed, and the live registry was left
+        # stranded. `is_symlink()` is now checked first.
+        shutil.rmtree(str(paths.data_dir()), ignore_errors=True)
+        paths.reset_machine_id_cache()
+
+        archive = self.tmp / "dangling-machines.tar.gz"
+        with tarfile.open(str(archive), "w:gz") as tar:
+            link = tarfile.TarInfo("data/machines")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "nowhere"
+            tar.addfile(link)
+            payload = json.dumps({"language": "en"}).encode("utf-8")
+            info = tarfile.TarInfo("data/preferences.json")
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+
+        with self.assertRaises(EnvError):
+            store.import_archive(archive)
+        self.assertFalse((self.home / "data.incoming").exists())
+
+    def test_a_portable_export_carries_no_secret_through_quarantine(self):
+        """CRITICAL: a default export used to ship whatever `devteam upgrade`
+        quarantined verbatim, including a plaintext `credentials.local.json` — a
+        reviewer extracted a real database password from a default archive this
+        way. Covers the two separate escapes a review found: a **nested** secret
+        (`env/credentials.local.json`) and one with **different case**
+        (`Credentials.local.json`).
+        """
+        root = self.new_project()
+        memory = project.legacy_memory_dir(root)
+        memory.mkdir(parents=True)
+        (memory / "session-summary.md").write_text("## memory\n", encoding="utf-8")
+        secret = "s3cret-value-should-never-travel"
+        jsonio.write_json_atomic(memory / "credentials.local.json", {"db_password": secret})
+        (memory / "env").mkdir()
+        jsonio.write_json_atomic(
+            memory / "env" / "credentials.local.json", {"db_password": secret}
+        )
+        # A different directory, not the same one as the top-level file: the two
+        # names differ only by case, and macOS's default APFS is case-insensitive —
+        # putting both in one directory would silently collide on disk.
+        (memory / "secrets").mkdir()
+        jsonio.write_json_atomic(
+            memory / "secrets" / "Credentials.local.json", {"db_password": secret}
+        )
+        bind.bind(root, provider_names=["claude"])
+        upgrade.apply(root)
+
+        archive = self.tmp / "export.tar.gz"
+        exported = store.export(archive)
+        self.assertIn("quarantine", exported["excluded"])
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            for member in tar.getmembers():
+                if not member.isfile():
+                    continue
+                content = tar.extractfile(member).read()
+                self.assertNotIn(secret.encode("utf-8"), content, member.name)
+
+    def test_export_all_excludes_the_lock_directory(self):
+        """HIGH: the exclusion used to match only the first path component, and
+        locks now live at `machines/<id>/locks/` — whose first component is
+        `machines`, not `locks` — so a first-component test silently let a held
+        lock into an `--all` archive.
+        """
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        jsonio.ensure_dir(paths.locks_dir())
+        (paths.locks_dir() / "registry.lock").write_text("12345\n", encoding="utf-8")
+
+        archive = self.tmp / "export-all.tar.gz"
+        store.export(archive, include_machine=True)
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = tar.getnames()
+
+        self.assertFalse([n for n in names if "locks" in Path(n).parts], names)
+        # `--all` exists to carry exactly these two, so the lock exclusion must not
+        # take them down with it.
+        self.assertTrue(any(n.endswith("registry.json") for n in names), names)
+        self.assertTrue(
+            any(n.endswith("bind-manifest.json") for n in names)
+            or any(result["project_id"] in n for n in names),
+            names,
+        )
+
+    def test_export_defaults_to_the_cache_dir_and_is_owner_only(self):
+        """HIGH: the default destination used to be `Path.cwd()` — the bound
+        repository, one `git add -A` away from committing an archive that can hold
+        credential references and a quarantined pre-upgrade memory directory.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+
+        exported = store.export()
+        archive = Path(exported["archive"])
+        self.assertEqual(archive.parent, paths.cache_dir() / "exports")
+        self.assertNotIn(str(root.resolve()), str(archive))
+        self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
+        # `--to .` is one keystroke away, so the project's own gitignore must catch
+        # an archive left in the repository too.
+        self.assertIn("devteam-data-*.tar.gz", bind.PROJECT_GITIGNORE_ENTRIES)
+
+    def test_export_files_count_matches_the_archive_in_both_modes(self):
+        """The count and the archive filter used to be two separate expressions,
+        and a review found the count could drift from what the archive actually
+        holds without a test noticing — they are now one predicate.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        prefs.set_value("language", "en", "3.0.0", scope="global")
+
+        default_archive = self.tmp / "default.tar.gz"
+        exported = store.export(default_archive)
+        with tarfile.open(str(default_archive), "r:gz") as tar:
+            counted = sum(1 for m in tar.getmembers() if m.isfile())
+        self.assertEqual(exported["files"], counted)
+
+        all_archive = self.tmp / "all.tar.gz"
+        exported_all = store.export(all_archive, include_machine=True)
+        with tarfile.open(str(all_archive), "r:gz") as tar:
+            counted_all = sum(1 for m in tar.getmembers() if m.isfile())
+        self.assertEqual(exported_all["files"], counted_all)
+        self.assertGreater(exported_all["files"], exported["files"])
+
+    def test_import_withholds_consent_from_an_incoming_preferences_file(self):
+        """`telemetry`/`auto_update` must never travel as `true` on an import: the
+        backfill only adds *missing* keys, so an imported file already saying
+        `true` would silently enable telemetry on a machine whose owner was never
+        asked.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        prefs.set_value("telemetry", "true", "3.0.0", scope="global")
+        prefs.set_value("auto_update", "true", "3.0.0", scope="global")
+        archive = self.tmp / "export.tar.gz"
+        store.export(archive)
+
+        # Import onto a store that does not have these keys set at all.
+        shutil.rmtree(str(self.home / "data"))
+        imported = store.import_archive(archive)
+        self.assertEqual(imported["consent_withheld"], ["auto_update", "telemetry"])
+
+        saved = jsonio.read_json(paths.global_preferences_file())
+        self.assertNotIn("telemetry", saved)
+        self.assertNotIn("auto_update", saved)
+
+        resolved = prefs.resolve(None, "3.0.0")
+        for key in ("telemetry", "auto_update"):
+            self.assertFalse(resolved["values"][key], key)
+            self.assertEqual(resolved["origin"][key], "consent-withheld", key)
+
+    def test_all_archive_import_with_force_adopts_the_archived_identity(self):
+        """The archived registry in an `--all` archive lives at
+        `machines/<archived-id>/registry.json`. Keeping this machine's own id after
+        the wholesale replace would leave `machine_dir()` pointing at a subtree the
+        archive never wrote, and every restored bind would read as unbound despite
+        `registry.json` sitting right there on disk — so adopting the archived
+        identity is a correctness requirement, not an accident of the replace.
+        """
+        home_a = self.tmp / "machine-a"
+        os.environ["DEVTEAM_HOME"] = str(home_a)
+        paths.reset_machine_id_cache()
+        self.install_version("3.0.0", activate=True)
+        root_a = self.new_project("app-a")
+        result_a = bind.bind(root_a, provider_names=["claude"])
+        machine_a_id = paths.machine_id()
+        archive = self.tmp / "all-a.tar.gz"
+        store.export(archive, include_machine=True)
+
+        home_b = self.tmp / "machine-b"
+        os.environ["DEVTEAM_HOME"] = str(home_b)
+        paths.reset_machine_id_cache()
+        self.install_version("3.0.0", activate=True)
+        root_b = self.new_project("app-b")
+        bind.bind(root_b, provider_names=["claude"])
+        machine_b_id = paths.machine_id()
+        self.assertNotEqual(machine_a_id, machine_b_id)
+
+        store.import_archive(archive, force=True)
+        paths.reset_machine_id_cache()
+
+        self.assertEqual(paths.machine_id(), machine_a_id)
+        self.assertIn(result_a["project_id"], registry.entries())
+        self.assertNotIn(machine_b_id, [p.name for p in paths.machines_dir().glob("*")])
 
     def test_uninstall_keeps_the_data_store_by_default(self):
         root = self.new_project()

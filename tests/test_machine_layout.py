@@ -27,15 +27,51 @@ class MachineIdentityTest(StoreTestCase):
         first = paths.machine_id()
         self.assertTrue(paths.machine_id_file().is_file())
         self.assertEqual(first, paths.machine_id())
-        self.assertEqual(
-            paths.machine_id_file().read_text(encoding="utf-8").strip(), first
-        )
+        # The record is `{"id", "created_on"}`, not a bare UUID: the host that
+        # created the id has to be on disk for a travelled store to be detected.
+        record = json.loads(paths.machine_id_file().read_text(encoding="utf-8"))
+        self.assertEqual(record["id"], first)
+        self.assertEqual(record["created_on"], paths.machine_host())
 
     def test_an_existing_id_is_adopted_rather_than_replaced(self):
         jsonio.ensure_dir(paths.data_dir())
         paths.machine_id_file().write_text(OTHER_MACHINE + "\n", encoding="utf-8")
         paths._MACHINE_ID_CACHE.clear()
-        self.assertEqual(paths.machine_id(), OTHER_MACHINE)
+        with mock.patch.dict(os.environ, {"DEVTEAM_HOSTNAME": "this-host"}):
+            result = paths.machine_id()
+        # A bare-UUID record predates host tracking, so a `None` recorded host must
+        # be read as "cannot be judged to have travelled" and adopted — a fixed
+        # regression had it read as "host does not match" instead, which re-issued a
+        # new id and orphaned every record the old one already named. Both halves
+        # matter: the id survives unchanged, AND the record is rewritten to include
+        # the current host so the *next* open has something to judge against.
+        self.assertEqual(result, OTHER_MACHINE)
+        record = json.loads(paths.machine_id_file().read_text(encoding="utf-8"))
+        self.assertEqual(record["id"], OTHER_MACHINE)
+        self.assertEqual(record["created_on"], "this-host")
+
+    def test_a_recorded_id_from_a_different_host_is_reissued(self):
+        with mock.patch.dict(os.environ, {"DEVTEAM_HOSTNAME": "laptop-a"}):
+            first = paths.machine_id()
+        paths.reset_machine_id_cache()
+        with mock.patch.dict(os.environ, {"DEVTEAM_HOSTNAME": "laptop-b"}):
+            second = paths.machine_id()
+        # Unlike the bare-UUID case, a record naming a *different* host is exactly
+        # the travelled-store signal the host check exists to catch.
+        self.assertNotEqual(first, second)
+        record = json.loads(paths.machine_id_file().read_text(encoding="utf-8"))
+        self.assertEqual(record["id"], second)
+        self.assertEqual(record["created_on"], "laptop-b")
+
+    def test_an_uppercase_override_is_rejected(self):
+        # The regex is anchored to lowercase; an uppercase UUID must not slip
+        # through as "close enough" and silently pick a different machine subtree.
+        # `OTHER_MACHINE` has no hex letters in it, so it round-trips through
+        # `.upper()` unchanged — this needs a UUID that actually has a-f digits.
+        lettered = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        with mock.patch.dict(os.environ, {paths.MACHINE_ID_ENV: lettered.upper()}):
+            with self.assertRaises(EnvError):
+                paths.machine_id()
 
     def test_a_file_that_is_not_a_uuid_is_reported_not_replaced(self):
         jsonio.ensure_dir(paths.data_dir())
@@ -224,6 +260,163 @@ class AdoptLayoutTest(StoreTestCase):
         self.assertTrue(paths.registry_file().is_file())
         self.assertIn(pid, registry.entries())
         self.assertIn("machine-local record", err)
+
+    def test_the_cli_reports_the_relocation_in_the_json_payload(self):
+        self._pre_split_store()
+        code, out, err = self.run_cli("doctor", "--json")
+        self.assertIn(code, (0, 1), err)
+        payload = json.loads(out)
+        # ADR-0011 makes the desktop app a client of this CLI: a store mutation it
+        # cannot see in the JSON document is a contract gap, so the relocation must
+        # ride in the payload and not only on stderr.
+        self.assertIn("store_relocation", payload)
+        self.assertTrue(payload["store_relocation"]["moved"])
+        # `_pre_split_store`'s registry entry names a path that was never a real
+        # directory, so `_repoint_bound_projects` correctly skips it — `repointed`
+        # is a real key in the payload either way, just empty for this fixture.
+        self.assertIn("repointed", payload["store_relocation"])
+
+    def test_it_repoints_a_real_bound_projects_pointers(self):
+        """`_repoint_bound_projects` against a real, live project directory.
+
+        The existing relocation tests use a fake `path` in the registry entry
+        (`/somewhere/app`), which is never a real directory, so
+        `_repoint_bound_projects` always skips it and the repair itself has no
+        coverage. This builds a project that really was bound, then rolls its
+        records back to the pre-split shape by hand.
+        """
+        self.install_version("3.0.0", activate=True)
+        root = self.new_project()
+        pid = bind.bind(root, provider_names=["claude"])["project_id"]
+
+        # Move this project's machine-local state.json back to the flat, pre-split
+        # location, and the registry back to the flat top-level path.
+        state_payload = jsonio.read_json(paths.machine_project_dir(pid) / "state.json")
+        legacy_project_dir = paths.projects_dir() / pid
+        jsonio.write_json_atomic(legacy_project_dir / "state.json", state_payload)
+        (paths.machine_project_dir(pid) / "state.json").unlink()
+
+        registry_payload = jsonio.read_json(paths.registry_file())
+        jsonio.write_json_atomic(paths.data_dir() / "registry.json", registry_payload)
+        paths.registry_file().unlink()
+
+        # And the state-dir pointer named the single directory a pre-split bind had.
+        (root / project.PROJECT_DIR / project.STATE_DIR_POINTER).write_text(
+            str(legacy_project_dir) + "\n", encoding="utf-8"
+        )
+
+        self.assertTrue(store.machine_layout_pending())
+        result = store.adopt_machine_layout()
+
+        entry = registry.get(pid)
+        self.assertEqual(result["repointed"], [entry["path"]])
+        state_pointer = (
+            (root / project.PROJECT_DIR / project.STATE_DIR_POINTER)
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        memory_pointer = (
+            (root / project.PROJECT_DIR / project.MEMORY_DIR_POINTER)
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        self.assertEqual(state_pointer, str(project.state_dir(root, pid)))
+        self.assertEqual(memory_pointer, str(project.memory_dir(root, pid)))
+        self.assertNotEqual(state_pointer, memory_pointer)
+        # The machine-local state.json itself resolves correctly through the
+        # repointed directory, not just the pointer file's text.
+        self.assertEqual(
+            jsonio.read_json(Path(state_pointer) / "state.json")["installed_version"],
+            state_payload["installed_version"],
+        )
+
+    def test_a_stray_file_under_projects_is_skipped_not_raised_on(self):
+        """A plain file at `data/projects/<something>` must not crash the scan.
+
+        The relocation loop assumes every entry under `projects/` is a directory
+        named after a project id; a stray file there (e.g. an editor swap file, a
+        `.DS_Store`) must be skipped, not treated as a project to promote records
+        out of.
+        """
+        pid = self._pre_split_store()
+        stray = paths.projects_dir() / "not-a-project-id"
+        stray.write_text("noise\n", encoding="utf-8")
+
+        result = store.adopt_machine_layout()
+
+        self.assertIn(pid, registry.entries())
+        self.assertTrue(stray.is_file())
+        self.assertEqual(stray.read_text(encoding="utf-8"), "noise\n")
+
+    def test_a_per_project_destination_collision_is_quarantined_not_overwritten(self):
+        """Mirrors `test_an_occupied_destination_is_never_overwritten`, one level
+        deeper: a per-project record (not just the registry) can already exist at
+        its machine-subtree destination, and must be quarantined rather than
+        clobbered — only the user can say which of the two is current.
+        """
+        pid = self._pre_split_store()
+        jsonio.write_json_atomic(
+            paths.machine_project_dir(pid) / "bind-manifest.json",
+            {"schema": 1, "already": "current"},
+        )
+
+        result = store.adopt_machine_layout()
+
+        quarantined_paths = [item["path"] for item in result["quarantined"]]
+        self.assertIn("projects/{}/bind-manifest.json".format(pid), quarantined_paths)
+        self.assertEqual(
+            jsonio.read_json(paths.machine_project_dir(pid) / "bind-manifest.json")["already"],
+            "current",
+        )
+        # A collision on one record must not stop the others from promoting.
+        self.assertEqual(
+            jsonio.read_json(paths.machine_project_dir(pid) / "state.json")["session_id"], 9
+        )
+        self.assertIn(pid, registry.entries())
+
+
+class NoMutationOnReadTest(StoreTestCase):
+    """`devteam path` and `devteam doctor` are questions; they must create nothing."""
+
+    def test_describe_creates_no_machine_identity_or_data_dir(self):
+        self.assertFalse(paths.data_dir().exists())
+        result = paths.describe()
+        self.assertEqual(result["machine_id"], "<unassigned>")
+        self.assertFalse(paths.machine_id_file().exists())
+        self.assertFalse(paths.data_dir().exists())
+
+    def test_doctor_on_an_uninstalled_store_creates_no_machine_identity(self):
+        # REGRESSION: `doctor` used to mint the identity it was asked about, so a
+        # second run diagnosed a store the first one had created. `check_machine()`
+        # resolved read-only, but `check_registry()` reached `registry.entries()` ->
+        # `registry_file()` -> `machine_dir()` -> `machine_id(create=True)`. Reads now
+        # thread an explicitly read-only id, and no identity means no bound projects.
+        from devteam import doctor as doctor_module
+
+        doctor_module.run(project_root=None)
+        self.assertFalse(paths.machine_id_file().exists(), "doctor minted a machine id")
+        self.assertFalse(paths.data_dir().exists(), "doctor created the data store")
+
+
+class DoctorMachineReportTest(StoreTestCase):
+    def test_another_machines_record_set_is_a_warning_not_ok(self):
+        from devteam import doctor as doctor_module
+
+        current = paths.machine_id()
+        other = "99999999-8888-7777-6666-555555555555"
+        jsonio.ensure_dir(paths.machine_dir(other))
+
+        report = doctor_module.run(project_root=None)
+
+        machine_findings = [f for f in report["findings"] if f["category"] == "machine"]
+        self.assertTrue(any(f["level"] == "warn" for f in machine_findings), machine_findings)
+        self.assertTrue(any(other in f["message"] for f in machine_findings), machine_findings)
+        # This machine's own record set is still reported OK — the two must not be
+        # folded into a single finding that hides which set is the active one.
+        self.assertTrue(
+            any(f["level"] == "ok" and current in f["message"] for f in machine_findings),
+            machine_findings,
+        )
 
 
 if __name__ == "__main__":

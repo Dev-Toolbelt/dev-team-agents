@@ -96,13 +96,21 @@ class StoreTestCase(unittest.TestCase):
         self.home = self.tmp / "store"
         self._saved_env = {
             key: os.environ.get(key)
-            for key in ("DEVTEAM_HOME", "DEVTEAM_PLATFORM", "DEVTEAM_MACHINE_ID")
+            for key in (
+                "DEVTEAM_HOME",
+                "DEVTEAM_PLATFORM",
+                "DEVTEAM_MACHINE_ID",
+                "DEVTEAM_HOSTNAME",
+            )
         }
         os.environ["DEVTEAM_HOME"] = str(self.home)
         os.environ.pop("DEVTEAM_PLATFORM", None)
         # A machine-id override leaking out of one test would silently give the next
         # one a store whose registry it cannot see.
         os.environ.pop("DEVTEAM_MACHINE_ID", None)
+        # Likewise a spoofed hostname: it decides whether a recorded machine-id is
+        # adopted or re-issued, so it must not survive past the test that set it.
+        os.environ.pop("DEVTEAM_HOSTNAME", None)
         self.addCleanup(self._restore_env)
         self.source = make_source_tree(self.tmp / "source")
 

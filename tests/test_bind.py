@@ -23,9 +23,12 @@ class BindTest(StoreTestCase):
         self.assertTrue((root / ".claude" / "agents" / "dev-team").exists())
         self.assertTrue((root / ".claude" / "commands" / "devteam").exists())
         # The project holds identity plus the runtime-root pointer — no vendored tree.
+        # Two pointers, not one: layout 2 splits a project's own state into a
+        # machine-local directory (`state-dir`) and a portable one (`memory-dir`),
+        # and a bind writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "project.json", "resolved", "state-dir"],
+            ["core", "memory-dir", "project.json", "resolved", "state-dir"],
         )
         pointer = root / project.PROJECT_DIR / "core"
         self.assertTrue((pointer / "scripts").is_dir())
