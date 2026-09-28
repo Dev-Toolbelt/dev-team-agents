@@ -103,6 +103,15 @@ class MachineLocalClassifierTest(unittest.TestCase):
         self.assertFalse(paths.is_machine_local_record("session-summary.md"))
         self.assertFalse(paths.is_machine_local_record("graphify.json"))
 
+    def test_audit_log_is_machine_local(self):
+        # ADR-0010: the credential audit trail records reads that happened on THIS
+        # machine. Two machines appending to one portable log would need merge
+        # semantics nothing here has, so it must classify the same way
+        # `credentials.local.json` does.
+        self.assertTrue(paths.is_machine_local_record("audit.log"))
+        self.assertTrue(paths.is_machine_local_record("AUDIT.LOG"))
+        self.assertTrue(paths.path_is_machine_local("projects/pid/audit.log"))
+
     def test_path_is_machine_local_matches_any_component_not_just_the_first(self):
         # A review found that checking only `Path(rel).parts[0]` sent
         # `env/credentials.local.json` to the portable subtree, because `"env"`
@@ -113,6 +122,34 @@ class MachineLocalClassifierTest(unittest.TestCase):
         self.assertFalse(paths.path_is_machine_local("session-summary.md"))
         self.assertFalse(paths.path_is_machine_local("graphify.json"))
         self.assertFalse(paths.path_is_machine_local("notes/session-summary.md"))
+
+
+class CredentialPathsTest(StoreTestCase):
+    """Where reference layers, secret values and the audit log each live (ADR-0010).
+
+    The reference layer and the value store must resolve to different subtrees —
+    that separation is the whole design, so it is pinned here rather than assumed.
+    """
+
+    def test_global_and_project_reference_layers_are_distinct_files(self):
+        global_file = paths.credentials_file(None)
+        project_file = paths.credentials_file("proj-1")
+        self.assertEqual(global_file.name, "global.json")
+        self.assertEqual(project_file.name, "proj-1.json")
+        self.assertEqual(global_file.parent, project_file.parent)
+        self.assertEqual(global_file.parent, paths.credentials_dir())
+
+    def test_secrets_dir_is_machine_local_and_separate_from_credentials_dir(self):
+        # The reference layer is portable precisely because it holds no value; the
+        # value store must never sit inside the tree a portable export would take.
+        self.assertNotEqual(paths.secrets_dir(), paths.credentials_dir())
+        self.assertTrue(str(paths.secrets_dir()).startswith(str(paths.machine_dir())))
+        self.assertFalse(str(paths.credentials_dir()).startswith(str(paths.machine_dir())))
+
+    def test_audit_log_lives_under_this_projects_machine_directory(self):
+        log_path = paths.audit_log("proj-1")
+        self.assertEqual(log_path.name, "audit.log")
+        self.assertEqual(log_path.parent, paths.machine_project_dir("proj-1"))
 
 
 if __name__ == "__main__":
