@@ -8,7 +8,7 @@ cannot be broken by a stray ``print``.
 from __future__ import annotations
 
 import argparse
-import json
+import os
 from pathlib import Path
 
 from . import bind as bind_module
@@ -108,49 +108,30 @@ def cmd_compat(args, emitter):
     }
 
     unsupported = {}
-    if args.client is not None or args.client_file is not None:
-        raw = args.client
-        if args.client_file is not None:
-            try:
-                raw = Path(args.client_file).read_text(encoding="utf-8")
-            except OSError as exc:
-                raise UsageError(
-                    "--client-file {} could not be read: {}".format(args.client_file, exc),
-                    hint="Pass a path to a readable JSON file, or use --client '<json>' instead.",
-                )
+    parsed = None
+    if args.client is not None:
+        parsed = compat.parse_client_schemas(args.client, "--client")
+    elif args.client_file is not None:
+        # The label names the flag, not just the path: `--client-file /nope/x.json could
+        # not be read`. That attribution was lost when this call site stopped carrying its
+        # own reader, and it is the exact property `compat`'s docstring argues for.
+        parsed = compat.load_client_schemas(
+            args.client_file, source="--client-file {}".format(args.client_file)
+        )
+    else:
+        # Neither flag: fall back to the global declaration seam, so a client that
+        # exported `DEVTEAM_CLIENT_SCHEMAS` once gets `may_write` from a bare
+        # `devteam compat` instead of having to restate the same file in a second flag
+        # form. An explicit `--client`/`--client-file` outranks it — more specific wins,
+        # the same precedence the seam itself uses between flag and variable.
+        declaration = compat.client_declaration(
+            getattr(args, "client_schemas", None), os.environ
+        )
+        if declaration is not None:
+            parsed = declaration.schemas
 
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise UsageError(
-                "client schemas are not valid JSON: {}".format(exc),
-                hint="Pass a JSON object, e.g. --client '{\"project\": 1}'.",
-            )
-
-        # `unsupported_by` treats an *absent* key as silence — a client honestly
-        # saying "I don't know this shape" — and that is a legitimate answer, not a
-        # mistake. A *present* value of the wrong type (a string, a float, `true`)
-        # is a different thing: the client meant to claim something and got the
-        # claim wrong. Catching that here, before it reaches `unsupported_by`, keeps
-        # that function's leniency for other callers while giving this boundary a
-        # message that names the exact key and value at fault.
-        if isinstance(parsed, dict):
-            for name, value in parsed.items():
-                if not isinstance(value, int) or isinstance(value, bool):
-                    raise UsageError(
-                        "client value for '{}' is not an integer: {!r}".format(name, value),
-                        hint="Each shape must map to a plain integer schema version, or be left "
-                        "out entirely to mean \"unknown\".",
-                    )
-
-        try:
-            unsupported = compat.unsupported_by(parsed)
-        except TypeError as exc:
-            # Not a mapping at all (a JSON array, string, or number) — `unsupported_by`
-            # already says exactly what is wrong; just route it through the contract
-            # as a usage error instead of letting it escape as unexpected.
-            raise UsageError(str(exc))
-
+    if parsed is not None:
+        unsupported = compat.unsupported_by(parsed)
         payload["client_schemas"] = parsed
         payload["unsupported"] = unsupported
         # A boolean the client can branch on directly, rather than inferring the
@@ -871,6 +852,21 @@ def build_parser():
         default=argparse.SUPPRESS,
         help="emit a single JSON document on stdout",
     )
+    # The declaration seam, on every command for the same reason `--json` is: a client
+    # should not have to know whether this particular command takes it. SUPPRESS keeps a
+    # value passed before the subcommand from being overwritten by the subparser's
+    # default, exactly as for `--json`.
+    common.add_argument(
+        "--client-schemas",
+        dest="client_schemas",
+        metavar="PATH",
+        default=argparse.SUPPRESS,
+        help=(
+            "path to a JSON file naming the store shapes this caller understands; a "
+            "mutating command is refused when any shape is missing or behind "
+            "(env: {})".format(compat.CLIENT_SCHEMAS_ENV)
+        ),
+    )
 
     parser = _Parser(
         prog=PROGRAM,
@@ -1116,6 +1112,34 @@ def build_parser():
     return parser
 
 
+def resolved_command_path(parser, args):
+    """The leaf path the parse resolved to, e.g. ``("cred", "get")``.
+
+    Walked from the real parser rather than read off a hardcoded set of dest names
+    (`command`, `store_cmd`, `cred_cmd`, …): a new command group would otherwise resolve
+    to its parent path and be gated as the wrong thing, silently. Same discipline as
+    `tests/test_json_contract.py`'s discovery walk, and the same path tuples, so the
+    classification in `compat.py` is keyed by what both produce.
+
+    Returns a group path (``("store",)``) when no subcommand was chosen; `main` only
+    gates a path that actually resolved to a handler.
+    """
+    path = []
+    node = parser
+    while True:
+        action = next(
+            (a for a in node._actions if isinstance(a, argparse._SubParsersAction)), None
+        )
+        if action is None:
+            break
+        chosen = getattr(args, action.dest, None)
+        if not chosen or chosen not in action.choices:
+            break
+        path.append(chosen)
+        node = action.choices[chosen]
+    return tuple(path)
+
+
 def main(argv=None, stdout=None, stderr=None):
     # The emitter is built before parsing so a parse error can still honour
     # `--json`; argv is scanned directly because argparse has not run yet.
@@ -1133,19 +1157,77 @@ def main(argv=None, stdout=None, stderr=None):
 
     emitter.as_json = getattr(args, "json", emitter.as_json)
 
+    # The write gate, and it runs HERE — before `adopt_machine_layout()`, which is
+    # itself a store mutation, and before any handler. A refusal must leave the store
+    # byte-identical, so nothing that writes may run ahead of it.
+    #
+    # The declaration is resolved (and therefore validated) whenever one is present,
+    # even for a read-only command: a client whose declaration file is corrupt has a
+    # broken installation, and reporting that on its first call rather than on its first
+    # *write* removes the window where the gate silently is not there. The refusal
+    # itself applies only to a command that writes.
+    command_path = resolved_command_path(parser, args)
+    try:
+        declaration = compat.client_declaration(
+            getattr(args, "client_schemas", None), os.environ
+        )
+        # Computed here as well as inside `compat.gate` because the relocation decision
+        # below needs the comparison for a *read-only* command, where the gate
+        # deliberately does not raise. Both call `compat.unsupported_by` — the rule still
+        # has one definition; only the pure function runs twice.
+        unsupported = compat.unsupported_by(declaration.schemas) if declaration else {}
+        # `hasattr(args, "func")` keeps a group invoked with no subcommand — `devteam
+        # store`, `prefs`, `cred` — out of the gate. Its path resolves to the group, which
+        # is in neither classification table, so `is_mutating` would fail closed and turn
+        # a "needs a subcommand" usage error (exit 2) into a conflict (exit 4) about a
+        # command the caller never asked for.
+        if declaration is not None and hasattr(args, "func"):
+            compat.gate(command_path, declaration)
+    except DevteamError as exc:
+        return emitter.fail(exc)
+    except Exception as exc:  # noqa: BLE001 - the contract outranks a clean traceback
+        # The same net the handler call below carries, for the same reason and because
+        # this block parses caller-supplied text: `Path.read_text` raises
+        # `UnicodeDecodeError` and `json.loads` raises `RecursionError`, neither of which
+        # is an `OSError` or a `JSONDecodeError`. Both are converted to `UsageError` in
+        # `compat` now; this is what keeps the *next* one from reaching the shell as a
+        # traceback with an empty stdout under `--json`.
+        return emitter.fail(
+            EnvError(
+                "unexpected {} while reading the client declaration: {}".format(
+                    type(exc).__name__, exc
+                ),
+                hint="This is a bug in dev-team-agents; please report it.",
+            )
+        )
+
     # The store's own shape is brought up to date before any command reads it: a
     # command that found registry.json at the pre-split path would report every
     # bound project as unbound. Idempotent, and a no-op for an already-split store.
-    try:
-        adopted = store.adopt_machine_layout()
-    except (OSError, DevteamError) as exc:
-        return emitter.fail(
-            EnvError(
-                "cannot bring the data store up to the current layout: {}".format(exc),
-                hint="Check permissions on the data store, then retry.",
+    #
+    # **Not on behalf of an incompatible client.** The relocation writes `registry` and
+    # `bind_manifest`; a client that declared it cannot read those shapes must not have
+    # them rewritten because it asked a read-only question. A read-only command then
+    # answers against the layout actually on disk — which every one of them does
+    # correctly except those in `compat.NEEDS_MACHINE_LAYOUT`, which are refused rather
+    # than allowed to answer wrong.
+    adopted = None
+    if unsupported and store.machine_layout_pending():
+        if command_path in compat.NEEDS_MACHINE_LAYOUT:
+            return emitter.fail(
+                compat.migration_required(command_path, declaration, unsupported)
             )
-        )
-    if adopted["moved"] or adopted["quarantined"]:
+    else:
+        try:
+            adopted = store.adopt_machine_layout()
+        except (OSError, DevteamError) as exc:
+            return emitter.fail(
+                EnvError(
+                    "cannot bring the data store up to the current layout: {}".format(exc),
+                    hint="Check permissions on the data store, then retry.",
+                )
+            )
+    if adopted and (adopted["moved"] or adopted["quarantined"]):
         emitter.warn(
             "moved {} machine-local record(s) into {}; repointed {} project(s)".format(
                 len(adopted["moved"]), paths.machine_dir(), len(adopted["repointed"])
@@ -1220,7 +1302,9 @@ def main(argv=None, stdout=None, stderr=None):
     payload = dict(payload)
     # `warn` only reaches stderr, and ADR-0011 makes the desktop app a client of this
     # CLI: a store mutation it cannot observe in the document is a contract gap.
-    if adopted["moved"] or adopted["quarantined"]:
+    # `adopted` is None when the relocation was skipped because an incompatible client
+    # asked a read-only question — nothing moved, so there is nothing to report.
+    if adopted and (adopted["moved"] or adopted["quarantined"]):
         payload["store_relocation"] = adopted
     payload["ok"] = ok
     emitter.emit(payload, human)
