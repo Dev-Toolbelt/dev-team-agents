@@ -29,11 +29,25 @@ test, the release rewrite extracted from inline YAML and tested, and a CI gate o
 **M4.3 is the Electron app, and it is not built**: it is blocked on signing credentials the repository
 owner holds.
 
+**Subsequently, the framework's half gained the write gate M4.1 stopped short of.** `devteam compat`
+answered "may this client write?" and nothing made the answer binding. A caller may now declare the
+shapes it understands (`--client-schemas <PATH>` or `DEVTEAM_CLIENT_SCHEMAS`), and a caller that
+declares is refused every mutating command it cannot understand, at exit 4, before anything on disk
+changes. An incompatible declaration also **suppresses the one-time pre-ADR-0013 layout relocation**,
+because that relocation writes the very shapes such a caller said it cannot read — and the single
+read-only command whose answer depends on it, `devteam list`, is refused at exit **3** rather than
+allowed to report an empty store. A caller that declares **nothing** is unaffected and keeps the entire
+pre-gate write surface —
+that boundary is a decision, not an unfinished edge, and it is recorded in
+[ADR-0014](../development/adrs/0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md)
+§ 3 together with the `json_contract` deprecation policy and the ruling that `store_schemas()` is the
+normative compatibility statement.
+
 **Every scenario below is marked, and the marks are the point of this document:**
 
 | Mark | Meaning |
 |------|---------|
-| **[MET]** | Built and asserted, by something named in the scenario itself — either a test that passes today (`tests/test_json_contract.py`, 35 tests; `tests/test_packaging.py`, 12; `tests/test_release_bump.py`, 23; all green, in a suite of 344) or, where a test cannot reach it, a **recorded run**: one execution on one maintainer's machine, with its platform and tooling version stated. A recorded run is evidence, not a channel — nothing re-runs it, and a `[MET]` resting on one says so in its own first line. |
+| **[MET]** | Built and asserted, by something named in the scenario itself — either a test that passes today (`tests/test_json_contract.py`, 35 tests; `tests/test_client_gate.py`, 52; `tests/test_packaging.py`, 12; `tests/test_release_bump.py`, 23; all green, in a suite of 396) or, where a test cannot reach it, a **recorded run**: one execution on one maintainer's machine, with its platform and tooling version stated. A recorded run is evidence, not a channel — nothing re-runs it, and a `[MET]` resting on one says so in its own first line. |
 | **[UNVERIFIABLE HERE]** | Stated as the criterion a human must check, against accounts, certificates and third-party review this environment does not have and should not be given. The artifact exists; the criterion has never been exercised. |
 | **[UNBUILT]** | The criterion is stated so the client has something to be built against. No code exists. |
 
@@ -138,6 +152,112 @@ plus pushes to `main` and to tags** — never "every push"; a branch with no ope
   read by a newer client is the direction that works
 - And a client claiming every current shape gets an empty result, meaning it may write
 - And a non-mapping argument raises rather than being interpreted
+
+**Scenario [MET]: a client that declares shapes it cannot handle is refused every write** — asserted by
+`tests/test_client_gate.py` (52 tests), on every pull request and every push to `main`/tags
+- Given a caller that names the shapes it understands, through `--client-schemas <PATH>` or
+  `DEVTEAM_CLIENT_SCHEMAS`, and is a version behind on every one of them
+- When each command classified as mutating runs — swept from `compat.MUTATING` itself, not from a list
+  written in the test, so a command added tomorrow is covered the moment it is classified
+- Then the process exits **4** (conflict), because nothing ran; `devteam compat`'s exit 1 stays the code
+  for a question that ran and answered "no"
+- And the message names the command and every blocking shape with both numbers, and `details` carries
+  exactly `{command, declared_by, declaration_source, client_schemas, store_schemas, unsupported,
+  may_write}` — the **key set** is pinned in both directions, failing on an added key as loudly as on a
+  removed one, and every value is asserted rather than only the names
+- And the store is byte-identical before and after — every path under it compared by content digest, not
+  by name, because a gate that refused *after* rewriting the registry would be invisible to a listing
+- And that holds on a store that has **not** yet been relocated to the ADR-0013 split layout, which is
+  where the gate's *position* is asserted: the refusal happens before `store.adopt_machine_layout()`, and
+  the sweep runs over the whole of `compat.MUTATING` rather than one command, so a gate moved below the
+  relocation — or granted a per-command exemption — fails here
+- And `declared_by` names the seam the caller actually used, with the flag outranking the environment
+  variable in both directions
+- And every declaration error names the seam that carried the path — `--client-schemas <PATH>`,
+  `--client-file <PATH>` or `DEVTEAM_CLIENT_SCHEMAS <PATH>` — rather than a bare path the caller never
+  typed on its own, asserted for all three seams
+- And a shape the client never mentioned is reported unsupported with `client: null`, taken from
+  `compat.unsupported_by()` rather than re-derived at the call site
+- And a client **ahead** of the store is not refused
+- And a missing declaration file, one that is not JSON, one that is not an object, one claiming a
+  non-integer (including a boolean), one that is not decodable as UTF-8 text, and one nested too deeply
+  for the JSON parser are each exit **2** with the file named, and the command does not run — a
+  malformed declaration must never read as no declaration, which is the fail-open case
+- And `--client-schemas ""` (or whitespace) is exit **2** as well, not the anonymous path: a shell cannot
+  distinguish an absent variable from an empty one, so "empty means unset" holds for the variable and for
+  nothing else. A flag given an empty value is a caller that meant to declare and got the value wrong —
+  `--client-schemas "$SCHEMAS"` with `SCHEMAS` unset — and downgrading it to silence dropped the gate on
+  exactly that invocation. Asserted through the CLI and against `compat.client_declaration` directly, and
+  asserted not to fall through to a *compatible* exported variable, which is how the mistake would have
+  been hidden behind an unrelated declaration
+- And the last two of those — not UTF-8, nested too deeply — reach the caller as **one** parseable
+  document on stdout under `--json` with no traceback on stderr; both previously escaped as exit 3
+  ("unexpected `UnicodeDecodeError` / `RecursionError`"), which a client branching on `$?` reads as an
+  environment problem rather than as its own malformed question
+- And every one of the 35 leaves the parser walk discovers is classified as mutating or read-only, with
+  no leaf in both tables and no table entry naming a command that no longer exists;
+  `compat.is_mutating()` treats an unclassified command as mutating, asserted rather than assumed
+- And `compat`, `version`, `path`, `catalog`, `list`, `store list`, `prefs list/get` and
+  `cred list/get/check/backends` are never refused **as writes**, so a client that has fallen behind can
+  still read — including reading a credential value — and can still ask how far behind it is
+- And `cred get --json` still answers with its documented exit-2 refusal under an incompatible
+  declaration, rather than an exit 4 that would send every client looking in the wrong place
+
+**Scenario [MET]: a caller that declares nothing is affected in no way** — asserted by
+`tests/test_client_gate.py`, the same suite
+- Given the same store and the same mutating command as above
+- When it is invoked with no `--client-schemas` and no `DEVTEAM_CLIENT_SCHEMAS`
+- Then it performs the mutation, and the pair is asserted both ways round in one test: refused when
+  declared, performed when not
+- And an empty or whitespace-only `DEVTEAM_CLIENT_SCHEMAS` is treated as *unset*, so a wrapper that
+  unsets by assigning empty lands on the anonymous path instead of being refused every write — and the
+  **flag** does not share that treatment, which the scenario above asserts as the deliberate asymmetry
+- And the gate leaks nothing into the `--json` contract: `bind --json` carries no `client_schemas` and
+  no `unsupported` key, asserted at the point of the change, and the 16 pinned app-facing key sets in
+  `tests/test_json_contract.py` are unchanged
+- And a read-only command answers byte-for-byte identically whether the caller declares nothing, a
+  compatible client, or an incompatible one
+- **Not** asserted, and by decision rather than omission: that an undeclared client is detected,
+  warned about or logged. It is not. An anonymous invocation is byte-for-byte a human at a terminal, so
+  omitting the declaration is a complete bypass of the gate; ADR-0014 § 3 records why and what would
+  have to be true to reopen it
+
+**Scenario [MET]: the store's one-time layout relocation does not happen on an incompatible client's
+behalf, and the one command that cannot answer without it says so** — asserted by
+`tests/test_client_gate.py::PreSplitStoreTest`, the same suite
+- Given a store whose machine-local records still sit at the pre-ADR-0013 paths — fabricated by
+  de-splitting a store a real `bind` wrote, including the project's own `state-dir` and `memory-dir`
+  pointers, so the records hold exactly what the current code produces and a difference the sweep reports
+  is the layout and nothing else
+- When any command runs under a declaration that is behind on at least one shape
+- Then `store.adopt_machine_layout()` does not run, because it rewrites `registry` and `bind_manifest` —
+  the exact shapes the caller declared it cannot read — and performing it for that caller is the gate
+  letting through the one write it exists to stop
+- And a **compatible** declaration, and an **anonymous** caller, both still get the relocation, so no
+  store is stranded by this; the anonymous case also still reports the move on stderr
+- And every read-only command answers **identically** on the pre-split store and on the same store after
+  relocation, or is refused — asserted by running each leaf of `compat.READ_ONLY` twice under the same
+  declaration and comparing exit code and document
+- And the set of commands that must be refused is asserted **equal** to `compat.NEEDS_MACHINE_LAYOUT`, so
+  the table is measured rather than trusted: a command that starts reading a machine-local record fails
+  this sweep instead of quietly joining the wrong side
+- And that set is exactly `{devteam list}` today, because `paths.registry_file()` resolves only the
+  post-split path: `list` read no registry at all and reported every bound project as unbound — exit 0,
+  `projects: []`, no error anywhere. The remaining read-only commands resolve through the project's own
+  pointers or through the core store, so the layout never reaches their answer
+- And `devteam list` is therefore exit **3**, not 4: the caller is entitled to read, and what is not ready
+  is the **environment**, whose repair is a write the caller cannot accept. Its `details` carry the
+  refusal's seven keys **plus `machine_layout_pending: true`**, and its `hint` names the fix that does not
+  require upgrading the client — run any `devteam` command from a terminal with no declaration
+- And the positive control is asserted beside it: the same store, the same command, invoked anonymously,
+  relocates and finds the bound project — without it, "refused" could be a store that genuinely has
+  nothing bound
+- And `devteam compat`, `devteam version` and `devteam path` — the three escape hatches that hint names —
+  answer on the un-relocated store and relocate nothing, so the guidance is not a dead end for the caller
+  it is written for
+- **Not** asserted: that `NEEDS_MACHINE_LAYOUT` is correct for a layout other than the one this fixture
+  builds. The sweep measures one de-split shape, which is the shape that exists; a future layout change
+  brings its own fixture
 
 **Scenario [MET]: the formula's declared payload is enough to start the CLI** — asserted by
 `tests/test_packaging.py` (12 tests), on Linux, on every pull request and every push to `main`/tags
@@ -372,32 +492,66 @@ installs before anyone merges**
 - And it special-cases `devteam cred get`, which answers `--json` with a conforming error by design
 - And every capability the app exposes remains reachable from the CLI alone, so a user who never
   installs the app loses only the screens
-- Unbuilt. Both preconditions this scenario used to list as open have since closed, and the residue is
-  smaller and more precise: `unsupported_by()` **does** have a caller now — `devteam compat`, with
-  `--client`/`--client-file` and an explicit `may_write` — so the comparison no longer has to be
-  reimplemented in the client; and the cask **does** declare `depends_on formula: "devteam"`, so which
-  `devteam` an app installed through Homebrew invokes is answerable. What remains open is that the app
-  must still call `devteam compat` before it writes, because a user can upgrade the store from a
-  terminal without touching the app, and nothing on the framework side refuses a client that never
-  asks.
+- Unbuilt. Three preconditions this scenario used to list as open have since closed, and the residue is
+  smaller and more precise each time: `unsupported_by()` **does** have a caller now — `devteam compat`,
+  with `--client`/`--client-file` and an explicit `may_write`, and `compat.gate()` — so the comparison no
+  longer has to be reimplemented in the client; the cask **does** declare
+  `depends_on formula: "devteam"`, so which `devteam` an app installed through Homebrew invokes is
+  answerable; and the framework **can** now refuse — see the two gate scenarios above. What remains open
+  is exactly one half of what this bullet used to claim, and the halves are worth separating:
+  - **Closed:** an app that declares its shapes is refused every mutating command it cannot understand,
+    at exit 4, before anything on disk changes. It does not have to remember to call `devteam compat`
+    first, and it cannot cache a stale "yes" — the gate re-compares on every invocation, so a user who
+    upgrades the store from a terminal without touching the app is covered by the next call the app
+    makes. The framework also declines to migrate the store's layout on such an app's behalf, and tells
+    it so at exit 3 on the one read-only command that cannot answer without the migration, rather than
+    handing it an empty project list.
+  - **Open by decision, not omission:** an app that declares **nothing** is still not refused, and no
+    framework code detects it. The gate binds the caller that identifies itself; omitting the
+    declaration bypasses it entirely. So the criterion above — the app reads the `compat` block,
+    degrades to read-only and says so — remains the **app's** obligation, and the framework's half is
+    now a safety net for an honest app rather than a guarantee against a silent one. ADR-0014 § 3
+    records the reasoning and the reopening condition.
+  - **Still unbuilt regardless:** the app. Nothing in this scenario is met, because there is no client
+    to declare anything.
 
 ### Out of Scope
 - **The Electron app itself.** Milestone M4.3, blocked on signing credentials the repository owner
   holds. Its criteria are stated above as `[UNBUILT]` so the client has a target; none of them is met
-- **A deprecation policy for the JSON contract.** `json_contract` is a single integer with no rule
-  attached: nothing states what bumping it obliges, how long the previous value is honoured, or how a
-  client learns a field is going away. Recorded as the first risk in ADR-0011; no mechanism is
-  specified here and none is built
-- **Per-command payload field contracts.** The sweep pins the *envelope* for every command. No test
-  enumerates any command's key set, so a renamed or dropped field passes every check that exists.
-  Nothing in this spec asserts otherwise
-- **Framework-side enforcement of client compatibility.** `devteam compat --client` now *answers* the
-  question — it returns `may_write` and, when false, the blocking shapes with both numbers — but
-  nothing makes a client ask it, and no command refuses a write from a client that did not. The client
-  is the party that degrades, by design
-- **Reconciling `min_app_version` with `store_schemas()`.** ADR-0011's amendment argues they are two
-  mechanisms answering one question and proposes which should be normative. That decision is not made,
-  and this spec asserts neither outcome
+- **Implementing the JSON contract's deprecation mechanism.** The *policy* is no longer open: ADR-0014
+  § 2 states what obliges a `json_contract` bump, what does not — including its ruling that an error
+  envelope's conditional `hint` appearing on a path that did not previously set it is additive and free,
+  its named carve-out for an exit code **corrected** from a crash rather than moved, and when the policy
+  starts binding at all (the first release that ships the CLI; nothing has) — that one value
+  is live at a time, and
+  that a departing key is marked in the payload for one full release before it is removed. What is out
+  of scope is the mechanism — **no payload emits a `deprecated` list, nothing reads one, and no test
+  mentions it.** The first deprecation implements it; there is nothing to deprecate at
+  `json_contract: 1`. Four of the policy's five contributor steps have no gate, which ADR-0014's first
+  risk row records rather than resolves
+- **Per-command payload field contracts, beyond the pinned set.** The generic sweep pins the *envelope*
+  for every command. On top of it, `tests/test_json_contract.py::AppFacingKeySetContractTest` pins the
+  exact top-level key set of **16** app-facing payloads and the per-record key set of **5** list
+  payloads — 16 tests, green — so dropping `project_id` from `bind --json`, the finding that class's
+  docstring cites by name, now fails the build. What is out of scope is the rest: `EXPECTED` is a
+  hand-written list with **no assertion tying it to the parser walk**, so a payload nobody added —
+  among them `sync`, `unbind`, `pin`, `prefs set/unset`, `cred set/unset/import`, `store install/use/gc`,
+  `migrate`, `upgrade`, `export`, `import`, `uninstall` — can still be renamed or dropped with every
+  check passing. This spec asserts the 21 pinned sets and nothing beyond them
+- **Framework-side enforcement against a client that declares nothing.** The enforcement that *is*
+  built has its own two `[MET]` scenarios above: a caller that declares its shapes is refused every
+  mutating command it cannot understand. What stays out of scope, by ADR-0014 § 3's decision rather than
+  for want of work, is the other half — nothing makes a caller declare, nothing detects one that does
+  not, and an undeclared caller retains the entire pre-gate write surface. The reopening condition is
+  stated in that ADR; "make the flag mandatory" does not satisfy it, because identification is not
+  authentication
+- **Reconciling `min_app_version` with `store_schemas()`.** Decided in ADR-0014 § 1 after this spec was
+  written: `store_schemas()` is the normative compatibility statement, `min_app_version` survives only
+  as a kill switch for a released app version that writes wrongly for a reason no shape number can
+  express, and `minFrameworkVersion` on the app side is advisory. What remains out of scope is any
+  *mechanism* for that ruling — `min_app_version` is still consulted by nothing, and only the ADR marks
+  it as non-normative. This spec asserts that `version --json` carries the field and that it is null
+  (above); it asserts nothing about anything honouring it
 - **The Windows packaging shape for the CLI.** Still undecided, and deliberately so: the choice moves
   `InstallerType`, `InstallerSwitches`, `NestedInstallerType`/`NestedInstallerFiles` and `Dependencies`
   together. `packaging/README.md` § *The Windows installer shape* now records three candidates — a
@@ -419,7 +573,7 @@ installs before anyone merges**
 - **Depends on**: [`v3-global-install.md`](v3-global-install.md) (the store, the bind, version
   resolution and pinning, the `--json` exit-code contract this sweep generalises, quarantine),
   [`v3-credentials.md`](v3-credentials.md) (the `cred get --json` refusal this contract must carry as
-  a standing exception), ADR-0011
+  a standing exception), ADR-0011, ADR-0014 (the write gate, and the `json_contract` deprecation policy)
 - **Blocks**: the desktop app (M4.3), and both publication pipelines
 
 ### Amendment Log
@@ -469,6 +623,108 @@ installs before anyone merges**
   was 35 already) and is corrected in place; the second entry's counts were accurate then, so they are
   annotated "then / today" rather than rewritten. M4.3 stays `[UNBUILT]`; nothing about signing,
   notarisation, the tap repository or the winget PR has become done.
+- 2026-09-28 | technical-writer | **The client write gate added as two `[MET]` scenarios, and three
+  `Out of Scope` items corrected — two of which this document was understating.** New scenarios, both
+  resting on `tests/test_client_gate.py` (30 tests, green): a caller that declares shapes it cannot
+  handle is refused every mutating command at exit 4 with the store left byte-identical; and a caller
+  that declares nothing is affected in no way. They are stated as a pair on purpose — the second is the
+  property most easily broken in silence, and the test asserts the same command refused when declared
+  and performed when not. **`[UNBUILT]` M4.3 is not upgraded**; there is no app. Its residue paragraph
+  is split instead, because half of "nothing on the framework side refuses a client that never asks"
+  is now closed and the other half is closed *by decision*: an undeclared caller keeps the entire
+  pre-gate write surface, per ADR-0014 § 3. Corrections: **"No test enumerates any command's key set"
+  was false when written** — `AppFacingKeySetContractTest` has pinned 16 payloads and 5 record shapes
+  since M4.1, and cites the `project_id`-from-`bind --json` finding by name. Understating what exists is
+  the same defect as overstating it: both are a document that does not match the tree, and a reader
+  cannot tell from the sentence which direction it failed in. That is stated here as a principle, not as
+  a quotation — the previous round wrote only that *"this document's failure mode is asserting more than
+  the artifacts support"*, which is the overstating half, so attributing the symmetry to it would be a
+  small version of the same error. The deprecation-policy item is now the *mechanism*, not the policy —
+  ADR-0014 § 2 decides the policy — and the `min_app_version` item records ADR-0014 § 1's ruling while
+  keeping the absence of any mechanism for it in scope. Test counts re-measured: suite 374,
+  `test_client_gate.py` 30.
+- 2026-09-28 | technical-writer | **A claims audit of the entry above, and of the same round's ADR text:
+  thirteen assertions found wrong, ten of them in these documents and corrected here. The framing error
+  is the finding, not the facts.** (The other three are not documentation: a `compat.py` docstring, a
+  test-coverage gap behind this document's `details` clause, and one scenario's `Given` naming a seam the
+  sweep does not exercise. All three are being fixed in the code and the tests; no clause here was
+  weakened to match a gap.) ADR-0011's amendment called three of its Risks-table statements "now stale"
+  and ADR-0014 said two of them "went stale with the gate". All three were **false when the rows were
+  written**: every contradicting artifact existed at `ed87507`, the commit that wrote them —
+  `AppFacingKeySetContractTest` from `95fa346`, `cmd_compat()` calling `compat.unsupported_by()` from
+  `4818176`, and the cask's `depends_on formula: "devteam"` from `06fd509`, all three commits ancestors
+  of `ed87507`. "Stale" implies decay and there was none, and this round's
+  own documents contradicted each other about it: the entry above says "was false when written" of the
+  third statement while ADR-0011's amendment called the same fact "now stale". Both are now
+  false-when-written, and the three statements are counted as **three across two rows**, since the
+  *A client reads `compat` and writes anyway* row supplies two. Also corrected: ADR-0011's
+  *"Revisit when the app ships…"* condition is **not met**, in either half — `depends_on formula:`
+  guarantees the formula is installed, not which binary the app invokes (the cask's own comment says
+  "answerable", not answered), that line predates the condition, and nothing here touched `packaging/`;
+  "met by half" is struck and the deviation stated. The envelope sweep covers every discovered leaf
+  **except `update` and `uninstall`** (`SKIP_INVOCATION`), and accepts **empty or** exactly one document,
+  both of which ADR-0011's M4.1 amendment already stated precisely. `validate-commit-msg.sh` accepts `!`
+  through `PATTERN` on line 4, not at `:40-44` (the footer-colon guard); its callers are two, not one —
+  `skills/shared/conventional-commits/SKILL.md` presents the invocation as well, and it is the skill the
+  mitigation depends on being loaded. `CLAUDE-md/cli.md` and the CHANGELOG said "four" judgment-call
+  classifications while naming **six**, and claimed each carries its reason when `upgrade` does not.
+  `CLAUDE-md/cli.md`'s example refusal payload was hand-written and unproducible — three shapes, one
+  reported unsupported, `registry` at 3 — and is replaced by the real emission of
+  `devteam bind --json --client-schemas …` against a throwaway store: five store shapes, two silences
+  and one behind number all reported, plus the `hint` key the invented example omitted. The § 3 claim
+  that a human's invocation is "byte-identical … asserted rather than argued" is weakened on both counts:
+  `--client-schemas PATH` now appears in every command's `--help`, and no test compares against a
+  pre-gate baseline. **No mark moved and no scenario weakened** — this round changed only sentences about
+  the artifacts, never a criterion.
+  **Neither README is changed, and the reason is recorded here because it was not recorded anywhere.**
+  The earlier pass reached the right conclusion on two wrong grounds. It is *not* true that "the README
+  documents no `devteam` flags at all": `README.md:62`, `:68` and `:69` carry
+  `devteam store install --from .`, `devteam migrate --apply` and `devteam upgrade --apply`, and
+  `README.pt-BR.md` mirrors all three at the same lines. And the Auto-Docs Rule's "script flags" trigger
+  carries no "flags a person invokes" qualifier — read literally, `--client-schemas` fires it. The actual
+  defence is narrower and does not need the rule re-read: `README.md:74` and `README.pt-BR.md:74` already
+  **delegate** the `--json` contract and exit codes to `CLAUDE-md/cli.md`, which is where this flag, its
+  exit 4 and its refusal payload are documented — so the mirror the rule points at is the one that was
+  updated. `CLAUDE.md` delegates its whole CLI surface to that same file for the same reason.
+- 2026-09-28 | technical-writer | **Four defects found in the write gate were fixed in the code, and
+  seven observable behaviours this document did not carry are now recorded: one new `[MET]` scenario, six
+  new bullets on the two existing gate scenarios, and one bullet corrected because it was wrong.** The
+  new scenario is the pre-split store — an incompatible declaration now suppresses
+  `store.adopt_machine_layout()`, because that relocation writes `registry` and `bind_manifest`, the exact
+  shapes such a caller declared it cannot read; a compatible declaration and an anonymous caller still
+  perform it; and `devteam list`, the single read-only command whose answer depends on it, is refused at
+  exit **3** with `machine_layout_pending: true` instead of reporting `projects: []` at exit 0.
+  `compat.NEEDS_MACHINE_LAYOUT` holds that one entry because the membership was **measured** — every
+  read-only leaf run twice under the same declaration, once on each layout, with the refused set asserted
+  *equal* to the table — and the reason only `list` qualifies is recorded: the others resolve through the
+  project's own pointers or the core store rather than through the registry. **The corrected bullet** said
+  "`compat`, `version`, `catalog`, `list` and `cred get` are not gated"; `list` *is* refused on a
+  pre-split store, so the clause is now "never refused **as writes**" and names the read-only set in full.
+  Also added: `--client-schemas ""` is exit 2 rather than the anonymous path (the environment variable
+  keeps "empty means unset"; the asymmetry is the point, and a truthiness test on the flag had made the
+  fail-open reachable through `--client-schemas "$SCHEMAS"` with `SCHEMAS` unset); a declaration file that
+  is not UTF-8 or nested too deeply is exit 2 as one parseable document, where both previously escaped as
+  exit 3 "unexpected `UnicodeDecodeError` / `RecursionError`"; every declaration error names the seam that
+  carried the path; the refusal's seven `details` keys are now pinned **in both directions** with every
+  value asserted, which is what makes this document's long-standing `[MET]` on that clause true — three of
+  the seven were asserted by no test at all when the mark was written; and the gate's position relative to
+  the relocation is asserted rather than trusted, across the whole of `compat.MUTATING` rather than one
+  command. **No mark moved and no criterion weakened; M4.3 stays `[UNBUILT]`** — the app does not exist,
+  and nothing here is evidence about it. Test counts re-measured with
+  `python3 -m unittest discover -s tests -t tests`: suite **396** (was 374), `test_client_gate.py` **52**
+  (was 30), `test_json_contract.py` 35, `test_packaging.py` 12, `test_release_bump.py` 23 — all unchanged
+  except the gate's own file. One earlier entry's counts were accurate when written and are left alone.
+  **One finding is carried out of this round rather than absorbed.** ADR-0014 § 2 lists *"changing which
+  exit code an existing outcome uses"* under **obliges a `json_contract` bump**, and one change here does
+  exactly that: `devteam compat --client-file <not-UTF-8 | too-deeply-nested>` moved from exit 3 to exit 2.
+  Read literally, that is a contract break. Two facts decide it instead of a judgment call, and both are
+  now recorded in § 2 rather than here: the old exit 3 was a crash the catch-all labelled *"unexpected
+  …"*, not a decided outcome; and **the CLI has never been released** — `scripts/cli/devteam` does not
+  exist at `v2.48.0`, the latest tag, so `json_contract: 1` has never been published to any client and
+  there is no prior value for a bump to distinguish it from. The other exit-code differences in this round
+  are not changes at all: `--client-schemas` and everything reached through it are new in the same
+  unreleased change set, so `--client-schemas ""` at exit 2 and `devteam list` at exit 3 replace no
+  released behaviour. `json_contract` stays at **1**.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

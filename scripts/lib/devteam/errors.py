@@ -5,9 +5,15 @@ script reads it, so a code never changes meaning once released.
 
     0  success
     1  findings — the command ran and reported a problem it did not fix
-    2  usage error — bad arguments, unknown subcommand
-    3  environment error — no store, no version, unreadable directory
-    4  conflict — lock timeout, identity collision, refusing to overwrite
+    2  usage error — bad arguments, unknown subcommand, malformed client declaration
+    3  environment error — no store, no version, unreadable directory, a store whose
+       one-time layout migration a declared client may not perform
+    4  conflict — lock timeout, identity collision, refusing to overwrite, refusing a
+       mutating command to a client that declared it cannot read a shape it would write
+
+`4` on the last case and not `1`: the command was **declined**, so nothing ran, and `1`
+here always means the opposite. See `compat.refusal` for the full reasoning, and
+`compat.migration_required` for why the read-only counterpart is `3` instead.
 """
 
 EXIT_OK = 0
