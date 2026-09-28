@@ -87,10 +87,18 @@ blocking "check-fingerprint-uniqueness" bash helpers/check-fingerprint-uniquenes
 # extract to a skill, which is what the cap exists to force.
 blocking "size-limits" bash helpers/size-limits.sh
 
-# Shell correctness across shipped scripts. Blocking: the tree is clean and any
-# finding in an installer or hook is a real runtime hazard. (Do not start a
-# comment line with the tool's own name followed by a space — shellcheck parses
-# that as a directive and errors out, silently disabling checks in this file.)
+# Shell correctness across every shell script in the repository. Blocking: the
+# tree is clean and any finding in an installer, a hook or a CI script is a real
+# runtime hazard. (Do not start a comment line with the tool's own name followed
+# by a space — shellcheck parses that as a directive and errors out, silently
+# disabling checks in this file.)
+#
+# TARGET SET — the gate used to lint `scripts helpers` only, which left every
+# script in this very directory, in .github/scripts/release/ and in packaging/
+# unchecked: the gate did not cover the scripts that run the gate. Pinning a
+# checker version to make a verdict trustworthy and then aiming it away from CI's
+# own shell is a hole, so all four trees are in the set. Adding a tree is one
+# entry in SHELLCHECK_TARGETS below — do not add a second shellcheck invocation.
 # --source-path=SCRIPTDIR makes shellcheck resolve a `source=` directive relative
 # to the sourcing script rather than to the invocation's working directory. Without
 # it, every hook sub-script that sources ../lib/ raises SC1091 for a file that is
@@ -122,8 +130,41 @@ elif [ "$SHELLCHECK_ACTUAL" != "$SHELLCHECK_PINNED" ]; then
   echo "  so a green here can still fail CI. Install ${SHELLCHECK_PINNED} to reproduce the gate."
   ADVISORY_HITS+=("shellcheck-version-mismatch")
 fi
-blocking "shellcheck scripts + helpers" \
-  find scripts helpers -name '*.sh' -exec shellcheck -x --source-path=SCRIPTDIR {} +
+# Quoted array expansion, never a bare glob list: the entries are literal paths
+# and must reach `find` as-is. An unquoted list here would be re-globbed against
+# the working tree, which this repository has been bitten by before.
+SHELLCHECK_TARGETS=(scripts helpers .github/scripts packaging)
+
+# Preconditions are part of the check, not a third tier. A missing target
+# directory and an empty target set both mean the gate did not lint what its
+# label claims, so both return 2 — "the check itself broke" per the exit-code
+# nuance in the policy header, because a check that cannot run has not passed.
+# Only shellcheck's own findings return 1, which is what `blocking` is judging.
+shellcheck_targets() {
+  local dir missing=0 count
+  for dir in "${SHELLCHECK_TARGETS[@]}"; do
+    [ -d "$dir" ] && continue
+    echo "  MISSING target directory: ${dir}"
+    missing=1
+  done
+  if [ "$missing" -ne 0 ]; then
+    echo "  A target tree was renamed or removed without updating SHELLCHECK_TARGETS."
+    return 2
+  fi
+  # Counted by NUL bytes from -print0, so the number is right even for a
+  # filename containing spaces or newlines.
+  count="$(find "${SHELLCHECK_TARGETS[@]}" -name '*.sh' -print0 \
+    | tr -dc '\000' | wc -c | tr -d '[:space:]')" || return 2
+  if [ "${count:-0}" -eq 0 ]; then
+    echo "  no *.sh found under: ${SHELLCHECK_TARGETS[*]} — linting nothing is not passing."
+    return 2
+  fi
+  echo "  ${count} shell script(s) under: ${SHELLCHECK_TARGETS[*]}"
+  # -exec … + passes filenames as argv, so no path is ever word-split.
+  find "${SHELLCHECK_TARGETS[@]}" -name '*.sh' \
+    -exec shellcheck -x --source-path=SCRIPTDIR {} +
+}
+blocking "shellcheck ${SHELLCHECK_TARGETS[*]}" shellcheck_targets
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 if [ ${#ADVISORY_HITS[@]} -gt 0 ]; then
