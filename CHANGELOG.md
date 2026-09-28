@@ -247,6 +247,182 @@ unverified contract is building on sand.
 **The Electron app itself is not built.** It is M4.3, and it is blocked on signing
 credentials the repository owner holds — not on anything in this repository.
 
+### Added — v3 milestone M4.2 (proving the distribution scaffold)
+
+M4.2 shipped the packaging files with nothing checking them: no CI job read
+`packaging/` at all, the release workflow's formula rewrite lived inline in YAML where
+only a real tag push could ever run it, and the only stated verification was three
+commands `packaging/README.md` asked a human to type. This closes the gap between what
+that directory looked like and what anything actually asserted about it.
+
+- **`packaging/verify-formula-locally.sh`** — the Homebrew formula has now really been
+  installed, **once, on one maintainer's machine**: a recorded run, not a channel. The
+  script builds a tarball with `git archive … HEAD` — committed sources, not the working
+  tree — in GitHub's tag-archive directory shape, creates a uniquely-named, git-less
+  **throwaway tap**, and runs `brew style`, `brew audit --formula`,
+  `brew audit --strict --online`, `brew install --build-from-source`, `brew test` and a
+  smoke test of the installed binary, tearing down in a trap. The throwaway tap is the
+  whole trick: `packaging/README.md` used to record `brew install`/`brew audit` as
+  impossible here because no tap exists, and the premise was right but the conclusion
+  was not. Homebrew 7 rejects a formula file that is **not inside a tap** (the path form
+  itself is fine — this script's own install passes a path), separately disables
+  `brew audit <path>` outright, and will not load a formula from an untrusted tap — so
+  the script makes a tap, trusts it inside a sandboxed `trust.json`, and removes both.
+  Requires Homebrew ≥ 7, checked in preflight. Run on macOS against Homebrew 7.0.6: the
+  install block ran unmodified, `brew test` passed, and the installed `devteam` answered
+  `path --json` and `version --json` with one `ok: true` document each and created no
+  store. It verifies its own teardown — formula uninstalled, tap gone, the real
+  `trust.json` and the tracked formula both byte-identical — because a verification
+  script that changes the machine and says nothing about it is not one anybody will run
+  twice. Two changes it does **not** undo, and says so: formulae Homebrew pulled in
+  transitively are reported rather than removed (something else may now depend on them),
+  and `brew style`/`brew audit` bootstrap ~100 MB of Homebrew dev gems into
+  `Library/Homebrew/vendor/bundle`, which is permanent by design — deleting that tree
+  would damage Homebrew's own state. `--keep` skips the **teardown only**; the
+  `trust.json` and tracked-formula assertions are read-only and always run. It has a
+  release mode (`--tag/--url/--sha256`) for a real released artifact.
+- **`brew audit` found three real problems the file had been carrying**, now fixed and
+  re-verified clean: `Formula[…].opt_bin` where `formula_opt_bin(…)` is wanted, and two
+  `refute_predicate` assertions where `refute_path_exists` is wanted. `brew style` and
+  `brew audit --formula` are clean afterwards, as is `brew audit --strict --online`.
+  This is the argument for the script in one line — the formula had passed `ruby -c` for
+  its whole life and was still wrong in three places.
+- **`brew audit --new` is deliberately not run, and its result must not be quoted.** An
+  earlier version of this entry claimed it was clean, which is the most misleading thing
+  this milestone said. Every new-formula check in Homebrew 7's `FormulaAuditor` is gated
+  on the core tap — the four git-forge notability checks reach it through
+  `get_repo_data`'s `return unless @core_tap` (`formula_auditor.rb:858`), the rest
+  directly — so on a private-tap formula `--new` is byte-identical to
+  `--strict --online` and reports nothing about homebrew-core eligibility. And it would
+  not pass if it were reached: `SharedAudits.github("Dev-Toolbelt", "dev-team-agents")`
+  called directly returns `GitHub repository not notable enough (<30 forks, <30 watchers
+  and <75 stars)`. So the stage is gone, replaced by `audit-strict`, which runs the two
+  flags `--new` degrades to under their own name — and `--online` does buy real coverage
+  in release mode, where the url is a live GitHub artifact. A stage whose "clean" means
+  "the checks did not run" reads as an endorsement nobody earned.
+- **The python dependency had already drifted, and the drift is now reported rather than
+  remembered.** The formula declared `python@3.12` while homebrew-core's `python3` had
+  moved to `python@3.14`, so every installer would have pulled a second, older python
+  (~68 MB) for devteam alone. It is now `python@3.14`, and the version appears in exactly
+  **one** place: `install` reads it back off the declared dependency instead of writing
+  the interpreter basename out a second time, which is how the old pair got to disagree
+  unnoticed. `verify-formula-locally.sh` parses that line, resolves
+  `brew info --json=v2 python3`, and prints the two side by side on every run. The
+  runbook listed "check this by hand before publishing" as a manual step; it no longer
+  does.
+- **`tests/test_packaging.py`** (12 tests) — the CI-portable half of the same question.
+  It parses the formula's own `install` block to derive what the formula stages, so it
+  cannot drift from it, stages exactly that, applies the `inreplace` shebang rewrite, and
+  runs the CLI out of the staged tree through `subprocess` only — importing the `devteam`
+  package would put the repository's `scripts/lib` on `sys.path` and quietly satisfy an
+  import the payload is missing. Its bound is documented in the module: only the
+  `.install` lines are read, so a later `rm_f` or `mv` in the same block is invisible and
+  nothing here proves the block does not *subtract* from the payload. This
+  **deliberately overlaps** the script above, and `packaging/README.md` documents it as
+  two layers rather than duplication: the test runs on Linux wherever CI runs — every
+  pull request and every push to `main`/tags, which is what `ci.yml`'s trigger covers,
+  not "every push" — while the script is the real thing and needs `brew` on PATH.
+  Neither can replace the other. The two are also not symmetrical about what they derive
+  from the formula: the test derives the whole payload, the script derives only the
+  python dependency and hardcodes the layout paths it asserts afterwards.
+- **The release workflow's formula rewrite is out of the YAML.**
+  `.github/scripts/release/bump-homebrew-formula.sh` holds what used to be two inline
+  `run:` blocks, and `tests/test_release_bump.py` (23 tests) drives the real script
+  against copies of the real formula: placeholder bump, idempotence, re-bumping an
+  already-released formula, malformed tags and digests refused, a repo name carrying a
+  regex metacharacter unable to match a different repo, and every untouched line asserted
+  byte-identical. Inline it could only ever run by pushing a tag, so the case it was
+  written for — a formula already carrying a *previous* release's tag and digest — was the
+  least likely of all to be right. The write is now staged to a sibling temp file and
+  renamed into place only after verification passes, so a failed run leaves the formula
+  byte-identical instead of half-rewritten. Two further defects the extraction exposed
+  are fixed: the url verification is now **repo-qualified** — it matches the whole
+  `url "https://github.com/<repo>/archive/refs/tags/<tag>.tar.gz"` line, not the tag
+  fragment, so a wrong `--repo` can no longer write this release's digest into a formula
+  whose url already carried the requested tag and exit 0 — and a formula in which more
+  than one `url "…"` or `sha256 "…"` would be rewritten is **refused** rather than
+  rewritten on a guess about which digest is the stable one. A `bottle do` block still
+  bumps correctly: its digests are keyword arguments and carry no `sha256 "` for the
+  anchor to match. The two `-w` writability checks are diagnostics, not gates — `-w` sees
+  neither an ACL nor a read-only mount — so `mktemp` keeps its own failure path.
+- **`release.yml` gained a `macos-latest` job.** The bump job uploads the rewritten
+  formula as an artifact; this job downloads it and asserts its `url` and `sha256` equal
+  the digest that job computed, that the url ends in the right tag, and that **nothing
+  else in the file changed** (both files normalised on those two values and diffed —
+  which is exactly what the rewrite's own after-the-fact grep cannot see). It then runs
+  `verify-formula-locally.sh` against the real released tarball and that digest, passed
+  between the jobs as an output rather than re-downloaded. **It is not a gate**, and its
+  own `RESIDUAL` block says so: the PR is opened by the bump job's last step, so it is
+  already open while this job runs, and no branch rule marks the check required — a red
+  check informs whoever merges. **Never executed.** No tag has been pushed since the
+  workflow was added, and the Actions run remains the untested part: the tag-validation
+  step, codeload timing and its retry loop, the PR creation, the artifact hand-off and the
+  digest passed between jobs.
+- **`packaging/` has a CI gate at all** — `.github/scripts/ci/04-packaging.sh` plus a
+  `packaging` job in `ci.yml`, which runs on every pull request and every push to
+  `main`/tags. (Not "every push": `ci.yml` scopes `push` to `main` and tags, so a branch
+  with no open PR gets no CI at all — the workflow's own header states that trade-off.)
+  `ruby -c` on both formulas; and for the winget manifests: YAML parse, classification by
+  the **declared** `ManifestType` rather than the filename — which cannot distinguish
+  `defaultLocale` from an additional `locale` manifest, and used to report a spec-correct
+  extra locale file as six findings, all six wrong — the filename then checked against
+  that type, the required-field set per type, no two manifests declaring the same
+  `PackageLocale`, agreement of
+  `PackageIdentifier`/`PackageVersion`/`ManifestVersion`, the version-**directory** name
+  matching `PackageVersion`, digest format, and `InstallerUrl` ↔ version agreement that
+  refuses a half-done bump in either direction. That last cluster exists for one
+  documented edit: a version bump lands in four places by hand, coordinated by nothing.
+  The `InstallerUrl` origin is checked unconditionally against a prefix **derived from**
+  `scripts/install.sh`'s own `GITHUB_OWNER`/`GITHUB_REPO` — a file outside `packaging/`,
+  so the edit that redirects the URLs cannot move the goalpost with them — and the tag is
+  parsed out of the URL and compared for exact equality, not substring-matched, so
+  `v1.0.0-rc1` no longer satisfies `1.0.0`. A 64-zero `InstallerSha256` **fails** once the
+  version and the url tag are both real, with no manual promotion needed. A missing `ruby`
+  or an unimportable `pyyaml` is exit 2, not a skip. Two advisories fire today and are
+  meant to — the Homebrew placeholder is still in place and winget is still at the
+  `0.0.0`/`vX.Y.Z` scaffold — anchored on the `url`/`sha256` **directives** rather than a
+  whole-file grep, so they stop firing once real values land instead of matching the
+  formulas' own explanatory prose forever. The promotion condition for each is recorded in
+  the script.
+- **`packaging/` and `.github/scripts/` are shellchecked at all.** `01-lint.sh`'s target
+  set is now `scripts helpers .github/scripts packaging` — 67 `*.sh` files, up from 55.
+  Neither directory was linted by any gate before, which means
+  `verify-formula-locally.sh`, `04-packaging.sh` and `bump-homebrew-formula.sh` were all
+  written unchecked.
+- **`packaging/README.md` now separates what is proven from what is not, row by row**, and
+  each proven row names the test or the recorded run that asserts it. The same split is
+  re-marked in `docs/specs/v4-app-and-distribution.md`, whose `[MET]` legend now
+  distinguishes a test that passes in CI from a recorded run on a maintainer's machine —
+  this milestone produced the first criterion only the latter can assert.
+- **A new section records the Windows installer shape without deciding it.**
+  `DevToolbelt.Devteam.installer.yaml`'s `InstallerType: exe` stays an honest placeholder;
+  replacing it with an unverified choice would be worse. Instead the runbook states three
+  candidates — a signed `.exe`, `zip` + `NestedInstallerType: portable` around a built
+  `devteam.exe`, and the same nest around the python sources plus a launcher with a
+  `Dependencies.PackageDependencies` entry for python — and the exact test that
+  discriminates each, so whoever has a Windows machine settles it in one sitting. The
+  enums, the `NestedInstallerFiles` fields and the two `PackageDependencies` levels were
+  read from `microsoft/winget-cli`'s v1.12.0 installer schema, cited in place. The open
+  question between the last two is whether a `portable` nest accepts a non-`.exe` file
+  such as a `.cmd` launcher: the schema does not constrain it, Microsoft's manifest
+  documentation does not address it, and only `winget validate` and
+  `winget install --manifest` on Windows answer it. Two bounding constraints from that
+  same documentation are recorded with it — winget manifests support neither anchors,
+  complex keys nor sets, and winget-pkgs requires that every tool support a silent install.
+
+**Still unproven, and labelled as such:** no `homebrew-devteam` tap hosts the formula and
+no release tarball has been installed from one — the one recorded `brew install` used
+`git archive … HEAD`, not GitHub's codeload bytes; `release.yml` has never run; no Windows
+installer has been built, so `winget validate` has never seen these manifests; and
+`devteam-app.rb` has no artifact, so `brew audit --cask` has never been attempted. Be
+precise about that last one: the missing `.dmg` blocks the install, the digest and the
+codesign/notarisation checks, and nothing else. Static checking of the cask is not blocked
+and is **not clean** — `brew style` reports four cask-cop findings today
+(`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`), none of them
+fixed, recorded as a known state in `packaging/README.md`. Signing, notarisation, the tap
+repository and the winget pull request remain blocked on accounts and third-party review
+the repository owner holds.
+
 ### Changed
 - **37 markdown references now read the projection**, not the v2 source file. The five documents that
   describe the *source* layer — the canonical `user-preferences` skill, first-time setup, both
