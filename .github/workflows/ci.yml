@@ -187,3 +187,45 @@ jobs:
         run: |
           mkdir -p /tmp/slim-fixture
           bash .github/scripts/ci/slim-bootstrap.sh "$GITHUB_WORKSPACE" /tmp/slim-fixture
+
+  # `packaging/` had no gate in CI at all before this job. Nothing in the workflow
+  # or in .github/scripts/ci/ so much as read the directory, so a Homebrew formula
+  # could stop being valid ruby, or the three winget manifests could disagree with
+  # each other about the version, and the build would still go green. The only
+  # verification was packaging/README.md's "Verification" section — three commands
+  # a human is asked to run by hand, which is to say: run by nobody.
+  #
+  # The version bump that directory documents lands in FOUR places by hand
+  # (PackageVersion in all three manifests, plus the name of the version directory
+  # they live in). Three of the gate's checks exist for that one edit.
+  #
+  # WHEN THIS RUNS — this job inherits the workflow trigger above and nothing
+  # more, so it is NOT "every push": every pull request, plus pushes to `main` and
+  # to tags. A packaging change sitting on a branch with no open PR is unchecked
+  # until the PR exists (the trigger policy at the top states that trade-off and
+  # how to opt in: open a draft PR). The same accurate statement is in
+  # 04-packaging.sh's Homebrew section, where an earlier "on every push" claim was
+  # simply false.
+  packaging:
+    name: Packaging manifests (Homebrew + winget)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up python3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # Installed explicitly, mirroring the "Set up jq" step in provider-contracts,
+      # rather than relying on whatever ruby the runner image happens to preinstall.
+      # Unlike shellcheck (see .github/shellcheck.pin) the version is not pinned:
+      # `ruby -c` is a parser invocation with a yes/no verdict, not a linter that
+      # grows new findings between releases, so image drift cannot flip this gate
+      # the way a shellcheck bump did.
+      - name: Set up ruby
+        run: sudo apt-get update -y && sudo apt-get install -y ruby
+
+      - name: Homebrew formula syntax + winget manifest contract
+        run: bash .github/scripts/ci/04-packaging.sh
