@@ -95,6 +95,39 @@ def check_store():
     return findings
 
 
+def check_machine():
+    """Report the machine identity and where its records live (ADR-0013)."""
+    findings = [
+        _finding(
+            OK,
+            "machine",
+            "machine {} — machine-local records in {}".format(
+                paths.machine_id(), paths.machine_dir()
+            ),
+        )
+    ]
+    other = [
+        entry.name
+        for entry in sorted(paths.machines_dir().glob("*"))
+        if entry.is_dir() and entry.name != paths.machine_id()
+    ]
+    if other:
+        # Not a problem, and not something to reconcile: the store was restored from
+        # a machine whose records came along. They are inert — nothing reads another
+        # machine's registry — but a user looking at the tree deserves to know why
+        # there is more than one.
+        findings.append(
+            _finding(
+                OK,
+                "machine",
+                "{} other machine record set(s) present and unused: {}".format(
+                    len(other), ", ".join(other)
+                ),
+            )
+        )
+    return findings
+
+
 def check_registry():
     findings = []
     entries = registry.entries()
@@ -224,7 +257,7 @@ def check_project(project_root):
         findings.append(_finding(OK, "layout", "layout {}".format(project.layout(root))))
 
     pointer = root / project.PROJECT_DIR / project.STATE_DIR_POINTER
-    expected_state_dir = str(project.memory_dir(root, project_id))
+    expected_state_dir = str(project.state_dir(root, project_id))
     if not pointer.is_file():
         findings.append(
             _finding(
@@ -385,6 +418,7 @@ def check_project(project_root):
 
 def run(project_root=None, reassign_identity=False):
     findings = list(check_store())
+    findings.extend(check_machine())
     registry_findings, _ = check_registry()
     findings.extend(registry_findings)
 

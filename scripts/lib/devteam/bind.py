@@ -38,7 +38,9 @@ PROJECT_GITIGNORE_ENTRIES = (
 
 
 def manifest_file(project_id):
-    return paths.project_data_dir(project_id) / "bind-manifest.json"
+    # Machine-local (ADR-0013): every artifact path in it is absolute, and two
+    # machines binding the same repository produce two different manifests.
+    return paths.machine_project_dir(project_id) / "bind-manifest.json"
 
 
 def read_manifest(project_id):
@@ -334,7 +336,7 @@ def _stamp_installed_version(project_root, project_id, version):
     project reported its v2 number forever. Retiring the key and repointing those
     four readers is a later decision; stamping it is what makes them truthful now.
     """
-    state_file = project.memory_dir(project_root, project_id) / "state.json"
+    state_file = project.state_dir(project_root, project_id) / "state.json"
     state = jsonio.read_json(state_file, default=None)
     if state is None:
         state = {}

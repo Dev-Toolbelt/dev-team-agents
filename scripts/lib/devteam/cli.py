@@ -424,10 +424,18 @@ def cmd_upgrade(args, emitter):
 
 
 def cmd_export(args, emitter):
-    result = store.export(args.to)
-    return result, "exported {} file(s) to {} ({:.1f} MB)".format(
-        result["files"], result["archive"], result["bytes"] / (1024 * 1024)
-    )
+    result = store.export(args.to, include_machine=args.all)
+    lines = [
+        "exported {} file(s) to {} ({:.1f} MB)".format(
+            result["files"], result["archive"], result["bytes"] / (1024 * 1024)
+        )
+    ]
+    if result["portable_only"]:
+        lines.append("  portable only — left behind: {}".format(", ".join(result["excluded"])))
+        lines.append("  on the other machine: run `devteam bind` in each project")
+    else:
+        lines.append("  includes this machine's registry and manifests (absolute paths)")
+    return result, "\n".join(lines)
 
 
 def cmd_import(args, emitter):
@@ -435,6 +443,12 @@ def cmd_import(args, emitter):
     lines = ["imported {} into {}".format(result["archive"], result["data_dir"])]
     if result["previous_kept_at"]:
         lines.append("  previous store kept at {}".format(result["previous_kept_at"]))
+    if result["machine_records_kept"]:
+        lines.append(
+            "  kept this machine's own records: {}".format(
+                ", ".join(result["machine_records_kept"])
+            )
+        )
     lines.append("  next: {}".format(result["next"]))
     return result, "\n".join(lines)
 
@@ -587,6 +601,11 @@ def build_parser():
 
     export_parser = leaf(sub, "export", help="archive the data store for another machine")
     export_parser.add_argument("--to", help="destination file or directory")
+    export_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="also archive this machine's registry and bind manifests (absolute paths)",
+    )
     export_parser.set_defaults(func=cmd_export)
 
     import_parser = leaf(sub, "import", help="restore a data store from an archive")
@@ -634,6 +653,25 @@ def main(argv=None, stdout=None, stderr=None):
         return emitter.fail(exc)
 
     emitter.as_json = getattr(args, "json", emitter.as_json)
+
+    # The store's own shape is brought up to date before any command reads it: a
+    # command that found registry.json at the pre-split path would report every
+    # bound project as unbound. Idempotent, and a no-op for an already-split store.
+    try:
+        adopted = store.adopt_machine_layout()
+    except (OSError, DevteamError) as exc:
+        return emitter.fail(
+            EnvError(
+                "cannot bring the data store up to the current layout: {}".format(exc),
+                hint="Check permissions on the data store, then retry.",
+            )
+        )
+    if adopted["moved"] or adopted["quarantined"]:
+        emitter.warn(
+            "moved {} machine-local record(s) into {}".format(
+                len(adopted["moved"]), paths.machine_dir()
+            )
+        )
 
     if not getattr(args, "command", None) or not hasattr(args, "func"):
         if getattr(args, "command", None) == "store":

@@ -9,6 +9,10 @@ which is the state-ownership defect a permanent dual path would have been.
 Order is copy → verify → retire, never move-and-hope: the source is only given up
 once every byte is confirmed present at the destination, and even then it goes to
 quarantine rather than being deleted.
+
+The v2 memory directory mixed the user's work with this machine's markers, so the
+upgrade splits it (ADR-0013): ``session-summary.md`` and the project preferences go
+to the portable subtree, ``state.json`` and the dot-markers to the machine subtree.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import gitignore, jsonio, project, quarantine, registry
+from . import gitignore, jsonio, paths, project, quarantine, registry
 from .errors import ConflictError, EnvError, UsageError
 
 #: Entries the managed `.gitignore` block no longer needs once memory has left
@@ -47,6 +51,12 @@ def _inventory(root):
         if path.is_file() and not path.is_symlink():
             found[str(path.relative_to(source))] = _digest(path)
     return found
+
+
+def _destination_for(rel, portable, machine):
+    """Which subtree a file from the legacy memory directory belongs to."""
+    head = Path(rel).parts[0]
+    return machine if paths.is_machine_local_record(head) else portable
 
 
 def _git_tracked(root, relative):
@@ -83,14 +93,23 @@ def plan(root=None):
     inventory = _inventory(project_root)
     source = project.legacy_memory_dir(project_root)
     destination = project.memory_dir_for_layout(project_root, project_id, project.CURRENT_LAYOUT)
+    state_destination = project.state_dir_for_layout(
+        project_root, project_id, project.CURRENT_LAYOUT
+    )
+    machine_local = sorted(
+        rel for rel in inventory if _destination_for(rel, destination, state_destination) is state_destination
+    )
     collisions = sorted(
-        rel for rel in inventory if (destination / rel).exists()
+        rel
+        for rel in inventory
+        if (_destination_for(rel, destination, state_destination) / rel).exists()
     )
 
     actions = [
-        "copy {} file(s) from .dev-team-agents/{}/ to the data store".format(
-            len(inventory), project.LEGACY_MEMORY_DIR
+        "copy {} portable file(s) from .dev-team-agents/{}/ to {}".format(
+            len(inventory) - len(machine_local), project.LEGACY_MEMORY_DIR, destination
         ),
+        "copy {} machine-local file(s) to {}".format(len(machine_local), state_destination),
         "verify every copied file by sha256",
         "move the original directory to the data-store quarantine",
         "set layout = {} in .dev-team-agents/project.json".format(project.CURRENT_LAYOUT),
@@ -110,6 +129,8 @@ def plan(root=None):
         "files": len(inventory),
         "source": str(source),
         "destination": str(destination),
+        "state_destination": str(state_destination),
+        "machine_local": machine_local,
         "collisions": collisions,
         "git_tracked": [
             rel
@@ -143,13 +164,13 @@ def apply(root=None, emitter=None):
 
     source = project.legacy_memory_dir(project_root)
     destination = Path(preview["destination"])
+    state_destination = Path(preview["state_destination"])
     before = _inventory(project_root)
 
     copied = []
     if before:
-        jsonio.ensure_dir(destination)
         for rel in before:
-            target = destination / rel
+            target = _destination_for(rel, destination, state_destination) / rel
             jsonio.ensure_dir(target.parent)
             shutil.copy2(str(source / rel), str(target))
             copied.append(rel)
@@ -159,7 +180,8 @@ def apply(root=None, emitter=None):
         mismatched = [
             rel
             for rel, digest in before.items()
-            if not (destination / rel).is_file() or _digest(destination / rel) != digest
+            if not _destination_for(rel, destination, state_destination).joinpath(rel).is_file()
+            or _digest(_destination_for(rel, destination, state_destination) / rel) != digest
         ]
         if mismatched:
             raise EnvError(
@@ -196,6 +218,7 @@ def apply(root=None, emitter=None):
         "to_layout": project.CURRENT_LAYOUT,
         "copied": len(copied),
         "destination": str(destination),
+        "state_destination": str(state_destination),
         "quarantined": str(quarantined) if quarantined else None,
         "state_pointer": pointer["path"],
         "gitignore": ignore_action,
