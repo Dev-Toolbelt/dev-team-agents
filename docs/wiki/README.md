@@ -12,8 +12,10 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | Entry | Keywords | Read it when |
 |-------|----------|--------------|
 | `bash/empty-array-under-set-u.md` | bash, set -u, unbound variable, empty array, macOS, bash 3.2, KNOWN_DRIFT | A script with `set -u` and a deliberately empty array dies the first time it has something to report |
+| `bash/set-e-inside-a-cleanup-trap.md` | bash, set -e, errexit, pipefail, EXIT trap, cleanup, teardown, command substitution, brew uninstall, silent skip | An EXIT-trap teardown stops halfway and the checks that would have reported it are skipped too |
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
 | `git/worktree-exclude-scope.md` | worktree, info/exclude, gitignore, GIT_DIR, GIT_COMMON_DIR, untracked | Keeping generated files out of git in a repository that uses linked worktrees |
+| `homebrew/verifying-a-formula-without-a-tap.md` | homebrew, brew tap-new, brew trust, trust.json, brew audit, audit --new, brew style, XDG_CONFIG_HOME, Formulary, requires formulae to be in a tap, notable enough | Homebrew rejects a formula file outside a tap, or `brew audit <path>` is disabled |
 | `python/exclusive-create-instead-of-a-lock.md` | O_EXCL, os.open, machine-id, circular dependency, lock, os.link, Windows, race, singleton | Creating a file exactly once from concurrent callers, especially when the lock would depend on the file |
 | `python/path-containment-and-symlinks.md` | realpath, symlink, containment, relative_to, startswith, /private/var, path traversal | Deciding whether a path stays inside a directory before writing to or removing it |
 | `python/tarfile-extraction-filter.md` | tarfile, extractall, filter, data, tarslip, linkname, symlink, CVE, python 3.14 | Extracting an archive you did not create, or pinning which interpreter CI tests |
