@@ -509,5 +509,45 @@ class LegacyV2MigrationTest(StoreTestCase):
         self.assertEqual(memory.read_text(encoding="utf-8"), "## 2026-01-01 | v2 memory\n")
 
 
+class DesignRuleTest(unittest.TestCase):
+    """The rows in `docs/development/reuse-guidelines.md` that no regex can enforce.
+
+    Each of those rows says a violation is the *absence* of a call, so nothing in the
+    lint can see it. A test that scans the tree can, as long as it names the sanctioned
+    callers explicitly — and the point of naming them is that adding one is then a
+    deliberate edit here rather than a line that slips in unreviewed.
+    """
+
+    PACKAGE = Path(__file__).resolve().parent.parent / "scripts" / "lib" / "devteam"
+
+    def test_only_the_credential_resolver_reads_a_secret_backend(self):
+        # `devteam_credential_read`: every credential value is read through
+        # `creds.get_value`, which resolves the layer, checks scope and audits. A module
+        # that reaches `secrets.get` directly gets the value with none of that, and the
+        # audit trail then has a hole exactly where someone would look for one.
+        #
+        # `creds.py` is the sanctioned home: `get_value` is the audited path,
+        # `import_file` verifies a value it just wrote, and `check` probes presence for
+        # `doctor` without disclosing it. All three are inside the resolver.
+        allowed = {"creds.py", "secrets.py"}
+        offenders = []
+        for module in sorted(self.PACKAGE.glob("*.py")):
+            if module.name in allowed:
+                continue
+            text = module.read_text(encoding="utf-8")
+            for lineno, line in enumerate(text.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                if "secrets.get(" in line or "secrets_module.get(" in line:
+                    offenders.append("{}:{}".format(module.name, lineno))
+        self.assertEqual(
+            offenders,
+            [],
+            "these read a secret backend outside creds.py, bypassing the scope check and "
+            "the audit line: {}".format(offenders),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

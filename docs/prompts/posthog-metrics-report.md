@@ -25,6 +25,18 @@ get the key" section in this repo's conversation history / PostHog docs — Pers
 Keys are created under Account Settings → Personal API Keys with `insight:read` and
 `query:read` scopes).
 
+> **Since ADR-0010 this read is guarded.** `scripts/hooks/pre-tool-use/03-credential-guard.sh`
+> refuses the obvious spelling of reading a credential file, this one included. Prefix the
+> command with `DEVTEAM_CRED_READ_CONFIRMED=1` to proceed — the prefix is in the transcript,
+> which is the point of it.
+>
+> The better path is to migrate once: `devteam cred import credentials.local.json --global`,
+> then read the key with `devteam cred get posthog.personalApiKey`, which resolves it from the
+> OS secret store, checks scope, and appends an audit line instead of leaving a plaintext key
+> at the repository root. The file is deliberately left in place until someone chooses to
+> migrate it: ADR-0010 names it as the proof case for why the importer never scans for
+> candidates, precisely so it cannot move a working file out from under this prompt.
+
 ### 2. Identify the project
 
 Resolve the PostHog **project ID**. If not already known, call
@@ -181,9 +193,13 @@ if git diff --cached --quiet; then
 else
   git -c commit.gpgsign=false commit --no-gpg-sign -m "docs(reports): metrics reports updates"
 
-  TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+  # Once this repository's root credential file has been migrated with
+  # `devteam cred import credentials.local.json --global`, this is the audited read:
+  #   TOKEN=$(devteam cred get github.token --global)
+  # Until then, the legacy read is refused by the credential guard unless confirmed:
+  TOKEN=$(DEVTEAM_CRED_READ_CONFIRMED=1 python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
   if [ -z "$TOKEN" ]; then
-    echo "ERROR: github.token missing in credentials.local.json — commit made, push skipped."
+    echo "ERROR: github.token missing — commit made, push skipped."
   else
     git push "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" main 2>&1 \
       | sed "s/${TOKEN}/<REDACTED>/g"
@@ -194,7 +210,8 @@ fi
 Verify the push landed (should print the local HEAD SHA on `refs/heads/main`):
 
 ```bash
-TOKEN=$(python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
+# After migration: TOKEN=$(devteam cred get github.token --global)
+TOKEN=$(DEVTEAM_CRED_READ_CONFIRMED=1 python3 -c "import json;print(json.load(open('credentials.local.json'))['github']['token'])")
 git ls-remote "https://${TOKEN}@github.com/Dev-Toolbelt/dev-team-agents.git" refs/heads/main \
   | sed "s/${TOKEN}/<REDACTED>/g"
 ```

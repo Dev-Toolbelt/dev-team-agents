@@ -11,7 +11,8 @@ import argparse
 from pathlib import Path
 
 from . import bind as bind_module
-from . import doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import creds, doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import secrets as secrets_module
 from .errors import DevteamError, EnvError, UsageError
 from .output import Emitter
 
@@ -394,6 +395,166 @@ def cmd_prefs_unset(args, emitter):
     return result, human
 
 
+def _cred_project_id(args):
+    """``None`` for the global layer, this project's id otherwise."""
+    if getattr(args, "global_layer", False):
+        return None
+    _, project_id = _bound_project(getattr(args, "path", None))
+    return project_id
+
+
+def cmd_cred_list(args, emitter):
+    project_id = _cred_project_id(args)
+    entries = creds.list_entries(project_id)
+    rows = [
+        (e["key"], e["layer"], e["source"], ",".join(e["scope"]) or "-", e["purpose"])
+        for e in entries
+    ]
+    payload = {"project_id": project_id, "credentials": entries, "count": len(entries)}
+    human = (
+        _table(rows, ["KEY", "LAYER", "SOURCE", "SCOPE", "PURPOSE"])
+        if rows
+        else "no credentials declared — add one with `devteam cred set`"
+    )
+    return payload, human
+
+
+def cmd_cred_get(args, emitter):
+    # The one command whose stdout IS the payload. ADR-0010: it "prints the value on
+    # stdout and nothing else". Wrapping a secret in a `--json` document would put it
+    # into a structure a client is likely to log, so `--json` is refused here rather
+    # than silently honoured — a documented exception to the --json contract, because
+    # the alternative is a contract that leaks.
+    if emitter.as_json:
+        raise UsageError(
+            "`devteam cred get` does not support --json",
+            hint=(
+                "It writes the value to stdout and nothing else, so it cannot be wrapped "
+                "in a document without putting a secret somewhere a client would log. Use "
+                "`devteam cred list --json` for the references."
+            ),
+        )
+    project_id = _cred_project_id(args)
+    value = creds.get_value(args.key, project_id, agent=args.agent)
+    emitter.raw(value)
+    return {"key": args.key, "delivered": True}, None
+
+
+def cmd_cred_set(args, emitter):
+    project_id = _cred_project_id(args)
+    # Never from argv: a value in a command line is in the process table for every
+    # other user on the machine, and in the shell history of this one.
+    value = _read_secret_from_stdin(args.key)
+    scope = [s.strip() for s in (args.scope or "").split(",") if s.strip()]
+    result = creds.set_entry(
+        args.key,
+        args.purpose,
+        ref_scope=scope,
+        project_id=project_id,
+        value=value,
+        backend=args.backend,
+    )
+    lines = [
+        "stored {}".format(result["key"]),
+        "  layer    {}".format(result["layer"]),
+        "  source   {}".format(result["source"]),
+        "  ref      {}".format(result["ref"]),
+        "  scope    {}".format(", ".join(result["scope"]) or "(any agent)"),
+    ]
+    # Derived from `source`, not read from the result: `creds._public_view` builds its
+    # dicts by naming non-secret fields explicitly so a future field cannot leak by
+    # default, and that is worth more than saving this line.
+    if result.get("source") == "insecure":
+        emitter.warn(
+            "this machine has no secret store, so the value is in a mode-600 file: {}. "
+            "It is not encrypted — treat the machine as the boundary.".format(
+                paths.secrets_dir()
+            )
+        )
+    return result, "\n".join(lines)
+
+
+def _read_secret_from_stdin(key):
+    import getpass
+    import sys as _sys
+
+    if _sys.stdin is not None and _sys.stdin.isatty():
+        value = getpass.getpass("value for {} (not echoed): ".format(key))
+    else:
+        value = _sys.stdin.read()
+    # A trailing newline from a pipe or a heredoc is the shell's, not the secret's.
+    value = value.rstrip("\r\n")
+    if not value:
+        raise UsageError(
+            "no value was given for {}".format(key),
+            hint="Pipe it in (`printf %s \"$TOKEN\" | devteam cred set ...`) or run interactively.",
+        )
+    return value
+
+
+def cmd_cred_unset(args, emitter):
+    project_id = _cred_project_id(args)
+    result = creds.unset(args.key, project_id=project_id, forget_value=args.forget_value)
+    if not result["removed"]:
+        return result, "no reference named {} in this layer".format(result["key"])
+    lines = ["removed the reference {}".format(result["key"])]
+    if result["value_removed"]:
+        lines.append("  value    deleted from the secret store")
+    else:
+        lines.append("  value    kept — pass --forget-value to delete it too")
+    return result, "\n".join(lines)
+
+
+def cmd_cred_import(args, emitter):
+    project_id = _cred_project_id(args)
+    result = creds.import_file(args.file, project_id)
+    lines = [
+        "imported {}".format(args.file),
+        "  stored     {} value(s): {}".format(
+            len(result["imported"]), ", ".join(result["imported"]) or "(none)"
+        ),
+        "  references {}".format(paths.credentials_file(project_id)),
+        "  quarantine {}".format(result["quarantined_to"] or "(nothing to move)"),
+    ]
+    if result["non_secret"]:
+        lines.append(
+            "  kept as plain values (not secrets): {}".format(", ".join(result["non_secret"]))
+        )
+    if result["insecure"]:
+        emitter.warn(
+            "{} value(s) went to the last-resort plaintext backend at {} — it is not "
+            "encrypted. `devteam cred backends` says what this machine offers.".format(
+                len(result["insecure"]), paths.secrets_dir()
+            )
+        )
+    return result, "\n".join(lines)
+
+
+def cmd_cred_backends(args, emitter):
+    payload = secrets_module.describe()
+    rows = [
+        (name, "yes" if name in payload["available"] else "no", payload["probed"].get(name) or "")
+        for name in secrets_module.BACKENDS
+    ]
+    human = "\n".join(
+        [_table(rows, ["BACKEND", "AVAILABLE", "WHY NOT"]), "", "default: {}".format(payload["default"])]
+    )
+    return payload, human
+
+
+def cmd_cred_check(args, emitter):
+    project_id = _cred_project_id(args)
+    findings = creds.check(project_id)
+    if not findings:
+        return {"project_id": project_id, "findings": []}, "every declared credential resolves"
+    rows = [
+        (f["issue"], f["key"], f["layer"], str(f.get("detail") or ""))
+        for f in findings
+    ]
+    payload = {"project_id": project_id, "findings": findings, "problems": findings}
+    return payload, _table(rows, ["ISSUE", "KEY", "LAYER", "DETAIL"])
+
+
 def cmd_upgrade(args, emitter):
     if args.apply:
         result = upgrade.apply(args.path, emitter=emitter)
@@ -607,6 +768,58 @@ def build_parser():
     prefs_unset.add_argument("--path")
     prefs_unset.set_defaults(func=cmd_prefs_unset)
 
+    cred_parser = leaf(
+        sub, "cred", help="declare credentials as references; values go to the OS secret store"
+    ).add_subparsers(dest="cred_cmd")
+
+    def cred_leaf(name, **kwargs):
+        leafp = leaf(cred_parser, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        leafp.add_argument(
+            "--global",
+            dest="global_layer",
+            action="store_true",
+            help="act on the global layer instead of this project's",
+        )
+        return leafp
+
+    cred_list = cred_leaf("list", help="every declared credential — references only, never a value")
+    cred_list.set_defaults(func=cmd_cred_list)
+
+    cred_get = cred_leaf("get", help="print one value on stdout and nothing else")
+    cred_get.add_argument("key")
+    cred_get.add_argument("--agent", help="the agent asking, checked against the entry's scope")
+    cred_get.set_defaults(func=cmd_cred_get)
+
+    cred_set = cred_leaf("set", help="declare a credential; the value is read from stdin")
+    cred_set.add_argument("key")
+    cred_set.add_argument("--purpose", required=True, help="why this project needs it")
+    cred_set.add_argument("--scope", help="comma-separated agent names allowed to read it")
+    cred_set.add_argument(
+        "--backend", choices=secrets_module.BACKENDS, help="override the probed default"
+    )
+    cred_set.set_defaults(func=cmd_cred_set)
+
+    cred_unset = cred_leaf("unset", help="remove a reference; the value stays unless told otherwise")
+    cred_unset.add_argument("key")
+    cred_unset.add_argument(
+        "--forget-value",
+        dest="forget_value",
+        action="store_true",
+        help="also delete the value from the secret store",
+    )
+    cred_unset.set_defaults(func=cmd_cred_unset)
+
+    cred_import = cred_leaf("import", help="migrate a v2 credentials.local.json into references")
+    cred_import.add_argument("file", help="the file to import — never scanned for, always named")
+    cred_import.set_defaults(func=cmd_cred_import)
+
+    cred_check = cred_leaf("check", help="report references with no value, or an insecure backend")
+    cred_check.set_defaults(func=cmd_cred_check)
+
+    cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
+    cred_backends.set_defaults(func=cmd_cred_backends)
+
     upgrade_parser = leaf(
         sub, "upgrade", help="move this project's memory into the store (asks first)"
     )
@@ -693,6 +906,10 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
         if getattr(args, "command", None) == "prefs":
             return emitter.fail(UsageError("prefs needs a subcommand: list, get, set, unset"))
+        if getattr(args, "command", None) == "cred":
+            return emitter.fail(
+                UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends")
+            )
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:

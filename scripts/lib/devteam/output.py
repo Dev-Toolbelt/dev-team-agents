@@ -27,6 +27,18 @@ class Emitter:
         if not self.as_json:
             self.stdout.write("{}\n".format(message))
 
+    def raw(self, text):
+        """Write exactly ``text`` plus a newline to stdout, undecorated.
+
+        For the one command whose stdout **is** the payload: `devteam cred get`
+        prints a secret and nothing else, so it can be consumed by
+        ``TOKEN="$(devteam cred get …)"`` without a parser. It is never used under
+        ``--json`` — that combination is refused, because wrapping a secret in a
+        document puts it somewhere a client would log.
+        """
+        self.stdout.write("{}\n".format(text))
+        self._emitted = True
+
     def emit(self, payload, human=None):
         """Terminal output for a successful command.
 

@@ -6,10 +6,12 @@ Companion to [`CLAUDE.md`](../CLAUDE.md). Decisions behind this layout:
 (identity and preference layers), [ADR-0009](../docs/development/adrs/0009-python3-as-the-devteam-cli-runtime-while-hooks-stay-bash.md)
 (python3 CLI). Acceptance criteria: [`docs/specs/v3-global-install.md`](../docs/specs/v3-global-install.md).
 
-**Milestone status.** M1 (store, CLI, identity, bind, versions/pin, migration) and M2 (preference
-cascade, memory relocation behind a consented upgrade, `context_paths`, store portability) are
-implemented. Credentials and the desktop app are later milestones. The v2 `install.sh` path keeps
-working for one deprecation cycle.
+**Milestone status.** M1 (store, CLI, identity, bind, versions/pin, migration), M2 (preference
+cascade, memory relocation behind a consented upgrade, `context_paths`, store portability), M2.1
+(the portable/machine-local store split, [ADR-0013](../docs/development/adrs/0013-portable-and-machine-local-split-of-the-data-store.md))
+and M3 (credentials — see § Credentials, [ADR-0010](../docs/development/adrs/0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md))
+are implemented. The desktop app, the Homebrew tap and winget are a later milestone. The v2
+`install.sh` path keeps working for one deprecation cycle.
 
 ---
 
@@ -18,7 +20,7 @@ working for one deprecation cycle.
 | Store | Holds | Lifetime |
 |-------|-------|----------|
 | **core** | `versions/<X.Y.Z>/` (agents, commands, skills, scripts, templates) + the `current` pointer | Disposable — an uninstall may remove it, `devteam update` rebuilds it |
-| **data** | `machine-id`, `preferences.json`, `credentials/`, `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
+| **data** | `machine-id`, `preferences.json`, `credentials/` (references only), `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` (registry, locks, per-project state, `secrets/`, `audit.log`) | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
 
 ```
 macOS    core  ~/Library/Application Support/dev-team-agents/core
@@ -53,8 +55,9 @@ data/machines/<machine-id>/projects/<id>/…         MACHINE-LOCAL — bind-mani
 **Portable = what the user authored or decided. Machine-local = what this machine observed or
 built.** `paths.is_machine_local_record(name)` is the single answer to which side a per-project
 record belongs on — dot-prefixed names are machine-local as a class, and so are `state.json`,
-`bind-manifest.json`, `telemetry-queue.json` and `credentials.local.json` (values, not references).
-Never re-derive that rule at a call site.
+`bind-manifest.json`, `telemetry-queue.json`, `audit.log` (this machine's own reads, and a growing
+record that two machines appending to would need merge semantics for) and the v2
+`credentials.local.json` (values, not references). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -130,6 +133,7 @@ preferences, markers, `.worktrees/`), between managed markers.
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
 | `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply` |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
+| `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
 | `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
@@ -148,6 +152,62 @@ desktop app is a client of the CLI (ADR-0011), so an output shape change is a br
 | 2 | usage error |
 | 3 | environment error (no store, no version, unreadable directory) |
 | 4 | conflict (lock timeout, identity collision, refusing to overwrite) |
+
+**Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.
+
+## Credentials
+
+Credential **references** (purpose, scope, backend) are portable and reviewed — stored in `data/credentials/global.json` (shared across projects) or `data/credentials/<project_id>.json` (per-project, overrides global). Values stay out of git entirely: the macOS `security` keychain, Windows DPAPI, or a machine-local encrypted store. See [ADR-0010](../docs/development/adrs/0010-credential-references-and-the-secret-backend-cascade.md).
+
+### Commands
+
+| Command | What it does | Flags |
+|---------|------|-------|
+| `devteam cred list` | Every declared credential — references only, never a value | `--path <dir>`, `--global` |
+| `devteam cred get <key>` | Print one value on stdout and nothing else — use this for the sanctioned read path (audited) | `--path <dir>`, `--global`, `--agent <name>` |
+| `devteam cred set <key>` | Declare a credential and store the value; reads from stdin (never argv) | `--path <dir>`, `--global`, `--purpose <text>` (required), `--scope <agents>` (comma-separated), `--backend <name>` |
+| `devteam cred unset <key>` | Remove a reference; the value stays unless `--forget-value` is passed | `--path <dir>`, `--global`, `--forget-value` |
+| `devteam cred import <file>` | Migrate a v2 `credentials.local.json` into references and move the file to quarantine | `--path <dir>`, `--global` |
+| `devteam cred check` | Report references with no stored value, or any credential on an insecure backend | `--path <dir>`, `--global` |
+| `devteam cred backends` | Which secret stores this machine has available (and why, if any are unavailable) | none |
+
+Shared flags (on all but `backends`): `--path <dir>` targets a different project directory (default: the current one); `--global` acts on the global layer instead of the project's.
+
+### Store layout
+
+**Portable** (in archives by default; reviewed in git):
+
+```
+data/credentials/global.json                    References used across projects
+data/credentials/<project_id>.json              References for one project (overrides global)
+```
+
+**Machine-local** (never in archives; never in git):
+
+```
+data/machines/<machine-id>/secrets/             Where a backend keeps values on disk (mode 0600, last resort)
+data/machines/<machine-id>/projects/<id>/audit.log   Append-only read audit trail — machine-local because two machines appending to one log would need merge semantics we do not have
+```
+
+When a reference exists but its value is missing, `devteam cred check` reports it; `devteam cred get` fails cleanly.
+
+### Backends
+
+| Backend | Availability | Behavior |
+|---------|--------------|----------|
+| `keychain` | macOS only, via `security` CLI | System keychain; service `dev-team-agents`, account `devteam/<project_id>/<key>`. Encrypted by OS. |
+| `dpapi` | Windows only, via ctypes | Windows Data Protection API; key derivation from machine identity. Implemented but unverified on real hardware — testers needed. |
+| `insecure` | All platforms (fallback only) | **Not encrypted.** A mode-0600 JSON file at `data/machines/<machine-id>/secrets/`. Last resort when no native store is available. `devteam cred check` reports every value on this backend. Never use in production; suitable for test/CI environments where the value lifetime is seconds. |
+
+A value is stored on the first-available backend by default; `--backend` on `devteam cred set` overrides the probed default. When a backend becomes unavailable (e.g., upgrading to a different OS), values stay on the machine that wrote them — move them across machines with `devteam export --all` → `devteam import`. A reference without a value is not an error; it documents what a project needs even if the value has not been set yet.
+
+### Special behaviors
+
+**Stdin rule:** `devteam cred set` reads the value from stdin, never from a command-line argument. A value in `argv` is in the process table for every other user on the machine, and in the shell history of the user running the command. Interactively, it prompts without echo; non-interactively, pipe it: `printf %s "$TOKEN" | devteam cred set mykey --purpose "an API key"`.
+
+**Scope field:** `--scope` restricts which agents can read the value via `devteam cred get --agent <name>`. Agents not listed get a clear error; comma-separated, no spaces. The scope is **hygiene and auditability, not a sandbox** — an agent with Bash can read anything the user can read. Its value is auditing read paths and reporting scope violations in the audit log.
+
+**`credentials.local.json` migration:** The v2 plaintext file is opt-in, never scanned for. `devteam cred import /path/to/credentials.local.json` reads it, migrates values to the secret store, writes references to the reference layer, and moves the original file to quarantine — a one-way, confirmed operation. Non-secret fields (TTL thresholds, notification prefs) are kept as plain values in the reference layer.
 
 ## Layout, memory and preferences
 

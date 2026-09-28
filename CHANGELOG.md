@@ -83,6 +83,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **No synchronisation exists or is implied.** ADR-0013 makes one possible; `export`/`import` stay
   explicit and manual.
 
+### Added — v3 milestone M3
+
+- **`devteam cred` — credentials as references, values in the OS secret store (ADR-0010).** v2 kept a
+  plaintext `credentials.local.json` in the project tree, which conflates two different things: *which*
+  credentials a project needs, which is worth reviewing and diffing, and *what they are*, which must
+  never be either. The two are now separate. `data/credentials/global.json` and
+  `data/credentials/<project_id>.json` hold references — `purpose`, `source`, `ref`, `scope` — and are
+  portable precisely because they hold no value. Commands: `cred list`, `get`, `set`, `unset`,
+  `import`, `check`, `backends`, with `--global` to act on the shared layer.
+- **Three value backends, probed rather than guessed.** `keychain` on macOS through `security`, `dpapi`
+  on Windows through `ctypes` and `CryptProtectData`, and `insecure` — a mode-`0600` JSON file that is
+  **not encrypted** and is reported loudly by `devteam cred check` and `devteam doctor`, because a
+  last resort that looks equivalent to the other two is a trap. The `age`/`sops` backend ADR-0010
+  lists is **deferred and deliberately absent from `BACKENDS`** rather than present-but-unavailable:
+  it needs a passphrase per run and the CLI has no interaction model for that, and a declared surface
+  with no implementation drifts. `dpapi` is implemented but **unverified on real Windows hardware**.
+- **A value never reaches argv.** `devteam cred set` reads it from stdin — a prompt without echo when
+  interactive, the pipe otherwise. A secret in a command line is in the process table for every other
+  user on the machine and in the shell history of this one. The `keychain` adapter passes it through
+  `security`'s stdin for the same reason.
+- **`devteam cred get` writes the value to stdout and nothing else, and refuses `--json`.** That makes
+  `TOKEN="$(devteam cred get k)"` work without a parser, and it is a deliberate, documented exception
+  to the `--json` contract: wrapping a secret in a document puts it into a structure a client is
+  likely to log. An exception to a stated contract is recorded next to the contract rather than left
+  to be discovered.
+- **Every read is scope-checked and audited.** `data/machines/<machine-id>/projects/<project_id>/audit.log`
+  is append-only JSONL: who, when, which key, which layer, what outcome — and never the value, nor
+  anything derived from it, not a length or a hash or a prefix. A scope refusal and a missing value
+  are audited too, since a failed read is exactly what an audit trail exists to show. The log is
+  **machine-local**: it records reads that happened on *this* machine, and two machines appending to
+  one portable log would need merge semantics nothing here has.
+- **`devteam cred import` migrates a v2 file, opt-in, on a named path, and never scans for
+  candidates.** Ordering is copy → verify → retire, the same one `devteam upgrade` uses: each value is
+  stored and read back before anything is given up, and the original is **moved to quarantine**, never
+  deleted. `work_feedback_active` and `work_feedback_interval_minutes` are not secrets and are carried
+  across as plain values. The no-scanning rule has a proof case in this repository: its root-level
+  `credentials.local.json` is read on purpose by `docs/prompts/posthog-metrics-report.md`, and an
+  importer that looked for candidates would have moved somebody's working file.
+- **A `PreToolUse` guard** (`scripts/hooks/pre-tool-use/03-credential-guard.sh`) refuses the obvious
+  spelling of dumping a credential store and warns on echoing a resolved value. It is **hygiene and
+  auditability, not a sandbox**, and the implementation says so in those terms: it matches command
+  text, so `c""at`, a variable, base64, a python one-liner or a here-doc walk past it, and it sees
+  only Bash tool calls — `Read`, `Grep` and MCP tools are invisible to it. It is tuned hard for
+  precision because a false positive gets a hook deleted, and it carries an escape hatch
+  (`DEVTEAM_CRED_READ_CONFIRMED=1` as a command prefix) for the same reason. What it buys is a loud,
+  attributable stop on the spelling an agent reaches for by default, and a pointer at the one read
+  that audits itself.
+- **An unrecognised backend name is a finding, not a parse error.** Validation refused any `source`
+  outside the built-in list, which meant a reference file written by a newer CLI, or restored from a
+  machine with a backend this build lacks, made `devteam cred list` and `devteam doctor` fail hard on
+  a file they should have been able to describe. It also made the resolver's own `unknown-source`
+  finding unreachable — dead code, which is how the defect was noticed. Structure is validated; the
+  set of known backends is reported, and a read of such an entry fails at use time with the backend's
+  own error.
+- **The guard also refuses a force-add of the v2 plaintext file.** ADR-0010 names the concrete blast
+  radius in its own Context — one force-add away from a public repository — and a guard that covered
+  reading but not committing would have missed the only failure that cannot be recalled. Three tiers:
+  a named protected path with the force flag is refused; a sweep (`.`, `-A`, a directory, a glob) with
+  the force flag is refused **only when something protected actually exists beneath the target**, so
+  force-adding an ignored build artifact stays silent; and without the force flag nothing fires,
+  because git already skips an ignored file. Read-only git subcommands (`log`, `show`, `diff`,
+  `blame`, `grep`) stay silent — the two git subcommand lists, one exempting and one refusing, sit
+  next to each other with a note that every other subcommand is in neither on purpose.
+- **Deliberately uncovered, and recorded so the gap is not "fixed" into noise**: `git update-index
+  --assume-unchanged`/`--skip-worktree`, and a `.gitignore` edit that un-ignores a protected path.
+  Neither is decidable from command text — the first is one step of a sequence whose danger lives in
+  the other steps, and the second depends on the interaction of every pattern in the file plus the
+  nested ones below it, which means asking git after the fact rather than matching the edit.
+- **`devteam doctor` reports credential drift**: a reference whose value is gone is a `fail` because
+  the credential cannot be used at all; a value in the plaintext backend is a `warn` because it works
+  and the user may have no alternative on their platform.
+
 ### Changed
 - **37 markdown references now read the projection**, not the v2 source file. The five documents that
   describe the *source* layer — the canonical `user-preferences` skill, first-time setup, both

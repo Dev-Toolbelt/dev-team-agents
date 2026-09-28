@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import bind as bind_module
 from .errors import EnvError
-from . import hooks, paths, prefs, project, registry, versions
+from . import creds, hooks, paths, prefs, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
@@ -187,6 +187,54 @@ def check_registry():
     return findings, entries
 
 
+#: `creds.check` returns a stable issue code; the sentence and the severity belong to
+#: whoever presents it. A missing value is a FAIL because the credential cannot be used
+#: at all; an insecure backend is a WARN because it works and the user may have no
+#: alternative on their platform — ADR-0010 asks for it to be loud, not fatal.
+_CREDENTIAL_ISSUES = {
+    "missing-value": (
+        FAIL,
+        "the reference resolves to no value in the {source} store",
+        "Re-store it with `devteam cred set {key}`, or drop the reference with "
+        "`devteam cred unset {key}`.",
+    ),
+    "insecure-backend": (
+        WARN,
+        "the value is in the last-resort plaintext store, not encrypted",
+        "Run `devteam cred backends` to see what this machine offers.",
+    ),
+    "unknown-source": (
+        FAIL,
+        "declares a source this build does not know: {detail}",
+        "Update dev-team-agents, or fix the entry by hand.",
+    ),
+    "backend-error": (
+        FAIL,
+        "the secret store could not be read: {detail}",
+        None,
+    ),
+}
+
+
+def _credential_finding(finding):
+    level, template, hint = _CREDENTIAL_ISSUES.get(
+        finding["issue"], (WARN, "unrecognised issue: {issue}", None)
+    )
+    fields = {
+        "key": finding.get("key", "-"),
+        "layer": finding.get("layer", "-"),
+        "detail": finding.get("detail", ""),
+        "issue": finding["issue"],
+        "source": finding.get("detail") or "configured",
+    }
+    return _finding(
+        level,
+        "credentials",
+        "{} ({} layer): {}".format(fields["key"], fields["layer"], template.format(**fields)),
+        hint.format(**fields) if hint else None,
+    )
+
+
 def check_project(project_root):
     """Bind health for one project, plus the reconciliation decision."""
     findings = []
@@ -311,6 +359,12 @@ def check_project(project_root):
                 )
     else:
         findings.append(_finding(OK, "layout", "both directory pointers resolve correctly"))
+
+    # Credential findings belong in the same report: a reference whose value is gone,
+    # or a value sitting in the last-resort plaintext backend, is exactly the kind of
+    # drift `doctor` exists to surface, and ADR-0010 asks for it to be reported loudly.
+    for finding in creds.check(project_id):
+        findings.append(_credential_finding(finding))
 
     resolved_prefs = root / prefs.RESOLVED_FILE
     if not resolved_prefs.is_file():
