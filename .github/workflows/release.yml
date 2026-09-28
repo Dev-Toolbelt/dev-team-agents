@@ -8,8 +8,11 @@ name: Release
 # GitHub materialises automatically the moment the tag exists — no upload step
 # needed. The Homebrew formula (packaging/homebrew/devteam.rb) points at that
 # SAME url, so there is exactly one artifact shape end to end, not a second
-# one only Homebrew users get. This job's only job is to download that exact
-# URL after the tag lands and hash the bytes it actually receives.
+# one only Homebrew users get. What the first job does is download that exact
+# URL after the tag lands, hash the bytes it actually receives, rewrite the
+# formula to that tag and digest, and open a PR with the result. The second job
+# then checks that rewrite's output and installs the formula from the real
+# tarball — see its own header for exactly which claims it covers.
 #
 # Why not `git archive` locally: GitHub's codeload tarballs are not guaranteed
 # byte-identical to a local `git archive` of the same commit (gzip parameters
@@ -26,6 +29,17 @@ name: Release
 #
 # It opens a PR in THIS repository with the formula's url/sha256 updated, so a
 # maintainer reviews the diff before it lands — never pushes to main directly.
+#
+# Where the rewrite logic lives: NOT in this file. The formula's url/sha256
+# rewrite and its verification are in
+# `.github/scripts/release/bump-homebrew-formula.sh`, covered by
+# `tests/test_release_bump.py` (run by CI's python gate,
+# `.github/scripts/ci/03-python.sh`). It was moved out of the two inline `run:`
+# blocks that used to be here because inline in YAML it could only ever be
+# exercised by pushing a real tag — so it had never executed once, including the
+# second-release case (a formula already carrying a real tag and digest) it was
+# specifically written for. Change the rewrite behaviour in that script, and in
+# that test; this workflow only supplies the tag and the digest.
 
 on:
   push:
@@ -40,8 +54,22 @@ jobs:
     name: Compute release sha256 and update the Homebrew formula
     runs-on: ubuntu-latest
 
+    # Published so the verify job below re-uses the tag, url and digest THIS job
+    # computed from the bytes it actually downloaded — which are the values the
+    # formula will ship. Hashing a second download there would prove a different
+    # thing: GitHub generates a tag's source archive on demand and does not
+    # guarantee the bytes are stable across regenerations, so a second hash can
+    # legitimately differ from the one the formula publishes, and the verify job
+    # would be green about a digest no user will ever see. (The same property is
+    # why the digest is taken from a real download at all — see the header.)
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      url: ${{ steps.download.outputs.url }}
+      sha256: ${{ steps.digest.outputs.sha256 }}
+
     steps:
       - name: Validate tag matches vX.Y.Z
+        id: tag
         # Mirrors ci.yml's `tag-name` job. Duplicated rather than shared
         # because these are two independent workflow files triggered by the
         # same push — this workflow must not act on a malformed tag even if
@@ -54,12 +82,14 @@ jobs:
             exit 1
           fi
           echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Download the release tarball (the same URL Homebrew and scripts/install.sh use)
+        id: download
         run: |
           set -euo pipefail
           URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
@@ -79,8 +109,10 @@ jobs:
             sleep 10
           done
           [ -s release.tar.gz ] || { echo "::error::Downloaded tarball is empty."; exit 1; }
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Compute sha256 of the downloaded tarball
+        id: digest
         run: |
           set -euo pipefail
           SHA256="$(sha256sum release.tar.gz | awk '{print $1}')"
@@ -89,43 +121,43 @@ jobs:
             exit 1
           fi
           echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "Tag $TAG → sha256 $SHA256"
 
-      - name: Update packaging/homebrew/devteam.rb
+      - name: Update and verify packaging/homebrew/devteam.rb
+        # The rewrite AND its verification live in the script — it validates the
+        # tag and digest shapes itself, performs the anchored sed, and re-reads
+        # the file to assert both lines landed. `--repo` is omitted so it takes
+        # GITHUB_REPOSITORY, which is the same value the url anchor used when
+        # this was inline here.
         run: |
           set -euo pipefail
-          FORMULA="packaging/homebrew/devteam.rb"
+          bash .github/scripts/release/bump-homebrew-formula.sh \
+            --tag "$TAG" \
+            --sha256 "$SHA256" \
+            --formula packaging/homebrew/devteam.rb
 
-          # Replace the url line's tag placeholder (or a previous real tag)
-          # and the sha256 line's placeholder (or a previous real digest).
-          # Anchored on the literal `url "..."` / `sha256 "..."` line shape
-          # this formula uses, so a change to unrelated lines is never touched.
-          sed -i.bak -E \
-            -e "s#(url \"https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/)[^\"]+(\.tar\.gz\")#\\1${TAG}\\2#" \
-            -e "s#(sha256 \")[^\"]+(\")#\\1${SHA256}\\2#" \
-            "$FORMULA"
-          rm -f "${FORMULA}.bak"
-
-          echo "── Updated formula ──"
-          grep -nE '^\s*(url|sha256) ' "$FORMULA"
-
-      - name: Verify the edit landed correctly
-        run: |
-          set -euo pipefail
-          FORMULA="packaging/homebrew/devteam.rb"
-          grep -qF "archive/refs/tags/${TAG}.tar.gz" "$FORMULA" || {
-            echo "::error::url line was not updated to tag ${TAG}."; exit 1;
-          }
-          grep -qF "sha256 \"${SHA256}\"" "$FORMULA" || {
-            echo "::error::sha256 line was not updated to the computed digest."; exit 1;
-          }
+      # The rewritten file itself, handed to the verify job. Without this, the
+      # only thing downstream of the rewrite is the PR a human reads: the verify
+      # job checks out the TAG, whose formula still carries the placeholders, so
+      # nothing outside this job ever looked at the bytes the rewrite produced.
+      # Uploaded straight after the rewrite and before anything else runs, so the
+      # artifact is that step's output and not a later step's idea of it.
+      - name: Upload the rewritten formula for the verify job
+        uses: actions/upload-artifact@v4
+        with:
+          name: bumped-homebrew-formula
+          path: packaging/homebrew/devteam.rb
+          # An empty upload would make the verify job's assertion vacuous; fail
+          # here instead, where the cause is obvious.
+          if-no-files-found: error
 
       - name: Set up Ruby (formula syntax check)
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
 
-      - name: ruby -c on both formulas (this one changed, the cask did not)
+      - name: ruby -c on both packaging manifests (the formula changed, the cask did not)
         run: |
           set -euo pipefail
           ruby -c packaging/homebrew/devteam.rb
@@ -175,3 +207,162 @@ jobs:
             --body-file "$PR_BODY_FILE" \
             --base main \
             --head "$BRANCH"
+
+  verify-formula-against-the-real-tarball:
+    name: Check the rewritten formula's bytes, then brew-install against the real tarball
+    needs: bump-homebrew-formula
+    runs-on: macos-latest
+    # Read-only: this job proves the formula, it never writes to the repo or the
+    # PR. Narrower than the workflow-level `contents: write` the bump job needs.
+    # `actions/download-artifact@v4` needs no extra scope here — an artifact of
+    # the CURRENT run is fetched with the runner's own runtime token; it is the
+    # cross-run form (`run-id:` + `github-token:`) that would require
+    # `actions: read`, and this job does not use it.
+    permissions:
+      contents: read
+
+    # WHAT THIS JOB COVERS, AND IN WHICH ORDER
+    # ========================================
+    # Two different claims, checked by two different steps. Neither subsumes the
+    # other, and the job is named after both.
+    #
+    # 1. "The rewrite produced the right bytes." Everything the bump job checks
+    #    about its own output is internal to the rewrite: the script asserts the
+    #    two lines it just wrote contain the tag and digest it was handed, and
+    #    `ruby -c` says the result parses. Nothing outside that step ever read the
+    #    file, because the bumped copy exists only on the PR branch — so a rewrite
+    #    that mangled an unrelated line, or dropped one, would reach a human
+    #    reviewer as the first check. The bump job now uploads the rewritten file
+    #    and the assert step below reads it back: url and sha256 must hold exactly
+    #    the values the bump job computed, and the rest of the file must be
+    #    byte-identical to the formula at the tag.
+    #
+    # 2. "The formula WORKS." A formula can be byte-perfect and still fail on a
+    #    user's machine — a renamed python dependency, an `install` block whose
+    #    paths no longer exist in the source tree, a `test do` block that breaks
+    #    on the real layout. Only resolving the url, verifying the digest and
+    #    running `brew install` proves that, and it has never happened for this
+    #    formula against a released tarball (packaging/README.md § What is
+    #    unverified). `packaging/verify-formula-locally.sh` does it in release
+    #    mode: it applies its OWN awk rewrite of url/sha256 to a throwaway copy of
+    #    the formula in this checkout (the checkout is at the tag, so that copy
+    #    still carries the placeholders), inside a temporary tap. That is why all
+    #    three values are passed in. The digest comes from the bump job's output
+    #    rather than a second download, so what installs here is verified against
+    #    the exact bytes the formula will tell users to trust.
+    #
+    # So step 1 covers bytes the install cannot see, and step 2 covers behaviour
+    # the byte check cannot see. Read `packaging/verify-formula-locally.sh` before
+    # describing step 2 as anything more than that.
+    #
+    # WHY macos-latest
+    # ================
+    # Not because macOS is the only platform that can install a formula — it is
+    # not, Homebrew runs on Linux and installs formulae there. The reasons are
+    # that macOS is the platform this formula and its companion cask
+    # (packaging/homebrew/devteam-app.rb) are aimed at, and that the image ships
+    # Homebrew already, so the one end-to-end install a release gets is run where
+    # users will actually run it. The Homebrew on this runner is whatever the
+    # image happens to ship: this job neither pins nor upgrades it, and nothing
+    # here may be written as if a particular version were guaranteed.
+    # `verify-formula-locally.sh` depends on Homebrew 7 semantics (`brew trust`,
+    # and formulae loadable only from inside a tap) — that requirement, and any
+    # version floor for it, belongs to the script, not to this job.
+    #
+    # RESIDUAL — what is still not covered
+    # ====================================
+    #   * This job is not a gate. The bump job opens the PR in its last step, so
+    #     the PR is already open while this job runs, and no branch rule marks
+    #     this check as required. A red check is a signal to the maintainer who
+    #     merges, not something that stops the merge.
+    #   * The whole workflow has still never executed. The rewrite itself is
+    #     covered by tests/test_release_bump.py and the verify script by local
+    #     runs, but the artifact hand-off, the job outputs and this download are
+    #     first exercised by a real tag push.
+    #   * The script's `style` and `audit` stages report findings without failing,
+    #     and its install is `--build-from-source`, not a bottle.
+    #   * The published path remains unproven: no tap hosts this formula, so
+    #     `brew install` from a tap a user has added is not what runs here.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the formula the bump job rewrote
+        uses: actions/download-artifact@v4
+        with:
+          name: bumped-homebrew-formula
+          # A directory of its own, NOT over packaging/homebrew/devteam.rb. The
+          # verify script asserts the tracked formula is byte-identical before and
+          # after its run, and needs the placeholders in place for its own rewrite.
+          path: bumped-formula
+
+      - name: Assert the rewritten formula carries this tag's url and digest, and nothing else changed
+        env:
+          EXPECTED_TAG: ${{ needs.bump-homebrew-formula.outputs.tag }}
+          EXPECTED_URL: ${{ needs.bump-homebrew-formula.outputs.url }}
+          EXPECTED_SHA: ${{ needs.bump-homebrew-formula.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          BUMPED="bumped-formula/devteam.rb"
+          TRACKED="packaging/homebrew/devteam.rb"
+
+          [ -f "$BUMPED" ] || {
+            echo "::error::$BUMPED is missing — the artifact did not contain the formula."
+            exit 1
+          }
+
+          # Read the DIRECTIVE, not the file: devteam.rb's header comment names
+          # the sha256 placeholder string on purpose, so a whole-file grep would
+          # match it forever. `$1 == key` under awk's default splitting picks the
+          # `  url "…"` / `  sha256 "…"` lines and skips `head "…"` and comments.
+          directive() {
+            awk -v key="$2" '$1 == key {
+              match($0, /"[^"]*"/); print substr($0, RSTART + 1, RLENGTH - 2); exit
+            }' "$1"
+          }
+
+          GOT_URL="$(directive "$BUMPED" url)"
+          GOT_SHA="$(directive "$BUMPED" sha256)"
+          echo "url:    $GOT_URL"
+          echo "sha256: $GOT_SHA"
+
+          if [ "$GOT_URL" != "$EXPECTED_URL" ]; then
+            echo "::error::url is '$GOT_URL', expected '$EXPECTED_URL' (the URL the bump job downloaded)."
+            exit 1
+          fi
+          if [ "$GOT_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::sha256 is '$GOT_SHA', expected '$EXPECTED_SHA' (the digest of those bytes)."
+            exit 1
+          fi
+          # Independent of the equality above: ties the url to the tag that
+          # triggered this run, so a bump job that computed a correct-looking url
+          # for the wrong tag cannot pass both checks by agreeing with itself.
+          case "$GOT_URL" in
+            *"archive/refs/tags/${EXPECTED_TAG}.tar.gz") ;;
+            *) echo "::error::url does not end in archive/refs/tags/${EXPECTED_TAG}.tar.gz"; exit 1 ;;
+          esac
+
+          # The rewrite is two anchored `sed` substitutions; a mangled or dropped
+          # line elsewhere in the file is exactly what its own after-the-fact
+          # check cannot see. Blank both directives' values in each file and the
+          # remainder must be identical — the tag's formula is the reference,
+          # since that is what the rewrite was applied to.
+          normalise() {
+            sed -E -e 's#^([[:space:]]*url ")[^"]*(")#\1<VALUE>\2#' \
+                   -e 's#^([[:space:]]*sha256 ")[^"]*(")#\1<VALUE>\2#' "$1"
+          }
+          normalise "$TRACKED" > tracked.normalised
+          normalise "$BUMPED"  > bumped.normalised
+          if ! diff -u tracked.normalised bumped.normalised; then
+            echo "::error::the rewrite changed something other than the url and sha256 values (diff above)."
+            exit 1
+          fi
+          echo "verified: url and sha256 rewritten to this release's values; every other byte unchanged"
+          rm -f tracked.normalised bumped.normalised
+
+      - name: Verify the formula end to end (brew install + the formula's own test)
+        run: |
+          set -euo pipefail
+          bash packaging/verify-formula-locally.sh \
+            --tag "${{ needs.bump-homebrew-formula.outputs.tag }}" \
+            --url "${{ needs.bump-homebrew-formula.outputs.url }}" \
+            --sha256 "${{ needs.bump-homebrew-formula.outputs.sha256 }}"

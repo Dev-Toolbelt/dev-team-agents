@@ -5,17 +5,31 @@
 # package the agents/skills/commands framework itself; a project still gets that
 # via `devteam bind` (or, for now, the curl | bash `scripts/install.sh` flow).
 #
-# ── PLACEHOLDER VALUES — replace before this formula is published ───────────
-#   url    below points at a real git tag, but no such tag has been cut yet.
-#   sha256 is the literal string "REPLACE_WITH_SHA256_OF_RELEASE_TARBALL" —
-#          not a plausible-looking fake digest, so a stale/unset value fails
-#          loudly (`brew install` refuses a wrong-length/non-hex sha256)
-#          instead of silently succeeding against the wrong bytes.
-#   `.github/workflows/release.yml` computes the real sha256 from the actual
-#   release tarball and rewrites both lines — see packaging/README.md.
+# ── The two machine-written lines ────────────────────────────────────────────
+#   Exactly two directives below are not maintained by hand: the `url` and the
+#   digest line under it. `.github/scripts/release/bump-homebrew-formula.sh`,
+#   which the release workflow runs once a version tag has been pushed, points
+#   the url at that tag and writes the digest of the tarball it actually
+#   downloaded. That script rewrites those two lines only and never touches
+#   comments — so read the lines themselves, not this block, to know which
+#   release the formula currently describes.
 #
-# This formula has never been run through `brew install` or `brew audit` — there
-# is no Homebrew tap to install it from yet (see packaging/README.md).
+#   Before that script has ever run they hold placeholders: the tag reads
+#   vX.Y.Z and the digest is the literal string
+#   REPLACE_WITH_SHA256_OF_RELEASE_TARBALL. That is deliberately not a
+#   plausible-looking 64-hex fake — `brew install` refuses a value that is not
+#   64 hex characters, and the bump script refuses it on the way in, so an
+#   unset or stale digest fails loudly instead of quietly verifying the wrong
+#   bytes.
+#
+# ── What has actually been exercised ─────────────────────────────────────────
+#   `packaging/verify-formula-locally.sh` runs this file through a real
+#   Homebrew — `brew style`, `brew audit --formula`, `brew audit --strict
+#   --online`, `brew install --build-from-source`, `brew test` and a smoke test
+#   of the installed binary — via a throwaway
+#   local tap, against a tarball built from HEAD. What is still unproven is the
+#   published path: no tap hosts this formula, and no release tarball has been
+#   installed from one (see packaging/README.md).
 class Devteam < Formula
   desc "CLI for the dev-team-agents multi-agent development harness"
   homepage "https://github.com/Dev-Toolbelt/dev-team-agents"
@@ -29,18 +43,32 @@ class Devteam < Formula
   head "https://github.com/Dev-Toolbelt/dev-team-agents.git", branch: "main"
 
   # Homebrew core's currently-bottled python formula. This name drifts as
-  # Homebrew retires old python versions (it was python@3.12 at authoring
-  # time, 2026-09) — confirm the current formula name with
-  # `brew info python3` before publishing, and update this line and the
-  # `python3` constant in `install` together.
-  depends_on "python@3.12"
+  # Homebrew retires old python versions, and it already has: the line said
+  # python@3.12 when the file was written (2026-09), while homebrew-core's
+  # python3 had moved to python@3.14 by the first real `brew install` of it.
+  #
+  # This line is now the ONLY place the python version appears — `install`
+  # reads the version back off this dependency instead of repeating it, so the
+  # python Homebrew installs and the interpreter the shebang invokes cannot
+  # disagree. Nor is the drift against homebrew-core something a human has to
+  # remember to check: packaging/verify-formula-locally.sh parses this line,
+  # resolves `brew info python3`, and prints the two side by side on every run.
+  depends_on "python@3.14"
 
   # The CLI enforces python 3.9+ itself (scripts/cli/devteam checks
-  # sys.version_info before importing anything), so the runtime floor here is
-  # the dependency above, not a version check this formula duplicates.
+  # sys.version_info before importing anything) and imports only the stdlib, so
+  # the runtime floor here is the dependency above, not a version check this
+  # formula duplicates.
 
   def install
-    python3 = Formula["python@3.12"].opt_bin/"python3.12"
+    # The interpreter, derived from the declared dependency rather than named a
+    # second time: `python@3.14` → `<opt>/python@3.14/bin/python3.14`. Writing
+    # that basename out by hand is exactly how the old python@3.12 dependency
+    # and its `python3.12` shebang got to drift apart unnoticed.
+    python_dep = deps.find { |dep| dep.name.start_with?("python@") }&.name
+    raise "no python@ dependency declared; there is no interpreter to point the shebang at" if python_dep.nil?
+
+    python3 = formula_opt_bin(python_dep)/python_dep.sub("@", "")
 
     # Preserve the source tree's relative layout: `scripts/cli/devteam` does
     # `Path(__file__).resolve().parent.parent / "lib"` to find the `devteam`
@@ -71,7 +99,7 @@ class Devteam < Formula
     payload = JSON.parse(output)
 
     assert payload.key?("ok")
-    refute_predicate testpath/"core", :exist?
-    refute_predicate testpath/"data", :exist?
+    refute_path_exists testpath/"core"
+    refute_path_exists testpath/"data"
   end
 end
