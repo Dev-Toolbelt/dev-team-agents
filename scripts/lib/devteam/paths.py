@@ -357,6 +357,10 @@ MACHINE_LOCAL_RECORDS = (
     "bind-manifest.json",
     "telemetry-queue.json",
     "credentials.local.json",
+    # Records credential reads that happened on THIS machine (ADR-0010). Two machines
+    # appending to one portable log would need merge semantics nothing here has, and an
+    # audit trail that silently interleaves two hosts is worse than two separate ones.
+    "audit.log",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:
@@ -408,7 +412,30 @@ def global_preferences_file():
 
 
 def credentials_dir():
+    """Credential **references** (ADR-0010). Portable: no entry holds a value."""
     return data_dir() / "credentials"
+
+
+def credentials_file(project_id=None):
+    """``global.json``, or a project's own reference layer when given an id."""
+    if project_id is None:
+        return credentials_dir() / "global.json"
+    return credentials_dir() / "{}.json".format(project_id)
+
+
+def secrets_dir():
+    """Where a backend that must keep a value on disk keeps it.
+
+    Machine-local, and separate from ``credentials/`` on purpose: the reference layer
+    is portable precisely because it holds no value, and a value store must never end
+    up in an archive that the reference layer's portability makes routine.
+    """
+    return machine_dir() / "secrets"
+
+
+def audit_log(project_id):
+    """Append-only credential audit for this project, on this machine."""
+    return machine_project_dir(project_id) / "audit.log"
 
 
 def projects_dir():
@@ -448,5 +475,6 @@ def describe():
         "registry": str(registry_file(_reported)),
         "global_preferences": str(global_preferences_file()),
         "credentials": str(credentials_dir()),
+        "secrets": str(machine_dir(_reported) / "secrets"),
         "projects": str(projects_dir()),
     }
