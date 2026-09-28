@@ -62,6 +62,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner image ships its own shellcheck and bumps it without telling anyone.
+      # That made this gate's verdict depend on the image: 0.9.0 on the runner against
+      # 0.11.0 on a contributor's machine, which disagree about an SC2317 false positive,
+      # produced a clean local run and a red CI on the same commit. Version and hashes
+      # live in .github/shellcheck.pin so this step and 01-lint.sh cannot drift apart.
+      #
+      # The hash is verified before the binary is used. This repository already refuses
+      # to run an unverified download in scripts/lib/installer-fetch.sh; a CI step that
+      # executed whatever the network returned would contradict that for no reason.
+      - name: Install the pinned shellcheck
+        run: |
+          set -euo pipefail
+          PIN=.github/shellcheck.pin
+          VERSION="$(sed -n 's/^version=//p' "$PIN")"
+          ARCH="$(uname -m)"
+          EXPECTED="$(sed -n "s/^sha256_${ARCH}=//p" "$PIN")"
+          if [ -z "$VERSION" ] || [ -z "$EXPECTED" ]; then
+            echo "::error::$PIN has no version, or no sha256 for arch '$ARCH'"
+            exit 1
+          fi
+          URL="https://github.com/koalaman/shellcheck/releases/download/v${VERSION}/shellcheck-v${VERSION}.linux.${ARCH}.tar.xz"
+          echo "pinned shellcheck $VERSION ($ARCH)"
+          curl -fsSL --retry 3 --retry-delay 2 -o shellcheck.tar.xz "$URL"
+          echo "${EXPECTED}  shellcheck.tar.xz" | sha256sum --check --strict
+          tar -xJf shellcheck.tar.xz "shellcheck-v${VERSION}/shellcheck"
+          sudo install -m 0755 "shellcheck-v${VERSION}/shellcheck" /usr/local/bin/shellcheck
+          rm -rf shellcheck.tar.xz "shellcheck-v${VERSION}"
+          # Prove the thing now on PATH is the thing we pinned — `install` to
+          # /usr/local/bin only wins if it precedes the image's copy.
+          INSTALLED="$(shellcheck --version | sed -n 's/^version: //p')"
+          if [ "$INSTALLED" != "$VERSION" ]; then
+            echo "::error::shellcheck on PATH is $INSTALLED, expected $VERSION (which shellcheck: $(command -v shellcheck))"
+            exit 1
+          fi
+
       - name: Lint, orphan scan, fingerprint uniqueness, size limits, shellcheck
         run: bash .github/scripts/ci/01-lint.sh
 

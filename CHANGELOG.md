@@ -267,10 +267,22 @@ credentials the repository owner holds — not on anything in this repository.
   failed, which is not if-then-else. The gate now prints the shellcheck version, because the
   next divergence should cost one look at the log instead of a bisect.
 
-  **The version is still not pinned**, and until it is, a runner image bump can turn this gate
-  red on an unchanged tree. Recorded rather than fixed here: pinning means fetching a specific
-  release in CI, which is a build-infrastructure change and does not belong in a
-  make-CI-green commit.
+  **Now pinned.** `.github/shellcheck.pin` is the single source of truth for the version and
+  its per-architecture sha256; CI installs exactly that release and verifies the hash before
+  running the binary, because this repository already refuses an unverified download in
+  `scripts/lib/installer-fetch.sh` and a CI step executing whatever the network returned would
+  contradict that for no reason. The install step then asserts the version now on `PATH` is the
+  pinned one, since `install`ing to `/usr/local/bin` only wins if it precedes the image's copy.
+  `01-lint.sh` reads the version from the same file and warns when a contributor's differs,
+  naming the direction that actually bites: a **newer** shellcheck finds fewer things, so it
+  hands you a green CI will not honour. That warning is advisory, not blocking — CI is pinned so
+  it can only fire locally, and refusing to lint at all because someone is a minor version
+  behind trades a real check for a version complaint.
+
+  Pinned **forward** to 0.11.0 rather than back to the runner image's 0.9.0: pinning to the old
+  default would enshrine the false positive that started this, and 0.11.0 is what a contributor
+  on a current machine already has, so the pin moves CI to meet developers instead of the
+  reverse.
 
 - **The mandated duplicate-ADR check could never find an ADR.**
   `skills/shared/adr/SKILL.md` § Check Before Creating told the reader to list existing titles with

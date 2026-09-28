@@ -1,0 +1,42 @@
+# Pinned shellcheck for this repository's lint gate.
+#
+# WHY THIS FILE EXISTS
+# ===================
+# `.github/scripts/ci/01-lint.sh` runs one shellcheck command, and for a while it ran it
+# against whatever version happened to be present: the GitHub runner image shipped 0.9.0
+# and a contributor's machine had 0.11.0. Those two disagree — 0.11.0 no longer emits an
+# SC2317 "command appears unreachable" false positive for a function invoked by an `EXIT`
+# trap, which 0.9.0 still emits. The result was a commit whose local gate exited 0 and
+# whose CI went red, and the cause was the checker, not the tree.
+#
+# A gate whose verdict depends on an unpinned tool is not a gate. This file is the single
+# source of truth for which version that is: CI installs exactly this one, and 01-lint.sh
+# reads the version from here to tell a contributor when theirs differs. Neither of them
+# carries its own copy, because two copies of a version number is how this recurs.
+#
+# CHOOSING THE VERSION
+# ====================
+# Pinned forward to 0.11.0 rather than back to the runner image's 0.9.0. Pinning to the
+# old default would enshrine the false positive that started this, and 0.11.0 is what a
+# contributor on a current machine already has — so the pin moves CI to meet developers
+# rather than moving developers back to CI.
+#
+# BUMPING IT
+# ==========
+# Change `version`, replace BOTH hashes with the real ones from the release, and run the
+# lint gate. Hashes are verified in CI before the binary is used, so a wrong one fails
+# the build loudly instead of silently running an unexpected checker. Get them with:
+#
+#   V=<version>
+#   for a in x86_64 aarch64; do
+#     curl -sSLf "https://github.com/koalaman/shellcheck/releases/download/v$V/shellcheck-v$V.linux.$a.tar.xz" \
+#       | shasum -a 256 | awk -v a="$a" '{print "sha256_"a"="$1}'
+#   done
+#
+# Expect the tree to need fixes when bumping: a newer shellcheck finds more, which is the
+# point of bumping. Fix findings at the source; reach for a `disable` directive only when
+# the finding is genuinely wrong, and say why on the same line.
+
+version=0.11.0
+sha256_x86_64=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+sha256_aarch64=12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588

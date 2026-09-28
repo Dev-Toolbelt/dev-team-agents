@@ -97,14 +97,31 @@ blocking "size-limits" bash helpers/size-limits.sh
 # right there on disk — and any finding, even info-level, exits non-zero. That was
 # a red build caused by the checker's path resolution, not by the tree.
 #
-# The version is printed because this gate's verdict depends on it and nothing pins it:
-# CI uses whatever shellcheck the runner image ships, a contributor uses whatever their
-# machine has, and the two disagree. That is not hypothetical — a clean local run and a
-# red CI on the same commit were traced to 0.11.0 no longer emitting an SC2317 false
-# positive that the runner's older build still does. Until the version is pinned, the
-# log is what makes the next divergence diagnosable in one look instead of one bisect.
+# The version is checked, not just used. This gate's verdict depends on it: the runner
+# image shipped 0.9.0 while a contributor had 0.11.0, and 0.11.0 no longer emits an
+# SC2317 false positive that 0.9.0 still does — a clean local run and a red CI on the
+# same commit. CI now installs exactly the pinned version (see the workflow step that
+# reads `.github/shellcheck.pin`); this check is what tells a contributor running the
+# gate by hand that their result may not be the one CI will produce.
+#
+# A mismatch is advisory rather than blocking on purpose. CI is pinned, so this can only
+# fire locally, and refusing to lint at all because someone's package manager is a minor
+# version behind trades a real check for a version complaint. The warning names the
+# direction that actually bites: a NEWER shellcheck finds fewer things, so it hands you a
+# green that CI will not honour.
 echo "─ shellcheck version ──────────────────────────────────────────"
-shellcheck --version | sed -n 's/^version: /  shellcheck /p'
+SHELLCHECK_PIN_FILE="$REPO_ROOT/.github/shellcheck.pin"
+SHELLCHECK_PINNED="$(sed -n 's/^version=//p' "$SHELLCHECK_PIN_FILE" 2>/dev/null)"
+SHELLCHECK_ACTUAL="$(shellcheck --version 2>/dev/null | sed -n 's/^version: //p')"
+echo "  shellcheck ${SHELLCHECK_ACTUAL:-unknown} (pinned: ${SHELLCHECK_PINNED:-unknown})"
+if [ -z "$SHELLCHECK_PINNED" ]; then
+  echo "  cannot read the pinned version from ${SHELLCHECK_PIN_FILE} — findings below may not match CI."
+  ADVISORY_HITS+=("shellcheck-pin-unreadable")
+elif [ "$SHELLCHECK_ACTUAL" != "$SHELLCHECK_PINNED" ]; then
+  echo "  MISMATCH — CI runs ${SHELLCHECK_PINNED}. A newer shellcheck reports fewer findings,"
+  echo "  so a green here can still fail CI. Install ${SHELLCHECK_PINNED} to reproduce the gate."
+  ADVISORY_HITS+=("shellcheck-version-mismatch")
+fi
 blocking "shellcheck scripts + helpers" \
   find scripts helpers -name '*.sh' -exec shellcheck -x --source-path=SCRIPTDIR {} +
 
