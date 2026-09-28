@@ -402,8 +402,23 @@ def cmd_upgrade(args, emitter):
             "  layout      {} -> {}".format(result["from_layout"], result["to_layout"]),
             "  copied      {} file(s) to {}".format(result["copied"], result["destination"]),
             "  quarantine  {}".format(result["quarantined"] or "(nothing to move)"),
-            "  pointer     {}".format(result["state_pointer"]),
+            "  pointers    {}, {}".format(result["state_pointer"], result["memory_pointer"]),
         ]
+        if result["retained"]:
+            lines.append(
+                "  kept        {} (project-owned, stays committed)".format(
+                    ", ".join(result["retained"])
+                )
+            )
+        # `layout` lives in the committed project.json, so an uncommitted upgrade is
+        # invisible to a fresh clone — it comes back on layout 1 and asks to upgrade
+        # again. Observed in an end-to-end run; nothing else says this.
+        lines.append(
+            "  commit      {}/project.json — the new layout is committed state; a clone "
+            "without it returns to layout {}".format(
+                project.PROJECT_DIR, result["from_layout"]
+            )
+        )
         if result["git_tracked"]:
             lines.append(
                 "  git         commit the removal: git rm -r --cached {}".format(
@@ -668,8 +683,8 @@ def main(argv=None, stdout=None, stderr=None):
         )
     if adopted["moved"] or adopted["quarantined"]:
         emitter.warn(
-            "moved {} machine-local record(s) into {}".format(
-                len(adopted["moved"]), paths.machine_dir()
+            "moved {} machine-local record(s) into {}; repointed {} project(s)".format(
+                len(adopted["moved"]), paths.machine_dir(), len(adopted["repointed"])
             )
         )
 
@@ -721,6 +736,10 @@ def main(argv=None, stdout=None, stderr=None):
         exit_code = 1
 
     payload = dict(payload)
+    # `warn` only reaches stderr, and ADR-0011 makes the desktop app a client of this
+    # CLI: a store mutation it cannot observe in the document is a contract gap.
+    if adopted["moved"] or adopted["quarantined"]:
+        payload["store_relocation"] = adopted
     payload["ok"] = ok
     emitter.emit(payload, human)
     return exit_code

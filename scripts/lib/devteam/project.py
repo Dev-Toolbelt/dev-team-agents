@@ -43,9 +43,17 @@ DEFAULT_CONTEXT_PATHS = ["docs"]
 LAYOUT_MEMORY_IN_PROJECT = 1
 LAYOUT_MEMORY_IN_STORE = 2
 CURRENT_LAYOUT = LAYOUT_MEMORY_IN_STORE
-#: The pointer the bash hooks read to find the state directory in one file read,
-#: instead of a subprocess per `state_get`.
+#: The pointers the bash hooks and the agent context order read, each in one file
+#: read instead of a subprocess per lookup. Two, because layout 2 has two
+#: directories: `state-dir` names the machine-local one (`state.json`, the markers)
+#: and `memory-dir` names the portable one (`session-summary.md`).
+#:
+#: `memory-dir` is not speculative: `skills/shared/project-context/SKILL.md` step 4 is
+#: `<state-dir>/session-summary.md`, so every agent in the framework was reading a
+#: pointer to find the episodic layer. Repointing `state-dir` at the machine subtree
+#: without adding this one left them all looking in a directory that has no summary.
 STATE_DIR_POINTER = "state-dir"
+MEMORY_DIR_POINTER = "memory-dir"
 LEGACY_MEMORY_DIR = "user-data"
 
 # `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
@@ -290,19 +298,39 @@ def state_dir_for_layout(root, project_id, target_layout):
     return legacy_memory_dir(root)
 
 
-def write_state_pointer(root, project_id=None):
-    """Record the resolved state directory for the bash hooks to read.
-
-    It points at :func:`state_dir`, not the portable one: ``state.sh`` resolves
-    ``state.json`` through this pointer and nothing else.
-    """
-    target = Path(root) / PROJECT_DIR / STATE_DIR_POINTER
-    resolved = state_dir(root, project_id)
+def _write_pointer(root, name, resolved):
+    target = Path(root) / PROJECT_DIR / name
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tmp")
+    # `with_name`, not `with_suffix`: `state-dir` has no suffix, but `memory-dir`
+    # would have had `-dir` replaced rather than `.tmp` appended.
+    tmp = target.with_name(name + ".tmp")
     tmp.write_text(str(resolved) + "\n", encoding="utf-8")
     tmp.replace(target)
-    return {"path": str(Path(PROJECT_DIR) / STATE_DIR_POINTER), "kind": "pointer"}
+    return {"path": str(Path(PROJECT_DIR) / name), "kind": "pointer"}
+
+
+def write_pointers(root, project_id=None):
+    """Record both resolved directories, for the hooks and the agent context order.
+
+    `state-dir` names :func:`state_dir` because `scripts/lib/state.sh` resolves
+    `state.json` through it; `memory-dir` names :func:`memory_dir` because the
+    canonical context-loading order reads the session summary through it.
+
+    Returns one manifest record per pointer. Both are projections of state that lives
+    elsewhere, so a stale one is a bug rather than a user edit to preserve — which is
+    why **every** path that changes where either directory resolves must call this.
+    Missing that call from the store relocation made `state_get` return an empty
+    string for every key, silently.
+    """
+    return [
+        _write_pointer(root, STATE_DIR_POINTER, state_dir(root, project_id)),
+        _write_pointer(root, MEMORY_DIR_POINTER, memory_dir(root, project_id)),
+    ]
+
+
+def write_state_pointer(root, project_id=None):
+    """Backwards-compatible single-record form. Writes both pointers."""
+    return write_pointers(root, project_id)[0]
 
 
 def upgrade_available(root):

@@ -34,6 +34,10 @@ PROJECT_GITIGNORE_ENTRIES = (
     ".dev-team-agents/.worktree-session",
     ".dev-team-agents/.learn-last-run",
     ".worktrees/",
+    # `devteam export` defaults to the cache directory, but `--to .` is one keystroke
+    # away and the archive can hold credential references and a quarantined
+    # pre-upgrade memory directory. Never a thing to commit.
+    "devteam-data-*.tar.gz",
 )
 
 
@@ -530,7 +534,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     # every sync: both are projections of state that lives elsewhere, so a stale
     # one is a bug rather than a user edit to preserve.
     artifacts.append(prefs.materialize(project_root, project_id, version))
-    artifacts.append(project.write_state_pointer(project_root, project_id))
+    artifacts.extend(project.write_pointers(project_root, project_id))
     _stamp_installed_version(project_root, project_id, version)
 
     if project.upgrade_available(project_root) and emitter is not None:
