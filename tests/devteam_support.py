@@ -95,10 +95,14 @@ class StoreTestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, str(self.tmp), True)
         self.home = self.tmp / "store"
         self._saved_env = {
-            key: os.environ.get(key) for key in ("DEVTEAM_HOME", "DEVTEAM_PLATFORM")
+            key: os.environ.get(key)
+            for key in ("DEVTEAM_HOME", "DEVTEAM_PLATFORM", "DEVTEAM_MACHINE_ID")
         }
         os.environ["DEVTEAM_HOME"] = str(self.home)
         os.environ.pop("DEVTEAM_PLATFORM", None)
+        # A machine-id override leaking out of one test would silently give the next
+        # one a store whose registry it cannot see.
+        os.environ.pop("DEVTEAM_MACHINE_ID", None)
         self.addCleanup(self._restore_env)
         self.source = make_source_tree(self.tmp / "source")
 

@@ -1,14 +1,17 @@
 """M2: the preference cascade, the layout upgrade, and store portability."""
 
 import json
+import os
 import shutil
 import subprocess
+import tarfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, gitignore, jsonio, prefs, project, registry, store, upgrade, versions
+from devteam import bind, gitignore, jsonio, paths, prefs, project, registry, store, upgrade, versions
 from devteam.errors import ConflictError, EnvError, UsageError
 
 
@@ -116,6 +119,8 @@ class UpgradeTest(StoreTestCase):
         memory.mkdir(parents=True)
         (memory / "session-summary.md").write_text("## 2026-01-01 | v2 memory\n", encoding="utf-8")
         jsonio.write_json_atomic(memory / "state.json", {"session_id": 42})
+        jsonio.write_json_atomic(memory / "credentials.local.json", {"db_password": "s3cret"})
+        (memory / ".notifier-state").write_text("turns=3\n", encoding="utf-8")
         (memory / "nested").mkdir()
         (memory / "nested" / "note.txt").write_text("deep\n", encoding="utf-8")
         result = bind.bind(root, provider_names=["claude"])
@@ -128,13 +133,16 @@ class UpgradeTest(StoreTestCase):
         after = sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
         self.assertEqual(before, after)
         self.assertEqual(preview["from_layout"], 1)
-        self.assertEqual(preview["files"], 3)
+        self.assertEqual(preview["files"], 5)
+        self.assertEqual(
+            preview["machine_local"], [".notifier-state", "credentials.local.json", "state.json"]
+        )
 
     def test_apply_copies_verifies_and_leaves_the_project_clean(self):
         root, pid = self._v2_bound()
         result = upgrade.apply(root)
 
-        self.assertEqual(result["copied"], 3)
+        self.assertEqual(result["copied"], 5)
         self.assertEqual(project.layout(root), project.CURRENT_LAYOUT)
         self.assertFalse(project.legacy_memory_dir(root).exists())
         self.assertEqual(
@@ -148,7 +156,15 @@ class UpgradeTest(StoreTestCase):
             "## 2026-01-01 | v2 memory\n",
         )
         self.assertEqual((destination / "nested" / "note.txt").read_text(encoding="utf-8"), "deep\n")
-        self.assertEqual(jsonio.read_json(destination / "state.json")["session_id"], 42)
+
+        # state.json, the dot-markers and the secrets describe this machine, so they
+        # land in the machine subtree and never in the portable one (ADR-0013).
+        state_destination = Path(result["state_destination"])
+        self.assertEqual(jsonio.read_json(state_destination / "state.json")["session_id"], 42)
+        self.assertTrue((state_destination / ".notifier-state").is_file())
+        self.assertTrue((state_destination / "credentials.local.json").is_file())
+        for machine_local in ("state.json", ".notifier-state", "credentials.local.json"):
+            self.assertFalse((destination / machine_local).exists(), machine_local)
 
     def test_the_original_is_quarantined_not_deleted(self):
         root, _ = self._v2_bound()
@@ -163,7 +179,10 @@ class UpgradeTest(StoreTestCase):
         pointer = (root / project.PROJECT_DIR / project.STATE_DIR_POINTER).read_text(
             encoding="utf-8"
         ).strip()
-        self.assertEqual(pointer, str(project.memory_dir(root, pid)))
+        # `state.sh` resolves state.json through this pointer, so it must name the
+        # machine subtree — the portable one has no state.json in it.
+        self.assertEqual(pointer, str(project.state_dir(root, pid)))
+        self.assertNotEqual(pointer, str(project.memory_dir(root, pid)))
         self.assertTrue(Path(pointer).is_dir())
 
     def test_the_gitignore_block_drops_the_user_data_entries(self):
@@ -213,7 +232,7 @@ class InstalledVersionTest(StoreTestCase):
         self.install_version("3.0.0", activate=True)
         root = self.new_project()
         result = bind.bind(root, provider_names=["claude"])
-        state = jsonio.read_json(project.memory_dir(root, result["project_id"]) / "state.json")
+        state = jsonio.read_json(project.state_dir(root, result["project_id"]) / "state.json")
         self.assertEqual(state["installed_version"], "3.0.0")
 
     def test_a_stale_v2_value_is_corrected_without_losing_other_keys(self):
@@ -225,7 +244,7 @@ class InstalledVersionTest(StoreTestCase):
             memory / "state.json", {"installed_version": "2.48.0", "session_id": 7}
         )
         result = bind.bind(root, provider_names=["claude"])
-        state = jsonio.read_json(project.memory_dir(root, result["project_id"]) / "state.json")
+        state = jsonio.read_json(project.state_dir(root, result["project_id"]) / "state.json")
         self.assertEqual(state["installed_version"], "3.0.0")
         self.assertEqual(state["session_id"], 7)
 
@@ -265,26 +284,119 @@ class StorePortabilityTest(StoreTestCase):
         super().setUp()
         self.install_version("3.0.0", activate=True)
 
-    def test_export_then_import_round_trips_the_registry(self):
+    def test_a_portable_export_leaves_the_machine_records_behind(self):
         root = self.new_project()
         result = bind.bind(root, provider_names=["claude"])
+        prefs.set_value("language", "en", "3.0.0", scope="global")
+        summary = paths.project_data_dir(result["project_id"]) / "session-summary.md"
+        summary.parent.mkdir(parents=True, exist_ok=True)
+        summary.write_text("## 2026-01-01 | authored\n", encoding="utf-8")
+
         archive = self.tmp / "export.tar.gz"
         exported = store.export(archive)
         self.assertTrue(Path(exported["archive"]).is_file())
+        self.assertTrue(exported["portable_only"])
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = tar.getnames()
+        self.assertIn("data/preferences.json", names)
+        self.assertTrue(any(name.endswith("session-summary.md") for name in names), names)
+        self.assertFalse([name for name in names if "/machines/" in name], names)
+        self.assertNotIn("data/machine-id", names)
+        self.assertFalse([name for name in names if "bind-manifest.json" in name], names)
+
+    def test_a_portable_export_round_trips_memory_and_is_rebuilt_by_a_rebind(self):
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        pid = result["project_id"]
+        summary = paths.project_data_dir(pid) / "session-summary.md"
+        summary.parent.mkdir(parents=True, exist_ok=True)
+        summary.write_text("## 2026-01-01 | portable\n", encoding="utf-8")
+
+        archive = self.tmp / "export.tar.gz"
+        store.export(archive)
+        shutil.rmtree(str(self.home / "data"))
+
+        imported = store.import_archive(archive)
+        self.assertTrue(imported["portable_only"])
+        # The registry did not travel — by design — so the project reads as unbound
+        # until it is re-bound, and the memory is waiting under its committed identity.
+        self.assertEqual(registry.entries(), {})
+        self.assertEqual(imported["machine_records_kept"], [])
+        self.assertEqual(
+            summary.read_text(encoding="utf-8"), "## 2026-01-01 | portable\n"
+        )
+        self.assertIn("devteam bind", imported["next"])
+
+        rebound = bind.bind(root, provider_names=["claude"])
+        self.assertEqual(rebound["project_id"], pid)
+        self.assertIn(pid, registry.entries())
+        self.assertTrue(bind.manifest_file(pid).is_file())
+
+    def test_export_all_carries_the_registry_and_the_manifests(self):
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        archive = self.tmp / "export-all.tar.gz"
+        exported = store.export(archive, include_machine=True)
+        self.assertFalse(exported["portable_only"])
 
         shutil.rmtree(str(self.home / "data"))
-        self.assertEqual(registry.entries(), {})
-
         store.import_archive(archive)
         self.assertIn(result["project_id"], registry.entries())
+        self.assertTrue(bind.manifest_file(result["project_id"]).is_file())
 
-    def test_import_refuses_to_overwrite_a_populated_store_without_force(self):
+    def test_importing_a_portable_archive_keeps_this_machines_registry(self):
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        archive = self.tmp / "export.tar.gz"
+        store.export(archive)
+
+        # The archive carries no machine subtree. Promoting it verbatim would take
+        # the live registry out of the active store and make every bound project
+        # read as unbound.
+        imported = store.import_archive(archive, force=True)
+        self.assertEqual(imported["machine_records_kept"], ["machine-id", "machines"])
+        self.assertIn(result["project_id"], registry.entries())
+        # This machine already knew the project, so reconciling is the next step —
+        # a freshly installed machine would be told to bind instead.
+        self.assertIn("devteam sync --all", imported["next"])
+
+    def test_a_second_machine_sees_the_memory_but_not_the_registry(self):
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        pid = result["project_id"]
+        self.assertIn(pid, registry.entries())
+
+        other = "11111111-2222-3333-4444-555555555555"
+        with mock.patch.dict(os.environ, {paths.MACHINE_ID_ENV: other}):
+            self.assertEqual(paths.machine_id(), other)
+            # Nothing is shared across machines except what the user authored: the
+            # portable preferences layer is the same file, the registry is not.
+            self.assertEqual(registry.entries(), {})
+            self.assertEqual(prefs.global_file(), paths.global_preferences_file())
+            self.assertFalse(bind.manifest_file(pid).exists())
+        self.assertIn(pid, registry.entries())
+
+    def test_import_refuses_to_overwrite_authored_records_without_force(self):
         root = self.new_project()
         bind.bind(root, provider_names=["claude"])
+        prefs.set_value("language", "en", "3.0.0", scope="global")
         archive = self.tmp / "export.tar.gz"
         store.export(archive)
         with self.assertRaises(ConflictError):
             store.import_archive(archive)
+
+    def test_an_all_archive_refuses_to_replace_a_live_registry_without_force(self):
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        archive = self.tmp / "export-all.tar.gz"
+        store.export(archive, include_machine=True)
+        # Nothing portable was authored, so the pre-extraction check passes; the
+        # incoming registry is what must not silently displace the live one.
+        self.assertEqual(store.portable_entries(), [])
+        with self.assertRaises(ConflictError):
+            store.import_archive(archive)
+        self.assertTrue(store.registry_file_has_entries())
 
     def test_import_rejects_an_unsafe_archive(self):
         import io
