@@ -53,22 +53,27 @@ Sub-scripts in `scripts/hooks/pre-tool-use/` are run by `scripts/hooks/pre-tool-
 |--------|-------------|-----------------|
 | `01-` | Installation freshness | _(free — the update check moved to `SessionStart`, see below and § Disabled Hooks)_ |
 | `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02b-telemetry.sh` — queues telemetry events for agent spawns and devteam commands; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
+| `03-` | Safety and policy guards | `03-credential-guard.sh` — hygiene guard on credential store access (Bash only), refuses obvious commands that dump credentials (ADR-0010), see below |
 
 > One script per bare number. `02-graphify-hint.sh` keeps `02-` because it is referenced externally; the telemetry script is `02b-telemetry.sh`. Two files sharing a bare prefix leaves execution order to an alphabetical tiebreak on the rest of the filename — never rely on that. Add a **lowercase letter suffix** (`02b-`, `02c-`, …) instead.
 
 Each sub-script must:
 - **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — the same regex the Stop dispatcher uses. Non-matching files are skipped, not run; `DEVTEAM_HOOK_DEBUG=1` traces both
-- Exit `0` in all normal paths — a PreToolUse sub-script runs on **every tool call** and must never block one
+- Exit `0` in all normal paths — **exceptions documented below**; a PreToolUse sub-script runs on **every tool call** and must never block one by default
 - Stay off the hot path: return from the TTL/cache check before forking anything (no `python3`, no network) — see `update-check.sh`, whose interval sidecar cache is invalidated with the `[ prefs -nt cache ]` bash builtin
 
-`02c-full-suite-guard.sh` is the per-command safety net for `skills/shared/scoped-test-execution/SKILL.md`: when a `Bash` command matches an unscoped full-suite shape (e.g. `pytest` with no path/`-k`, `vendor/bin/phpunit` with no `--filter`), it injects an `additionalContext` reminder of the rule — it never blocks, consistent with the rule above. It complements, and does not replace, the `SessionStart` reminder below, which covers sessions that never issue a matching Bash command but still need the rule in context from the start (e.g. work happening outside `/devteam:*` routing, where `project-context`'s mandatory skill load is never triggered).
+**Exit code exception**: `02c-full-suite-guard.sh` and `03-credential-guard.sh` exit with status 2 when refusing a tool call (scoped-test reminder on tests with no filter, credential-guard refusal on obvious dump commands). These are **documented, narrow exceptions** — a refusal exits 2 so the dispatcher propagates it and blocks the tool call. The alternative (every Bash test command blocked by safety-netting; every credential read blocked by default) would disable these hooks rather than improve them, so the exceptions are load-bearing.
+
+`02c-full-suite-guard.sh` is the per-command safety net for `skills/shared/scoped-test-execution/SKILL.md`: when a `Bash` command matches an unscoped full-suite shape (e.g. `pytest` with no path/`-k`, `vendor/bin/phpunit` with no `--filter`), it injects an `additionalContext` reminder of the rule — it never blocks, consistent with the rule above (this script does **not** exit 2). It complements, and does not replace, the `SessionStart` reminder below, which covers sessions that never issue a matching Bash command but still need the rule in context from the start (e.g. work happening outside `/devteam:*` routing, where `project-context`'s mandatory skill load is never triggered).
+
+`03-credential-guard.sh` (ADR-0010) refuses commands that read credential stores (dump keychain, cat a secrets file, etc.) and warns on reads via the audit-path CLI. It is **hygiene and auditability, not a sandbox** — it matches command text, so it is trivially bypassed (a variable, base64, a here-doc, etc.). Its value is stopping the obvious spelling by default; the audit log and the `DEVTEAM_CRED_READ_CONFIRMED=1` escape hatch are the record.
 
 ### Hook Files Map
 
 | Event | File | Dispatcher | Purpose |
 |-------|------|-----------|---------|
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
-| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard (update checks disabled, see § Disabled Hooks) |
+| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard, credential-guard (update checks disabled, see § Disabled Hooks) |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
 | `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, telemetry flush (including per-agent usage, see `lib/agent-usage.sh` below), archive rotation (notifications and graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |

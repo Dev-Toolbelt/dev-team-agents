@@ -16,7 +16,9 @@ updated N times for N projects. ADR-0007 splits the installation into a versione
 durable **data** store; ADR-0008 gives each project a committed identity and resolves
 preferences on write; ADR-0009 makes the CLI python3. This spec covers milestone **M1** only:
 store, CLI, identity, bind, versions/pin, and migration of an existing v2 install. Memory
-relocation, the preference cascade, credentials and the desktop app are later milestones.
+relocation and the preference cascade arrived in M2/M2.1 and are asserted below; credentials
+arrived in M3 and are specified separately in [`v3-credentials.md`](v3-credentials.md); the desktop
+app is a later milestone.
 
 ### Acceptance Criteria
 
@@ -270,7 +272,10 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 ### Out of Scope
 - Any synchronisation mechanism — no daemon, no cloud, no conflict resolution. ADR-0013 makes one
   possible; nothing in this spec starts one, and `export`/`import` stay explicit and manual
-- Credential storage, `devteam cred`, and the PreToolUse guard — later milestone
+- Credential storage, `devteam cred`, and the PreToolUse guard — **built in M3, specified in
+  [`v3-credentials.md`](v3-credentials.md)**, which owns those criteria. Out of scope *here*, not
+  unbuilt: this spec asserts nothing about them, and a change to that surface is checked against
+  that spec
 - Retiring `state.json:installed_version` and repointing its four readers — later milestone;
   the bind stamps the key so they report the truth in the meantime
 - The Electron app, the Homebrew tap and the winget package — later milestone
@@ -279,7 +284,7 @@ relocation, the preference cascade, credentials and the desktop app are later mi
 
 ### Dependencies
 - **Depends on**: ADR-0007, ADR-0008, ADR-0009, ADR-0012, ADR-0013
-- **Blocks**: credentials, desktop app
+- **Blocks**: [`v3-credentials.md`](v3-credentials.md) (M3, now built), desktop app
 
 ### Amendment Log
 - 2026-09-27 | implementation | Bind artifacts are excluded through `.git/info/exclude`, not
@@ -329,6 +334,13 @@ relocation, the preference cascade, credentials and the desktop app are later mi
   what a subtree contains, assert that the relocation refreshes the pointers it invalidates, and
   add the machine re-issue, consent-withholding, archive-member validation, and the
   `path`/`doctor`-create-nothing guarantees that had no criterion at all.
+- 2026-09-28 | software-architect | Moved credentials, `devteam cred` and the PreToolUse guard out of
+  Out of Scope as unbuilt, and pointed at the new [`v3-credentials.md`](v3-credentials.md) instead of
+  absorbing them here. | M3 built them. They stay out of *this* spec's criteria on purpose: this spec
+  is about the store, the bind and versioning, and folding ~15 credential scenarios into it would mean
+  one document whose scope is "v3", which is not a boundary anyone can check a change against. The
+  line in Out of Scope now says which spec owns them rather than that they do not exist — a stale
+  "later milestone" reads as "not built" and is how a reviewer concludes a surface is unspecified.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

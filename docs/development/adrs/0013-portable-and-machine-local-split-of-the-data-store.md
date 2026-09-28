@@ -76,6 +76,40 @@ data/
         └── .<markers>                           ← machine-local: caches, ETags, day stamps
 ```
 
+> **Amended by ADR-0010's implementation (M3).** The inventory in Context above was taken before
+> credentials were built, and it classified neither of the two records that milestone adds. Both are
+> **machine-local**, and the tree above should be read as carrying them:
+>
+> ```
+> data/credentials/                                 ← PORTABLE: references only, no value
+> data/machines/<machine-id>/secrets/               ← machine-local: values at rest
+> data/machines/<machine-id>/projects/<pid>/audit.log ← machine-local: reads on THIS machine
+> ```
+>
+> - **`audit.log`** is in `paths.MACHINE_LOCAL_RECORDS`. It is an observation, not something the
+>   user authored — it records credential reads that happened on this host — so it lands on the
+>   machine side by the same rule as `state.json`. The stronger reason is that it is a *growing*
+>   record: two machines appending to one portable log would need merge semantics nothing here has,
+>   and a trail that silently interleaves two hosts is worse than two separate ones. It is written as
+>   append-only JSONL, one `json.dumps` per `os.write` on an `O_APPEND` descriptor, which is the
+>   format this ADR's own closing paragraph asks a growing log to use — and the contrast with
+>   `session-summary.md`, still prepend-at-top markdown, is recorded under Remaining gaps below.
+>   Global-layer reads (no bound project) use the scope `global`, which cannot collide with a
+>   `project_id` because those are UUID4.
+> - **The value store** at `machine_dir() / "secrets"` is machine-local and deliberately **not**
+>   beside `data/credentials/`. The reference layer is portable *precisely because* it holds no
+>   value, which makes exporting it routine — and a value store adjacent to a routinely-exported
+>   directory ends up in the first archive somebody takes. Separating the subtrees means the
+>   classification does the work rather than an author remembering an exclusion, which is the same
+>   argument the `credentials.local.json` bullet below already makes for the v2 file. A keychain or
+>   DPAPI value is not in this directory at all on macOS; DPAPI writes one `0600` JSON envelope per
+>   secret here, and the last-resort `insecure` backend writes one `insecure.json`.
+>
+> Neither record changes the export predicate: both are caught by
+> `paths.is_machine_local_record` / `path_is_machine_local` at every path depth, so no new exclusion
+> was added and none has to be remembered — which is what the `devteam_record_class` row in
+> `docs/development/reuse-guidelines.md` exists to keep true.
+
 Consequences of the line, each deliberate:
 
 - **The machine id identifies a machine, not a store.** `machine-id` records the id **and the host

@@ -385,6 +385,12 @@ manifests, `state.json`, locks, caches and credential *values* — lives under
 `data/machines/<machine-id>/`. `paths.is_machine_local_record()` is the single answer to which side a
 record belongs on; never re-derive that rule at a call site. No synchronisation exists or is implied.
 
+**Credential references are portable; values are machine-local** (ADR-0010): `data/credentials/` holds the
+**references** (purpose, scope, which backend holds the value — no secret data), reviewed and diffed in git;
+`data/machines/<machine-id>/secrets/` or the OS keychain holds the **values** themselves, never exported or
+shared. This split keeps the references reviewable while values stay on the machine that set them. Reading a
+value is audited (who, when, which key) in a machine-local append-only log.
+
 A project's memory moves into the store only when the user runs **`devteam upgrade`** — `bind`,
 `sync`, `update` and `migrate` report a stale `layout` and change nothing. Preferences cascade in
 three personal layers and are resolved on write into `.dev-team-agents/resolved/preferences.json`,
