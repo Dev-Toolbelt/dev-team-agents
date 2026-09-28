@@ -4,15 +4,19 @@ Companion to [`CLAUDE.md`](../CLAUDE.md). Decisions behind this layout:
 [ADR-0007](../docs/development/adrs/0007-global-core-and-data-store-replacing-per-project-vendored-install.md)
 (store split), [ADR-0008](../docs/development/adrs/0008-project-identity-via-committed-project-json-and-three-personal-preference-layers.md)
 (identity and preference layers), [ADR-0009](../docs/development/adrs/0009-python3-as-the-devteam-cli-runtime-while-hooks-stay-bash.md)
-(python3 CLI). Acceptance criteria: [`docs/specs/v3-global-install.md`](../docs/specs/v3-global-install.md).
+(python3 CLI),
+[ADR-0014](../docs/development/adrs/0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md)
+(store schemas as the normative write gate, and the `json_contract` deprecation policy).
+Acceptance criteria: [`docs/specs/v3-global-install.md`](../docs/specs/v3-global-install.md).
 
 **Milestone status.** M1 (store, CLI, identity, bind, versions/pin, migration), M2 (preference
 cascade, memory relocation behind a consented upgrade, `context_paths`, store portability), M2.1
 (the portable/machine-local store split, [ADR-0013](../docs/development/adrs/0013-portable-and-machine-local-split-of-the-data-store.md))
 and M3 (credentials — see § Credentials, [ADR-0010](../docs/development/adrs/0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md))
 are implemented. **M4 is partially done:** `devteam catalog`, the `compat` block in `version --json`,
-and the `--json` contract test sweep are in place. The desktop app, signed release channels (Homebrew,
-winget), and full M4 are not yet available. The v2 `install.sh` path keeps working for one deprecation cycle.
+the `--json` contract test sweep, and the client write gate (§ The client write gate) are in place.
+The desktop app, signed release channels (Homebrew, winget), and full M4 are not yet available. The v2
+`install.sh` path keeps working for one deprecation cycle.
 
 ---
 
@@ -145,7 +149,7 @@ preferences, markers, `.worktrees/`), between managed markers.
 
 `--json` is accepted before or after the subcommand. stdout then carries exactly one JSON document
 with an `ok` field; human text is suppressed and warnings stay on stderr. This is **public API**
-defined in [ADR-0011](../docs/development/adrs/0011-the-devteam-cli-is-the-desktop-apps-api.md) —
+defined in [ADR-0011](../docs/development/adrs/0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) —
 the desktop app is a client of the CLI, so an output shape change is a breaking change. The contract
 is swept across every subcommand by `tests/test_json_contract.py`, which discovers commands from the
 real parser rather than a hardcoded list, ensuring new or changed commands are caught before release.
@@ -154,9 +158,15 @@ real parser rather than a hardcoded list, ensuring new or changed commands are c
 |------|---------|
 | 0 | success |
 | 1 | findings — ran and reported a problem it did not fix |
-| 2 | usage error |
-| 3 | environment error (no store, no version, unreadable directory) |
-| 4 | conflict (lock timeout, identity collision, refusing to overwrite) |
+| 2 | usage error (bad arguments, unknown subcommand, **a malformed client declaration** — see § The client write gate) |
+| 3 | environment error (no store, no version, unreadable directory, **a store whose one-time layout migration a declared client may not perform**) |
+| 4 | conflict (lock timeout, identity collision, refusing to overwrite, a declared client refused a mutating command — see § The client write gate) |
+
+This table and the module docstring of `scripts/lib/devteam/errors.py` are two halves of one contract:
+the docstring names the same declared-client cases on 2, 3 and 4, and the reasoning for each sits with
+the function that raises it (`compat.refusal` for 4, `compat.migration_required` for 3). If you change
+one, change the other in the same commit — and see ADR-0014 § 2, which makes *changing which exit code
+an existing outcome uses* a `json_contract` obligation.
 
 **Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.
 
@@ -223,9 +233,220 @@ the current contract. This is ADR-0011's "compatibility is declared, not assumed
 is inferring compatibility from the framework's release version, which moves for reasons that have
 nothing to do with the contract.
 
+## The client write gate
+
+`devteam compat` *answers* "may this client write?". The gate is what makes that answer **binding** for
+a caller that identified itself. Decided in
+[ADR-0014](../docs/development/adrs/0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md);
+the reasoning behind each judgment call is recorded in `scripts/lib/devteam/compat.py` beside the code
+and is not restated here.
+
+**Declaring.** Two seams, both naming a JSON file holding the same object `devteam compat
+--client-file` accepts (`{"project": 1, "registry": 3, …}`):
+
+| Seam | Form |
+|------|------|
+| `--client-schemas <PATH>` | global — accepted before or after the subcommand, like `--json` |
+| `DEVTEAM_CLIENT_SCHEMAS` | the same path in the environment, exported once for a client session |
+
+**The flag wins over the variable.** The flag is on the invocation in front of you; the variable is
+ambient and inherited, so a wrapper that exported it once must not override what this call says about
+itself. An empty or whitespace-only variable is treated as *unset*, not as an empty declaration —
+`export DEVTEAM_CLIENT_SCHEMAS=` is a shell saying "no value", and reading it as `{}` would refuse
+every write in that session.
+
+**An empty flag is the opposite case: `--client-schemas ""` is exit 2, not the anonymous path.** The
+asymmetry is deliberate. A shell cannot distinguish an absent variable from an empty one, so empty means
+unset *there and only there*; a flag with an empty value is a caller that passed a value and got it
+wrong — almost always `--client-schemas "$SCHEMAS"` with `SCHEMAS` unset, the ordinary idiom a client
+wrapper has. Downgrading that to silence would drop the gate on exactly the invocation that meant to
+declare. Asserted in both directions by `tests/test_client_gate.py::EmptyFlagValueIsNotSilenceTest`,
+including against `compat.client_declaration` itself so the rule is pinned as a rule and not only as an
+exit code.
+
+One parser (`compat.parse_client_schemas` / `compat.load_client_schemas`)
+serves both seams **and** `devteam compat`'s own `--client`/`--client-file`, so the two cannot disagree
+about what a valid declaration is. A bare `devteam compat` with no `--client`/`--client-file` falls back
+to the same seam, so an exported declaration gets a `may_write` without restating the file.
+
+**Every rejection names the seam that carried the path**, not just the path: `--client-schemas …`,
+`--client-file …` or `DEVTEAM_CLIENT_SCHEMAS …`. A client whose wrapper exported the variable three
+layers up has to be told which seam is at fault rather than handed a path it never typed. Asserted for
+all three seams by `tests/test_client_gate.py::…test_a_declaration_file_names_the_seam_that_carried_it`.
+
+**A malformed declaration is a malformed question — exit 2 on every seam, including `devteam compat`.**
+`json.loads` has two failure modes that are not `JSONDecodeError` and `Path.read_text` one that is not
+`OSError`: a file that is not valid UTF-8, and input nested too deeply to parse. Both are `UsageError`
+now, so `devteam compat --client-file <undecodable-or-too-deep>` is **exit 2**; it was exit 3 before,
+reached through `cli.main`'s catch-all as *"unexpected UnicodeDecodeError / RecursionError"*, which is a
+crash reported as an environment problem. Exactly one document still goes out on stdout under `--json`,
+and no traceback reaches the shell — `tests/test_client_gate.py::UnreadableDeclarationIsADocumentNotATracebackTest`
+asserts both on all three seams plus `devteam compat`, and exercises `cli.main`'s remaining catch-all
+directly so the net itself is not the untested part.
+
+**When it runs.** A declaration is resolved — and therefore validated — on every invocation that
+carries one, including a read-only one: a corrupt declaration file is a broken client installation, and
+reporting it on the first call rather than on the first *write* removes the window in which the gate
+silently is not there. The refusal itself applies only to a **mutating** command, and it happens in
+`cli.main` after the parse and **before `store.adopt_machine_layout()`**, which is itself a store
+mutation — so a refused command leaves the store byte-identical. That ordering is not a comment any
+more: `tests/test_client_gate.py::PreSplitStoreTest` fabricates a pre-split store and asserts the store
+is byte-identical after a refusal, for `bind` and then across the whole of `compat.MUTATING`. Before it
+existed, moving the gate block below `adopt_machine_layout()` left every test green.
+
+| Caller | Mutating command | Read-only command |
+|--------|------------------|-------------------|
+| declares nothing | runs | runs |
+| declares, understands every shape | runs | runs |
+| declares, is behind on or silent about a shape | **refused, exit 4** | runs — except on a store that has not been relocated, see below |
+| declaration file missing, empty, malformed, not UTF-8 or nested too deeply | usage error, exit 2 | usage error, exit 2 |
+
+A client *ahead* of the store is not refused — an older store read by a newer client is the direction
+that works.
+
+**Exit 4, not 1.** `devteam compat` exits 1 for an incompatible client because there the negative is a
+*finding*: the question ran and answered. A refused write ran nothing, and exit 1 in this CLI always
+means "ran and reported a problem it did not fix". Exit 2 stays reserved for a malformed question,
+which is what a broken declaration file already raises; exit 3 says the environment cannot support the
+command, and for a refused **write** the environment is fine — the client is the party that is behind.
+Exit 3 does have one declared-client use, and it is the opposite case: a read-only command whose
+*environment* is not ready, described below.
+
+The refusal is an ordinary error document, and its `details` carry the comparison so a client branches
+on data rather than on the wording of a sentence. Below is a **real emission**, not an illustration:
+`devteam bind --json --client-schemas client-schemas.json` in a throwaway store, against a declaration
+naming three of the store's five shapes and one of those a version behind
+(`{"project": 1, "project_layout": 2, "registry": 0}`). Keys are alphabetical because the emitter dumps
+with `sort_keys=True` (`output.py`), so this is the on-the-wire order, not a tidied one:
+
+```json
+{
+  "details": {
+    "client_schemas": {
+      "project": 1,
+      "project_layout": 2,
+      "registry": 0
+    },
+    "command": "bind",
+    "declaration_source": "client-schemas.json",
+    "declared_by": "--client-schemas",
+    "may_write": false,
+    "store_schemas": {
+      "bind_manifest": 1,
+      "credentials": 1,
+      "project": 1,
+      "project_layout": 2,
+      "registry": 1
+    },
+    "unsupported": {
+      "bind_manifest": {
+        "client": null,
+        "store": 1
+      },
+      "credentials": {
+        "client": null,
+        "store": 1
+      },
+      "registry": {
+        "client": 0,
+        "store": 1
+      }
+    }
+  },
+  "error": "bind would write to this store, and the client declared via --client-schemas does not understand 3 shape(s) it uses: bind_manifest (store=1, client=(not declared)), credentials (store=1, client=(not declared)), registry (store=1, client=0)",
+  "exit_code": 4,
+  "hint": "Upgrade the client, or run `devteam compat --client-file client-schemas.json` for the full comparison. Read-only commands still work. Dropping the declaration is not a fix — it only hides the mismatch.",
+  "ok": false
+}
+```
+
+Read what that payload is actually saying, because a shorter example would teach the wrong rule. The
+store carries **five** shapes (`project`, `project_layout`, `registry`, `bind_manifest`, `credentials`).
+This declaration named three, so `unsupported` has **three** entries, not one: `registry` is a version
+behind, and `bind_manifest` and `credentials` were never mentioned — silence is not a claim of support,
+so both are reported with `"client": null` and render as `client=(not declared)` in the human message.
+A client that declares a subset is refused for every shape it left out.
+
+`declaration_source` is the path exactly as the caller passed it — relative here, because the invocation
+passed a relative path. `declared_by` names the seam actually used, so a client whose wrapper three
+layers up exported `DEVTEAM_CLIENT_SCHEMAS` is told about the variable rather than about a flag it never
+passed. This refusal always sets `hint`, so a client parsing `details` should expect it — but `hint` is a
+*conditional* key of the error envelope generally (`errors.DevteamError.payload()` emits it only when
+set), never a fixed key of any command. The seven `details` keys are the pinned part, held by
+`tests/test_client_gate.py::RefusalDetailsAreThePinnedContractTest` in both directions — it fails on an
+added key as loudly as on a removed one, and prints the two sets so the next reader decides rather than
+silences.
+
+**The one-time machine-layout relocation is suppressed for an incompatible client, and one read-only
+command is refused instead — exit 3.** `store.adopt_machine_layout()` moves a pre-ADR-0013 store's
+machine-local records to the split paths. It **writes `registry` and `bind_manifest`** — precisely the
+shapes an incompatible client just declared it cannot read — so it does not run on that caller's behalf.
+A terminal invocation, any anonymous caller and any *compatible* declaration still perform it, so no
+store is stranded by this.
+
+With the relocation skipped, a read-only command answers against the layout actually on disk. Every
+read-only command answers the same on both layouts **except `devteam list`**, which is why
+`compat.NEEDS_MACHINE_LAYOUT` holds exactly that one entry. `paths.registry_file()` resolves only the
+post-split path, so `list` read no registry at all and reported *every* bound project as unbound — exit
+0, `projects: []`, no error anywhere, the same silent failure mode as the stranded `state-dir` pointer
+that made `state_get` return an empty string for every key. The other read-only commands resolve through
+the project's own pointers or through the core store rather than through the registry, so the layout
+never reaches their answer.
+
+**That membership was measured, not reasoned about.**
+`tests/test_client_gate.py::PreSplitStoreTest.test_a_read_only_command_answers_the_pre_split_truth_or_is_refused`
+runs every leaf of `compat.READ_ONLY` twice under the same incompatible declaration — once on the split
+store, once after de-splitting — and requires each to answer identically or be refused, then asserts the
+refused set **equals** `compat.NEEDS_MACHINE_LAYOUT`. A command that starts reading the registry fails
+there rather than joining the wrong side quietly. (`cred get` is the one exclusion, and not for
+convenience: it appends an audit line, so two runs differ by construction, and it refuses `--json` by
+design so there is no document to compare.)
+
+So `list` under an incompatible declaration on a pre-split store is **exit 3, not 4**. Nothing is being
+refused *as a write* — this caller is entitled to read, and ADR-0011's rule is that an incompatible
+client degrades to read-only. What is not ready is the **environment**: the store is in a shape this
+command cannot read, and the one thing that would fix it is a write the caller said it cannot
+understand. A clear refusal beats a wrong answer, because a client told `projects: []` would offer to
+bind a project that is already bound. `compat.migration_required` raises it, carrying the refusal's seven
+`details` keys **plus `machine_layout_pending: true`**, and its `hint` names the fix that does not
+require upgrading the client: run any `devteam` command from a terminal without a declaration. The hint's
+own escape hatches — `devteam compat`, `version` and `path` — are asserted to answer on a pre-split
+store, so the guidance is not a dead end for the caller it is written for.
+
+**Where the classification lives.** `compat.MUTATING` and `compat.READ_ONLY` in
+`scripts/lib/devteam/compat.py` — 19 and 16 entries, covering all 35 parser leaves — keyed by the same
+path tuples `tests/test_json_contract.py`'s discovery walk produces, with the reason beside every
+entry. `compat.is_mutating()` **fails closed**: a command in neither table counts as mutating, so
+forgetting to classify a new one cannot open a hole. `tests/test_client_gate.py` (52 tests) walks the real
+parser and fails on any unclassified leaf, any leaf in both tables, and any entry naming a command that no
+longer exists. A third, much smaller table sits beside them — `compat.NEEDS_MACHINE_LAYOUT`, one entry,
+described above — and its membership is swept rather than trusted.
+
+Six entries are judgment calls rather than readings of a name. Five of them carry their reason in the
+table; the sixth is noted below because it does not:
+
+- `cred get` is **read-only**. Its audit line is the framework's own record *about* the caller, not one
+  of the shapes `store_schemas()` declares; gating it would turn a write gate into a read denial and
+  replace its documented `--json` exit-2 refusal with an exit 4.
+- `doctor` is **mutating** — it repairs directory pointers and can reassign identity.
+- `export` is **mutating** — it creates a restorable archive of shapes the declaring client just said
+  it cannot read.
+- `store gc` and `migrate` are **mutating** by what the command can do, not by which flag one
+  invocation passed — both say exactly that in the table, because both are read-only without `--apply`.
+- `upgrade` is **mutating** for the same per-command reason, and its table entry does **not** state it —
+  it reads only "relocates this project's memory into the store". It is also gated on `--apply`, so a
+  reader comparing it against `store gc` and `migrate` finds the rationale missing from the one entry
+  where the flag is most likely to invite re-deciding it from the invocation.
+
+**An anonymous caller keeps its full write access.** No detection, no warning, no log entry: the gate
+binds only callers that identify themselves, and omitting the declaration is a complete bypass. That is
+deliberate — an anonymous invocation is byte-for-byte a human at a terminal, and the human's CLI is the
+one thing this gate may not touch. ADR-0014 § 3 records the boundary, why identification is not
+authentication, and the two conditions that would justify reopening it.
+
 ## Credentials
 
-Credential **references** (purpose, scope, backend) are portable and reviewed — stored in `data/credentials/global.json` (shared across projects) or `data/credentials/<project_id>.json` (per-project, overrides global). Values stay out of git entirely: the macOS `security` keychain, Windows DPAPI, or a machine-local encrypted store. See [ADR-0010](../docs/development/adrs/0010-credential-references-and-the-secret-backend-cascade.md).
+Credential **references** (purpose, scope, backend) are portable and reviewed — stored in `data/credentials/global.json` (shared across projects) or `data/credentials/<project_id>.json` (per-project, overrides global). Values stay out of git entirely: the macOS `security` keychain, Windows DPAPI, or a machine-local encrypted store. See [ADR-0010](../docs/development/adrs/0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md).
 
 ### Commands
 
