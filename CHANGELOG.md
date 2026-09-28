@@ -92,6 +92,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — independent of the split
 
+- **The mandated duplicate-ADR check could never find an ADR.**
+  `skills/shared/adr/SKILL.md` § Check Before Creating told the reader to list existing titles with
+  `grep -h '^# ' docs/development/adrs/adr-*.md`. No file in that directory has ever matched that
+  pattern — `new-adr.sh` emits `NNNN-slug.md` — so the check returned an empty list every time it ran,
+  which is precisely the failure mode that produces a second ADR for a decision that already has one.
+  The skill no longer carries a glob at all: `scripts/new-adr.sh --list` is a new mode that prints the
+  titles and creates nothing, and the script is the one place that knows both naming schemes. The
+  skill also claimed the script creates `adr-NNN-title.md`, which it stopped doing.
+- **The ADR-gap safety net warned at the session that had just added an ADR.**
+  `scripts/hooks/stop/03e-adr-gap-check.sh` recognised "an ADR was already added, nothing to warn" by
+  matching `adrs/adr-[0-9]+.*\.md$` against the touched paths. Since no real filename carries the
+  `adr-` prefix, that escape hatch could never fire, so the heuristic aimed a false positive at
+  whoever had just done the right thing. The prefix is now optional in the pattern, and the comment
+  points at `new-adr.sh`'s `adr_files` as the owner of the scheme list.
+- **The two naming schemes were spelled out three times**, and the third copy was the stale one. They
+  now have a single definition inside `new-adr.sh` (`adr_files`), used by the title listing, the
+  number scan and `--list` alike.
+
 - **The two telemetry hooks wrote into the shared, versioned core store.**
   `scripts/hooks/pre-tool-use/02b-telemetry.sh` and `scripts/hooks/stop/05-telemetry.sh` derived the
   project root by counting `..` hops from `SCRIPT_DIR`, which assumes the flat v2 vendored layout. The

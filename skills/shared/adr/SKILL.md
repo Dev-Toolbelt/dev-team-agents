@@ -58,7 +58,13 @@ docs/development/adrs/
 
 ## Check Before Creating
 
-**Before running the script**, read the `# ` heading of every file in `docs/development/adrs/` (`grep -h '^# ' docs/development/adrs/adr-*.md`) and check whether the decision is already covered:
+**Before creating anything**, list the existing ADR titles and check whether the decision is already covered:
+
+```bash
+bash .dev-team-agents/scripts/new-adr.sh --list
+```
+
+`--list` prints the titles and creates nothing. Use it rather than a glob of your own: ADR filenames exist under two schemes (the historical `adr-NNN-slug.md` and the current `NNNN-slug.md`), the script is the single place that knows both, and a hand-written glob that matched only the historical one is exactly why this check silently returned an empty list for every ADR that existed.
 
 - **Same decision, not yet decided** (still `Proposed`, or genuinely still open) → edit that file, do not create a new one.
 - **Same decision, already `Accepted`, and this is a reversal** → create a new ADR, then set the old one's status to `Superseded by ADR-XXX` and link forward.
@@ -75,7 +81,7 @@ Use the script to auto-number and scaffold the file — it also prints existing 
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-This creates `docs/development/adrs/adr-NNN-title.md` with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
+This creates `docs/development/adrs/NNNN-title-slug.md` — four digits, no `adr-` prefix — with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
 
 ## When to Write an ADR
 

@@ -18,7 +18,13 @@ fi
 [ -n "${DEVTEAM_TOUCHED_PATHS:-}" ] || exit 0
 
 # A new ADR was already added this session — signal handled, nothing to warn.
-if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE 'docs/development/adrs/adr-[0-9]+.*\.md$'; then
+# Both naming schemes, and the `adr-` prefix is optional: `new-adr.sh` emits
+# `NNNN-slug.md`, so a pattern requiring the prefix matched no real filename and this
+# escape hatch could never fire. The hook then warned about a missing ADR at the very
+# session that had just added one — a false positive aimed at the person who did the
+# right thing. `scripts/new-adr.sh` (see `adr_files`) owns the scheme list; keep this
+# in step with it.
+if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE 'docs/development/adrs/(adr-)?[0-9]+.*\.md$'; then
     exit 0
 fi
 
