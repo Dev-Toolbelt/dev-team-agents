@@ -62,6 +62,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Colocar uma versão no store | `python3 scripts/cli/devteam store install --from .` |
 | Colocar o `devteam` no PATH | `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam` |
 | Vincular um projeto | `devteam bind /caminho/do/projeto` |
+| Listar o que está disponível | `devteam catalog agents|skills|commands` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
 | Converter uma instalação v2 existente | `devteam migrate --apply` |

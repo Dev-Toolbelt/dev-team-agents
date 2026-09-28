@@ -10,8 +10,9 @@ Companion to [`CLAUDE.md`](../CLAUDE.md). Decisions behind this layout:
 cascade, memory relocation behind a consented upgrade, `context_paths`, store portability), M2.1
 (the portable/machine-local store split, [ADR-0013](../docs/development/adrs/0013-portable-and-machine-local-split-of-the-data-store.md))
 and M3 (credentials — see § Credentials, [ADR-0010](../docs/development/adrs/0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md))
-are implemented. The desktop app, the Homebrew tap and winget are a later milestone. The v2
-`install.sh` path keeps working for one deprecation cycle.
+are implemented. **M4 is partially done:** `devteam catalog`, the `compat` block in `version --json`,
+and the `--json` contract test sweep are in place. The desktop app, signed release channels (Homebrew,
+winget), and full M4 are not yet available. The v2 `install.sh` path keeps working for one deprecation cycle.
 
 ---
 
@@ -124,6 +125,7 @@ preferences, markers, `.worktrees/`), between managed markers.
 |---------|------|
 | `devteam path` | Resolved store locations |
 | `devteam version` | Installed versions and the active one |
+| `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
 | `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
@@ -142,8 +144,11 @@ preferences, markers, `.worktrees/`), between managed markers.
 ## The `--json` contract
 
 `--json` is accepted before or after the subcommand. stdout then carries exactly one JSON document
-with an `ok` field; human text is suppressed and warnings stay on stderr. This is public API — the
-desktop app is a client of the CLI (ADR-0011), so an output shape change is a breaking change.
+with an `ok` field; human text is suppressed and warnings stay on stderr. This is **public API**
+defined in [ADR-0011](../docs/development/adrs/0011-the-devteam-cli-is-the-desktop-apps-api.md) —
+the desktop app is a client of the CLI, so an output shape change is a breaking change. The contract
+is swept across every subcommand by `tests/test_json_contract.py`, which discovers commands from the
+real parser rather than a hardcoded list, ensuring new or changed commands are caught before release.
 
 | Exit | Meaning |
 |------|---------|
@@ -154,6 +159,69 @@ desktop app is a client of the CLI (ADR-0011), so an output shape change is a br
 | 4 | conflict (lock timeout, identity collision, refusing to overwrite) |
 
 **Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.
+
+## Catalog
+
+`devteam catalog` is a read-only browse surface for the framework's agents, skills, and commands
+in the version the project is bound to.
+
+**Three deliberate behaviors:**
+
+1. **It reads from the bound version, never from the working tree.** If you stand in a project with a
+   pin or a stale checkout, catalog shows what that pin resolves to. This is load-bearing for the desktop
+   app, which must never report the harness in two different states depending on where the user was
+   standing when they asked.
+2. **It creates nothing, including not minting a machine identity.** Same discipline as `devteam path`
+   and `devteam doctor` — read-only commands leave the store untouched.
+3. **Malformed files are flagged, never fatal.** A skill with invalid YAML in the frontmatter is
+   listed as `malformed` with its path, so the user can locate and fix it. A catalog that exits on
+   one bad file is useless for finding the bad file.
+
+**Subcommands:**
+
+- `devteam catalog` — Summary: installed version, project identity, counts per kind, and malformed counts
+- `devteam catalog agents|skills|commands` — Every entry of that kind, with name/tier/model/path/description
+- `devteam catalog show <name>` — One entry's metadata plus body; resolves a bare name across all three kinds. When a name is ambiguous, lists the candidates instead
+
+**Flags:**
+
+- `--path <dir>` — Read from a different project (default: current one)
+- `--json` — Output JSON with entries in their full structure
+
+**Payload shapes (JSON output):**
+
+- `devteam catalog`: `{version, project_id, counts: {agents, skills, commands}, malformed: {agents, skills, commands}}`
+- `devteam catalog agents|skills|commands`: `{version, project_id, <kind>: [{name, tier, model, description, path, version}, …], count}`
+- `devteam catalog show`: adds `kind` and `body` to the entry
+
+## Compatibility block in `version`
+
+`devteam version --json` now includes a `compat` block that reports the JSON contract version and
+the store schema numbers:
+
+```json
+{
+  "current": "3.0.0",
+  "installed": ["3.0.0"],
+  "core": "/path/to/core",
+  "compat": {
+    "json_contract": 1,
+    "min_app_version": null,
+    "store_schemas": {
+      "project": 1,
+      "project_layout": 2,
+      "registry": 3
+    }
+  }
+}
+```
+
+A client (the desktop app, for example) reads this before writing to the store: if it does not
+understand a schema number in `store_schemas`, it downgrades to read-only mode. `min_app_version`
+is `null` until a desktop release ships; it will then carry the minimum app version that understands
+the current contract. This is ADR-0011's "compatibility is declared, not assumed" — the alternative
+is inferring compatibility from the framework's release version, which moves for reasons that have
+nothing to do with the contract.
 
 ## Credentials
 

@@ -62,6 +62,7 @@ Help me set up this project with dev-team-agents
 | Put a version in the store | `python3 scripts/cli/devteam store install --from .` |
 | Put `devteam` on your PATH | `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam` |
 | Bind a project | `devteam bind /path/to/project` |
+| List what's available | `devteam catalog agents|skills|commands` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
 | Convert an existing v2 install | `devteam migrate --apply` |
