@@ -481,6 +481,19 @@ class FormulaPayloadTest(unittest.TestCase):
             )
 
 
+#: This class runs the staged entry point **through its own ``#!`` line**, which
+#: Windows does not honour, and it chmods that file executable, which NTFS has no
+#: notion of. ``FormulaPayloadTest`` above only reads the formula's text and stays
+#: portable, so the gate is per-class rather than per-module.
+#:
+#: Defined locally, not imported: this module deliberately does not import
+#: ``devteam_support`` (see the module docstring above).
+_requires_shebangs = unittest.skipUnless(
+    os.name == "posix", "the staged CLI is invoked through a #! line"
+)
+
+
+@_requires_shebangs
 class StagedPayloadRunTest(unittest.TestCase):
     """Stage the formula's payload for real, then run the CLI out of it."""
 

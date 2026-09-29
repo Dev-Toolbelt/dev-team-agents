@@ -12,7 +12,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from devteam_support import StoreTestCase
+from devteam_support import StoreTestCase, requires_posix_modes
 
 from devteam import bind, gitignore, hooks, jsonio, lock, migrate, paths, project, registry, versions
 from devteam.errors import ConflictError, EnvError, UsageError
@@ -307,6 +307,9 @@ class RuntimeRootTest(StoreTestCase):
         self.assertTrue((pointer / "agents").is_dir())
 
 
+# Every assertion in this class is a POSIX permission bit, so there is nothing
+# left to check on a filesystem that has none. See `devteam_support.POSIX_MODES`.
+@requires_posix_modes
 class FileModeTest(StoreTestCase):
     def test_committed_files_are_readable_and_store_files_are_not(self):
         self.install_version("3.0.0", activate=True)

@@ -52,6 +52,51 @@ from devteam import secrets as secrets_module  # noqa: E402  (same bootstrap as 
 TEST_PLATFORM = "linux"
 
 
+# ── platform gates ────────────────────────────────────────────────────────────
+# The suite runs on ubuntu, macOS **and windows-latest**. Three kinds of test
+# cannot pass on Windows, and each one is skipped for a stated reason rather
+# than made to pass by a weaker assertion — a check loosened until it is green
+# everywhere has stopped testing the thing it was written for.
+#
+# Note these read the *real* host, via ``os.name``/``shutil.which``, and never
+# ``paths.platform_key()``: that one is pinned by ``DEVTEAM_PLATFORM`` so a test
+# can exercise another platform's store layout, which is exactly the opposite
+# question from "can this filesystem hold a mode bit".
+
+#: NTFS has no POSIX permission bits, and ``os.chmod`` on Windows can only flip
+#: the read-only attribute — so ``stat.S_IMODE()`` there reports a value the code
+#: never asked for. The store's ``0o600``/``0o700`` modes are a real guarantee on
+#: macOS and Linux and **no guarantee at all on Windows**. That is a property of
+#: the platform, not a defect in the assertion, and it is recorded in
+#: ``secrets.py``'s module docstring so the claim is not made where it is false.
+POSIX_MODES = os.name == "posix"
+
+requires_posix_modes = unittest.skipUnless(
+    POSIX_MODES, "POSIX permission bits do not exist on this filesystem"
+)
+
+#: Windows does not honour a ``#!`` line, so a test that runs a script *through*
+#: its shebang is testing something the platform does not do.
+requires_shebangs = unittest.skipUnless(
+    os.name == "posix", "a #! line is not honoured on this platform"
+)
+
+
+def requires_bash():
+    """Skip when there is no ``bash`` to drive a shell script under test.
+
+    Some tests' subject **is** a bash script (the Homebrew release bump). Those
+    are POSIX artifacts that only ever run in the ubuntu CI job; git-bash on a
+    Windows runner can execute the interpreter but not the ``mktemp``/``cp -p``/
+    mode semantics the script relies on, so a pass there would be misleading and
+    a failure would not be a real defect.
+    """
+    return unittest.skipUnless(
+        os.name == "posix" and shutil.which("bash") is not None,
+        "no POSIX bash to run the shell script under test",
+    )
+
+
 def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "testing/unit")):
     """A minimal but structurally faithful dev-team-agents tree."""
     root = Path(root)

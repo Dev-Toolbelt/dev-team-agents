@@ -82,6 +82,24 @@ def _keyword_line_re(directive):
     return re.compile(r"^" + re.escape(directive) + r" [A-Za-z_][A-Za-z0-9_]*:")
 
 
+#: The subject of every test in this module is a **bash script**, driven through
+#: ``subprocess``. That makes the whole module POSIX-only, which matters now that
+#: the suite also runs on ``windows-latest``: git-bash there can execute the
+#: interpreter, but not the ``mktemp`` / ``cp -p`` / permission-bit semantics the
+#: script is built on, and two tests below branch on ``os.geteuid()``, which does
+#: not exist on Windows at all. Skipped with a reason rather than adapted — the
+#: script ships to a Homebrew tap and only ever runs in the ubuntu CI job, so a
+#: Windows pass would assert nothing and a Windows failure would not be a defect.
+#:
+#: Defined locally, not imported: this module deliberately does not import
+#: ``devteam_support`` (see the module docstring above).
+_requires_posix_bash = unittest.skipUnless(
+    os.name == "posix" and shutil.which("bash") is not None,
+    "the script under test is a POSIX shell script",
+)
+
+
+@_requires_posix_bash
 class BumpFormulaTestCase(unittest.TestCase):
     """Base: one throwaway copy of the real formula per test."""
 

@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from devteam_support import StoreTestCase
+from devteam_support import POSIX_MODES, StoreTestCase, requires_posix_modes
 
 from devteam import bind, gitignore, jsonio, paths, prefs, project, registry, store, upgrade, versions
 from devteam.errors import ConflictError, EnvError, UsageError
@@ -178,6 +178,7 @@ class UpgradeTest(StoreTestCase):
         self.assertTrue(quarantined.is_dir())
         self.assertTrue((quarantined / "session-summary.md").is_file())
 
+    @requires_posix_modes
     def test_quarantine_and_upgraded_files_are_owner_only(self):
         """Containment used to rest entirely on `data/` itself never being loosened
         (0700). Quarantine can hold a retired `credentials.local.json` verbatim, and
@@ -728,7 +729,8 @@ class StorePortabilityTest(StoreTestCase):
         archive = Path(exported["archive"])
         self.assertEqual(archive.parent, paths.cache_dir() / "exports")
         self.assertNotIn(str(root.resolve()), str(archive))
-        self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
+        if POSIX_MODES:
+            self.assertEqual(stat.S_IMODE(archive.stat().st_mode), 0o600)
         # `--to .` is one keystroke away, so the project's own gitignore must catch
         # an archive left in the repository too.
         self.assertIn("devteam-data-*.tar.gz", bind.PROJECT_GITIGNORE_ENTRIES)
