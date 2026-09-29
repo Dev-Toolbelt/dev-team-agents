@@ -161,8 +161,15 @@ function interpret(result: CliResult): Handshake {
     storeSchemas,
     clientSchemas: asNumberMap(body['client_schemas']) ?? APP_STORE_SCHEMAS,
     unsupported,
+    // States what the *handshake* established and nothing else. It used to close with
+    // "this build has no write actions yet", which was true when it was written and
+    // became false the moment six of them landed — leaving the app contradicting itself
+    // on one screen, the header listing every write action beside a card saying there
+    // were none. What this build offers is `BuildInfo.hasWriteActions`' fact and the
+    // header renders it; a fact with two homes eventually disagrees with itself, so this
+    // one now has one.
     summary: mayWrite
-      ? 'This app understands every shape the store uses. Writing would be allowed; this build has no write actions yet.'
+      ? 'This app understands every shape the store uses, so the framework\'s write gate allows it to write.'
       : `The store keeps ${names.length === 1 ? 'a record' : 'records'} in ${names.length} shape${names.length === 1 ? '' : 's'} this app does not understand (${names
           .map((name) => `${name}: store ${unsupported[name]?.store ?? '?'}, this app ${unsupported[name]?.client ?? 'does not know it'}`)
           .join('; ')}). The app stays read-only — upgrade the app to write to this store.`,
