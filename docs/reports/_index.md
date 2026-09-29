@@ -734,6 +734,8 @@ candidatos descartados pelo Protocolo Anti-Duplicação. Ver [o relatório do pa
 - `token-graphify-setup-os-detection-30-lines-diverges-from-tool-installers` — **MEDIUM** — alvo: `skills/devops/graphify-setup/SKILL.md` — `:24-53` duplicam a detecção de SO num passo que `:64` já delega a `/devteam:install`, e a cópia divergiu na direção destrutiva: barra o usuário Windows com `winget` que `tool-installers/SKILL.md:12` atende nativamente — [report](2026-09-18/05-economia-tokens.md)
 - `token-telemetry-consent-guard-reforks-python3-above-the-fast-path` — **MEDIUM** — alvo: `scripts/hooks/stop/05-telemetry.sh` — `:31` roda `_telemetry_enabled` (1 fork de `python3`, 8 ms medidos) **acima** do fast-path de `:39` que existe para evitar forks; com K agentes o Stop paga 3+K forks do mesmo veredito imutável, e no default (telemetria `false`) todos são desperdício — [report](2026-09-18/05-economia-tokens.md)
 
+- `auto-github-actions-pinned-to-mutable-major-tags` — **MEDIUM** — alvo: `.github/workflows/ci.yml`, `.github/workflows/release.yml` — todos os 16 `uses:` apontam para tags major mutáveis (`actions/checkout@v4` ×8, `actions/setup-python@v5` ×4, `setup-node`, `upload-artifact`, `download-artifact`, e `ruby/setup-ruby@v1` — o único terceiro); quem controla a tag controla o que roda no CI. Recomendação: fixar `ruby/setup-ruby@v1` em SHA (terceiro, e `release.yml` é o workflow privilegiado) e deixar `actions/*` na tag major até existir config Dependabot para `github-actions`, sem a qual fixar tudo troca um risco pequeno por patches de segurança que ninguém aplica — [report](2026-09-29/00-security-scanners.md)
+
 ### Descartados por duplicação — 67
 
 Detalhe por eixo nos relatórios. Distribuição: Eixo A 28 (13 pela Porta 5), B 13, C 7, D 10, E 9.
