@@ -26,24 +26,47 @@ This module also carries the **write gate**: the declaration seam a caller uses 
 what it understands (``--client-schemas``, ``DEVTEAM_CLIENT_SCHEMAS``), and the
 classification of every command as mutating or read-only that decides when the
 declaration is checked. ``devteam compat`` answers "may I write?"; the gate is what
-makes that answer **binding** for a caller that identified itself — a declared client is
+enforces that answer against a caller that identified itself — a declared client is
 refused whether or not it ever ran ``compat``, which is the half of the v4 spec's
-complaint this module does close.
+complaint this module does close. Correct the word before it invites the wrong
+expectation: the gate binds a caller that declares **truthfully**. A caller that merely
+declares is self-bound, not bound — the two bypasses below are exactly the gap between
+those.
 
-**It does not close the other half, and the spec's sentence is worth quoting exactly:**
-*nothing on the framework side refuses a client that never asks.* A caller that declares
-nothing is still not refused, and that is deliberate rather than pending. An anonymous
-invocation is indistinguishable from a human at a terminal: there is no signal to
-separate the two, and inventing one would either break ordinary CLI use or be bypassable
-by omitting a flag. So the gate binds the callers that declare, and the residue — an
-undeclared client writes exactly as a human does — is accepted, recorded, and left to
-the client to honour. Anything claiming this module refuses *every* client that never
-asks is wrong; what it refuses is every **declared** client that may not write.
+**It closes neither of the other two, and both are worth stating as plainly as the one
+it does close.**
+
+The first is the spec's own sentence, worth quoting exactly: *nothing on the framework
+side refuses a client that never asks.* A caller that declares nothing is still not
+refused, and that is deliberate rather than pending. An anonymous invocation is
+indistinguishable from a human at a terminal: there is no signal to separate the two,
+and inventing one would either break ordinary CLI use or be bypassable by omitting a
+flag.
+
+The second has no name in the spec, because the declaration seam did not exist when it
+was written: a caller can declare ``{"project": 999, "registry": 999, ...}`` — every
+shape at or above the number the store carries — and ``gate()`` passes it unconditionally,
+truthfully declared or not. This costs the caller nothing: the declaration is a file it
+both names and writes, so inflating it takes no more privilege than writing any other
+file it already controls. Like the credential scope check elsewhere in this codebase,
+the write gate is **hygiene and auditability, not a sandbox** — it holds a caller to what
+it says about itself, and has no way to check whether what it says is true. **Do not
+attempt to close this one.** There is no signal in this seam, or in any seam the CLI has,
+that authenticates a caller or distinguishes a truthful declaration from an invented one;
+manufacturing one here would only relocate the trust assumption somewhere less visible,
+not remove it.
+
+So the gate binds — self-binds, per the correction above — the callers that declare, and
+the residue — an undeclared client writes exactly as a human does — is accepted,
+recorded, and left to the client to honour. Anything claiming this module refuses *every*
+client that never asks is wrong; what it refuses is every **declared** client that may
+not write, and only for as long as what it declared was true.
 """
 
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 from . import bind, creds, project, registry
@@ -74,6 +97,18 @@ def store_schemas():
         "bind_manifest": bind.MANIFEST_SCHEMA,
         "credentials": creds.SCHEMA,
     }
+
+
+def _example_declaration():
+    """A syntactically valid declaration, always at the store's real numbers.
+
+    Used only to build hint text. A hand-typed literal goes stale the moment a shape's
+    schema number moves — which already happened once: a `--client` usage hint quoted
+    ``{"registry": 3}`` long after ``registry.SCHEMA`` became ``1``, and stayed that way
+    because nothing tied the string to the number. Deriving it from ``store_schemas()``
+    costs one dict lookup and cannot drift again.
+    """
+    return json.dumps(store_schemas())
 
 
 def describe():
@@ -162,7 +197,7 @@ def parse_client_schemas(raw, source):
     except json.JSONDecodeError as exc:
         raise UsageError(
             "{} is not valid JSON: {}".format(source, exc),
-            hint="Pass a JSON object, e.g. {\"project\": 1, \"registry\": 3}.",
+            hint="Pass a JSON object, e.g. {}.".format(_example_declaration()),
         )
     except RecursionError as exc:
         # Deeply nested input exhausts the parser's stack. Raised *after* the stack has
@@ -177,7 +212,7 @@ def parse_client_schemas(raw, source):
         # cannot become the next traceback.
         raise UsageError(
             "{} could not be parsed as JSON: {}".format(source, exc),
-            hint="Pass a JSON object, e.g. {\"project\": 1, \"registry\": 3}.",
+            hint="Pass a JSON object, e.g. {}.".format(_example_declaration()),
         )
     if not isinstance(parsed, dict):
         raise UsageError(
@@ -189,15 +224,36 @@ def parse_client_schemas(raw, source):
     # *present* value of the wrong type (a string, a float, `true`) is a different
     # thing: the client meant to claim something and got the claim wrong. Catching it
     # here keeps `unsupported_by` lenient for other callers while giving this boundary
-    # a message that names the exact key and value at fault.
+    # a message that names the exact key and its type.
+    #
+    # The *value* itself must never appear in that message. `DEVTEAM_CLIENT_SCHEMAS` is
+    # ambient and inherited, and this function is the one place a caller-named,
+    # caller-controlled path (or a stale wrapper's stray env var) has its content read
+    # and echoed toward `--json` output, a CI log, and the desktop app's error screen. A
+    # layout-1 credentials file is a JSON object of string values — exactly the shape
+    # that trips this branch on every key — so printing `value` here is a one-string
+    # read primitive against any UTF-8 JSON file this process can open. The key name and
+    # the type it got wrong are enough for a caller to fix its declaration; the value
+    # never needs to leave the process.
     for name, value in parsed.items():
         if not isinstance(value, int) or isinstance(value, bool):
             raise UsageError(
-                "{}: the value for '{}' is not an integer: {!r}".format(source, name, value),
+                "{}: the value for '{}' is not an integer: got {}".format(
+                    source, name, type(value).__name__
+                ),
                 hint="Each shape maps to a plain integer schema version, or is left out "
                 "entirely to mean \"unknown\".",
             )
     return parsed
+
+
+#: The size cap for a declaration file, in bytes. A well-formed declaration is a flat
+#: object mapping today's five shape names to small integers — a few hundred bytes even
+#: pretty-printed with generous whitespace. 4 KiB is an order of magnitude of headroom
+#: above that for a hand-edited or future file, while still being small enough to refuse
+#: promptly, by name, before anything that could stress this process's memory: an
+#: oversized file, or a character device such as `/dev/zero` that never raises EOF.
+MAX_DECLARATION_BYTES = 4096
 
 
 def load_client_schemas(path, source=None):
@@ -213,20 +269,64 @@ def load_client_schemas(path, source=None):
     ``DEVTEAM_CLIENT_SCHEMAS`` three layers up has to be told which seam is at fault, not
     handed a path it never typed. It defaults to the bare path for a caller that has no
     seam to name.
+
+    Two properties the plain ``Path(path).read_text()`` this used to be did not have,
+    reproduced by a security review before either was closed here:
+
+    * **The path must name a regular file.** ``stat()`` never opens anything, so the
+      check happens before this function calls ``open()`` at all. Skipping it meant a
+      FIFO blocked the read indefinitely — ``open()`` in read mode waits for a writer to
+      connect no matter how small the eventual read is — and a character device like
+      ``/dev/zero`` read without end, growing this process's heap for as long as
+      anything kept consuming it.
+    * **The read is capped, not trusted to ``st_size``.** A size read from ``stat()``
+      and a size read moments later by ``read()`` can disagree — the file can grow
+      between the two calls — so the cap is enforced against what was actually read, in
+      bytes, before it is decoded or handed to ``json.loads``.
     """
     label = str(path) if source is None else source
+    path = Path(path)
     try:
-        raw = Path(path).read_text(encoding="utf-8")
+        file_stat = path.stat()
     except OSError as exc:
         raise UsageError(
             "{} could not be read: {}".format(label, exc),
             hint="Pass a path to a readable JSON file naming the shapes this client "
             "understands.",
         )
-    except ValueError as exc:
-        # `UnicodeDecodeError`. It is a `ValueError`, not an `OSError`, so the original
-        # `except OSError` let it through to the shell as a traceback. See
-        # `parse_client_schemas` for why every exit from here is a `UsageError`.
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise UsageError(
+            "{} is not a regular file".format(label),
+            hint="Pass a path to a regular JSON file, not a pipe, socket, or device.",
+        )
+    try:
+        with open(str(path), "rb") as handle:
+            # One byte past the cap, so an oversized file is *detected* rather than
+            # silently truncated into something that parses as valid JSON with the
+            # wrong content.
+            raw_bytes = handle.read(MAX_DECLARATION_BYTES + 1)
+    except OSError as exc:
+        raise UsageError(
+            "{} could not be read: {}".format(label, exc),
+            hint="Pass a path to a readable JSON file naming the shapes this client "
+            "understands.",
+        )
+    if len(raw_bytes) > MAX_DECLARATION_BYTES:
+        raise UsageError(
+            "{} is larger than the {}-byte limit for a declaration".format(
+                label, MAX_DECLARATION_BYTES
+            ),
+            hint="A declaration is a flat object mapping a handful of shape names to "
+            "integers; it is expected to be well under {} bytes.".format(
+                MAX_DECLARATION_BYTES
+            ),
+        )
+    try:
+        raw = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        # It is a `ValueError`, not an `OSError`, so the original `except OSError` let
+        # it through to the shell as a traceback. See `parse_client_schemas` for why
+        # every exit from here is a `UsageError`.
         raise UsageError(
             "{} is not valid UTF-8 text: {}".format(label, exc),
             hint="A declaration file is UTF-8 JSON; this one is not decodable as text.",
