@@ -293,6 +293,32 @@ def apply(root=None, emitter=None):
     ]
     _, ignore_action = gitignore.apply_managed_block(gitignore_path, kept)
 
+    # The two pointers `write_pointers` just created carry an absolute path into one
+    # developer's store, so they can never be committed.
+    #
+    # **Usually they are already excluded and this step reports `unchanged`**: `bind`
+    # rebuilds the local exclude block from its whole artifact set and the pointers are
+    # artifacts, so any project bound in `link` or `copy` mode is covered before `upgrade`
+    # runs. The narrower case this closes is a project whose block does **not** have them —
+    # a `vendored` bind, where `bind` skips the exclude write entirely; a checkout that
+    # became a git repository after it was bound, so `local_exclude_file` was `None` at
+    # bind time; or a block someone edited. In those, `upgrade` wrote the pointers and
+    # touched no ignore file, leaving two untracked entries in every `git status` until
+    # some later `devteam sync` happened to rebuild the block.
+    #
+    # Unioned into the existing managed entries rather than written as the block: replacing
+    # it would erase the 100+ artifact paths `bind` put there.
+    exclude_file = gitignore.local_exclude_file(project_root)
+    exclude_action = "skipped"
+    if exclude_file is not None:
+        pointer_paths = [pointer["path"] for pointer in pointers]
+        existing = gitignore.read_managed_entries(exclude_file)
+        merged = sorted(set(existing) | set(pointer_paths))
+        if merged != sorted(set(existing)):
+            _, exclude_action = gitignore.apply_managed_block(exclude_file, merged)
+        else:
+            exclude_action = "unchanged"
+
     if emitter is not None and preview["git_tracked"]:
         emitter.warn(
             "the old memory directory was tracked by git — commit its removal: "
@@ -312,6 +338,7 @@ def apply(root=None, emitter=None):
         "state_pointer": pointers[0]["path"],
         "memory_pointer": pointers[1]["path"],
         "gitignore": ignore_action,
+        "git_exclude": exclude_action,
         "git_tracked": preview["git_tracked"],
     }
 

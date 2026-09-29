@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+/**
+ * `Doctor` renders what the CLI answered, not what a screen assumed about it.
+ *
+ * Two things a misrendering could get silently wrong: treating `outcome: 'findings'`
+ * (exit 1, a complete report) as an error and showing nothing on the one screen whose
+ * whole purpose is the report, and dropping `hint` from a genuine failure.
+ */
+import '@testing-library/jest-dom/vitest';
+
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { Doctor } from '../../src/renderer/screens/Doctor.js';
+import { doctorReport, fail, fakeBridge, installBridge, ok } from './support.js';
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe('Doctor', () => {
+  it('renders a findings result as the report it is, not as a failure', async () => {
+    const report = doctorReport({
+      status: 'warn',
+      findings: [
+        { level: 'warn', category: 'symlinks', message: 'a skill reference is broken', hint: 'run the symlink repair' },
+      ],
+      actions: ['repaired 2 broken symlinks'],
+    });
+    installBridge(fakeBridge({ doctor: vi.fn(() => Promise.resolve(ok(report, { outcome: 'findings' }))) }));
+
+    render(<Doctor />);
+
+    expect(await screen.findByText('a skill reference is broken')).toBeInTheDocument();
+    expect(screen.getByText('run the symlink repair')).toBeInTheDocument();
+    // The findings-is-not-an-error distinction, stated in the copy the screen itself uses.
+    expect(screen.getByText(/that is a result, not a failure/i)).toBeInTheDocument();
+    // `doctor` is the one mutating command this app runs; what it repaired is a write and
+    // is labelled as one.
+    expect(screen.getByText('repaired 2 broken symlinks')).toBeInTheDocument();
+    expect(screen.getByText(/these were writes/i)).toBeInTheDocument();
+  });
+
+  it('renders an ok: false result as a failure, message and hint both reachable', async () => {
+    installBridge(
+      fakeBridge({
+        doctor: vi.fn(() => Promise.resolve(fail('the store could not be reached', { hint: 'run `devteam doctor --no-project`', kind: 'unavailable' }))),
+      }),
+    );
+
+    render(<Doctor />);
+
+    expect(await screen.findByText('the store could not be reached')).toBeInTheDocument();
+    expect(screen.getByText('run `devteam doctor --no-project`')).toBeInTheDocument();
+    // The report table never renders for a genuine failure.
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing to report when the run found nothing', async () => {
+    installBridge(fakeBridge({ doctor: vi.fn(() => Promise.resolve(ok(doctorReport({ status: 'ok' })))) }));
+
+    render(<Doctor />);
+
+    expect(await screen.findByText(/nothing to report/i)).toBeInTheDocument();
+    expect(screen.getByText('No findings.')).toBeInTheDocument();
+  });
+});

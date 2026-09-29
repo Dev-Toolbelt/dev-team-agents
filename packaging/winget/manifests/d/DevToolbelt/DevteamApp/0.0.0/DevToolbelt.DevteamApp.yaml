@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+
+# DevToolbelt.DevteamApp.yaml — version manifest for the desktop app (ADR-0011,
+# ADR-0015).
+#
+# UNRELEASED SCAFFOLD, and further behind than the CLI's sibling scaffold at
+# ../../Devteam/0.0.0/: no Windows build of the app has ever been produced —
+# `app/electron-builder.yml` had no `win` block at all until the M4.3 closeout
+# that added this manifest set alongside it. PackageVersion "0.0.0" is a
+# placeholder; the version folder this file lives in (0.0.0) must be renamed
+# to the real release version before this is submitted anywhere.
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 by fetching
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.version.1.12.0.json
+# from the microsoft/winget-cli repository and reading its declared $id and
+# required fields directly. See packaging/README.md for the confirmation
+# trail covering all three manifest files.
+
+PackageIdentifier: DevToolbelt.DevteamApp
+PackageVersion: 0.0.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.12.0

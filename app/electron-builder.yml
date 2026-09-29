@@ -59,8 +59,52 @@ mac:
 dmg:
   artifactName: ${productName}-${version}.dmg
 
-# Windows is not wired: ADR-0011's winget row is a placeholder ("`InstallerType: exe` is
-# a placeholder, not a decision") and an Authenticode certificate does not exist either.
-# Adding a `win` block here would imply a decided shape.
+# WINDOWS SHAPE — DECIDED (M4.3 closeout), UNSIGNED BY CONFIGURATION.
+#
+# Target: NSIS producing a single per-user installer .exe, one per architecture. Weighed
+# against the other two electron-builder can produce:
+#   - MSIX/AppX needs a trusted signing identity to install outside the Store at all — even
+#     a self-signed cert requires the user to import it into their trusted root store by hand
+#     before sideloading works. Unsigned MSIX is not "warned", it is refused. Off the table
+#     with no Authenticode certificate (packaging/README.md § Prerequisites — winget app
+#     manifest — records that none exists).
+#   - MSI installs unsigned same as NSIS (a warning, not a refusal) but needs the WiX toolset
+#     wired into the build and buys nothing here: no enterprise GPO deployment story is in
+#     scope, and NSIS is what electron-builder documents as its default, best-supported target.
+#   - NSIS is unsigned-friendly (SmartScreen warns, exactly like the unsigned macOS build's
+#     Gatekeeper prompt — this app already ships that trade-off on one platform), needs no
+#     external toolset, and its generated installer/uninstaller integrate with Add/Remove
+#     Programs without any of this repository writing that logic.
+#
+# perMachine: false — a per-user install needs no admin elevation, which matters more for an
+# UNSIGNED installer than a signed one: an elevated (per-machine) install of unsigned code is
+# the more alarming UAC prompt, and per-user still lets `winget install --scope user` resolve
+# the CLI dependency the same way `devteam-app.rb`'s `depends_on formula: "devteam"` does today.
+# oneClick: false — shows the install-location wizard rather than silently placing files, so a
+# user who sees the unsigned/SmartScreen warning also sees what they are agreeing to.
+#
+# Update/uninstall: NSIS's generated uninstaller is what Add/Remove Programs calls; nothing
+# here implements auto-update (electron-updater is not wired — out of scope for this decision).
+#
+# Signing stays OFF, explicitly, the same way `mac.identity: null` does it above: no
+# `win.certificateFile`/`certificatePassword` keys are set (there is no Authenticode
+# certificate — see the mac block's header and packaging/README.md), and
+# `forceCodeSigning: false` makes a future accidental signing attempt a no-op instead of a
+# build failure if electron-builder ever finds credentials on a build machine's keychain by
+# surprise.
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  # No certificateFile / certificatePassword — deliberately absent. See header above.
+  forceCodeSigning: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}-${arch}.exe
 
 afterAllArtifactBuild: build/after-build.cjs

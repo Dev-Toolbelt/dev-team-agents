@@ -27,7 +27,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { invokeDevteam } from '../src/cli/invoke.js';
 import { ranAndAnswered } from '../src/cli/contract.js';
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
-import { catalogSummary, doctor, listProjects } from '../src/cli/operations.js';
+import { bindProject, catalogSummary, doctor, listProjects, setPin, unbindProject } from '../src/cli/operations.js';
 
 /** `app/test/` → the repository root → `scripts/cli/devteam`. */
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -352,6 +352,82 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     // `compat.READ_ONLY` and are asserted there to create nothing — including not minting
     // a machine identity. This is that claim, checked from the client side.
     expect(await readdir(home)).toEqual([]);
+  });
+
+  // ── write actions, against the real CLI ────────────────────────────────────────
+  //
+  // Everything above reads. These bind, unbind and pin a throwaway project inside the
+  // same disposable `DEVTEAM_HOME` `beforeEach` creates — never the developer's real
+  // store — and prove `cli/operations.ts`'s write functions read the CLI's real shapes,
+  // not a fake's approximation of them (`app/test/ipc.test.ts` covers the main-process
+  // security properties — offered paths, `project_id` resolution — against a fake CLI;
+  // this file is the one place those functions run against the real one).
+
+  it('binds a real project through bindProject(), and reads back the real BindReport shape', async () => {
+    installStoreVersion();
+    const result = await bindProject(context(), work, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`expected success: ${result.message}`);
+    expect(result.outcome).toBe('success');
+    expect(result.data.project_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.data.path).toBe(await realpath(work));
+    expect(result.data.version).toBe(STORE_VERSION);
+    expect(result.data.providers.length).toBeGreaterThan(0);
+    expect(result.data.identity_created).toBe(true);
+    // The argv actually spawned, not a paraphrase of it.
+    expect(result.command).toContain(`bind ${work}`);
+  });
+
+  it('unbindProject removes the registry entry a real bindProject created', async () => {
+    installStoreVersion();
+    const bound = await bindProject(context(), work, {});
+    if (!bound.ok) throw new Error(`expected a successful bind: ${bound.message}`);
+
+    const result = await unbindProject(context(), bound.data.project_id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`expected success: ${result.message}`);
+    expect(result.data.project_id).toBe(bound.data.project_id);
+    expect(result.command).toContain(`unbind --project-id ${bound.data.project_id}`);
+
+    // The unbind actually took: nothing this project_id names is bound any more.
+    const after = await listProjects(context());
+    if (!after.ok) throw new Error('unreachable');
+    expect(after.data.projects.find((p) => p.project_id === bound.data.project_id)).toBeUndefined();
+  });
+
+  it('setPin sets and then releases a real pin, and never sends an empty-string version', async () => {
+    installStoreVersion();
+    const bound = await bindProject(context(), work, {});
+    if (!bound.ok) throw new Error(`expected a successful bind: ${bound.message}`);
+
+    const pinned = await setPin(context(), work, STORE_VERSION);
+    expect(pinned.ok).toBe(true);
+    if (!pinned.ok) throw new Error(`expected success: ${pinned.message}`);
+    expect(pinned.data.pin).toBe(STORE_VERSION);
+
+    const released = await setPin(context(), work, null);
+    expect(released.ok).toBe(true);
+    if (!released.ok) throw new Error(`expected success: ${released.message}`);
+    expect(released.data.pin).toBeNull();
+    // `cmd_pin` refuses `pin ''` outright ("pass a version to pin, or --release to
+    // clear the pin") — a release that reached the CLI as an empty string would have
+    // failed this assertion with a `usage` result, not a successful release.
+    expect(released.outcome).toBe('success');
+  });
+
+  it('surfaces the exit-4 write gate as OperationResult.kind "conflict", a problem the UI can render', async () => {
+    // The end-to-end version of the raw `invokeDevteam` gate test above, through the
+    // same layer the app actually calls: `bindProject()`, not a hand-built argv.
+    installStoreVersion();
+    const declaration = join(home, 'behind.json');
+    await writeFile(declaration, JSON.stringify({ ...APP_STORE_SCHEMAS, project_layout: 1 }));
+    const result = await bindProject({ ...context(), declarationFile: declaration }, work, {});
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.kind).toBe('conflict');
+    expect(result.exitCode).toBe(4);
+    expect(result.message.length).toBeGreaterThan(0);
+    expect(result.hint).toBeDefined();
   });
 });
 

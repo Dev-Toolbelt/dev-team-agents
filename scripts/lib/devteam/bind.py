@@ -51,31 +51,10 @@ def read_manifest(project_id):
     return jsonio.read_json(manifest_file(project_id), default=None) or {}
 
 
-def _local_exclude_file(project_root):
-    """``.git/info/exclude`` for this checkout, when it is a git repository."""
-    git_dir = Path(project_root) / ".git"
-    if git_dir.is_file():
-        # A linked worktree: .git is a file pointing at the real git dir.
-        try:
-            content = git_dir.read_text(encoding="utf-8").strip()
-        except OSError:
-            return None
-        if content.startswith("gitdir:"):
-            resolved = Path(content.split(":", 1)[1].strip())
-            if not resolved.is_absolute():
-                resolved = (Path(project_root) / resolved).resolve()
-            common = resolved / "commondir"
-            if common.is_file():
-                try:
-                    rel = common.read_text(encoding="utf-8").strip()
-                    resolved = (resolved / rel).resolve()
-                except OSError:
-                    pass
-            return resolved / "info" / "exclude"
-        return None
-    if git_dir.is_dir():
-        return git_dir / "info" / "exclude"
-    return None
+# The implementation moved to `gitignore.local_exclude_file`, because `upgrade` needs it
+# too and a second copy of the linked-worktree walk is the kind of duplication that
+# diverges. Kept as a module-level alias so the call sites below read unchanged.
+_local_exclude_file = gitignore.local_exclude_file
 
 
 def symlink_supported(project_root):

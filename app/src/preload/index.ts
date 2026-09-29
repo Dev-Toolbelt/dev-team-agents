@@ -15,7 +15,13 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-import { CHANNELS, type CatalogKind, type DevteamBridge } from '../shared/api.js';
+import {
+  CHANNELS,
+  type BindRequest,
+  type CatalogKind,
+  type DevteamBridge,
+  type ProjectId,
+} from '../shared/api.js';
 
 const bridge: DevteamBridge = {
   buildInfo: () => ipcRenderer.invoke(CHANNELS.buildInfo),
@@ -30,6 +36,30 @@ const bridge: DevteamBridge = {
   catalogListing: (kind: CatalogKind) => ipcRenderer.invoke(CHANNELS.catalogListing, String(kind)),
   catalogEntry: (name: string) => ipcRenderer.invoke(CHANNELS.catalogEntry, String(name)),
   doctor: () => ipcRenderer.invoke(CHANNELS.doctor),
+
+  // Write actions. Every argument is rebuilt into a plain, minimal object here rather
+  // than passed through — the main process validates it again regardless (see
+  // `main/ipc.ts` -> `validateBindRequest`), but this is the same boundary discipline as
+  // `catalogListing` above: nothing the renderer handed this function crosses the bridge
+  // unexamined, including a `BindRequest` it built itself.
+  chooseProjectDirectory: () => ipcRenderer.invoke(CHANNELS.chooseProjectDirectory),
+  bindProject: (request: BindRequest) =>
+    ipcRenderer.invoke(CHANNELS.bindProject, {
+      path: String(request.path),
+      ...(request.providers !== undefined ? { providers: [...request.providers] } : {}),
+      ...(request.mode !== undefined ? { mode: request.mode } : {}),
+      ...(request.pin !== undefined ? { pin: request.pin } : {}),
+    }),
+  unbindProject: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.unbindProject, String(projectId)),
+  syncProject: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.syncProject, String(projectId)),
+  syncAllProjects: () => ipcRenderer.invoke(CHANNELS.syncAllProjects),
+  // `version: null` is a release, and must reach the main process as `null` — never
+  // coerced to the string `"null"` or to `""`, either of which `setPin` in
+  // `cli/operations.ts` would build into an argv `pin --release` does not mean.
+  setPin: (projectId: ProjectId, version: string | null) =>
+    ipcRenderer.invoke(CHANNELS.setPin, String(projectId), version === null ? null : String(version)),
+  planUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.planUpgrade, String(projectId)),
+  applyUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.applyUpgrade, String(projectId)),
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

@@ -107,6 +107,40 @@ def apply_managed_block(path, entries, create=True):
     return True, "updated" if start is not None else "created"
 
 
+def local_exclude_file(project_root):
+    """``.git/info/exclude`` for this checkout, when it is a git repository.
+
+    Lives here rather than in ``bind`` because two commands write that file:
+    ``bind``/``sync`` regenerate its whole managed block from the artifact set, and
+    ``upgrade`` has to add the two layout-2 pointers it creates without erasing the
+    rest of the block. A private copy in ``bind`` made the second caller either
+    import an underscore name or reimplement the linked-worktree walk below.
+    """
+    git_dir = Path(project_root) / ".git"
+    if git_dir.is_file():
+        # A linked worktree: .git is a file pointing at the real git dir.
+        try:
+            content = git_dir.read_text(encoding="utf-8").strip()
+        except OSError:
+            return None
+        if content.startswith("gitdir:"):
+            resolved = Path(content.split(":", 1)[1].strip())
+            if not resolved.is_absolute():
+                resolved = (Path(project_root) / resolved).resolve()
+            common = resolved / "commondir"
+            if common.is_file():
+                try:
+                    rel = common.read_text(encoding="utf-8").strip()
+                    resolved = (resolved / rel).resolve()
+                except OSError:
+                    pass
+            return resolved / "info" / "exclude"
+        return None
+    if git_dir.is_dir():
+        return git_dir / "info" / "exclude"
+    return None
+
+
 def read_managed_entries(path):
     """The entries currently inside the managed block of ``path``."""
     target = Path(path)

@@ -1,5 +1,6 @@
 /**
- * The named operations: their validation, and the claim that this slice writes nothing.
+ * The named operations: their validation, and — since this build's write actions
+ * landed — the argv each one builds and the payload each one reads back.
  */
 
 import { readFileSync } from 'node:fs';
@@ -15,13 +16,33 @@ import {
   READ_ONLY_COMMANDS,
   argvProblem,
   validateEntryName,
+  applyUpgrade,
+  asBindReport,
+  asPinReport,
+  asSyncAllReport,
+  asUnbindReport,
+  asUpgradePlan,
+  asUpgradeReport,
+  bindProject,
   catalogEntry,
   catalogListing,
   listProjects,
+  planUpgrade,
   run,
+  setPin,
+  syncAllProjects,
+  syncProject,
+  unbindProject,
 } from '../src/cli/operations.js';
 import { scanTopLevelJson, parseSingleDocument } from '../src/cli/parse.js';
 import type { CliContext } from '../src/cli/operations.js';
+
+/** A copy of `body` with `key` dropped, for the "missing required key" validator tests. */
+function omit(body: Record<string, unknown>, key: string): Record<string, unknown> {
+  const copy = { ...body };
+  delete copy[key];
+  return copy;
+}
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -85,14 +106,26 @@ describe('what this slice is allowed to run', () => {
     }
   });
 
-  it('declares `doctor` as gated, because the framework classifies it as mutating', () => {
-    // The tension the brief left open: the slice is "read-only" and the diagnosis screen
-    // is `devteam doctor`, which `compat.MUTATING` lists because it repairs what it finds.
-    // This asserts the app admits that rather than filing `doctor` under read-only.
+  it('gates exactly the project lifecycle plus `doctor`, and every one is `compat.MUTATING`', () => {
+    // The tension the brief left open for `doctor` alone: the slice was specified
+    // read-only and the diagnosis screen is `devteam doctor`, which `compat.MUTATING`
+    // lists because it repairs what it finds. The same tension now applies to the five
+    // project-lifecycle commands the write actions added — each one must be admitted
+    // here rather than reclassified as read-only to dodge the gate.
     const { mutating, readOnly } = classificationTables();
-    expect(GATED_COMMANDS.map((command) => command.join(' '))).toEqual(['doctor']);
-    expect(mutating).toContain('("doctor",)');
-    expect(readOnly).not.toContain('("doctor",)');
+    expect(GATED_COMMANDS.map((command) => command.join(' '))).toEqual([
+      'doctor',
+      'bind',
+      'unbind',
+      'sync',
+      'pin',
+      'upgrade',
+    ]);
+    for (const command of GATED_COMMANDS) {
+      const tuple = tupleLiteral(command);
+      expect(mutating, `${command.join(' ')} should be in compat.MUTATING`).toContain(tuple);
+      expect(readOnly, `${command.join(' ')} must not be in compat.READ_ONLY`).not.toContain(tuple);
+    }
   });
 
   it('runs nothing the framework has not classified at all', () => {
@@ -163,12 +196,29 @@ describe('the argv boundary refuses before it spawns', () => {
     expect(result.message).toContain('not a command this app is allowed to run');
   });
 
-  it('refuses every mutating command outside the gated list, and `bind` in particular', async () => {
-    for (const args of [['bind'], ['unbind'], ['prefs', 'set'], ['cred', 'list'], ['update'], ['uninstall']]) {
+  it('refuses every mutating command outside the gated list, and `migrate` in particular', async () => {
+    // `bind`/`unbind`/`sync`/`pin`/`upgrade` moved into the gated list with this app's
+    // write actions; these are the ones that remain refused because nothing in this
+    // build spawns them yet — `migrate` in particular, because it is the project
+    // lifecycle's other mutating command and has no handler.
+    for (const args of [['migrate'], ['export'], ['prefs', 'set'], ['cred', 'list'], ['update'], ['uninstall']]) {
       const result = await run(unspawnable(), args, (body) => body);
       expect(result.ok, args.join(' ')).toBe(false);
       if (result.ok) throw new Error('unreachable');
       expect(result.kind, args.join(' ')).toBe('refused');
+    }
+  });
+
+  it('refuses a `--project-id`-shaped or `--provider`-shaped flag on a command that does not take it', async () => {
+    for (const args of [
+      ['list', '--project-id', 'x'],
+      ['catalog', '--provider', 'claude'],
+      ['doctor', '--all'],
+    ]) {
+      const result = await run(unspawnable(), args, (body) => body);
+      if (result.ok) throw new Error(`expected a refusal for ${args.join(' ')}`);
+      expect(result.kind, args.join(' ')).toBe('refused');
+      expect(result.message, args.join(' ')).toContain('may not be passed');
     }
   });
 
@@ -209,6 +259,232 @@ describe('the argv boundary refuses before it spawns', () => {
 
   it('refuses an empty argv rather than spawning a bare `devteam --json`', () => {
     expect(argvProblem([])).not.toBeNull();
+  });
+});
+
+/**
+ * The write actions' argv, against `unspawnable()` — the binary does not exist, so
+ * `result.command` is the only thing worth reading: it is the exact argv `invokeDevteam`
+ * would have spawned, and every assertion below is about what got into it.
+ */
+describe('the write actions build the argv the CLI documents', () => {
+  it('bindProject repeats --provider once per provider, in a single positional path', async () => {
+    const result = await bindProject(unspawnable(), '/tmp/project', {
+      providers: ['claude', 'codex'],
+      mode: 'link',
+      pin: '3.0.0',
+    });
+    expect(result.command).toContain(
+      'bind /tmp/project --provider claude --provider codex --mode link --pin 3.0.0 --json',
+    );
+  });
+
+  it('bindProject omits every flag it was not given', async () => {
+    const result = await bindProject(unspawnable(), '/tmp/project');
+    expect(result.command).toContain('bind /tmp/project --json');
+    expect(result.command).not.toContain('--provider');
+    expect(result.command).not.toContain('--mode');
+    expect(result.command).not.toContain('--pin');
+  });
+
+  it('unbindProject names its target by --project-id, never a path', async () => {
+    const result = await unbindProject(unspawnable(), 'proj-1');
+    expect(result.command).toContain('unbind --project-id proj-1 --json');
+  });
+
+  it('syncProject names its target by --project-id; syncAllProjects passes --all with no id', async () => {
+    const one = await syncProject(unspawnable(), 'proj-1');
+    expect(one.command).toContain('sync --project-id proj-1 --json');
+    const all = await syncAllProjects(unspawnable());
+    expect(all.command).toContain('sync --all --json');
+    expect(all.command).not.toContain('--project-id');
+  });
+
+  it('setPin(id, version) passes the version and --path; setPin(id, null) is --release, never an empty string', async () => {
+    const versioned = await setPin(unspawnable(), '/tmp/project', '3.1.0');
+    expect(versioned.command).toContain('pin 3.1.0 --path /tmp/project --json');
+    const released = await setPin(unspawnable(), '/tmp/project', null);
+    expect(released.command).toContain('pin --path /tmp/project --release --json');
+    // The one assertion this test exists for: `setPin(id, null)` must never reach the
+    // CLI as `pin ''` or `pin ""`, either of which `cmd_pin` would refuse as "pass a
+    // version to pin, or --release to clear the pin" rather than releasing anything.
+    expect(released.command).not.toContain("pin ''");
+    expect(released.command).not.toContain('pin ""');
+  });
+
+  it('planUpgrade and applyUpgrade pass a path, never a project id, with --apply only on apply', async () => {
+    const plan = await planUpgrade(unspawnable(), '/tmp/project');
+    expect(plan.command).toContain('upgrade /tmp/project --json');
+    expect(plan.command).not.toContain('--apply');
+    const apply = await applyUpgrade(unspawnable(), '/tmp/project');
+    expect(apply.command).toContain('upgrade /tmp/project --apply --json');
+  });
+});
+
+/**
+ * The write-action payload validators, against the real shapes captured from the CLI at
+ * store version 2.48.0 (see `shared/api.ts`'s `BindReport` doc comment). Each one is
+ * checked three ways: the real shape is accepted, an added key is tolerated (ADR-0014
+ * § 2), and a missing required key is reported rather than silently dropped.
+ */
+describe('write-action payload validation, against the real shapes', () => {
+  const bindBody: Record<string, unknown> = {
+    path: '/repo/project',
+    project_id: 'abc-123',
+    version: '2.48.0',
+    mode: 'link',
+    providers: ['claude'],
+    artifacts: 42,
+    identity_created: true,
+    gitignore: '.gitignore',
+    git_exclude: '.git/info/exclude',
+    pin: null,
+    fallback_reason: null,
+    retired: [],
+    merged_project_files: [],
+    pruned: { unlinked: [], quarantined: [] },
+  };
+
+  it('accepts the real `bind`/single-`sync` shape, worktrees included', () => {
+    const result = asBindReport({ ...bindBody, worktrees: [{ path: '/repo/wt' }] });
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.project_id).toBe('abc-123');
+    expect(result.pruned).toEqual({ unlinked: [], quarantined: [] });
+    expect(result.worktrees).toEqual([{ path: '/repo/wt' }]);
+  });
+
+  it('tolerates a key the CLI added that this app does not know yet', () => {
+    const result = asBindReport({ ...bindBody, a_future_field: 'value' });
+    expect(typeof result).not.toBe('string');
+  });
+
+  it('reports a missing required key on `bind` rather than rendering nothing', () => {
+    expect(asBindReport(omit(bindBody, 'artifacts'))).toBe('no numeric `artifacts`');
+  });
+
+  it('accepts the real `sync --all` shape', () => {
+    const result = asSyncAllReport({ synced: [bindBody], problems: [] });
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.synced).toHaveLength(1);
+    expect(result.synced[0]?.project_id).toBe('abc-123');
+  });
+
+  it('reports a missing required key on `sync --all`', () => {
+    expect(asSyncAllReport({ synced: [bindBody] })).toBe('no `problems` array');
+  });
+
+  it('accepts the real `unbind` shape', () => {
+    const result = asUnbindReport({
+      path: '/repo/project',
+      project_id: 'abc-123',
+      unlinked: ['.claude/settings.json'],
+      quarantined: [{ to: '/store/quarantine/abc-123' }],
+      kept: ['project.json'],
+      problems: [],
+    });
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.quarantined).toEqual([{ to: '/store/quarantine/abc-123' }]);
+  });
+
+  it('tolerates an added key on `unbind`', () => {
+    const result = asUnbindReport({
+      path: '/repo/project',
+      project_id: 'abc-123',
+      unlinked: [],
+      quarantined: [],
+      kept: [],
+      problems: [],
+      a_future_field: 'value',
+    });
+    expect(typeof result).not.toBe('string');
+  });
+
+  it('reports a missing required key on `unbind`', () => {
+    expect(
+      asUnbindReport({ project_id: 'abc-123', unlinked: [], quarantined: [], kept: [], problems: [] }),
+    ).toBe('no string `path`');
+  });
+
+  it('accepts the real `pin` shape, a set and a release alike', () => {
+    const versioned = asPinReport({ project_id: 'abc-123', path: '/repo/project', pin: '3.1.0' });
+    if (typeof versioned === 'string') throw new Error(versioned);
+    expect(versioned.pin).toBe('3.1.0');
+    const released = asPinReport({ project_id: 'abc-123', path: '/repo/project', pin: null });
+    if (typeof released === 'string') throw new Error(released);
+    expect(released.pin).toBeNull();
+  });
+
+  it('reports a missing required key on `pin`', () => {
+    expect(asPinReport({ path: '/repo/project', pin: null })).toBe('no string `project_id`');
+  });
+
+  const upgradePlanBody: Record<string, unknown> = {
+    path: '/repo/project',
+    project_id: 'abc-123',
+    from_layout: 1,
+    to_layout: 2,
+    files: 12,
+    source: '.dev-team-agents/user-data',
+    destination: '/store/data/projects/abc-123',
+    state_destination: '/store/data/machines/m1/projects/abc-123',
+    machine_local: ['state.json'],
+    retained: ['docs/project.md'],
+    collisions: [],
+    git_tracked: ['.dev-team-agents/user-data/session-summary.md'],
+    actions: ['copy 12 file(s)'],
+  };
+
+  it('accepts the real `upgrade` plan shape', () => {
+    const result = asUpgradePlan(upgradePlanBody);
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.files).toBe(12);
+    expect(result.git_tracked).toEqual(['.dev-team-agents/user-data/session-summary.md']);
+  });
+
+  it('tolerates an added key on the `upgrade` plan', () => {
+    expect(typeof asUpgradePlan({ ...upgradePlanBody, a_future_field: 'value' })).not.toBe('string');
+  });
+
+  it('reports a missing required key on the `upgrade` plan', () => {
+    expect(asUpgradePlan(omit(upgradePlanBody, 'files'))).toBe('no numeric `files`');
+  });
+
+  it('accepts the real `upgrade --apply` shape', () => {
+    const result = asUpgradeReport({
+      path: '/repo/project',
+      project_id: 'abc-123',
+      from_layout: 1,
+      to_layout: 2,
+      copied: 12,
+      retained: ['docs/project.md'],
+      destination: '/store/data/projects/abc-123',
+      state_destination: '/store/data/machines/m1/projects/abc-123',
+      quarantined: null,
+      state_pointer: '.dev-team-agents/memory-dir',
+      memory_pointer: '.dev-team-agents/memory-dir',
+      git_tracked: [],
+    });
+    if (typeof result === 'string') throw new Error(result);
+    expect(result.quarantined).toBeNull();
+    expect(result.copied).toBe(12);
+  });
+
+  it('reports a missing required key on `upgrade --apply`', () => {
+    expect(
+      asUpgradeReport({
+        path: '/repo/project',
+        project_id: 'abc-123',
+        from_layout: 1,
+        to_layout: 2,
+        copied: 12,
+        retained: [],
+        destination: '/x',
+        quarantined: null,
+        state_pointer: '/x',
+        memory_pointer: '/x',
+        git_tracked: [],
+      }),
+    ).toBe('no string `state_destination`');
   });
 });
 

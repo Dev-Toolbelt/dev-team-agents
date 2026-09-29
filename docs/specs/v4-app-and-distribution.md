@@ -29,7 +29,7 @@ test, the release rewrite extracted from inline YAML and tested, and a CI gate o
 **M4.3 is the Electron app. Its first slice is built and ships to nobody** — `app/` holds the client
 decided by [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md)
 (the stack, where the source lives, which process may spawn, which `devteam` is invoked and what happens
-when none is found), with 133 passing tests and 1 skipped under `app/test/` and a CI gate at
+when none is found), with 201 passing tests and 1 skipped under `app/test/` and a CI gate at
 `.github/scripts/ci/05-app.sh`. Releasing it is still blocked on signing credentials the repository owner
 holds: every build is unsigned by configuration, so its scenario below is `[PARTLY MET]`, clause by
 clause, and not `[MET]`.
@@ -52,7 +52,7 @@ normative compatibility statement.
 
 | Mark | Meaning |
 |------|---------|
-| **[MET]** | Built and asserted, by something named in the scenario itself — either a test that passes today (`tests/test_json_contract.py`, 35 tests; `tests/test_client_gate.py`, 52; `tests/test_packaging.py`, 12; `tests/test_release_bump.py`, 23; all green, in a suite of 396) or, where a test cannot reach it, a **recorded run**: one execution on one maintainer's machine, with its platform and tooling version stated. A recorded run is evidence, not a channel — nothing re-runs it, and a `[MET]` resting on one says so in its own first line. |
+| **[MET]** | Built and asserted, by something named in the scenario itself — either a test that passes today (`tests/test_json_contract.py`, 35 tests; `tests/test_client_gate.py`, 52; `tests/test_packaging.py`, 12; `tests/test_release_bump.py`, 23; all green, in a suite of 407) or, where a test cannot reach it, a **recorded run**: one execution on one maintainer's machine, with its platform and tooling version stated. A recorded run is evidence, not a channel — nothing re-runs it, and a `[MET]` resting on one says so in its own first line. |
 | **[UNVERIFIABLE HERE]** | Stated as the criterion a human must check, against accounts, certificates and third-party review this environment does not have and should not be given. The artifact exists; the criterion has never been exercised. |
 | **[UNBUILT]** | The criterion is stated so the client has something to be built against. No code exists. |
 | **[PARTLY MET]** | Some clauses are asserted by a named test today and the rest are not, so the scenario **as a whole is not met**. Introduced for M4.3, where `[MET]` and `[UNBUILT]` would both be false in opposite directions: the client exists in source and is tested, and nothing about it ships. Every clause carries its own verdict and the test that earns it; a clause with no test named is not met. |
@@ -504,7 +504,7 @@ installs before anyone merges**
 - Given the desktop app (milestone M4.3), whose first slice now exists in `app/` — Electron,
   TypeScript, Vite, React, decided by
   [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
-  with 133 passing tests and 1 skipped under `app/test/` and a CI gate at
+  with 201 passing tests and 1 skipped under `app/test/` and a CI gate at
   `.github/scripts/ci/05-app.sh`
 - When any action in the UI runs
 - Then it invokes `devteam <command> --json` and renders the result
@@ -516,17 +516,34 @@ installs before anyone merges**
     entry of that list is classified by `compat`. Spawning is argv-array and never a shell string
     (*never builds a shell string from the arguments*, *passes arguments as an array, so shell
     metacharacters are inert*).
-  - **Not asserted: "and renders the result."** No test exercises a screen. Nothing compares what a
-    screen displays against what the CLI answered, which is exactly the residual ADR-0015's fourth
-    Risks row names — a misrendered `list` leads a user to a destructive action they take in the
-    terminal, where no gate applies.
+  - **[MET] for "and renders the result", and this is the clause that moved.** `app/test/renderer/`
+    mounts the screens against a stubbed `window.devteam` and compares what is displayed with what the
+    bridge answered: `projects.test.tsx` (11 tests) and `doctor.test.tsx` (3). The assertions were
+    chosen against the failure mode ADR-0015's fourth Risks row names rather than for coverage —
+    `path_exists` is asserted in **all three** states (`true`, `false`, and `null` rendered as *not
+    checked*, never as an affirmative "missing" beside a path that exists), an `ok: true, outcome:
+    'findings'` result renders the report rather than an error, an `ok: false` renders its `message`
+    **and** its `hint`, and a successful write's `notice` is displayed when present and renders nothing
+    when absent.
+  - **The render suite found a real defect on its first pass, which is the evidence that it is testing
+    something.** A row-level write's success notice was unreadable by construction: the write called
+    `reload()`, `useOperation` reset to `loading`, the whole table was replaced by a spinner, and that
+    unmounted the very row whose notice had just been set. A reload now keeps the result already on
+    screen (`useOperation`'s `refreshing`), only the first load blanks it, and the test that documented
+    the defect is now the regression that asserts the notice survives — plus a second one asserting the
+    table stays mounted mid-reload and the refresh is announced.
 - And no bind rule, preference merge or credential resolution exists in the app's own code
   - **[MET] for credential resolution, by non-invocation.** `app/test/operations.test.ts` · *never runs
     `cred get` — a value must not enter this app* asserts no allowed command so much as **starts**
     with `cred`, so no credential value can enter the process by any route the app has.
-  - **Not asserted for the other two.** No `prefs` command is wired, so no merge can be reached — but
-    that is an absence inferred from the command list, not a test. Nothing asserts ADR-0015 § 4's
-    stronger rule that the **main process reads no store file directly** either; it is held by review.
+  - **Not asserted for the other two, unchanged by this round.** No `prefs` command is wired, so no
+    merge can be reached — still an absence inferred from the command list rather than a test, and
+    ADR-0015's second amendment now records *why* `prefs set`/`prefs unset` stay unwired: the cascade has
+    three personal layers, and a UI that edits one without showing which layer answered would
+    misrepresent the model it is editing. Nothing asserts ADR-0015 § 4's stronger rule that the **main
+    process reads no store file directly** either; it is held by review. The bind *rule* is likewise an
+    inference: the app now invokes `bind`, and that it reimplements none of the rule follows from the
+    argv being a `devteam bind` rather than from an assertion.
 - And the app reads the `compat` block before it writes, and when `store_schemas` reports a shape it
   does not understand it degrades to read-only **and says so**
   - **[MET], within the limit that the slice has no write to gate.** The declaration is the app's own
@@ -541,11 +558,16 @@ installs before anyone merges**
     degradation when the handshake cannot complete at all. Against the real gate,
     `app/test/real-cli.test.ts` · *handshakes as behind, read-only, when the app declares an older
     shape* and *is refused with exit 4 on a mutating command when the declaration is behind*.
-  - **Not asserted: "before it writes."** There is no write action in this slice, so the clause is
-    satisfied vacuously. The slice does run one command `compat.MUTATING` classifies — `devteam
-    doctor`, which repairs what it finds — held by the declaration and the framework's exit-4 refusal
-    rather than by its absence; ADR-0015's own amendment records that decision and corrects that ADR's
-    "the first slice is read-only" claim.
+  - **[MET] for "before it writes", and it stopped being vacuous.** The clause used to be satisfied by
+    there being no write to gate. There are now six — `bind`, `unbind`, `sync` (single and `--all`),
+    `pin`, `upgrade` — and every one declares on the invocation that performs it, so the gate re-compares
+    on each call and a store upgraded from a terminal is covered by the app's next call. `app/test/
+    real-cli.test.ts` drives the refusal through an operation rather than a hand-built argv: *is refused
+    with exit 4 on a mutating command when the declaration is behind*. The app also **withholds** write
+    actions itself when its own declaration could not be written, and the gating **fails closed** — before
+    the environment report arrives, write actions are disabled rather than enabled, which is asserted by
+    `app/test/renderer/projects.test.tsx` · *fails closed while the environment is unknown*. ADR-0015's
+    second amendment records which commands remain deliberately unwired and why.
 - And it special-cases `devteam cred get`, which answers `--json` with a conforming error by design
   - **Not met as written, and satisfied in a stronger way.** The app has no special case, because it
     never calls `cred get` at all (ADR-0015 § 7), which the test named above asserts. The exception is
@@ -553,11 +575,13 @@ installs before anyone merges**
     clause is not deleted; it is recorded as not applicable to a client that never reaches the command.
 - And every capability the app exposes remains reachable from the CLI alone, so a user who never
   installs the app loses only the screens
-  - **Not met, and a skeleton cannot establish it.** Every command the slice runs is a `devteam`
-    command by construction, which is what *runs nothing the framework has not classified at all*
-    asserts — but the criterion is about the app's **whole** capability surface, and a first slice with
-    four read screens has barely any surface to test the claim against. It becomes meaningful when
-    write actions land, and nothing mechanical checks it then either.
+  - **Still not met, and now for a better reason than "no surface".** Every command the app runs is a
+    `devteam` command by construction — *runs nothing the framework has not classified at all* asserts
+    exactly that against `compat`'s own tables — so nothing the app does is unreachable from a terminal.
+    What is unasserted is the **converse direction the criterion is really about**: that no capability
+    the UI offers is *only* reachable through the UI. With six write actions this is finally a claim with
+    content, and nothing mechanical checks it: the argument is that `ALLOWED_COMMANDS` is a closed list of
+    CLI subcommands and a reviewer can read it, which is review, not a test.
 - **The scenario as a whole is not met, and no amount of passing tests moves it.** The app is unsigned
   (`CODE_SIGNED = false`, `mac.identity: null`), unreleased, installable by nobody: no cask artifact,
   no winget manifest for the app at all, and `KEEP_ROOT` drops `app/` from every installed project. A
@@ -600,14 +624,25 @@ installs before anyone merges**
   - **Signing, notarisation and release.** Still blocked on credentials the repository owner holds — an
     Apple Developer ID and an Authenticode certificate. Every build is unsigned by configuration, so
     there is no artifact any channel can describe
-  - **A winget manifest for the app.** None exists, at any version, unlike the CLI's scaffold. ADR-0011's
-    channel table promises one; `app/electron-builder.yml` has no `win` block, deliberately, because
-    adding one would imply a Windows packaging shape that is still undecided
-  - **Every write action.** ADR-0015 § 8 sequences them after the declaration seam has been driven by a
-    real client, which has now happened — so this is the next thing in scope, not a permanent exclusion.
-    The one mutating command the slice runs (`devteam doctor`) is not a write action the UI exposes
-  - **Any assertion about what a screen renders.** The tests cover the invocation layer, the declaration
-    and the payload validators; no test opens a window. That gap is ADR-0015's fourth Risks row
+  - ~~**A winget manifest for the app.**~~ **No longer out of scope — scaffolded, and the shape is
+    decided: NSIS, per-user, unsigned by configuration.** `app/electron-builder.yml` has a `win`/`nsis`
+    block and `packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` holds the three manifests,
+    expressing the CLI dependency through `Dependencies.PackageDependencies` — winget's closest
+    equivalent to the cask's `depends_on formula: "devteam"`, and **not** a confirmed winget behaviour.
+    What remains out of scope is everything that needs a built artifact or Windows tooling: real
+    `InstallerUrl`/`InstallerSha256` values, and any run of `winget validate` or `winget install
+    --manifest`. `packaging/README.md` § Verification records those as unverified by name
+  - ~~**Every write action.**~~ **No longer out of scope — built.** ADR-0015 § 8 sequenced them after
+    the declaration seam had been driven by a real client; that happened, and the project lifecycle
+    (`bind`, `unbind`, `sync` single and `--all`, `pin`, `upgrade` as plan-then-apply) is now wired and
+    marked above. What stays out is the rest of `compat.MUTATING` — `update`, `uninstall`, `store
+    install|use|gc`, `export`/`import`, `migrate`, `prefs set|unset`, and every `cred` command — each with
+    its own recorded reason in ADR-0015's second amendment, not as a backlog
+  - ~~**Any assertion about what a screen renders.**~~ **No longer out of scope — `app/test/renderer/`
+    mounts the screens.** What stays out is anything needing a real browser or a packaged build: no test
+    launches Electron, drives the real window, or exercises the native directory picker, so
+    `chooseProjectDirectory`'s dialog is asserted only through its stub. ADR-0015's fourth Risks row is
+    narrowed by this, not closed
   - **A build or release job for the app.** CI typechecks, lints and tests it (`05-app.sh`) and never
     builds an artifact, because a gate that produces an unsigned `.dmg` is shipping, not checking
 - **Implementing the JSON contract's deprecation mechanism.** The *policy* is no longer open: ADR-0014
@@ -842,6 +877,36 @@ installs before anyone merges**
   the pinned Electron's `Info.plist`; the bundle id comes from the build's `appId`). `## Out of Scope`
   now points at ADR-0015 and enumerates what is still excluded and why, instead of excluding the app
   wholesale. No `[MET]` scenario was touched and no framework-side criterion moved.
+- 2026-09-28 | main session | **Test counts re-measured; no mark moved and no criterion changed.** The
+  review round that followed M4.3's first slice added tests on both sides, and the three places in this
+  document that state a count as *current* had gone stale: the python suite is **407** (was 396) and
+  `app/test/` is **139 passing plus 1 skipped** (was 133 plus 1), re-measured with `python3 -m unittest
+  discover -s tests -q` and `npm test` in `app/`. Corrected in § Context, in the `[MET]` legend and in the
+  `[PARTLY MET]` scenario's Given. **The two dated entries above keep their original numbers** — they were
+  accurate when written, and a log that is rewritten to match today stops being a log. Per-file counts in
+  the legend (`test_json_contract.py` 35, `test_client_gate.py` 52, `test_packaging.py` 12,
+  `test_release_bump.py` 23) are unchanged; the growth is in files the legend does not enumerate.
+- 2026-09-29 | main session | **M4.3's second slice: the write actions are wired, the screens are tested,
+  and the Windows shape is decided. The scenario stays `[PARTLY MET]`, and the reason is unchanged.**
+  Three clauses moved to `[MET]` and each names the test that earns it: *"and renders the result"*
+  (`app/test/renderer/projects.test.tsx` 11 tests, `doctor.test.tsx` 3 — `path_exists` asserted in all
+  three states, `findings` rendered as a report rather than an error, `hint` rendered, `notice` displayed
+  and absent); *"before it writes"*, which stopped being vacuous now that there are six writes to gate;
+  and, in Out of Scope, the three exclusions this round built rather than deferred — every write action,
+  the app's winget manifest, and screen assertions — each rewritten to say what **remains** excluded
+  instead of being deleted. Suite: **201 passing, 1 skipped** under `app/test/` (was 139/1), python
+  unchanged at **407**. **The render suite earned its place by failing usefully on its first pass:** a
+  row-level write's success notice was unreadable by construction, because the write's own `reload()`
+  reset `useOperation` to `loading`, blanked the table, and unmounted the row that would have shown it.
+  Fixed by keeping a result on screen across a reload; the test that documented the defect is now the
+  regression. **What did not move, and why it is the same reason as before:** the app is unsigned by
+  configuration on both platforms, no cask or winget artifact exists at any version, and `KEEP_ROOT` drops
+  `app/` from every installed project — a client that ships to nobody cannot satisfy a criterion about
+  what a user who installs it gets. Two clauses are also honestly *re-argued* rather than moved: the
+  preference-merge absence is still inferred from the command list rather than asserted (ADR-0015 now
+  records why `prefs set|unset` stays unwired), and "every capability remains reachable from the CLI
+  alone" is still unasserted — but for a better reason than "no surface to test": with six write actions
+  the claim finally has content, and what checks it is a reviewer reading a closed `ALLOWED_COMMANDS`.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

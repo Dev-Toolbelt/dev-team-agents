@@ -342,3 +342,102 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > resolve to the same directory.** Nothing enforces it; the same collision exists under
 > `%APPDATA%` on Windows. Decision § 4's rule that the main process does not read the store
 > is what made this a write rather than a read, and therefore worse.
+
+> **Amendment (M4.3 closeout) — the app's Windows target is now decided: NSIS, per-user,
+> unsigned by configuration.** This ADR's Risks table names the Windows-side gap twice — "the
+> Windows CLI has no decided packaging shape at all" and "winget has no cask-style dependency
+> anywhere" for the app — and neither row is closed by this amendment. What changes is narrower:
+> `app/electron-builder.yml` previously had no `win` block whatsoever; it now has one, alongside a
+> `packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` scaffold that expresses the CLI
+> dependency the Risks table found missing, via `Dependencies.PackageDependencies: DevToolbelt.Devteam`
+> — winget's closest expressible equivalent to the cask's `depends_on formula: "devteam"`, not a
+> confirmed winget behaviour (nothing here has run `winget validate` to check winget accepts it).
+>
+> The choice itself: NSIS over MSI and AppX/MSIX, for the same reason § 1 of this ADR chose Electron
+> over Tauri and native toolkits by naming what each alternative costs rather than picking the
+> smallest bundle — MSIX requires a trusted signing identity to install outside the Microsoft Store
+> at all (refused unsigned, not merely warned), which this repository cannot produce; MSI needs a
+> toolchain (WiX) this repository does not otherwise need. NSIS installs unsigned with a SmartScreen
+> warning, the same shape of trade-off this app already ships on macOS via an unsigned, Gatekeeper-
+> warned `.dmg`. `packaging/README.md`'s "The Windows app installer shape — decided" section carries
+> the full comparison table.
+>
+> This does not touch § 4's resolution order, § 5's failure-screen behaviour, or § 6's declaration
+> rule — those govern what the app does once installed, and remain platform-agnostic. It also does
+> not sign anything: no Authenticode certificate exists, `app/electron-builder.yml`'s `win` block sets
+> no certificate fields, and `forceCodeSigning: false` is the explicit counterpart to `mac.identity:
+> null` already in the same file. The Risks table's Windows rows are more precisely describable after
+> this amendment, not resolved by it.
+
+---
+
+> **Amendment (M4.3, second slice) — § 8's sequencing condition is met, and the write actions are
+> now wired. § 8's title is left standing as the record of what was decided for the *first* slice;
+> it no longer describes the app.**
+>
+> § 8 made wiring a write conditional on one thing: *"the handshake is unexercised by any client…
+> Wiring a write before a real client has driven the declaration seam means discovering the seam's
+> defects with a user's store as the test fixture."* That condition is discharged. The first slice
+> declared on every invocation, `app/test/real-cli.test.ts` drove the framework's exit-4 refusal end
+> to end against a real store, and the seam's defects were found there rather than in a user's store.
+> So this slice wires the project lifecycle: **`bind`, `unbind`, `sync` (single and `--all`), `pin`
+> (set and release), and `upgrade` (plan, then apply)**.
+>
+> **What is deliberately still not wired, and why each one is a decision rather than a backlog item:**
+>
+> | Command | Why not |
+> |---------|---------|
+> | `update` | Fetches over the network and runs long. The invocation layer is request/response with a timeout and has no progress channel; a UI that shows a frozen window for a minute is worse than a terminal |
+> | `uninstall` | Destroys the store. A button for it does not belong in a client whose first write actions are days old |
+> | `store install` / `store use` / `store gc` | Store administration, not project work. `gc` in particular deletes versions; its `--apply` semantics deserve their own decision |
+> | `export` / `import` | Archive handling, with its own failure modes |
+> | `migrate` | Superseded for a project by `upgrade`, which is wired |
+> | `prefs set` / `prefs unset` | The cascade has three personal layers. A UI that edits one layer without showing which layer answered would misrepresent the model it is editing — that is a screen, not a button |
+> | every `cred` command | § 7 stands unchanged: no allowed command so much as starts with `cred`, asserted by test, so no credential value can enter this process by any route the app has |
+>
+> **Two provenance rules carry the security of this surface, and they are opposites on purpose.**
+>
+> - **Every write names its target by `project_id`, never by path.** The main process resolves the id
+>   against the registry's own `list --json` answer before an argv exists; an id the registry does not
+>   know is refused with nothing spawned. This is what stops a renderer from aiming `unbind` at a
+>   directory of its choosing — it has no way to name one. Where the CLI takes `--path` rather than
+>   `--project-id` (`pin`, `upgrade`), the main process resolves id → path from that same answer, so
+>   the path still originates in the registry and not in the renderer.
+> - **`bind` is the inverse, because it has no existing project to name.** `chooseProjectDirectory()`
+>   opens the native picker **in the main process** and records the chosen path in a session-only
+>   offered set; `bindProject` refuses any path not in that set. Two steps rather than one — a `bind()`
+>   that opened its own dialog would also be safe — because the UI has to show what was chosen and let
+>   the user pick providers and a mode before anything is written. The offered set is what keeps the
+>   two-step safe: the renderer is handed a path it may echo back, and nothing else.
+>
+> **`BuildInfo.noWriteActions: true` is gone, replaced by `hasWriteActions: boolean`.** The old field
+> was typed as the literal `true` and named for the claim rather than the question, which meant the
+> *type system itself* had to be edited to admit a write action. It was, and that is the shape worth
+> recording: a type that encodes a policy will be edited when the policy changes, and the edit is
+> invisible in review next to the feature that motivated it. The field is now a plain boolean, and
+> `mutatingCommandsRun` is derived from `GATED_COMMANDS` rather than hardcoded, so the UI cannot claim
+> a narrower write surface than the app actually has.
+>
+> **The `withheld` contract got a format, because it had none.** `EnvironmentReport.withheld[].command`
+> is the CLI's subcommand words, space-joined. It is the one field both sides of the IPC contract must
+> agree on with no type to enforce it — the renderer decides whether an action is available by matching
+> that string — and a mismatch silently re-enables a button the app meant to withhold. The renderer
+> matches **exactly**, never by prefix, so a future two-word leaf cannot be swallowed by its first word.
+> Gating also **fails closed**: before the environment report arrives, write actions are withheld with
+> a reason worded as a wait, because reading an unanswered precondition as "no objection" would enable
+> writes during precisely the window in which the app has not yet checked whether it can write its own
+> declaration.
+>
+> **One contract gap was found by the implementation and closed rather than worked around.**
+> `devteam bind` in a directory that is not a git repository exits **0** with a complete payload and
+> says on stderr that the bind artifacts were added to no ignore file — which means they can be
+> committed by accident, and the JSON has no field that carries it. `OperationResult`'s success branch
+> gained an optional `notice` for exactly this: a succeeding command's stderr, surfaced in the UI as a
+> success with something to report, not styled as a failure. Without it the app rendered a clean
+> success and dropped the one sentence the user needed.
+>
+> **What this amendment does not change:** the app still ships to nobody. It is unsigned by
+> configuration on both platforms, no cask or winget artifact exists at any version, and `KEEP_ROOT`
+> drops `app/` from every installed project. The spec's scenario for this app therefore stays
+> `[PARTLY MET]`, and the reason is unchanged — not test coverage, but that a client which ships to
+> nobody cannot have satisfied a criterion about what a user who installs it gets.

@@ -14,9 +14,12 @@
 export const CODE_SIGNED = false;
 
 /**
- * The app exposes no write action. One command it runs — `devteam doctor` — is classified
- * mutating by the framework because it repairs what it finds; see
- * `cli/operations.ts` -> `GATED_COMMANDS` for why that is admitted rather than filed under
- * read-only, and what limits it.
+ * Whether this build exposes any write action at all.
+ *
+ * `true`: the project lifecycle — bind, unbind, sync, pin, upgrade — is reachable from
+ * the UI, alongside `devteam doctor`, which was the one mutating command before it. See
+ * `cli/operations.ts` -> `GATED_COMMANDS` for the full list of commands the framework
+ * classifies as mutating that this build runs, and why each was admitted rather than
+ * filed under read-only.
  */
-export const NO_WRITE_ACTIONS = true;
+export const HAS_WRITE_ACTIONS = true;

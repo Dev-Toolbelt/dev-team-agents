@@ -41,6 +41,19 @@ export type OperationResult<T> =
       readonly data: T;
       readonly command: string;
       readonly durationMs: number;
+      /**
+       * What the command wrote to **stderr while succeeding**, when it wrote anything.
+       *
+       * Not diagnostics for a log: the CLI uses stderr to tell the user something the
+       * payload does not carry. `devteam bind` in a directory that is not a git repository
+       * exits 0 with a complete document and says on stderr that the bind artifacts were
+       * added to no ignore file — which means they can be committed by accident, and the
+       * JSON has no field for it. Without this the app would render a clean success and
+       * drop the one sentence the user needed.
+       *
+       * Absent when stderr was empty, so a UI can test for it rather than for `''`.
+       */
+      readonly notice?: string;
     }
   | {
       readonly ok: false;
@@ -208,6 +221,151 @@ export interface DoctorReport {
   readonly actions: readonly string[];
 }
 
+// ── write actions ────────────────────────────────────────────────────────────
+
+/**
+ * Where a mutating command's target came from.
+ *
+ * **Every write action names its target by `project_id`, never by path**, and the main
+ * process resolves that id against the registry's own `list` answer before it builds an
+ * argv. That is the whole security argument for this surface: an id the registry does not
+ * know is refused in the main process, so the renderer cannot aim `unbind` at a directory
+ * of its choosing. A path-taking parameter would have handed it exactly that.
+ *
+ * `bind` is the one command with no existing project to name, and it is handled the other
+ * way round — see `DirectoryChoice`.
+ */
+export type ProjectId = string;
+
+/**
+ * The result of asking the OS for a directory.
+ *
+ * The renderer cannot type a path into `bind`. It calls `chooseProjectDirectory()`, the
+ * **main process** opens the native picker, and the path the user picked is recorded in a
+ * set of directories this session has offered. `bindProject` then refuses any path that is
+ * not in that set.
+ *
+ * Two steps rather than one — a `bind()` that opened its own dialog would be safe too —
+ * because the UI has to show what was chosen and let the user pick providers and a mode
+ * before anything is written. The offered-set is what keeps the two-step safe: the
+ * renderer is handed a path it may echo back and nothing else.
+ */
+export type DirectoryChoice =
+  | { readonly chosen: true; readonly path: string }
+  /** The user dismissed the picker. Not an error, and the UI says nothing about it. */
+  | { readonly chosen: false };
+
+export type BindProvider = 'claude' | 'opencode' | 'codex';
+export type BindMode = 'auto' | 'link' | 'copy' | 'vendored';
+
+/**
+ * What `bind` is asked to do. `path` must be one the main process offered through
+ * `chooseProjectDirectory`; every other field is optional and omitted rather than
+ * defaulted here, so the CLI's own defaults stay the single source of truth.
+ */
+export interface BindRequest {
+  readonly path: string;
+  readonly providers?: readonly BindProvider[];
+  readonly mode?: BindMode;
+  readonly pin?: string | null;
+}
+
+/**
+ * `bind --json` and single-project `sync --json`, which answer with the same document —
+ * `sync` adds `worktrees`, which is why it is optional here rather than two near-identical
+ * interfaces. Keys observed against the real CLI at store version 2.48.0 and pinned by
+ * `app/test/real-cli.test.ts`.
+ */
+export interface BindReport {
+  readonly path: string;
+  readonly project_id: string;
+  readonly version: string;
+  readonly mode: string;
+  readonly providers: readonly string[];
+  readonly artifacts: number;
+  readonly identity_created: boolean;
+  readonly gitignore: string;
+  readonly git_exclude: string;
+  readonly pin: string | null;
+  readonly fallback_reason: string | null;
+  readonly retired: readonly unknown[];
+  /**
+   * Files the CLI merged into the project's own committed config. It prints "commit these
+   * yourself", and the UI has to repeat that: a bind that silently leaves a dirty working
+   * tree is a bind the user discovers from `git status` days later.
+   */
+  readonly merged_project_files: readonly string[];
+  readonly pruned?: { readonly unlinked: readonly string[]; readonly quarantined: readonly unknown[] };
+  readonly worktrees?: readonly unknown[];
+}
+
+/** `sync --all --json`. One entry per project, plus the ones that failed. */
+export interface SyncAllReport {
+  readonly synced: readonly BindReport[];
+  readonly problems: readonly unknown[];
+}
+
+/**
+ * `unbind --json`. `unlinked` is long — 159 entries on a claude-only bind — and the UI
+ * shows its length rather than the list; `quarantined` is the one the user must read,
+ * because it names where their files went.
+ */
+export interface UnbindReport {
+  readonly path: string;
+  readonly project_id: string;
+  readonly unlinked: readonly string[];
+  readonly quarantined: readonly { readonly to?: string }[];
+  readonly kept: readonly string[];
+  readonly problems: readonly unknown[];
+}
+
+/** `pin <version> --json` and `pin --release --json`. */
+export interface PinReport {
+  readonly project_id: string;
+  readonly path: string;
+  readonly pin: string | null;
+}
+
+/**
+ * `upgrade --json` without `--apply`: reads only, and says so in its own first line.
+ *
+ * The preview is not a courtesy. `upgrade` moves a project's memory into the store and
+ * quarantines what it moved; the plan is the only place the user can see `collisions` and
+ * `git_tracked` before any of it happens, and the UI refuses to offer `--apply` until the
+ * plan has been fetched.
+ */
+export interface UpgradePlan {
+  readonly path: string;
+  readonly project_id: string;
+  readonly from_layout: number;
+  readonly to_layout: number;
+  readonly files: number;
+  readonly source: string;
+  readonly destination: string;
+  readonly state_destination: string;
+  readonly machine_local: readonly string[];
+  readonly retained: readonly string[];
+  readonly collisions: readonly string[];
+  readonly git_tracked: readonly string[];
+  readonly actions: readonly string[];
+}
+
+/** `upgrade --apply --json`. */
+export interface UpgradeReport {
+  readonly path: string;
+  readonly project_id: string;
+  readonly from_layout: number;
+  readonly to_layout: number;
+  readonly copied: number;
+  readonly retained: readonly string[];
+  readonly destination: string;
+  readonly state_destination: string;
+  readonly quarantined: string | null;
+  readonly state_pointer: string;
+  readonly memory_pointer: string;
+  readonly git_tracked: readonly string[];
+}
+
 // ── the bridge ───────────────────────────────────────────────────────────────
 
 /** Static facts about the build, so the UI can be honest about what it is. */
@@ -223,14 +381,21 @@ export interface BuildInfo {
    */
   readonly codeSigned: boolean;
   /**
-   * The app offers no write action of its own: no bind, no preference edit, no credential
-   * change. Stated rather than implied, because the next field qualifies it.
+   * Whether this build exposes any write action at all.
+   *
+   * It used to be the literal type `true`, and the field was named for the claim rather
+   * than the question — so the type system itself would have had to be edited to admit a
+   * write action, which is exactly what happened. It is now a boolean, and it is `false`
+   * in this build: the project lifecycle (bind, unbind, sync, pin, upgrade) is reachable
+   * from the UI. Kept rather than deleted, because a build that offers nothing but reads
+   * is a state the UI should still be able to state plainly.
    */
-  readonly noWriteActions: true;
+  readonly hasWriteActions: boolean;
   /**
-   * Commands the app runs that the framework classifies as **mutating**. Today: `doctor`,
-   * which `compat.MUTATING` lists because it repairs what it finds. Surfaced so "read-only"
-   * is not a claim the UI makes that the classification tables contradict.
+   * Commands the app runs that the framework classifies as **mutating**. Surfaced so
+   * "read-only" is not a claim the UI makes that the classification tables contradict —
+   * and now, with write actions wired, so the About surface can enumerate exactly what
+   * this build can change without anyone reading `operations.ts` to find out.
    */
   readonly mutatingCommandsRun: readonly string[];
 }
@@ -266,7 +431,17 @@ export interface EnvironmentReport {
    * app was launched from.
    */
   readonly workingDirectory: string;
-  /** Commands the app is refusing right now, and why. Empty in the ordinary case. */
+  /**
+   * Commands the app is refusing right now, and why. Empty in the ordinary case.
+   *
+   * **`command` is the CLI's own subcommand words, space-joined** — `bind`, `unbind`,
+   * `sync`, `pin`, `upgrade`, `doctor`, and `store gc` for a two-word leaf. Not a channel
+   * name, not a UI label, not a prefixed identifier. Pinned here because it is the one
+   * field both sides of this contract have to agree on without a type to enforce it: the
+   * renderer decides whether an action is available by matching this string against the
+   * command that action would run, and a mismatch silently re-enables a withheld button.
+   * `BuildInfo.mutatingCommandsRun` uses the same spelling for the same reason.
+   */
   readonly withheld: readonly { readonly command: string; readonly reason: string }[];
 }
 
@@ -280,6 +455,23 @@ export interface DevteamBridge {
   readonly catalogListing: (kind: CatalogKind) => Promise<OperationResult<CatalogListing>>;
   readonly catalogEntry: (name: string) => Promise<OperationResult<CatalogDetail>>;
   readonly doctor: () => Promise<OperationResult<DoctorReport>>;
+
+  // Write actions. Each one spawns a command in `compat.MUTATING`, so each one is
+  // refused at exit 4 by the framework's own gate whenever the store is ahead of this
+  // app's declaration — the app does not decide that, it declares and is told.
+  /** Opens the native directory picker in the main process. Spawns nothing. */
+  readonly chooseProjectDirectory: () => Promise<DirectoryChoice>;
+  readonly bindProject: (request: BindRequest) => Promise<OperationResult<BindReport>>;
+  readonly unbindProject: (projectId: ProjectId) => Promise<OperationResult<UnbindReport>>;
+  readonly syncProject: (projectId: ProjectId) => Promise<OperationResult<BindReport>>;
+  readonly syncAllProjects: () => Promise<OperationResult<SyncAllReport>>;
+  /** `version: null` releases the pin, which is `pin --release`, not `pin ""`. */
+  readonly setPin: (
+    projectId: ProjectId,
+    version: string | null,
+  ) => Promise<OperationResult<PinReport>>;
+  readonly planUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradePlan>>;
+  readonly applyUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradeReport>>;
 }
 
 /** The channel names, shared so main and preload cannot disagree about a string. */
@@ -293,4 +485,12 @@ export const CHANNELS = {
   catalogListing: 'devteam:catalog-listing',
   catalogEntry: 'devteam:catalog-entry',
   doctor: 'devteam:doctor',
+  chooseProjectDirectory: 'devteam:choose-project-directory',
+  bindProject: 'devteam:bind-project',
+  unbindProject: 'devteam:unbind-project',
+  syncProject: 'devteam:sync-project',
+  syncAllProjects: 'devteam:sync-all-projects',
+  setPin: 'devteam:set-pin',
+  planUpgrade: 'devteam:plan-upgrade',
+  applyUpgrade: 'devteam:apply-upgrade',
 } as const;
