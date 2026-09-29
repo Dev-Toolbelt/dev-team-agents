@@ -193,6 +193,12 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     child.kill('SIGTERM');
     // A python process wedged in a lock wait does not always honour SIGTERM. The
     // second timer is what makes the deadline a deadline rather than a request.
+    //
+    // On Windows the escalation never fires, and nothing is lost by that: `kill` there is
+    // `TerminateProcess`, which is immediate and cannot be caught or ignored, so the first
+    // signal has already ended the process by the time this timer would run and the
+    // `exitCode`/`signalCode` guard below short-circuits. The deadline is enforced on every
+    // platform; only the two-step mechanism is POSIX-specific.
     const hard = setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) {
         timedOutWith = 'SIGKILL';

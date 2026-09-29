@@ -221,7 +221,11 @@ describe('the binary itself', () => {
 });
 
 describe('timeout', () => {
-  it('kills a hung process, says what timed out, and escalates past an ignored SIGTERM', async () => {
+  // Split from the escalation assertion below, because only one of the two is a property
+  // every platform has. The deadline itself holds everywhere; which signal enforced it
+  // does not, and one test asserting both went red on Windows for a reason that had
+  // nothing to do with whether the timeout worked.
+  it('kills a hung process and says what timed out', async () => {
     // A short kill grace, not the production two seconds: the assertion is that the hard
     // kill fires at all, and waiting out a real 2 s window is what made this test fail on a
     // loaded machine while passing on an idle one.
@@ -229,10 +233,22 @@ describe('timeout', () => {
     expect(result.outcome).toBe('timeout');
     if (result.outcome !== 'timeout') throw new Error('unreachable');
     expect(result.timeoutMs).toBe(1_500);
-    // The fixture ignores SIGTERM, so the deadline only holds if the hard kill fires.
-    expect(result.signal).toBe('SIGKILL');
     expect(result.command.display).toContain('version');
     expect(explain(result)).toContain('1500 ms');
+  });
+
+  // POSIX only, and not a coverage gap: on Windows there is nothing to escalate *past*.
+  // `child.kill('SIGTERM')` there is `TerminateProcess`, which is immediate and cannot be
+  // caught or ignored, so the first signal already ends the process and the grace timer
+  // never fires. The fixture's `process.on('SIGTERM')` handler is simply never consulted.
+  // The deadline is still enforced on Windows — asserted by the test above, which runs
+  // there — so what is skipped is the mechanism, not the guarantee.
+  it.skipIf(process.platform === 'win32')('escalates past a SIGTERM the process ignores', async () => {
+    const result = await run('hang', ['version'], 1_500, 150);
+    expect(result.outcome).toBe('timeout');
+    if (result.outcome !== 'timeout') throw new Error('unreachable');
+    // The fixture ignores SIGTERM, so the deadline only holds if the hard kill fires.
+    expect(result.signal).toBe('SIGKILL');
   });
 });
 
