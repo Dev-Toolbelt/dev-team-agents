@@ -13,23 +13,22 @@
  */
 
 /**
- * The documented exit codes. `1` is **not** a failure: it means the command ran and
- * reported a finding — `devteam doctor` on a store with problems exits 1 with a
- * complete payload, and `devteam compat` exits 1 to say "this client may not write".
- * Conflating 1 with failure is the single most likely way this layer goes wrong, so
- * each code gets its own named outcome rather than a boolean.
+ * The documented exit codes, and the one place that states the set.
+ *
+ * `1` is **not** a failure: it means the command ran and reported a finding —
+ * `devteam doctor` on a store with problems exits 1 with a complete payload, and
+ * `devteam compat` exits 1 to say "this client may not write". Conflating 1 with
+ * failure is the single most likely way this layer goes wrong, so each code gets its
+ * own named outcome rather than a boolean.
+ *
+ * This was previously stated three times — this table, a separate `EXIT` object with
+ * no runtime consumer, and `invoke.ts`'s `isDocumentedExit()` hardcoding the same five
+ * numbers — so a sixth exit code required finding and updating all three, and
+ * TypeScript caught only some of the drift. `ExitCode` and `isDocumentedExit()` are
+ * now both derived from this object's keys; there is nothing else to keep in sync
+ * within this app. (`scripts/lib/devteam/errors.py` states the same set on the Python
+ * side; nothing cross-checks the two languages against each other today.)
  */
-export const EXIT = {
-  ok: 0,
-  findings: 1,
-  usage: 2,
-  environment: 3,
-  conflict: 4,
-} as const;
-
-export type ExitCode = (typeof EXIT)[keyof typeof EXIT];
-
-/** The outcome names this layer maps the exit codes onto, one per code. */
 export const OUTCOME_BY_EXIT = {
   0: 'success',
   1: 'findings',
@@ -38,7 +37,9 @@ export const OUTCOME_BY_EXIT = {
   4: 'conflict',
 } as const;
 
-export type DocumentOutcome = (typeof OUTCOME_BY_EXIT)[keyof typeof OUTCOME_BY_EXIT];
+export type ExitCode = keyof typeof OUTCOME_BY_EXIT;
+
+export type DocumentOutcome = (typeof OUTCOME_BY_EXIT)[ExitCode];
 
 /** `Emitter.emit`: a successful payload. Always carries `ok`. */
 export interface SuccessDocument {

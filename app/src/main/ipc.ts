@@ -157,6 +157,7 @@ export function registerIpc(deps: IpcDependencies): void {
       found: false,
       rejected: resolved.rejected,
       searchedCount: resolved.searched.length,
+      searchedBySource: resolved.searchedBySource,
       remedy: resolved.remedy,
     };
   }

@@ -116,8 +116,9 @@ function describe(binary: string, args: readonly string[]): CommandDescription {
   };
 }
 
+/** Documented iff it is one of `OUTCOME_BY_EXIT`'s own keys — see that object's comment. */
 function isDocumentedExit(code: number): code is ExitCode {
-  return code === 0 || code === 1 || code === 2 || code === 3 || code === 4;
+  return Object.hasOwn(OUTCOME_BY_EXIT, code);
 }
 
 /**

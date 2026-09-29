@@ -47,15 +47,20 @@
 
 import { constants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 
 import { invokeDevteam } from './invoke.js';
 import { ranAndAnswered } from './contract.js';
+import type { CliSource, RejectedCli } from '../shared/api.js';
 
 /** Probe budget. A `version` call touches no locks; slow means wrong, not busy. */
 const PROBE_TIMEOUT_MS = 10_000;
 
-export type ResolutionSource = 'configured' | 'path' | 'homebrew' | 'winget';
+// `CliSource` and `RejectedCli` are declared once, in `shared/api.ts`, and re-exported
+// here under this module's own names so callers of `resolve.ts` need not change. See
+// `declaration.ts`'s `Handshake`/`UnsupportedShape` re-export for the same reasoning.
+export type ResolutionSource = CliSource;
+export type RejectedCandidate = RejectedCli;
 
 export interface ResolvedCli {
   readonly path: string;
@@ -72,10 +77,15 @@ export interface ResolvedCli {
   };
 }
 
-export interface RejectedCandidate {
-  readonly path: string;
+/**
+ * How many candidates were tried under one resolution step. `label` matches the
+ * numbered steps in this file's own header comment, so the screen that renders this
+ * can name the same three steps the header documents rather than inventing new prose.
+ */
+export interface SearchedLocation {
   readonly source: ResolutionSource;
-  readonly reason: string;
+  readonly label: string;
+  readonly count: number;
 }
 
 export type Resolution =
@@ -85,6 +95,15 @@ export type Resolution =
       readonly rejected: readonly RejectedCandidate[];
       /** Where the search looked, in order, for a message that names them. */
       readonly searched: readonly string[];
+      /**
+       * `searched`, grouped by resolution step. ADR-0015 § 5 says the app "shows which
+       * locations it tried" — a bare count of `searched.length` does not, because most
+       * of that count is `PATH` entries with nothing there, which is the ordinary case
+       * and not itself informative. A per-step breakdown (configured path, PATH, this
+       * platform's channel location) names the locations without listing every one of
+       * dozens of `PATH` directories individually.
+       */
+      readonly searchedBySource: readonly SearchedLocation[];
       readonly remedy: readonly string[];
     };
 
@@ -151,6 +170,34 @@ export function knownBinDirs(
   push('/opt/homebrew/bin');
   push('/usr/local/bin');
   return dirs;
+}
+
+/**
+ * Refuse a candidate whose containing directory anyone can write to.
+ *
+ * Whoever can write a `PATH` directory can already plant an executable there and run it
+ * as this user by other means, so this is a defense in depth rather than one that closes
+ * a real gap — the finding that prompted it says as much. It is cheap (one `stat`, and
+ * only once the file itself has already passed `isExecutableFile`, so it is never paid
+ * for the ordinary "not there" candidate) and it means the main process — this app's
+ * most privileged context — does not spawn a binary out of a directory any local user
+ * could have altered, without at least saying so first.
+ *
+ * Posix-only: Node's emulated `mode` on Windows does not reflect the real ACL, so a
+ * check built on it there would be either a false sense of security or false positives.
+ * `configured` is exempt — the user pointed the app here explicitly, which is the one
+ * source this module trusts by design (see the file header on step 1).
+ */
+async function worldWritableDirProblem(directory: string, platform: NodeJS.Platform): Promise<string | null> {
+  if (platform === 'win32') return null;
+  try {
+    const info = await stat(directory);
+    return (info.mode & 0o002) !== 0 ? `${directory} is world-writable` : null;
+  } catch {
+    // Can't stat the directory — let the candidate's own check (which just ran) be the
+    // one that explains why, rather than failing twice for the same underlying cause.
+    return null;
+  }
 }
 
 async function isExecutableFile(candidate: string): Promise<string | null> {
@@ -253,14 +300,28 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
     }
   }
 
+  // One label per step, matching this file's own numbered header comment — the
+  // screen that reports "which locations it tried" names these three steps rather
+  // than a bare count or every individual `PATH` directory.
+  const stepLabel: Record<ResolutionSource, string> = {
+    configured: 'a configured path (DEVTEAM_CLI_PATH or the settings file)',
+    path: 'a PATH entry',
+    homebrew: 'Homebrew bin',
+    winget: 'a winget shim directory',
+  };
+
   const rejected: RejectedCandidate[] = [];
   const searched: string[] = [];
+  const bySource = new Map<ResolutionSource, { label: string; count: number }>();
   const seen = new Set<string>();
 
   for (const candidate of candidates) {
     if (seen.has(candidate.path)) continue;
     seen.add(candidate.path);
     searched.push(candidate.path);
+    const bucket = bySource.get(candidate.source);
+    if (bucket) bucket.count += 1;
+    else bySource.set(candidate.source, { label: stepLabel[candidate.source], count: 1 });
 
     const fileProblem = await isExecutableFile(candidate.path);
     if (fileProblem !== null) {
@@ -270,6 +331,13 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
         rejected.push({ path: candidate.path, source: candidate.source, reason: fileProblem });
       }
       continue;
+    }
+    if (candidate.source !== 'configured') {
+      const dirProblem = await worldWritableDirProblem(dirname(candidate.path), platform);
+      if (dirProblem !== null) {
+        rejected.push({ path: candidate.path, source: candidate.source, reason: dirProblem });
+        continue;
+      }
     }
     const outcome = await probe(candidate.path, candidate.source, candidate.detail);
     if (typeof outcome === 'string') {
@@ -283,11 +351,31 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
     found: false,
     rejected,
     searched,
-    remedy: [
-      'Install the CLI: `brew install dev-toolbelt/devteam/devteam` (macOS).',
-      'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
-      'Or set `cliPath` in the app settings file to the same path.',
-      'The app deliberately ships no copy of the CLI: a bundled, older CLI writing a newer store is the failure ADR-0011 forbids.',
-    ],
+    searchedBySource: [...bySource.entries()].map(([source, { label, count }]) => ({ source, label, count })),
+    remedy: remedyFor(platform),
   };
+}
+
+/**
+ * The remedy is the one thing on the no-CLI screen that used to be true on exactly one
+ * platform: it opened with a `brew install` line and no branch, while `knownBinDirs`
+ * above was fixed specifically so Windows resolution works. ADR-0011 records the
+ * Windows installer shape as still undecided — "a placeholder, not a decision" — so the
+ * Windows branch does not invent a `winget install <package>` line that would imply
+ * one; it says what is actually true today, which is that a Windows user reaches this
+ * CLI only by pointing the app at one directly.
+ */
+function remedyFor(platform: NodeJS.Platform): readonly string[] {
+  const seams = [
+    'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
+    'Or set `cliPath` in the app settings file to the same path.',
+    'The app deliberately ships no copy of the CLI: a bundled, older CLI writing a newer store is the failure ADR-0011 forbids.',
+  ];
+  if (platform === 'win32') {
+    return [
+      'No packaged Windows install exists yet — ADR-0011 records the Windows installer shape as still undecided.',
+      ...seams,
+    ];
+  }
+  return ['Install the CLI: `brew install dev-toolbelt/devteam/devteam` (macOS or Linux via Homebrew).', ...seams];
 }

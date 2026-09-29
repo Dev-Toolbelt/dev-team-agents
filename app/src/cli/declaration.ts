@@ -14,11 +14,13 @@
  * to be present here.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { rm, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { ranAndAnswered, type CliResult } from './contract.js';
+import type { HandshakeView, UnsupportedShape } from '../shared/api.js';
 
 export const APP_STORE_SCHEMAS: Readonly<Record<string, number>> = Object.freeze({
   project: 1,
@@ -38,38 +40,39 @@ export const DECLARATION_FILE_NAME = 'client-schemas.json';
  * inherited, and `compat.client_declaration` documents the flag as winning precisely
  * because an inherited variable is the thing most likely to be stale. A flag on each
  * invocation says what *that* call believes.
+ *
+ * Written to a temp name in the same directory and then renamed into place, rather than
+ * `writeFile(path, …)` directly. A direct write follows a symlink at `path` — a
+ * pre-planted one would have been written through and truncated — and `{ mode: 0o600 }`
+ * is a no-op when the file already exists, so a pre-planted world-writable file would
+ * have kept its permissions. The temp file is created fresh (so its mode is honoured)
+ * and `rename()` replaces whatever is at `path` — symlink or not — as a single
+ * directory-entry swap rather than writing through it.
  */
 export async function writeDeclarationFile(directory: string): Promise<string> {
   const path = join(directory, DECLARATION_FILE_NAME);
-  await writeFile(path, `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  const tempPath = join(directory, `.${DECLARATION_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
+  await writeFile(tempPath, `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+    flag: 'wx', // exclusive create: refuse to follow anything already at the temp name too.
+  });
+  try {
+    await rename(tempPath, path);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
   return path;
 }
 
-export interface UnsupportedShape {
-  readonly store: number;
-  /** null when the app declared nothing for this shape — silence, not a lower number. */
-  readonly client: number | null;
-}
-
-export type Handshake =
-  | {
-      /** The CLI answered. `mayWrite` is the framework's verdict, never inferred here. */
-      readonly state: 'answered';
-      readonly mayWrite: boolean;
-      readonly jsonContract: number | null;
-      readonly minAppVersion: string | null;
-      readonly storeSchemas: Readonly<Record<string, number>>;
-      readonly clientSchemas: Readonly<Record<string, number>>;
-      readonly unsupported: Readonly<Record<string, UnsupportedShape>>;
-      /** Plain-language sentence for the UI. */
-      readonly summary: string;
-    }
-  | {
-      /** The handshake itself could not be completed. Read-only either way. */
-      readonly state: 'unknown';
-      readonly summary: string;
-      readonly detail: string;
-    };
+// `UnsupportedShape` and the handshake view itself are declared once, in `shared/api.ts`
+// — the type-only surface main, preload and renderer all import — and re-exported here
+// under this module's own name so its callers need not change. Restating an identical
+// shape here is what let it drift from `HandshakeView` with no import connecting them;
+// `ipc.ts` bridged the two by direct assignment, relying on structural compatibility.
+export type { UnsupportedShape };
+export type Handshake = HandshakeView;
 
 /**
  * Ask the framework whether this app may write, and translate the answer.

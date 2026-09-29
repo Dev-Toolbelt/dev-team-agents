@@ -77,12 +77,26 @@ export interface RejectedCli {
   readonly reason: string;
 }
 
+/** One resolution step's tally — see `resolve.ts`'s `SearchedLocation`. */
+export interface SearchedLocation {
+  readonly source: CliSource;
+  readonly label: string;
+  readonly count: number;
+}
+
 export type CliResolution =
   | { readonly found: true; readonly cli: CliIdentity; readonly rejected: readonly RejectedCli[] }
   | {
       readonly found: false;
       readonly rejected: readonly RejectedCli[];
       readonly searchedCount: number;
+      /**
+       * `searched`, grouped by resolution step (configured path, PATH, this platform's
+       * channel location). ADR-0015 § 5 says the screen "shows which locations it
+       * tried"; a bare count does not name them, and dozens of individual `PATH`
+       * entries with nothing there would drown a report that listed every one.
+       */
+      readonly searchedBySource: readonly SearchedLocation[];
       readonly remedy: readonly string[];
     };
 
