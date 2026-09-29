@@ -35,10 +35,14 @@ afterEach(() => {
 
 describe('Projects — path_exists is rendered faithfully', () => {
   it('shows a missing badge only for false, never for true or null', async () => {
+    // Paths deliberately do not end in the project's own id — the Project column now
+    // renders both the display name (falling back to the path's basename) and the id
+    // itself, so an id equal to its own basename would make both spans say "exists" and
+    // turn the lookups below into an ambiguous, multi-match query.
     const projects = [
-      project({ project_id: 'exists', path: '/repo/exists', path_exists: true }),
-      project({ project_id: 'gone', path: '/repo/gone', path_exists: false }),
-      project({ project_id: 'unknown', path: '/repo/unknown', path_exists: null }),
+      project({ project_id: 'exists', path: '/repo/dir-a', path_exists: true }),
+      project({ project_id: 'gone', path: '/repo/dir-b', path_exists: false }),
+      project({ project_id: 'unknown', path: '/repo/dir-c', path_exists: null }),
     ];
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))) }));
 
@@ -383,5 +387,207 @@ describe('Projects — a row-level notice survives the reload its own write trig
 
     releaseSecondList();
     await vi.waitFor(() => expect(screen.queryByText(/refreshing the project list/i)).not.toBeInTheDocument());
+  });
+});
+
+describe('Projects — project names: stored, rendered, and falling back to the basename', () => {
+  it('falls back to the directory’s own basename when no name is stored for a project', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() =>
+          Promise.resolve(ok({ current: '2.48.0', projects: [project({ project_id: 'abc-123', path: '/repo/my-app' })] })),
+        ),
+        // The default `fakeBridge` already answers `projectNames` with `{}` — spelled out
+        // here so the point of the test is not hidden in the fixture default.
+        projectNames: vi.fn(() => Promise.resolve({})),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+
+    // The basename is the row's name; the id is still reachable, just no longer the
+    // headline — never a bare UUID with nothing readable beside it.
+    expect(await screen.findByText('my-app')).toBeInTheDocument();
+    expect(screen.getByText('abc-123')).toBeInTheDocument();
+  });
+
+  it('renders the stored name instead of the basename when one is on record', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() =>
+          Promise.resolve(ok({ current: '2.48.0', projects: [project({ project_id: 'abc-123', path: '/repo/my-app' })] })),
+        ),
+        projectNames: vi.fn(() => Promise.resolve({ 'abc-123': 'Storefront' })),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+
+    expect(await screen.findByText('Storefront')).toBeInTheDocument();
+    expect(screen.queryByText('my-app')).not.toBeInTheDocument();
+    expect(screen.getByText('abc-123')).toBeInTheDocument();
+  });
+
+  it('pre-fills the bind dialog’s name field with the chosen directory’s basename, editable', async () => {
+    const user = userEvent.setup();
+    const chooseProjectDirectory = vi.fn<() => Promise<DirectoryChoice>>(() =>
+      Promise.resolve({ chosen: true, path: '/Users/dev/storefront-app' }),
+    );
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory,
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+
+    const nameField = await within(dialog).findByLabelText(/project name/i);
+    expect(nameField).toHaveValue('storefront-app');
+
+    // It is a suggestion, not a fixed value — the user can still change it.
+    await user.clear(nameField);
+    await user.type(nameField, 'Storefront');
+    expect(nameField).toHaveValue('Storefront');
+  });
+
+  it('stores the name the user typed, and the newly bound project renders it in the table after Done', async () => {
+    const user = userEvent.setup();
+    const chooseProjectDirectory = vi.fn<() => Promise<DirectoryChoice>>(() =>
+      Promise.resolve({ chosen: true, path: '/Users/dev/storefront-app' }),
+    );
+    const bindProject = vi.fn(() =>
+      Promise.resolve(ok(bindReport({ project_id: 'proj-new', path: '/Users/dev/storefront-app' }))),
+    );
+    const listProjects = vi
+      .fn()
+      .mockResolvedValueOnce(ok({ current: '2.48.0', projects: [] }))
+      .mockResolvedValue(
+        ok({
+          current: '2.48.0',
+          projects: [project({ project_id: 'proj-new', path: '/Users/dev/storefront-app' })],
+        }),
+      );
+    const projectNames = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValue({ 'proj-new': 'Storefront' });
+    installBridge(fakeBridge({ listProjects, projectNames, chooseProjectDirectory, bindProject }));
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    const nameField = await within(dialog).findByLabelText(/project name/i);
+    await user.clear(nameField);
+    await user.type(nameField, 'Storefront');
+    await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
+
+    // The success step reads as a name, not a bare id — `project_id` is still there, just
+    // no longer the headline.
+    expect(await within(dialog).findByText('Storefront')).toBeInTheDocument();
+    expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'Storefront' }));
+
+    await user.click(within(dialog).getByRole('button', { name: /^done$/i }));
+
+    // The table reflects it after the reload Done triggers.
+    expect(await screen.findByText('Storefront')).toBeInTheDocument();
+    expect(screen.getByText('proj-new')).toBeInTheDocument();
+  });
+});
+
+describe('Projects — the Bind dialog resets fully every time it is reopened', () => {
+  /**
+   * This was a real defect: `onBound` (in `Projects`) closes the dialog by calling the
+   * parent's `onOpenChange` directly, bypassing `BindDialog`'s own `close()`. Pressing
+   * "Bind…" again therefore reopened the same still-mounted dialog with the previous
+   * bind's `bind.state.phase === 'done'` intact, showing the last "… is bound" result
+   * instead of a fresh form. The fix resets on every open, not only on close — this test
+   * pins it.
+   */
+  it('shows a fresh form, not the previous result, the second time it is opened', async () => {
+    const user = userEvent.setup();
+    const chooseProjectDirectory = vi.fn<() => Promise<DirectoryChoice>>(() =>
+      Promise.resolve({ chosen: true, path: '/Users/dev/first-project' }),
+    );
+    const bindProject = vi.fn(() => Promise.resolve(ok(bindReport())));
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory,
+        bindProject,
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+
+    let dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await within(dialog).findByText('/Users/dev/first-project');
+    await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
+    await within(dialog).findByText(/is bound/i);
+
+    await user.click(within(dialog).getByRole('button', { name: /^done$/i }));
+
+    // Reopen. This must be a blank form — not the previous success screen, not the
+    // previous directory choice.
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).queryByText(/is bound/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/no directory chosen yet/i)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/project name/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^bind$/i })).toBeDisabled();
+  });
+});
+
+describe('Projects — filters narrow the list, client-side, and distinguish no-match from nothing-bound', () => {
+  it('filters by text, by mode, and by providers (any-of), and reports a distinct empty state', async () => {
+    const user = userEvent.setup();
+    const projects = [
+      project({ project_id: 'alpha-id', path: '/repo/alpha', mode: 'link', providers: ['claude'] }),
+      project({ project_id: 'beta-id', path: '/repo/beta', mode: 'copy', providers: ['codex'] }),
+    ];
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))) }));
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('alpha');
+    expect(screen.getByText('beta')).toBeInTheDocument();
+    expect(screen.getByText(/showing 2 of 2 projects/i)).toBeInTheDocument();
+
+    // Free-text narrows by name (basename, here — neither project has a stored name).
+    await user.type(screen.getByLabelText(/filter by name or path/i), 'alpha');
+    expect(screen.getByText('alpha')).toBeInTheDocument();
+    expect(screen.queryByText('beta')).not.toBeInTheDocument();
+    expect(screen.getByText(/showing 1 of 2 projects/i)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/filter by name or path/i));
+
+    // The mode select narrows independently.
+    await user.selectOptions(screen.getByLabelText(/^mode$/i), 'copy');
+    expect(screen.getByText('beta')).toBeInTheDocument();
+    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/^mode$/i), 'all');
+
+    // Provider checkboxes are any-of: checking just Codex still surfaces the row with only
+    // Codex, and excludes the Claude-only one.
+    await user.click(screen.getByRole('checkbox', { name: /codex \(openai\)/i }));
+    expect(screen.getByText('beta')).toBeInTheDocument();
+    expect(screen.queryByText('alpha')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /codex \(openai\)/i }));
+
+    // A combination matching nothing is reported distinctly from "nothing is bound yet" —
+    // there is plenty bound, these filters just do not match any of it.
+    await user.type(screen.getByLabelText(/filter by name or path/i), 'no-such-project');
+    expect(await screen.findByText(/no bound project matches these filters/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nothing is bound yet/i)).not.toBeInTheDocument();
   });
 });

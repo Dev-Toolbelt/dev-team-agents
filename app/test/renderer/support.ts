@@ -220,6 +220,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     resolveCli: vi.fn(() => Promise.resolve(cliResolutionFound())),
     handshake: vi.fn(() => Promise.resolve(ok(handshakeView()))),
     listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+    projectNames: vi.fn(() => Promise.resolve({})),
     catalogSummary: vi.fn(),
     catalogListing: vi.fn(),
     catalogEntry: vi.fn(),

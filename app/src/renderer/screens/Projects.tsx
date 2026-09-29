@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,26 @@ import type {
 } from '../../shared/api.js';
 
 const PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
-const MODES: readonly BindMode[] = ['auto', 'link', 'copy', 'vendored'];
+
+// The values sent to the CLI — never change these. The label shown to the user is a
+// separate concern (`PROVIDER_LABELS`, below).
+const PROVIDER_LABELS: Record<BindProvider, string> = {
+  claude: 'Claude Code (Anthropic)',
+  codex: 'Codex (OpenAI)',
+  opencode: 'Opencode',
+};
+
+// `link` first: it is what the app recommends, and putting the recommendation first
+// reads as a recommendation rather than as something buried in a list sorted some other
+// way. The other three keep no particular order among themselves.
+const MODES: readonly BindMode[] = ['link', 'auto', 'copy', 'vendored'];
+
+const MODE_LABELS: Record<BindMode, string> = {
+  link: 'Link',
+  auto: 'Auto',
+  copy: 'Copy',
+  vendored: 'Vendored',
+};
 
 // `link` is what the app recommends — it is the only mode where a store update reaches a
 // bound project with no further step. `auto` stays the CLI's own default (it probes for
@@ -47,6 +67,30 @@ const MODE_DESCRIPTIONS: Record<BindMode, string> = {
   copy: 'For Windows systems without symlink permission. Requires running sync by hand after every update.',
   vendored: 'Also copies the framework in, but commits it into this project’s own repository.',
 };
+
+/**
+ * The last path segment, POSIX or Windows — the picker can hand back either. Falls back
+ * to the whole string on the degenerate input a directory picker never actually returns
+ * (empty, or all separators), so a caller always has something to render.
+ */
+function basename(path: string): string {
+  const trimmed = path.replace(/[/\\]+$/, '');
+  const segments = trimmed.split(/[/\\]/);
+  const last = segments[segments.length - 1];
+  return last !== undefined && last !== '' ? last : path;
+}
+
+/**
+ * The name shown for a project: its stored name, or the directory's own basename.
+ *
+ * The fallback is load-bearing, not cosmetic — see `DevteamBridge.projectNames`'s doc
+ * comment in `shared/api.ts`. It applies identically to a project this app never had the
+ * chance to name (bound from the terminal) and one bound here and left unnamed, so
+ * **no row anywhere in this screen ever renders a bare UUID**.
+ */
+function displayName(path: string, projectId: string, names: Readonly<Record<string, string>>): string {
+  return names[projectId] ?? basename(path);
+}
 
 /**
  * Three states, because the payload has three.
@@ -123,14 +167,57 @@ function WriteButton({
  * component would buy anything for.
  */
 export function Projects({ environment }: { environment: EnvironmentReport | null }) {
-  const { state, refreshing, reload } = useOperation((): ReturnType<typeof window.devteam.listProjects> => window.devteam.listProjects());
+  const { state, refreshing, reload: reloadList } = useOperation((): ReturnType<typeof window.devteam.listProjects> => window.devteam.listProjects());
   const [bindOpen, setBindOpen] = useState(false);
   const syncAll = useAction(() => window.devteam.syncAllProjects());
+
+  // The app's own names, fetched separately from `list` because they live in this app's
+  // settings file, not the store. Re-fetched every time the project list itself reloads —
+  // the only write action that can change this map is `bind`, but re-fetching on every
+  // reload is one effect instead of threading a second, bind-specific refresh through
+  // every call site that already calls `reload()`.
+  const [projectNames, setProjectNames] = useState<Readonly<Record<string, string>>>({});
+  const [namesNonce, setNamesNonce] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void window.devteam.projectNames().then((names) => {
+      if (live) setProjectNames(names);
+    });
+    return () => {
+      live = false;
+    };
+  }, [namesNonce]);
+  function reload() {
+    reloadList();
+    setNamesNonce((n) => n + 1);
+  }
+
+  const [filterText, setFilterText] = useState('');
+  const [filterMode, setFilterMode] = useState<BindMode | 'all'>('all');
+  const [filterProviders, setFilterProviders] = useState<ReadonlySet<BindProvider>>(new Set());
 
   if (state.phase === 'loading') return <Loading what="devteam list" />;
   if (!state.result.ok) return <Problem problem={state.result} />;
 
   const { current, projects } = state.result.data;
+
+  const normalizedFilterText = filterText.trim().toLowerCase();
+  const filteredProjects = projects.filter((project) => {
+    if (normalizedFilterText !== '') {
+      const name = displayName(project.path, project.project_id, projectNames).toLowerCase();
+      if (!name.includes(normalizedFilterText) && !project.path.toLowerCase().includes(normalizedFilterText)) {
+        return false;
+      }
+    }
+    if (filterMode !== 'all' && project.mode !== filterMode) return false;
+    // Any-of, not all-of: three checkboxes that all narrow together would need every one
+    // checked to see a project bound with just one provider, which reads as "everything
+    // is filtered out" the first time someone tries it.
+    if (filterProviders.size > 0 && !project.providers.some((provider) => filterProviders.has(provider as BindProvider))) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <section aria-labelledby="projects-heading" className="space-y-4">
@@ -187,23 +274,60 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
       {projects.length === 0 ? (
         <Empty>Nothing is bound yet. Use Bind above to choose a project directory.</Empty>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">Project</TableHead>
-              <TableHead scope="col">Resolves to</TableHead>
-              <TableHead scope="col">Mode</TableHead>
-              <TableHead scope="col">Providers</TableHead>
-              <TableHead scope="col">Path</TableHead>
-              <TableHead scope="col">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {projects.map((project) => (
-              <ProjectRow key={project.project_id} project={project} environment={environment} onChanged={reload} />
-            ))}
-          </TableBody>
-        </Table>
+        <>
+          <ProjectFilters
+            text={filterText}
+            onText={setFilterText}
+            mode={filterMode}
+            onMode={setFilterMode}
+            providers={filterProviders}
+            onToggleProvider={(provider, checked) => {
+              setFilterProviders((previous) => {
+                const next = new Set(previous);
+                if (checked) next.add(provider);
+                else next.delete(provider);
+                return next;
+              });
+            }}
+          />
+          {/* Announced the same way `refreshing`, above, is — a filter that silently changes
+              which rows are on screen is exactly the kind of update a screen reader user
+              would otherwise miss entirely. */}
+          <p aria-live="polite" className="text-xs text-muted-foreground">
+            Showing {filteredProjects.length} of {projects.length} project{projects.length === 1 ? '' : 's'}.
+          </p>
+          {filteredProjects.length === 0 ? (
+            // Distinct from the "nothing is bound yet" empty state above: that one means
+            // there is nothing to show the user at all, this one means there is something,
+            // just not anything these filters let through — the fix is "loosen a filter",
+            // not "go bind a project".
+            <Empty>No bound project matches these filters.</Empty>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Project</TableHead>
+                  <TableHead scope="col">Resolves to</TableHead>
+                  <TableHead scope="col">Mode</TableHead>
+                  <TableHead scope="col">Providers</TableHead>
+                  <TableHead scope="col">Path</TableHead>
+                  <TableHead scope="col">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProjects.map((project) => (
+                  <ProjectRow
+                    key={project.project_id}
+                    project={project}
+                    environment={environment}
+                    projectNames={projectNames}
+                    onChanged={reload}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </>
       )}
 
       <BindDialog
@@ -228,6 +352,81 @@ function SyncAllSummary({ report }: { report: SyncAllReport }) {
   );
 }
 
+/**
+ * Client-side filtering over the list `Projects` already loaded — there is no `list
+ * --filter`, and the row counts here (a handful, not thousands) do not need one.
+ *
+ * The mode control is a native `<select>` rather than a kit component: this codebase has
+ * no shadcn Select wrapper yet (only `RadioGroup` and `Checkbox` wrap a Radix primitive
+ * here), and a native select is the more accessible and more testable choice for a plain
+ * single-value dropdown — it needs no extra wiring to be keyboard- and
+ * screen-reader-operable. Styled to match `Input` so it does not look like a stray
+ * browser default beside it.
+ */
+function ProjectFilters({
+  text,
+  onText,
+  mode,
+  onMode,
+  providers,
+  onToggleProvider,
+}: {
+  text: string;
+  onText: (value: string) => void;
+  mode: BindMode | 'all';
+  onMode: (value: BindMode | 'all') => void;
+  providers: ReadonlySet<BindProvider>;
+  onToggleProvider: (provider: BindProvider, checked: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-4 rounded-md border border-border p-3">
+      <div className="grid gap-1.5">
+        <Label htmlFor="project-filter-text">Filter by name or path</Label>
+        <Input
+          id="project-filter-text"
+          value={text}
+          onChange={(event) => onText(event.target.value)}
+          placeholder="e.g. my-project or /repo/my-project"
+          className="w-64"
+        />
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor="project-filter-mode">Mode</Label>
+        <select
+          id="project-filter-mode"
+          value={mode}
+          onChange={(event) => onMode(event.target.value as BindMode | 'all')}
+          className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+        >
+          <option value="all">All modes</option>
+          {MODES.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {MODE_LABELS[candidate]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <fieldset className="grid gap-1.5">
+        <legend className="text-sm font-medium">Providers</legend>
+        <div className="flex flex-wrap gap-3">
+          {PROVIDERS.map((provider) => (
+            <div key={provider} className="flex items-center gap-2">
+              <Checkbox
+                id={`filter-provider-${provider}`}
+                checked={providers.has(provider)}
+                onCheckedChange={(checked) => onToggleProvider(provider, checked === true)}
+              />
+              <Label htmlFor={`filter-provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
+            </div>
+          ))}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
 type RowDialog = 'pin' | 'unbind' | 'upgrade' | null;
 
 /**
@@ -239,20 +438,34 @@ type RowDialog = 'pin' | 'unbind' | 'upgrade' | null;
 function ProjectRow({
   project,
   environment,
+  projectNames,
   onChanged,
 }: {
   project: ProjectRecord;
   environment: EnvironmentReport | null;
+  projectNames: Readonly<Record<string, string>>;
   onChanged: () => void;
 }) {
   const [dialog, setDialog] = useState<RowDialog>(null);
   const sync = useAction(() => window.devteam.syncProject(project.project_id));
+  const name = displayName(project.path, project.project_id, projectNames);
 
   return (
     <TableRow>
-      <TableCell className="font-mono text-xs">{project.project_id}</TableCell>
       <TableCell>
-        {project.resolves_to ?? '—'}
+        <div className="flex flex-col">
+          <span className="font-medium">{name}</span>
+          {/* The framework's own identity, kept reachable — a user debugging with the CLI
+              needs it, even though it is no longer the headline. */}
+          <span className="font-mono text-xs text-muted-foreground">{project.project_id}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        {project.resolves_to !== null ? (
+          <Badge variant="outline">{project.resolves_to}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
         {project.pin !== null ? (
           <Badge variant="secondary" className="ml-2">
             pinned {project.pin}
@@ -332,6 +545,7 @@ function ProjectRow({
         open={dialog === 'upgrade'}
         onOpenChange={(open) => setDialog(open ? 'upgrade' : null)}
         projectId={project.project_id}
+        name={name}
         onApplied={onChanged}
       />
     </TableRow>
@@ -533,11 +747,13 @@ function UpgradeDialog({
   open,
   onOpenChange,
   projectId,
+  name,
   onApplied,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  name: string;
   onApplied: () => void;
 }) {
   const plan = useAction(() => window.devteam.planUpgrade(projectId));
@@ -562,7 +778,10 @@ function UpgradeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Upgrade {projectId}</DialogTitle>
+          <DialogTitle>
+            Upgrade {name}
+            <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{projectId}</span>
+          </DialogTitle>
           <DialogDescription>
             Moves this project&apos;s memory into the store and quarantines what it moved. Nothing changes until
             Apply is confirmed below.
@@ -708,28 +927,54 @@ function BindDialog({
   onBound: () => void;
 }) {
   const [path, setPath] = useState<string | null>(null);
+  const [name, setName] = useState('');
   const [providers, setProviders] = useState<ReadonlySet<BindProvider>>(new Set());
   const [mode, setMode] = useState<BindMode>(RECOMMENDED_MODE);
   const choose = useAction(() => window.devteam.chooseProjectDirectory());
   const bind = useAction(() => {
     if (path === null) throw new Error('bind requested with no directory chosen');
+    const trimmedName = name.trim();
     return window.devteam.bindProject({
       path,
       ...(providers.size > 0 ? { providers: Array.from(providers) } : {}),
       mode,
+      // An empty field means "no name" — the fallback to the directory's basename lives at
+      // render time (`displayName`), not here, so an empty string is never what gets
+      // stored. See `BindRequest.name`'s doc comment in `shared/api.ts`.
+      ...(trimmedName !== '' ? { name: trimmedName } : {}),
     });
   });
 
-  function close() {
+  function resetForm() {
     setPath(null);
+    setName('');
     setProviders(new Set());
     setMode(RECOMMENDED_MODE);
     choose.reset();
     bind.reset();
+  }
+
+  function close() {
+    resetForm();
     onOpenChange(false);
   }
 
+  // Reset on every **open**, not only on close. `onBound` (in `Projects`) closes this
+  // dialog by calling the parent's `onOpenChange` directly — the "Done" button's own path
+  // — which bypasses `close()` above entirely. Without this effect, `BindDialog` stayed
+  // mounted with `bind.state.phase === 'done'` from the previous bind, so pressing
+  // "Bind…" again reopened the dialog still showing the last "Bound …" result instead of
+  // a fresh form. Keyed on `open` alone: a reset is idempotent, so running it again on an
+  // already-blank form (the ordinary first-open case) costs nothing.
+  useEffect(() => {
+    if (open) resetForm();
+    // Keyed on `open` alone, deliberately: `resetForm` is a fresh closure every render
+    // and is not itself part of what should re-trigger this effect — see `UpgradeDialog`'s
+    // identical `[open, projectId]` effect above for the same reasoning.
+  }, [open]);
+
   const bound = bind.state.phase === 'done' && bind.state.result.ok ? bind.state.result.data : null;
+  const boundName = name.trim() !== '' ? name.trim() : path !== null ? basename(path) : '';
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
@@ -740,26 +985,59 @@ function BindDialog({
         </DialogHeader>
 
         {bound !== null ? (
-          <BindResultSummary report={bound} />
+          <BindResultSummary report={bound} name={boundName} />
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
               <Button
                 type="button"
-                variant="outline"
+                variant={path === null ? 'outline' : 'link'}
                 size="sm"
+                className={path === null ? undefined : 'h-auto px-0'}
                 onClick={() => {
                   void choose.run().then((choice) => {
                     // `{ chosen: false }` is a dismissed picker, not an error — say nothing,
-                    // change nothing, leave any previously chosen path as it was.
-                    if (choice.chosen) setPath(choice.path);
+                    // change nothing, leave any previously chosen path (and name) as it was.
+                    if (choice.chosen) {
+                      setPath(choice.path);
+                      setName(basename(choice.path));
+                    }
                   });
                 }}
               >
                 {path === null ? 'Choose directory…' : 'Choose a different directory…'}
               </Button>
-              <p className="font-mono text-xs text-muted-foreground">{path ?? 'No directory chosen yet.'}</p>
+
+              {path === null ? (
+                <p className="font-mono text-xs text-muted-foreground">No directory chosen yet.</p>
+              ) : (
+                // Colour is never the only signal: the icon and the word "chosen" carry the
+                // same fact for a colour-blind user, and both are in the accessible name a
+                // screen reader announces — the border alone would tell neither.
+                <div className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200">
+                  <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    Directory chosen: <span className="font-mono text-xs">{path}</span>
+                  </span>
+                </div>
+              )}
             </div>
+
+            {path !== null ? (
+              <div className="grid gap-2">
+                <Label htmlFor="bind-project-name">Project name</Label>
+                <Input
+                  id="bind-project-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={basename(path)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown in this app only, on this machine — never sent to the framework. Leave it as the
+                  suggested name, or clear it to fall back to the directory name everywhere it is shown.
+                </p>
+              </div>
+            ) : null}
 
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Providers</legend>
@@ -778,7 +1056,7 @@ function BindDialog({
                       });
                     }}
                   />
-                  <Label htmlFor={`provider-${provider}`}>{provider}</Label>
+                  <Label htmlFor={`provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
                 </div>
               ))}
             </fieldset>
@@ -796,7 +1074,7 @@ function BindDialog({
                     />
                     <div>
                       <Label htmlFor={`mode-${candidate}`}>
-                        {candidate}
+                        {MODE_LABELS[candidate]}
                         {candidate === RECOMMENDED_MODE ? ' (recommended)' : ''}
                       </Label>
                       <p id={`mode-${candidate}-description`} className="text-xs text-muted-foreground">
@@ -839,14 +1117,16 @@ function BindDialog({
  * `merged_project_files` is repeated here in plain language, not just listed: a bind that
  * silently dirties the working tree is discovered days later from `git status`.
  */
-function BindResultSummary({ report }: { report: BindReport | null }) {
+function BindResultSummary({ report, name }: { report: BindReport | null; name: string }) {
   if (report === null) return null;
   return (
     <div className="space-y-2 text-sm">
       <p>
-        Bound <span className="font-mono text-xs">{report.project_id}</span> at version {report.version}, mode{' '}
-        {report.mode}.
+        <strong className="font-semibold">{name}</strong> is bound — version {report.version}, mode {report.mode}.
       </p>
+      {/* The framework's own identity: still visible for a user debugging with the CLI,
+          but no longer the headline — see the table's Project column for the same choice. */}
+      <p className="font-mono text-xs text-muted-foreground">{report.project_id}</p>
       {report.merged_project_files.length > 0 ? (
         <div>
           <p className="font-medium">
