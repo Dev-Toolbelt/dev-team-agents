@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from 'vitest';
 
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
+import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 
@@ -24,14 +25,23 @@ const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.ur
  * cannot route the fake CLI through `node` to make it executable on Windows — there is
  * no seam to insert an interpreter ahead of the subcommand. `FAKE` has to be `binary`
  * itself, and a `.mjs` script has no Windows-native way to run directly (see
- * `invoke.test.ts`'s `fakeCli()` comment for the general shape of the problem), so every
- * test built on this helper is skipped there — see each `it.skipIf` below.
+ * `invoke.test.ts`'s `fakeCli()` comment for the general shape of the problem). On
+ * Windows, `FAKE_BINARY` is instead the compiled launcher `launcher-global-setup.ts`
+ * built — a real PE `spawn(..., { shell: false })` can execute — when one was built;
+ * `launcherAvailable` says whether it was, and gates every `it.skipIf` below that isn't
+ * skipped for the separate, POSIX-mode-bit reason this file's own comments name.
  */
+const { binary: FAKE_BINARY, available: launcherAvailable } = resolveFixtureBinary(
+  FAKE,
+  readLauncherManifest()?.fakeDevteam,
+);
+
 function handshake(scenario: string) {
-  return performHandshake({ binary: FAKE, env: { FAKE_DEVTEAM_SCENARIO: scenario } });
+  return performHandshake({ binary: FAKE_BINARY, env: { FAKE_DEVTEAM_SCENARIO: scenario } });
 }
 
 const skipOnWindows = process.platform === 'win32';
+const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
 describe('the declaration is the app’s own constant', () => {
   it('names every shape `store_schemas()` declares', () => {
@@ -120,7 +130,7 @@ describe('the declaration is the app’s own constant', () => {
   });
 });
 
-describe.skipIf(skipOnWindows)('compatible', () => {
+describe.skipIf(skipOnWindowsWithoutLauncher)('compatible', () => {
   it('reports may_write true and echoes the shapes', async () => {
     const view = await handshake('compat-compatible');
     expect(view.state).toBe('answered');
@@ -132,7 +142,7 @@ describe.skipIf(skipOnWindows)('compatible', () => {
   });
 });
 
-describe.skipIf(skipOnWindows)('behind', () => {
+describe.skipIf(skipOnWindowsWithoutLauncher)('behind', () => {
   it('treats the exit-1 answer as a verdict, not a failure, and stays read-only', async () => {
     const view = await handshake('compat-behind');
     expect(view.state).toBe('answered');
@@ -159,14 +169,14 @@ describe('when the handshake cannot be completed', () => {
     expect(view.summary).toContain('read-only');
   });
 
-  it.skipIf(skipOnWindows)('degrades to read-only on a non-conforming answer', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('degrades to read-only on a non-conforming answer', async () => {
     const view = await handshake('two-documents');
     expect(view.state).toBe('unknown');
     if (view.state !== 'unknown') throw new Error('unreachable');
     expect(view.detail).toContain('one JSON document');
   });
 
-  it.skipIf(skipOnWindows)('degrades to read-only when the CLI reports an error', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('degrades to read-only when the CLI reports an error', async () => {
     const view = await handshake('environment');
     expect(view.state).toBe('unknown');
     if (view.state !== 'unknown') throw new Error('unreachable');

@@ -36,6 +36,7 @@ import {
 } from '../src/cli/operations.js';
 import { scanTopLevelJson, parseSingleDocument } from '../src/cli/parse.js';
 import type { CliContext } from '../src/cli/operations.js';
+import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 /** A copy of `body` with `key` dropped, for the "missing required key" validator tests. */
 function omit(body: Record<string, unknown>, key: string): Record<string, unknown> {
@@ -52,10 +53,6 @@ function unspawnable(): CliContext {
   return { binary: join(REPO_ROOT, 'no-such-devteam-binary'), cwd: REPO_ROOT };
 }
 
-function fakeContext(scenario = 'ok'): CliContext {
-  return { binary: FAKE, cwd: REPO_ROOT, env: { FAKE_DEVTEAM_SCENARIO: scenario } };
-}
-
 /**
  * `fakeContext()` hands `CliContext.binary` straight to `invokeDevteam`, which spawns it
  * with `shell: false` — the same policy `invoke.ts` documents for the real CLI. `FAKE` is
@@ -64,10 +61,22 @@ function fakeContext(scenario = 'ok'): CliContext {
  * `invoke.test.ts`'s `run()`, this file cannot route around that by handing `node` the
  * script path as an argument: `operations.ts` itself decides the argv (`bind`, `list`, …)
  * from `context.binary` onward, so there is no seam here to insert an interpreter ahead
- * of the subcommand without changing production code for a test's sake. Every test that
- * needs the fixture to actually answer is skipped on Windows below.
+ * of the subcommand without changing production code for a test's sake. `FAKE_BINARY` is
+ * the compiled launcher `launcher-global-setup.ts` built instead, on Windows, when one
+ * built successfully; `launcherAvailable` says whether it did, and gates every
+ * `it.skipIf` below.
  */
+const { binary: FAKE_BINARY, available: launcherAvailable } = resolveFixtureBinary(
+  FAKE,
+  readLauncherManifest()?.fakeDevteam,
+);
+
+function fakeContext(scenario = 'ok'): CliContext {
+  return { binary: FAKE_BINARY, cwd: REPO_ROOT, env: { FAKE_DEVTEAM_SCENARIO: scenario } };
+}
+
 const skipOnWindows = process.platform === 'win32';
+const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
 /**
  * `source.indexOf(marker)`, except a missing marker throws instead of returning -1.
@@ -562,7 +571,7 @@ describe('catalog entry names', () => {
 });
 
 describe('payload validation', () => {
-  it.skipIf(skipOnWindows)('reports a missing required key as a contract breach rather than rendering nothing', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('reports a missing required key as a contract breach rather than rendering nothing', async () => {
     // `ok` emits `{ok, argv, current}` — no `projects`.
     const result = await listProjects(fakeContext('ok'));
     expect(result.ok).toBe(false);
@@ -579,7 +588,7 @@ describe('payload validation', () => {
     expect(result.durationMs).toBe(0);
   });
 
-  it.skipIf(skipOnWindows)('carries a malformed catalog entry’s flag and error into the row', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('carries a malformed catalog entry’s flag and error into the row', async () => {
     const result = await catalogListing(fakeContext('catalog-malformed'), 'skills');
     if (!result.ok) throw new Error(`expected a payload: ${result.message}`);
     const broken = result.data.entries.find((entry) => entry.name === 'broken');
@@ -598,7 +607,7 @@ describe('payload validation', () => {
  * validated against zero rows. This block validates it against rows; `real-cli.test.ts`
  * does the same against a real, non-empty listing.
  */
-describe.skipIf(skipOnWindows)('the project row mapping', () => {
+describe.skipIf(skipOnWindowsWithoutLauncher)('the project row mapping', () => {
   it('distinguishes true, false and unknown, and maps the rest of the row', async () => {
     const result = await listProjects(fakeContext('list-projects'));
     if (!result.ok) throw new Error(`expected a payload: ${result.message}`);
@@ -626,7 +635,7 @@ describe.skipIf(skipOnWindows)('the project row mapping', () => {
  * ternary fell through to `'environment'` — so an exit-1 error document was titled "The
  * environment is not ready".
  */
-describe.skipIf(skipOnWindows)('an error document gets the label its exit code means', () => {
+describe.skipIf(skipOnWindowsWithoutLauncher)('an error document gets the label its exit code means', () => {
   const cases: readonly [string, string, number][] = [
     ['findings-error-document', 'findings', 1],
     ['usage', 'usage', 2],

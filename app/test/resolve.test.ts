@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { knownBinDirs, knownLocationSource, resolveDevteam } from '../src/cli/resolve.js';
+import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 
@@ -25,14 +26,21 @@ const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.ur
  * `plant()` below stands in for a real installed CLI: `resolveDevteam` decides the
  * candidate path itself and spawns it directly with `shell: false` (`invoke.ts`'s
  * policy), so — unlike `invoke.test.ts`'s `fakeCli()` — there is no seam here to route
- * through `node` instead. The wrapper it writes is a `#!/bin/sh` script, which only
- * POSIX can run directly; Windows has no shebang support, and Node's own `spawn` refuses
- * to launch a `.bat`/`.cmd` without `shell: true` besides (CVE-2024-27980), which
- * `invoke.ts` deliberately never sets. Every test that needs a planted candidate to
- * actually answer is skipped on Windows below; the ones that only assert on
- * `knownBinDirs` or on a rejection reached before a spawn is attempted are unaffected.
+ * through `node` instead. On POSIX the wrapper `plant()` writes is a `#!/bin/sh`
+ * script; on Windows it copies the compiled launcher `launcher-global-setup.ts` built
+ * (see `launcherAvailable` below), a real PE, because Windows honours no `#!` line and
+ * Node's own `spawn` refuses to launch a `.bat`/`.cmd` without `shell: true` besides
+ * (CVE-2024-27980), which `invoke.ts` deliberately never sets. When the launcher could
+ * not be built (no compiler, or the compile failed), every test that needs a planted
+ * candidate to actually answer stays skipped on Windows; the ones that only assert on
+ * `knownBinDirs` or on a rejection reached before a spawn is attempted are unaffected
+ * either way.
  */
 const skipOnWindows = process.platform === 'win32';
+const launcherManifest = readLauncherManifest();
+const { available: launcherAvailable } = resolveFixtureBinary(FAKE, launcherManifest?.fakeDevteam);
+/** Guards every `plant()`-dependent test that has no POSIX-mode-bit reason to skip. */
+const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
 let root: string;
 
@@ -41,6 +49,21 @@ async function plant(dir: string, scenario: string): Promise<string> {
   const target = join(root, dir);
   await mkdir(target, { recursive: true });
   const path = join(target, 'devteam');
+  if (process.platform === 'win32') {
+    // `skipOnWindowsWithoutLauncher` gates every caller, so `launcherManifest`'s path
+    // is present whenever this branch actually runs.
+    const launcherPath = launcherManifest?.fakeDevteam.path;
+    if (launcherPath === null || launcherPath === undefined) {
+      throw new Error('plant() called on Windows without a built launcher — a missing skipIf guard');
+    }
+    await copyFile(launcherPath, path);
+    // `resolveDevteam`'s probe never passes `invokeDevteam` a custom `env` (see
+    // `resolve.ts`'s `probe()`), so — same reason as the POSIX wrapper below — the
+    // scenario cannot travel through the environment. `launcher.c` reads this sibling
+    // file at startup instead.
+    await writeFile(`${path}.scenario`, scenario, 'utf8');
+    return path;
+  }
   await copyFile(FAKE, path);
   // The fake reads its scenario from the environment, which `resolveDevteam` does not
   // forward — so it is baked into a shell wrapper instead. A wrapper is also a fair
@@ -61,7 +84,7 @@ afterEach(async () => {
 });
 
 describe('order', () => {
-  it.skipIf(skipOnWindows)('prefers DEVTEAM_CLI_PATH over everything on PATH', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('prefers DEVTEAM_CLI_PATH over everything on PATH', async () => {
     const configured = await plant('configured', 'version-with-compat');
     const onPath = await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -75,7 +98,7 @@ describe('order', () => {
     expect(resolution.cli.path).not.toBe(onPath);
   });
 
-  it.skipIf(skipOnWindows)('prefers the settings-file path over PATH too, and names which seam won', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('prefers the settings-file path over PATH too, and names which seam won', async () => {
     const configured = await plant('configured', 'version-with-compat');
     await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -88,7 +111,7 @@ describe('order', () => {
     expect(resolution.cli.sourceDetail).toContain('settings file');
   });
 
-  it.skipIf(skipOnWindows)('falls back to PATH, honouring PATH order', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('falls back to PATH, honouring PATH order', async () => {
     const first = await plant('bin-a', 'version-with-compat');
     await plant('bin-b', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -100,7 +123,11 @@ describe('order', () => {
     expect(resolution.cli.source).toBe('path');
   });
 
-  it.skipIf(skipOnWindows)('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
+  // Homebrew itself is not a Windows concept, but `platform: 'darwin'` below is what
+  // `resolveDevteam` actually branches on — the real host only has to be able to spawn
+  // whatever `plant()` puts on disk, which is exactly what the launcher makes true on
+  // Windows too. So this is gated on the launcher, not left Windows-skipped outright.
+  it.skipIf(skipOnWindowsWithoutLauncher)('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
     // Deliberately *not* injecting `knownLocations`: this is the one test whose subject is
     // the derivation, and it stays machine-independent because `knownBinDirs` puts
     // `$HOMEBREW_PREFIX/bin` ahead of the two conventional prefixes, so a real
@@ -116,7 +143,7 @@ describe('order', () => {
     expect(resolution.cli.path).toBe(join(brewPrefix, 'bin', 'devteam'));
   });
 
-  it.skipIf(skipOnWindows)('reads the store version and compat block from the probe, so the UI needs no second call', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('reads the store version and compat block from the probe, so the UI needs no second call', async () => {
     const path = await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({ env: { PATH: join(root, 'bin') }, platform: 'darwin' });
     if (!resolution.found) throw new Error('expected a CLI');
@@ -156,7 +183,7 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
     expect(knownLocationSource('win32')).toBe('winget');
   });
 
-  it.skipIf(skipOnWindows)('finds a CLI in a Windows channel location, under every shim name', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('finds a CLI in a Windows channel location, under every shim name', async () => {
     const localAppData = join(root, 'AppData');
     const links = join(localAppData, 'Microsoft', 'WinGet', 'Links');
     await plant(join('AppData', 'Microsoft', 'WinGet', 'Links'), 'version-with-compat');
@@ -174,7 +201,7 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
 });
 
 describe('a candidate must answer, not merely exist', () => {
-  it.skipIf(skipOnWindows)('rejects a program called devteam that has no compat block', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('rejects a program called devteam that has no compat block', async () => {
     await plant('bin', 'version-no-compat');
     const good = await plant('bin2', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -248,6 +275,8 @@ describe('a candidate must answer, not merely exist', () => {
     expect(resolution.rejected[0]?.reason).toContain('world-writable');
   });
 
+  // Stays POSIX-only even with the Windows launcher available: the point being
+  // asserted is `chmod(dir, 0o777)`, and NTFS has no world-writable bit for it to set.
   it.skipIf(skipOnWindows)('trusts a configured path even out of a world-writable directory — the user overrode the search', async () => {
     const cli = await plant('configured', 'version-with-compat');
     await chmod(join(root, 'configured'), 0o777);

@@ -21,21 +21,32 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import type * as IpcModule from '../src/main/ipc.js';
 import type * as ApiModule from '../src/shared/api.js';
+import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam-write.mjs', import.meta.url));
 
 /**
- * `registerAgainstFake` points the app's own settings file at `FAKE` as `cliPath`,
- * which `main/ipc.ts` hands to `invokeDevteam` as `binary` — spawned with `shell: false`
- * (`invoke.ts`'s policy for the real CLI too). `FAKE` is a `.mjs` script: POSIX runs it
- * via its shebang, Windows has neither shebang support nor a `.mjs` association, so the
- * spawn cannot start it. There is no seam here (as there is in `invoke.test.ts`'s
- * `fakeCli()`) to insert `node` ahead of the subcommand, because `main/ipc.ts` decides
- * that argv from `cliPath` onward, not this test. Only the tests below that need the
- * fixture to actually answer are skipped on Windows; the ones that only check the argv
- * built for a refusal, or that never call the CLI at all, are unaffected.
+ * `registerAgainstFake` points the app's own settings file at `FAKE_BINARY` as
+ * `cliPath`, which `main/ipc.ts` hands to `invokeDevteam` as `binary` — spawned with
+ * `shell: false` (`invoke.ts`'s policy for the real CLI too). `FAKE` is a `.mjs`
+ * script: POSIX runs it via its shebang, Windows has neither shebang support nor a
+ * `.mjs` association, so the spawn cannot start it. There is no seam here (as there is
+ * in `invoke.test.ts`'s `fakeCli()`) to insert `node` ahead of the subcommand, because
+ * `main/ipc.ts` decides that argv from `cliPath` onward, not this test. On Windows,
+ * `FAKE_BINARY` is instead the compiled launcher `launcher-global-setup.ts` built for
+ * this fixture, when one built successfully — this fixture selects its behaviour from
+ * argv, not an environment variable, so it needs no scenario file the way
+ * `resolve.test.ts`'s `plant()` does. `launcherAvailable` gates every `it.skipIf` below
+ * that needs the fixture to actually answer; the ones that only check the argv built
+ * for a refusal, or that never call the CLI at all, are unaffected either way.
  */
+const { binary: FAKE_BINARY, available: launcherAvailable } = resolveFixtureBinary(
+  FAKE,
+  readLauncherManifest()?.fakeDevteamWrite,
+);
+
 const skipOnWindows = process.platform === 'win32';
+const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
 let dir: string;
 
@@ -77,7 +88,7 @@ async function loadIpc(): Promise<{
 }
 
 async function registerAgainstFake(registerIpc: typeof IpcModule.registerIpc): Promise<void> {
-  await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE }), 'utf8');
+  await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE_BINARY }), 'utf8');
   registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
 }
 
@@ -187,7 +198,7 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     expect(result.command).toBe('devteam bind');
   });
 
-  it.skipIf(skipOnWindows)('bindProject spawns bind for an offered path, with --provider repeated per entry', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('bindProject spawns bind for an offered path, with --provider repeated per entry', async () => {
     const { handlers, showOpenDialog, registerIpc, CHANNELS } = await loadIpc();
     showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
     await registerAgainstFake(registerIpc);
@@ -205,7 +216,7 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
 // ── project_id resolution — the security property every non-bind write action rests on ──
 
 describe('write actions resolve project_id against list, never trust a path from the renderer', () => {
-  it.skipIf(skipOnWindows)('refuses an id list does not know, for unbind/sync/setPin/planUpgrade/applyUpgrade alike, and spawns nothing', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses an id list does not know, for unbind/sync/setPin/planUpgrade/applyUpgrade alike, and spawns nothing', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
@@ -234,7 +245,7 @@ describe('write actions resolve project_id against list, never trust a path from
     }
   });
 
-  it.skipIf(skipOnWindows)('resolves a known id and spawns the real write command, never the renderer’s own path', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('resolves a known id and spawns the real write command, never the renderer’s own path', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
@@ -256,7 +267,7 @@ describe('write actions resolve project_id against list, never trust a path from
     expect(apply.command).toContain('upgrade /repo/project-1 --apply --json');
   });
 
-  it.skipIf(skipOnWindows)('setPin(id, null) resolves to --release, never an empty-string version', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('setPin(id, null) resolves to --release, never an empty-string version', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
