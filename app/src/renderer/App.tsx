@@ -5,7 +5,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { About } from './screens/About.js';
 import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
@@ -33,7 +32,7 @@ import type {
  * The header carries only what changes a decision on every screen: the store version (what
  * Projects compares against), whether a CLI was found at all, and the unsigned-build
  * warning. "Which `devteam` is this?" — path, source, contract, write actions — is answered
- * in full on the About tab (ADR-0011), one click away rather than crowding every screen.
+ * in full in the platform's native About window (ADR-0011) — see `main/about.ts`.
  */
 export function App() {
   const [build, setBuild] = useState<BuildInfo | null>(null);
@@ -125,7 +124,6 @@ export function App() {
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
-                <TabsTrigger value="about">About</TabsTrigger>
               </TabsList>
               <TabsContent value="projects" className="pt-4">
                 <Projects environment={environment} />
@@ -135,9 +133,6 @@ export function App() {
               </TabsContent>
               <TabsContent value="doctor" className="pt-4">
                 <Doctor />
-              </TabsContent>
-              <TabsContent value="about" className="pt-4">
-                <About build={build} resolution={resolution} onReResolve={() => void load()} />
               </TabsContent>
             </Tabs>
           </>

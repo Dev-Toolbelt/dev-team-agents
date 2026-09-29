@@ -150,6 +150,8 @@ export interface IpcDependencies {
   readonly appVersion: string;
   readonly electronVersion: string;
   readonly packaged: boolean;
+  /** Told every time the renderer re-resolves the CLI — the About panel shows the answer. */
+  readonly onResolved?: (resolution: CliResolution) => void;
 }
 
 const NO_CLI: OperationResult<never> = {
@@ -381,7 +383,9 @@ export function registerIpc(deps: IpcDependencies): void {
     handshake = null;
     settings = null;
     declaration = null;
-    return toCliResolution(await ensureResolution());
+    const resolved = toCliResolution(await ensureResolution());
+    deps.onResolved?.(resolved);
+    return resolved;
   });
 
   ipcMain.handle(CHANNELS.handshake, async (): Promise<OperationResult<HandshakeView>> => {

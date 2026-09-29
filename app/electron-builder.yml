@@ -65,6 +65,11 @@ mac:
     # The app never loads remote content, so ATS exceptions are not needed and are not
     # added. Declared here so the absence is visibly deliberate.
     NSHighResolutionCapable: true
+    # The name a user reads — menu bar, Dock, About panel — without renaming the bundle.
+    # `productName` stays `dev-team-agents` because the cask, the dmg name and winget all
+    # expect it; CFBundleName/CFBundleDisplayName are display only.
+    CFBundleName: Dev Team Agents
+    CFBundleDisplayName: Dev Team Agents
 
 dmg:
   artifactName: ${productName}-${version}.dmg
@@ -116,5 +121,9 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   artifactName: ${productName}-Setup-${version}-${arch}.exe
+  # Start menu / desktop shortcut and Add/Remove Programs entry; the install directory and
+  # artifact keep `productName`, which winget's manifests expect.
+  shortcutName: Dev Team Agents
+  uninstallDisplayName: Dev Team Agents
 
 afterAllArtifactBuild: build/after-build.cjs

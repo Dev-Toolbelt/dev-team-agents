@@ -11,8 +11,10 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, app, nativeImage, session } from 'electron';
+import { BrowserWindow, Menu, app, nativeImage, session } from 'electron';
 
+import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
+import { GATED_COMMANDS } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { WINDOW_WEB_PREFERENCES, hardenContents, hardenSession } from './security.js';
 import { CODE_SIGNED } from './build-info.js';
@@ -43,12 +45,35 @@ const PRELOAD = join(__dirname, '..', '..', 'preload', 'index.js');
  * same condition as `!app.isPackaged`, but the `existsSync` is kept anyway: a missing
  * icon must never be the reason a window fails to open.
  */
-function developmentIcon(): Electron.NativeImage | null {
+function developmentIconPath(): string | null {
   if (app.isPackaged) return null;
   const file = join(__dirname, '..', '..', '..', 'build', 'icon.png');
-  if (!existsSync(file)) return null;
+  return existsSync(file) ? file : null;
+}
+
+function developmentIcon(): Electron.NativeImage | null {
+  const file = developmentIconPath();
+  if (file === null) return null;
   const image = nativeImage.createFromPath(file);
   return image.isEmpty() ? null : image;
+}
+
+/**
+ * The application menu. macOS keeps Electron's default — its app menu already carries
+ * "About Dev Team Agents", labelled from `app.setName`. Windows' default has no About at
+ * all, so a Help menu is appended to the default roles rather than the menu rebuilt.
+ */
+function installMenu(): void {
+  if (process.platform === 'darwin') return;
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'fileMenu' },
+      { role: 'editMenu' },
+      { role: 'viewMenu' },
+      { role: 'windowMenu' },
+      { label: 'Help', submenu: [{ label: `About ${DISPLAY_NAME}`, click: () => app.showAboutPanel() }] },
+    ]),
+  );
 }
 
 function createWindow(): BrowserWindow {
@@ -60,6 +85,7 @@ function createWindow(): BrowserWindow {
     minHeight: 520,
     // macOS convention: the traffic lights sit over the app's own header row.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    title: DISPLAY_NAME,
     backgroundColor: '#1c1c1e',
     // Windows and Linux read the window's own icon; macOS ignores it entirely and takes
     // the dock's, which is set once in the ready handler instead.
@@ -96,10 +122,17 @@ app.enableSandbox();
  * every invocation's `cwd` and `--path`, one the CLI would also be asked about.
  *
  * Set before `whenReady`, because every later `getPath('userData')` reads the value cached
- * here. The suffix is the app's name plus `-app`, which is the same distinction
+ * here. A literal, not derived from `app.getName()`: the display name is now `Dev Team
+ * Agents`, and a derived path would have moved with it. `-app` is the same distinction
  * `packaging/` already draws between the formula and the cask.
  */
-app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-app`));
+app.setPath('userData', join(app.getPath('appData'), 'dev-team-agents-app'));
+
+// After `userData` is pinned, never before: the path above used to be derived from
+// `app.getName()`, and renaming the app first would have moved every saved setting —
+// the project names among them — to a directory nothing reads. The literal keeps the
+// directory where it has always been; the name below is display only.
+app.setName(DISPLAY_NAME);
 
 void app.whenReady().then(() => {
   if (!CODE_SIGNED && app.isPackaged) {
@@ -119,11 +152,33 @@ void app.whenReady().then(() => {
   }
 
   hardenSession(session.defaultSession, DEV_SERVER);
-  registerIpc({
-    userDataDir: app.getPath('userData'),
+  const facts: AboutFacts = {
     appVersion: app.getVersion(),
     electronVersion: process.versions.electron,
     packaged: app.isPackaged,
+    codeSigned: CODE_SIGNED,
+    mutatingCommandsRun: GATED_COMMANDS.map((command) => command.join(' ')),
+  };
+  const setAbout = (resolution: Parameters<typeof aboutCredits>[1]) => {
+    const iconPath = developmentIconPath();
+    app.setAboutPanelOptions({
+      applicationName: DISPLAY_NAME,
+      applicationVersion: facts.appVersion,
+      credits: aboutCredits(facts, resolution),
+      copyright: 'dev-team-agents contributors',
+      // Windows and Linux only; macOS shows the application icon, which the dock icon
+      // set above already is.
+      ...(iconPath !== null ? { iconPath } : {}),
+    });
+  };
+  setAbout(null);
+  installMenu();
+  registerIpc({
+    userDataDir: app.getPath('userData'),
+    appVersion: facts.appVersion,
+    electronVersion: facts.electronVersion,
+    packaged: facts.packaged,
+    onResolved: setAbout,
   });
 
   createWindow();
