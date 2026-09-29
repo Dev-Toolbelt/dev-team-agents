@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from devteam_support import POSIX_MODES, StoreTestCase, requires_posix_modes
+from devteam_support import POSIX_MODES, StoreTestCase, requires_posix_modes, rmtree as _rmtree_readonly_safe
 
 from devteam import bind, gitignore, jsonio, paths, prefs, project, registry, store, upgrade, versions
 from devteam.errors import ConflictError, EnvError, UsageError
@@ -314,7 +314,10 @@ class UpgradeTest(StoreTestCase):
 
     def test_the_exclude_step_is_reported_as_skipped_outside_a_git_repository(self):
         root, _ = self._v2_bound()
-        shutil.rmtree(root / ".git")
+        # `_rmtree_readonly_safe`, not `shutil.rmtree`: this is a real git
+        # repository, whose object files git marks read-only — Windows refuses
+        # to unlink those with a plain `rmtree` (see `devteam_support.rmtree`).
+        _rmtree_readonly_safe(root / ".git")
         result = upgrade.apply(root)
         self.assertEqual(result["git_exclude"], "skipped")
 

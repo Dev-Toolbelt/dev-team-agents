@@ -77,6 +77,23 @@ class ProjectIdentityTest(StoreTestCase):
             with self.assertRaises(EnvError):
                 project.validate({"schema": 1, "project_id": pid, "context_paths": bad})
 
+    def test_rejects_a_context_path_absolute_only_on_the_other_platform(self):
+        """A `project.json` is committed, so it crosses platforms by design.
+
+        Each shape below is absolute on exactly one flavour and relative on the
+        other, which is why the host's own `Path` was not enough to catch them:
+        `PurePosixPath("C:\\x").is_absolute()` is False, and
+        `PureWindowsPath("/etc").is_absolute()` is False. Asserted here on every
+        host — a check that only runs on Windows would not have caught the
+        Windows shapes being accepted on macOS either.
+        """
+        pid = "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10"
+        for bad in ("C:\\Windows", "c:/windows", "\\\\server\\share", "\\etc", "//server/share"):
+            with self.assertRaises(EnvError, msg=bad):
+                project.validate(
+                    {"schema": 1, "project_id": pid, "context_paths": [bad]}
+                )
+
     def test_rejects_a_newer_schema_instead_of_rewriting_it(self):
         pid = "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10"
         with self.assertRaises(EnvError):

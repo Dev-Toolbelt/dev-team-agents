@@ -8,7 +8,7 @@ import tarfile
 import unittest
 from pathlib import Path
 
-from devteam_support import StoreTestCase
+from devteam_support import StoreTestCase, rmtree as _rmtree_readonly_safe
 
 from devteam import bind, doctor, migrate, providers, update, versions
 from devteam.errors import EnvError, UsageError
@@ -39,6 +39,25 @@ class ArchiveSafetyTest(StoreTestCase):
         archive = _archive(self.tmp / "a.tar.gz", [(member, None)])
         with self.assertRaises(EnvError):
             self._members(archive)
+
+    def test_rejects_a_symlink_target_absolute_only_on_windows(self):
+        """The security half: a tarball is untrusted and authored anywhere.
+
+        An archive built on Windows can carry a drive-rooted or UNC symlink
+        target, and `PurePosixPath` does not call either one absolute — so on a
+        POSIX host our own check waved them through to the stdlib's `data`
+        filter, which rejects them as `tarfile.LinkOutsideDestinationError`: a
+        stdlib exception type leaking through a CLI that contracts to raise
+        `EnvError`. Asserted on every host for the same reason as the
+        `project.json` case: the gap was the flavour, not the platform.
+        """
+        for index, target in enumerate(("C:\\Windows\\System32", "\\\\server\\share\\x", "\\etc")):
+            member = tarfile.TarInfo("root/escape")
+            member.type = tarfile.SYMTYPE
+            member.linkname = target
+            archive = _archive(self.tmp / "win{}.tar.gz".format(index), [(member, None)])
+            with self.assertRaises(EnvError, msg=target):
+                self._members(archive)
 
     def test_rejects_a_symlink_climbing_out_of_the_tree(self):
         member = tarfile.TarInfo("root/up")
@@ -200,7 +219,10 @@ class ExitCodeContractTest(StoreTestCase):
         self.install_version("3.0.0", activate=True)
         root = self.new_project("gone")
         self.run_cli("bind", str(root))
-        shutil.rmtree(str(root))
+        # `_rmtree_readonly_safe`, not `shutil.rmtree`: `new_project` is a real git
+        # repository, whose object files git marks read-only — Windows refuses to
+        # unlink those with a plain `rmtree` (see `devteam_support.rmtree`).
+        _rmtree_readonly_safe(str(root))
 
         code, body, _ = self._json("sync", "--all", "--json")
         self.assertEqual(code, 1)

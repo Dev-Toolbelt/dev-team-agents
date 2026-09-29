@@ -38,9 +38,14 @@ class PlatformLayoutTest(unittest.TestCase):
 
     def test_macos_splits_core_data_and_cache(self):
         os.environ["DEVTEAM_PLATFORM"] = "darwin"
-        self.assertIn("Application Support/dev-team-agents/core", str(paths.core_dir()))
-        self.assertIn("Application Support/dev-team-agents/data", str(paths.data_dir()))
-        self.assertIn("Caches/dev-team-agents", str(paths.cache_dir()))
+        # `.as_posix()`, not `str()`: this simulates the macOS layout while the
+        # suite may actually be running on Windows (`DEVTEAM_PLATFORM` fakes
+        # `platform_key()`, not the host's own path flavour), where `str()` on
+        # the very same `Path` renders with backslashes and the forward-slash
+        # substring below would never match.
+        self.assertIn("Application Support/dev-team-agents/core", paths.core_dir().as_posix())
+        self.assertIn("Application Support/dev-team-agents/data", paths.data_dir().as_posix())
+        self.assertIn("Caches/dev-team-agents", paths.cache_dir().as_posix())
 
     def test_windows_puts_data_in_roaming_and_core_in_local(self):
         os.environ["DEVTEAM_PLATFORM"] = "win32"
@@ -54,19 +59,23 @@ class PlatformLayoutTest(unittest.TestCase):
         os.environ["DEVTEAM_PLATFORM"] = "linux"
         os.environ["XDG_DATA_HOME"] = "/tmp/xdg-data"
         # No per-test cleanup: `tearDown` restores this key from `self._saved`.
-        self.assertEqual(str(paths.core_dir()), "/tmp/xdg-data/dev-team-agents/core")
+        # `.as_posix()`: see `test_macos_splits_core_data_and_cache` — this fakes
+        # a Linux layout, which may still run under Windows' pathlib flavour.
+        self.assertEqual(paths.core_dir().as_posix(), "/tmp/xdg-data/dev-team-agents/core")
 
     def test_devteam_home_overrides_every_platform(self):
         os.environ["DEVTEAM_HOME"] = "/tmp/explicit"
         for platform in ("darwin", "win32", "linux"):
             os.environ["DEVTEAM_PLATFORM"] = platform
-            self.assertEqual(str(paths.core_dir()), "/tmp/explicit/core")
-            self.assertEqual(str(paths.data_dir()), "/tmp/explicit/data")
-            self.assertEqual(str(paths.cache_dir()), "/tmp/explicit/cache")
+            # `.as_posix()`: see `test_macos_splits_core_data_and_cache`.
+            self.assertEqual(paths.core_dir().as_posix(), "/tmp/explicit/core")
+            self.assertEqual(paths.data_dir().as_posix(), "/tmp/explicit/data")
+            self.assertEqual(paths.cache_dir().as_posix(), "/tmp/explicit/cache")
 
     def test_current_is_a_file_not_a_symlink_path(self):
         os.environ["DEVTEAM_HOME"] = "/tmp/explicit"
-        self.assertEqual(str(paths.current_file()), "/tmp/explicit/core/current")
+        # `.as_posix()`: see `test_macos_splits_core_data_and_cache`.
+        self.assertEqual(paths.current_file().as_posix(), "/tmp/explicit/core/current")
 
     def test_machine_local_paths_resolve_inside_data_dir_on_every_platform(self):
         # `DEVTEAM_MACHINE_ID` short-circuits `machine_id()` before any file I/O, so

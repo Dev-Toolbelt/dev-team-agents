@@ -66,12 +66,12 @@ class JsonContractTest(StoreTestCase):
     def test_warnings_go_to_stderr_so_json_stdout_stays_parseable(self):
         self.run_cli("store", "install", "--from", str(self.source), "--version", "3.0.0")
         project_root = self.new_project()
-        import shutil
+        from devteam_support import rmtree
 
         code, out, _ = self.run_cli("bind", str(project_root), "--json")
         self.assertEqual(code, 0)
         json.loads(out)
-        shutil.rmtree(str(project_root))
+        rmtree(str(project_root))
         code, out, err = self.run_cli("sync", "--all", "--json")
         json.loads(out)  # still a single valid document
         self.assertEqual(code, errors.EXIT_FINDINGS)

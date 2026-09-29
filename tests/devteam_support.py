@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,44 @@ def requires_bash():
         os.name == "posix" and shutil.which("bash") is not None,
         "no POSIX bash to run the shell script under test",
     )
+
+
+def _clear_readonly_and_retry(func, path, exc):
+    """Error handler for :func:`rmtree`: clear a read-only bit and retry once.
+
+    Git marks the pack/object files it writes read-only, and Windows — unlike
+    POSIX, where the *directory's* write permission is what matters — refuses to
+    unlink a read-only *file* at all: every test that tears down a git fixture
+    mid-test raised ``PermissionError: [WinError 5] Access is denied`` from deep
+    inside ``.git/objects/...``. This is deterministic behaviour of ``git
+    commit`` on Windows, not a flaky race, so it needs no retry loop or backoff —
+    clearing the attribute once and calling the failed operation again is
+    enough. A no-op on POSIX, where a tracked object file is never marked this
+    way.
+    """
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def rmtree(path, ignore_errors=False):
+    """``shutil.rmtree`` that survives a git fixture's read-only object files.
+
+    Every test that removes a git fixture directory **mid-test** — not through
+    ``StoreTestCase``'s own ``addCleanup(shutil.rmtree, ..., True)``, which
+    already passes ``ignore_errors=True`` and so never hit this — should call
+    this instead of ``shutil.rmtree`` directly, so the read-only workaround
+    lives in one place rather than being copied into each test.
+    """
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(str(path), ignore_errors=ignore_errors, onexc=_clear_readonly_and_retry)
+    else:
+        # `onexc` (the exception instance) replaced `onerror` (a full
+        # `sys.exc_info()` triple) in 3.12; the package's declared floor is 3.9.
+        shutil.rmtree(
+            str(path),
+            ignore_errors=ignore_errors,
+            onerror=lambda func, p, exc_info: _clear_readonly_and_retry(func, p, exc_info[1]),
+        )
 
 
 def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "testing/unit")):
@@ -194,7 +233,12 @@ class StoreTestCase(unittest.TestCase):
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="devteam-test-"))
-        self.addCleanup(shutil.rmtree, str(self.tmp), True)
+        # `rmtree`, not a bare `shutil.rmtree`: a git fixture under `self.tmp`
+        # leaves read-only object files on Windows (see `rmtree`'s docstring),
+        # and `ignore_errors=True` alone silently *skips* those rather than
+        # removing them — leaving the temp directory behind instead of merely
+        # not failing the test over it.
+        self.addCleanup(rmtree, str(self.tmp), True)
         self.home = self.tmp / "store"
         self._saved_env = {
             key: os.environ.get(key)

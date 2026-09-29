@@ -3,6 +3,7 @@
 import os
 import subprocess
 import unittest
+from pathlib import Path
 
 from devteam_support import StoreTestCase
 
@@ -198,7 +199,13 @@ class BindTest(StoreTestCase):
         bind.bind(root, provider_names=["claude"], mode="link")
         target = root / ".claude" / "agents" / "dev-team"
         self.assertTrue(target.is_symlink())
-        self.assertIn("versions/3.0.0/agents", os.readlink(str(target)))
+        # `.as_posix()`, not the raw `os.readlink()` string: on Windows, a
+        # symlink's absolute target always reads back with the `\\?\`
+        # extended-length prefix — that is how NTFS reparse points store an
+        # absolute substitute name — regardless of what `os.symlink` was given.
+        # The prefix only changes the drive/root component; the rest of the
+        # path, which is what this assertion actually cares about, is unaffected.
+        self.assertIn("versions/3.0.0/agents", Path(os.readlink(str(target))).as_posix())
 
     def test_switching_modes_replaces_artifacts_without_touching_identity(self):
         root = self.new_project()
@@ -240,13 +247,13 @@ class BindTest(StoreTestCase):
         self.assertEqual(registry.get(held_result["project_id"])["pin"], "3.0.0")
 
     def test_sync_all_reports_a_missing_path_without_aborting_the_rest(self):
-        import shutil
+        from devteam_support import rmtree
 
         good = self.new_project("good")
         gone = self.new_project("gone")
         bind.bind(good, provider_names=["claude"])
         bind.bind(gone, provider_names=["claude"])
-        shutil.rmtree(str(gone))
+        rmtree(str(gone))
 
         summary = bind.sync_all()
         self.assertEqual(len(summary["synced"]), 1)

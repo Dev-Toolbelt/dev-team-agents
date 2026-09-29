@@ -14,6 +14,7 @@ use, never by invoking the real thing.
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import unittest
@@ -255,15 +256,27 @@ class SecretsKeychainAdapterTest(CredsTestCase):
             secrets_module.put("devteam/proj/tok", PLANTED, backend="keychain")
 
 
-# ── secrets.py — dpapi adapter, mocked (cannot run on this machine at all) ──
+# ── secrets.py — dpapi adapter, mocked except where this interpreter is itself
+# ── Windows, in which case the probe below is real, not a simulation ──
 
 
 class SecretsDpapiAdapterTest(CredsTestCase):
-    def test_probed_unavailable_on_this_interpreter_regardless_of_platform_override(self):
-        # ctypes.windll simply does not exist on a non-Windows CPython build, so
-        # dpapi must never be offered here even when DEVTEAM_PLATFORM says win32.
+    def test_probed_availability_matches_whether_windll_actually_exists(self):
+        # `ctypes.windll` does not exist on a non-Windows CPython build — that is
+        # what `_probe_dpapi` itself keys on — so dpapi must never be offered
+        # there even when `DEVTEAM_PLATFORM` says win32. The suite now also runs
+        # on a real Windows interpreter, where `ctypes.windll` genuinely exists
+        # and the probe is no longer a simulation: dpapi is expected to be
+        # offered there. This asserts whichever of the two is actually true for
+        # the interpreter running the test, rather than assuming the first
+        # unconditionally — an assumption this repository's CI could not
+        # previously check, having never run on Windows.
         os.environ["DEVTEAM_PLATFORM"] = "win32"
-        self.assertNotIn("dpapi", secrets_module.available_backends())
+        backends = secrets_module.available_backends()
+        if hasattr(ctypes, "windll"):
+            self.assertIn("dpapi", backends)
+        else:
+            self.assertNotIn("dpapi", backends)
 
     def test_put_get_delete_require_windows(self):
         for platform in ("darwin", "linux"):

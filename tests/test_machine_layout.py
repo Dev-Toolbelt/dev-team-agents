@@ -119,8 +119,16 @@ class RecordPlacementTest(StoreTestCase):
 
         # The two records the inventory found to carry absolute paths, and the only
         # two: whatever else a bind writes must be readable on another machine.
-        self.assertIn(str(self.root.resolve()), paths.registry_file().read_text(encoding="utf-8"))
-        self.assertIn(str(self.root.resolve()), manifest.read_text(encoding="utf-8"))
+        #
+        # Searched as the JSON-*encoded* form, not the raw path: a Windows path
+        # contains backslashes, and `json.dump` escapes every one of them
+        # (`C:\Users\...` becomes `C:\\Users\\...` in the file's actual bytes).
+        # The raw, unescaped path is never a literal substring of valid JSON text
+        # once it contains a backslash — true of any JSON file on any platform,
+        # just invisible on POSIX, where a path has nothing to escape.
+        needle = json.dumps(str(self.root.resolve()))[1:-1]
+        self.assertIn(needle, paths.registry_file().read_text(encoding="utf-8"))
+        self.assertIn(needle, manifest.read_text(encoding="utf-8"))
 
     def test_no_portable_record_names_an_absolute_path(self):
         portable = paths.projects_dir()
