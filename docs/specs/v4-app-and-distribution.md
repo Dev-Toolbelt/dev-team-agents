@@ -29,7 +29,7 @@ test, the release rewrite extracted from inline YAML and tested, and a CI gate o
 **M4.3 is the Electron app. Its first slice is built and ships to nobody** — `app/` holds the client
 decided by [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md)
 (the stack, where the source lives, which process may spawn, which `devteam` is invoked and what happens
-when none is found), with 102 passing tests and 1 skipped under `app/test/` and a CI gate at
+when none is found), with 133 passing tests and 1 skipped under `app/test/` and a CI gate at
 `.github/scripts/ci/05-app.sh`. Releasing it is still blocked on signing credentials the repository owner
 holds: every build is unsigned by configuration, so its scenario below is `[PARTLY MET]`, clause by
 clause, and not `[MET]`.
@@ -504,7 +504,7 @@ installs before anyone merges**
 - Given the desktop app (milestone M4.3), whose first slice now exists in `app/` — Electron,
   TypeScript, Vite, React, decided by
   [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
-  with 102 passing tests and 1 skipped under `app/test/` and a CI gate at
+  with 133 passing tests and 1 skipped under `app/test/` and a CI gate at
   `.github/scripts/ci/05-app.sh`
 - When any action in the UI runs
 - Then it invokes `devteam <command> --json` and renders the result
@@ -819,7 +819,7 @@ installs before anyone merges**
   released behaviour. `json_contract` stays at **1**.
 - 2026-09-28 | technical-writer | **M4.3's first slice landed, so its scenario stops being `[UNBUILT]`
   and becomes `[PARTLY MET]` — a fourth mark, added to the legend in the same edit.** `app/` now holds
-  the Electron client decided by ADR-0015, with 102 passing tests and 1 skipped under `app/test/` and a CI
+  the Electron client decided by ADR-0015, with 133 passing tests and 1 skipped under `app/test/` and a CI
   gate at `.github/scripts/ci/05-app.sh`. Neither existing mark could describe it honestly: `[MET]`
   would claim a client users can install, `[UNBUILT]` would claim no code exists, and both are false in
   opposite directions. So the scenario is annotated **clause by clause**, each verdict naming the test

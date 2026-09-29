@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Documentation corrections for M4.3 app slice**: Corrected test count from 102 to 133 in ADR-0015 amendment and `docs/specs/v4-app-and-distribution.md` (three instances); fixed `packaging/homebrew/devteam-app.rb` `zap` list to include `~/Library/Application Support/dev-team-agents-app` (the app's user data directory) and change logs path to `~/Library/Logs/dev-team-agents` (correct app name); clarified ADR-0015's "State of the tree" section to reflect that `app/` now exists; recorded in ADR-0015 § 5 that the resolution order table was corrected before commit, noting the divergence from what `app/src/cli/resolve.ts`'s comment claims; added amendment to ADR-0014 documenting the undocumented bypass where a declaration at or above the store's shapes passes unconditionally.
+
 ### Added
 - **v3 milestone M1 — global core/data store, project bind and the `devteam` CLI.** The framework is installed once per machine instead of vendored into every project (325 files, ~2.3 MB, previously committed per repository). `scripts/cli/devteam` (python3, stdlib only) with the implementation in `scripts/lib/devteam/`: `path`, `version`, `store list|install|use|gc`, `bind`, `unbind`, `list`, `sync`, `pin`, `update`, `migrate`, `doctor`. Decisions recorded in ADR-0007 through ADR-0011; acceptance criteria in `docs/specs/v3-global-install.md`; reference in `CLAUDE-md/cli.md`.
 - **Two stores with different lifetimes.** `core` holds `versions/<X.Y.Z>/` and a plain-text `current` pointer (not a symlink — that would put the Windows materialisation failure at the most load-bearing path in the design). `data` holds the registry, preferences, per-project directories and quarantine, and survives uninstall — on Windows it lives in the roaming profile. `$DEVTEAM_HOME` overrides both and is the test seam.

@@ -32,13 +32,14 @@ be written down on the app's side or it exists nowhere.
 
 ### State of the tree while this was written
 
-Read at the moment of writing, on branch `app/electron-client-skeleton` at `86e2f04`: **there is no
-`app/` directory in this repository.** The skeleton is being written in parallel with this document.
-Nothing below describes code that exists; every statement about the app is a decision the
-implementation is being held to, and where a resolution order or a declaration constant is given, it is
-given as the decision rather than as a reading of shipped code. `packaging/homebrew/devteam-app.rb`
-states the same absence in its own header ("there is no `app/` directory, no build pipeline, and no
-signed artifact"), and `docs/specs/v4-app-and-distribution.md` marks the whole of M4.3 `[UNBUILT]`.
+Read at the moment of writing, on branch `app/electron-client-skeleton` at `86e2f04`: **there was no
+`app/` directory in this repository.** The skeleton was being written in parallel with this document.
+When this ADR was committed (commit `b2bc7cc`), the `app/` directory had already existed for three
+commits. The ADR's statements were held as decisions the implementation would be bound to at the time
+of writing; the existence of code since then is a verification, not a revision. `packaging/homebrew/devteam-app.rb`
+states its own corresponding absence in the header ("there is no `app/` directory, no build pipeline,
+and no signed artifact"), which is now false in the same way: the app exists in source and is tested,
+and nothing about it ships (the cask remains unsigned).
 
 ## Decision
 
@@ -131,8 +132,12 @@ where the compat check is load-bearing and the case nothing prevented. A bundled
 divergence in the direction nobody sees — the user's terminal and the app would be two different
 versions of the single source of truth, which is the outcome ADR-0011's Decision exists to forbid.
 
-**Resolution order — a decision, not a reading.** The `app/` skeleton is being written in parallel and
-did not exist when this was written; the implementation is held to this order:
+**Resolution order — a decision, not a reading.** The `app/` skeleton was being written in parallel and
+did not exist when this was written; the implementation is held to this order. The table was corrected
+before the ADR was committed: the variable name in row 1 is `DEVTEAM_CLI_PATH`, not `DEVTEAM_CLI` as
+this text stated. `app/src/cli/resolve.ts` carries the implemented version and takes the corrected
+precedence (environment variable before settings file); this ADR's own amendment does not record the
+correction, and the implementation's comment claiming it does is inaccurate.
 
 | # | Source | Why it is where it is |
 |---|--------|----------------------|
@@ -203,7 +208,7 @@ This is a sequencing decision, not a scope cut:
 >
 > The tree this ADR was written ahead of now exists. `app/` holds the Electron client — TypeScript,
 > Vite, React, shadcn/ui, Tailwind v4 — with the invocation layer in `app/src/cli/`, the main process
-> in `app/src/main/`, 73 passing tests plus 1 skipped under `app/test/`, and a CI gate at
+> in `app/src/main/`, 133 passing tests plus 1 skipped under `app/test/`, and a CI gate at
 > `.github/scripts/ci/05-app.sh` (the `app` job in `ci.yml`: preflight, node pin from `app/.nvmrc`,
 > `npm ci`, `typecheck`, `lint`, non-vacuous tests). That gate closes the residual of this ADR's
 > second Risks row, which said "the gate is not built"; the row is left as written, because it was
