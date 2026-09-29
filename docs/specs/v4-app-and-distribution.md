@@ -26,8 +26,13 @@ checkable). **M4.2 is the packaging scaffold** — a Homebrew formula and cask, 
 release workflow and an operator runbook under `packaging/` — **plus, subsequently, the verification
 those files had none of**: a real `brew install` through a throwaway local tap, a CI-portable payload
 test, the release rewrite extracted from inline YAML and tested, and a CI gate over the directory.
-**M4.3 is the Electron app, and it is not built**: it is blocked on signing credentials the repository
-owner holds.
+**M4.3 is the Electron app. Its first slice is built and ships to nobody** — `app/` holds the client
+decided by [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md)
+(the stack, where the source lives, which process may spawn, which `devteam` is invoked and what happens
+when none is found), with 102 passing tests and 1 skipped under `app/test/` and a CI gate at
+`.github/scripts/ci/05-app.sh`. Releasing it is still blocked on signing credentials the repository owner
+holds: every build is unsigned by configuration, so its scenario below is `[PARTLY MET]`, clause by
+clause, and not `[MET]`.
 
 **Subsequently, the framework's half gained the write gate M4.1 stopped short of.** `devteam compat`
 answered "may this client write?" and nothing made the answer binding. A caller may now declare the
@@ -50,6 +55,7 @@ normative compatibility statement.
 | **[MET]** | Built and asserted, by something named in the scenario itself — either a test that passes today (`tests/test_json_contract.py`, 35 tests; `tests/test_client_gate.py`, 52; `tests/test_packaging.py`, 12; `tests/test_release_bump.py`, 23; all green, in a suite of 396) or, where a test cannot reach it, a **recorded run**: one execution on one maintainer's machine, with its platform and tooling version stated. A recorded run is evidence, not a channel — nothing re-runs it, and a `[MET]` resting on one says so in its own first line. |
 | **[UNVERIFIABLE HERE]** | Stated as the criterion a human must check, against accounts, certificates and third-party review this environment does not have and should not be given. The artifact exists; the criterion has never been exercised. |
 | **[UNBUILT]** | The criterion is stated so the client has something to be built against. No code exists. |
+| **[PARTLY MET]** | Some clauses are asserted by a named test today and the rest are not, so the scenario **as a whole is not met**. Introduced for M4.3, where `[MET]` and `[UNBUILT]` would both be false in opposite directions: the client exists in source and is tested, and nothing about it ships. Every clause carries its own verdict and the test that earns it; a clause with no test named is not met. |
 
 A spec that implied the packaging was proven would be worse than no spec. So the boundary is drawn
 narrowly: **one** `brew install` is asserted below, of a tarball built with `git archive … HEAD`
@@ -472,27 +478,91 @@ installs before anyone merges**
   Developer ID, and the app installs
 - And uninstalling with `--zap` trashes only the app's own Electron chrome and leaves the CLI's core
   and data store — which the app shares and does not own — untouched
-- Unverifiable here because: **there is no `app/` directory and no build**, so there is no `.dmg` to
-  sign, notarise or hash (`sha256` is the literal `NO_RELEASE_SHA256_DOES_NOT_EXIST_YET`); signing
-  needs a paid Apple Developer ID and notarisation needs an app-specific password or API key, which
-  are account-level credentials this environment does not have; and the cask's macOS floor and bundle
-  id are guesses to be confirmed from the app's own `Info.plist` once it exists. What the absent
-  artifact blocks is precisely the install, the digest and the codesign/notarisation checks — **not**
+- Unverifiable here because: **there is no signed, notarised `.dmg` and no release to attach one to.**
+  The reason has narrowed since this scenario was written, and the narrowing is worth stating rather
+  than leaving the old sentence standing: `app/` now exists and `npm run dist:mac` produces a universal
+  `dev-team-agents.app` inside `dev-team-agents-<version>.dmg`, so "there is no build" is no longer the
+  obstacle. **Every such build is unsigned by configuration** — `app/electron-builder.yml` sets
+  `mac.identity: null` and `mac.notarize: false`, `app/build/after-build.cjs` prints
+  `UNSIGNED, UNNOTARISED BUILD — DO NOT DISTRIBUTE`, and `app/src/main/build-info.ts` carries
+  `CODE_SIGNED = false` as a greppable source constant — and an unsigned build is not this scenario's
+  subject: `brew audit --cask` verifies a Developer ID signature and a notarisation ticket, so its
+  correct verdict on an ad-hoc-signed artifact is *reject*. Signing needs a paid Apple Developer ID and
+  notarisation needs an app-specific password or API key, which are account-level credentials this
+  environment does not have. No CI job builds the artifact either: `.github/scripts/ci/05-app.sh` runs
+  `typecheck`, `lint` and `test` and deliberately never `dist:mac`. Two of the cask's guesses are no
+  longer guesses: the macOS floor is **measured** at `">= :monterey"` (the pinned Electron's
+  `Info.plist` declares `LSMinimumSystemVersion` 12.0, so the previous `">= :big_sur"` licensed an
+  install on a system the app cannot launch on) and the bundle id is read from the build's `appId`.
+  What the absent **release** artifact blocks is precisely the install, the digest and the
+  codesign/notarisation checks — **not**
   static style checking, which does run and is **not clean**: `brew style` on the cask reports four
   cask-cop findings today (`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`),
   none of them fixed. `packaging/README.md` § Verification records them as a known state.
 
-**Scenario [UNBUILT]: the app is a client, and never a prerequisite**
-- Given the desktop app (milestone M4.3)
+**Scenario [PARTLY MET]: the app is a client, and never a prerequisite**
+- Given the desktop app (milestone M4.3), whose first slice now exists in `app/` — Electron,
+  TypeScript, Vite, React, decided by
+  [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
+  with 102 passing tests and 1 skipped under `app/test/` and a CI gate at
+  `.github/scripts/ci/05-app.sh`
 - When any action in the UI runs
 - Then it invokes `devteam <command> --json` and renders the result
+  - **[MET] for the invocation.** `--json` is appended by the invocation layer itself, not by callers,
+    so no operation can omit it — `app/test/invoke.test.ts` · *appends --json itself so no operation can
+    forget it*. The renderer supplies no command: every argument vector is built in
+    `app/src/cli/operations.ts` from a closed `ALLOWED_COMMANDS` list, and
+    `app/test/operations.test.ts` · *runs nothing the framework has not classified at all* asserts every
+    entry of that list is classified by `compat`. Spawning is argv-array and never a shell string
+    (*never builds a shell string from the arguments*, *passes arguments as an array, so shell
+    metacharacters are inert*).
+  - **Not asserted: "and renders the result."** No test exercises a screen. Nothing compares what a
+    screen displays against what the CLI answered, which is exactly the residual ADR-0015's fourth
+    Risks row names — a misrendered `list` leads a user to a destructive action they take in the
+    terminal, where no gate applies.
 - And no bind rule, preference merge or credential resolution exists in the app's own code
+  - **[MET] for credential resolution, by non-invocation.** `app/test/operations.test.ts` · *never runs
+    `cred get` — a value must not enter this app* asserts no allowed command so much as **starts**
+    with `cred`, so no credential value can enter the process by any route the app has.
+  - **Not asserted for the other two.** No `prefs` command is wired, so no merge can be reached — but
+    that is an absence inferred from the command list, not a test. Nothing asserts ADR-0015 § 4's
+    stronger rule that the **main process reads no store file directly** either; it is held by review.
 - And the app reads the `compat` block before it writes, and when `store_schemas` reports a shape it
   does not understand it degrades to read-only **and says so**
+  - **[MET], within the limit that the slice has no write to gate.** The declaration is the app's own
+    frozen constant, never derived from a store (`app/test/handshake.test.ts` · *names every shape
+    `store_schemas()` declares*, *is frozen, so nothing can derive it from a store at runtime*), and
+    `app/test/real-cli.test.ts` · *agrees with the real store_schemas, so the app's constant is not a
+    guess* pins it against the real CLI. An exit-1 answer is read as a **verdict, not a failure**, and
+    `may_write` is never inferred from `unsupported` (*treats the exit-1 answer as a verdict, not a
+    failure, and stays read-only*; *does not infer the verdict from `unsupported` when no boolean was
+    returned*). "Says so" is asserted, not assumed: the same test requires the plain-language summary
+    to contain both `read-only` and the offending shape's name. Three further tests assert the
+    degradation when the handshake cannot complete at all. Against the real gate,
+    `app/test/real-cli.test.ts` · *handshakes as behind, read-only, when the app declares an older
+    shape* and *is refused with exit 4 on a mutating command when the declaration is behind*.
+  - **Not asserted: "before it writes."** There is no write action in this slice, so the clause is
+    satisfied vacuously. The slice does run one command `compat.MUTATING` classifies — `devteam
+    doctor`, which repairs what it finds — held by the declaration and the framework's exit-4 refusal
+    rather than by its absence; ADR-0015's own amendment records that decision and corrects that ADR's
+    "the first slice is read-only" claim.
 - And it special-cases `devteam cred get`, which answers `--json` with a conforming error by design
+  - **Not met as written, and satisfied in a stronger way.** The app has no special case, because it
+    never calls `cred get` at all (ADR-0015 § 7), which the test named above asserts. The exception is
+    still owed as a **category** — the first secret-handling command anyone wires needs it — so this
+    clause is not deleted; it is recorded as not applicable to a client that never reaches the command.
 - And every capability the app exposes remains reachable from the CLI alone, so a user who never
   installs the app loses only the screens
-- Unbuilt. Three preconditions this scenario used to list as open have since closed, and the residue is
+  - **Not met, and a skeleton cannot establish it.** Every command the slice runs is a `devteam`
+    command by construction, which is what *runs nothing the framework has not classified at all*
+    asserts — but the criterion is about the app's **whole** capability surface, and a first slice with
+    four read screens has barely any surface to test the claim against. It becomes meaningful when
+    write actions land, and nothing mechanical checks it then either.
+- **The scenario as a whole is not met, and no amount of passing tests moves it.** The app is unsigned
+  (`CODE_SIGNED = false`, `mac.identity: null`), unreleased, installable by nobody: no cask artifact,
+  no winget manifest for the app at all, and `KEEP_ROOT` drops `app/` from every installed project. A
+  client that ships to nobody cannot have satisfied a criterion about what a user who installs it gets.
+- Three preconditions this scenario used to list as open have since closed, and the residue is
   smaller and more precise each time: `unsupported_by()` **does** have a caller now — `devteam compat`,
   with `--client`/`--client-file` and an explicit `may_write`, and `compat.gate()` — so the comparison no
   longer has to be reimplemented in the client; the cask **does** declare
@@ -512,12 +582,34 @@ installs before anyone merges**
     degrades to read-only and says so — remains the **app's** obligation, and the framework's half is
     now a safety net for an honest app rather than a guarantee against a silent one. ADR-0014 § 3
     records the reasoning and the reopening condition.
-  - **Still unbuilt regardless:** the app. Nothing in this scenario is met, because there is no client
-    to declare anything.
+  - **The client now declares, and that is the part that moved.** This bullet used to read "still
+    unbuilt regardless: the app — nothing in this scenario is met, because there is no client to
+    declare anything." There is one: it declares its own frozen constant on every gated invocation, and
+    `app/test/real-cli.test.ts` drives the framework's refusal end to end. So the framework's half is no
+    longer a safety net waiting for a client to be honest towards — it has one. What has not moved is
+    shipping: the client is unsigned, unreleased and installed by nobody, which is why the scenario is
+    `[PARTLY MET]` and not `[MET]`.
 
 ### Out of Scope
-- **The Electron app itself.** Milestone M4.3, blocked on signing credentials the repository owner
-  holds. Its criteria are stated above as `[UNBUILT]` so the client has a target; none of them is met
+- **Everything about the Electron app beyond its first slice.** Milestone M4.3 is no longer wholly
+  outside this spec's scope, and the bullet is rewritten rather than left standing: the app's stack and
+  its operating rules as a CLI client are decided in
+  [ADR-0015](../development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
+  and a first slice exists in `app/` with its criteria now marked `[PARTLY MET]` above, clause by clause,
+  each against a named test. **What remains out of scope, and why each one is:**
+  - **Signing, notarisation and release.** Still blocked on credentials the repository owner holds — an
+    Apple Developer ID and an Authenticode certificate. Every build is unsigned by configuration, so
+    there is no artifact any channel can describe
+  - **A winget manifest for the app.** None exists, at any version, unlike the CLI's scaffold. ADR-0011's
+    channel table promises one; `app/electron-builder.yml` has no `win` block, deliberately, because
+    adding one would imply a Windows packaging shape that is still undecided
+  - **Every write action.** ADR-0015 § 8 sequences them after the declaration seam has been driven by a
+    real client, which has now happened — so this is the next thing in scope, not a permanent exclusion.
+    The one mutating command the slice runs (`devteam doctor`) is not a write action the UI exposes
+  - **Any assertion about what a screen renders.** The tests cover the invocation layer, the declaration
+    and the payload validators; no test opens a window. That gap is ADR-0015's fourth Risks row
+  - **A build or release job for the app.** CI typechecks, lints and tests it (`05-app.sh`) and never
+    builds an artifact, because a gate that produces an unsigned `.dmg` is shipping, not checking
 - **Implementing the JSON contract's deprecation mechanism.** The *policy* is no longer open: ADR-0014
   § 2 states what obliges a `json_contract` bump, what does not — including its ruling that an error
   envelope's conditional `hint` appearing on a path that did not previously set it is additive and free,
@@ -725,6 +817,31 @@ installs before anyone merges**
   are not changes at all: `--client-schemas` and everything reached through it are new in the same
   unreleased change set, so `--client-schemas ""` at exit 2 and `devteam list` at exit 3 replace no
   released behaviour. `json_contract` stays at **1**.
+- 2026-09-28 | technical-writer | **M4.3's first slice landed, so its scenario stops being `[UNBUILT]`
+  and becomes `[PARTLY MET]` — a fourth mark, added to the legend in the same edit.** `app/` now holds
+  the Electron client decided by ADR-0015, with 102 passing tests and 1 skipped under `app/test/` and a CI
+  gate at `.github/scripts/ci/05-app.sh`. Neither existing mark could describe it honestly: `[MET]`
+  would claim a client users can install, `[UNBUILT]` would claim no code exists, and both are false in
+  opposite directions. So the scenario is annotated **clause by clause**, each verdict naming the test
+  that earns it, and each clause with no test says so. Moved to met: the invocation half of "invokes
+  `devteam <command> --json`" (`invoke.test.ts` · *appends --json itself…*, plus the closed
+  `ALLOWED_COMMANDS` list asserted against `compat`'s tables); credential resolution, by the app never
+  running any `cred` command at all (`operations.test.ts` · *never runs `cred get`…*); and reading the
+  `compat` block, degrading to read-only **and saying so**, which is asserted against both a fake and the
+  real CLI (`handshake.test.ts`, `real-cli.test.ts` · *…refused with exit 4 on a mutating command when the
+  declaration is behind*). **Explicitly not moved:** "renders the result" (no test opens a window), the
+  absence of a bind rule or preference merge (an absence inferred from the command list, not asserted),
+  the `cred get` special case (not met as written — the app never reaches the command, which is stronger,
+  and the exception is still owed as a category), and "every capability remains reachable from the CLI
+  alone" (a four-screen slice has no surface to establish it). **The scenario as a whole is not met, and
+  the reason is not test coverage:** the app is unsigned (`CODE_SIGNED = false`, `mac.identity: null`),
+  unreleased, and installable by nobody. The `[UNVERIFIABLE HERE]` cask scenario keeps its mark and had
+  its **stated reason corrected** — it said "there is no `app/` directory and no build", which is no
+  longer why; the obstacle is now a signed, notarised artifact at a real version, and two of the cask's
+  guesses became measurements (the macOS floor is `">= :monterey"`, from `LSMinimumSystemVersion` 12.0 in
+  the pinned Electron's `Info.plist`; the bundle id comes from the build's `appId`). `## Out of Scope`
+  now points at ADR-0015 and enumerates what is still excluded and why, instead of excluding the app
+  wholesale. No `[MET]` scenario was touched and no framework-side criterion moved.
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.

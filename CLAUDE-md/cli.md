@@ -209,20 +209,28 @@ in the version the project is bound to.
 `devteam version --json` now includes a `compat` block that reports the JSON contract version and
 the store schema numbers:
 
+Keys are alphabetical because `output.py` dumps with `sort_keys=True`. This is a real emission,
+captured from `devteam version --json` against a throwaway store — **`store_schemas` carries every
+shape the store has, and a client that is silent about one of them is treated as not understanding
+it** (see the write gate below), so an example listing a subset would teach the opposite rule:
+
 ```json
 {
-  "current": "3.0.0",
-  "installed": ["3.0.0"],
-  "core": "/path/to/core",
   "compat": {
     "json_contract": 1,
     "min_app_version": null,
     "store_schemas": {
+      "bind_manifest": 1,
+      "credentials": 1,
       "project": 1,
       "project_layout": 2,
-      "registry": 3
+      "registry": 1
     }
-  }
+  },
+  "core": "/path/to/core",
+  "current": null,
+  "installed": [],
+  "ok": true
 }
 ```
 
@@ -242,7 +250,8 @@ the reasoning behind each judgment call is recorded in `scripts/lib/devteam/comp
 and is not restated here.
 
 **Declaring.** Two seams, both naming a JSON file holding the same object `devteam compat
---client-file` accepts (`{"project": 1, "registry": 3, …}`):
+--client-file` accepts — every shape `store_schemas` reports, since an omitted one counts as
+unsupported:
 
 | Seam | Form |
 |------|------|

@@ -548,6 +548,124 @@ what the cask's own comment means by "answerable". That line also predates the c
 this change touched `packaging/`. The gate was built ahead of the condition deliberately, and the ADRs
 now say so instead of borrowing credit for a dependency somebody else added.
 
+### Added — v3 milestone M4.3 (the desktop client's first slice, and a JS gate to hold it)
+
+M4.3 was the milestone every earlier entry deferred: `packaging/homebrew/devteam-app.rb` was a cask
+for an app that did not exist, ADR-0011's channel table had an empty "app" column, and
+`docs/specs/v4-app-and-distribution.md` marked the whole scenario `[UNBUILT]`. The client now exists
+in source. **It ships to nobody, and that half has not changed** — the build is unsigned by
+configuration, no release carries it, and `KEEP_ROOT` keeps `app/` out of every installed project.
+
+- **`app/` — an Electron client that is a pure client of the CLI.** TypeScript, Vite, React,
+  shadcn/ui and Tailwind v4, decided in **ADR-0015** (the stack, where the source lives, which
+  process may spawn, which `devteam` is invoked, and what happens when none is found). **Zero
+  runtime dependencies**: `dependencies` in `app/package.json` is empty, the renderer is bundled by
+  Vite, and the main process imports only node builtins plus `electron`, so no `node_modules` tree
+  is packaged.
+- **The CLI is resolved, never bundled.** `app/src/cli/resolve.ts` tries an explicit path
+  (`DEVTEAM_CLI_PATH`, then the app's settings file), then `PATH` in the shell's own order, then
+  Homebrew's `bin` — the Finder-launch case, where a GUI app inherits no login shell's `PATH`. A
+  candidate is accepted only if **running** `version --json` returns a conforming document carrying
+  a `compat` block, so a different program named `devteam` is rejected at resolution rather than on
+  every screen. There is no fallback binary: a bundled older CLI writing a newer store is the
+  failure ADR-0011's second Risks row names.
+- **Every invocation is declared, so ADR-0014's write gate binds this client.** The declaration is
+  the app's **own frozen constant** (`APP_STORE_SCHEMAS`), never derived from a store — deriving it
+  would compare the store's numbers with themselves and pass always. The main process attaches
+  `--client-schemas` in one place, so no operation can omit it; the handshake declares the same
+  constant inline on `devteam compat --client`, which cannot be a stale file. An incompatible answer
+  is **exit 1, a verdict** rather than a failure, `may_write` is read and never inferred from
+  `unsupported`, and the plain-language summary names each shape the app does not understand.
+- **The renderer can ask for a screen, never a command.** `contextBridge` exposes named operations
+  only; every argument vector is built in the main process from a closed `ALLOWED_COMMANDS` list
+  (`version`, `compat`, `list`, `catalog` bare and its three kinds, `catalog show`, `doctor`), spawn
+  is argv-array with `shell: false` stated explicitly, and a catalog name beginning with `-` is
+  refused before it can be read as a flag.
+- **The slice is not read-only, and says so instead of relabelling the command.** `devteam doctor`
+  is in `compat.MUTATING` because it repairs what it finds, so the app carries it in a separate
+  `GATED_COMMANDS` constant rather than filing it under read-only; `--reassign-identity` is never
+  passed (asserted against the source), the declaration makes the framework refuse the call at exit
+  4 when the store is ahead, and the UI header says **"no write actions"** rather than "read-only".
+  ADR-0015 § 8 claimed the slice was read-only; its own amendment now corrects that, and records the
+  distinction it turns on: the classification belongs to the **command**, not to the invocation.
+- **`cred` is unreachable, not special-cased.** ADR-0010 keeps values out of any client, and the app
+  never calls `cred get` — a test asserts no allowed command so much as starts with `cred`, so no
+  secret can enter the process by any route the app has.
+- **103 tests (102 passing, 1 skipped) under `app/test/`**, including `real-cli.test.ts`, which drives
+  the **real** `scripts/cli/devteam` with `DEVTEAM_HOME` in a temp directory: the app's constant
+  matches `store_schemas()` exactly, a declaration one behind is refused on a mutating command at
+  exit 4 before anything on disk changes, and a final test asserts every read-only command leaves
+  that directory **empty**. A fake proves the parser handles the shapes it was told about; only the
+  real CLI proves the shapes were described correctly.
+- **`.github/scripts/ci/05-app.sh` and the `app` job — the JavaScript gate this repository had
+  none of.** ADR-0009's precedent applied to a second language: the gate lands in the same change as
+  the language, not after it. Preflight (missing `app/` is a **failure**, not a skip), the node
+  version proven against the single pin in `app/.nvmrc` and against `engines.node`, the
+  typecheck/lint/test script contract asserted before the scripts are called, `npm ci` from the
+  committed lockfile, and a **non-vacuity** check on the suite: test files must exist on disk, the
+  `test` script must not carry `--passWithNoTests`, and the runner must report a positive count. No
+  `app/**` path filter, deliberately — a change to `scripts/lib/devteam/` must exercise the only
+  consumer of the `--json` contract. No build step: a gate that produces an unsigned `.dmg` is
+  shipping, not checking.
+- **`app/electron-builder.yml` — one artifact shape, unsigned and announced as such.** A universal
+  `dev-team-agents.app` inside `dev-team-agents-<version>.dmg`, matching what the cask expects.
+  `mac.identity: null` and `mac.notarize: false`, `CODE_SIGNED = false` as a greppable source
+  constant, a loud banner at build time, on startup and in the UI — because a `.dmg` that looks
+  shippable and is not is worse than no `.dmg`. No `win` block: adding one would imply a Windows
+  packaging shape ADR-0011 still records as undecided.
+- **M4.3 adversarial review: 14 findings fixed, 29 new tests, 73 → 102 passing.** An independent review
+  of the M4.3 slice returned 14 findings, all now fixed. The test suite grew from 73 to 102 passing
+  tests, covering CLI resolution order, invocation layer, declaration integrity, handshake accuracy,
+  degradation on incompatibility, gated command behavior, and allow-list enforcement. Included in the
+  fixes: Windows platform support in CLI resolution (winget's shim directories now searched), environment
+  variable name and precedence corrected in ADR-0015 (now `DEVTEAM_CLI_PATH` before settings file),
+  allow-list enforcement at spawn boundary rather than dead data, missing `cwd` required on every catalog
+  call, `path_exists` reported as unknown rather than false when unresolved, declaration write failure
+  now refuses mutating commands, application data directory collision resolved (`userData` now
+  `<appData>/<name>-app`), exit-1 error document corrected, `setWindowOpenHandler` denies all external
+  URLs, request filter narrowed to match stated rule, handshake result fabrication removed, stdout capped
+  at 32MB, and Tailwind v4 source directive added for component directory (`@source '../components'`).
+
+### Fixed — packaging, measured against the build that now exists
+
+- **The cask's macOS floor was wrong in the dangerous direction.**
+  `packaging/homebrew/devteam-app.rb` carried `depends_on macos: ">= :big_sur"` under a comment
+  calling it "a guess, not a measured value". Measured: the pinned Electron's
+  `Electron.app/Contents/Info.plist` declares `LSMinimumSystemVersion` **12.0**, so Electron 39 does
+  not launch on Big Sur at all, and `">= :big_sur"` licensed `brew install` on a system where the app
+  cannot start — which a user experiences as the app being broken rather than as unsupported. Now
+  `">= :monterey"`, mirrored by `mac.minimumSystemVersion: '12.0'` in the build config, and recorded
+  as a **per-release check**: the floor moves with every Electron major and nothing enforces the pair.
+- **The cask's bundle id and app name stopped being placeholders.** Both are now read from
+  `app/electron-builder.yml` (`appId`, `productName`) rather than guessed from an `Info.plist` that
+  did not exist.
+- **The cask's `version` and `app/package.json`'s `version` are one value in two files, and the
+  coupling is now written down.** `dmg.artifactName: ${productName}-${version}.dmg` derives the dmg
+  filename from the package's version while the cask's `url` derives the same filename from the
+  cask's, so a release whose two strings differ downloads a filename nothing produced. Neither file
+  is authoritative: **the `app-v*` git tag is**, per `packaging/README.md` § Version source of truth,
+  and a build step must stamp the package from it. That step does not exist, so the two values are
+  deliberately left disagreeing (`0.0.0` vs `0.0.0-unreleased`) rather than reconciled by hand into a
+  matching pair that still describes no artifact.
+- **`packaging/README.md` no longer says the app does not exist**, and is precise about what replaced
+  that: a build exists and is unsigned; what is absent is a signed, notarised artifact at a real
+  version. Its prerequisites, placeholder table and "what is unverified, and exactly why" table are
+  updated row by row, including three new rows — whether the dmg filename the cask builds is the one
+  the build produces, and the fact that **winget has no app manifest at all** while ADR-0011's channel
+  table promises winget for the app as well as the CLI.
+- **ADR-0011 and ADR-0014 gained forward references to ADR-0015**, as amendments appended after their
+  existing ones; both files are additive-only, with no Decision body or Risks row altered. ADR-0011's
+  "settle which CLI the app calls before it ships" instruction is recorded as **decided** (ADR-0015 § 5,
+  implemented and asserted) with its residual unchanged, because the app still has not shipped;
+  ADR-0014 § 3's reopening condition is recorded as **still unmet in both halves**, with the note that
+  the honest declaring client it was narrowed to now exists and exercises the gate.
+- **`docs/specs/v4-app-and-distribution.md` marks M4.3 `[PARTLY MET]`** — a fourth mark added to its
+  legend, because `[MET]` and `[UNBUILT]` were both false in opposite directions. Every clause of the
+  scenario carries its own verdict and the test that earns it; "renders the result", the absence of a
+  bind rule or preference merge, the `cred get` special case and "every capability remains reachable
+  from the CLI alone" are explicitly **not** moved. The scenario as a whole stays unmet: the client
+  ships to nobody.
+
 ### Changed — as a consequence of the shared parser
 - **Error-message wording inside `devteam compat` changed, and nothing else did.** `--client` and
   `--client-file` now go through the same parser as the new seam
