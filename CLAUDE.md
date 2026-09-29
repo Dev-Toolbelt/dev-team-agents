@@ -231,6 +231,7 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 ```
 dev-team-agents/
 ├── agents/          ← agent definitions (.md)
+├── app/             ← Electron desktop client, a pure CLI client (ADR-0015); DEV-ONLY, dropped by install.sh's KEEP_ROOT
 ├── skills/          ← modular skill knowledge
 │   ├── shared/      ← foundational rules used by all agents
 │   ├── architecture/
@@ -299,7 +300,7 @@ dev-team-agents/
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
 │           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
 ├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
-│                      (incl. 04-packaging.sh) + scripts/release/bump-homebrew-formula.sh — stripped at install
+│                      (incl. 04-packaging.sh, 05-app.sh ← the app/ JS gate) + scripts/release/bump-homebrew-formula.sh — stripped at install
 ├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
 │                      and the operator runbook. UNRELEASED — see packaging/README.md for what each
 │                      placeholder needs. Never reaches a user project: install.sh's KEEP_ROOT

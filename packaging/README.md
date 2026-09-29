@@ -26,9 +26,34 @@ tags** — not on every push; see the trigger note below — and
 `tests/test_packaging.py` runs the formula's own declared payload on Linux in CI.
 **What remains unproven is the published path**: no `homebrew-devteam` tap hosts
 this formula, no release tarball has ever been installed from one, no Windows
-installer has been built, no cask artifact exists, and the release workflow has
-never been triggered. Nothing below claims otherwise — read the two tables at the
-end for the split, item by item.
+installer has been built, **no cask-installable artifact exists**, and the release
+workflow has never been triggered. Nothing below claims otherwise — read the two
+tables at the end for the split, item by item.
+
+**The app exists now, and it is unsigned. Both halves of that matter.**
+`app/` holds the Electron client decided by
+[ADR-0015](../docs/development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
+and `npm run dist:mac` produces a universal `dev-team-agents.app` inside
+`dev-team-agents-<version>.dmg` — a maintainer has run it on macOS and it built.
+That is a recorded local build, in the same sense as the formula run above, and it
+is **weaker than one**: nothing in the tree is the artifact (`app/.gitignore`
+excludes `dist/` and `release/`), no CI job produces one —
+`.github/scripts/ci/05-app.sh` runs `typecheck`, `lint` and `test` and
+deliberately never `dist:mac`, because "one that builds an unsigned artifact is
+shipping, not checking" — and the build is unsigned by configuration, not by
+accident: `app/electron-builder.yml` sets `mac.identity: null` and
+`mac.notarize: false`, and `app/build/after-build.cjs` prints
+`UNSIGNED, UNNOTARISED BUILD — DO NOT DISTRIBUTE` after every artifact. A
+universal build still carries an **ad-hoc** signature because macOS will not load
+an unsigned arm64 Mach-O, and an ad-hoc signature is not a Developer ID
+signature and carries no notarisation ticket: `brew audit --cask` rejects it, and
+Gatekeeper refuses to open it without an explicit user override. So what the cask
+still cannot describe is unchanged — a **signed, notarised** artifact at a **real
+version** — and the app column of ADR-0011's channel table is still empty on both
+platforms. On Windows it is emptier than that: **there is no app manifest at all**
+under `packaging/winget/` (the three manifests there are the CLI,
+`DevToolbelt.Devteam`; the word "app" appears once, in a comment), while
+ADR-0011's channel table promises winget for the app as well as the CLI.
 
 **The CI trigger, stated once.** `ci.yml`'s `push` trigger is `branches: [main]`
 plus `tags: ["**"]`; every other branch is covered by `pull_request` only. So a
@@ -43,7 +68,8 @@ it was simply false.
 | Path | What it is | Status |
 |------|-----------|--------|
 | `homebrew/devteam.rb` | Formula for the CLI (`scripts/cli/devteam` + `scripts/lib/devteam/`) | Installs and passes its own `test do` block through a real Homebrew, via `verify-formula-locally.sh`'s throwaway tap. Never installed from a **published** tap, and its `url`/`sha256` are still placeholders. |
-| `homebrew/devteam-app.rb` | Cask for the desktop app's signed, notarised `.dmg` | Groundwork only — the app does not exist. `ruby -c` is the only **CI** check that touches it, and it passes. `brew style` has been run on it by hand and reports four unfixed cask-cop findings — see § Verification. |
+| `homebrew/devteam-app.rb` | Cask for the desktop app's signed, notarised `.dmg` | Still unpublishable, for a narrower reason than before: the app exists (`app/`, ADR-0015) and builds an **unsigned** `.dmg`; no signed, notarised artifact and no real version exist. Its macOS floor and bundle id are no longer guesses — both are now read from `app/electron-builder.yml` (see the row below). `ruby -c` is the only **CI** check that touches it, and it passes. `brew style` has been run on it by hand and reports four unfixed cask-cop findings — see § Verification. |
+| (absent) `winget/…/DevToolbelt.DevteamApp/` | The winget manifest ADR-0011's channel table promises for the **app** | **Does not exist.** Nothing under `packaging/winget/` is about the app; all three manifests are the CLI. Windows therefore has no app channel at all, scaffolded or otherwise, and no Authenticode certificate to sign one with. |
 | `winget/manifests/d/DevToolbelt/Devteam/0.0.0/` | winget multi-file manifest (version, installer, locale) for the CLI | Scaffold at a placeholder version — no Windows installer exists to point at. Contract-checked in CI; never through `winget validate`. |
 | `verify-formula-locally.sh` | Exercises `devteam.rb` end to end through a real Homebrew (see Verification below) | Run and passing on macOS with Homebrew 7.0.6. Needs `brew` on PATH and Homebrew ≥ 7; the `packaging` job runs on `ubuntu-latest`, which has no Homebrew, so it is not run there. That is a cost choice, not an impossibility — Homebrew runs on Linux too, and `release.yml` runs this very script on a `macos-latest` runner. |
 | `../.github/scripts/ci/04-packaging.sh` | The CI gate for this directory: `ruby -c` on both formulas, plus the winget manifest contract | Runs on every pull request and on pushes to `main`/tags (the `packaging` job in `ci.yml`). Two advisories fire today, deliberately — see below. |
@@ -144,10 +170,20 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 
 ### Homebrew — app cask (`devteam-app.rb`)
 
-- [ ] The Electron app itself (`app/` directory, build pipeline — none of this
-      exists in this repository yet)
+- [x] The Electron app itself (`app/`, decided by ADR-0015) and a build that
+      produces the artifact shape the cask names: `npm run dist:mac` →
+      `release/dev-team-agents-<version>.dmg` containing a universal
+      `dev-team-agents.app`. **This box is ticked for existence only** — the
+      build is unsigned, no CI job runs it, and no artifact is committed
+- [ ] A step that stamps `app/package.json`'s `version` from the `app-v*` git tag
+      at build time. Without it the dmg filename and this cask's `version` are two
+      hand-maintained strings for one value; see the cask's own header for the rule
+      and § Version source of truth for why the tag is the authority
 - [ ] An Apple Developer ID (paid Apple Developer Program membership) to sign the
-      `.dmg`
+      `.dmg`, and `mac.identity`/`mac.notarize` in `app/electron-builder.yml`
+      flipped off their `null`/`false` placeholders, plus `CODE_SIGNED` in
+      `app/src/main/build-info.ts` flipped to `true` in the same change — the app
+      states its own signing status from that constant, in the UI and on startup
 - [ ] An app-specific password (or API key) for `notarytool` to notarise the signed
       build — generated from the Apple ID account, not something CI can create for
       itself
@@ -170,8 +206,15 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 
 ### winget — app manifest
 
-- [ ] Everything above, plus the app build itself and Windows code-signing for the
-      installer it produces
+- [ ] **The manifest itself. It does not exist** — no directory, no scaffold, no
+      placeholder, unlike every other row in this document. ADR-0011's channel
+      table promises winget for the app; nothing here delivers even a draft of it
+- [ ] A Windows build of the app. `app/electron-builder.yml` has **no `win`
+      block**, and says why: adding one "would imply a decided shape" while
+      ADR-0011's winget row is still a placeholder. So the app builds on macOS
+      only today
+- [ ] Windows code-signing (Authenticode) for whatever installer that build
+      produces
 
 ## The Windows installer shape — undecided, and the test that decides it
 
@@ -246,9 +289,11 @@ Both are quoted on the Microsoft page linked above:
 |------|------------|-------------|---------------------------|
 | `homebrew/devteam.rb` | `url "...tags/vX.Y.Z.tar.gz"` | The real tag | `.github/scripts/release/bump-homebrew-formula.sh`, called by `release.yml`, from `github.ref_name` on tag push |
 | `homebrew/devteam.rb` | `sha256 "REPLACE_WITH_SHA256_OF_RELEASE_TARBALL"` | 64-char hex digest | The same script, automatically — `sha256sum` of the downloaded tag tarball, never hand-written. The script refuses anything that is not 64 lowercase hex characters |
-| `homebrew/devteam-app.rb` | Entire file marked UNRELEASED AND UNVERIFIED | A real formula, once the app exists | Manual — write it against the actual signed `.dmg` the app build produces; do not just fill in these placeholders |
-| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | Manual, decided when the app first ships |
-| `homebrew/devteam-app.rb` | `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"` | 64-char hex digest of the real notarised `.dmg` | Manual — hash the actual release artifact once it exists; do not reuse the CLI formula's automation blindly, since a cask's artifact is signed/notarised and that should be verified, not just hashed |
+| `homebrew/devteam-app.rb` | Entire file marked UNRELEASED | A real cask, once a **signed** build exists | Manual — write it against the actual signed, notarised `.dmg`; do not just fill in these placeholders. The header no longer claims the app is absent: `app/` exists and builds an unsigned dmg |
+| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | The `app-v*` git tag, via a build step that stamps `app/package.json` from it. **Coupled**: `dmg.artifactName: ${productName}-${version}.dmg` derives the dmg filename from `app/package.json`'s `version` while the cask's `url` derives it from this line, so the two must be one string at release time. They disagree today on purpose (`0.0.0` vs `0.0.0-unreleased`) and must not be reconciled by hand — see the cask header |
+| `homebrew/devteam-app.rb` | `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"` | 64-char hex digest of the real notarised `.dmg` | Manual — hash the actual release artifact once it exists; do not reuse the CLI formula's automation blindly, since a cask's artifact is signed/notarised and that should be verified, not just hashed. **Never the digest of a local unsigned build**, which is a different artifact with the same filename |
+| `homebrew/devteam-app.rb` | ~~`depends_on macos: ">= :big_sur"`~~ — **no longer a placeholder** | `">= :monterey"`, measured | `app/node_modules/electron/dist/Electron.app/Contents/Info.plist` → `LSMinimumSystemVersion` **12.0** for Electron 39.8.10, mirrored by `mac.minimumSystemVersion: '12.0'` in `app/electron-builder.yml`. Big Sur was wrong in the dangerous direction: it licensed an install on a system the app cannot launch on. **Re-measure on every Electron major** — the floor moves with it, nothing checks the pair, and this is the one row in this table that comes back |
+| `homebrew/devteam-app.rb` | ~~placeholder bundle id in `zap trash:`~~ — **no longer a placeholder** | `com.devtoolbelt.dev-team-agents-app` | `appId` in `app/electron-builder.yml`; `app "dev-team-agents.app"` likewise matches its `productName`. Both confirmed against the build config, both still unchecked by any gate |
 | `winget/manifests/.../DevToolbelt.Devteam.yaml` (version dir + all 3 files) | `0.0.0` (`PackageVersion`, directory name) | The real release version | Manual — rename the `0.0.0/` directory and update `PackageVersion` in all three files together when a Windows installer first ships. `04-packaging.sh` fails the build if those four edits disagree with each other |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerUrl` entries (`vX.Y.Z`, filenames) | Real asset URLs | Manual — wherever the installers actually get uploaded (a GitHub Release is the obvious place, not decided). `04-packaging.sh` refuses a half-bump in either direction: the URL's tag and `PackageVersion` must move together |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerSha256` (64 zeros — deliberately not a plausible-looking fake hash) | Real digests of the real installers | Manual — hash the actual artifacts; **do this after signing**, if the chosen shape signs, since signing changes the bytes and therefore the hash |
@@ -364,7 +409,7 @@ printed beside it. Note the trap the third module carries:
 module only yields its cases under discovery. Its real command is
 `python3 -m unittest discover -s tests -t tests -p "test_json_contract.py"`, which
 reports `Ran 35 tests`. The whole suite — `python3 -m unittest discover -s tests -t tests`,
-which is what `.github/scripts/ci/03-python.sh` runs — reports `Ran 344 tests`.)
+which is what `.github/scripts/ci/03-python.sh` runs — reports `Ran 396 tests`.)
 
 **The two advisory findings are expected and must stay green.** They report that
 the Homebrew formula still carries its `vX.Y.Z`/`REPLACE_WITH_SHA256…` placeholders
@@ -434,9 +479,12 @@ three commands.
 winget manifests, and cannot be from macOS or Linux. `brew audit --cask` has never
 been run against `devteam-app.rb`. Neither channel has been published.
 
-On the cask, be precise about what the missing `.dmg` does and does not block.
-What it blocks is the **install**, the **digest** and the **codesign/notarisation**
-checks — there is nothing to fetch, hash or verify a signature on. It does not
+On the cask, be precise about what the missing artifact does and does not block —
+and note that "missing" now means *missing a signed, released* `.dmg`, not missing
+any `.dmg`: `app/` builds an unsigned one locally, and that build is not a
+substitute for the audit's subject. What is blocked is the **install**, the
+**digest** and the **codesign/notarisation** checks — there is nothing published to
+fetch or hash, and nothing signed to verify a signature on. It does not
 block static style checking, and that checking is not clean:
 `brew style packaging/homebrew/devteam-app.rb` reports seven offenses today, of
 which **four are genuine cask cops** and are recorded here as a known, unfixed
@@ -499,7 +547,9 @@ belong in this table.
 | `brew install` of a **real release tarball** | The formula's `url` and `sha256` are still placeholders, and no release tarball exists for any digest to describe. The local verification installs from `git archive … HEAD` — committed sources, the same file layout but not the same bytes GitHub's codeload serves. Worth naming precisely, because it is the gap inside the gap: the recorded run packaged **committed** sources while testing a formula copy whose own edits were **uncommitted**, so what was installed and what was audited did not come from the same tree state. `release.yml`'s `macos-latest` job closes the codeload half on the first tag that is pushed |
 | `release.yml` itself running end to end | It has never been triggered — the newest tag in this repository predates the commit that added the workflow. Its rewrite logic is no longer the unverified part: that lives in `bump-homebrew-formula.sh` with 23 tests. What is untested is the Actions run — the tag validation step, GitHub's codeload timing and retry loop, the PR creation, the artifact hand-off, and the digest passed between the two jobs. And the `macos-latest` job is **not a gate** even once it runs: the PR is opened by the bump job's last step, so it is already open while the job runs, and no branch rule marks the check required. A red check is a signal to whoever merges |
 | macOS code signing and notarisation of the app | Needs an Apple Developer ID and an app-specific password/API key — account-level access this environment does not have and should not be given |
-| `brew audit --cask` / any install of `devteam-app.rb` | There is no `app/` directory and no build, so there is no `.dmg` to fetch, hash, or verify a signature and notarisation ticket on — that is what the absent artifact blocks, and only that. **Static checking is not blocked, and is not clean:** `brew style` on the cask reports four genuine cask-cop findings today (`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`), all unfixed — see § Verification. The cask's macOS floor and bundle id are also guesses to be confirmed from the app's own `Info.plist` once it exists |
+| `brew audit --cask` / any install of `devteam-app.rb` | The app now exists and builds, so the reason has moved: what is absent is a **signed, notarised** `.dmg` at a real version, published at a `url` that resolves. An unsigned local build cannot stand in — `brew audit --cask` verifies a Developer ID signature and a notarisation ticket, which an ad-hoc-signed build does not have, so the audit's correct verdict on it is *reject*. The cask also still points at a 404 and carries `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"`. **Static checking is not blocked, and is not clean:** `brew style` on the cask reports four genuine cask-cop findings today (`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`), all unfixed — see § Verification. What is no longer unverified: the macOS floor and the bundle id, both now read off `app/electron-builder.yml` and the pinned Electron's `Info.plist` rather than guessed |
+| Whether the dmg filename the cask builds is the one the build produces | The two `version` values that decide it are hand-maintained in two files and no step derives either from the `app-v*` tag. Nothing compares them: `04-packaging.sh` runs `ruby -c` on the cask and never reads `app/package.json`, and `05-app.sh` never reads the cask. A release whose stamping step is missing produces a cask whose `url` 404s for a reason that looks like a mirror problem |
+| The app on winget, at all | There is no manifest to verify — see § Prerequisites. This row is not "an artifact exists and cannot be checked here"; it is an absence, and it is the one gap in this directory that ADR-0011's channel table promises and nothing here drafts |
 | Windows installer signing | Needs an Authenticode code-signing certificate — same reasoning. Required outright by candidate (a); recommended by (b) and (c) |
 | Anything winget accepts or rejects | `winget` runs on Windows only. `04-packaging.sh` checks the manifests against the schema's rules and against each other; it has never asked `winget validate` for its opinion, and the two are not the same authority. The installer shape itself is undecided |
 | The `InstallerSha256` values in the winget installer manifest | 64 zeros — no Windows installer has ever been built, signed or hashed |

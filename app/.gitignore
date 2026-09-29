@@ -1,0 +1,10 @@
+# Installed dependencies are never committed; package-lock.json is.
+node_modules/
+
+# Build output.
+dist/
+release/
+
+# Vite / TS caches.
+*.tsbuildinfo
+.vite/

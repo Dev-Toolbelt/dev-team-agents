@@ -1,0 +1,160 @@
+/**
+ * Tailwind v4 entry. One `@import`, no PostCSS chain and no `tailwind.config.js` — v4
+ * reads its configuration from CSS, and the Vite plugin (`@tailwindcss/vite`) replaces
+ * the old `postcss.config.js` + `autoprefixer` pair entirely.
+ *
+ * The token block below is shadcn/ui's, in `oklch`, with the colours chosen to read as a
+ * macOS developer tool rather than a branded web app: near-neutral greys, a system blue
+ * accent, and `--radius` at the platform's 8px rather than a rounder web default.
+ *
+ * Dark mode is driven by `prefers-color-scheme` — the OS setting, with no in-app toggle,
+ * because a desktop app that disagrees with the system appearance is the wrong kind of
+ * opinionated. shadcn components key off a `.dark` class, so `@custom-variant dark` is
+ * pointed at the media query instead and the class is never needed.
+ */
+
+@import 'tailwindcss';
+
+/*
+ * The kit components are outside Vite's `root`, so they have to be named.
+ *
+ * Tailwind v4 detects its sources automatically, starting from the directory it is run
+ * in — and `vite.config.mts` sets `root` to `src/renderer`, so the scan covered the three
+ * screens and stopped. Every class that exists only in `src/components/ui/**` — the whole
+ * of `TabsList`, `Table`, `Badge`'s variants — was therefore never emitted, and those
+ * components rendered as unstyled markup while the screens around them looked correct.
+ * That is the failure mode worth a comment: the page does not break, it quietly degrades,
+ * and the styles that vanish are exactly the ones nobody wrote in a screen file.
+ */
+@source '../components';
+@source '../lib';
+
+/* `tw-animate-css` is NOT imported. shadcn/ui adds it by default for the enter/exit
+   animations that dialogs, dropdowns and popovers use; none of the seven components this
+   slice generated uses one, and the only animation on screen (`animate-spin`) is core
+   Tailwind. Add it back in the same change that adds the first component that needs it. */
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --font-sans: var(--font-system);
+  --font-mono: var(--font-system-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  /* The system font stack. No webfont: `font-src 'self'` in the production CSP would
+     block one anyway, and San Francisco is what a macOS developer tool should look like. */
+  --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-system-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --radius: 0.5rem;
+
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.205 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.556 0.184 259.5);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0 0);
+  --secondary-foreground: oklch(0.245 0 0);
+  --muted: oklch(0.955 0 0);
+  --muted-foreground: oklch(0.525 0 0);
+  --accent: oklch(0.955 0 0);
+  --accent-foreground: oklch(0.245 0 0);
+  --destructive: oklch(0.58 0.205 27.3);
+  --destructive-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.72 0.152 70);
+  --warning-foreground: oklch(0.21 0.04 70);
+  --success: oklch(0.6 0.13 150);
+  --success-foreground: oklch(0.99 0 0);
+  --border: oklch(0.905 0 0);
+  --input: oklch(0.905 0 0);
+  --ring: oklch(0.556 0.184 259.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.185 0 0);
+    --foreground: oklch(0.96 0 0);
+    --card: oklch(0.225 0 0);
+    --card-foreground: oklch(0.96 0 0);
+    --popover: oklch(0.225 0 0);
+    --popover-foreground: oklch(0.96 0 0);
+    --primary: oklch(0.64 0.166 258);
+    --primary-foreground: oklch(0.16 0 0);
+    --secondary: oklch(0.27 0 0);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.27 0 0);
+    --muted-foreground: oklch(0.7 0 0);
+    --accent: oklch(0.3 0 0);
+    --accent-foreground: oklch(0.96 0 0);
+    --destructive: oklch(0.66 0.19 25);
+    --destructive-foreground: oklch(0.16 0 0);
+    --warning: oklch(0.78 0.15 75);
+    --warning-foreground: oklch(0.2 0.04 75);
+    --success: oklch(0.7 0.14 152);
+    --success-foreground: oklch(0.16 0 0);
+    --border: oklch(0.32 0 0);
+    --input: oklch(0.32 0 0);
+    --ring: oklch(0.64 0.166 258);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-system);
+    /* A desktop window, not a document: the chrome does not rubber-band or select. */
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* The traffic-light strip under `titleBarStyle: 'hiddenInset'` is draggable; anything
+     interactive inside the header opts back out with `.no-drag`. */
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+}

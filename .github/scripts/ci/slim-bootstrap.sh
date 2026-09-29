@@ -95,6 +95,155 @@ done
 
 [ "$fail" -eq 0 ] && echo "slim install shape OK ✓"
 
+# ── 2b. Root allowlist: what must NEVER reach a user project ────────────
+# Everything above tests apply_strip. install.sh applies a SECOND mechanism that
+# apply_strip knows nothing about: a KEEP_ROOT allowlist over the extracted
+# tarball root, which deletes every root entry not named in it. Section 2 cannot
+# see that mechanism at all, so until now a change to the allowlist was checked
+# by nothing.
+#
+# ADR-0015's Electron client under app/ is the case that made the gap matter. Its
+# Risks table leans on the allowlist by name — "KEEP_ROOT keeps app/ out of every
+# installed project, so a dependency defect cannot reach a user through the
+# framework's own channel" — and that mitigation was incidental: one word added to
+# one line would have put node_modules (100 MB+, tens of thousands of files), a
+# lockfile that every JS tool walking upward would then honour, and a packaged
+# Chromium into every user's repository. This section makes the claim asserted.
+#
+# The allowlist is PARSED from install.sh, never restated. A second copy here
+# would go green while the real allowlist shipped app/ — the only failure this
+# section exists to catch.
+#
+# The tree it is applied to is SYNTHETIC on purpose. Asserting against the
+# working tree alone passes vacuously on any checkout where app/ happens not to
+# exist, which is a green that proves nothing; the synthetic root always contains
+# the forbidden entries, so the assertion has something to remove on every run.
+KEEP_ROOT_DECL="$(sed -n 's/^KEEP_ROOT=(\(.*\))[[:space:]]*$/\1/p' "$SOURCE/scripts/install.sh")"
+if [ -z "$KEEP_ROOT_DECL" ]; then
+  echo "allowlist: CANNOT RUN — no KEEP_ROOT=(...) line found in scripts/install.sh." >&2
+  echo "  The declaration moved or changed shape. Re-point this parser; a check that" >&2
+  echo "  cannot run has not passed (see 01-lint.sh, ENFORCEMENT POLICY)." >&2
+  exit 2
+fi
+KEEP_ROOT_PARSED=()
+read -r -a KEEP_ROOT_PARSED <<<"$KEEP_ROOT_DECL"
+echo "allowlist parsed from install.sh: ${KEEP_ROOT_PARSED[*]}"
+
+# The loop from scripts/install.sh, iterating `/*` so dotfiles are untouched
+# exactly as they are there, and removing every root entry not in the allowlist.
+#
+# One deliberate difference: the removal is an `if`, not install.sh's
+# `[ "$keep" = false ] && rm -rf "$item"`. That form makes a kept entry the last
+# command's failure, so a function (or a loop) that ends on one returns 1 and
+# aborts the caller under `set -e`. install.sh survives it only because the
+# alphabetically last root entry happens to be one it removes.
+apply_root_allowlist() {
+  local root="$1" item name k keep
+  for item in "$root"/*; do
+    [ -e "$item" ] || continue
+    name="$(basename "$item")"
+    keep=false
+    for k in "${KEEP_ROOT_PARSED[@]}"; do
+      if [ "$name" = "$k" ]; then keep=true; break; fi
+    done
+    if [ "$keep" = false ]; then rm -rf "$item"; fi
+  done
+}
+
+# Names and extensions that must not survive anywhere in an installed project.
+# Chosen for what a user would have to live with, not just for app/:
+#   node_modules                — the size and the file count, and the only
+#                                 directory here a user is certain to notice
+#   package.json / lockfiles    — an installed tree that reads as a node package
+#                                 to every JS tool walking upward, and to a
+#                                 dependency bot that would then open pull
+#                                 requests against a file the user never wrote
+#   *.asar / *.dmg / *.AppImage — a packaged Electron build, i.e. shipping the
+#                                 desktop app itself through the framework's
+#                                 install channel
+#
+# Checked by NAME anywhere in the tree, not only under app/, because a
+# node_modules or a lockfile nested inside an ALLOWLISTED tree (scripts/,
+# skills/) survives both mechanisms and neither of them would say so. That is
+# true today and is the case this assertion will still be here for.
+#
+# node_modules is reported once and pruned: without the prune the failure output
+# is one line per nested package.json, which on a real dependency tree was 600+
+# lines of log for a single finding.
+assert_no_js_payload() {
+  local root="$1" label="$2" hits total
+  hits="$(cd "$root" && find . -name node_modules -print -prune -o \
+      \( -name package.json \
+         -o -name package-lock.json \
+         -o -name npm-shrinkwrap.json \
+         -o -name yarn.lock \
+         -o -name pnpm-lock.yaml \
+         -o -name '*.asar' \
+         -o -name '*.dmg' \
+         -o -name '*.AppImage' \) -print 2>/dev/null || true)"
+  [ -n "$hits" ] || return 0
+  total="$(printf '%s\n' "$hits" | wc -l | tr -d '[:space:]')"
+  echo "allowlist: FAIL — ${label} still carries JavaScript payload after strip + allowlist (${total} path(s)):" >&2
+  printf '%s\n' "$hits" | head -20 | sed 's/^/    /' >&2
+  [ "$total" -gt 20 ] && echo "    … and $((total - 20)) more" >&2
+  return 1
+}
+
+# (A) Synthetic root — the real allowlist applied to a tree that definitely
+#     contains the Electron client, whatever the working tree looks like today.
+ALLOW_STAGING="$(mktemp -d)"
+trap 'rm -rf "$STAGING" "$ALLOW_STAGING"' EXIT
+while IFS= read -r root_entry; do
+  if [ -n "$root_entry" ]; then mkdir -p "$ALLOW_STAGING/$root_entry"; fi
+done <<EOF
+$(cd "$SOURCE" && ls -1)
+EOF
+mkdir -p "$ALLOW_STAGING/app/node_modules/electron/dist" \
+         "$ALLOW_STAGING/app/src/cli" \
+         "$ALLOW_STAGING/app/release"
+touch "$ALLOW_STAGING/app/package.json" \
+      "$ALLOW_STAGING/app/package-lock.json" \
+      "$ALLOW_STAGING/app/node_modules/electron/package.json" \
+      "$ALLOW_STAGING/app/release/dev-team-agents.dmg" \
+      "$ALLOW_STAGING/app/release/app.asar"
+apply_root_allowlist "$ALLOW_STAGING"
+apply_strip "$ALLOW_STAGING"
+
+if [ -e "$ALLOW_STAGING/app" ]; then
+  echo "allowlist: FAIL — app/ survived the KEEP_ROOT allowlist in scripts/install.sh." >&2
+  echo "  The Electron desktop client (ADR-0015) would be installed into every user project." >&2
+  echo "  KEEP_ROOT is an allowlist: adding 'app' to it ships app/, and ADR-0015's risk" >&2
+  echo "  mitigation depends on it not being there." >&2
+  fail=1
+fi
+assert_no_js_payload "$ALLOW_STAGING" "the synthetic root" || fail=1
+
+# The other direction: an allowlist that stops keeping what the runtime needs is
+# just as broken as one that keeps too much, and nothing else asserts the five
+# top-level trees survive it.
+#
+# This list is hardcoded ON PURPOSE, unlike the allowlist itself. It states what
+# an installed project REQUIRES, so it has to be independent of the declaration
+# it is checking — parsing KEEP_ROOT here would make the assertion agree with
+# whatever the allowlist says and therefore assert nothing. Do not "deduplicate"
+# it against the parser above.
+for keep_dir in agents scripts skills templates commands; do
+  if [ ! -d "$ALLOW_STAGING/$keep_dir" ]; then
+    echo "allowlist: FAIL — ${keep_dir}/ did not survive the allowlist; an installed project needs it." >&2
+    fail=1
+  fi
+done
+
+# (B) The real tree, which today genuinely carries app/ with an installed
+#     node_modules — so this proves the mechanism removes the actual payload and
+#     not merely a fixture. STAGING is consumed here: section 2's assertions are
+#     complete and nothing below reads it again.
+apply_root_allowlist "$STAGING"
+assert_no_js_payload "$STAGING" "the stripped working tree" || fail=1
+
+[ "$fail" -eq 0 ] || exit 1
+echo "root allowlist OK ✓  (app/, node_modules, lockfiles and packaged builds cannot reach a user project)"
+
 # ── 3. Bootstrap opencode via install-provider.sh --source ──────────────
 rm -rf "$FIXTURE"
 mkdir -p "$FIXTURE"

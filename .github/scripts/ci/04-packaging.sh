@@ -802,8 +802,9 @@ homebrew_placeholders() {
   esac
   value="$(formula_directive "$HOMEBREW_DIR/devteam-app.rb" sha256)"
   if [ "$value" = "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET" ]; then
-    echo "  $HOMEBREW_DIR/devteam-app.rb is cask groundwork only — the desktop app"
-    echo "    does not exist, so its sha256 directive is an explicit non-value."
+    echo "  $HOMEBREW_DIR/devteam-app.rb has no releasable artifact to describe — the"
+    echo "    app exists under app/ (ADR-0015) but no signed, notarised build does, so"
+    echo "    its sha256 directive is an explicit non-value."
     rc=1
   fi
   [ "$rc" -eq 0 ] && echo "  no placeholders left in the Homebrew url/sha256 directives."

@@ -378,7 +378,14 @@ for item in "$EXTRACTED_ROOT"/*; do
     for k in "${KEEP_ROOT[@]}"; do
         [ "$name" = "$k" ] && keep=true && break
     done
-    [ "$keep" = false ] && rm -rf "$item"
+    # `if`, not `[ … ] && rm -rf …`: as an AND-list this is the loop body's last
+    # command, so on a KEPT entry it returns 1 and the loop returns 1. At top
+    # level with code after it that status is harmlessly discarded, which is why
+    # this has always worked here — but wrap this block in a function, or let the
+    # loop become the script's last statement, and `set -e` aborts the install.
+    if [ "$keep" = false ]; then
+        rm -rf "$item"
+    fi
 done
 
 # Strip dotfiles/dotdirs (not matched by KEEP_ROOT glob above), repo-only
