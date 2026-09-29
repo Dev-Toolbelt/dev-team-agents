@@ -11,9 +11,12 @@ import { vi } from 'vitest';
 
 import type {
   BindReport,
+  BuildInfo,
+  CliResolution,
   DevteamBridge,
   DoctorReport,
   EnvironmentReport,
+  HandshakeView,
   OperationResult,
   ProblemKind,
   ProjectRecord,
@@ -69,6 +72,65 @@ export function environment(overrides: Partial<EnvironmentReport> = {}): Environ
     settings: { path: '/app/settings.json', problem: null, cliPathConfigured: true },
     workingDirectory: '/repo/project-1',
     withheld: [],
+    ...overrides,
+  };
+}
+
+export function buildInfo(overrides: Partial<BuildInfo> = {}): BuildInfo {
+  return {
+    appVersion: '1.0.0',
+    electronVersion: '30.0.0',
+    packaged: false,
+    codeSigned: false,
+    hasWriteActions: false,
+    mutatingCommandsRun: [],
+    ...overrides,
+  };
+}
+
+/** The `found: true` branch — the ordinary case a fake bridge should answer with. */
+export function cliResolutionFound(overrides: {
+  readonly cli?: Partial<Extract<CliResolution, { found: true }>['cli']>;
+  readonly rejected?: CliResolution['rejected'];
+} = {}): CliResolution {
+  return {
+    found: true,
+    rejected: overrides.rejected ?? [],
+    cli: {
+      path: '/opt/homebrew/bin/devteam',
+      source: 'path',
+      sourceDetail: 'PATH',
+      storeVersion: '2.48.0',
+      jsonContract: 1,
+      minAppVersion: null,
+      storeSchemas: {},
+      ...overrides.cli,
+    },
+  };
+}
+
+/** The `found: false` branch, for a test that needs the no-CLI state. */
+export function cliResolutionNotFound(overrides: Partial<Extract<CliResolution, { found: false }>> = {}): CliResolution {
+  return {
+    found: false,
+    rejected: [],
+    searchedCount: 3,
+    searchedBySource: [],
+    remedy: ['Install the CLI: `brew install dev-toolbelt/devteam/devteam`.'],
+    ...overrides,
+  };
+}
+
+export function handshakeView(overrides: Partial<Extract<HandshakeView, { state: 'answered' }>> = {}): HandshakeView {
+  return {
+    state: 'answered',
+    mayWrite: true,
+    jsonContract: 1,
+    minAppVersion: null,
+    storeSchemas: {},
+    clientSchemas: {},
+    unsupported: {},
+    summary: 'compatible',
     ...overrides,
   };
 }
@@ -153,10 +215,10 @@ export function doctorReport(overrides: Partial<DoctorReport> = {}): DoctorRepor
 /** A fake bridge with every method stubbed to a benign default; tests override per case. */
 export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridge {
   return {
-    buildInfo: vi.fn(),
+    buildInfo: vi.fn(() => Promise.resolve(buildInfo())),
     environment: vi.fn(() => Promise.resolve(environment())),
-    resolveCli: vi.fn(),
-    handshake: vi.fn(),
+    resolveCli: vi.fn(() => Promise.resolve(cliResolutionFound())),
+    handshake: vi.fn(() => Promise.resolve(ok(handshakeView()))),
     listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
     catalogSummary: vi.fn(),
     catalogListing: vi.fn(),
