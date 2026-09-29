@@ -908,5 +908,27 @@ installs before anyone merges**
   alone" is still unasserted — but for a better reason than "no surface to test": with six write actions
   the claim finally has content, and what checks it is a reviewer reading a closed `ALLOWED_COMMANDS`.
 
+**2026-09-29 — Windows and macOS stop being simulated, and the app gains a diagnosis of itself.**
+Every scenario above that reads *"unverifiable here"* or *"simulated on Linux"* did so against the same
+underlying fact: all seven CI jobs ran on `ubuntu-latest`, so the only assertions about Windows were pure
+functions handed the string `'win32'`. Two of those jobs now matrix over `ubuntu-latest`,
+`windows-latest` and `macos-latest` — `python` (the CLI's stdlib suite) and `app` (typecheck, lint,
+vitest) — with `fail-fast: false`. **This closes the execution gap, not the artifact gap:** the five
+remaining jobs stay ubuntu-only because their subjects are bash installers, shellcheck, ruby and jq, and
+`winget validate` / `winget install --manifest` still have never run, because they need an installer that
+has never been built. The `packaging` gate's ubuntu-only note above therefore still stands as written.
+Three POSIX-only test groups are now skipped on Windows with a stated reason rather than adapted —
+permission-bit assertions (NTFS has none), `test_release_bump.py` (its subject is a bash script, and two
+tests branch on `os.geteuid()`), and the staged-CLI run (Windows does not honour a `#!` line) — because a
+check loosened until it passes everywhere has stopped testing what it was written for. One documentation
+claim was false rather than merely untested and is corrected in `secrets.py`: the fallback secret
+backend's "mode-0600 JSON file" is not enforced on Windows at all, and `dpapi`, the backend that should
+be reached instead, is itself UNVERIFIED. Separately, `doctor` covered the store, machine, registry and
+project but nothing about the app, and it still must not — so the app now evaluates its own
+preconditions in `selfCheck()`, a pure function over values the bridge already returned, adding no IPC
+channel. It is what finally compares `min_app_version` against the app's own version, a value that had
+been read and displayed and never used. Suite: **226 passing, 1 skipped** under `app/test/` (was 201/1),
+python **420** (was 417).
+
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
