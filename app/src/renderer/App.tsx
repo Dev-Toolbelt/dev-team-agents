@@ -13,7 +13,8 @@ import { Loading } from './Problem.js';
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
 // `bash build/make-icon.sh`. Imported rather than referenced from `public/` so a missing
 // asset is a build error — over `file://` a wrong path is a silent 404.
-import brandSymbol from './logo/derived/symbol-128.png';
+import wordmarkLight from './logo/derived/wordmark-light-720.png';
+import wordmarkDark from './logo/derived/wordmark-dark-720.png';
 import lockupLight from './logo/derived/horizontal-light-720.png';
 import lockupDark from './logo/derived/horizontal-dark-720.png';
 import type {
@@ -62,20 +63,35 @@ export function App() {
     <div className="flex h-full flex-col">
       <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
         <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          {/* The symbol, not the horizontal lockup. The brand guide's horizontal and
-              principal compositions both carry the slogan, and it says to avoid the
-              slogan at sizes that hurt its legibility — at a 20px header it would be
-              unreadable. The mark alone is the composition the guide defines for this
-              ("Símbolo: somente o asterisco existente"). `aria-hidden` because the
-              heading beside it already announces the name; two labels would be read
-              twice. Height only, so the aspect ratio is never distorted. */}
-          <img
-            src={brandSymbol}
-            alt=""
-            aria-hidden="true"
-            className="h-5 w-auto self-center"
-          />
-          <h1 className="text-lg font-semibold tracking-tight">dev-team-agents</h1>
+          {/* The lockup with the slogan cropped off, not the symbol and not the full
+              composition. The guide warns against the slogan at a size that hurts its
+              legibility, which is why this row carried the symbol alone before —
+              removing the slogan is what makes the lockup usable here at all. The crop
+              is measured, not eyeballed; `build/make-icon.sh` records the alpha bands it
+              was taken from. Height only, so the ratio is never distorted.
+
+              Two images rather than one `<picture>`, because the dark variant needs a
+              style the light one must not have. The brand pack has no transparent
+              white-letter horizontal lockup — the guide's *negativa* is white letters and
+              orange on a **solid black** field — and a black rectangle on this header's
+              oklch(0.185) background reads as a pasted box. `mix-blend-screen` makes that
+              black composite away to nothing while leaving the white and the orange
+              intact, so the sanctioned asset is used unmodified rather than a new
+              treatment being invented for it. Screen on the light variant would wash it
+              out, so it is applied to this one only — which a shared `<img>` could not do.
+
+              The name lives in the heading as text: with only one image visible per
+              scheme, an `alt` on either would leave the other scheme's heading unnamed. */}
+          <h1 className="self-center">
+            <span className="sr-only">dev-team-agents</span>
+            <img src={wordmarkLight} alt="" aria-hidden="true" className="h-7 w-auto dark:hidden" />
+            <img
+              src={wordmarkDark}
+              alt=""
+              aria-hidden="true"
+              className="hidden h-7 w-auto mix-blend-screen dark:block"
+            />
+          </h1>
           <WriteActionsBadge build={build} />
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
           {build !== null ? (

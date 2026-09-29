@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Regenerate the derived brand assets from the brand source.
 #
-# Three outputs, all generated and all committed:
+# Four kinds of output, all generated and all committed:
 #   build/icon.icns                          — the macOS app icon
 #   build/icon.png                           — 1024px, the cross-platform icon source
 #   src/renderer/logo/derived/symbol-128.png — the symbol the renderer imports
+#   src/renderer/logo/derived/wordmark-*     — the lockup with the slogan cropped off
 #
 # WHY A PNG TOO, when the icns already exists: `iconutil` is macOS-only and writes no
 # `.ico`, so the Windows installer had no icon of its own and would have shipped
@@ -75,6 +76,32 @@ for variant in "logo-horizontal-transparente horizontal-light-720" \
   src_name=${variant%% *}
   out_name=${variant##* }
   sips -Z 720 "src/renderer/logo/${src_name}.png" \
+    --out "src/renderer/logo/derived/${out_name}.png" >/dev/null
+  echo "src/renderer/logo/derived/${out_name}.png written ($(wc -c < "src/renderer/logo/derived/${out_name}.png") bytes)"
+done
+
+# The same lockup with the slogan cropped away, for the header — where the full
+# composition cannot go. The guide says not to use the slogan at a size that hurts its
+# legibility, and the header row is exactly that size; cropping it off is what makes the
+# lockup usable there at all, and is why the header carried the symbol alone until now.
+#
+# The crop is MEASURED, not eyeballed. Decoding logo-horizontal-transparente.png's alpha
+# gives two content bands and 224 empty rows between them:
+#     mark    rows  150..866   (x 175..3400, so 3226x717 — a 4.5:1 mark)
+#     slogan  rows 1091..1274
+# So the cut lands in dead space with ~100 rows of clearance on each side, and a 10px
+# margin is kept around the mark so nothing antialiased is clipped. Both source
+# compositions are 3600x1440 and aligned, so one geometry serves both.
+#
+# Re-measure if the brand source is ever replaced. A hardcoded crop against art that
+# moved would silently shave the mark instead of the slogan.
+for variant in "logo-horizontal-transparente wordmark-light-720" \
+               "logo-principal-dark-negativa wordmark-dark-720"; do
+  src_name=${variant%% *}
+  out_name=${variant##* }
+  sips -c 737 3245 --cropOffset 140 165 "src/renderer/logo/${src_name}.png" \
+    --out "$WORK/${out_name}.png" >/dev/null
+  sips -Z 720 "$WORK/${out_name}.png" \
     --out "src/renderer/logo/derived/${out_name}.png" >/dev/null
   echo "src/renderer/logo/derived/${out_name}.png written ($(wc -c < "src/renderer/logo/derived/${out_name}.png") bytes)"
 done
