@@ -9,9 +9,20 @@ Backends, best first:
 
 * ``keychain`` — macOS, via the ``security`` CLI.
 * ``dpapi`` — Windows, via ``CryptProtectData``/``CryptUnprotectData``.
-* ``insecure`` — a mode-0600 JSON file. Always available, so an unsupported
-  platform is never blocked, but it is not a security control: anyone who can
-  read the data store as this user can read every value in it.
+* ``insecure`` — a JSON file, chmod'ed 0600 where the filesystem has POSIX
+  permission bits. Always available, so an unsupported platform is never
+  blocked, but it is not a security control: anyone who can read the data store
+  as this user can read every value in it.
+
+  **On Windows that mode is not applied at all.** ``os.chmod`` there can only
+  flip the read-only attribute, so neither this file's 0600 nor the data store's
+  0700 directory mode is enforced by the filesystem — containment falls back to
+  whatever the user profile's own ACLs give, which this code neither sets nor
+  checks. The backend is therefore weaker on Windows than the name ``insecure``
+  already warns, and ``dpapi`` above is the one that should be reached — but
+  ``dpapi`` is itself marked UNVERIFIED (see its section), so a Windows user can
+  land here. Stated rather than implied, because a 0600 claimed and not enforced
+  is worse than one never claimed.
 
 ADR-0010 also lists an ``age``/``sops`` encrypted backend. It is **not**
 implemented here and does not appear in ``BACKENDS`` — it needs a passphrase
