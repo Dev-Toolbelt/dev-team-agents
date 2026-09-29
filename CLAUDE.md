@@ -194,6 +194,7 @@ Skills that users trigger directly via slash command must be registered here:
 |-------|------|---------|
 | `skill-creator` | `skills/skill-creator/SKILL.md` | `/skill-creator` or "create/update a skill" |
 | `agent-creator` | `.claude/skills/agent-creator/SKILL.md` — tracked in this repo, but `.claude/` is stripped from the package by `scripts/lib/strip-tarball.sh`, so it never reaches an installed project. Available to contributors working inside this repo only. | `/agent-creator` or "create/update an agent" |
+| `repo-release-prep` | `.claude/skills/repo-release-prep/SKILL.md` — contributor-only, same fate as `agent-creator`: tracked here, stripped from the package. **Named apart from the shipped `release-prep` on purpose.** The two are different documents — this one is the 10-step runbook for tagging *this* repository (orphan scan, agent compliance, README sync, package exclusions, this very table), while `skills/shared/release-prep/SKILL.md` is the generic checklist a bound project gets. They shared the name `release-prep` until the collision blocked `devteam bind` on this repository, because bind will not write a framework skill's symlink over a real directory. | `/repo-release-prep` |
 | `review` | `agents/code-reviewer.md` | `/review`, `/review backend`, `/review frontend`, `/review both` |
 
 **Command-level skills** — loaded by `commands/*.md` files rather than by agents directly:

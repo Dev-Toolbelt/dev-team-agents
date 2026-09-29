@@ -1,6 +1,6 @@
 ---
-name: release-prep
-description: Guides the pre-release process for the dev-team-agents repository. Runs consistency checks, validates README sync, determines the correct version bump, and creates the git tag. Use before any version tag is created.
+name: repo-release-prep
+description: Release runbook for the dev-team-agents repository itself, not for a bound project. Runs consistency checks, validates README sync, determines the correct version bump, and creates the git tag. Use before any version tag is created.
 ---
 
 # Release Prep
