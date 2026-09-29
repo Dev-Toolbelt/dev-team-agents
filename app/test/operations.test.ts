@@ -36,15 +36,37 @@ function fakeContext(scenario = 'ok'): CliContext {
 }
 
 /**
+ * `source.indexOf(marker)`, except a missing marker throws instead of returning -1.
+ *
+ * This is the strongest cross-language guard in the repository — it fails a JS test
+ * when a Python table is renamed — so it must not have a silent-failure mode. An
+ * unchecked `-1` from a renamed marker turns `slice(x, -1)` into "the rest of the
+ * file", and every subsequent `.toContain(tuple)` check on that slice can then pass by
+ * accident for a tuple that merely appears somewhere later on, not because it is in
+ * the table being asserted about.
+ */
+function markerIndex(source: string, marker: string, file: string): number {
+  const index = source.indexOf(marker);
+  if (index === -1) {
+    throw new Error(`expected to find the marker ${JSON.stringify(marker)} in ${file}, but it is not there`);
+  }
+  return index;
+}
+
+/**
  * The classification tables, read out of `compat.py` rather than restated here. A command
  * moved between them in the framework has to fail this test — which is the whole reason to
  * parse the source file instead of keeping a copy of the answer.
  */
 function classificationTables() {
-  const source = readFileSync(join(REPO_ROOT, 'scripts', 'lib', 'devteam', 'compat.py'), 'utf8');
+  const file = join(REPO_ROOT, 'scripts', 'lib', 'devteam', 'compat.py');
+  const source = readFileSync(file, 'utf8');
+  const mutatingStart = markerIndex(source, 'MUTATING = {', file);
+  const readOnlyStart = markerIndex(source, 'READ_ONLY = {', file);
+  const needsMachineLayoutStart = markerIndex(source, 'NEEDS_MACHINE_LAYOUT = {', file);
   return {
-    mutating: source.slice(source.indexOf('MUTATING = {'), source.indexOf('READ_ONLY = {')),
-    readOnly: source.slice(source.indexOf('READ_ONLY = {'), source.indexOf('NEEDS_MACHINE_LAYOUT = {')),
+    mutating: source.slice(mutatingStart, readOnlyStart),
+    readOnly: source.slice(readOnlyStart, needsMachineLayoutStart),
   };
 }
 

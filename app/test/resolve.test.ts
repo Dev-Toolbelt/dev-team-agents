@@ -198,6 +198,33 @@ describe('a candidate must answer, not merely exist', () => {
     if (resolution.found) throw new Error('unreachable');
     expect(resolution.rejected[0]?.reason).toContain('not a regular file');
   });
+
+  it('refuses to run a candidate out of a world-writable directory', async () => {
+    const cli = await plant('bin', 'version-with-compat');
+    await chmod(join(root, 'bin'), 0o777);
+    const resolution = await resolveDevteam({
+      env: { PATH: join(root, 'bin') },
+      platform: 'darwin',
+      knownLocations: [],
+    });
+    expect(resolution.found).toBe(false);
+    if (resolution.found) throw new Error('unreachable');
+    expect(resolution.rejected[0]?.path).toBe(cli);
+    expect(resolution.rejected[0]?.reason).toContain('world-writable');
+  });
+
+  it('trusts a configured path even out of a world-writable directory — the user overrode the search', async () => {
+    const cli = await plant('configured', 'version-with-compat');
+    await chmod(join(root, 'configured'), 0o777);
+    const resolution = await resolveDevteam({
+      env: { DEVTEAM_CLI_PATH: cli },
+      platform: 'darwin',
+      knownLocations: [],
+    });
+    expect(resolution.found).toBe(true);
+    if (!resolution.found) throw new Error('unreachable');
+    expect(resolution.cli.path).toBe(cli);
+  });
 });
 
 describe('when nothing is found', () => {
@@ -218,6 +245,11 @@ describe('when nothing is found', () => {
     expect(resolution.remedy.join(' ')).toContain('brew install');
     // The claim ADR-0011 rests on, asserted rather than only commented.
     expect(resolution.remedy.join(' ')).toContain('ships no copy of the CLI');
+    // "which locations it tried" (ADR-0015 § 5), grouped by step rather than one count.
+    const path = resolution.searchedBySource.find((entry) => entry.source === 'path');
+    const homebrew = resolution.searchedBySource.find((entry) => entry.source === 'homebrew');
+    expect(path?.count).toBe(1);
+    expect(homebrew?.count).toBe(1);
   });
 
   it('still searches a channel location on Windows, under each shim name', async () => {
@@ -233,5 +265,26 @@ describe('when nothing is found', () => {
     for (const name of ['devteam.exe', 'devteam.cmd', 'devteam.bat', 'devteam']) {
       expect(resolution.searched, name).toContain(join(links, name));
     }
+    // Four shim names under the one winget directory: one location, four candidates.
+    const winget = resolution.searchedBySource.find((entry) => entry.source === 'winget');
+    expect(winget?.count).toBe(4);
+  });
+
+  it('gives Windows a remedy that is actually true, not a macOS or invented-package one', async () => {
+    const resolution = await resolveDevteam({
+      env: { PATH: join(root, 'nowhere') },
+      platform: 'win32',
+      knownLocations: [],
+    });
+    if (resolution.found) throw new Error('unreachable');
+    const remedy = resolution.remedy.join(' ');
+    // The defect this covers: the remedy used to open with `brew install`, unconditionally,
+    // on every platform — including this one, where Homebrew does not apply.
+    expect(remedy).not.toContain('brew install');
+    // ADR-0011 records the Windows installer shape as undecided; a `winget install <pkg>`
+    // line would claim a package that does not exist.
+    expect(remedy).not.toContain('winget install');
+    expect(remedy).toContain('DEVTEAM_CLI_PATH');
+    expect(remedy).toContain('ADR-0011');
   });
 });

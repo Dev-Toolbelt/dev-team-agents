@@ -7,7 +7,7 @@
  * still produces a usable answer rather than an error state.
  */
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +47,52 @@ describe('the declaration is the app’s own constant', () => {
     expect(parsed).toEqual(APP_STORE_SCHEMAS);
     // `compat.parse_client_schemas` rejects a non-integer value for a present key.
     expect(Object.values(parsed).every((value) => typeof value === 'number' && Number.isInteger(value))).toBe(true);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('replaces a pre-planted symlink instead of writing through it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    const targetDir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-target-'));
+    const sensitive = join(targetDir, 'sensitive.json');
+    await writeFile(sensitive, 'do not touch');
+    const declarationPath = join(dir, 'client-schemas.json');
+    await symlink(sensitive, declarationPath);
+
+    const path = await writeDeclarationFile(dir);
+
+    expect(path).toBe(declarationPath);
+    // The symlink is gone — replaced by a regular file — not followed and truncated.
+    const info = await lstat(path);
+    expect(info.isSymbolicLink()).toBe(false);
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(APP_STORE_SCHEMAS);
+    // What the symlink pointed at is untouched.
+    expect(await readFile(sensitive, 'utf8')).toBe('do not touch');
+
+    await rm(dir, { recursive: true, force: true });
+    await rm(targetDir, { recursive: true, force: true });
+  });
+
+  it('replaces a pre-planted world-writable file rather than keeping its mode', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    const declarationPath = join(dir, 'client-schemas.json');
+    await writeFile(declarationPath, 'pre-existing', { mode: 0o666 });
+    await chmod(declarationPath, 0o666); // belt-and-suspenders against an inherited umask
+
+    await writeDeclarationFile(dir);
+
+    const info = await stat(declarationPath);
+    // 0o600, not the 0o666 the pre-planted file had — `{ mode }` on a `writeFile` to an
+    // existing path is a no-op, so this only holds because the file was replaced, not
+    // opened and overwritten.
+    expect(info.mode & 0o777).toBe(0o600);
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('leaves no temp file behind after a successful write', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    await writeDeclarationFile(dir);
+    expect(await readdir(dir)).toEqual(['client-schemas.json']);
     await rm(dir, { recursive: true, force: true });
   });
 });
