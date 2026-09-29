@@ -92,7 +92,12 @@ def _malformed(name_fallback, rel, version, exc, extra=None):
 
 
 def _agent_entry(path, version_dir, version):
-    rel = str(Path(path).relative_to(version_dir))
+    # `.as_posix()`: `path` is part of the `--json` contract the desktop app
+    # consumes (ADR-0011), and a shape change includes the separator — a Windows
+    # CLI answering `agents\backend-developer.md` where every other platform
+    # answers `agents/backend-developer.md` is exactly the breaking change that
+    # ADR forbids, just silent because nothing failed loudly.
+    rel = Path(path).relative_to(version_dir).as_posix()
     name_fallback = Path(path).stem
     try:
         frontmatter, _body = parse_frontmatter(_read_text(path))
@@ -110,7 +115,8 @@ def _agent_entry(path, version_dir, version):
 
 def _skill_entry(path, version_dir, version):
     rel_path = Path(path).relative_to(version_dir)
-    rel = str(rel_path)
+    # `.as_posix()`: see `_agent_entry` — same `--json` contract.
+    rel = rel_path.as_posix()
     # `skills/<category>/.../SKILL.md` — the parts after `skills/` itself, so the
     # first one is the top-level grouping CLAUDE.md's file-structure list names
     # (shared, architecture, testing, ...). A skill directly under `skills/`
@@ -132,7 +138,8 @@ def _skill_entry(path, version_dir, version):
 
 
 def _command_entry(path, version_dir, version):
-    rel = str(Path(path).relative_to(version_dir))
+    # `.as_posix()`: see `_agent_entry` — same `--json` contract.
+    rel = Path(path).relative_to(version_dir).as_posix()
     # Commands carry no `name:` key (only `description` and, optionally,
     # `argument-hint` are Claude-only frontmatter here) — the filename is the name.
     name = Path(path).stem

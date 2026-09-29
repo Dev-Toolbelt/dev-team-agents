@@ -129,11 +129,22 @@ def validate(data, source="project.json"):
     paths_value = data.get("context_paths", DEFAULT_CONTEXT_PATHS)
     if not isinstance(paths_value, list) or not paths_value:
         raise EnvError("{}: 'context_paths' must be a non-empty list".format(source))
+    # Imported locally: `paths` is not otherwise a dependency of this module, and
+    # `state_dir_for_layout` below already imports it the same way to sidestep a
+    # cycle risk rather than take it on at module load time.
+    from . import paths
+
     for item in paths_value:
         if not isinstance(item, str) or not item.strip():
             raise EnvError("{}: every context path must be a non-empty string".format(source))
         candidate = Path(item)
-        if candidate.is_absolute():
+        # `candidate.is_absolute()` alone only answers for the platform this
+        # process happens to run on: `WindowsPath("/etc").is_absolute()` is
+        # False (no drive letter), which let a POSIX-absolute string through a
+        # committed `project.json` read on Windows. `project.json` is committed
+        # and can be authored on any platform, so both flavours are checked
+        # regardless of which one is running this validation.
+        if candidate.is_absolute() or paths.is_absolute_on_any_platform(item):
             raise EnvError(
                 "{}: context path '{}' must be relative to the project root".format(
                     source, item
@@ -306,7 +317,12 @@ def _write_pointer(root, name, resolved):
     tmp = target.with_name(name + ".tmp")
     tmp.write_text(str(resolved) + "\n", encoding="utf-8")
     tmp.replace(target)
-    return {"path": str(Path(PROJECT_DIR) / name), "kind": "pointer"}
+    # `.as_posix()` on the manifest key only: this record's "path" feeds the
+    # exclude block and the manifest alongside every artifact bind.py mints, all
+    # of which are forward-slash (see bind.py's `_vendored_tree`). `resolved`
+    # itself stays a native, absolute path — it is written to a pointer file a
+    # shell hook reads back on this same machine, not compared as a string.
+    return {"path": (Path(PROJECT_DIR) / name).as_posix(), "kind": "pointer"}
 
 
 def write_pointers(root, project_id=None):

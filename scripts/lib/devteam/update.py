@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 
 from . import bind as bind_module
-from . import versions
+from . import paths, versions
 from .errors import EnvError, UsageError
 
 GITHUB_OWNER = "Dev-Toolbelt"
@@ -152,13 +152,21 @@ def safe_members(tar):
     """
     for member in tar.getmembers():
         name = Path(member.name)
-        if name.is_absolute() or ".." in name.parts:
+        # An archive is untrusted input that may have been built on, or for, a
+        # different platform than the one extracting it — so both a member name
+        # and a link target are checked against POSIX *and* Windows absoluteness
+        # regardless of which platform this process is running on. A bare
+        # `name.is_absolute()` only answers for the host's own flavour:
+        # `WindowsPath("/etc").is_absolute()` is False, which let a
+        # POSIX-absolute member name through unrejected when extracting on
+        # Windows.
+        if name.is_absolute() or ".." in name.parts or paths.is_absolute_on_any_platform(member.name):
             raise EnvError("refusing unsafe archive member name: {}".format(member.name))
         if member.isdev() or member.isfifo():
             raise EnvError("refusing device/fifo archive member: {}".format(member.name))
         if member.issym() or member.islnk():
             link = Path(member.linkname)
-            if link.is_absolute():
+            if link.is_absolute() or paths.is_absolute_on_any_platform(member.linkname):
                 raise EnvError(
                     "refusing archive link with an absolute target: {} -> {}".format(
                         member.name, member.linkname

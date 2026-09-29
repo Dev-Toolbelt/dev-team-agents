@@ -20,15 +20,22 @@ FAIL = "fail"
 
 
 def _points_into(target, version):
-    """True when a link target lives inside ``versions/<version>/``.
+    r"""True when a link target lives inside ``versions/<version>/``.
 
     A substring test (`version not in target`) false-negatives whenever the store
     path itself contains the version string, so compare by path components.
+
+    ``paths.realpath_normalized`` rather than a bare ``os.path.realpath`` matters
+    on Windows: ``target`` is read back with ``os.readlink``, which always carries
+    the ``\\?\`` extended prefix, while ``expected_root`` is a plain path that
+    does not reliably pick the same prefix up from ``realpath`` — comparing the
+    two unnormalized reports a perfectly healthy bind as pointing at the wrong
+    version.
     """
     expected_root = paths.version_dir(version)
     try:
-        resolved = Path(os.path.realpath(str(target)))
-        root = Path(os.path.realpath(str(expected_root)))
+        resolved = paths.realpath_normalized(target)
+        root = paths.realpath_normalized(expected_root)
         resolved.relative_to(root)
         return True
     except (ValueError, OSError):

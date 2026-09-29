@@ -107,7 +107,10 @@ def materialize(project_root, project_id, version):
     target = Path(project_root) / RESOLVED_FILE
     jsonio.write_json_atomic(target, payload, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
     return {
-        "path": str(RESOLVED_FILE),
+        # `.as_posix()`: see the comment in `project._write_pointer` — this
+        # manifest key must match the forward-slash form everything else in the
+        # manifest, the exclude block and `.gitignore` uses.
+        "path": RESOLVED_FILE.as_posix(),
         "kind": "resolved",
         "keys": len(resolved["values"]),
         "unknown": resolved["unknown"],

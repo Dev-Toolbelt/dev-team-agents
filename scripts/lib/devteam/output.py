@@ -28,15 +28,33 @@ class Emitter:
             self.stdout.write("{}\n".format(message))
 
     def raw(self, text):
-        """Write exactly ``text`` plus a newline to stdout, undecorated.
+        """Write exactly ``text`` plus one LF to stdout, undecorated.
 
         For the one command whose stdout **is** the payload: `devteam cred get`
         prints a secret and nothing else, so it can be consumed by
         ``TOKEN="$(devteam cred get …)"`` without a parser. It is never used under
         ``--json`` — that combination is refused, because wrapping a secret in a
         document puts it somewhere a client would log.
+
+        Written through the underlying binary buffer when there is one, rather
+        than through the text wrapper's own ``write``: on Windows, a text-mode
+        stream translates every ``\\n`` to ``\\r\\n`` at the OS level, which is
+        harmless for human-readable output but not here — this command's entire
+        contract is "exactly the value and a newline, nothing else", and
+        ``TOKEN="$(devteam cred get …)"`` strips only a trailing ``\\n``. A
+        trailing ``\\r`` would ride along inside every value a caller reads,
+        silently, in a bearer token or a shell variable. Falls back to a plain
+        text write for a caller-supplied stream with no ``.buffer`` — an
+        ``io.StringIO`` used directly in a test, which does no translation of
+        its own.
         """
-        self.stdout.write("{}\n".format(text))
+        payload = "{}\n".format(text)
+        buffer = getattr(self.stdout, "buffer", None)
+        if buffer is not None:
+            buffer.write(payload.encode("utf-8"))
+            buffer.flush()
+        else:
+            self.stdout.write(payload)
         self._emitted = True
 
     def emit(self, payload, human=None):

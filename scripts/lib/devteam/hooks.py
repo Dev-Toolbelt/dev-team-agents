@@ -113,7 +113,9 @@ def wire(project_root, emitter=None):
     elif emitter is not None:
         emitter.warn("hooks already registered in {}".format(SETTINGS_FILE))
 
-    return [{"path": str(SETTINGS_FILE), "kind": "settings", "events": wired}]
+    # `.as_posix()`: see `project._write_pointer` — the manifest's "path" values
+    # are forward-slash everywhere else.
+    return [{"path": SETTINGS_FILE.as_posix(), "kind": "settings", "events": wired}]
 
 
 def unwire(project_root):

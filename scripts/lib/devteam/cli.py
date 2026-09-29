@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from . import bind as bind_module
@@ -1143,11 +1144,41 @@ def resolved_command_path(parser, args):
     return tuple(path)
 
 
+def _ensure_utf8_stdio():
+    """Force ``sys.stdout``/``sys.stderr`` to UTF-8, if the interpreter allows it.
+
+    Every human-facing message in this package is an ordinary Python string that
+    may contain non-ASCII punctuation — an em dash, mainly (`grep -rn "—"` finds
+    dozens, in hints and human output, not just comments). On Linux and macOS
+    that is never a problem: the stream is UTF-8 by default. On Windows it is
+    only UTF-8 when talking to a real console; the moment stdout/stderr are
+    redirected to a pipe or a file — exactly what every subprocess-driven test,
+    and every caller piping this CLI's output, does — Python falls back to
+    ``locale.getpreferredencoding()``, commonly ``cp1252``, and a bare em dash
+    raises ``UnicodeEncodeError`` or round-trips as a different byte than a
+    UTF-8-decoding caller expects. ``reconfigure`` exists on every stream this
+    matters for (Python 3.7+'s ``TextIOWrapper``) and is a no-op cost-wise; a
+    stream that lacks it (already replaced by a test double) is left alone.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except (OSError, ValueError):
+                pass
+
+
 def main(argv=None, stdout=None, stderr=None):
     # The emitter is built before parsing so a parse error can still honour
     # `--json`; argv is scanned directly because argparse has not run yet.
+    if stdout is None and stderr is None:
+        # Only when both are about to default to the real `sys.stdout`/`sys.stderr`
+        # — a caller that supplied its own streams (every in-process test) gets
+        # exactly what it passed in, untouched.
+        _ensure_utf8_stdio()
     argv_list = list(argv) if argv is not None else None
-    raw = argv_list if argv_list is not None else __import__("sys").argv[1:]
+    raw = argv_list if argv_list is not None else sys.argv[1:]
     emitter = Emitter(as_json="--json" in raw, stdout=stdout, stderr=stderr)
 
     try:

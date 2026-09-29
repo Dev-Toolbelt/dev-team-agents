@@ -147,7 +147,7 @@ def _is_managed_path(rel, path, previous_paths, project_root):
 
 
 def _is_inside(candidate, root):
-    """Containment by path components, on both sides fully resolved.
+    r"""Containment by path components, on both sides fully resolved.
 
     ``realpath`` on both is what makes this correct on macOS, where ``/var`` is a
     symlink to ``/private/var``: comparing a resolved root against an unresolved
@@ -155,10 +155,17 @@ def _is_inside(candidate, root):
     dev-team-agents itself created. ``relative_to`` rather than ``startswith``
     compares whole components, so a sibling named ``core-backup`` is not read as
     living inside ``core``.
+
+    ``paths.realpath_normalized`` rather than a bare ``os.path.realpath`` is what
+    makes this correct on Windows: ``candidate`` is frequently a symlink target
+    read back with ``os.readlink``, which always carries the ``\\?\`` extended
+    prefix, while ``root`` is a plain, never-linked-through path that does not
+    reliably pick up the same prefix from ``realpath``. Without normalizing both,
+    a link this module created its own bind is read back as foreign.
     """
     try:
-        resolved_candidate = Path(os.path.realpath(str(candidate)))
-        resolved_root = Path(os.path.realpath(str(root)))
+        resolved_candidate = paths.realpath_normalized(candidate)
+        resolved_root = paths.realpath_normalized(root)
         resolved_candidate.relative_to(resolved_root)
         return True
     except (ValueError, OSError):
@@ -309,7 +316,14 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         if not source.is_dir():
             continue
         dest = install_dir / name
-        rel = str(Path(project.PROJECT_DIR) / name)
+        # `.as_posix()`, not `str()`: this path is stored in the manifest, the
+        # local exclude block and `.gitignore` — all of which are read back by
+        # `_is_managed_path`/`unbind`/`doctor` as plain strings, or interpreted by
+        # git, which only understands forward slashes in an ignore pattern. A
+        # native-separator string here matched nothing on Windows: bind's own
+        # artifacts went un-ignored and every manifest lookup keyed on this
+        # string missed.
+        rel = Path(project.PROJECT_DIR, name).as_posix()
         if dest.exists() or dest.is_symlink():
             action, destination = _retire_artifact(
                 dest, project_id, project_root, group="revendored"
@@ -322,7 +336,7 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
 
     for rel_path, source in providers.claude_artifacts(install_dir):
         dest = Path(project_root) / rel_path
-        rel = str(rel_path)
+        rel = rel_path.as_posix()
         require_inside(dest, project_root, what="artifact")
         if dest.exists() or dest.is_symlink():
             action, destination = _retire_artifact(dest, project_id, project_root)
@@ -331,7 +345,12 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         _mkdir_within(dest.parent, project_root)
         depth = len(rel_path.parts) - 1
         relative_target = Path(*([".."] * depth)) / source.relative_to(Path(project_root))
-        os.symlink(str(relative_target), str(dest), target_is_directory=True)
+        # `.as_posix()`: this string is the symlink's on-disk target, not merely a
+        # value this process reads back. A backslash target resolves fine on the
+        # Windows checkout that created it, but the whole point of a *relative*
+        # vendored link is that a POSIX clone of the same repository can follow
+        # it too — and a POSIX symlink reader has no notion of `\` as a separator.
+        os.symlink(relative_target.as_posix(), str(dest), target_is_directory=True)
         created.append({"path": rel, "kind": "relative-link"})
     return created
 
@@ -424,7 +443,9 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, project_id, r
     installers' `ensure_claude_framework` was faking by vendoring 2.3 MB back in.
     """
     rel_path = Path(project.PROJECT_DIR) / "core"
-    rel = str(rel_path)
+    # `.as_posix()`: see the comment on the same pattern in `_vendored_tree` —
+    # this string ends up in the manifest, the exclude block and `.gitignore`.
+    rel = rel_path.as_posix()
     dest = Path(project_root) / rel_path
     kind = _materialize(
         Path(version_dir),
@@ -515,7 +536,8 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         )
     elif "claude" in selected:
         for rel_path, source in providers.claude_artifacts(version_dir):
-            rel = str(rel_path)
+            # `.as_posix()`: see the comment on the same pattern in `_vendored_tree`.
+            rel = rel_path.as_posix()
             kind = _materialize(
                 source,
                 Path(project_root) / rel_path,
@@ -736,7 +758,11 @@ def _prune_empty_dirs(project_root, relpaths):
             directory.rmdir()
         except OSError:
             continue
-        removed.append(str(directory.relative_to(root)))
+        # `.as_posix()`: `removed_dirs` is reported to the caller (and to the
+        # `--json` contract) alongside every other artifact path in this module,
+        # all of which are forward-slash. A native-separator entry here was the
+        # one inconsistent value in that list on Windows.
+        removed.append(directory.relative_to(root).as_posix())
     return sorted(removed)
 
 

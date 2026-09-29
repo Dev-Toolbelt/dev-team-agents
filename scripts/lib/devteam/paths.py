@@ -26,7 +26,7 @@ import re
 import socket
 import sys
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from .errors import EnvError
 
@@ -134,6 +134,61 @@ def current_file():
 
 def version_dir(version):
     return versions_dir() / version
+
+
+#: Windows' NT device-namespace prefix on an absolute path. ``os.readlink`` on a
+#: symlink with an absolute target always returns it prefixed this way — that is
+#: how NTFS reparse points store an absolute substitute name — but
+#: ``os.path.realpath`` on a plain path that never traverses a reparse point does
+#: not reliably add the same prefix. ``pathlib`` parses ``\\?\C:\`` as a different
+#: anchor than ``C:\``, so ``Path.relative_to`` raises ``ValueError`` even when
+#: both sides name the identical directory. Harmless everywhere else: the prefix
+#: never occurs in a POSIX path, so ``startswith`` is a no-op there.
+_EXTENDED_PREFIX = "\\\\?\\"
+_EXTENDED_UNC_PREFIX = "\\\\?\\UNC\\"
+
+
+def is_absolute_on_any_platform(text):
+    """True when ``text`` would be absolute, drive-rooted or UNC on POSIX *or* Windows.
+
+    For untrusted input — an archive member's symlink target, a path recorded in
+    ``project.json`` — validating against only the host's own flavour is not
+    enough: ``PureWindowsPath("/etc").is_absolute()`` is ``False`` (no drive
+    letter), so a validator running on Windows let a POSIX-absolute string
+    through, and ``PurePosixPath("C:\\\\Windows").is_absolute()`` is ``False``
+    too, so the reverse held running on POSIX. An archive extracted on one
+    platform can carry a target written for the other — a tarball built on Linux
+    but extracted on a Windows machine, or vice versa — so both flavours are
+    checked regardless of which platform is doing the checking.
+
+    ``PureWindowsPath(...).is_absolute()`` alone also misses a *drive-relative*
+    path such as ``/etc`` or ``\\etc``: Windows resolves that against whatever
+    the current drive happens to be, so pathlib does not call it absolute, but
+    it is exactly as much an escape from "relative to this directory" as a
+    fully qualified one — hence the explicit ``root`` check below rather than
+    relying on ``is_absolute()`` for the Windows side.
+    """
+    if PurePosixPath(text).is_absolute():
+        return True
+    win = PureWindowsPath(text)
+    return bool(win.drive) or win.root != ""
+
+
+def realpath_normalized(path):
+    """``os.path.realpath(path)`` with the extended-length prefix stripped.
+
+    Use this instead of a bare ``os.path.realpath`` wherever the result is about
+    to be compared against — or checked for containment in — another path via
+    ``pathlib`` (``relative_to``, ``==``). A raw ``os.path.realpath`` result is
+    fine to display to a human; it is not safe to compare, because only one side
+    of a comparison may have picked up the prefix.
+    """
+    resolved = os.path.realpath(str(path))
+    if resolved.startswith(_EXTENDED_UNC_PREFIX):
+        resolved = "\\\\" + resolved[len(_EXTENDED_UNC_PREFIX) :]
+    elif resolved.startswith(_EXTENDED_PREFIX):
+        resolved = resolved[len(_EXTENDED_PREFIX) :]
+    return Path(resolved)
 
 
 # ── machine identity ──────────────────────────────────────────────────────────
