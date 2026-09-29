@@ -306,6 +306,45 @@ hypothetical.
 > `min_app_version` to a kill switch, and records `minFrameworkVersion` as advisory. The residual it
 > names survives unchanged: nothing in the code marks the field as advisory, only an ADR does.
 
+> **Amended by implementation (M4.3, first slice) — the app exists in source, this ADR's stack and
+> client rules are narrowed by [ADR-0015](0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
+> and the "app" column of the channel table above is still empty on both platforms.**
+>
+> **The forward reference, first, because this ADR names Electron once and decides nothing else about
+> the client.** ADR-0015 decides the stack (Electron, TypeScript + Vite + React), that the source lives
+> in `app/` in this repository, that every invocation happens in the main process behind named
+> operations, that **no second CLI is ever bundled** and in what order one is resolved, that the app
+> declares its schemas so ADR-0014's gate binds it, and that it never calls `devteam cred get`. It
+> narrows this ADR and reverses nothing in it; the two channels, the app as a pure client, the JSON
+> contract as public API and "the app is never a prerequisite" all stand as written.
+>
+> **What the second Risks row asked for is decided, and its condition is still not met.** That row
+> instructs: "Settle 'which CLI does the app call' before the app ships; it is a precondition for
+> `compat` meaning anything." It is settled — ADR-0015 § 5, a stated resolution order with no bundled
+> fallback and a loud total failure when nothing resolves, implemented in `app/src/cli/resolve.ts` and
+> asserted by `app/test/resolve.test.ts`, which also asserts that a candidate is accepted only when
+> running `version --json` returns a conforming document carrying a `compat` block. The row's residual
+> is unchanged, because the app has **not** shipped: nothing installs it through either channel, so
+> the resolution order remains the only thing connecting the two independent installs.
+>
+> **What `packaging/` can now say, and what it still cannot.** `app/` builds a universal
+> `dev-team-agents.app` inside `dev-team-agents-<version>.dmg`, and every such build is **unsigned**:
+> `app/electron-builder.yml` sets `mac.identity: null` and `mac.notarize: false`, and the build prints
+> `UNSIGNED, UNNOTARISED BUILD — DO NOT DISTRIBUTE`. So this ADR's "macOS artifacts are signed and
+> notarised" is still a statement about a release that has not happened, and the M4.1 amendment's
+> "blocked on signing credentials the repository owner holds" is still the reason. Two values in
+> `packaging/homebrew/devteam-app.rb` stopped being guesses: the macOS floor is now **measured** at
+> `">= :monterey"` (the pinned Electron declares `LSMinimumSystemVersion` 12.0, so the previous
+> `">= :big_sur"` would have licensed an install on a system the app cannot launch on), and the bundle
+> id is read from the build's `appId`. Windows is further behind than this ADR's channel table reads:
+> there is **no app manifest at all** under `packaging/winget/`, and `app/electron-builder.yml` has no
+> `win` block, deliberately, because adding one would imply a Windows packaging shape this ADR still
+> records as undecided.
+>
+> Nothing in the Decision, the channel table or the Risks rows above is changed by this amendment. The
+> app column becomes true when a signed, notarised artifact is published at a real version — and
+> `docs/specs/v4-app-and-distribution.md` carries the per-clause state of M4.3 in the meantime.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |

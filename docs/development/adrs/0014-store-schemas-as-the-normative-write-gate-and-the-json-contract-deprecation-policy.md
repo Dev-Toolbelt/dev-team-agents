@@ -284,6 +284,43 @@ declaring nothing, **and** a mechanism exists that a human's terminal use does n
 is true today, and "make the flag mandatory" satisfies the second only by ignoring the first bullet
 above.
 
+> **Amended by implementation (M4.3, first slice) — the honest declaring client this gate was built for
+> now exists in source, the gate is exercised by it, and § 3's reopening condition is still not met.**
+>
+> The client's own rules are decided in
+> [ADR-0015](0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md), which is the
+> forward reference this ADR lacked. Its § 6 obliges the app to declare — and the slice under `app/`
+> does: the declaration is the app's own frozen constant (`app/src/cli/declaration.ts` →
+> `APP_STORE_SCHEMAS`, never derived from a store, which is the vacuity this ADR's § 1 warns about),
+> written to a file the main process attaches to every gated invocation in one place
+> (`app/src/main/ipc.ts` → `context()`).
+>
+> **What is now asserted against the real CLI rather than against fabricated declarations.**
+> `tests/test_client_gate.py` drives the gate from the framework side; `app/test/real-cli.test.ts`
+> drives it from a client's side, against `scripts/cli/devteam` with `DEVTEAM_HOME` in a temp
+> directory: the app's constant names exactly the shapes `store_schemas()` declares; a compatible
+> declaration answers `may_write: true`; a declaration one behind on `project_layout` comes back as
+> **exit 1 with `may_write: false`** and is treated as a verdict rather than a failure; and a mutating
+> command with that same declaration on `--client-schemas` is **refused at exit 4** with
+> `details.may_write == false`, before anything on disk changes. The seam this ADR's § 3 described is
+> no longer unexercised by any client.
+>
+> **Two clarifications this amendment owes the reader, neither of which reopens anything.**
+>
+> - § 3 says "The app has not shipped" and that remains exactly true: the build is unsigned and
+>   unreleased, and nothing installs it. The reopening condition — a shipped client observed writing
+>   while declaring nothing, *and* a mechanism a human's terminal use does not pay for — is unmet in
+>   both halves, and this client makes the first half less likely rather than more: it declares, and it
+>   declares on the calls that can be gated.
+> - The first client slice runs one command from `compat.MUTATING` — `devteam doctor`, which repairs
+>   what it finds — and its protection is precisely this gate: the declaration makes the refusal
+>   available, so a store ahead of the app stops that call at exit 4. ADR-0015's own amendment records
+>   the decision and the reasoning. It is worth naming here because it is the first real instance of
+>   the population this gate was narrowed to: not a client that hides, but one that states what it
+>   understands and accepts being refused on the strength of it.
+>
+> Nothing in § 1, § 2, § 3, the Risks table or the Alternatives above is changed.
+
 ## Consequences
 
 ### Positive
