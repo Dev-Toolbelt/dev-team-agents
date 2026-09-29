@@ -82,7 +82,7 @@ class ClientGateTestCase(StoreTestCase):
 
     # ── invocation ───────────────────────────────────────────────────────────
 
-    def run_in(self, cwd, *args, env_extra=None):
+    def run_in(self, cwd, *args, env_extra=None, timeout=None):
         """Run the real entry point in an explicit cwd, with stdin an empty pipe.
 
         `cwd` is explicit because `bind`, `sync`, `pin`, `migrate`, `upgrade` and
@@ -92,6 +92,11 @@ class ClientGateTestCase(StoreTestCase):
         stdin is an empty pipe, never inherited: `cred set` reads its value from stdin
         and prompts without echo when stdin is a tty, so a gate that failed to refuse it
         would hang the suite on a password prompt instead of failing.
+
+        `timeout` is `None` by default (no change for any existing caller). A test that
+        deliberately points the CLI at something that can block forever — a FIFO with no
+        writer — passes one explicitly, so a regression fails fast with
+        `subprocess.TimeoutExpired` instead of hanging the whole suite.
         """
         env = dict(os.environ)
         env.update(env_extra or {})
@@ -103,6 +108,7 @@ class ClientGateTestCase(StoreTestCase):
             stderr=subprocess.PIPE,
             env=env,
             check=False,
+            timeout=timeout,
         )
         return (
             result.returncode,
@@ -578,6 +584,206 @@ class MalformedDeclarationIsAUsageErrorTest(ClientGateTestCase):
         self.assertEqual(code, errors.EXIT_USAGE)
         self.assertIn(str(path), json.loads(out)["error"])
         self.assertFalse((project_root / ".dev-team-agents" / "project.json").exists())
+
+
+class DeclarationValueNeverReachesOutputTest(ClientGateTestCase):
+    """A security review's MEDIUM finding: the old message echoed the offending value.
+
+    `DEVTEAM_CLIENT_SCHEMAS` is ambient and inherited, so a wrapper or CI step pointed at
+    the wrong JSON file handed this process a one-string read primitive against any UTF-8
+    JSON file it can open — the first non-integer value came back out through `--json`,
+    into a CI log, and into the desktop app's error screen. A layout-1 credentials file is
+    a JSON object of string values, which is exactly the shape that trips the "not an
+    integer" branch on its first key, so it stands in for the file a stale seam is most
+    likely to be misdirected at. Every assertion here failed against the code before the
+    fix — the old message format was `"... is not an integer: {!r}".format(value)`.
+    """
+
+    def test_a_string_value_never_appears_in_stdout_or_stderr(self):
+        secret = "sk-super-secret-do-not-print-4f9c2b"
+        declaration = self.write_declaration("leaky.json", {"api_key": secret, "project": 1})
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(declaration)
+        )
+        self.assertEqual(
+            code, errors.EXIT_USAGE, "stdout: {}\nstderr: {}".format(out[:300], err[:300])
+        )
+        self.assertNotIn(secret, out, "the declared value leaked into stdout")
+        self.assertNotIn(secret, err, "the declared value leaked into stderr")
+        body = json.loads(out)
+        # The key and the type it got wrong are still reported — only the value is gone.
+        self.assertIn("api_key", body["error"])
+        self.assertIn("not an integer", body["error"])
+        self.assertIn("str", body["error"])
+        self.assertFalse((project_root / ".dev-team-agents" / "project.json").exists())
+
+    def test_a_boolean_value_never_appears_either(self):
+        # `bool` is a subclass of `int`, so this branch fires for `true`/`false` too, and
+        # the old `{!r}` formatting printed `True`/`False` just as readily as a string.
+        declaration = self.write_declaration("leaky-bool.json", {"registry": True})
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(declaration)
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        self.assertNotIn("True", out)
+        self.assertNotIn("True", err)
+        self.assertIn("bool", json.loads(out)["error"])
+
+    def test_the_leak_is_closed_on_the_environment_variable_seam_too(self):
+        # The seam the finding names explicitly: ambient, inherited, and the one a
+        # wrapper script sets once for a whole session.
+        secret = "another-secret-should-never-print-9z"
+        declaration = self.write_declaration("leaky-env.json", {"credentials": secret})
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root,
+            "bind",
+            "--json",
+            env_extra={compat.CLIENT_SCHEMAS_ENV: str(declaration)},
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        self.assertNotIn(secret, out)
+        self.assertNotIn(secret, err)
+
+    def test_a_credentials_shaped_file_leaks_nothing_across_every_key(self):
+        # The exact shape the finding calls out: a layout-1 credentials file is a JSON
+        # object of string values, so every key in it trips the same branch.
+        fake_credentials = {
+            "github-token": "ghp_totallyrealsecretvalue000000000000",
+            "db-password": "hunter2-but-longer-and-more-secret",
+        }
+        declaration = self.write_declaration("fake-credentials.json", fake_credentials)
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(declaration)
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        for secret in fake_credentials.values():
+            self.assertNotIn(secret, out)
+            self.assertNotIn(secret, err)
+
+
+class DeclarationFileReadIsBoundedTest(ClientGateTestCase):
+    """A security review's LOW finding: an unbounded, non-regular-file read.
+
+    `load_client_schemas` used to call `Path(path).read_text()` with no check that the
+    path was a regular file and no cap on how much it would read. The reviewer reproduced
+    two hangs from that: a FIFO with no writer blocks `open()` forever, and a character
+    device such as `/dev/zero` never raises EOF, so the read never returns and the
+    interpreter's heap grows for as long as something keeps consuming it.
+    """
+
+    def test_a_fifo_is_refused_promptly_instead_of_blocking_forever(self):
+        # `open()` in read mode blocks waiting for a writer no matter how small the
+        # eventual read would be, so this test must never depend on the read completing.
+        # A generous timeout turns a regression into a fast, legible test failure instead
+        # of a hung suite.
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("no FIFOs on this platform")
+        fifo_path = self.tmp / "declaration.fifo"
+        os.mkfifo(str(fifo_path))
+        project_root = self.fresh_project()
+        try:
+            code, out, err = self.run_in(
+                project_root,
+                "bind",
+                "--json",
+                "--client-schemas",
+                str(fifo_path),
+                timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail(
+                "reading the FIFO declaration hung past a 10s timeout instead of being "
+                "refused as 'not a regular file' — the fix regressed and the gate is "
+                "opening a non-regular path unconditionally again"
+            )
+        self.assertEqual(
+            code, errors.EXIT_USAGE, "stdout: {}\nstderr: {}".format(out[:300], err[:300])
+        )
+        body = json.loads(out)
+        self.assertIn(str(fifo_path), body["error"])
+        self.assertIn("not a regular file", body["error"])
+        self.assertFalse((project_root / ".dev-team-agents" / "project.json").exists())
+
+    def test_a_directory_is_refused_as_not_a_regular_file(self):
+        directory = self.tmp / "a-directory.json"
+        directory.mkdir()
+        project_root = self.fresh_project()
+        code, out, _err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(directory)
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        self.assertIn("not a regular file", json.loads(out)["error"])
+        self.assertFalse((project_root / ".dev-team-agents" / "project.json").exists())
+
+    def test_an_oversized_declaration_is_refused_by_name(self):
+        # Stands in for the reviewer's `/dev/zero` case with a deterministic, portable
+        # fixture: a large *valid* JSON document, so a fix that merely truncated the read
+        # and then tried to parse it could not accidentally slip through as "malformed
+        # JSON" instead of being caught by the size check itself.
+        oversized = self.tmp / "oversized.json"
+        padding = {"k{}".format(i): i for i in range(2000)}
+        oversized.write_text(json.dumps(padding), encoding="utf-8")
+        self.assertGreater(
+            oversized.stat().st_size,
+            compat.MAX_DECLARATION_BYTES,
+            "the fixture is not actually over the cap — strengthen it",
+        )
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(oversized)
+        )
+        self.assertEqual(
+            code, errors.EXIT_USAGE, "stdout: {}\nstderr: {}".format(out[:300], err[:300])
+        )
+        body = json.loads(out)
+        self.assertIn(str(oversized), body["error"])
+        self.assertIn(str(compat.MAX_DECLARATION_BYTES), body["error"])
+        self.assertFalse((project_root / ".dev-team-agents" / "project.json").exists())
+
+    def test_a_well_formed_declaration_under_the_cap_is_unaffected(self):
+        # The cap must not tighten around ordinary use — a real declaration is a handful
+        # of shape names mapped to small integers, nowhere near the limit.
+        project_root = self.fresh_project()
+        code, out, err = self.run_in(
+            project_root, "bind", "--json", "--client-schemas", str(self.compatible())
+        )
+        self.assertEqual(code, 0, "stdout: {}\nstderr: {}".format(out[:300], err[:300]))
+        self.assertTrue((project_root / ".dev-team-agents" / "project.json").exists())
+
+
+class HintExampleTracksTheStoreSchemasTest(ClientGateTestCase):
+    """The stale-example finding: a hardcoded hint literal quoted `registry: 3` long
+    after `registry.SCHEMA` became `1`. The fix derives the example from
+    `store_schemas()` instead of a literal, so it cannot go stale silently again.
+    """
+
+    def test_the_not_json_hint_embeds_the_real_store_numbers(self):
+        path = self.tmp / "not-json.json"
+        path.write_text("nope", encoding="utf-8")
+        code, out, _err = self.run_in(
+            self.fresh_project(), "bind", "--json", "--client-schemas", str(path)
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        hint = json.loads(out)["hint"]
+        self.assertIn(json.dumps(compat.store_schemas()), hint)
+        # The exact stale literal this replaced must not come back.
+        self.assertNotIn('"registry": 3', hint)
+
+    def test_the_non_integer_value_hint_is_unchanged(self):
+        # Only the two JSON-parsing hints used the stale literal; this one names no
+        # example and must not be touched by the fix.
+        schemas = dict(compat.store_schemas())
+        schemas["project"] = "not-a-number"
+        declaration = self.write_declaration("bad-type.json", schemas)
+        code, out, _err = self.run_in(
+            self.fresh_project(), "bind", "--json", "--client-schemas", str(declaration)
+        )
+        self.assertEqual(code, errors.EXIT_USAGE)
+        self.assertIn("is left out", json.loads(out)["hint"])
 
 
 class RefusalConformsToTheJsonContractTest(ClientGateTestCase):

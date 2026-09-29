@@ -663,6 +663,26 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "body",
             "project_id",
         },
+        # `doctor` findings (`doctor._finding()`): `hint` is added to the dict only
+        # when truthy, so it is an OPTIONAL key, not a fourth required one -- a
+        # finding with no hint has exactly the required set, one with a hint has
+        # required | {"hint"}, and nothing else is ever legal either way.
+        "doctor.finding.required": {"level", "category", "message"},
+        "doctor.finding.optional": {"hint"},
+        # `catalog`'s `counts` and `malformed` maps share this shape -- both are
+        # `{agents, skills, commands}` per `cli.py`'s catalog handler.
+        "catalog.counts": {"agents", "skills", "commands"},
+        "catalog.malformed": {"agents", "skills", "commands"},
+        # A malformed catalog entry (`catalog._malformed_entry`-style construction):
+        # the well-formed fields (`tier`/`model`/`description` for agents,
+        # `description` for commands) are NOT carried over -- only `name`, `path`
+        # and `version` survive, plus `malformed` and `error`. Verified against the
+        # actual payload for `agents/backend-developer.md` and `commands/plan.md`,
+        # both deliberately frontmatter-less in the shared fixture.
+        "catalog agents.malformed.record": {"name", "path", "version", "malformed", "error"},
+        "catalog commands.malformed.record": {"name", "path", "version", "malformed", "error"},
+        # `compat.unsupported_by()` return value, per shape name.
+        "compat.unsupported.record": {"store", "client"},
         "prefs list": {"project_id", "version", "values", "origin", "unknown"},
         "cred list": {"project_id", "credentials", "count"},
         "cred list.record": {"key", "purpose", "source", "ref", "scope", "layer"},
@@ -715,6 +735,38 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "  removed: {}\n"
             "This is not automatically a bug -- see AppFacingKeySetContractTest's "
             "class docstring.".format(label, added or "(none)", removed or "(none)")
+        )
+
+    def _assert_finding_keys(self, label, finding):
+        """A doctor finding's `hint` key is present only when truthy (see
+        `doctor._finding()`), so this is not a plain exact-keys check: a finding
+        must carry exactly the required set, optionally plus `hint`, and nothing
+        else -- a required key vanishing and an optional key being absent must
+        produce two different failures, not the same one.
+        """
+        required = self.EXPECTED["doctor.finding.required"]
+        optional = self.EXPECTED["doctor.finding.optional"]
+        actual = set(finding)
+        missing_required = required - actual
+        unexpected = actual - required - optional
+        # `_finding()` only ever sets `hint` when it is truthy -- a present-but-falsy
+        # `hint` (None, "", ...) would mean the source stopped honouring that
+        # contract, which a plain key-set check would miss entirely.
+        falsy_hint = "hint" in finding and not finding["hint"]
+        if not missing_required and not unexpected and not falsy_hint:
+            return
+        self.fail(
+            "{}: finding shape changed.\n"
+            "  missing required: {}\n"
+            "  unexpected keys:  {}\n"
+            "  falsy hint present: {}\n"
+            "This is not automatically a bug -- see AppFacingKeySetContractTest's "
+            "class docstring.".format(
+                label,
+                sorted(missing_required) or "(none)",
+                sorted(unexpected) or "(none)",
+                falsy_hint,
+            )
         )
 
     def _assert_no_secret_like_keys(self, label, payload):
@@ -772,6 +824,28 @@ class AppFacingKeySetContractTest(StoreTestCase):
         payload = self._run_ok("compat", "--json")
         self._assert_exact_keys("compat", payload, self.EXPECTED["compat"])
 
+    def test_compat_unsupported_record(self):
+        # A client one behind on one shape (mirrors
+        # `CompatContractTest.test_unsupported_by_reports_a_client_one_behind_on_one_shape`)
+        # so `unsupported` is actually populated instead of the empty-dict case
+        # `test_compat` above exercises. `--client` makes `ok` False and exits 1
+        # -- a different top-level shape (it gains `client_schemas`) that is not
+        # what this test is pinning, so it goes through `run_cli` directly
+        # rather than `_run_ok`/`_assert_exact_keys`.
+        current = compat.store_schemas()
+        one_name = next(iter(current))
+        behind = dict(current)
+        behind[one_name] = current[one_name] - 1
+        code, out, err = self.run_cli("compat", "--json", "--client", json.dumps(behind))
+        self.assertEqual(code, 1, "expected a behind client to fail compat: {}".format(err))
+        payload = json.loads(out)
+        self.assertIn(one_name, payload["unsupported"])
+        self._assert_record_keys(
+            "compat.unsupported.record",
+            payload["unsupported"][one_name],
+            self.EXPECTED["compat.unsupported.record"],
+        )
+
     def test_list(self):
         payload = self._run_ok("list", "--json")
         self._assert_exact_keys("list", payload, self.EXPECTED["list"])
@@ -783,6 +857,26 @@ class AppFacingKeySetContractTest(StoreTestCase):
     def test_doctor(self):
         payload = self._run_ok("doctor", str(self.project_root), "--json")
         self._assert_exact_keys("doctor", payload, self.EXPECTED["doctor"])
+        self.assertTrue(payload["findings"], "expected the bound fixture to produce at least one finding")
+        for finding in payload["findings"]:
+            self._assert_finding_keys("doctor.finding", finding)
+
+        # The fixture bound project is clean, so none of its findings carry a
+        # `hint` -- the optional key needs a scenario that actually exercises it.
+        # An unbound directory produces a WARN with a hint (`doctor.check_project`:
+        # "... is not a bound project" / "Run `devteam bind`."), which both proves
+        # `hint` is accepted when present and confirms it is genuinely optional
+        # rather than always-absent-in-practice.
+        unbound_dir = self.tmp / "doctor-unbound-dir"
+        unbound_dir.mkdir()
+        code, out, err = self.run_cli("doctor", str(unbound_dir), "--json")
+        unbound_payload = json.loads(out)
+        self.assertEqual(unbound_payload.get("ok"), False, "an unbound dir should not report ok")
+        with_hint = [f for f in unbound_payload["findings"] if "hint" in f]
+        self.assertTrue(with_hint, "expected the unbound-project finding to carry a hint")
+        for finding in with_hint:
+            self._assert_finding_keys("doctor.finding (with hint)", finding)
+            self.assertEqual(set(finding), self.EXPECTED["doctor.finding.required"] | {"hint"})
 
     def test_bind(self):
         # Reuse the bind already performed in setUp rather than binding again --
@@ -798,6 +892,8 @@ class AppFacingKeySetContractTest(StoreTestCase):
     def test_catalog(self):
         payload = self._run_ok("catalog", "--path", str(self.project_root), "--json")
         self._assert_exact_keys("catalog", payload, self.EXPECTED["catalog"])
+        self._assert_record_keys("catalog.counts", payload["counts"], self.EXPECTED["catalog.counts"])
+        self._assert_record_keys("catalog.malformed", payload["malformed"], self.EXPECTED["catalog.malformed"])
 
     def test_catalog_agents(self):
         payload = self._run_ok(
@@ -808,6 +904,16 @@ class AppFacingKeySetContractTest(StoreTestCase):
         self.assertIn("sample-agent", by_name, "expected the well-formed fixture agent")
         self._assert_record_keys(
             "catalog agents.record", by_name["sample-agent"], self.EXPECTED["catalog agents.record"]
+        )
+        # `agents/backend-developer.md` is deliberately frontmatter-less in the
+        # shared fixture (see setUp's comment) -- it is the malformed entry this
+        # command must also produce, with the smaller, distinct record shape.
+        self.assertIn("backend-developer", by_name, "expected the malformed fixture agent")
+        self.assertTrue(by_name["backend-developer"]["malformed"])
+        self._assert_record_keys(
+            "catalog agents.malformed.record",
+            by_name["backend-developer"],
+            self.EXPECTED["catalog agents.malformed.record"],
         )
 
     def test_catalog_skills(self):
@@ -832,6 +938,15 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "catalog commands.record",
             by_name["sample-command"],
             self.EXPECTED["catalog commands.record"],
+        )
+        # `commands/plan.md` is deliberately frontmatter-less in the shared
+        # fixture (see setUp's comment) -- the malformed counterpart entry.
+        self.assertIn("plan", by_name, "expected the malformed fixture command")
+        self.assertTrue(by_name["plan"]["malformed"])
+        self._assert_record_keys(
+            "catalog commands.malformed.record",
+            by_name["plan"],
+            self.EXPECTED["catalog commands.malformed.record"],
         )
 
     def test_catalog_show(self):
