@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import bind as bind_module
 from .errors import EnvError
-from . import creds, hooks, paths, prefs, project, registry, versions
+from . import creds, hooks, migrate, paths, prefs, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
@@ -33,6 +33,18 @@ def _points_into(target, version):
         return True
     except (ValueError, OSError):
         return False
+
+
+def _legacy_root_install(root):
+    """True when a pre-root install still sits at ``.claude/dev-team-agents/``.
+
+    That path predates ADR's move of the install to the project root, and
+    ``scripts/migrate-to-root.sh`` is the one thing that knows how to relocate it —
+    it rewrites the Claude Code symlinks and the hook paths in ``.claude/settings.json``
+    along with the move. No python module tracks this shape today, so it is checked
+    directly rather than invented as a new helper on ``project`` for a single caller.
+    """
+    return (Path(root) / ".claude" / "dev-team-agents").is_dir()
 
 
 def _finding(level, category, message, hint=None):
@@ -247,9 +259,41 @@ def check_project(project_root):
         )
     data = project.load(root)
     if data is None:
-        findings.append(
-            _finding(WARN, "project", "{} is not a bound project".format(root), "Run `devteam bind`.")
-        )
+        # `devteam bind` is the right advice for a directory that never had the
+        # framework on it — but not for one carrying a shape from before this
+        # command existed. Both older shapes are adapted by a dedicated command,
+        # never by `bind`, which does not know how to fold either one in.
+        legacy = migrate.detect(root)
+        if legacy["is_v2"]:
+            findings.append(
+                _finding(
+                    WARN,
+                    "project",
+                    "{} is a v2 vendored install ({} under {}/), not a v3 bind".format(
+                        root, ", ".join(legacy["vendored_trees"]), project.PROJECT_DIR
+                    ),
+                    "Run `devteam migrate` — it shows a plan first and moves the old "
+                    "tree into a dated quarantine rather than deleting it.",
+                )
+            )
+        elif _legacy_root_install(root):
+            findings.append(
+                _finding(
+                    WARN,
+                    "project",
+                    "{} still has the pre-root install at .claude/dev-team-agents/".format(root),
+                    "Run `scripts/migrate-to-root.sh` — it moves the install to "
+                    "{}/ and updates the Claude Code symlinks and hook paths.".format(
+                        project.PROJECT_DIR
+                    ),
+                )
+            )
+        else:
+            findings.append(
+                _finding(
+                    WARN, "project", "{} is not a bound project".format(root), "Run `devteam bind`."
+                )
+            )
         return findings, actions
 
     project_id = data["project_id"]

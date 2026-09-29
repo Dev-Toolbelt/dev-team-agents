@@ -184,6 +184,40 @@ class DoctorTest(StoreTestCase):
         report = doctor.run(project_root=None)
         self.assertEqual(report["status"], "fail")
 
+    def _project_findings(self, root):
+        report = doctor.run(project_root=root)
+        return [f for f in report["findings"] if f["category"] == "project"]
+
+    def test_an_unbound_v2_vendored_install_points_at_migrate(self):
+        # No `devteam bind` was ever run here — just the vendored tree a v2
+        # install leaves under `.dev-team-agents/`, same as `migrate.detect`
+        # itself recognises. `devteam bind` cannot fold this in; only
+        # `devteam migrate` knows to quarantine it instead of clobbering it.
+        root = self.new_project("vendored")
+        install_dir = root / project.PROJECT_DIR
+        (install_dir / "agents").mkdir(parents=True)
+        (install_dir / "agents" / "backend-developer.md").write_text(
+            "# agent\n", encoding="utf-8"
+        )
+        findings = self._project_findings(root)
+        self.assertTrue(findings)
+        self.assertIn("devteam migrate", findings[0]["hint"])
+
+    def test_a_pre_root_install_points_at_the_root_migration_script(self):
+        # The shape `scripts/migrate-to-root.sh` targets: the framework still
+        # sitting at `.claude/dev-team-agents/` instead of the project root.
+        root = self.new_project("prerooted")
+        (root / ".claude" / "dev-team-agents").mkdir(parents=True)
+        findings = self._project_findings(root)
+        self.assertTrue(findings)
+        self.assertIn("migrate-to-root.sh", findings[0]["hint"])
+
+    def test_a_directory_with_no_legacy_shape_still_gets_the_bind_hint(self):
+        root = self.new_project("fresh")
+        findings = self._project_findings(root)
+        self.assertTrue(findings)
+        self.assertIn("devteam bind", findings[0]["hint"])
+
 
 if __name__ == "__main__":
     unittest.main()
