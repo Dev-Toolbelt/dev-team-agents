@@ -168,6 +168,32 @@
     height: 100%;
   }
 
+  /* Scrollbars follow the app's tokens instead of the platform default — Windows' grey
+     gutter in particular reads as a foreign widget on the dark theme. WebKit pseudo-elements
+     only, deliberately: Chromium ignores all of them on an element that also sets the
+     standard `scrollbar-color`/`scrollbar-width`, and those cannot round the thumb. The
+     transparent border plus `background-clip` is what insets the thumb inside its track. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--muted-foreground) 75%, transparent);
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--primary);
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-system);
