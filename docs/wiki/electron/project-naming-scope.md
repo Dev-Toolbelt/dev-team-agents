@@ -36,3 +36,4 @@ The CLI has no `--name` flag and `project.json` is committed. A name passed thro
 - `app/src/main/settings.ts` — `writeProjectName()` / `readProjectNames()`
 - `app/src/shared/api.ts` — `BindRequest.name` declared
 - `app/src/renderer/screens/Projects.tsx` — `displayName()` reads it with fallback to basename
+- [ADR-0016](../../development/adrs/0016-the-project-display-name-is-app-local-and-never-reaches-the-cli.md) — the decision, the three alternatives rejected, and what promoting it would cost
