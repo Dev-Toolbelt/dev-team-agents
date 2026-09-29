@@ -757,6 +757,7 @@ def cmd_upgrade(args, emitter):
             "  copied      {} file(s) to {}".format(result["copied"], result["destination"]),
             "  quarantine  {}".format(result["quarantined"] or "(nothing to move)"),
             "  pointers    {}, {}".format(result["state_pointer"], result["memory_pointer"]),
+            "  exclude     {}".format(result["git_exclude"]),
         ]
         if result["retained"]:
             lines.append(

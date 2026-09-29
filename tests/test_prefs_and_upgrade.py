@@ -222,6 +222,66 @@ class UpgradeTest(StoreTestCase):
         self.assertNotIn(".dev-team-agents/user-data/", after)
         self.assertIn(".worktrees/", after)
 
+    def test_the_pointers_it_creates_are_excluded_and_the_artifact_block_survives(self):
+        """The two layout-2 pointers hold an absolute path into one developer's store,
+        so they can never be committed — and nothing was ignoring them. `bind` gets it
+        for free because it rebuilds the local exclude from its whole artifact set and
+        the pointers are artifacts; `upgrade` wrote them directly and touched no ignore
+        file, so an upgraded project showed two untracked files in every `git status`
+        until some later `devteam sync` happened to rebuild the block.
+        """
+        root, _ = self._v2_bound()
+        exclude = gitignore.local_exclude_file(root)
+        self.assertIsNotNone(exclude, "the fixture project must be a git repository")
+        before = gitignore.read_managed_entries(exclude)
+        self.assertTrue(before, "bind should have written an artifact block to exclude")
+
+        result = upgrade.apply(root)
+
+        after = gitignore.read_managed_entries(exclude)
+        self.assertIn(".dev-team-agents/memory-dir", after)
+        self.assertIn(".dev-team-agents/state-dir", after)
+        # Unioned, not replaced: the artifact paths bind wrote are still there.
+        self.assertTrue(set(before).issubset(set(after)))
+        # `unchanged`, and that is the point of asserting it: after a normal `link`-mode
+        # bind the pointers are ALREADY excluded, because bind builds the block from its
+        # artifact set and the pointers are artifacts. This asserts `upgrade` does not
+        # churn a file it has nothing to add to. The case where it does have something to
+        # add is the next test.
+        self.assertEqual(result["git_exclude"], "unchanged")
+
+    def test_the_pointers_are_added_when_the_exclude_block_does_not_have_them(self):
+        """The narrow case the exclude step exists for: a project whose managed block is
+        missing the pointers. Reachable from a `vendored` bind (which skips the exclude
+        write), from a checkout that became a git repository after it was bound, or from a
+        hand-edited block. Before this step, `upgrade` wrote the pointers and touched no
+        ignore file, so they stayed untracked-visible until some later `sync` rebuilt it.
+        """
+        root, _ = self._v2_bound()
+        exclude = gitignore.local_exclude_file(root)
+        # Simulate the block as a bind that never wrote the pointers would have left it.
+        kept = [
+            entry
+            for entry in gitignore.read_managed_entries(exclude)
+            if not entry.endswith(("memory-dir", "state-dir"))
+        ]
+        gitignore.apply_managed_block(exclude, kept)
+        self.assertNotIn(".dev-team-agents/memory-dir", gitignore.read_managed_entries(exclude))
+
+        result = upgrade.apply(root)
+
+        after = gitignore.read_managed_entries(exclude)
+        self.assertIn(".dev-team-agents/memory-dir", after)
+        self.assertIn(".dev-team-agents/state-dir", after)
+        self.assertTrue(set(kept).issubset(set(after)))
+        self.assertEqual(result["git_exclude"], "updated")
+
+    def test_the_exclude_step_is_reported_as_skipped_outside_a_git_repository(self):
+        root, _ = self._v2_bound()
+        shutil.rmtree(root / ".git")
+        result = upgrade.apply(root)
+        self.assertEqual(result["git_exclude"], "skipped")
+
     def test_graphify_json_stays_in_the_project_through_upgrade(self):
         """`graphify.json` is committed, shared project config, not personal memory
         — it must never travel into the per-user store, even though it lives right
