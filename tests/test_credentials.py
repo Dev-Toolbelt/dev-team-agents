@@ -7,13 +7,24 @@ Every test that plants a value scans for its absence explicitly rather than
 trusting a code review to have caught a leak.
 
 No test touches a real macOS keychain: behavioural tests force the `insecure`
-backend explicitly, and the keychain/dpapi adapters are covered by patching
-`subprocess.run` / `ctypes.windll` and asserting the argv and stdin they would
-use, never by invoking the real thing.
+backend explicitly, and the keychain adapter is covered by patching
+`subprocess.run` and asserting the argv and stdin it would use, never by
+invoking the real thing. The keychain lives in the OS, outside `$DEVTEAM_HOME`,
+where no temp directory can undo what a test wrote — a full run once left three
+items in a developer's real login keychain, which is why that rule exists.
+
+**dpapi is the one exception, and the asymmetry is the reason.** A DPAPI blob is
+written to `paths.secrets_dir()`, which is inside `$DEVTEAM_HOME` and therefore
+inside the throwaway store the fixture removes; the OS holds the *key*, not the
+data. So the real `CryptProtectData`/`CryptUnprotectData` can be exercised
+without leaving anything behind, and `SecretsDpapiRealRoundTripTest` does
+exactly that wherever the host provides them. The mocked class above stays: it
+runs everywhere and covers the envelope, which is most of the logic.
 """
 
 from __future__ import annotations
 
+import base64
 import ctypes
 import json
 import os
@@ -336,6 +347,134 @@ class SecretsDpapiAdapterTest(CredsTestCase):
         self.assertEqual(got, PLANTED)
         # The on-disk envelope must be base64, never the raw value.
         assert_value_absent_from_tree(self, paths.secrets_dir().parent, value=PLANTED)
+
+
+# ── secrets.py — dpapi adapter, for real, where the host has one ────────────
+# Gated on the host itself rather than on `_probe_dpapi()`, deliberately: that
+# function reads `paths.platform_key()`, which every test in this file steers
+# through `DEVTEAM_PLATFORM`, so using it as the gate would let a leaked env var
+# decide whether these tests run. `os.name`/`ctypes.windll` cannot be steered.
+# The probe is then asserted *inside* the first test, so it is checked rather
+# than trusted.
+_HOST_HAS_DPAPI = os.name == "nt" and hasattr(ctypes, "windll")
+
+
+@unittest.skipUnless(_HOST_HAS_DPAPI, "no real DPAPI on this host")
+class SecretsDpapiRealRoundTripTest(CredsTestCase):
+    """The real `CryptProtectData`/`CryptUnprotectData`, not a reversible fake.
+
+    `secrets.py` marks its dpapi section UNVERIFIED, and until this repository's
+    CI gained a `windows-latest` runner that was the only honest label available:
+    the code was written against the documented Win32 pattern and had never once
+    executed. The mocked round-trip above proves the envelope (base64 + jsonio)
+    and cannot prove anything about DPAPI, because it *is* the part it fakes.
+
+    Four things only a real call can establish, and each has its own test below:
+
+    * the `crypt32` entry points resolve and succeed for this user profile;
+    * the stored blob is genuinely ciphertext — the fake's `marker + raw`
+      contains the plaintext verbatim, so the assertion below is one the fake
+      would fail, which is what makes it worth writing;
+    * `_dpapi_bytes_from_blob` copies out of the returned buffer *before*
+      `LocalFree` releases it. Reversed, that reads freed memory: garbage, or a
+      crash. No fake allocates through `LocalAlloc`, so no fake can test it;
+    * a DPAPI blob is integrity-protected, so a tampered one must fail rather
+      than decrypt to something else.
+    """
+
+    REF = "devteam/proj/real-dpapi"
+
+    def setUp(self):
+        super().setUp()
+        # `CredsTestCase` pins linux so the keychain probe never shells out. The
+        # dpapi adapter refuses any platform but win32, so this test needs it back.
+        os.environ["DEVTEAM_PLATFORM"] = "win32"
+
+    def _stored(self):
+        return json.loads(secrets_module._dpapi_path(self.REF).read_text(encoding="utf-8"))
+
+    def test_the_probe_agrees_that_this_host_can_use_dpapi(self):
+        # If this fails, every skip in this class was hiding a broken probe rather
+        # than an absent capability.
+        self.assertIsNone(secrets_module._probe_dpapi())
+        self.assertIn("dpapi", secrets_module.available_backends())
+
+    def test_a_value_round_trips_through_the_public_put_and_get(self):
+        result = secrets_module.put(self.REF, PLANTED, backend="dpapi")
+        self.assertEqual(result["backend"], "dpapi")
+        self.assertFalse(result["insecure"])
+        self.assertTrue(secrets_module._dpapi_path(self.REF).is_file())
+        self.assertEqual(secrets_module.get(self.REF, "dpapi"), PLANTED)
+
+    def test_the_stored_blob_is_ciphertext_and_not_the_value(self):
+        """The assertion the reversible fake would fail.
+
+        Also the file's own central promise, applied to the one backend that
+        keeps a value on disk: nothing under the store may contain it.
+        """
+        secrets_module.put(self.REF, PLANTED, backend="dpapi")
+        blob = base64.b64decode(self._stored()["blob_b64"])
+        self.assertNotIn(PLANTED.encode("utf-8"), blob)
+        self.assertGreater(len(blob), len(PLANTED), "a DPAPI blob carries a header and a MAC")
+        assert_value_absent_from_tree(self, paths.secrets_dir().parent, value=PLANTED)
+
+    def test_a_tampered_blob_is_refused_instead_of_decrypting_to_something_else(self):
+        """DPAPI authenticates what it protects; this asserts we surface that.
+
+        The failure must arrive as `SecretError` and must not quote the value —
+        an error path is the easiest place for a secret to escape into a log.
+        """
+        secrets_module.put(self.REF, PLANTED, backend="dpapi")
+        path = secrets_module._dpapi_path(self.REF)
+        blob = bytearray(base64.b64decode(self._stored()["blob_b64"]))
+        # Corrupted in the middle, across several bytes, rather than at one end.
+        # The blob's layout is not a documented contract, so a single flip at the
+        # tail could land in padding or a length field and fail for the wrong
+        # reason — or, worse, not fail at all and make this test vacuous. A run
+        # through the middle is inside the ciphertext whatever the layout is.
+        middle = len(blob) // 2
+        for offset in range(middle, min(middle + 8, len(blob))):
+            blob[offset] ^= 0xFF
+        path.write_text(
+            json.dumps({"blob_b64": base64.b64encode(bytes(blob)).decode("ascii")}),
+            encoding="utf-8",
+        )
+        with self.assertRaises(SecretError) as caught:
+            secrets_module.get(self.REF, "dpapi")
+        self.assertNotIn(PLANTED, str(caught.exception))
+
+    def test_a_non_ascii_value_survives_the_utf8_encode_decode(self):
+        # `_dpapi_put` encodes utf-8 and `_dpapi_get` decodes it; a byte-length
+        # assumption anywhere in between shows up here and nowhere else.
+        value = "s3cr3t-ação-日本語-ß"
+        secrets_module.put(self.REF, value, backend="dpapi")
+        self.assertEqual(secrets_module.get(self.REF, "dpapi"), value)
+
+    def test_a_long_value_round_trips(self):
+        # One buffer sized from the wrong length would truncate, and a short
+        # value can hide that inside DPAPI's own block padding.
+        value = "x" * 4096
+        secrets_module.put(self.REF, value, backend="dpapi")
+        self.assertEqual(secrets_module.get(self.REF, "dpapi"), value)
+
+    def test_two_refs_do_not_share_a_blob(self):
+        other = "devteam/proj/real-dpapi-two"
+        secrets_module.put(self.REF, PLANTED, backend="dpapi")
+        secrets_module.put(other, PLANTED + "-other", backend="dpapi")
+        self.assertNotEqual(secrets_module._dpapi_path(self.REF), secrets_module._dpapi_path(other))
+        self.assertEqual(secrets_module.get(self.REF, "dpapi"), PLANTED)
+        self.assertEqual(secrets_module.get(other, "dpapi"), PLANTED + "-other")
+
+    def test_get_answers_none_for_a_ref_that_was_never_stored(self):
+        # Absent is not an error: `get` returning None is what `creds.py` keys on.
+        self.assertIsNone(secrets_module.get("devteam/proj/never-stored", "dpapi"))
+
+    def test_delete_removes_the_blob_and_is_false_the_second_time(self):
+        secrets_module.put(self.REF, PLANTED, backend="dpapi")
+        self.assertTrue(secrets_module.delete(self.REF, "dpapi"))
+        self.assertFalse(secrets_module._dpapi_path(self.REF).exists())
+        self.assertIsNone(secrets_module.get(self.REF, "dpapi"))
+        self.assertFalse(secrets_module.delete(self.REF, "dpapi"))
 
 
 # ── creds.py — schema and validation ────────────────────────────────────────
