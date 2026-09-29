@@ -345,6 +345,40 @@ hypothetical.
 > app column becomes true when a signed, notarised artifact is published at a real version — and
 > `docs/specs/v4-app-and-distribution.md` carries the per-clause state of M4.3 in the meantime.
 
+> **Amended by implementation (M4.3 closeout) — the app's Windows packaging shape is now decided, and
+> a manifest scaffold exists for it. Neither closes the gap the previous amendment recorded; both
+> narrow it from "undecided and absent" to "decided and scaffolded, still unbuilt and unsigned".**
+>
+> **What is now decided.** `app/electron-builder.yml` has a `win` block: NSIS
+> (`InstallerType: nullsoft` on the winget side), producing a per-user installer per
+> architecture, unsigned by configuration the same way `mac.identity: null` is unsigned by
+> configuration — no `certificateFile`/`certificatePassword` keys exist to set, and
+> `forceCodeSigning: false` makes a future accidental signing attempt a no-op rather than a build
+> failure. MSI and AppX/MSIX were weighed and rejected: MSI needs the WiX toolset for no benefit this
+> project needs, and AppX/MSIX requires a trusted signing identity to install outside the Microsoft
+> Store at all — unsigned MSIX is refused, not warned, so it was off the table before any other
+> trade-off mattered. `packaging/README.md`'s new § "The Windows app installer shape — decided"
+> records the full comparison.
+>
+> **What now exists.** `packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` — a three-file
+> manifest set (version, installer, `defaultLocale`) at the same placeholder-version and
+> zero-digest discipline as the CLI's sibling manifest, contract-checked by the same
+> `.github/scripts/ci/04-packaging.sh` gate (which groups and validates by directory, so it needed
+> no changes to cover a second manifest set).
+>
+> **What is still blocked on the repository owner, precisely.** No Windows build of the app has ever
+> been produced — deciding the shape did not build it, the same way deciding "signed and notarised"
+> for macOS did not sign anything. `InstallerUrl` and `InstallerSha256` in the new manifest are
+> placeholders in exactly the sense the CLI's are. An Authenticode certificate does not exist; NSIS
+> makes it recommended rather than required (SmartScreen warns on an unsigned installer instead of
+> refusing it), but a certificate would still remove that warning. And `winget validate` /
+> `winget install --manifest` have never been run against this manifest, and cannot be from the
+> environment that wrote it — a Windows operator is the only party who can close that.
+>
+> Nothing in the Decision, the channel table or the Risks rows above is changed by this amendment
+> either. The app's Windows column moves from "no shape, no manifest" to "decided shape, scaffolded
+> manifest, still unbuilt and unsigned" — a narrower gap, not a closed one.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
