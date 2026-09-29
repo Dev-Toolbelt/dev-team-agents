@@ -7,10 +7,11 @@
  * the sake of one shared constants module; the renderer is bundled by Vite either way.
  */
 
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, app, session } from 'electron';
+import { BrowserWindow, app, nativeImage, session } from 'electron';
 
 import { registerIpc } from './ipc.js';
 import { WINDOW_WEB_PREFERENCES, hardenContents, hardenSession } from './security.js';
@@ -28,7 +29,30 @@ const RENDERER_INDEX = join(__dirname, '..', '..', 'renderer', 'index.html');
 // `vite.preload.config.mts` for why a sandboxed preload has to be one self-contained file.
 const PRELOAD = join(__dirname, '..', '..', 'preload', 'index.js');
 
+/**
+ * The brand icon, for development only.
+ *
+ * A packaged build takes its icon from the bundle electron-builder assembles, so this is
+ * `null` there and nothing below runs. Unpackaged, `electron .` launches the stock
+ * Electron binary, which carries Electron's own icon — so the app showed the default
+ * atom in the dock and in the task switcher for every contributor who ran it, while the
+ * header two centimetres below showed the brand. Set here rather than left alone,
+ * because "how the app looks when you run it" is the thing this build exists to try.
+ *
+ * `dist/node/main` → `app/build/icon.png`, which only resolves in a checkout. That is the
+ * same condition as `!app.isPackaged`, but the `existsSync` is kept anyway: a missing
+ * icon must never be the reason a window fails to open.
+ */
+function developmentIcon(): Electron.NativeImage | null {
+  if (app.isPackaged) return null;
+  const file = join(__dirname, '..', '..', '..', 'build', 'icon.png');
+  if (!existsSync(file)) return null;
+  const image = nativeImage.createFromPath(file);
+  return image.isEmpty() ? null : image;
+}
+
 function createWindow(): BrowserWindow {
+  const icon = developmentIcon();
   const window = new BrowserWindow({
     width: 1080,
     height: 760,
@@ -37,6 +61,9 @@ function createWindow(): BrowserWindow {
     // macOS convention: the traffic lights sit over the app's own header row.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     backgroundColor: '#1c1c1e',
+    // Windows and Linux read the window's own icon; macOS ignores it entirely and takes
+    // the dock's, which is set once in the ready handler instead.
+    ...(icon !== null && process.platform !== 'darwin' ? { icon } : {}),
     show: false,
     // The flags themselves live in `main/security.ts` as `WINDOW_WEB_PREFERENCES`, so a
     // test can assert the real object instead of this file's source text.
@@ -82,6 +109,13 @@ void app.whenReady().then(() => {
     process.stderr.write(
       'dev-team-agents: this is an UNSIGNED, UNNOTARISED build. Do not distribute it.\n',
     );
+  }
+
+  // macOS only, and only unpackaged: the dock icon belongs to the running binary, not to
+  // the window, so it cannot be set in `createWindow` with the others.
+  if (process.platform === 'darwin') {
+    const icon = developmentIcon();
+    if (icon !== null) app.dock?.setIcon(icon);
   }
 
   hardenSession(session.defaultSession, DEV_SERVER);

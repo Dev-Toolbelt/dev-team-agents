@@ -29,7 +29,17 @@ files:
 
 asar: true
 
+# Stated rather than left to the default lookup. electron-builder would find
+# `build/icon.icns` and `build/icon.png` on its own, but "the icon works because of a
+# filename convention nobody wrote down" is how an unbranded installer ships: on Windows
+# there is no `.ico` in the tree at all, and the `.ico` is *derived* from this 1024px PNG
+# at build time. Both files come from `build/make-icon.sh`.
+icon: build/icon.png
+
 mac:
+  # The icns beside it wins for macOS, which is what gives the .app its icon; the PNG
+  # above is what every other target derives from.
+  icon: build/icon.icns
   category: public.app-category.developer-tools
   # MEASURED, not guessed: `node_modules/electron/dist/Electron.app` declares
   # LSMinimumSystemVersion 12.0, so Electron 39 does not run on Big Sur. The cask in

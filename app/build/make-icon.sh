@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # Regenerate the derived brand assets from the brand source.
 #
-# Two outputs, both generated and both committed:
+# Three outputs, all generated and all committed:
 #   build/icon.icns                          — the macOS app icon
+#   build/icon.png                           — 1024px, the cross-platform icon source
 #   src/renderer/logo/derived/symbol-128.png — the symbol the renderer imports
+#
+# WHY A PNG TOO, when the icns already exists: `iconutil` is macOS-only and writes no
+# `.ico`, so the Windows installer had no icon of its own and would have shipped
+# Electron's default. electron-builder derives the per-platform icons — including that
+# `.ico` — from a single square PNG of at least 256px, so one 1024px file closes it with
+# no new tool. The same file is the window icon on Windows and Linux in development,
+# where there is no bundle to take an icon from.
 #
 # The files in src/renderer/logo/ are the brand SOURCE: 2400x2400 and 3600x1440 PNGs,
 # 3.1 MB in total. The renderer must never import one directly — Vite emits whatever it
@@ -42,6 +50,12 @@ done
 
 iconutil -c icns "$SET" -o build/icon.icns
 echo "build/icon.icns written ($(wc -c < build/icon.icns) bytes)"
+
+# 1024px: electron-builder's documented floor is 256, and 1024 is what macOS and the
+# Windows installer's largest slot actually want. From the same padded canvas as the
+# icns, so no platform's icon is framed differently from another's.
+sips -z 1024 1024 "$WORK/padded.png" --out build/icon.png >/dev/null
+echo "build/icon.png written ($(wc -c < build/icon.png) bytes)"
 
 # 128px covers the header's 20px box up to a 3x display with room to spare. Derived from
 # the same padded canvas as the icon so the two never drift in framing.
