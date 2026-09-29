@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { About } from './screens/About.js';
 import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
@@ -20,7 +21,6 @@ import lockupDark from './logo/derived/horizontal-dark-720.png';
 import type {
   BuildInfo,
   CliResolution,
-  CliSource,
   EnvironmentReport,
   HandshakeView,
   OperationResult,
@@ -30,11 +30,10 @@ import type {
  * The shell: which CLI was resolved, what the compatibility handshake said, and the three
  * read-only screens.
  *
- * The header is not decoration. ADR-0011 makes the app a client of one CLI, and "which
- * `devteam` is this?" is the question a user cannot answer from the outside — an app that
- * silently resolved a different binary from the user's terminal would report the harness
- * in a state the terminal disagrees with. So the resolved path, its source and its store
- * version sit at the top of every screen.
+ * The header carries only what changes a decision on every screen: the store version (what
+ * Projects compares against), whether a CLI was found at all, and the unsigned-build
+ * warning. "Which `devteam` is this?" — path, source, contract, write actions — is answered
+ * in full on the About tab (ADR-0011), one click away rather than crowding every screen.
  */
 export function App() {
   const [build, setBuild] = useState<BuildInfo | null>(null);
@@ -92,16 +91,9 @@ export function App() {
               className="hidden h-7 w-auto mix-blend-screen dark:block"
             />
           </h1>
-          <WriteActionsBadge build={build} />
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
-          {build !== null ? (
-            <span className="text-xs text-muted-foreground">
-              app {build.appVersion} · Electron {build.electronVersion}
-              {build.packaged ? '' : ' · development'}
-            </span>
-          ) : null}
+          <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
         </div>
-        <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
       </header>
 
       <main className="flex-1 overflow-auto px-6 py-5">
@@ -133,6 +125,7 @@ export function App() {
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
+                <TabsTrigger value="about">About</TabsTrigger>
               </TabsList>
               <TabsContent value="projects" className="pt-4">
                 <Projects environment={environment} />
@@ -143,6 +136,9 @@ export function App() {
               <TabsContent value="doctor" className="pt-4">
                 <Doctor />
               </TabsContent>
+              <TabsContent value="about" className="pt-4">
+                <About build={build} resolution={resolution} onReResolve={() => void load()} />
+              </TabsContent>
             </Tabs>
           </>
         )}
@@ -150,40 +146,6 @@ export function App() {
     </div>
   );
 }
-
-/**
- * What this build can change, in plain language.
- *
- * `BuildInfo.noWriteActions: true` — a literal type the compiler itself would have had to
- * be edited to admit a write action — is gone. `hasWriteActions` is a boolean, and this
- * build sets it `true`: the project lifecycle (bind, unbind, sync, pin, upgrade) is
- * reachable from the UI. The badge says so, and the commands it can actually run are
- * enumerated rather than left to a claim that could silently drift from
- * `compat.MUTATING`.
- */
-function WriteActionsBadge({ build }: { build: BuildInfo | null }) {
-  if (build === null) return null;
-  if (!build.hasWriteActions) return <Badge variant="secondary">no write actions</Badge>;
-  return (
-    <Badge
-      variant="outline"
-      title={
-        build.mutatingCommandsRun.length > 0
-          ? `Commands this build can run that change the store: ${build.mutatingCommandsRun.join(', ')}`
-          : 'This build declares write actions but runs no mutating command yet.'
-      }
-    >
-      write actions: {build.mutatingCommandsRun.length > 0 ? build.mutatingCommandsRun.join(', ') : 'none run'}
-    </Badge>
-  );
-}
-
-const SOURCE_LABEL: Record<CliSource, string> = {
-  configured: 'configured path',
-  path: 'PATH',
-  homebrew: 'Homebrew',
-  winget: 'winget',
-};
 
 function CliLine({
   resolution,
@@ -195,31 +157,21 @@ function CliLine({
   onRetry: () => void;
 }) {
   if (busy || resolution === null) {
-    return <p className="no-drag pt-1 text-xs text-muted-foreground">Looking for a devteam CLI…</p>;
+    return <span className="text-xs text-muted-foreground">Looking for a devteam CLI…</span>;
   }
   if (!resolution.found) {
     return (
-      <p className="no-drag flex items-center gap-2 pt-1 text-xs text-destructive">
+      <span className="flex items-center gap-2 text-xs text-destructive">
         <CircleAlert className="size-3.5" aria-hidden="true" />
         No devteam CLI found.
         <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onRetry}>
           Look again
         </Button>
-      </p>
+      </span>
     );
   }
-  const { cli } = resolution;
   return (
-    <p className="no-drag flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-xs text-muted-foreground">
-      <span className="font-mono">{cli.path}</span>
-      <Badge variant="outline">via {SOURCE_LABEL[cli.source]}</Badge>
-      <span>
-        store {cli.storeVersion ?? 'not installed'} · json contract {cli.jsonContract ?? '?'}
-      </span>
-      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onRetry}>
-        Re-resolve
-      </Button>
-    </p>
+    <span className="text-xs text-muted-foreground">store {resolution.cli.storeVersion ?? 'not installed'}</span>
   );
 }
 
