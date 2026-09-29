@@ -730,6 +730,14 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
     unlinked = []
     quarantined = []
     problems = []
+    kept_pointers = []
+    # A layout-2 project's memory lives in the store, and the two pointers are the only
+    # record of where. Removing them leaves `project.json` still saying `layout: 2` while
+    # nothing can resolve the store paths — and the resolvers then fall back to the
+    # in-project layout-1 path, so the next writer creates a fresh, empty
+    # `.dev-team-agents/user-data/state.json` beside a store copy holding the real state.
+    # Observed on this repository's own unbind, not derived from reading the code.
+    keep_pointers = project.layout(project_root) >= project.CURRENT_LAYOUT
     if not keep_artifacts:
         for item in manifest.get("artifacts", []):
             rel = item.get("path")
@@ -739,6 +747,17 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
             # key. `_prune_stale` already guarded this; unbind did not.
             if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
                 problems.append({"path": rel, "error": "not a relative artifact path"})
+                continue
+            if item.get("kind") == "pointer" and keep_pointers:
+                # Kept, not unlinked. `pointer` used to be lumped in with `resolved`
+                # below, on the reasoning that both are generated projections carrying no
+                # state of their own. That is true of `resolved` — the preference cascade
+                # regenerates it — and false of a pointer once the memory it names is
+                # outside the project: nothing regenerates it after an unbind, and its
+                # absence is worse than staleness, because the fallback writes *into* the
+                # project. Same category as `project.json`: a record of where this
+                # project's own data is, not an artifact of being bound.
+                kept_pointers.append(rel)
                 continue
             if item.get("kind") in ("resolved", "pointer"):
                 # Generated projections: unlink and move on. They carry no state
@@ -782,7 +801,9 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
             # verified, the per-worktree file is ignored — so the block is shared
             # by every checkout of the repository. Clearing it while another
             # worktree is still bound would un-ignore that worktree's artifacts.
-            gitignore.apply_managed_block(exclude_file, [])
+            # Cleared, except for anything unbind kept: an entry it leaves behind still
+            # needs ignoring, or the unbind trades two untracked files for a clean block.
+            gitignore.apply_managed_block(exclude_file, sorted(kept_pointers))
 
     registry.remove(project_id)
     return {
@@ -791,5 +812,5 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
         "unlinked": unlinked,
         "quarantined": quarantined,
         "problems": problems,
-        "kept": ["project.json", "user-data/"],
+        "kept": ["project.json", "user-data/"] + sorted(kept_pointers),
     }

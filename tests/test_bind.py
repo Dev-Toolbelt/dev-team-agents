@@ -57,6 +57,52 @@ class BindTest(StoreTestCase):
         entries = gitignore.read_managed_entries(root / ".gitignore")
         self.assertEqual(len(entries), len(set(entries)))
 
+    def test_unbind_keeps_the_pointers_a_layout_2_project_needs_to_find_its_memory(self):
+        """A layout-2 project's memory is in the store, and the two pointers are the only
+        record of where. Unbind used to remove them as "generated projections", leaving
+        `project.json` still saying `layout: 2` while nothing could resolve the store paths
+        — so the next writer fell back to the in-project layout-1 path and created a fresh,
+        empty `user-data/state.json` beside a store copy holding the real state. Observed on
+        this repository's own unbind.
+        """
+        root = self.new_project()
+        result_bind = bind.bind(root, provider_names=["claude"])
+        pid = result_bind["project_id"]
+        self.assertEqual(project.layout(root), project.CURRENT_LAYOUT)
+        state_pointer = root / project.PROJECT_DIR / project.STATE_DIR_POINTER
+        memory_pointer = root / project.PROJECT_DIR / project.MEMORY_DIR_POINTER
+        before = state_pointer.read_text(encoding="utf-8")
+        self.assertTrue(before.strip())
+
+        result = bind.unbind(root)
+
+        self.assertTrue(state_pointer.exists(), "state-dir must survive an unbind")
+        self.assertTrue(memory_pointer.exists(), "memory-dir must survive an unbind")
+        self.assertEqual(state_pointer.read_text(encoding="utf-8"), before)
+        # Reported as kept, not silently left behind.
+        self.assertIn(".dev-team-agents/state-dir", result["kept"])
+        self.assertIn(".dev-team-agents/memory-dir", result["kept"])
+        self.assertNotIn(".dev-team-agents/state-dir", result["unlinked"])
+        # And still ignored, or the unbind trades two untracked files for a clean block.
+        local = gitignore.read_managed_entries(root / ".git" / "info" / "exclude")
+        self.assertIn(".dev-team-agents/state-dir", local)
+        self.assertIn(".dev-team-agents/memory-dir", local)
+        # The rest of the block is gone — this is still an unbind.
+        self.assertNotIn(".claude/agents/dev-team", local)
+
+    def test_unbind_still_removes_the_resolved_preference_projection(self):
+        """The fix must not turn into "keep every projection". `resolved/preferences.json`
+        is regenerated from the three-layer cascade, carries nothing of its own, and has no
+        reason to outlive the bind.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        resolved = root / project.PROJECT_DIR / "resolved" / "preferences.json"
+        self.assertTrue(resolved.exists())
+        result = bind.unbind(root)
+        self.assertFalse(resolved.exists())
+        self.assertNotIn(".dev-team-agents/resolved/preferences.json", result["kept"])
+
     def test_gitignore_block_never_ignores_project_json(self):
         """`project.json` is committed identity (ADR-0008), so it must never reach the
         managed block. This used to also assert `.dev-team-agents/user-data/` was in the
