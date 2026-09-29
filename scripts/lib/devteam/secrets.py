@@ -19,10 +19,11 @@ Backends, best first:
   0700 directory mode is enforced by the filesystem — containment falls back to
   whatever the user profile's own ACLs give, which this code neither sets nor
   checks. The backend is therefore weaker on Windows than the name ``insecure``
-  already warns, and ``dpapi`` above is the one that should be reached — but
-  ``dpapi`` is itself marked UNVERIFIED (see its section), so a Windows user can
-  land here. Stated rather than implied, because a 0600 claimed and not enforced
-  is worse than one never claimed.
+  already warns, and ``dpapi`` above is the one that should be reached. That is
+  now the likely outcome rather than a hope — ``dpapi`` is verified on a real
+  Windows host by CI — so landing here on Windows means its probe failed, which
+  ``devteam cred`` reports. Stated either way, because a 0600 claimed and not
+  enforced is worse than one never claimed.
 
 ADR-0010 also lists an ``age``/``sops`` encrypted backend. It is **not**
 implemented here and does not appear in ``BACKENDS`` — it needs a passphrase
@@ -204,11 +205,30 @@ def _keychain_delete(ref):
 
 
 # ── dpapi (Windows) ────────────────────────────────────────────────────────────
-# UNVERIFIED: written carefully against the documented Win32 DPAPI/ctypes
-# pattern, but never exercised on a real Windows host — this development
-# machine is macOS. Every Windows-only symbol (`ctypes.windll`) is reached only
-# behind a `platform_key() == "win32"` guard, so importing this module on
-# macOS or Linux never touches it and cannot fail because of it.
+# VERIFIED on a real Windows host, by CI. This block carried an UNVERIFIED label
+# for as long as it had never executed: it was written against the documented
+# Win32 DPAPI/ctypes pattern on a macOS development machine, and the only test
+# covering it faked `crypt32`, which is to say it tested the base64 envelope and
+# nothing about DPAPI.
+#
+# `tests/test_credentials.py::SecretsDpapiRealRoundTripTest` now drives the real
+# `CryptProtectData`/`CryptUnprotectData` on the `windows-latest` runner. What
+# that establishes, beyond "it does not crash": the stored blob is genuinely
+# ciphertext and does not contain the plaintext; `_dpapi_bytes_from_blob` copies
+# out of the returned buffer before `LocalFree` releases it, which no fake can
+# check because no fake allocates through `LocalAlloc`; and a tampered blob is
+# refused by DPAPI's own integrity protection rather than decrypting to
+# something else.
+#
+# Still not verified, and deliberately named rather than left to be assumed
+# covered: the failure branches of `_probe_dpapi()` (a build whose `crypt32`
+# entry points do not resolve), and behaviour under a roaming profile or a
+# non-interactive service account, where the user's master key may not be
+# available. A GitHub runner is an ordinary interactive-style local profile.
+#
+# Every Windows-only symbol (`ctypes.windll`) is still reached only behind a
+# `platform_key() == "win32"` guard, so importing this module on macOS or Linux
+# never touches it and cannot fail because of it.
 
 
 class _DataBlob(ctypes.Structure):

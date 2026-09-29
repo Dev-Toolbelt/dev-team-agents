@@ -951,5 +951,26 @@ named, rather than resolved and then failing on first use. And the `dpapi` backe
 marks UNVERIFIED is, for the first time, running on a host where it can be verified; a real round-trip
 test of it is now reachable and still unwritten.
 
+**2026-09-29 (same day, third entry) — the dpapi backend is verified, and the two entries above are
+left standing rather than corrected.** Both say dpapi is UNVERIFIED and that a round-trip test is
+"reachable and unwritten". That was true when each was written and is now false; they keep their
+wording for the same reason the test-count entries did — a log rewritten to match today stops being a
+log. `secrets.py`'s own section carries the current state, which is the file a reader acts on.
+`SecretsDpapiRealRoundTripTest` drives the real `CryptProtectData`/`CryptUnprotectData` on the Windows
+runner: nine tests for what the pre-existing mocked test structurally could not reach, since the thing
+it faked *was* DPAPI. The load-bearing ones are that the stored blob does not contain the plaintext —
+an assertion the reversible fake would fail, which is what makes it worth having — that
+`_dpapi_bytes_from_blob` copies out of the returned buffer before `LocalFree` releases it, untestable
+without a real `LocalAlloc`, and that a tampered blob is refused by DPAPI's integrity protection
+instead of decrypting to something else, without the error quoting the value. **Verified as having
+executed, not merely as green:** the Windows leg went from 422 tests / 30 skipped to 431 / 30 — the
+skip count did not move, so all nine ran there — while macOS went to 431 / 9, the same nine skipped by
+design. The test is this file's one exception to its no-real-backend rule, and the asymmetry is the
+justification: a DPAPI blob lands inside `$DEVTEAM_HOME`, so the fixture's teardown removes it, whereas
+the keychain lives in the OS where nothing a test wrote can be undone. **What is still not verified is
+now named in the code rather than left to be assumed covered:** `_probe_dpapi()`'s failure branches, and
+behaviour under a roaming profile or a non-interactive service account, neither of which a GitHub runner
+resembles.
+
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
