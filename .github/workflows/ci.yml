@@ -125,6 +125,61 @@ jobs:
       - name: Byte-compile and run the unit tests
         run: bash .github/scripts/ci/03-python.sh
 
+  # The first JavaScript gate in a repository ADR-0009 holds at python3 and bash.
+  # ADR-0015 puts an Electron desktop client under `app/` (TypeScript + Vite +
+  # React, shadcn/ui and Tailwind in the renderer) and its Risks table names the
+  # hole this job closes: "An Electron dependency tree lands in a repository with
+  # no JavaScript gate." Nothing here read a package.json before.
+  #
+  # WHAT IT COVERS — a reproducible install from the committed lockfile
+  # (`npm ci`), then the three headless npm scripts that are the app's CI
+  # contract: typecheck, lint, test. The unit-test step additionally asserts the
+  # suite was not vacuous (a runner whose glob matches nothing exits 0). Nothing
+  # that needs a display or produces an installer is invoked — `start`,
+  # `dev:app`, `dev:renderer` and `dist:mac` are never called by CI.
+  #
+  # WHEN IT RUNS — this job inherits the workflow trigger above and adds nothing,
+  # so it is NOT "every push": every pull request, plus pushes to `main` and to
+  # tags. An app change on a branch with no open PR is unchecked until the PR
+  # exists; the trigger policy at the top of this file states that trade-off and
+  # how to opt in (open a draft PR).
+  #
+  # There is deliberately no `paths:` filter on `app/**`. The app is a client of
+  # the CLI's `--json` output, which ADR-0011 makes public API — filtering would
+  # mean a change under `scripts/lib/devteam/` never exercises the only consumer
+  # of that output in the repository, which is the side of the contract most
+  # likely to break unnoticed. The job runs concurrently with the others and
+  # setup-node caches on app/package-lock.json, so the filter would save minutes
+  # the wall clock never sees.
+  app:
+    name: Desktop app (TypeScript / Electron client)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Before setup-node, and with no node required: this reports a missing
+      # app/, lockfile or version pin in the gate's own words rather than as the
+      # action's "Unable to find .nvmrc". A missing tree fails the job — the gate
+      # has no skip path, for the reason stated in 05-app.sh's preflight comment.
+      - name: Preflight — app tree, lockfile and node pin
+        run: bash .github/scripts/ci/05-app.sh --preflight
+
+      # The version comes from app/.nvmrc and from nowhere else, so `nvm use` in a
+      # contributor's shell and this job resolve the same interpreter. Mirrors how
+      # the lint job treats .github/shellcheck.pin: one file holds the number, and
+      # 05-app.sh then proves the interpreter on PATH is the pinned one instead of
+      # assuming the action honoured it.
+      - name: Set up node from app/.nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: npm ci, typecheck, lint, unit tests
+        run: bash .github/scripts/ci/05-app.sh
+
   provider-contracts:
     name: Provider contract (${{ matrix.provider }})
     runs-on: ubuntu-latest
