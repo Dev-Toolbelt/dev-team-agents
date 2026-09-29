@@ -92,16 +92,13 @@ int main(int argc, char **argv) {
      `_spawnve` is an argv vector, so nothing here is ever parsed by a command
      interpreter.
 
-     The `e` is the environment, passed **explicitly** as `_environ` rather than left to
-     `_spawnv`'s documented inheritance. That inheritance is what the first version
-     relied on, and the scenarios that travel by environment variable — the handshake's
-     — arrived unset at the fixture while the ones that travel by argv arrived fine. The
-     difference between "documented to inherit" and "observably inherited" is not worth
-     re-litigating inside a test fixture: naming the block leaves nothing to a CRT
-     startup detail. `applyScenarioOverride` above has already mutated `_environ` if a
-     sibling file asked it to. */
-  intptr_t status = _spawnve(_P_WAIT, NODE_PATH, (const char *const *)childArgv,
-                             (const char *const *)_environ);
+     The environment is left to `_spawnv`'s inheritance, and that is a measured choice,
+     not the default one. Passing `_environ` explicitly through `_spawnve` was tried and
+     **made things worse**: the suites whose scenarios travel by argv went from passing
+     to failing, which is what an empty or unpopulated `_environ` looks like from the
+     outside. Inheritance demonstrably carries the block this process was given. Do not
+     "fix" this back to an explicit env without a Windows run to show it helps. */
+  intptr_t status = _spawnv(_P_WAIT, NODE_PATH, (const char *const *)childArgv);
   free(childArgv);
 
   if (status == -1) {
