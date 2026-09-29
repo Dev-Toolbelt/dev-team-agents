@@ -38,7 +38,7 @@ import {
   type CliContext,
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
-import { readSettings, type AppSettings } from './settings.js';
+import { readSettings, writeProjectName, type AppSettings } from './settings.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
   CHANNELS,
@@ -73,6 +73,7 @@ interface ValidatedBindRequest {
   readonly providers?: readonly BindProvider[];
   readonly mode?: BindMode;
   readonly pin?: string | null;
+  readonly name?: string;
 }
 
 /**
@@ -124,11 +125,23 @@ export function validateBindRequest(
     pin = rawPin;
   }
 
+  // `name` never reaches the CLI's argv — see `BindRequest.name`'s doc comment in
+  // `shared/api.ts`. It is validated here like every other field this boundary is not
+  // trusted to have sent honestly, and stored by the caller only after `bindProject`
+  // itself has succeeded.
+  let name: string | undefined;
+  const rawName = raw['name'];
+  if (rawName !== undefined) {
+    if (typeof rawName !== 'string') return '`name` must be a string';
+    name = rawName;
+  }
+
   return {
     path,
     ...(providers !== undefined ? { providers } : {}),
     ...(mode !== undefined ? { mode } : {}),
     ...(pin !== undefined ? { pin } : {}),
+    ...(name !== undefined ? { name } : {}),
   };
 }
 
@@ -393,6 +406,13 @@ export function registerIpc(deps: IpcDependencies): void {
     return ctx === null ? NO_CLI : listProjects(ctx);
   });
 
+  // Spawns nothing — reads this app's own settings file. See `BindRequest.name`'s
+  // comment above for why this channel is not in `CHANNELS`.
+  ipcMain.handle(CHANNELS.projectNames, async (): Promise<Readonly<Record<string, string>>> => {
+    const current = await ensureSettings();
+    return current.projectNames;
+  });
+
   ipcMain.handle(CHANNELS.catalogSummary, async () => {
     const ctx = await context();
     return ctx === null ? NO_CLI : catalogSummary(ctx);
@@ -455,11 +475,25 @@ export function registerIpc(deps: IpcDependencies): void {
     }
     const gated = await gatedContext('bind');
     if (!gated.ready) return gated.problem;
-    return bindProject(gated.ctx, validated.path, {
+    const result = await bindProject(gated.ctx, validated.path, {
       ...(validated.providers !== undefined ? { providers: validated.providers } : {}),
       ...(validated.mode !== undefined ? { mode: validated.mode } : {}),
       ...(validated.pin !== undefined ? { pin: validated.pin } : {}),
     });
+    if (result.ok && validated.name !== undefined) {
+      try {
+        await writeProjectName(deps.userDataDir, result.data.project_id, validated.name);
+        // The cached copy `ensureSettings()` holds is now stale; drop it so the next
+        // `projectNames()` call sees the name that was just written rather than the
+        // snapshot read before this bind ran.
+        settings = null;
+      } catch {
+        // Best-effort: this app's own local convenience record, not the framework's
+        // write. A bind that succeeded must be reported as succeeded even when naming it
+        // afterward failed — see `BindRequest.name`'s doc comment in `shared/api.ts`.
+      }
+    }
+    return result;
   });
 
   ipcMain.handle(CHANNELS.unbindProject, async (_event, projectId: unknown): Promise<OperationResult<UnbindReport>> => {

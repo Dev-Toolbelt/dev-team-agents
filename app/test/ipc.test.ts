@@ -148,6 +148,17 @@ describe('validateBindRequest', () => {
     expect(validateBindRequest('a string', new Set())).toContain('must be an object');
     expect(validateBindRequest({}, new Set())).toContain('must name a string');
   });
+
+  it('accepts a string name, and refuses a non-string one — never reaching the CLI argv either way', async () => {
+    const { validateBindRequest } = await loadIpc();
+    expect(validateBindRequest({ path: '/offered', name: 'My Project' }, new Set(['/offered']))).toEqual({
+      path: '/offered',
+      name: 'My Project',
+    });
+    expect(validateBindRequest({ path: '/offered', name: 42 }, new Set(['/offered']))).toContain(
+      '`name` must be a string',
+    );
+  });
 });
 
 // ── chooseProjectDirectory and the offered set it feeds ─────────────────────────────
@@ -210,6 +221,56 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     )) as { readonly command: string };
 
     expect(result.command).toContain('bind /chosen/dir --provider claude --provider codex --mode link --json');
+  });
+});
+
+// ── project names — the app's own record, stored only after a successful bind ──────────
+
+describe('bindProject stores a name only after the bind succeeds, and never in the CLI argv', () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('stores the name and projectNames() reflects it afterward', async () => {
+    const { handlers, showOpenDialog, registerIpc, CHANNELS } = await loadIpc();
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
+    await registerAgainstFake(registerIpc);
+
+    // Nothing stored before the bind.
+    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
+
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    const bound = (await handlers.get(CHANNELS.bindProject)?.(
+      {},
+      { path: '/chosen/dir', name: 'My Project' },
+    )) as { readonly command: string; readonly ok: boolean };
+    expect(bound.ok).toBe(true);
+    // `name` never became argv — every fixture-answered command is asserted on its own
+    // `command` elsewhere in this file; here the proof is that this exact string appears
+    // nowhere in the one that did run.
+    expect(bound.command).not.toContain('My Project');
+
+    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({ 'proj-1': 'My Project' });
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('stores nothing when bindProject is called with no name', async () => {
+    const { handlers, showOpenDialog, registerIpc, CHANNELS } = await loadIpc();
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
+    await registerAgainstFake(registerIpc);
+
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    await handlers.get(CHANNELS.bindProject)?.({}, { path: '/chosen/dir' });
+
+    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
+  });
+
+  it('a refused bind (path never offered) never reaches name storage', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const bound = (await handlers.get(CHANNELS.bindProject)?.(
+      {},
+      { path: '/never/offered', name: 'Should Not Be Stored' },
+    )) as { readonly ok: boolean };
+    expect(bound.ok).toBe(false);
+
+    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
   });
 });
 

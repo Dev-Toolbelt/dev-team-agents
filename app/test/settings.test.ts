@@ -6,13 +6,13 @@
  * is the one that actually protects the fix, not just the read function in isolation.
  */
 
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETTINGS_FILE_NAME, readSettings } from '../src/main/settings.js';
+import { SETTINGS_FILE_NAME, readSettings, writeProjectName } from '../src/main/settings.js';
 
 let dir: string;
 
@@ -125,6 +125,105 @@ describe('readSettings — cliPath and path shape', () => {
     expect((await readSettings(dir)).path).toBe(expected);
     await writeFile(join(dir, SETTINGS_FILE_NAME), 'garbage', 'utf8');
     expect((await readSettings(dir)).path).toBe(expected);
+  });
+});
+
+describe('readSettings — projectNames degrades to empty rather than a problem or a throw', () => {
+  it('reports no names when the file does not exist', async () => {
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({});
+  });
+
+  it('reports no names, and no problem, when projectNames is absent from an otherwise valid file', async () => {
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ cliPath: '/usr/local/bin/devteam' }), 'utf8');
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({});
+    expect(result.problem).toBeUndefined();
+  });
+
+  it('reads a valid projectNames map alongside a valid cliPath', async () => {
+    await writeFile(
+      join(dir, SETTINGS_FILE_NAME),
+      JSON.stringify({ cliPath: '/usr/local/bin/devteam', projectNames: { 'proj-1': 'My Project' } }),
+      'utf8',
+    );
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({ 'proj-1': 'My Project' });
+    expect(result.cliPath).toBe('/usr/local/bin/devteam');
+  });
+
+  it('drops non-string and blank entries but keeps the valid ones, without raising a problem', async () => {
+    await writeFile(
+      join(dir, SETTINGS_FILE_NAME),
+      JSON.stringify({ projectNames: { good: 'Kept', blank: '   ', wrongType: 42 } }),
+      'utf8',
+    );
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({ good: 'Kept' });
+    expect(result.problem).toBeUndefined();
+  });
+
+  it('degrades to no names, never throws, when projectNames itself is not an object', async () => {
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ projectNames: 'not an object' }), 'utf8');
+    await expect(readSettings(dir)).resolves.toMatchObject({ projectNames: {} });
+  });
+
+  it('a malformed cliPath does not blank out otherwise-valid projectNames', async () => {
+    await writeFile(
+      join(dir, SETTINGS_FILE_NAME),
+      JSON.stringify({ cliPath: 42, projectNames: { 'proj-1': 'Kept anyway' } }),
+      'utf8',
+    );
+    const result = await readSettings(dir);
+    expect(result.cliPath).toBeUndefined();
+    expect(result.problem).toBe('`cliPath` is not a non-empty string');
+    expect(result.projectNames).toEqual({ 'proj-1': 'Kept anyway' });
+  });
+});
+
+describe('writeProjectName', () => {
+  it('creates the file when none exists, and readSettings sees the write', async () => {
+    await writeProjectName(dir, 'proj-1', 'My Project');
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({ 'proj-1': 'My Project' });
+  });
+
+  it('trims the stored name', async () => {
+    await writeProjectName(dir, 'proj-1', '  My Project  ');
+    expect((await readSettings(dir)).projectNames).toEqual({ 'proj-1': 'My Project' });
+  });
+
+  it('is a no-op for a blank name — never stores an empty string', async () => {
+    await writeProjectName(dir, 'proj-1', '   ');
+    const result = await readSettings(dir);
+    expect(result.projectNames).toEqual({});
+    // No file at all was created for a no-op write.
+    await expect(readFile(join(dir, SETTINGS_FILE_NAME), 'utf8')).rejects.toThrow();
+  });
+
+  it('preserves an existing cliPath, and merges into an existing projectNames map', async () => {
+    await writeFile(
+      join(dir, SETTINGS_FILE_NAME),
+      JSON.stringify({ cliPath: '/usr/local/bin/devteam', projectNames: { 'proj-1': 'First' } }),
+      'utf8',
+    );
+    await writeProjectName(dir, 'proj-2', 'Second');
+    const result = await readSettings(dir);
+    expect(result.cliPath).toBe('/usr/local/bin/devteam');
+    expect(result.projectNames).toEqual({ 'proj-1': 'First', 'proj-2': 'Second' });
+  });
+
+  it('overwrites the name already stored for the same project_id', async () => {
+    await writeProjectName(dir, 'proj-1', 'Old Name');
+    await writeProjectName(dir, 'proj-1', 'New Name');
+    expect((await readSettings(dir)).projectNames).toEqual({ 'proj-1': 'New Name' });
+  });
+
+  it('leaves no temp file behind after a successful write', async () => {
+    await writeProjectName(dir, 'proj-1', 'My Project');
+    const { readdir } = await import('node:fs/promises');
+    const entries = await readdir(dir);
+    expect(entries).toEqual([SETTINGS_FILE_NAME]);
   });
 });
 

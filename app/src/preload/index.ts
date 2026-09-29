@@ -29,6 +29,7 @@ const bridge: DevteamBridge = {
   resolveCli: () => ipcRenderer.invoke(CHANNELS.resolveCli),
   handshake: () => ipcRenderer.invoke(CHANNELS.handshake),
   listProjects: () => ipcRenderer.invoke(CHANNELS.listProjects),
+  projectNames: () => ipcRenderer.invoke(CHANNELS.projectNames),
   catalogSummary: () => ipcRenderer.invoke(CHANNELS.catalogSummary),
   // The argument is coerced to a string here and validated again in the main process.
   // The renderer is not trusted to have sent a member of the union just because the type
@@ -49,6 +50,7 @@ const bridge: DevteamBridge = {
       ...(request.providers !== undefined ? { providers: [...request.providers] } : {}),
       ...(request.mode !== undefined ? { mode: request.mode } : {}),
       ...(request.pin !== undefined ? { pin: request.pin } : {}),
+      ...(request.name !== undefined ? { name: String(request.name) } : {}),
     }),
   unbindProject: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.unbindProject, String(projectId)),
   syncProject: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.syncProject, String(projectId)),

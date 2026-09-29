@@ -268,6 +268,23 @@ export interface BindRequest {
   readonly providers?: readonly BindProvider[];
   readonly mode?: BindMode;
   readonly pin?: string | null;
+  /**
+   * A human name for this project — **the app's own record, never the CLI's.**
+   *
+   * `devteam bind` has no `--name`, and `project.json` has no `name` field: the
+   * framework identifies a project by `project_id`, a UUID chosen so identity survives a
+   * re-clone, a move and a machine change. This never reaches the CLI's argv; the main
+   * process stores it after a successful bind and it is read back through
+   * `projectNames()`.
+   *
+   * The consequence is worth stating rather than discovering: a name set here lives in
+   * this app's `settings.json` on this machine only. It does not travel with the
+   * project, another client does not see it, and clearing the app's data loses it.
+   * Making it portable means adding a field to the committed `project.json` and a flag
+   * to `bind` — a change to the framework's public surface, which a UI affordance is not
+   * on its own a reason to make.
+   */
+  readonly name?: string;
 }
 
 /**
@@ -495,6 +512,15 @@ export interface DevteamBridge {
   readonly catalogListing: (kind: CatalogKind) => Promise<OperationResult<CatalogListing>>;
   readonly catalogEntry: (name: string) => Promise<OperationResult<CatalogDetail>>;
   readonly doctor: () => Promise<OperationResult<DoctorReport>>;
+  /**
+   * The app's own names for bound projects, keyed by `project_id`. Spawns nothing.
+   *
+   * Read-only and app-local (see `BindRequest.name`). A project with no stored name is
+   * absent from this map rather than present with a placeholder, so the caller decides
+   * the fallback — which is the directory's own basename, so **no row ever renders a
+   * bare UUID**, including for a project bound from the terminal and never named here.
+   */
+  readonly projectNames: () => Promise<Readonly<Record<string, string>>>;
 
   // Write actions. Each one spawns a command in `compat.MUTATING`, so each one is
   // refused at exit 4 by the framework's own gate whenever the store is ahead of this
@@ -525,6 +551,7 @@ export const CHANNELS = {
   catalogListing: 'devteam:catalog-listing',
   catalogEntry: 'devteam:catalog-entry',
   doctor: 'devteam:doctor',
+  projectNames: 'devteam:project-names',
   chooseProjectDirectory: 'devteam:choose-project-directory',
   bindProject: 'devteam:bind-project',
   unbindProject: 'devteam:unbind-project',
