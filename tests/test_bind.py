@@ -57,12 +57,35 @@ class BindTest(StoreTestCase):
         entries = gitignore.read_managed_entries(root / ".gitignore")
         self.assertEqual(len(entries), len(set(entries)))
 
-    def test_gitignore_block_ignores_memory_but_not_project_json(self):
+    def test_gitignore_block_never_ignores_project_json(self):
+        """`project.json` is committed identity (ADR-0008), so it must never reach the
+        managed block. This used to also assert `.dev-team-agents/user-data/` was in the
+        block, which **pinned a bug**: a fresh bind records layout 2, where memory lives in
+        the store and the project has no `user-data/` at all, so the line named a directory
+        that never existed. Writing it unconditionally also meant a sync after `upgrade`
+        put back the two lines `upgrade.RETIRED_GITIGNORE_ENTRIES` had just retired. The
+        layout-1 direction is asserted separately, below.
+        """
         root = self.new_project()
         bind.bind(root, provider_names=["claude"])
         entries = gitignore.read_managed_entries(root / ".gitignore")
-        self.assertIn(".dev-team-agents/user-data/", entries)
         self.assertNotIn(".dev-team-agents/project.json", entries)
+        self.assertEqual(project.layout(root), project.CURRENT_LAYOUT)
+        self.assertNotIn(".dev-team-agents/user-data/", entries)
+        # The entries that are not about the legacy directory are still written.
+        self.assertIn(".dev-team-agents/resolved/", entries)
+
+    def test_gitignore_block_ignores_the_memory_directory_on_layout_1(self):
+        """The other direction, so the fix above cannot become "never write them": while a
+        project's memory is still inside it, the directory line and the negation that keeps
+        `graphify.json` tracked within it both have to be there.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        project.set_layout(root, project.LAYOUT_MEMORY_IN_PROJECT)
+        entries = bind.project_gitignore_entries(root)
+        self.assertIn(".dev-team-agents/user-data/", entries)
+        self.assertIn("!.dev-team-agents/user-data/graphify.json", entries)
 
     def test_bind_artifacts_are_excluded_locally_not_in_gitignore(self):
         root = self.new_project()

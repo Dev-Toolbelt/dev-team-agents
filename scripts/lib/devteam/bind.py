@@ -26,9 +26,15 @@ MANIFEST_SCHEMA = 1
 #: Ignored in the project's own ``.gitignore``: paths every developer on the
 #: project needs ignored. ``project.json`` is deliberately absent — it is
 #: committed (ADR-0008).
+#:
+#: The two ``user-data/`` lines are **layout-1 only** and live in their own tuple
+#: below, because a layout-2 project has no ``user-data/`` at all: its memory moved
+#: into the store, and ``upgrade.RETIRED_GITIGNORE_ENTRIES`` deliberately removes the
+#: directory line when it goes. Writing them unconditionally meant the next ``bind``
+#: or ``sync`` put back exactly what ``upgrade`` had just retired, so an upgraded
+#: project got a dirty ``.gitignore`` on every sync, forever, naming a directory that
+#: does not exist. Observed on this repository's own install, right after its upgrade.
 PROJECT_GITIGNORE_ENTRIES = (
-    ".dev-team-agents/user-data/",
-    "!.dev-team-agents/user-data/graphify.json",
     ".dev-team-agents/resolved/",
     ".dev-team-agents/VERSION",
     ".dev-team-agents/.worktree-session",
@@ -39,6 +45,25 @@ PROJECT_GITIGNORE_ENTRIES = (
     # pre-upgrade memory directory. Never a thing to commit.
     "devteam-data-*.tar.gz",
 )
+
+#: Ignore lines that only make sense while a project's memory is still inside it.
+#: `graphify.json`'s negation travels with the directory line: it exists to keep one
+#: committed file tracked *inside* `user-data/`, so it is meaningless once there is no
+#: `user-data/` — and `upgrade` keeps it out of its retired list for the opposite
+#: reason, that a layout-1 project must not lose it.
+LEGACY_MEMORY_GITIGNORE_ENTRIES = (
+    ".dev-team-agents/user-data/",
+    "!.dev-team-agents/user-data/graphify.json",
+)
+
+
+def project_gitignore_entries(project_root):
+    """The `.gitignore` entries for this project, given the layout it records."""
+    entries = list(PROJECT_GITIGNORE_ENTRIES)
+    if project.layout(project_root) == project.LAYOUT_MEMORY_IN_PROJECT:
+        entries = list(LEGACY_MEMORY_GITIGNORE_ENTRIES) + entries
+    return entries
+
 
 
 def manifest_file(project_id):
@@ -562,7 +587,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         )
 
     ignore_changed, ignore_action = gitignore.apply_managed_block(
-        Path(project_root) / ".gitignore", list(PROJECT_GITIGNORE_ENTRIES)
+        Path(project_root) / ".gitignore", project_gitignore_entries(project_root)
     )
 
     exclude_action = "skipped"

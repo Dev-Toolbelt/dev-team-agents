@@ -222,6 +222,41 @@ class UpgradeTest(StoreTestCase):
         self.assertNotIn(".dev-team-agents/user-data/", after)
         self.assertIn(".worktrees/", after)
 
+    def test_a_sync_after_upgrade_does_not_put_the_user_data_entries_back(self):
+        """`upgrade` retires the `user-data/` ignore lines because the directory is gone.
+        `bind`/`sync` used to rewrite them unconditionally, so the next sync put back
+        exactly what the upgrade had retired — a dirty `.gitignore` on every sync,
+        forever, naming a directory that does not exist. Observed on this repository's
+        own install right after its upgrade, not derived from reading the code.
+        """
+        root, _ = self._v2_bound()
+        before = gitignore.read_managed_entries(root / ".gitignore")
+        self.assertIn(".dev-team-agents/user-data/", before)
+
+        upgrade.apply(root)
+        after_upgrade = gitignore.read_managed_entries(root / ".gitignore")
+        self.assertNotIn(".dev-team-agents/user-data/", after_upgrade)
+
+        bind.sync_project(project.load(root)["project_id"])
+
+        after_sync = gitignore.read_managed_entries(root / ".gitignore")
+        self.assertNotIn(".dev-team-agents/user-data/", after_sync)
+        self.assertNotIn("!.dev-team-agents/user-data/graphify.json", after_sync)
+        # The entries that are not about the legacy directory still get written.
+        self.assertIn(".dev-team-agents/resolved/", after_sync)
+        self.assertIn(".worktrees/", after_sync)
+
+    def test_a_layout_1_project_still_gets_the_user_data_entries(self):
+        """The other direction, so the fix cannot be "stop writing them at all": a
+        project whose memory is still inside it must keep the line that ignores the
+        directory, and the negation that keeps `graphify.json` tracked within it.
+        """
+        root, _ = self._v2_bound()
+        self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_PROJECT)
+        entries = bind.project_gitignore_entries(root)
+        self.assertIn(".dev-team-agents/user-data/", entries)
+        self.assertIn("!.dev-team-agents/user-data/graphify.json", entries)
+
     def test_the_pointers_it_creates_are_excluded_and_the_artifact_block_survives(self):
         """The two layout-2 pointers hold an absolute path into one developer's store,
         so they can never be committed — and nothing was ignoring them. `bind` gets it
