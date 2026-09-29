@@ -109,15 +109,18 @@ cask "devteam-app" do
   # client of the CLI... no bind rule, no preference merge, no credential
   # resolution is reimplemented"). Zapping the app must not delete a store the
   # CLI (installed separately, via the `devteam` formula) still owns. Only the
-  # app's own Electron chrome is listed here. The bundle id is **no longer a
-  # placeholder**: `app/electron-builder.yml` declares
-  # `appId: com.devtoolbelt.dev-team-agents-app`, which is the value below, and
-  # `productName: dev-team-agents`, which is the `app` stanza above. Both are
-  # now read from the build config rather than guessed — and both are still
-  # unenforced by any check, so they are edited in pairs by hand.
+  # app's own Electron chrome is listed here. The suffix `-app` is the
+  # distinction: `app/src/main/index.ts` sets `userData` to `${appName}-app`,
+  # which resolves to `~/Library/Application Support/dev-team-agents-app` on
+  # macOS. That directory holds the app's settings and schema cache; the CLI's
+  # store is at `~/Library/Application Support/dev-team-agents` (without the
+  # suffix). The bundle id and product name are read from
+  # `app/electron-builder.yml` — both are now enforced by
+  # `.github/scripts/ci/05-app.sh` rather than edited in pairs by hand.
   zap trash: [
     "~/Library/Preferences/com.devtoolbelt.dev-team-agents-app.plist",
     "~/Library/Saved Application State/com.devtoolbelt.dev-team-agents-app.savedState",
-    "~/Library/Logs/dev-team-agents-app",
+    "~/Library/Application Support/dev-team-agents-app",
+    "~/Library/Logs/dev-team-agents",
   ]
 end
