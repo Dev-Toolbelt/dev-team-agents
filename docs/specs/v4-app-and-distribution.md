@@ -972,5 +972,22 @@ now named in the code rather than left to be assumed covered:** `_probe_dpapi()`
 behaviour under a roaming profile or a non-interactive service account, neither of which a GitHub runner
 resembles.
 
+**2026-09-29 (fourth entry) — the app's Windows leg is no longer a smoke test, and the entry above
+saying it is stays as written.** That entry called the 179-of-229 gap *structural* and said the honest
+next step was "a compiled or `node`-shimmed fake CLI rather than more skips". That is what was built:
+`app/test/fixtures/launcher.c`, a real PE compiled at test time, never checked in, degrading to today's
+skips when the runner has no compiler. The leg now runs **203 of 229** and the whole workflow is green
+on ubuntu, macOS and Windows. Four platform defects were found on the way, all by measurement:
+`CreateProcess` refusing an extensionless PE; tests simulating `darwin` asking for a filename a real
+Windows host cannot produce; `PATH` joined with `:` where Windows uses `;`; and the launcher re-joining
+argv without escaping a quote, which mangled the handshake's inline `--client` JSON. Two of the four were
+first "fixed" by inference from documentation and had to be reverted — one of them doubled the failure
+count — so the argv quoting was instead extracted and exercised on macOS before it ever reached the
+runner. **The residue is 26 skips, and they are the platform's absences rather than the fixture's
+limits**: POSIX permission bits, the SIGTERM escalation, `HOMEBREW_PREFIX`, the world-writable refusal
+that production itself disables on win32, and the python-shebang `real-cli` suite. `PASS_THROUGH_ENV` was
+never widened to carry a test variable; that shortcut would have admitted arbitrary code into a spawned
+child, and the fixture problem was solved on the fixture's side instead.
+
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
