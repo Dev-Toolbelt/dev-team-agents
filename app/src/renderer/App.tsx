@@ -76,7 +76,7 @@ export function App() {
             className="h-5 w-auto self-center"
           />
           <h1 className="text-lg font-semibold tracking-tight">dev-team-agents</h1>
-          <Badge variant="secondary">no write actions</Badge>
+          <WriteActionsBadge build={build} />
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
           {build !== null ? (
             <span className="text-xs text-muted-foreground">
@@ -119,7 +119,7 @@ export function App() {
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
               </TabsList>
               <TabsContent value="projects" className="pt-4">
-                <Projects />
+                <Projects environment={environment} />
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
                 <Catalog />
@@ -132,6 +132,33 @@ export function App() {
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * What this build can change, in plain language.
+ *
+ * `BuildInfo.noWriteActions: true` — a literal type the compiler itself would have had to
+ * be edited to admit a write action — is gone. `hasWriteActions` is a boolean, and this
+ * build sets it `true`: the project lifecycle (bind, unbind, sync, pin, upgrade) is
+ * reachable from the UI. The badge says so, and the commands it can actually run are
+ * enumerated rather than left to a claim that could silently drift from
+ * `compat.MUTATING`.
+ */
+function WriteActionsBadge({ build }: { build: BuildInfo | null }) {
+  if (build === null) return null;
+  if (!build.hasWriteActions) return <Badge variant="secondary">no write actions</Badge>;
+  return (
+    <Badge
+      variant="outline"
+      title={
+        build.mutatingCommandsRun.length > 0
+          ? `Commands this build can run that change the store: ${build.mutatingCommandsRun.join(', ')}`
+          : 'This build declares write actions but runs no mutating command yet.'
+      }
+    >
+      write actions: {build.mutatingCommandsRun.length > 0 ? build.mutatingCommandsRun.join(', ') : 'none run'}
+    </Badge>
   );
 }
 
