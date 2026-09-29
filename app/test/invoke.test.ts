@@ -18,6 +18,21 @@ import { explain, ranAndAnswered } from '../src/cli/contract.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 
+/**
+ * The fake CLI is a `.mjs` script with a `#!/usr/bin/env node` shebang. POSIX honours
+ * that and runs it directly; Windows has no shebang support and no association for
+ * `.mjs`, so `spawn(FAKE, args, { shell: false })` — this layer's own policy, see
+ * invoke.ts's header — cannot start it at all (`spawn UNKNOWN`). Routing through
+ * `process.execPath`, the real `node` binary this test runner is itself running on, is
+ * the fix: it is a genuine, directly-executable program on every platform, and it
+ * changes nothing about what `invokeDevteam` does with the array it is given — `FAKE`
+ * is simply this test's first argument now, the way `node fake-devteam.mjs …` would be
+ * typed at a POSIX shell.
+ */
+function fakeCli(args: readonly string[]): { binary: string; args: readonly string[] } {
+  return { binary: process.execPath, args: [FAKE, ...args] };
+}
+
 function run(
   scenario: string,
   args: readonly string[] = ['version'],
@@ -25,8 +40,7 @@ function run(
   killGraceMs?: number,
 ) {
   return invokeDevteam({
-    binary: FAKE,
-    args,
+    ...fakeCli(args),
     env: { FAKE_DEVTEAM_SCENARIO: scenario },
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(killGraceMs !== undefined ? { killGraceMs } : {}),
@@ -183,18 +197,27 @@ describe('the binary itself', () => {
     expect(explain(result)).toContain('could not be started');
   });
 
-  it('reports a non-executable file as unavailable/not-executable', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-test-'));
-    const path = join(dir, 'devteam');
-    await writeFile(path, '#!/bin/sh\necho hi\n');
-    await chmod(path, 0o600);
-    const result = await invokeDevteam({ binary: path, args: ['version'] });
-    expect(result.outcome).toBe('unavailable');
-    if (result.outcome !== 'unavailable') throw new Error('unreachable');
-    expect(result.reason).toBe('not-executable');
-    // Removed, not left behind: this file used to leak one directory per run.
-    await rm(dir, { recursive: true, force: true });
-  });
+  // Windows has no POSIX execute bit — `chmod(path, 0o600)` does not make a file
+  // non-executable there, and a file with no recognized extension is never executable
+  // there regardless of mode, so the `not-found` vs. `not-executable` distinction this
+  // test is about does not exist on that platform. `resolve.ts`'s own
+  // `worldWritableDirProblem` documents the same POSIX-only limit of `fs`'s emulated
+  // `mode` on Windows.
+  it.skipIf(process.platform === 'win32')(
+    'reports a non-executable file as unavailable/not-executable',
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'devteam-app-test-'));
+      const path = join(dir, 'devteam');
+      await writeFile(path, '#!/bin/sh\necho hi\n');
+      await chmod(path, 0o600);
+      const result = await invokeDevteam({ binary: path, args: ['version'] });
+      expect(result.outcome).toBe('unavailable');
+      if (result.outcome !== 'unavailable') throw new Error('unreachable');
+      expect(result.reason).toBe('not-executable');
+      // Removed, not left behind: this file used to leak one directory per run.
+      await rm(dir, { recursive: true, force: true });
+    },
+  );
 });
 
 describe('timeout', () => {
@@ -222,20 +245,19 @@ describe('argument and environment handling', () => {
   });
 
   it('puts --client-schemas before the subcommand, where the global flag belongs', async () => {
+    // Asserted on `result.command.args` rather than run end-to-end: `describe()` builds
+    // it (unshift included) before `invokeDevteam` ever attempts to spawn anything, so
+    // the placement this test is about does not depend on the fake CLI actually being
+    // executable — which, run through `node` the way `fakeCli()` does for the rest of
+    // this file, would put `--client-schemas` ahead of the script path instead of ahead
+    // of the subcommand, breaking the very ordering being tested.
     const result = await invokeDevteam({
       binary: FAKE,
       args: ['list'],
       env: { FAKE_DEVTEAM_SCENARIO: 'ok' },
       declarationFile: '/tmp/client-schemas.json',
     });
-    if (!ranAndAnswered(result)) throw new Error('expected a document');
-    if (result.document.kind !== 'payload') throw new Error('expected a payload');
-    expect(result.document.body['argv']).toEqual([
-      '--client-schemas',
-      '/tmp/client-schemas.json',
-      'list',
-      '--json',
-    ]);
+    expect(result.command.args).toEqual(['--client-schemas', '/tmp/client-schemas.json', 'list', '--json']);
   });
 
   it('passes arguments as an array, so shell metacharacters are inert', async () => {
@@ -265,8 +287,11 @@ describe('argument and environment handling', () => {
   it('never builds a shell string from the arguments', async () => {
     const result = await run('ok', ['version']);
     if (!ranAndAnswered(result)) throw new Error('expected a document');
-    // `display` exists for messages; the spawned vector is the array.
-    expect(result.command.args).toEqual(['version', '--json']);
-    expect(result.command.binary).toBe(FAKE);
+    // `display` exists for messages; the spawned vector is the array — `fakeCli()`
+    // routes it through `node`, so the array this run actually used is `[FAKE, …args]`
+    // under `process.execPath`, not `FAKE` under itself, but it is still an array, still
+    // untouched by any shell, which is the property this test is about.
+    expect(result.command.args).toEqual([FAKE, 'version', '--json']);
+    expect(result.command.binary).toBe(process.execPath);
   });
 });

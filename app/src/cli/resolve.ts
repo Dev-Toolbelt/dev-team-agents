@@ -47,7 +47,7 @@
 
 import { constants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, join, posix as posixPath } from 'node:path';
 
 import { invokeDevteam } from './invoke.js';
 import { ranAndAnswered } from './contract.js';
@@ -166,7 +166,15 @@ export function knownBinDirs(
   }
 
   const prefix = env['HOMEBREW_PREFIX'];
-  if (typeof prefix === 'string' && prefix !== '') push(join(prefix, 'bin'));
+  // `posixPath.join`, not the platform-bound `join`: this branch's paths are always
+  // POSIX (Homebrew never runs on Windows), but the host running this code is not
+  // necessarily the platform being asked about — `resolveDevteam`'s own tests probe
+  // `knownBinDirs('darwin', …)` from whichever CI runner they happen to execute on.
+  // Production never hits this mismatch (it always calls with the true platform, so a
+  // real POSIX host already gets POSIX behaviour from the plain `join`), but the plain
+  // `join` import resolves to `path.win32.join` on an actual Windows host, which would
+  // turn a simulated-macOS prefix like `/opt/brew` into `\opt\brew\bin`.
+  if (typeof prefix === 'string' && prefix !== '') push(posixPath.join(prefix, 'bin'));
   push('/opt/homebrew/bin');
   push('/usr/local/bin');
   return dirs;
@@ -200,7 +208,28 @@ async function worldWritableDirProblem(directory: string, platform: NodeJS.Platf
   }
 }
 
+/**
+ * Extensions this app can find but can **never** invoke, so finding one is a dead end.
+ *
+ * `invoke.ts` spawns with `shell: false`, which is a security property and not a
+ * preference. Node refuses outright to spawn a `.cmd` or `.bat` without a shell — the
+ * hardening that closed CVE-2024-27980, where the Windows command interpreter re-parsed
+ * an argument list that had already been quoted. So a candidate with one of these
+ * extensions would resolve, then fail on first use with an `EINVAL` naming no cause.
+ *
+ * `executableNames('win32')` still lists them, deliberately: a shim shaped this way is a
+ * real thing to *find*, and the honest outcome is a rejection that names the constraint,
+ * not silence about a file that is sitting right there. The alternative — turning the
+ * shell on for this one case — would hand a shell the argv the CLI is invoked with, which
+ * is exactly what the CVE was.
+ */
+const UNSPAWNABLE_EXTENSIONS = ['.cmd', '.bat'];
+
 async function isExecutableFile(candidate: string): Promise<string | null> {
+  const lowered = candidate.toLowerCase();
+  if (UNSPAWNABLE_EXTENSIONS.some((extension) => lowered.endsWith(extension))) {
+    return 'a .cmd or .bat shim cannot be spawned without a shell, and this app never uses one';
+  }
   try {
     const info = await stat(candidate); // follows symlinks, which is what we want
     if (!info.isFile()) return `not a regular file`;

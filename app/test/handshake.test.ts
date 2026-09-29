@@ -18,9 +18,20 @@ import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../sr
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 
+/**
+ * `performHandshake` fixes its own `args` (`['compat', '--client', …]`, see
+ * `declaration.ts`) and takes only `binary`, so unlike `invoke.test.ts` this helper
+ * cannot route the fake CLI through `node` to make it executable on Windows — there is
+ * no seam to insert an interpreter ahead of the subcommand. `FAKE` has to be `binary`
+ * itself, and a `.mjs` script has no Windows-native way to run directly (see
+ * `invoke.test.ts`'s `fakeCli()` comment for the general shape of the problem), so every
+ * test built on this helper is skipped there — see each `it.skipIf` below.
+ */
 function handshake(scenario: string) {
   return performHandshake({ binary: FAKE, env: { FAKE_DEVTEAM_SCENARIO: scenario } });
 }
+
+const skipOnWindows = process.platform === 'win32';
 
 describe('the declaration is the app’s own constant', () => {
   it('names every shape `store_schemas()` declares', () => {
@@ -76,7 +87,12 @@ describe('the declaration is the app’s own constant', () => {
     expect(await readFile(sensitive, 'utf8')).toBe('do not touch');
   });
 
-  it('replaces a pre-planted world-writable file rather than keeping its mode', async () => {
+  // Windows has no POSIX permission bits: `fs`'s `mode` there only ever reflects the
+  // read-only DOS attribute, never a specific octal value, so `writeFile(…, { mode:
+  // 0o600 })` cannot be observed back as `0o600` the way this asserts. Same platform
+  // limit `resolve.ts`'s `worldWritableDirProblem` and `invoke.test.ts`'s
+  // not-executable test are POSIX-only for.
+  it.skipIf(skipOnWindows)('replaces a pre-planted world-writable file rather than keeping its mode', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
     onTestFinished(async () => {
       await rm(dir, { recursive: true, force: true });
@@ -104,7 +120,7 @@ describe('the declaration is the app’s own constant', () => {
   });
 });
 
-describe('compatible', () => {
+describe.skipIf(skipOnWindows)('compatible', () => {
   it('reports may_write true and echoes the shapes', async () => {
     const view = await handshake('compat-compatible');
     expect(view.state).toBe('answered');
@@ -116,7 +132,7 @@ describe('compatible', () => {
   });
 });
 
-describe('behind', () => {
+describe.skipIf(skipOnWindows)('behind', () => {
   it('treats the exit-1 answer as a verdict, not a failure, and stays read-only', async () => {
     const view = await handshake('compat-behind');
     expect(view.state).toBe('answered');
@@ -143,14 +159,14 @@ describe('when the handshake cannot be completed', () => {
     expect(view.summary).toContain('read-only');
   });
 
-  it('degrades to read-only on a non-conforming answer', async () => {
+  it.skipIf(skipOnWindows)('degrades to read-only on a non-conforming answer', async () => {
     const view = await handshake('two-documents');
     expect(view.state).toBe('unknown');
     if (view.state !== 'unknown') throw new Error('unreachable');
     expect(view.detail).toContain('one JSON document');
   });
 
-  it('degrades to read-only when the CLI reports an error', async () => {
+  it.skipIf(skipOnWindows)('degrades to read-only when the CLI reports an error', async () => {
     const view = await handshake('environment');
     expect(view.state).toBe('unknown');
     if (view.state !== 'unknown') throw new Error('unreachable');

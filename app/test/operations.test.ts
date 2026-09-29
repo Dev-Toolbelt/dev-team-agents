@@ -57,6 +57,19 @@ function fakeContext(scenario = 'ok'): CliContext {
 }
 
 /**
+ * `fakeContext()` hands `CliContext.binary` straight to `invokeDevteam`, which spawns it
+ * with `shell: false` — the same policy `invoke.ts` documents for the real CLI. `FAKE` is
+ * a `.mjs` script; POSIX runs it via its shebang, but Windows has no shebang support and
+ * no association for `.mjs`, so the spawn cannot start it at all. Unlike
+ * `invoke.test.ts`'s `run()`, this file cannot route around that by handing `node` the
+ * script path as an argument: `operations.ts` itself decides the argv (`bind`, `list`, …)
+ * from `context.binary` onward, so there is no seam here to insert an interpreter ahead
+ * of the subcommand without changing production code for a test's sake. Every test that
+ * needs the fixture to actually answer is skipped on Windows below.
+ */
+const skipOnWindows = process.platform === 'win32';
+
+/**
  * `source.indexOf(marker)`, except a missing marker throws instead of returning -1.
  *
  * This is the strongest cross-language guard in the repository — it fails a JS test
@@ -549,7 +562,7 @@ describe('catalog entry names', () => {
 });
 
 describe('payload validation', () => {
-  it('reports a missing required key as a contract breach rather than rendering nothing', async () => {
+  it.skipIf(skipOnWindows)('reports a missing required key as a contract breach rather than rendering nothing', async () => {
     // `ok` emits `{ok, argv, current}` — no `projects`.
     const result = await listProjects(fakeContext('ok'));
     expect(result.ok).toBe(false);
@@ -566,7 +579,7 @@ describe('payload validation', () => {
     expect(result.durationMs).toBe(0);
   });
 
-  it('carries a malformed catalog entry’s flag and error into the row', async () => {
+  it.skipIf(skipOnWindows)('carries a malformed catalog entry’s flag and error into the row', async () => {
     const result = await catalogListing(fakeContext('catalog-malformed'), 'skills');
     if (!result.ok) throw new Error(`expected a payload: ${result.message}`);
     const broken = result.data.entries.find((entry) => entry.name === 'broken');
@@ -585,7 +598,7 @@ describe('payload validation', () => {
  * validated against zero rows. This block validates it against rows; `real-cli.test.ts`
  * does the same against a real, non-empty listing.
  */
-describe('the project row mapping', () => {
+describe.skipIf(skipOnWindows)('the project row mapping', () => {
   it('distinguishes true, false and unknown, and maps the rest of the row', async () => {
     const result = await listProjects(fakeContext('list-projects'));
     if (!result.ok) throw new Error(`expected a payload: ${result.message}`);
@@ -613,7 +626,7 @@ describe('the project row mapping', () => {
  * ternary fell through to `'environment'` — so an exit-1 error document was titled "The
  * environment is not ready".
  */
-describe('an error document gets the label its exit code means', () => {
+describe.skipIf(skipOnWindows)('an error document gets the label its exit code means', () => {
   const cases: readonly [string, string, number][] = [
     ['findings-error-document', 'findings', 1],
     ['usage', 'usage', 2],

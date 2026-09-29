@@ -51,7 +51,20 @@ function python3Works(): boolean {
 
 const cliPresent = existsSync(REAL_CLI);
 const pythonPresent = python3Works();
-const available = cliPresent && pythonPresent;
+/**
+ * Whether this file's whole approach — spawn `REAL_CLI` directly, `shell: false`, and
+ * let the OS resolve its `#!/usr/bin/env python3` shebang — can work on this platform.
+ * POSIX honours the shebang; Windows has none, and `REAL_CLI` is an extensionless file
+ * (`scripts/cli/devteam`, not `.py`), so there is no PATHEXT or file-association route
+ * to it either. `python3Works()` only proves an interpreter exists on `PATH`, not that
+ * this file's `spawnSync(REAL_CLI, …)` can start it — the fixture helper `runCliDirectly`
+ * hit exactly that gap, failing with `status: null` (a process that never launched) on
+ * every call. A packaged Windows CLI would be a real `.exe`, not this checked-out
+ * script; ADR-0011 records that shape as still undecided, so there is no Windows
+ * equivalent to run this file against yet.
+ */
+const canSpawnScriptDirectly = process.platform !== 'win32';
+const available = cliPresent && pythonPresent && canSpawnScriptDirectly;
 
 let home: string;
 /**
@@ -432,12 +445,13 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
 });
 
 describe.skipIf(available)('real CLI unavailable', () => {
-  it('is skipped because the CLI or a working python3 is missing, and says which', () => {
+  it('is skipped because the CLI, a working python3, or direct script execution is missing, and says which', () => {
     expect(available).toBe(false);
-    // Not a bare `false` assertion: the reason is the useful part when a contributor sees
-    // ten skipped tests and has to decide whether that is expected.
-    expect(cliPresent && pythonPresent).toBe(false);
+    // Not a bare `false` assertion: the reason is the useful part when a contributor (or
+    // a Windows CI leg) sees a block of skipped tests and has to decide whether that is
+    // expected.
     if (!cliPresent) expect(existsSync(REAL_CLI)).toBe(false);
-    else expect(pythonPresent).toBe(false);
+    else if (!pythonPresent) expect(pythonPresent).toBe(false);
+    else expect(canSpawnScriptDirectly).toBe(false);
   });
 });

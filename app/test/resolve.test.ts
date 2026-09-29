@@ -21,6 +21,19 @@ import { knownBinDirs, knownLocationSource, resolveDevteam } from '../src/cli/re
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
 
+/**
+ * `plant()` below stands in for a real installed CLI: `resolveDevteam` decides the
+ * candidate path itself and spawns it directly with `shell: false` (`invoke.ts`'s
+ * policy), so — unlike `invoke.test.ts`'s `fakeCli()` — there is no seam here to route
+ * through `node` instead. The wrapper it writes is a `#!/bin/sh` script, which only
+ * POSIX can run directly; Windows has no shebang support, and Node's own `spawn` refuses
+ * to launch a `.bat`/`.cmd` without `shell: true` besides (CVE-2024-27980), which
+ * `invoke.ts` deliberately never sets. Every test that needs a planted candidate to
+ * actually answer is skipped on Windows below; the ones that only assert on
+ * `knownBinDirs` or on a rejection reached before a spawn is attempted are unaffected.
+ */
+const skipOnWindows = process.platform === 'win32';
+
 let root: string;
 
 /** Put a copy of the fake CLI at `<root>/<dir>/devteam`, pinned to one scenario. */
@@ -48,7 +61,7 @@ afterEach(async () => {
 });
 
 describe('order', () => {
-  it('prefers DEVTEAM_CLI_PATH over everything on PATH', async () => {
+  it.skipIf(skipOnWindows)('prefers DEVTEAM_CLI_PATH over everything on PATH', async () => {
     const configured = await plant('configured', 'version-with-compat');
     const onPath = await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -62,7 +75,7 @@ describe('order', () => {
     expect(resolution.cli.path).not.toBe(onPath);
   });
 
-  it('prefers the settings-file path over PATH too, and names which seam won', async () => {
+  it.skipIf(skipOnWindows)('prefers the settings-file path over PATH too, and names which seam won', async () => {
     const configured = await plant('configured', 'version-with-compat');
     await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -75,7 +88,7 @@ describe('order', () => {
     expect(resolution.cli.sourceDetail).toContain('settings file');
   });
 
-  it('falls back to PATH, honouring PATH order', async () => {
+  it.skipIf(skipOnWindows)('falls back to PATH, honouring PATH order', async () => {
     const first = await plant('bin-a', 'version-with-compat');
     await plant('bin-b', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -87,7 +100,7 @@ describe('order', () => {
     expect(resolution.cli.source).toBe('path');
   });
 
-  it('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
+  it.skipIf(skipOnWindows)('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
     // Deliberately *not* injecting `knownLocations`: this is the one test whose subject is
     // the derivation, and it stays machine-independent because `knownBinDirs` puts
     // `$HOMEBREW_PREFIX/bin` ahead of the two conventional prefixes, so a real
@@ -103,7 +116,7 @@ describe('order', () => {
     expect(resolution.cli.path).toBe(join(brewPrefix, 'bin', 'devteam'));
   });
 
-  it('reads the store version and compat block from the probe, so the UI needs no second call', async () => {
+  it.skipIf(skipOnWindows)('reads the store version and compat block from the probe, so the UI needs no second call', async () => {
     const path = await plant('bin', 'version-with-compat');
     const resolution = await resolveDevteam({ env: { PATH: join(root, 'bin') }, platform: 'darwin' });
     if (!resolution.found) throw new Error('expected a CLI');
@@ -143,7 +156,7 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
     expect(knownLocationSource('win32')).toBe('winget');
   });
 
-  it('finds a CLI in a Windows channel location, under every shim name', async () => {
+  it.skipIf(skipOnWindows)('finds a CLI in a Windows channel location, under every shim name', async () => {
     const localAppData = join(root, 'AppData');
     const links = join(localAppData, 'Microsoft', 'WinGet', 'Links');
     await plant(join('AppData', 'Microsoft', 'WinGet', 'Links'), 'version-with-compat');
@@ -161,7 +174,7 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
 });
 
 describe('a candidate must answer, not merely exist', () => {
-  it('rejects a program called devteam that has no compat block', async () => {
+  it.skipIf(skipOnWindows)('rejects a program called devteam that has no compat block', async () => {
     await plant('bin', 'version-no-compat');
     const good = await plant('bin2', 'version-with-compat');
     const resolution = await resolveDevteam({
@@ -173,7 +186,10 @@ describe('a candidate must answer, not merely exist', () => {
     expect(resolution.rejected.map((entry) => entry.reason).join(' ')).toContain('not a devteam CLI');
   });
 
-  it('records a file that exists but is not executable', async () => {
+  // Windows has no POSIX execute bit: `chmod(path, 0o600)` does not make a file
+  // non-executable there (see `invoke.test.ts`'s equivalent test and `resolve.ts`'s own
+  // `worldWritableDirProblem` comment on the same limit of `fs`'s emulated `mode`).
+  it.skipIf(skipOnWindows)('records a file that exists but is not executable', async () => {
     const dir = join(root, 'bin');
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'devteam'), '#!/bin/sh\n');
@@ -185,6 +201,25 @@ describe('a candidate must answer, not merely exist', () => {
     expect(resolution.found).toBe(false);
     if (resolution.found) throw new Error('unreachable');
     expect(resolution.rejected[0]?.reason).toContain('not executable');
+  });
+
+  // Not skipped on Windows: the rejection is decided from the candidate's name, so it is
+  // the same answer on every host — which is the point. A shim the resolver can see and
+  // the spawner can never run has to say so, or the failure surfaces later as an `EINVAL`
+  // from `invoke.ts` naming no cause at all.
+  it('rejects a .cmd or .bat shim it could never spawn, and says why', async () => {
+    const dir = join(root, 'bin');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'devteam.cmd'), '@echo off\n');
+    const resolution = await resolveDevteam({
+      env: { PATH: dir },
+      platform: 'win32',
+      knownLocations: [],
+    });
+    expect(resolution.found).toBe(false);
+    if (resolution.found) throw new Error('unreachable');
+    const reasons = resolution.rejected.map((entry) => entry.reason).join(' ');
+    expect(reasons).toContain('without a shell');
   });
 
   it('does not report a directory as a CLI', async () => {
@@ -213,7 +248,7 @@ describe('a candidate must answer, not merely exist', () => {
     expect(resolution.rejected[0]?.reason).toContain('world-writable');
   });
 
-  it('trusts a configured path even out of a world-writable directory — the user overrode the search', async () => {
+  it.skipIf(skipOnWindows)('trusts a configured path even out of a world-writable directory — the user overrode the search', async () => {
     const cli = await plant('configured', 'version-with-compat');
     await chmod(join(root, 'configured'), 0o777);
     const resolution = await resolveDevteam({
