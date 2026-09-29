@@ -226,15 +226,20 @@ async function worldWritableDirProblem(directory: string, platform: NodeJS.Platf
 const UNSPAWNABLE_EXTENSIONS = ['.cmd', '.bat'];
 
 async function isExecutableFile(candidate: string): Promise<string | null> {
-  const lowered = candidate.toLowerCase();
-  if (UNSPAWNABLE_EXTENSIONS.some((extension) => lowered.endsWith(extension))) {
-    return 'a .cmd or .bat shim cannot be spawned without a shell, and this app never uses one';
-  }
   try {
     const info = await stat(candidate); // follows symlinks, which is what we want
     if (!info.isFile()) return `not a regular file`;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'does not exist' : `unreadable: ${String(error)}`;
+  }
+  // Checked **after** the file is known to exist, not before. Ahead of the `stat` this
+  // answered "cannot be spawned" for a `.cmd` candidate that was never there, turning
+  // every absent shim name into a rejection with a confident and wrong reason — the
+  // search report is read by a user trying to find out why no CLI was found, and a
+  // location that holds nothing must say so.
+  const lowered = candidate.toLowerCase();
+  if (UNSPAWNABLE_EXTENSIONS.some((extension) => lowered.endsWith(extension))) {
+    return 'a .cmd or .bat shim cannot be spawned without a shell, and this app never uses one';
   }
   try {
     await access(candidate, constants.X_OK);

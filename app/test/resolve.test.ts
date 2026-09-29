@@ -48,7 +48,12 @@ let root: string;
 async function plant(dir: string, scenario: string): Promise<string> {
   const target = join(root, dir);
   await mkdir(target, { recursive: true });
-  const path = join(target, 'devteam');
+  // `.exe` on Windows, and it is not cosmetic: `CreateProcess` states that
+  // `lpApplicationName` "must include the file name extension; no default extension is
+  // assumed", so an extensionless file is not executed there even when it is a valid PE.
+  // `executableNames('win32')` lists `devteam.exe` first, so this is also the name the
+  // resolver looks for first.
+  const path = join(target, process.platform === 'win32' ? 'devteam.exe' : 'devteam');
   if (process.platform === 'win32') {
     // `skipOnWindowsWithoutLauncher` gates every caller, so `launcherManifest`'s path
     // is present whenever this branch actually runs.

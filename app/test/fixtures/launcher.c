@@ -53,12 +53,14 @@ static void applyScenarioOverride(void) {
   DWORD n = GetModuleFileNameA(NULL, self, sizeof(self));
   if (n == 0 || n >= sizeof(self)) return;
 
+  /* Appended to the whole name — `devteam.exe` looks for `devteam.exe.scenario` — and
+     not to the name with its extension stripped. Stripping was the first version and it
+     was wrong in a way that cost a CI round: `plant()` writes `${path}.scenario` from
+     the path it planted, so the two rules have to be the same rule, and the one that
+     needs no parsing is the one that cannot disagree. */
   char path[MAX_PATH + 16];
   size_t len = strlen(self);
   memcpy(path, self, len + 1);
-  char *slash = strrchr(path, '\\');
-  char *dot = strrchr(path, '.');
-  if (dot != NULL && (slash == NULL || dot > slash)) *dot = '\0';
   strcat(path, ".scenario");
 
   FILE *f = fopen(path, "rb");
@@ -86,12 +88,20 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++) childArgv[i + 1] = argv[i];
   childArgv[argc + 1] = NULL;
 
-  /* No shell, ever — the same rule `invoke.ts` states for its own spawn. `_spawnv`
-     takes an argv vector directly, so nothing here is ever parsed by a command
-     interpreter; it inherits this process's environment, which is exactly "the
-     environment it was given", mutated above only when a sibling `.scenario` file
-     asked for an override. */
-  intptr_t status = _spawnv(_P_WAIT, NODE_PATH, (const char *const *)childArgv);
+  /* No shell, ever — the same rule `invoke.ts` states for its own spawn. The `v` in
+     `_spawnve` is an argv vector, so nothing here is ever parsed by a command
+     interpreter.
+
+     The `e` is the environment, passed **explicitly** as `_environ` rather than left to
+     `_spawnv`'s documented inheritance. That inheritance is what the first version
+     relied on, and the scenarios that travel by environment variable — the handshake's
+     — arrived unset at the fixture while the ones that travel by argv arrived fine. The
+     difference between "documented to inherit" and "observably inherited" is not worth
+     re-litigating inside a test fixture: naming the block leaves nothing to a CRT
+     startup detail. `applyScenarioOverride` above has already mutated `_environ` if a
+     sibling file asked it to. */
+  intptr_t status = _spawnve(_P_WAIT, NODE_PATH, (const char *const *)childArgv,
+                             (const char *const *)_environ);
   free(childArgv);
 
   if (status == -1) {
