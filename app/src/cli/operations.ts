@@ -1,8 +1,11 @@
 /**
- * The named read-only operations this app can perform, and nothing else.
+ * The named operations this app can perform, and nothing else.
  *
- * One function per screen's needs. Each builds its own argument vector — the renderer
- * never supplies one — and each validates the payload it got before handing it on.
+ * Read-only for most of this file — `list`, `catalog*`, `doctor` — plus the project
+ * lifecycle's five write actions at the bottom: `bindProject`, `unbindProject`,
+ * `syncProject`, `syncAllProjects`, `setPin`, `planUpgrade`, `applyUpgrade`. One function
+ * per screen's needs. Each builds its own argument vector — the renderer never supplies
+ * one — and each validates the payload it got before handing it on.
  *
  * **Validation checks that required keys are present and of the right type. It does not
  * demand an exact key set.** ADR-0014 § 2 makes an *additive* payload change explicitly
@@ -20,6 +23,9 @@
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import type {
+  BindMode,
+  BindProvider,
+  BindReport,
   CatalogDetail,
   CatalogEntry,
   CatalogKind,
@@ -28,9 +34,14 @@ import type {
   DoctorFinding,
   DoctorReport,
   OperationResult,
+  PinReport,
   ProjectList,
   ProjectRecord,
   ProblemKind,
+  SyncAllReport,
+  UnbindReport,
+  UpgradePlan,
+  UpgradeReport,
 } from '../shared/api.js';
 
 /**
@@ -68,24 +79,43 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
 /**
  * Subcommands this build runs that the framework classifies in `compat.MUTATING`.
  *
- * **Exactly one, and it is `doctor`.** This slice was specified as read-only and the
- * diagnosis screen was specified as `devteam doctor`; those two are in tension, because
- * `compat.MUTATING` lists `doctor` with the reason written out — it "repairs what it
- * finds… it rewrites the directory pointers, relocates a moved registry entry, and
- * reassigns identity with --reassign-identity. Read the actions it returns, not the word
- * 'diagnose', before reclassifying this one." So the app cannot both show a diagnosis
- * screen and claim it never runs a mutating command.
+ * **`doctor` alone was the whole list until this build.** It stayed alone because the
+ * app had no project lifecycle: nothing else this app ran needed to change the store,
+ * and admitting an entry here without needing one would have been a widening with no
+ * corresponding capability to justify it.
  *
- * It is listed here rather than hidden in the read-only list, and the consequences are
- * carried rather than papered over: the app declares its schemas on every invocation, so
- * the framework's gate refuses this call with exit 4 whenever the store is ahead of the
- * app — that refusal is the protection, and the Diagnosis screen states that any repairs
- * it reports were writes. `--reassign-identity` is never passed.
+ * This build adds the five commands that *are* the project lifecycle — `bind`, `unbind`,
+ * `sync`, `pin`, `upgrade` — because the UI now offers binding, unbinding, syncing,
+ * pinning and upgrading a project, and every one of those five is listed in
+ * `compat.MUTATING` with its own reason (`bind`: "writes project.json, the registry
+ * entry, the manifest and every artifact"; `unbind`: "removes artifacts and rewrites the
+ * registry entry"; `sync`: "rebuilds artifacts and rewrites the manifest"; `pin`: "writes
+ * the pin into the registry entry"; `upgrade`: "relocates this project's memory into the
+ * store"). None of the five can be reclassified as read-only to avoid this list; the
+ * decision this app made instead is to run them, declare its schemas on every
+ * invocation as it already did for `doctor`, and accept the framework's exit-4 refusal
+ * as the real protection whenever the store is ahead of what this app understands.
  *
- * Adding a second entry here is a decision to widen what this app can change. Make it
+ * **Each addition here is deliberate, and the security posture that makes it safe lives
+ * in `main/ipc.ts`, not in this file.** This table only says which command words may be
+ * spawned; it is `ipc.ts` that resolves every write action's target against the
+ * registry's own `list` answer before an argv is built (`resolveProject`), and that
+ * treats `bind` — the one command with no existing project to resolve — as the
+ * exception, refusing any path the main process did not itself hand back through
+ * `chooseProjectDirectory`. Widening this list without that resolution in place would be
+ * the defect the whole design exists to prevent.
+ *
+ * Adding a further entry is again a decision to widen what this app can change. Make it
  * explicitly; `test/operations.test.ts` fails on an unreviewed addition.
  */
-export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([['doctor']]);
+export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
+  ['doctor'],
+  ['bind'],
+  ['unbind'],
+  ['sync'],
+  ['pin'],
+  ['upgrade'],
+]);
 
 /** Every subcommand this build is allowed to run. */
 export const ALLOWED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
@@ -115,8 +145,16 @@ export const CATALOG_KINDS: readonly CatalogKind[] = Object.freeze(['agents', 's
 export interface CommandShape {
   /** Positional operands the app may pass after the command words. */
   readonly operands: 0 | 1;
-  /** Flags this command may be passed, and whether each takes a value. */
-  readonly flags: Readonly<Record<string, 'value' | 'bare'>>;
+  /**
+   * Flags this command may be passed, and how each is used.
+   *
+   * `'repeatable'` is `'value'` in every way `argvProblem` checks it — a flag word
+   * followed by a value token — named apart so the table states honestly that `bind`
+   * means the flag to appear once per provider (`--provider claude --provider codex`)
+   * rather than smuggling a joined list through a single occurrence (`--provider
+   * "claude,codex"`, which the real CLI's `argparse` would read as one unknown choice).
+   */
+  readonly flags: Readonly<Record<string, 'value' | 'bare' | 'repeatable'>>;
 }
 
 /** Keyed by the command words joined with a space. Pinned to `ALLOWED_COMMANDS` by a test. */
@@ -132,6 +170,20 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'catalog show': { operands: 1, flags: { '--path': 'value' } },
   // `--no-project`: "check the store only, ignoring the cwd". Never `--reassign-identity`.
   doctor: { operands: 0, flags: { '--no-project': 'bare' } },
+  // The one positional is the directory to bind — the path `chooseProjectDirectory`
+  // offered, never one the renderer typed. See `main/ipc.ts` -> `resolveProject`.
+  bind: { operands: 1, flags: { '--provider': 'repeatable', '--mode': 'value', '--pin': 'value' } },
+  // The positional `path` this app never passes: every unbind names its target by
+  // `--project-id`, resolved against `list` in `main/ipc.ts` first.
+  unbind: { operands: 1, flags: { '--project-id': 'value', '--keep-artifacts': 'bare' } },
+  sync: { operands: 1, flags: { '--all': 'bare', '--project-id': 'value' } },
+  // `cmd_pin` resolves its target from `--path`/the positional path alone — there is no
+  // `--project-id` on this command — so `main/ipc.ts` resolves the id to a path first.
+  pin: { operands: 1, flags: { '--path': 'value', '--release': 'bare' } },
+  // Same as `pin`: `upgrade.plan`/`upgrade.apply` take only a path, so the positional
+  // here is always a path `main/ipc.ts` resolved from a `project_id`, never a renderer
+  // string.
+  upgrade: { operands: 1, flags: { '--apply': 'bare' } },
 });
 
 const MAX_COMMAND_WORDS = 2;
@@ -168,7 +220,7 @@ export function argvProblem(args: readonly string[]): string | null {
       if (takesValue === undefined) {
         return `\`devteam ${name}\` may not be passed \`${part}\``;
       }
-      if (takesValue === 'value') {
+      if (takesValue === 'value' || takesValue === 'repeatable') {
         index += 1;
         const value = args[index];
         if (value === undefined) return `\`${part}\` was passed with no value`;
@@ -273,12 +325,18 @@ function toOperationResult<T>(result: CliResult, validate: (body: Record<string,
     };
   }
 
+  // A succeeding command's stderr is carried, not discarded: see `OperationResult.notice`
+  // in `shared/api.ts` for the case that forced it (`bind` outside a git repository warns
+  // that nothing was added to an ignore file, and the payload cannot say so). Spread
+  // conditionally so the key is absent rather than `''` when there was nothing to say.
+  const notice = (result.stderr ?? '').trim();
   return {
     ok: true,
     outcome: result.outcome,
     data: validated,
     command: result.command.display,
     durationMs: result.durationMs,
+    ...(notice === '' ? {} : { notice }),
   };
 }
 
@@ -465,6 +523,238 @@ export function doctor(context: CliContext): Promise<OperationResult<DoctorRepor
       actions: body['actions'].map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry))),
     };
   });
+}
+
+// ── write actions ────────────────────────────────────────────────────────────
+//
+// Every function below takes an already-resolved target — a `path` `main/ipc.ts`
+// offered or resolved from a `project_id` against `list`, never a bare renderer
+// string. That resolution, and the closed-union validation of `BindRequest`, are the
+// main process's job; this file only builds the argv and reads the answer back.
+
+/** What `bindProject` accepts beyond the target path, mirroring `BindRequest` minus `path`. */
+export interface BindOptions {
+  readonly providers?: readonly BindProvider[];
+  readonly mode?: BindMode;
+  readonly pin?: string | null;
+}
+
+export function bindProject(
+  context: CliContext,
+  path: string,
+  options: BindOptions = {},
+): Promise<OperationResult<BindReport>> {
+  const args: string[] = ['bind', path];
+  for (const provider of options.providers ?? []) {
+    args.push('--provider', provider);
+  }
+  if (options.mode !== undefined) args.push('--mode', options.mode);
+  // `null` and `undefined` both mean "no pin at bind time" — `bind` has no `--release`
+  // of its own the way `pin` does, so there is nothing an explicit `null` could mean
+  // beyond omitting the flag.
+  if (typeof options.pin === 'string') args.push('--pin', options.pin);
+  return run(context, args, asBindReport);
+}
+
+/**
+ * `projectId` goes straight to `--project-id`: `bind_module.unbind` resolves that flag
+ * itself, so unlike `pin`/`upgrade` this needs no path resolved first. `main/ipc.ts`
+ * still confirms the id against `list` before calling this, so nothing is spawned for
+ * an id the registry does not know.
+ */
+export function unbindProject(context: CliContext, projectId: string): Promise<OperationResult<UnbindReport>> {
+  return run(context, ['unbind', '--project-id', projectId], asUnbindReport);
+}
+
+/** Same reasoning as `unbindProject`: `sync --project-id` needs no path. */
+export function syncProject(context: CliContext, projectId: string): Promise<OperationResult<BindReport>> {
+  return run(context, ['sync', '--project-id', projectId], asBindReport);
+}
+
+export function syncAllProjects(context: CliContext): Promise<OperationResult<SyncAllReport>> {
+  return run(context, ['sync', '--all'], asSyncAllReport);
+}
+
+/**
+ * `path` is the project's resolved location, not its id — `cmd_pin` has no
+ * `--project-id`. `version === null` is `pin --release`; it must never become `pin ''`,
+ * which `cmd_pin` would read as "no version and no --release" and refuse.
+ */
+export function setPin(context: CliContext, path: string, version: string | null): Promise<OperationResult<PinReport>> {
+  const args = version === null ? ['pin', '--path', path, '--release'] : ['pin', version, '--path', path];
+  return run(context, args, asPinReport);
+}
+
+/** `path` is resolved the same way as `setPin`'s — `upgrade` takes only a path. */
+export function planUpgrade(context: CliContext, path: string): Promise<OperationResult<UpgradePlan>> {
+  return run(context, ['upgrade', path], asUpgradePlan);
+}
+
+export function applyUpgrade(context: CliContext, path: string): Promise<OperationResult<UpgradeReport>> {
+  return run(context, ['upgrade', path, '--apply'], asUpgradeReport);
+}
+
+// ── write-action payload validation ─────────────────────────────────────────────
+//
+// Exported, unlike `asCounts`/`asEntry` above: `test/operations.test.ts` exercises each
+// of these against the real payload shapes captured from the CLI, independent of
+// spawning anything, the way `validateEntryName` is already tested directly.
+
+/**
+ * `bind --json` and single-project `sync --json`. Shared because the two commands
+ * answer with the same document — `sync` adds `worktrees`, which is why it is read as
+ * optional here rather than the two call sites keeping separate near-identical readers.
+ */
+export function asBindReport(body: Record<string, unknown>): BindReport | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['project_id'] !== 'string') return 'no string `project_id`';
+  if (typeof body['version'] !== 'string') return 'no string `version`';
+  if (typeof body['mode'] !== 'string') return 'no string `mode`';
+  if (!Array.isArray(body['providers'])) return 'no `providers` array';
+  if (typeof body['artifacts'] !== 'number') return 'no numeric `artifacts`';
+  if (typeof body['identity_created'] !== 'boolean') return 'no boolean `identity_created`';
+  if (typeof body['gitignore'] !== 'string') return 'no string `gitignore`';
+  if (typeof body['git_exclude'] !== 'string') return 'no string `git_exclude`';
+  if (!Array.isArray(body['retired'])) return 'no `retired` array';
+  if (!Array.isArray(body['merged_project_files'])) return 'no `merged_project_files` array';
+
+  let pruned: BindReport['pruned'];
+  const prunedRaw = body['pruned'];
+  if (prunedRaw !== undefined) {
+    if (!isRecord(prunedRaw) || !Array.isArray(prunedRaw['unlinked']) || !Array.isArray(prunedRaw['quarantined'])) {
+      return '`pruned` is present but not `{unlinked: [], quarantined: []}`';
+    }
+    pruned = { unlinked: asStringArray(prunedRaw['unlinked']), quarantined: prunedRaw['quarantined'] };
+  }
+
+  let worktrees: BindReport['worktrees'];
+  const worktreesRaw = body['worktrees'];
+  if (worktreesRaw !== undefined) {
+    if (!Array.isArray(worktreesRaw)) return '`worktrees` is present but not an array';
+    worktrees = worktreesRaw;
+  }
+
+  return {
+    path: body['path'],
+    project_id: body['project_id'],
+    version: body['version'],
+    mode: body['mode'],
+    providers: asStringArray(body['providers']),
+    artifacts: body['artifacts'],
+    identity_created: body['identity_created'],
+    gitignore: body['gitignore'],
+    git_exclude: body['git_exclude'],
+    pin: asNullableString(body['pin']),
+    fallback_reason: asNullableString(body['fallback_reason']),
+    retired: body['retired'],
+    merged_project_files: asStringArray(body['merged_project_files']),
+    ...(pruned !== undefined ? { pruned } : {}),
+    ...(worktrees !== undefined ? { worktrees } : {}),
+  };
+}
+
+/** `sync --all --json`. */
+export function asSyncAllReport(body: Record<string, unknown>): SyncAllReport | string {
+  const syncedRaw = body['synced'];
+  if (!Array.isArray(syncedRaw)) return 'no `synced` array';
+  const synced: BindReport[] = [];
+  for (const raw of syncedRaw) {
+    if (!isRecord(raw)) return 'a `synced` entry is not an object';
+    const report = asBindReport(raw);
+    if (typeof report === 'string') return `a \`synced\` entry: ${report}`;
+    synced.push(report);
+  }
+  if (!Array.isArray(body['problems'])) return 'no `problems` array';
+  return { synced, problems: body['problems'] };
+}
+
+/** `unbind --json`. */
+export function asUnbindReport(body: Record<string, unknown>): UnbindReport | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['project_id'] !== 'string') return 'no string `project_id`';
+  if (!Array.isArray(body['unlinked'])) return 'no `unlinked` array';
+  if (!Array.isArray(body['quarantined'])) return 'no `quarantined` array';
+  if (!Array.isArray(body['kept'])) return 'no `kept` array';
+  if (!Array.isArray(body['problems'])) return 'no `problems` array';
+  const quarantined = body['quarantined'].map((entry) =>
+    isRecord(entry) && typeof entry['to'] === 'string' ? { to: entry['to'] } : {},
+  );
+  return {
+    path: body['path'],
+    project_id: body['project_id'],
+    unlinked: asStringArray(body['unlinked']),
+    quarantined,
+    kept: asStringArray(body['kept']),
+    problems: body['problems'],
+  };
+}
+
+/** `pin <version> --json` and `pin --release --json`. */
+export function asPinReport(body: Record<string, unknown>): PinReport | string {
+  if (typeof body['project_id'] !== 'string') return 'no string `project_id`';
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  return { project_id: body['project_id'], path: body['path'], pin: asNullableString(body['pin']) };
+}
+
+/** `upgrade --json` without `--apply` — a preview; nothing was written. */
+export function asUpgradePlan(body: Record<string, unknown>): UpgradePlan | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['project_id'] !== 'string') return 'no string `project_id`';
+  if (typeof body['from_layout'] !== 'number') return 'no numeric `from_layout`';
+  if (typeof body['to_layout'] !== 'number') return 'no numeric `to_layout`';
+  if (typeof body['files'] !== 'number') return 'no numeric `files`';
+  if (typeof body['source'] !== 'string') return 'no string `source`';
+  if (typeof body['destination'] !== 'string') return 'no string `destination`';
+  if (typeof body['state_destination'] !== 'string') return 'no string `state_destination`';
+  if (!Array.isArray(body['machine_local'])) return 'no `machine_local` array';
+  if (!Array.isArray(body['retained'])) return 'no `retained` array';
+  if (!Array.isArray(body['collisions'])) return 'no `collisions` array';
+  if (!Array.isArray(body['git_tracked'])) return 'no `git_tracked` array';
+  if (!Array.isArray(body['actions'])) return 'no `actions` array';
+  return {
+    path: body['path'],
+    project_id: body['project_id'],
+    from_layout: body['from_layout'],
+    to_layout: body['to_layout'],
+    files: body['files'],
+    source: body['source'],
+    destination: body['destination'],
+    state_destination: body['state_destination'],
+    machine_local: asStringArray(body['machine_local']),
+    retained: asStringArray(body['retained']),
+    collisions: asStringArray(body['collisions']),
+    git_tracked: asStringArray(body['git_tracked']),
+    actions: asStringArray(body['actions']),
+  };
+}
+
+/** `upgrade --apply --json`. */
+export function asUpgradeReport(body: Record<string, unknown>): UpgradeReport | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['project_id'] !== 'string') return 'no string `project_id`';
+  if (typeof body['from_layout'] !== 'number') return 'no numeric `from_layout`';
+  if (typeof body['to_layout'] !== 'number') return 'no numeric `to_layout`';
+  if (typeof body['copied'] !== 'number') return 'no numeric `copied`';
+  if (!Array.isArray(body['retained'])) return 'no `retained` array';
+  if (typeof body['destination'] !== 'string') return 'no string `destination`';
+  if (typeof body['state_destination'] !== 'string') return 'no string `state_destination`';
+  if (typeof body['state_pointer'] !== 'string') return 'no string `state_pointer`';
+  if (typeof body['memory_pointer'] !== 'string') return 'no string `memory_pointer`';
+  if (!Array.isArray(body['git_tracked'])) return 'no `git_tracked` array';
+  return {
+    path: body['path'],
+    project_id: body['project_id'],
+    from_layout: body['from_layout'],
+    to_layout: body['to_layout'],
+    copied: body['copied'],
+    retained: asStringArray(body['retained']),
+    destination: body['destination'],
+    state_destination: body['state_destination'],
+    quarantined: asNullableString(body['quarantined']),
+    state_pointer: body['state_pointer'],
+    memory_pointer: body['memory_pointer'],
+    git_tracked: asStringArray(body['git_tracked']),
+  };
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

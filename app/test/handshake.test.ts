@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
 
@@ -41,18 +41,25 @@ describe('the declaration is the app’s own constant', () => {
 
   it('writes a declaration file the CLI’s own parser would accept', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    // `onTestFinished` rather than a trailing `await rm(...)`: a failed assertion above
+    // used to skip the cleanup and leak the directory — this runs regardless of outcome.
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
     const path = await writeDeclarationFile(dir);
-    // Removed, not left behind: this file used to leak one directory per run.
     const parsed = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
     expect(parsed).toEqual(APP_STORE_SCHEMAS);
     // `compat.parse_client_schemas` rejects a non-integer value for a present key.
     expect(Object.values(parsed).every((value) => typeof value === 'number' && Number.isInteger(value))).toBe(true);
-    await rm(dir, { recursive: true, force: true });
   });
 
   it('replaces a pre-planted symlink instead of writing through it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
     const targetDir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-target-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+      await rm(targetDir, { recursive: true, force: true });
+    });
     const sensitive = join(targetDir, 'sensitive.json');
     await writeFile(sensitive, 'do not touch');
     const declarationPath = join(dir, 'client-schemas.json');
@@ -67,13 +74,13 @@ describe('the declaration is the app’s own constant', () => {
     expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(APP_STORE_SCHEMAS);
     // What the symlink pointed at is untouched.
     expect(await readFile(sensitive, 'utf8')).toBe('do not touch');
-
-    await rm(dir, { recursive: true, force: true });
-    await rm(targetDir, { recursive: true, force: true });
   });
 
   it('replaces a pre-planted world-writable file rather than keeping its mode', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
     const declarationPath = join(dir, 'client-schemas.json');
     await writeFile(declarationPath, 'pre-existing', { mode: 0o666 });
     await chmod(declarationPath, 0o666); // belt-and-suspenders against an inherited umask
@@ -85,15 +92,15 @@ describe('the declaration is the app’s own constant', () => {
     // existing path is a no-op, so this only holds because the file was replaced, not
     // opened and overwritten.
     expect(info.mode & 0o777).toBe(0o600);
-
-    await rm(dir, { recursive: true, force: true });
   });
 
   it('leaves no temp file behind after a successful write', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
     await writeDeclarationFile(dir);
     expect(await readdir(dir)).toEqual(['client-schemas.json']);
-    await rm(dir, { recursive: true, force: true });
   });
 });
 
