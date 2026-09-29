@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+# DevToolbelt.DevteamApp.installer.yaml — installer manifest for the desktop app.
+#
+# UNRELEASED SCAFFOLD — every value under Installers is a placeholder, same
+# discipline as the CLI's sibling manifest:
+#   InstallerUrl     points at a release asset that does not exist (no Windows
+#                    build of the app has ever been produced).
+#   InstallerSha256  64 zeros — an obviously-fake digest, never a
+#                    plausible-looking fake one. See packaging/README.md for
+#                    why the zeros shape was chosen over a random-looking hex
+#                    string.
+#   Filename shape  dev-team-agents-Setup-<version>-<arch>.exe, which is
+#                    app/electron-builder.yml's `nsis.artifactName`
+#                    (${productName}-Setup-${version}-${arch}.exe) rendered.
+#                    ${version} interpolates WITHOUT a `v` prefix — only the
+#                    release tag in the URL path carries one. Do not "fix" the
+#                    filename to match the tag; that is a 404.
+#   InstallerType    "nullsoft" is a DECIDED shape, not a placeholder — see
+#                    packaging/README.md's Windows-app section and
+#                    app/electron-builder.yml's `win`/`nsis` blocks for the
+#                    reasoning (NSIS, per-user, unsigned-by-configuration).
+#                    What is still a placeholder is everything that names a
+#                    specific built artifact: the URLs, the digests, the
+#                    version.
+#
+# Scope: user — matches `nsis.perMachine: false` in app/electron-builder.yml.
+# An unsigned per-machine install needs admin elevation for a more alarming
+# UAC prompt than an unsigned per-user one; per-user also needs no
+# uninstall-for-all-users handling this repository does not implement.
+#
+# InstallerSwitches.Silent: /S is NSIS's own default silent-install switch
+# (electron-builder does not override it), and winget-pkgs requires every
+# accepted installer to support a silent install — recorded in
+# packaging/README.md's "Two constraints" section for the CLI candidates and
+# equally true here.
+#
+# Dependencies: the app is a pure CLI client (ADR-0015) and implements no
+# store logic of its own, so it depends on the CLI package the same way
+# `packaging/homebrew/devteam-app.rb` declares `depends_on formula: "devteam"`.
+# winget has no cask-style Formula dependency, but PackageDependencies is the
+# closest expressible equivalent, so it is stated here rather than left
+# implicit — the same gap ADR-0011's amendment names for the current,
+# app-manifest-free state ("winget has no cask-style dependency anywhere").
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.installer.1.12.0.json
+# (microsoft/winget-cli repo) — required top level: PackageIdentifier,
+# PackageVersion, Installers, ManifestType, ManifestVersion; required per
+# Installer entry: Architecture, InstallerUrl, InstallerSha256.
+
+PackageIdentifier: DevToolbelt.DevteamApp
+PackageVersion: 0.0.0
+InstallerType: nullsoft
+Scope: user
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: DevToolbelt.Devteam
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/dev-team-agents-Setup-X.Y.Z-x64.exe
+    InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  - Architecture: arm64
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/dev-team-agents-Setup-X.Y.Z-arm64.exe
+    InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
+ManifestType: installer
+ManifestVersion: 1.12.0

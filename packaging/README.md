@@ -50,10 +50,18 @@ signature and carries no notarisation ticket: `brew audit --cask` rejects it, an
 Gatekeeper refuses to open it without an explicit user override. So what the cask
 still cannot describe is unchanged — a **signed, notarised** artifact at a **real
 version** — and the app column of ADR-0011's channel table is still empty on both
-platforms. On Windows it is emptier than that: **there is no app manifest at all**
-under `packaging/winget/` (the three manifests there are the CLI,
-`DevToolbelt.Devteam`; the word "app" appears once, in a comment), while
-ADR-0011's channel table promises winget for the app as well as the CLI.
+platforms.
+
+**The Windows packaging gap is closed at the scaffold level (M4.3 closeout), not at
+the published-artifact level.** `app/electron-builder.yml` now has a `win` block
+(NSIS, per-user, unsigned by configuration — see
+[§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided)),
+and `packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` now exists with the
+same three-file layout as the CLI's manifest. What has not changed: no Windows build
+of the app has ever been produced, there is no Authenticode certificate, and nothing
+here has been through `winget validate`. The gap this closes is a **decision** gap —
+ADR-0011's channel table promised a shape and none existed; one now does, on paper,
+in the same unpublished state as every other row in this document.
 
 **The CI trigger, stated once.** `ci.yml`'s `push` trigger is `branches: [main]`
 plus `tags: ["**"]`; every other branch is covered by `pull_request` only. So a
@@ -69,7 +77,7 @@ it was simply false.
 |------|-----------|--------|
 | `homebrew/devteam.rb` | Formula for the CLI (`scripts/cli/devteam` + `scripts/lib/devteam/`) | Installs and passes its own `test do` block through a real Homebrew, via `verify-formula-locally.sh`'s throwaway tap. Never installed from a **published** tap, and its `url`/`sha256` are still placeholders. |
 | `homebrew/devteam-app.rb` | Cask for the desktop app's signed, notarised `.dmg` | Still unpublishable, for a narrower reason than before: the app exists (`app/`, ADR-0015) and builds an **unsigned** `.dmg`; no signed, notarised artifact and no real version exist. Its macOS floor and bundle id are no longer guesses — both are now read from `app/electron-builder.yml` (see the row below). `ruby -c` is the only **CI** check that touches it, and it passes. `brew style` has been run on it by hand and reports four unfixed cask-cop findings — see § Verification. |
-| (absent) `winget/…/DevToolbelt.DevteamApp/` | The winget manifest ADR-0011's channel table promises for the **app** | **Does not exist.** Nothing under `packaging/winget/` is about the app; all three manifests are the CLI. Windows therefore has no app channel at all, scaffolded or otherwise, and no Authenticode certificate to sign one with. |
+| `winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` | winget multi-file manifest (version, installer, locale) for the **desktop app** | **M4.3 closeout.** Scaffold at a placeholder version, same discipline as the CLI's manifest. `InstallerType: nullsoft` is a **decided** shape (NSIS, per-user, unsigned-by-configuration — see [the Windows-app section](#the-windows-app-installer-shape--decided) below and `app/electron-builder.yml`'s `win`/`nsis` blocks), not a placeholder like the CLI's still-undecided `exe`. Still no Authenticode certificate to sign it with, and no Windows build has ever been produced. Contract-checked in CI; never through `winget validate`. |
 | `winget/manifests/d/DevToolbelt/Devteam/0.0.0/` | winget multi-file manifest (version, installer, locale) for the CLI | Scaffold at a placeholder version — no Windows installer exists to point at. Contract-checked in CI; never through `winget validate`. |
 | `verify-formula-locally.sh` | Exercises `devteam.rb` end to end through a real Homebrew (see Verification below) | Run and passing on macOS with Homebrew 7.0.6. Needs `brew` on PATH and Homebrew ≥ 7; the `packaging` job runs on `ubuntu-latest`, which has no Homebrew, so it is not run there. That is a cost choice, not an impossibility — Homebrew runs on Linux too, and `release.yml` runs this very script on a `macos-latest` runner. |
 | `../.github/scripts/ci/04-packaging.sh` | The CI gate for this directory: `ruby -c` on both formulas, plus the winget manifest contract | Runs on every pull request and on pushes to `main`/tags (the `packaging` job in `ci.yml`). Two advisories fire today, deliberately — see below. |
@@ -206,17 +214,32 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 
 ### winget — app manifest
 
-- [ ] **The manifest itself. It does not exist** — no directory, no scaffold, no
-      placeholder, unlike every other row in this document. ADR-0011's channel
-      table promises winget for the app; nothing here delivers even a draft of it
-- [ ] A Windows build of the app. `app/electron-builder.yml` has **no `win`
-      block**, and says why: adding one "would imply a decided shape" while
-      ADR-0011's winget row is still a placeholder. So the app builds on macOS
-      only today
-- [ ] Windows code-signing (Authenticode) for whatever installer that build
-      produces
+- [x] **The manifest scaffold.** `packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/`
+      exists now (M4.3 closeout), at the same placeholder version and hash discipline
+      as the CLI's sibling manifest. **This box is ticked for existence only** — see
+      the unchecked items below for everything it still needs
+- [x] **A decided Windows packaging shape.** NSIS, per-user, unsigned by
+      configuration — see [§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided).
+      `app/electron-builder.yml` now has `win` and `nsis` blocks
+- [ ] A Windows build of the app. The shape is decided; nothing has built it. No CI
+      job runs `electron-builder --win` any more than `.github/scripts/ci/05-app.sh`
+      runs `dist:mac` for macOS — building an artifact is a release action, not a
+      check
+- [ ] Windows code-signing (Authenticode) for the `.exe` that build produces.
+      Recommended, not required, by NSIS — SmartScreen warns on an unsigned
+      installer rather than refusing it, the same trade-off the unsigned macOS
+      `.dmg` already ships
+- [ ] Real `InstallerUrl`/`InstallerSha256` values once that build exists, and a
+      reviewed pull request to `microsoft/winget-pkgs`, same process as the CLI
 
-## The Windows installer shape — undecided, and the test that decides it
+## The Windows installer shape for the CLI — undecided, and the test that decides it
+
+This section is about the **CLI** package (`DevToolbelt.Devteam`) only. The **app**'s
+Windows shape is a separate, already-decided question — see
+[§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided)
+below — because an Electron app and a python CLI are packaged by different tools with
+different constraints, and conflating the two sections was the wrong shape for this
+document.
 
 `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` carries
 `InstallerType: exe`. **That is an honest design placeholder, and this section does
@@ -283,6 +306,42 @@ Both are quoted on the Microsoft page linked above:
   candidate (a)'s `InstallerSwitches`, and it is a reason the portable shapes are
   attractive: a portable install has no installer UI to silence.
 
+## The Windows app installer shape — decided
+
+Unlike the CLI section above, this one is a decision, not a set of candidates left
+open for a Windows machine to settle. The reason it can be decided here is that the
+question is not winget's opinion (undecidable from macOS) — it is which
+electron-builder Windows target to point at, which is documented behaviour, not a
+runtime unknown.
+
+### The three candidates electron-builder and winget both describe
+
+| | Shape | Signing | Install scope / UAC | Update & uninstall | Toolchain |
+|---|---|---|---|---|---|
+| **NSIS (`.exe`)** — chosen | Unsigned installs with a SmartScreen warning, same trade-off the unsigned macOS `.dmg` already ships (Gatekeeper prompt) | `perMachine: false` (per-user) needs no admin elevation — an unsigned installer asking for elevation is the more alarming prompt of the two | NSIS's own generated uninstaller registers with Add/Remove Programs; no auto-update wired (electron-updater is out of scope for this decision) | None — electron-builder's default, best-documented target, no external toolset |
+| **MSI** | Also installs unsigned (a warning, not a refusal) | Same per-user option exists but is less idiomatic for MSI, which enterprises expect per-machine with GPO deployment | MSI's own uninstall path via Windows Installer service | Needs the WiX toolset wired into the build for no benefit this project needs (no enterprise/GPO deployment story is in scope) |
+| **AppX / MSIX** | **Requires a trusted signing identity to install outside the Microsoft Store at all** — even a self-signed certificate must be imported into the user's trusted root store by hand before sideloading works; there is no "warned but allowed" path the way NSIS and MSI have | N/A — blocked before scope matters | Cleanest update/uninstall story of the three (App Installer service) | Off the table outright: no Authenticode certificate exists (packaging/README.md § Prerequisites), and MSIX cannot substitute a self-signed cert the way an ad-hoc macOS signature stands in for a while |
+
+**Chosen: NSIS**, `perMachine: false`, `oneClick: false` (shows the install-location
+wizard so a user who sees the SmartScreen warning also sees what they are agreeing
+to). Wired in `app/electron-builder.yml`'s `win` and `nsis` blocks, with
+`forceCodeSigning: false` making a future accidental signing attempt (found
+credentials on a build machine) a no-op rather than a build failure — the explicit
+counterpart to `mac.identity: null` on the macOS side. No
+`certificateFile`/`certificatePassword` keys are set anywhere in the config, because
+none exist to set.
+
+**What this decision does not resolve.** `winget validate` and `winget install
+--manifest` have never been run against
+`packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/` — see § Verification and
+§ What is unverified below. Nothing here proves winget accepts an `InstallerType:
+nullsoft` entry with a `Dependencies.PackageDependencies` pointing at
+`DevToolbelt.Devteam`; that dependency stanza is this repository's best expression of
+"the app needs the CLI" (ADR-0015's resolution order), not a confirmed winget
+behaviour. And no Windows build of the app has ever been produced, so `InstallerUrl`
+and `InstallerSha256` in that manifest are placeholders in exactly the sense the CLI's
+are.
+
 ## Placeholders in this directory — what replaces them, and from where
 
 | File | Placeholder | Replaced by | Source of the real value |
@@ -297,7 +356,10 @@ Both are quoted on the Microsoft page linked above:
 | `winget/manifests/.../DevToolbelt.Devteam.yaml` (version dir + all 3 files) | `0.0.0` (`PackageVersion`, directory name) | The real release version | Manual — rename the `0.0.0/` directory and update `PackageVersion` in all three files together when a Windows installer first ships. `04-packaging.sh` fails the build if those four edits disagree with each other |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerUrl` entries (`vX.Y.Z`, filenames) | Real asset URLs | Manual — wherever the installers actually get uploaded (a GitHub Release is the obvious place, not decided). `04-packaging.sh` refuses a half-bump in either direction: the URL's tag and `PackageVersion` must move together |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerSha256` (64 zeros — deliberately not a plausible-looking fake hash) | Real digests of the real installers | Manual — hash the actual artifacts; **do this after signing**, if the chosen shape signs, since signing changes the bytes and therefore the hash |
-| `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | `InstallerType: exe` | Whatever the Windows packaging decision lands on | Manual — a design placeholder, not a decided tool. See [the section above](#the-windows-installer-shape--undecided-and-the-test-that-decides-it); update alongside `InstallerSwitches`, `NestedInstallerType`/`NestedInstallerFiles` and `Dependencies` as one edit |
+| `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | `InstallerType: exe` | Whatever the Windows packaging decision lands on | Manual — a design placeholder, not a decided tool. See [the section above](#the-windows-installer-shape-for-the-cli--undecided-and-the-test-that-decides-it); update alongside `InstallerSwitches`, `NestedInstallerType`/`NestedInstallerFiles` and `Dependencies` as one edit |
+| `winget/manifests/.../DevToolbelt.DevteamApp.yaml` (version dir + all 3 files) | `0.0.0` (`PackageVersion`, directory name) | The real release version | Manual — same four-edit discipline as the CLI's row above, once a Windows build of the app first ships |
+| `winget/manifests/.../DevToolbelt.DevteamApp.installer.yaml` | Both `InstallerUrl` entries — the tag segment is `vX.Y.Z` **with** the prefix, the filename segment is `X.Y.Z` **without** it, because `nsis.artifactName` interpolates `${version}` and only the tag carries a `v`. Making the two match is a 404 | Real asset URLs | Manual — wherever the app's Windows build actually gets uploaded (a GitHub Release is the obvious place, matching `app/electron-builder.yml`'s `nsis.artifactName`). `04-packaging.sh` refuses a half-bump in either direction |
+| `winget/manifests/.../DevToolbelt.DevteamApp.installer.yaml` | Both `InstallerSha256` (64 zeros) | Real digests of the real installer `.exe` per architecture | Manual — hash the actual built artifacts; nothing here signs them, so no post-signing re-hash step is needed unless a certificate is added later |
 
 **`depends_on "python@3.14"` is no longer on this list, and that is a change worth
 naming.** It used to be here as a manual pre-publish step: *run `brew info python3`
@@ -476,8 +538,15 @@ three commands.
 ### What none of these replace
 
 `winget validate` and `winget install --manifest` have never been run against the
-winget manifests, and cannot be from macOS or Linux. `brew audit --cask` has never
-been run against `devteam-app.rb`. Neither channel has been published.
+winget manifests — **either set, CLI or app** — and cannot be from macOS or Linux.
+`brew audit --cask` has never been run against `devteam-app.rb`. Neither channel has
+been published. Adding the app's manifest set did not change this: `04-packaging.sh`
+is a schema-and-cross-file-agreement check written against the manifest schema's own
+JSON, not a stand-in for `winget validate`'s opinion, and it says nothing about
+whether winget actually accepts `InstallerType: nullsoft` with a
+`Dependencies.PackageDependencies` entry the way this manifest set writes it. A
+Windows operator running `winget validate packaging/winget/manifests/d/DevToolbelt/DevteamApp/0.0.0/`
+is the only thing that answers that.
 
 On the cask, be precise about what the missing artifact does and does not block —
 and note that "missing" now means *missing a signed, released* `.dmg`, not missing
@@ -549,12 +618,13 @@ belong in this table.
 | macOS code signing and notarisation of the app | Needs an Apple Developer ID and an app-specific password/API key — account-level access this environment does not have and should not be given |
 | `brew audit --cask` / any install of `devteam-app.rb` | The app now exists and builds, so the reason has moved: what is absent is a **signed, notarised** `.dmg` at a real version, published at a `url` that resolves. An unsigned local build cannot stand in — `brew audit --cask` verifies a Developer ID signature and a notarisation ticket, which an ad-hoc-signed build does not have, so the audit's correct verdict on it is *reject*. The cask also still points at a 404 and carries `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"`. **Static checking is not blocked, and is not clean:** `brew style` on the cask reports four genuine cask-cop findings today (`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`), all unfixed — see § Verification. What is no longer unverified: the macOS floor and the bundle id, both now read off `app/electron-builder.yml` and the pinned Electron's `Info.plist` rather than guessed |
 | Whether the dmg filename the cask builds is the one the build produces | The two `version` values that decide it are hand-maintained in two files and no step derives either from the `app-v*` tag. Nothing compares them: `04-packaging.sh` runs `ruby -c` on the cask and never reads `app/package.json`, and `05-app.sh` never reads the cask. A release whose stamping step is missing produces a cask whose `url` 404s for a reason that looks like a mirror problem |
-| The app on winget, at all | There is no manifest to verify — see § Prerequisites. This row is not "an artifact exists and cannot be checked here"; it is an absence, and it is the one gap in this directory that ADR-0011's channel table promises and nothing here drafts |
-| Windows installer signing | Needs an Authenticode code-signing certificate — same reasoning. Required outright by candidate (a); recommended by (b) and (c) |
-| Anything winget accepts or rejects | `winget` runs on Windows only. `04-packaging.sh` checks the manifests against the schema's rules and against each other; it has never asked `winget validate` for its opinion, and the two are not the same authority. The installer shape itself is undecided |
-| The `InstallerSha256` values in the winget installer manifest | 64 zeros — no Windows installer has ever been built, signed or hashed |
-| winget acceptance | Publication is itself a reviewed pull request to `microsoft/winget-pkgs`, against a real installer URL and hash that do not exist yet — review happens on Microsoft's infrastructure, not here |
-| Whether a `portable` nested installer may point at a non-`.exe` launcher | The schema does not constrain it and Microsoft's manifest documentation does not address it. Only `winget validate` and `winget install --manifest` on a real Windows machine answer it — see the open question above |
+| The app on winget, published | The manifest scaffold now exists (M4.3 closeout) — this row is no longer "there is no manifest", it is "the manifest has never been validated or installed". No Windows build of the app has ever been produced, so `InstallerUrl`/`InstallerSha256` are placeholders and there is nothing for `winget validate` to fetch yet |
+| Whether winget accepts `InstallerType: nullsoft` with this manifest's `Dependencies.PackageDependencies` shape | The schema permits both fields; nothing here has asked `winget validate` whether it accepts a `PackageDependencies` entry naming a **CLI** package (`DevToolbelt.Devteam`) from an app manifest the way this file writes it. That is a winget-behaviour question, not a schema question, and only a real Windows machine answers it |
+| Windows installer signing (CLI or app) | Needs an Authenticode code-signing certificate — same reasoning for both packages. Required outright by CLI candidate (a); recommended for the CLI's other candidates and for the app's NSIS installer |
+| Anything winget accepts or rejects, for either package | `winget` runs on Windows only. `04-packaging.sh` checks the manifests against the schema's rules and against each other; it has never asked `winget validate` for its opinion, and the two are not the same authority. The CLI's installer shape is still undecided; the app's is decided (NSIS) but unbuilt |
+| The `InstallerSha256` values in both winget installer manifests | 64 zeros in each — no Windows installer, CLI or app, has ever been built, signed or hashed |
+| winget acceptance, for either package | Publication is itself a reviewed pull request to `microsoft/winget-pkgs`, against a real installer URL and hash that do not exist yet — review happens on Microsoft's infrastructure, not here |
+| Whether a `portable` nested installer may point at a non-`.exe` launcher | The schema does not constrain it and Microsoft's manifest documentation does not address it. Only `winget validate` and `winget install --manifest` on a real Windows machine answer it — see the open question above. This applies to the CLI's candidates (b)/(c) only; the app's NSIS shape does not use a nested installer |
 
 ## Contacts
 

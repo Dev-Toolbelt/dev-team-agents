@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+# DevToolbelt.DevteamApp.locale.en-US.yaml — default locale manifest for the
+# desktop app. Metadata only (no hashes, no URLs to a release asset), so
+# unlike the installer manifest this file has no placeholder values that
+# would fail at install time — it is accurate as written, just attached to
+# an unreleased PackageVersion (see the version and installer manifests in
+# this same directory).
+#
+# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.defaultLocale.1.12.0.json
+# (microsoft/winget-cli repo) — required fields: PackageIdentifier,
+# PackageVersion, PackageLocale, Publisher, PackageName, License,
+# ShortDescription, ManifestType, ManifestVersion.
+
+PackageIdentifier: DevToolbelt.DevteamApp
+PackageVersion: 0.0.0
+PackageLocale: en-US
+Publisher: Dev-Toolbelt
+PublisherUrl: https://github.com/Dev-Toolbelt
+PublisherSupportUrl: https://github.com/Dev-Toolbelt/dev-team-agents/issues
+PackageName: dev-team-agents
+PackageUrl: https://github.com/Dev-Toolbelt/dev-team-agents
+License: MIT
+LicenseUrl: https://github.com/Dev-Toolbelt/dev-team-agents/blob/main/LICENSE
+ShortDescription: Desktop client for the dev-team-agents multi-agent development harness
+Description: >-
+  dev-team-agents is the desktop client for the dev-team-agents multi-agent
+  development harness (ADR-0015). It is a pure CLI client: every store read
+  and write goes through the `devteam` CLI (DevToolbelt.Devteam), which this
+  package depends on. It never implements its own copy of bind, preference
+  resolution, or store layout. See docs/development/adrs/0015-the-desktop-app-
+  s-stack-and-its-operating-rules-as-a-cli-client.md in the project repository
+  for the full design.
+Moniker: dev-team-agents-app
+Tags:
+  - desktop
+  - developer-tools
+  - ai-agents
+  - automation
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
