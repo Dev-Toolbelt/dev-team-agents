@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,7 +20,6 @@ const KINDS: readonly CatalogKind[] = ['agents', 'skills', 'commands'];
  */
 export function Catalog() {
   const [kind, setKind] = useState<CatalogKind>('agents');
-  const [selected, setSelected] = useState<string | null>(null);
 
   const summary = useOperation(() => window.devteam.catalogSummary());
 
@@ -46,7 +44,6 @@ export function Catalog() {
           // only these three. A value from outside the set is ignored.
           if (KINDS.includes(next as CatalogKind)) {
             setKind(next as CatalogKind);
-            setSelected(null);
           }
         }}
       >
@@ -59,12 +56,10 @@ export function Catalog() {
         </TabsList>
         {KINDS.map((each) => (
           <TabsContent key={each} value={each} className="pt-4">
-            {each === kind ? <Listing kind={each} onSelect={setSelected} /> : null}
+            {each === kind ? <Listing kind={each} /> : null}
           </TabsContent>
         ))}
       </Tabs>
-
-      {selected !== null ? <Detail name={selected} onClose={() => setSelected(null)} /> : null}
     </section>
   );
 }
@@ -96,10 +91,9 @@ function CatalogSummaryLine({ state }: { state: Load<CatalogSummary> }) {
         {SUMMARY_KINDS.map((kind) => `${counts[kind]} ${kind}`).join(' · ')}
       </p>
       <p className="text-xs text-muted-foreground">
+        {/* A project is named, never shown by its UUID — the id means nothing on screen. */}
         {project_id !== null ? (
-          <>
-            Resolved against project <span className="font-mono">{project_id}</span>.
-          </>
+          'Resolved against a bound project.'
         ) : (
           'No project resolved — this build has no project picker, so the catalog is the bound version’s own.'
         )}
@@ -114,7 +108,7 @@ function CatalogSummaryLine({ state }: { state: Load<CatalogSummary> }) {
   );
 }
 
-function Listing({ kind, onSelect }: { kind: CatalogKind; onSelect: (name: string) => void }) {
+function Listing({ kind }: { kind: CatalogKind }) {
   const [filter, setFilter] = useState('');
   const { state } = useOperation(() => window.devteam.catalogListing(kind), [kind]);
 
@@ -162,9 +156,9 @@ function Listing({ kind, onSelect }: { kind: CatalogKind; onSelect: (name: strin
             {entries.map((entry) => (
               <TableRow key={entry.name}>
                 <TableCell>
-                  <Button variant="link" className="h-auto p-0 font-mono text-xs" onClick={() => onSelect(entry.name)}>
-                    {entry.name}
-                  </Button>
+                  {/* Plain text for now — the markdown view behind a click was removed until it
+                      renders the body properly. Kept in the brand colour it had as a link. */}
+                  <span className="font-mono text-xs text-primary">{entry.name}</span>
                   {entry.malformed === true ? (
                     <Badge variant="destructive" className="ml-2">
                       malformed
@@ -192,37 +186,5 @@ function Listing({ kind, onSelect }: { kind: CatalogKind; onSelect: (name: strin
         </Table>
       )}
     </div>
-  );
-}
-
-function Detail({ name, onClose }: { name: string; onClose: () => void }) {
-  const { state } = useOperation(() => window.devteam.catalogEntry(name), [name]);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-mono text-sm">{name}</CardTitle>
-        {state.phase === 'done' && state.result.ok ? (
-          <CardDescription>
-            {state.result.data.kind}
-            {state.result.data.path !== null ? ` · ${state.result.data.path}` : ''}
-          </CardDescription>
-        ) : null}
-        <Button variant="ghost" size="sm" onClick={onClose} className="justify-self-end">
-          Close
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {state.phase === 'loading' ? (
-          <Loading what="devteam catalog show" />
-        ) : !state.result.ok ? (
-          <Problem problem={state.result} />
-        ) : (
-          <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
-            {state.result.data.body === '' ? '(no body)' : state.result.data.body}
-          </pre>
-        )}
-      </CardContent>
-    </Card>
   );
 }
