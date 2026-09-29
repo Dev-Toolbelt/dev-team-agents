@@ -1,0 +1,66 @@
+# electron-builder configuration.
+#
+# UNSIGNED BY DESIGN, FOR NOW. `mac.identity: null` disables code signing and
+# `afterAllArtifactBuild` prints a banner saying so, because the alternative is a `.dmg`
+# that looks shippable and is not. ADR-0011 requires macOS artifacts to be signed and
+# notarised; its M4.1 amendment records that this is "blocked on signing credentials the
+# repository owner holds". Wiring signing means an Apple Developer ID plus an
+# app-specific password or API key for `notarytool`, and flipping `CODE_SIGNED` in
+# `src/main/build-info.ts` — none of which can be done from this repository today.
+#
+# The artifact names are what `packaging/homebrew/devteam-app.rb` expects:
+#   app "dev-team-agents.app"        -> productName: dev-team-agents
+#   dev-team-agents-<version>.dmg    -> dmg.artifactName below
+# and `appId` matches the bundle id the cask's `zap` block uses as its placeholder.
+appId: com.devtoolbelt.dev-team-agents-app
+productName: dev-team-agents
+copyright: dev-team-agents contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the built output ships. `dependencies` in package.json is empty on purpose: the
+# renderer is bundled by Vite and the main process imports nothing outside node's own
+# library, so no `node_modules` tree is packaged.
+files:
+  - dist/**/*
+  - package.json
+
+asar: true
+
+mac:
+  category: public.app-category.developer-tools
+  # MEASURED, not guessed: `node_modules/electron/dist/Electron.app` declares
+  # LSMinimumSystemVersion 12.0, so Electron 39 does not run on Big Sur. The cask in
+  # packaging/ says `depends_on macos: ">= :big_sur"` and its own comment asks for this to
+  # be confirmed against the build — it is wrong and must become `">= :monterey"`, or the
+  # cask will install on a system the app cannot launch on. Re-measure on every Electron
+  # major; the floor moves with it.
+  minimumSystemVersion: '12.0'
+  # One universal artifact, because the cask has one URL and ADR-0011's amendment describes
+  # "a signed, notarised universal .dmg". Two per-arch dmgs would need two cask URLs and a
+  # per-arch sha256, which the cask is not shaped for.
+  target:
+    - target: dmg
+      arch:
+        - universal
+  # Signing OFF. See the header.
+  identity: null
+  # `notarize` is a distinct step and is equally unavailable.
+  notarize: false
+  # No entitlements file: without signing, entitlements are inert, and shipping one would
+  # suggest a hardened-runtime configuration that has never been exercised.
+  extendInfo:
+    # The app never loads remote content, so ATS exceptions are not needed and are not
+    # added. Declared here so the absence is visibly deliberate.
+    NSHighResolutionCapable: true
+
+dmg:
+  artifactName: ${productName}-${version}.dmg
+
+# Windows is not wired: ADR-0011's winget row is a placeholder ("`InstallerType: exe` is
+# a placeholder, not a decision") and an Authenticode certificate does not exist either.
+# Adding a `win` block here would imply a decided shape.
+
+afterAllArtifactBuild: build/after-build.cjs
