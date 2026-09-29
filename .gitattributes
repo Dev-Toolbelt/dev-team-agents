@@ -20,3 +20,18 @@
 *.zip  binary
 *.tar  binary
 *.gz   binary
+
+# Keep the desktop client out of the release archive. `app/` is a development tree:
+# scripts/install.sh's KEEP_ROOT deletes it on arrival, so every user downloaded 640 KB
+# (5.95 MB -> 5.31 MB, 72 entries -> 0) only to have it removed. Measured with
+# `git archive HEAD | tar -t | grep -c '^app/'`; note that reading the attribute from an
+# UNCOMMITTED .gitattributes needs `git archive --worktree-attributes`, which is why a
+# first attempt to verify this concluded, wrongly, that export-ignore does not work.
+#
+# Deliberately only `app/`. tests/, helpers/, docs/ and packaging/ are also dev-only and
+# also stripped client-side, but the install path reads strip-tarball.sh out of the
+# extracted archive and packaging/ carries the formula that verify-formula-locally.sh
+# builds against — removing those needs a release to prove, and this one does not.
+# Verified after adding this line: scripts/cli/devteam and scripts/lib/devteam/*.py
+# (the Homebrew formula's whole payload) and all five KEEP_ROOT trees still ship.
+app/ export-ignore
