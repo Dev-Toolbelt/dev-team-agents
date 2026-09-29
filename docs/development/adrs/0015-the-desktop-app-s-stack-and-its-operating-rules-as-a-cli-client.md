@@ -441,3 +441,15 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > drops `app/` from every installed project. The spec's scenario for this app therefore stays
 > `[PARTLY MET]`, and the reason is unchanged — not test coverage, but that a client which ships to
 > nobody cannot have satisfied a criterion about what a user who installs it gets.
+
+> **Amendment — the header carries the store version only; the rest moved to an About tab.** The
+> M4.3 first-slice amendment records the header as carrying the resolved CLI path, its source, the
+> json contract, the app/Electron versions and a write-actions badge beside `unsigned build`. In use
+> that crowded every screen with facts the user consults rarely. The header now keeps the brand, the
+> `unsigned build` badge (a safety warning, so it stays everywhere) and the store version — the
+> value the Projects screen's Version column compares against — plus a "no devteam CLI found"
+> line when resolution fails. The answer to "which `devteam` is this?" is unchanged in content and
+> one click away: the **About** tab lists the CLI path and source, store version, json contract,
+> every mutating command this build runs, and the app build. Nothing was removed from the UI, and the
+> write-action enumeration is still derived from `mutatingCommandsRun`, not restated.
+
