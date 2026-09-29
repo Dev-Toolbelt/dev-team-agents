@@ -700,6 +700,46 @@ def sync_all(emitter=None):
     return {"synced": results, "problems": problems}
 
 
+def _prune_empty_dirs(project_root, relpaths):
+    """Remove directories an unbind emptied, deepest first.
+
+    `rmdir` is the whole safety argument: it refuses a directory that still has
+    anything in it, so a user's own file in `.claude/` keeps its parent alive without
+    this function needing to know about it. Bounded to paths inside the project, and
+    never the project root.
+
+    Without this, an unbind left `.claude/agents`, `.claude/commands`, `.claude/skills`
+    and `.dev-team-agents/resolved` behind as empty directories — nothing broken, but
+    four directories the project did not have before the bind and does not need after it.
+    """
+    root = Path(project_root).resolve()
+    candidates = set()
+    for rel in relpaths:
+        # `rel` may carry a note appended for the report, e.g. the settings entry.
+        rel = str(rel).split(" (", 1)[0]
+        if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+            continue
+        current = (root / rel).parent
+        while True:
+            try:
+                resolved = current.resolve()
+            except OSError:
+                break
+            if resolved == root or root not in resolved.parents:
+                break
+            candidates.add(resolved)
+            current = current.parent
+    removed = []
+    # Deepest first, so a parent becomes empty before it is tried.
+    for directory in sorted(candidates, key=lambda d: len(d.parts), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            continue
+        removed.append(str(directory.relative_to(root)))
+    return sorted(removed)
+
+
 def unbind(root=None, project_id=None, keep_artifacts=False):
     """Remove bind artifacts and the registry entry.
 
@@ -805,9 +845,17 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
             # needs ignoring, or the unbind trades two untracked files for a clean block.
             gitignore.apply_managed_block(exclude_file, sorted(kept_pointers))
 
+    pruned_dirs = []
+    if not keep_artifacts:
+        pruned_dirs = _prune_empty_dirs(
+            project_root,
+            [item["path"] for item in quarantined] + list(unlinked),
+        )
+
     registry.remove(project_id)
     return {
         "project_id": project_id,
+        "removed_dirs": pruned_dirs,
         "path": str(project_root),
         "unlinked": unlinked,
         "quarantined": quarantined,

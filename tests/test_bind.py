@@ -90,6 +90,44 @@ class BindTest(StoreTestCase):
         # The rest of the block is gone — this is still an unbind.
         self.assertNotIn(".claude/agents/dev-team", local)
 
+    def test_unbind_removes_the_directories_it_emptied(self):
+        """An unbind used to leave `.claude/agents`, `.claude/commands`, `.claude/skills`
+        and `.dev-team-agents/resolved` behind as empty directories — four directories the
+        project did not have before the bind and does not need after it.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        for rel in (".claude/agents", ".claude/commands", ".claude/skills",
+                    ".dev-team-agents/resolved"):
+            self.assertTrue((root / rel).is_dir(), rel)
+
+        result = bind.unbind(root)
+
+        for rel in (".claude/agents", ".claude/commands", ".claude/skills",
+                    ".dev-team-agents/resolved"):
+            self.assertFalse((root / rel).exists(), "{} should have been pruned".format(rel))
+            self.assertIn(rel, result["removed_dirs"])
+        # `.dev-team-agents` itself survives: `project.json` and the two pointers are in it.
+        self.assertTrue((root / ".dev-team-agents").is_dir())
+        self.assertTrue((root / ".claude" / "settings.json").exists())
+
+    def test_unbind_keeps_a_directory_that_still_holds_something_of_the_user_s(self):
+        """`rmdir` is the whole safety argument: a directory with anything left in it
+        refuses to go, so this needs no knowledge of what a user may have added.
+        """
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        mine = root / ".claude" / "skills" / "my-own-notes.md"
+        mine.write_text("mine\n", encoding="utf-8")
+
+        result = bind.unbind(root)
+
+        self.assertTrue(mine.exists(), "a user's own file must survive")
+        self.assertTrue((root / ".claude" / "skills").is_dir())
+        self.assertNotIn(".claude/skills", result["removed_dirs"])
+        # The siblings that really were empty are still pruned.
+        self.assertIn(".claude/agents", result["removed_dirs"])
+
     def test_unbind_still_removes_the_resolved_preference_projection(self):
         """The fix must not turn into "keep every projection". `resolved/preferences.json`
         is regenerated from the three-layer cascade, carries nothing of its own, and has no

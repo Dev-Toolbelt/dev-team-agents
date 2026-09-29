@@ -250,6 +250,8 @@ def cmd_unbind(args, emitter):
         "  quarantined {}".format(len(result["quarantined"])),
         "  kept        {}".format(", ".join(result["kept"])),
     ]
+    if result["removed_dirs"]:
+        lines.append("  removed     {} empty dir(s)".format(len(result["removed_dirs"])))
     if result["quarantined"]:
         lines.append("  quarantine  {}".format(result["quarantined"][0]["to"]))
     if result["problems"]:
