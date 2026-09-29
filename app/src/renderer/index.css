@@ -76,14 +76,38 @@
 
   --radius: 0.5rem;
 
+  /* ── Brand palette ────────────────────────────────────────────────────────────
+     Named so nothing re-derives a hex from the guide. Values are the guide's own
+     base and neutral entries (docs/brand/guia-de-cores.md § Cores), which it
+     states are estimates sampled from the reference rather than official codes.
+
+     Only the base pair is wired into the semantic tokens below. The derived and
+     support tones are deliberately NOT applied: the guide scopes them to
+     communication material and says outright they do not recolour the mark, and a
+     developer tool on macOS should read as platform-native rather than branded. They
+     are declared here so a future surface that genuinely wants one does not invent a
+     near-miss. Running text stays graphite on white, per the guide's warning that the
+     base orange is 4.17:1 on white and must not carry small text. */
+  /* Converted from the guide's hex with the sRGB -> OKLab matrices, not by eye: a
+     hand-estimated value was off by up to 0.05 in lightness and 0.02 in chroma, which
+     is a visibly different orange. The hex beside each one is the authority. */
+  --brand-orange: oklch(0.601 0.149 45.5);        /* #C65E26 */
+  --brand-graphite: oklch(0.337 0.009 304.0);     /* #38363B */
+  --brand-orange-dark: oklch(0.483 0.125 44.2);   /* #964217 */
+  --brand-ivory: oklch(0.962 0.007 80.7);         /* #F5F2ED */
+  --brand-warm-grey: oklch(0.827 0.015 74.4);     /* #CCC5BC */
+
   --background: oklch(0.985 0 0);
-  --foreground: oklch(0.205 0 0);
+  --foreground: var(--brand-graphite);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.205 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.205 0 0);
-  --primary: oklch(0.556 0.184 259.5);
-  --primary-foreground: oklch(0.99 0 0);
+  /* Brand orange. Its foreground is near-black, not white, because the brand guide
+     measures #000000 on #C65E26 at 5.03:1 and says so explicitly — white on this orange
+     does not reach AA. See docs/brand/guia-de-cores.md § Combinações. */
+  --primary: var(--brand-orange);
+  --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.955 0 0);
   --secondary-foreground: oklch(0.245 0 0);
   --muted: oklch(0.955 0 0);
@@ -98,7 +122,7 @@
   --success-foreground: oklch(0.99 0 0);
   --border: oklch(0.905 0 0);
   --input: oklch(0.905 0 0);
-  --ring: oklch(0.556 0.184 259.5);
+  --ring: var(--brand-orange);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -109,7 +133,11 @@
     --card-foreground: oklch(0.96 0 0);
     --popover: oklch(0.225 0 0);
     --popover-foreground: oklch(0.96 0 0);
-    --primary: oklch(0.64 0.166 258);
+    /* The brand orange lifted to L 0.72, hue and chroma unchanged. Measured, not
+       eyeballed: at the brand's own L 0.601 it reaches only 4.35:1 on this background,
+       while 0.72 gives 7.14:1 against it and 7.43:1 for the near-black text on top.
+       L 0.78 would be brighter still but falls outside the sRGB gamut at this chroma. */
+    --primary: oklch(0.72 0.149 45.5);
     --primary-foreground: oklch(0.16 0 0);
     --secondary: oklch(0.27 0 0);
     --secondary-foreground: oklch(0.96 0 0);
@@ -125,7 +153,7 @@
     --success-foreground: oklch(0.16 0 0);
     --border: oklch(0.32 0 0);
     --input: oklch(0.32 0 0);
-    --ring: oklch(0.64 0.166 258);
+    --ring: oklch(0.72 0.149 45.5);
   }
 }
 

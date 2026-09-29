@@ -9,6 +9,13 @@ import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
 import { Loading } from './Problem.js';
+// From derived/, never from the brand source beside it: Vite emits whatever it is handed,
+// and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
+// `bash build/make-icon.sh`. Imported rather than referenced from `public/` so a missing
+// asset is a build error — over `file://` a wrong path is a silent 404.
+import brandSymbol from './logo/derived/symbol-128.png';
+import lockupLight from './logo/derived/horizontal-light-720.png';
+import lockupDark from './logo/derived/horizontal-dark-720.png';
 import type {
   BuildInfo,
   CliResolution,
@@ -55,6 +62,19 @@ export function App() {
     <div className="flex h-full flex-col">
       <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
         <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          {/* The symbol, not the horizontal lockup. The brand guide's horizontal and
+              principal compositions both carry the slogan, and it says to avoid the
+              slogan at sizes that hurt its legibility — at a 20px header it would be
+              unreadable. The mark alone is the composition the guide defines for this
+              ("Símbolo: somente o asterisco existente"). `aria-hidden` because the
+              heading beside it already announces the name; two labels would be read
+              twice. Height only, so the aspect ratio is never distorted. */}
+          <img
+            src={brandSymbol}
+            alt=""
+            aria-hidden="true"
+            className="h-5 w-auto self-center"
+          />
           <h1 className="text-lg font-semibold tracking-tight">dev-team-agents</h1>
           <Badge variant="secondary">no write actions</Badge>
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
@@ -226,37 +246,60 @@ function NoCli({ resolution, onRetry }: { resolution: CliResolution | null; onRe
   const rejected = resolution !== null && !resolution.found ? resolution.rejected : [];
   const remedy = resolution !== null && !resolution.found ? resolution.remedy : [];
   const searched = resolution !== null && !resolution.found ? resolution.searchedCount : 0;
+  const bySource = resolution !== null && !resolution.found ? resolution.searchedBySource : [];
 
   return (
-    <Alert variant="destructive">
-      <CircleAlert />
-      <AlertTitle>No devteam CLI on this host</AlertTitle>
-      <AlertDescription>
-        <p>
-          This app is a client of the <code className="font-mono">devteam</code> CLI and deliberately ships no copy of
-          it. {searched} location{searched === 1 ? '' : 's'} were checked — a configured path, then every{' '}
-          <code className="font-mono">PATH</code> entry, then this platform&apos;s channel location (Homebrew&apos;s{' '}
-          <code className="font-mono">bin</code>, or winget&apos;s shim directory on Windows).
-        </p>
-        {rejected.length > 0 ? (
-          <ul className="list-inside list-disc font-mono text-xs">
-            {rejected.map((entry) => (
-              <li key={entry.path}>
-                {entry.path} — {entry.reason}
-              </li>
+    <div className="space-y-6">
+      {/* Above the alert, not inside it: a brand lockup in a destructive red box reads as
+          marketing at the moment the user wants a problem solved. This is the one surface
+          with the vertical room the horizontal composition needs — the brand guide warns
+          against the slogan at sizes that hurt its legibility, which is why the header
+          carries the symbol alone instead. The dark variant is the guide's *negativa*
+          (letters to white, orange kept) rather than the mono white, chosen by
+          prefers-color-scheme because the app follows the OS and has no theme toggle.
+          `alt=""` because the header already names the app; two labels read twice. */}
+      <picture>
+        <source srcSet={lockupDark} media="(prefers-color-scheme: dark)" />
+        <img src={lockupLight} alt="" aria-hidden="true" className="h-20 w-auto" />
+      </picture>
+      <Alert variant="destructive">
+        <CircleAlert />
+        <AlertTitle>No devteam CLI on this host</AlertTitle>
+        <AlertDescription>
+          <p>
+            This app is a client of the <code className="font-mono">devteam</code> CLI and deliberately ships no copy of
+            it. {searched} location{searched === 1 ? '' : 's'} were checked
+            {bySource.length > 0 ? ':' : '.'}
+          </p>
+          {bySource.length > 0 ? (
+            <ul className="list-inside list-disc font-mono text-xs">
+              {bySource.map((entry) => (
+                <li key={entry.source}>
+                  {entry.label}: {entry.count}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {rejected.length > 0 ? (
+            <ul className="list-inside list-disc font-mono text-xs">
+              {rejected.map((entry) => (
+                <li key={entry.path}>
+                  {entry.path} — {entry.reason}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <ul className="list-inside list-disc">
+            {remedy.map((line) => (
+              <li key={line}>{line}</li>
             ))}
           </ul>
-        ) : null}
-        <ul className="list-inside list-disc">
-          {remedy.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          Look again
-        </Button>
-      </AlertDescription>
-    </Alert>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Look again
+          </Button>
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }
 
@@ -298,21 +341,16 @@ function HandshakeBanner({ handshake }: { handshake: OperationResult<HandshakeVi
   }
 
   if (!view.mayWrite) {
-    const names = Object.keys(view.unsupported).sort();
+    // `view.summary` already names every unsupported shape with both versions — see
+    // `declaration.ts`'s `interpret()` — so this used to rebuild the identical list a
+    // second time underneath it. One rendering of the same facts, not a scan-then-read
+    // pair: the summary sentence is already parenthetical and per-shape.
     return (
       <Alert variant="destructive" className="mb-4">
         <Lock />
         <AlertTitle>This store keeps records in a shape this app does not understand</AlertTitle>
         <AlertDescription>
           <p>{view.summary}</p>
-          <ul className="list-inside list-disc font-mono text-xs">
-            {names.map((name) => (
-              <li key={name}>
-                {name}: store {view.unsupported[name]?.store}, this app{' '}
-                {view.unsupported[name]?.client ?? 'does not know this shape'}
-              </li>
-            ))}
-          </ul>
           <p className="text-muted-foreground">
             Everything below is still readable. Upgrade the app before it writes to this store — dropping the check
             would only hide the mismatch.
