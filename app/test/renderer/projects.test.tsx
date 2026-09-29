@@ -35,10 +35,7 @@ afterEach(() => {
 
 describe('Projects — path_exists is rendered faithfully', () => {
   it('shows a missing badge only for false, never for true or null', async () => {
-    // Paths deliberately do not end in the project's own id — the Project column now
-    // renders both the display name (falling back to the path's basename) and the id
-    // itself, so an id equal to its own basename would make both spans say "exists" and
-    // turn the lookups below into an ambiguous, multi-match query.
+    // Rows are found by display name (the path's basename) — the id is never rendered.
     const projects = [
       project({ project_id: 'exists', path: '/repo/dir-a', path_exists: true }),
       project({ project_id: 'gone', path: '/repo/dir-b', path_exists: false }),
@@ -47,11 +44,11 @@ describe('Projects — path_exists is rendered faithfully', () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))) }));
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('exists');
+    await screen.findByText('dir-a');
 
-    const existsRow = screen.getByText('exists').closest('tr')!;
-    const goneRow = screen.getByText('gone').closest('tr')!;
-    const unknownRow = screen.getByText('unknown').closest('tr')!;
+    const existsRow = screen.getByText('dir-a').closest('tr')!;
+    const goneRow = screen.getByText('dir-b').closest('tr')!;
+    const unknownRow = screen.getByText('dir-c').closest('tr')!;
 
     expect(within(existsRow).queryByText('missing')).not.toBeInTheDocument();
     expect(within(existsRow).queryByText('not checked')).not.toBeInTheDocument();
@@ -68,6 +65,7 @@ describe('Projects — path_exists is rendered faithfully', () => {
 
 describe('Projects — write actions are withheld honestly', () => {
   it('disables the withheld action and states why on the wrapper and to assistive tech', async () => {
+    const user = userEvent.setup();
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: null, projects: [] }))) }));
     const env = environment({ withheld: [{ command: 'bind', reason: 'the schema declaration could not be written' }] });
 
@@ -75,7 +73,9 @@ describe('Projects — write actions are withheld honestly', () => {
     const bindButton = await screen.findByRole('button', { name: /withheld: the schema declaration/i });
 
     expect(bindButton).toBeDisabled();
-    expect(bindButton.closest('span')).toHaveAttribute('title', expect.stringContaining('the schema declaration could not be written'));
+    // The tooltip hangs on the wrapper — a disabled button gets no hover of its own.
+    await user.hover(bindButton.closest('span')!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('the schema declaration could not be written');
   });
 
   it('fails closed while the environment has not answered yet, rather than enabling writes', async () => {
@@ -86,7 +86,7 @@ describe('Projects — write actions are withheld honestly', () => {
     );
 
     render(<Projects environment={null} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
 
     // Not anchored: `environment === null` gives every `WriteButton` an
     // `aria-label` of `"<label> — withheld: …"`, not the bare label.
@@ -116,7 +116,7 @@ describe('Projects — a successful write surfaces its notice, and only when the
     );
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
 
     expect(screen.queryByText(/added to no ignore file/i)).not.toBeInTheDocument();
 
@@ -129,7 +129,7 @@ describe('Projects — a successful write surfaces its notice, and only when the
   it('shows no notice banner when the command reported none', async () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
     expect(screen.queryByText(/the command succeeded and reported this/i)).not.toBeInTheDocument();
   });
 });
@@ -148,7 +148,7 @@ describe('Projects — the destructive path needs the confirm step', () => {
     );
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
 
     await user.click(screen.getByRole('button', { name: /unbind…/i }));
     // Opening the dialog must not itself have fired the write.
@@ -188,7 +188,7 @@ describe('Projects — the upgrade order is enforced structurally', () => {
     );
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
     await user.click(screen.getByRole('button', { name: /upgrade…/i }));
 
     const dialog = await screen.findByRole('dialog');
@@ -266,10 +266,10 @@ describe('Projects — bind defaults to the recommended mode, but lets it be cha
     await user.click(screen.getByRole('button', { name: /^bind…$/i }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('radio', { name: /link \(recommended\)/i })).toBeChecked();
-
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     await within(dialog).findByText('/Users/dev/my-project');
+    expect(within(dialog).getByRole('radio', { name: /link \(recommended\)/i })).toBeChecked();
+
     await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
 
     // Unlike `providers`, which stays omitted until the user checks one, `mode` is always
@@ -296,9 +296,9 @@ describe('Projects — bind defaults to the recommended mode, but lets it be cha
     await user.click(screen.getByRole('button', { name: /^bind…$/i }));
 
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('radio', { name: /^copy$/i }));
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     await within(dialog).findByText('/Users/dev/my-project');
+    await user.click(within(dialog).getByRole('radio', { name: /^copy$/i }));
     await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
 
     expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ mode: 'copy' }));
@@ -312,7 +312,7 @@ describe('Projects — a successful write refreshes the list', () => {
     installBridge(fakeBridge({ listProjects, syncProject: vi.fn(() => Promise.resolve(ok(bindReport()))) }));
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
     expect(listProjects).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole('button', { name: /^sync$/i }));
@@ -345,7 +345,7 @@ describe('Projects — a row-level notice survives the reload its own write trig
     installBridge(fakeBridge({ listProjects, syncProject }));
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
     await userEvent.setup().click(screen.getByRole('button', { name: /^sync$/i }));
 
     await vi.waitFor(() => expect(syncProject).toHaveBeenCalledTimes(1));
@@ -353,7 +353,7 @@ describe('Projects — a row-level notice survives the reload its own write trig
     await vi.waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/added to no ignore file/i)).toBeInTheDocument();
     // And the row was never unmounted, which is what made the notice unreadable before.
-    expect(screen.getByText('proj-1')).toBeInTheDocument();
+    expect(screen.getByText('project-1')).toBeInTheDocument();
   });
 
   it('shows nothing in place of the table while a reload is in flight, and says it is refreshing', async () => {
@@ -378,12 +378,12 @@ describe('Projects — a row-level notice survives the reload its own write trig
     );
 
     render(<Projects environment={environment()} />);
-    await screen.findByText('proj-1');
+    await screen.findByText('project-1');
     await userEvent.setup().click(screen.getByRole('button', { name: /sync all/i }));
 
     // Mid-reload: the table is still there and the refresh is announced.
     await screen.findByText(/refreshing the project list/i);
-    expect(screen.getByText('proj-1')).toBeInTheDocument();
+    expect(screen.getByText('project-1')).toBeInTheDocument();
 
     releaseSecondList();
     await vi.waitFor(() => expect(screen.queryByText(/refreshing the project list/i)).not.toBeInTheDocument());
@@ -405,10 +405,9 @@ describe('Projects — project names: stored, rendered, and falling back to the 
 
     render(<Projects environment={environment()} />);
 
-    // The basename is the row's name; the id is still reachable, just no longer the
-    // headline — never a bare UUID with nothing readable beside it.
+    // The basename is the row's name, and the id is never rendered at all.
     expect(await screen.findByText('my-app')).toBeInTheDocument();
-    expect(screen.getByText('abc-123')).toBeInTheDocument();
+    expect(screen.queryByText('abc-123')).not.toBeInTheDocument();
   });
 
   it('renders the stored name instead of the basename when one is on record', async () => {
@@ -425,7 +424,7 @@ describe('Projects — project names: stored, rendered, and falling back to the 
 
     expect(await screen.findByText('Storefront')).toBeInTheDocument();
     expect(screen.queryByText('my-app')).not.toBeInTheDocument();
-    expect(screen.getByText('abc-123')).toBeInTheDocument();
+    expect(screen.queryByText('abc-123')).not.toBeInTheDocument();
   });
 
   it('pre-fills the bind dialog’s name field with the chosen directory’s basename, editable', async () => {
@@ -490,16 +489,16 @@ describe('Projects — project names: stored, rendered, and falling back to the 
     await user.type(nameField, 'Storefront');
     await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
 
-    // The success step reads as a name, not a bare id — `project_id` is still there, just
-    // no longer the headline.
+    // The success step reads as a name, and never shows the id.
     expect(await within(dialog).findByText('Storefront')).toBeInTheDocument();
+    expect(within(dialog).queryByText('proj-new')).not.toBeInTheDocument();
     expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'Storefront' }));
 
     await user.click(within(dialog).getByRole('button', { name: /^done$/i }));
 
     // The table reflects it after the reload Done triggers.
     expect(await screen.findByText('Storefront')).toBeInTheDocument();
-    expect(screen.getByText('proj-new')).toBeInTheDocument();
+    expect(screen.queryByText('proj-new')).not.toBeInTheDocument();
   });
 });
 
@@ -589,5 +588,75 @@ describe('Projects — filters narrow the list, client-side, and distinguish no-
     await user.type(screen.getByLabelText(/filter by name or path/i), 'no-such-project');
     expect(await screen.findByText(/no bound project matches these filters/i)).toBeInTheDocument();
     expect(screen.queryByText(/nothing is bound yet/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('Projects — the bind form waits for a directory', () => {
+  it('shows only the picker until a directory is chosen', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory: vi.fn<() => Promise<DirectoryChoice>>(() =>
+          Promise.resolve({ chosen: true, path: '/Users/dev/my-project' }),
+        ),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).queryByLabelText(/project name/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    expect(await within(dialog).findByLabelText(/project name/i)).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('radio').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByRole('checkbox').length).toBeGreaterThan(0);
+  });
+});
+
+describe('Projects — the Version column says whether a project is current', () => {
+  it('marks a project on the current store version up to date and any other one outdated', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() =>
+          Promise.resolve(
+            ok({
+              current: '2.48.0',
+              projects: [
+                project({ project_id: 'a', path: '/repo/fresh', resolves_to: '2.48.0' }),
+                project({ project_id: 'b', path: '/repo/stale', resolves_to: '2.40.0' }),
+              ],
+            }),
+          ),
+        ),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    const freshRow = (await screen.findByText('fresh')).closest('tr')!;
+    const staleRow = screen.getByText('stale').closest('tr')!;
+
+    expect(within(freshRow).getByRole('img', { name: /up to date/i })).toBeInTheDocument();
+    expect(within(staleRow).getByRole('img', { name: /outdated.*2\.48\.0/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Version' })).toBeInTheDocument();
+  });
+
+  it('claims neither when the store has no current version', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() =>
+          Promise.resolve(ok({ current: null, projects: [project({ path: '/repo/lonely', resolves_to: '2.48.0' })] })),
+        ),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    const row = (await screen.findByText('lonely')).closest('tr')!;
+    expect(within(row).queryByRole('img')).not.toBeInTheDocument();
   });
 });

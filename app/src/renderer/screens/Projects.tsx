@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Hint } from '@/components/ui/tooltip';
 import { Empty, Loading, Problem } from '../Problem.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
@@ -111,6 +112,35 @@ function PathState({ exists }: { exists: boolean | null }) {
 }
 
 /**
+ * Whether a project resolves to the store's current version.
+ *
+ * Nothing at all when the store has no current version: "outdated" relative to nothing is
+ * a claim the payload cannot support. The icon is never the only signal — the tooltip text
+ * is also the accessible name, so a colour-blind or screen-reader user gets the same fact.
+ */
+function VersionState({ resolvesTo, current }: { resolvesTo: string; current: string | null }) {
+  if (current === null) return null;
+  if (resolvesTo === current) {
+    const label = `Up to date — the store's current version is ${current}.`;
+    return (
+      <Hint content={label}>
+        <span role="img" aria-label={label} className="inline-flex text-green-600 dark:text-green-500">
+          <CheckCircle2 className="size-4" aria-hidden="true" />
+        </span>
+      </Hint>
+    );
+  }
+  const label = `Outdated — the store's current version is ${current}.`;
+  return (
+    <Hint content={label}>
+      <span role="img" aria-label={label} className="inline-flex text-amber-600 dark:text-amber-500">
+        <AlertTriangle className="size-4" aria-hidden="true" />
+      </span>
+    </Hint>
+  );
+}
+
+/**
  * A write button that knows how to disable itself.
  *
  * Centralised so no row can forget the withheld check — item 5 of the brief is "the UI must
@@ -120,11 +150,14 @@ function PathState({ exists }: { exists: boolean | null }) {
 function WriteButton({
   command,
   environment,
+  tooltip,
   children,
   ...props
 }: {
   command: string;
   environment: EnvironmentReport | null;
+  /** What the action does, shown on hover. A withheld reason replaces it — that is the more urgent fact. */
+  tooltip?: string;
 } & React.ComponentProps<typeof Button>) {
   // `environment === null` means the report has not arrived yet, not that nothing is
   // withheld — so it fails CLOSED. Reading an unanswered precondition as "no objection"
@@ -137,26 +170,36 @@ function WriteButton({
       : isWithheld(environment.withheld, command);
   if (gate.withheld) {
     // The tooltip hangs on a wrapper, not on the button: a `disabled` button receives no
-    // mouse events, so a `title` on it is not reliably shown. The reason also goes into
+    // mouse events, so a tooltip on it is never triggered. The reason also goes into
     // `aria-label`, because a disabled control is not focusable and a tooltip a screen
     // reader never reaches is not an explanation. `EnvironmentBanner` in `App.tsx` states
     // the same reason once, visibly, for the sighted case — this is the per-control echo.
     return (
-      <span title={`Withheld: ${gate.reason}`} className="inline-flex">
-        <Button
-          {...props}
-          disabled
-          // The visible label when it is a plain string, and the CLI subcommand otherwise.
-          // Not `String(children)`: a ReactNode stringifies to "[object Object]", which is
-          // how a screen reader would have been told the reason.
-          aria-label={`${typeof children === 'string' ? children : command} — withheld: ${gate.reason}`}
-        >
-          {children}
-        </Button>
-      </span>
+      <Hint content={`Withheld: ${gate.reason}`}>
+        <span className="inline-flex">
+          <Button
+            {...props}
+            disabled
+            // The visible label when it is a plain string, and the CLI subcommand otherwise.
+            // Not `String(children)`: a ReactNode stringifies to "[object Object]", which is
+            // how a screen reader would have been told the reason.
+            aria-label={`${typeof children === 'string' ? children : command} — withheld: ${gate.reason}`}
+          >
+            {children}
+          </Button>
+        </span>
+      </Hint>
     );
   }
-  return <Button {...props}>{children}</Button>;
+  const button = <Button {...props}>{children}</Button>;
+  if (tooltip === undefined) return button;
+  // Wrapped in a span for the same reason as above: while pending the button is disabled
+  // and would otherwise swallow the hover that shows the tooltip.
+  return (
+    <Hint content={tooltip}>
+      <span className="inline-flex">{button}</span>
+    </Hint>
+  );
 }
 
 /**
@@ -246,6 +289,7 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
               environment={environment}
               variant="outline"
               size="sm"
+              tooltip="Re-apply the current store version to every bound project that is not pinned"
               disabled={syncAll.state.phase === 'pending'}
               onClick={() => {
                 void syncAll.run().then((result) => {
@@ -256,12 +300,20 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
               {syncAll.state.phase === 'pending' ? 'Syncing all…' : 'Sync all'}
             </WriteButton>
           ) : null}
-          <WriteButton command="bind" environment={environment} size="sm" onClick={() => setBindOpen(true)}>
+          <WriteButton
+            command="bind"
+            environment={environment}
+            size="sm"
+            tooltip="Bind a new project directory to this store"
+            onClick={() => setBindOpen(true)}
+          >
             Bind…
           </WriteButton>
-          <Button variant="outline" size="sm" onClick={reload}>
-            Refresh
-          </Button>
+          <Hint content="Reload the project list from the CLI">
+            <Button variant="outline" size="sm" onClick={reload}>
+              Refresh
+            </Button>
+          </Hint>
         </div>
       </header>
 
@@ -307,7 +359,7 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
               <TableHeader>
                 <TableRow>
                   <TableHead scope="col">Project</TableHead>
-                  <TableHead scope="col">Resolves to</TableHead>
+                  <TableHead scope="col">Version</TableHead>
                   <TableHead scope="col">Mode</TableHead>
                   <TableHead scope="col">Providers</TableHead>
                   <TableHead scope="col">Path</TableHead>
@@ -321,6 +373,7 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
                     project={project}
                     environment={environment}
                     projectNames={projectNames}
+                    current={current}
                     onChanged={reload}
                   />
                 ))}
@@ -408,9 +461,14 @@ function ProjectFilters({
         </select>
       </div>
 
-      <fieldset className="grid gap-1.5">
-        <legend className="text-sm font-medium">Providers</legend>
-        <div className="flex flex-wrap gap-3">
+      {/* A `role="group"` rather than a `<fieldset>`: a `<legend>` is laid out by the
+          browser's fieldset rules and would not sit on the same baseline as the two `Label`s
+          beside it. `h-9` puts the checkboxes on the input's centre line. */}
+      <div role="group" aria-labelledby="project-filter-providers" className="grid gap-1.5">
+        <Label id="project-filter-providers" asChild>
+          <span>Providers</span>
+        </Label>
+        <div className="flex h-9 flex-wrap items-center gap-3">
           {PROVIDERS.map((provider) => (
             <div key={provider} className="flex items-center gap-2">
               <Checkbox
@@ -422,7 +480,7 @@ function ProjectFilters({
             </div>
           ))}
         </div>
-      </fieldset>
+      </div>
     </div>
   );
 }
@@ -439,11 +497,13 @@ function ProjectRow({
   project,
   environment,
   projectNames,
+  current,
   onChanged,
 }: {
   project: ProjectRecord;
   environment: EnvironmentReport | null;
   projectNames: Readonly<Record<string, string>>;
+  current: string | null;
   onChanged: () => void;
 }) {
   const [dialog, setDialog] = useState<RowDialog>(null);
@@ -453,24 +513,22 @@ function ProjectRow({
   return (
     <TableRow>
       <TableCell>
-        <div className="flex flex-col">
-          <span className="font-medium">{name}</span>
-          {/* The framework's own identity, kept reachable — a user debugging with the CLI
-              needs it, even though it is no longer the headline. */}
-          <span className="font-mono text-xs text-muted-foreground">{project.project_id}</span>
-        </div>
+        {/* The name only. `project_id` is a UUID that means nothing to the reader and is
+            never rendered — `devteam list` in a terminal is where a debugger gets it. */}
+        <span className="font-medium">{name}</span>
       </TableCell>
       <TableCell>
-        {project.resolves_to !== null ? (
-          <Badge variant="outline">{project.resolves_to}</Badge>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-        {project.pin !== null ? (
-          <Badge variant="secondary" className="ml-2">
-            pinned {project.pin}
-          </Badge>
-        ) : null}
+        <span className="flex items-center gap-2 whitespace-nowrap">
+          {project.resolves_to !== null ? (
+            <>
+              <Badge variant="outline">{project.resolves_to}</Badge>
+              <VersionState resolvesTo={project.resolves_to} current={current} />
+            </>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+          {project.pin !== null ? <Badge variant="secondary">pinned {project.pin}</Badge> : null}
+        </span>
       </TableCell>
       <TableCell>{project.mode ?? '—'}</TableCell>
       <TableCell>{project.providers.length === 0 ? '—' : project.providers.join(', ')}</TableCell>
@@ -486,12 +544,13 @@ function ProjectRow({
         </span>
       </TableCell>
       <TableCell>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
           <WriteButton
             command="sync"
             environment={environment}
             variant="outline"
             size="xs"
+            tooltip="Re-apply this project's store version to its files"
             disabled={sync.state.phase === 'pending'}
             onClick={() => {
               void sync.run().then((result) => {
@@ -501,10 +560,24 @@ function ProjectRow({
           >
             {sync.state.phase === 'pending' ? 'Syncing…' : 'Sync'}
           </WriteButton>
-          <WriteButton command="pin" environment={environment} variant="outline" size="xs" onClick={() => setDialog('pin')}>
+          <WriteButton
+            command="pin"
+            environment={environment}
+            variant="outline"
+            size="xs"
+            tooltip="Hold this project on a specific version, or release the pin"
+            onClick={() => setDialog('pin')}
+          >
             Pin…
           </WriteButton>
-          <WriteButton command="upgrade" environment={environment} variant="outline" size="xs" onClick={() => setDialog('upgrade')}>
+          <WriteButton
+            command="upgrade"
+            environment={environment}
+            variant="outline"
+            size="xs"
+            tooltip="Move this project's memory into the store — shows the plan first"
+            onClick={() => setDialog('upgrade')}
+          >
             Upgrade…
           </WriteButton>
           <WriteButton
@@ -512,6 +585,7 @@ function ProjectRow({
             environment={environment}
             variant="destructive"
             size="xs"
+            tooltip="Remove this project from the store — asks for confirmation first"
             onClick={() => setDialog('unbind')}
           >
             Unbind…
@@ -529,6 +603,7 @@ function ProjectRow({
         open={dialog === 'pin'}
         onOpenChange={(open) => setDialog(open ? 'pin' : null)}
         projectId={project.project_id}
+        name={name}
         currentPin={project.pin}
         onChanged={onChanged}
       />
@@ -536,6 +611,7 @@ function ProjectRow({
         open={dialog === 'unbind'}
         onOpenChange={(open) => setDialog(open ? 'unbind' : null)}
         project={project}
+        name={name}
         onUnbound={() => {
           setDialog(null);
           onChanged();
@@ -557,12 +633,14 @@ function PinDialog({
   open,
   onOpenChange,
   projectId,
+  name,
   currentPin,
   onChanged,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  name: string;
   currentPin: string | null;
   onChanged: () => void;
 }) {
@@ -579,7 +657,7 @@ function PinDialog({
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Pin {projectId}</DialogTitle>
+          <DialogTitle>Pin {name}</DialogTitle>
           <DialogDescription>
             {currentPin !== null
               ? `Currently pinned to ${currentPin}. Set a different version, or release the pin to track the store's current version again.`
@@ -643,11 +721,13 @@ function UnbindDialog({
   open,
   onOpenChange,
   project,
+  name,
   onUnbound,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: ProjectRecord;
+  name: string;
   onUnbound: () => void;
 }) {
   const unbind = useAction(() => window.devteam.unbindProject(project.project_id));
@@ -656,7 +736,7 @@ function UnbindDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Unbind {project.project_id}?</DialogTitle>
+          <DialogTitle>Unbind {name}?</DialogTitle>
           <DialogDescription>
             This removes the store&apos;s link to <span className="font-mono">{project.path}</span>. Files this store
             manages are quarantined, not deleted; the project&apos;s own files are left alone.
@@ -778,10 +858,7 @@ function UpgradeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            Upgrade {name}
-            <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{projectId}</span>
-          </DialogTitle>
+          <DialogTitle>Upgrade {name}</DialogTitle>
           <DialogDescription>
             Moves this project&apos;s memory into the store and quarantines what it moved. Nothing changes until
             Apply is confirmed below.
@@ -1023,68 +1100,71 @@ function BindDialog({
               )}
             </div>
 
+            {/* Nothing but the picker until there is a directory to bind — providers and a
+                mode asked for decisions about nothing yet. */}
             {path !== null ? (
-              <div className="grid gap-2">
-                <Label htmlFor="bind-project-name">Project name</Label>
-                <Input
-                  id="bind-project-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder={basename(path)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Shown in this app only, on this machine — never sent to the framework. Leave it as the
-                  suggested name, or clear it to fall back to the directory name everywhere it is shown.
-                </p>
-              </div>
-            ) : null}
-
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Providers</legend>
-              <p className="text-xs text-muted-foreground">Leave all unchecked to use the CLI&apos;s own default.</p>
-              {PROVIDERS.map((provider) => (
-                <div key={provider} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`provider-${provider}`}
-                    checked={providers.has(provider)}
-                    onCheckedChange={(checked) => {
-                      setProviders((current) => {
-                        const next = new Set(current);
-                        if (checked === true) next.add(provider);
-                        else next.delete(provider);
-                        return next;
-                      });
-                    }}
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="bind-project-name">Project name</Label>
+                  <Input
+                    id="bind-project-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder={basename(path)}
                   />
-                  <Label htmlFor={`provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Only shown in this app. Clear it to use the directory name.
+                  </p>
                 </div>
-              ))}
-            </fieldset>
 
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Mode</legend>
-              <RadioGroup value={mode} onValueChange={(value) => setMode(value as BindMode)}>
-                {MODES.map((candidate) => (
-                  <div key={candidate} className="flex items-start gap-2">
-                    <RadioGroupItem
-                      value={candidate}
-                      id={`mode-${candidate}`}
-                      aria-describedby={`mode-${candidate}-description`}
-                      className="mt-1"
-                    />
-                    <div>
-                      <Label htmlFor={`mode-${candidate}`}>
-                        {MODE_LABELS[candidate]}
-                        {candidate === RECOMMENDED_MODE ? ' (recommended)' : ''}
-                      </Label>
-                      <p id={`mode-${candidate}-description`} className="text-xs text-muted-foreground">
-                        {MODE_DESCRIPTIONS[candidate]}
-                      </p>
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Providers</legend>
+                  <p className="text-xs text-muted-foreground">Leave all unchecked to use the CLI&apos;s own default.</p>
+                  {PROVIDERS.map((provider) => (
+                    <div key={provider} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`provider-${provider}`}
+                        checked={providers.has(provider)}
+                        onCheckedChange={(checked) => {
+                          setProviders((current) => {
+                            const next = new Set(current);
+                            if (checked === true) next.add(provider);
+                            else next.delete(provider);
+                            return next;
+                          });
+                        }}
+                      />
+                      <Label htmlFor={`provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
                     </div>
-                  </div>
-                ))}
-              </RadioGroup>
-            </fieldset>
+                  ))}
+                </fieldset>
+
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Mode</legend>
+                  <RadioGroup value={mode} onValueChange={(value) => setMode(value as BindMode)}>
+                    {MODES.map((candidate) => (
+                      <div key={candidate} className="flex items-start gap-2">
+                        <RadioGroupItem
+                          value={candidate}
+                          id={`mode-${candidate}`}
+                          aria-describedby={`mode-${candidate}-description`}
+                          className="mt-1"
+                        />
+                        <div>
+                          <Label htmlFor={`mode-${candidate}`}>
+                            {MODE_LABELS[candidate]}
+                            {candidate === RECOMMENDED_MODE ? ' (recommended)' : ''}
+                          </Label>
+                          <p id={`mode-${candidate}-description`} className="text-xs text-muted-foreground">
+                            {MODE_DESCRIPTIONS[candidate]}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </fieldset>
+              </>
+            ) : null}
 
             {bind.state.phase === 'done' && !bind.state.result.ok ? <Problem problem={bind.state.result} /> : null}
             {bind.state.phase === 'done' ? <Notice result={bind.state.result} /> : null}
@@ -1124,9 +1204,6 @@ function BindResultSummary({ report, name }: { report: BindReport | null; name: 
       <p>
         <strong className="font-semibold">{name}</strong> is bound — version {report.version}, mode {report.mode}.
       </p>
-      {/* The framework's own identity: still visible for a user debugging with the CLI,
-          but no longer the headline — see the table's Project column for the same choice. */}
-      <p className="font-mono text-xs text-muted-foreground">{report.project_id}</p>
       {report.merged_project_files.length > 0 ? (
         <div>
           <p className="font-medium">
