@@ -75,35 +75,117 @@ static void applyScenarioOverride(void) {
   }
   if (read == 0) return;
 
+  /* Both: `_putenv_s` for anything in this process that reads the CRT copy, and
+     `SetEnvironmentVariableA` for the OS block `CreateProcess` actually hands the child.
+     Whether the first updates the second is a CRT implementation detail, and this is one
+     round of CI per wrong guess. */
   _putenv_s("FAKE_DEVTEAM_SCENARIO", value);
+  SetEnvironmentVariableA("FAKE_DEVTEAM_SCENARIO", value);
+}
+
+/* Append one argument, quoted the way the CRT's command-line parser expects.
+   Straight out of the documented rule: quote only when the argument is empty or holds a
+   space, tab or quote; double every backslash that immediately precedes a quote (or the
+   closing quote); escape an embedded quote itself. Getting this subtly wrong is the
+   classic Windows argv bug, and a JSON argument — quotes on every key — hits every branch
+   of it at once. */
+static void appendQuoted(char *out, size_t *len, const char *arg) {
+  size_t n = strlen(arg);
+  int needsQuotes = (n == 0);
+  for (size_t i = 0; i < n && !needsQuotes; i++) {
+    if (arg[i] == ' ' || arg[i] == '\t' || arg[i] == '"') needsQuotes = 1;
+  }
+  if (!needsQuotes) {
+    memcpy(out + *len, arg, n);
+    *len += n;
+    return;
+  }
+  out[(*len)++] = '"';
+  for (size_t i = 0; i < n; i++) {
+    size_t slashes = 0;
+    while (i < n && arg[i] == '\\') { slashes++; i++; }
+    if (i == n) {
+      /* Trailing backslashes would otherwise escape the closing quote. */
+      for (size_t s = 0; s < slashes * 2; s++) out[(*len)++] = '\\';
+      break;
+    }
+    if (arg[i] == '"') {
+      for (size_t s = 0; s < slashes * 2 + 1; s++) out[(*len)++] = '\\';
+    } else {
+      for (size_t s = 0; s < slashes; s++) out[(*len)++] = '\\';
+    }
+    out[(*len)++] = arg[i];
+  }
+  out[(*len)++] = '"';
+}
+
+/* `node <script> <args...>`, escaped. Caller frees. */
+static char *buildCommandLine(int argc, char **argv) {
+  size_t budget = strlen(NODE_PATH) + strlen(SCRIPT_PATH);
+  for (int i = 1; i < argc; i++) budget += strlen(argv[i]);
+  /* Every character can at worst double, plus two quotes and a separator per argument. */
+  budget = budget * 2 + (size_t)(argc + 2) * 4 + 1;
+
+  char *out = (char *)malloc(budget);
+  if (out == NULL) return NULL;
+  size_t len = 0;
+  appendQuoted(out, &len, NODE_PATH);
+  out[len++] = ' ';
+  appendQuoted(out, &len, SCRIPT_PATH);
+  for (int i = 1; i < argc; i++) {
+    out[len++] = ' ';
+    appendQuoted(out, &len, argv[i]);
+  }
+  out[len] = '\0';
+  return out;
 }
 
 int main(int argc, char **argv) {
   applyScenarioOverride();
 
-  char **childArgv = (char **)malloc(sizeof(char *) * (size_t)(argc + 2));
-  if (childArgv == NULL) return 70; /* EX_SOFTWARE */
-  childArgv[0] = NODE_PATH;
-  childArgv[1] = SCRIPT_PATH;
-  for (int i = 1; i < argc; i++) childArgv[i + 1] = argv[i];
-  childArgv[argc + 1] = NULL;
+  /* Built by hand, and this is the whole reason `_spawnv` is not used below.
+     `_spawnv` re-joins the vector into one command line without escaping an embedded
+     double quote, so an argument that carries JSON — `--client {"project":1,…}`, which
+     is exactly what `performHandshake` passes — reached the child mangled. The child
+     then threw on `JSON.parse` and died writing nothing, which the handshake could only
+     report as "no answer". The two tests that failed were precisely and only the two
+     that parse an argv element; every scenario that ignores argv passed, which is what
+     named the cause.
 
-  /* No shell, ever — the same rule `invoke.ts` states for its own spawn. The `v` in
-     `_spawnve` is an argv vector, so nothing here is ever parsed by a command
-     interpreter.
+     The escaping below is the algorithm the CRT's own parser is the inverse of: quote
+     only when needed, double the backslashes that precede a quote, and escape the quote
+     itself. */
+  char *commandLine = buildCommandLine(argc, argv);
+  if (commandLine == NULL) return 70; /* EX_SOFTWARE */
 
-     The environment is left to `_spawnv`'s inheritance, and that is a measured choice,
-     not the default one. Passing `_environ` explicitly through `_spawnve` was tried and
-     **made things worse**: the suites whose scenarios travel by argv went from passing
-     to failing, which is what an empty or unpopulated `_environ` looks like from the
-     outside. Inheritance demonstrably carries the block this process was given. Do not
-     "fix" this back to an explicit env without a Windows run to show it helps. */
-  intptr_t status = _spawnv(_P_WAIT, NODE_PATH, (const char *const *)childArgv);
-  free(childArgv);
+  /* No shell, ever — the same rule `invoke.ts` states for its own spawn.
+     `lpApplicationName` is the absolute NODE_PATH, so nothing resolves a name through
+     PATH or a command interpreter; only the already-escaped `commandLine` is parsed, and
+     only by the child's own CRT.
 
-  if (status == -1) {
-    fprintf(stderr, "launcher: failed to run node (%s): %s\n", NODE_PATH, strerror(errno));
+     `bInheritHandles` must be TRUE: Node hands this process piped stdio, and the child is
+     what actually writes the JSON the test reads. The environment is NULL, which means
+     inherit — measured, not assumed: passing an explicit block was tried and broke the
+     suites that had been passing. `applyScenarioOverride` above has already put its value
+     into that inherited block. */
+  STARTUPINFOA si;
+  PROCESS_INFORMATION pi;
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
+  memset(&pi, 0, sizeof(pi));
+
+  if (!CreateProcessA(NODE_PATH, commandLine, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+    fprintf(stderr, "launcher: CreateProcess failed for %s (error %lu)\n", NODE_PATH,
+            (unsigned long)GetLastError());
+    free(commandLine);
     return 70;
   }
-  return (int)status;
+  free(commandLine);
+
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  DWORD code = 1;
+  GetExitCodeProcess(pi.hProcess, &code);
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+  return (int)code;
 }
