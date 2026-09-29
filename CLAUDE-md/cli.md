@@ -123,6 +123,18 @@ preferences, markers, `.worktrees/`), between managed markers.
 `auto` probes for symlink support rather than guessing from the platform name. An explicit
 `--mode=link` on a filesystem that cannot do it **fails** instead of silently downgrading.
 
+**`link` is the mode to recommend a user** — it is the only one where a `devteam update` to the
+store reaches every bound project with no further action. `copy` and `vendored` both need an
+explicit `devteam sync` (per project) after each update to pick up the change; a user on one of
+those modes who skips that step keeps running the version they bound at. This is a recommendation
+for a human choosing among the four, not a change to the CLI's own default: `--mode` still
+defaults to `auto`, and `auto` already resolves to `link` on any filesystem that supports it — a
+plain `devteam bind` on macOS or Linux gets the recommended behaviour without the caller having to
+know that. Only a caller for whom `link` is not viable (Windows without symlink privilege, or a
+project that intentionally wants `vendored`) has a reason to override it. The app's bind dialog
+mirrors this: it pre-selects `link` and labels it recommended, but a user can still choose another
+mode.
+
 ## Commands
 
 | Command | Does |

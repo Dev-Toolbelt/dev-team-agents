@@ -71,6 +71,8 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 
 No Windows, chame o CLI como `py -3 scripts\cli\devteam …` — o shebang do arquivo sem extensão não executa lá. Um projeto vinculado guarda um `.dev-team-agents/project.json` commitado (sua identidade e suas pastas de conhecimento) e um ponteiro `core` para o store; nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
 
+`devteam bind` usa `--mode=auto` por padrão, que resolve para **`link`** (symlinks para o store) em qualquer sistema de arquivos que suporte — o modo recomendado, já que um `devteam update` posterior chega a todo projeto vinculado assim sem nenhum passo extra. `copy` (o fallback do Windows quando symlinks não estão disponíveis) e o modo opcional `vendored` precisam de um `devteam sync` explícito por projeto após cada atualização para captar a mudança.
+
 > Layout do store, modos de bind, registro de hooks, contrato `--json` e códigos de saída: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
 
 ---

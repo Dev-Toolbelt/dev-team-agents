@@ -71,6 +71,8 @@ Help me set up this project with dev-team-agents
 
 On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionless file's shebang does not execute there. A bound project keeps a committed `.dev-team-agents/project.json` (its identity and knowledge folders) and a `core` pointer to the store; no copy of the framework, and no framework diffs in your product repository.
 
+`devteam bind` defaults to `--mode=auto`, which resolves to **`link`** (symlinks into the store) on any filesystem that supports it — the recommended mode, since a later `devteam update` reaches every project bound this way with no further step. `copy` (the Windows fallback when symlinks aren't available) and the opt-in `vendored` mode both need an explicit `devteam sync` per project after each update to pick up the change.
+
 > Store layout, bind modes, hook wiring, the `--json` contract and exit codes: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
 
 ---

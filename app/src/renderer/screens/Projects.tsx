@@ -34,6 +34,20 @@ import type {
 const PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
 const MODES: readonly BindMode[] = ['auto', 'link', 'copy', 'vendored'];
 
+// `link` is what the app recommends — it is the only mode where a store update reaches a
+// bound project with no further step. `auto` stays the CLI's own default (it probes for
+// symlink support and resolves to `link` or `copy` accordingly); this constant only decides
+// what the dialog pre-selects and labels, never the CLI contract.
+const RECOMMENDED_MODE: BindMode = 'link';
+
+// One line per mode, phrased as the consequence a user cares about — not the mechanism.
+const MODE_DESCRIPTIONS: Record<BindMode, string> = {
+  auto: 'Detects whether this system supports symlinks and behaves like Link or Copy accordingly.',
+  link: 'Framework updates reach this project automatically — no extra step needed.',
+  copy: 'For Windows systems without symlink permission. Requires running sync by hand after every update.',
+  vendored: 'Also copies the framework in, but commits it into this project’s own repository.',
+};
+
 /**
  * Three states, because the payload has three.
  *
@@ -676,9 +690,11 @@ function UpgradeReportSummary({ report }: { report: UpgradeReport }) {
  *
  * The renderer never types or constructs a path — `chooseProjectDirectory()` opens the
  * native picker in the main process, and `{ chosen: false }` means the user dismissed it:
- * nothing is shown and nothing changes. `providers`/`mode` are omitted from the request
- * entirely until the user picks something, so the CLI's own defaults stay authoritative —
- * this dialog never invents a default of its own.
+ * nothing is shown and nothing changes. `providers` stays omitted from the request until the
+ * user checks something, so the CLI's own default stays authoritative there — this dialog
+ * never invents a provider default of its own. `mode` is different: the app *does* have an
+ * opinion (`RECOMMENDED_MODE`), so the radio starts pre-selected on it and the choice — link
+ * or whatever the user switches to — is always sent, never omitted.
  */
 function BindDialog({
   open,
@@ -693,21 +709,21 @@ function BindDialog({
 }) {
   const [path, setPath] = useState<string | null>(null);
   const [providers, setProviders] = useState<ReadonlySet<BindProvider>>(new Set());
-  const [mode, setMode] = useState<BindMode | null>(null);
+  const [mode, setMode] = useState<BindMode>(RECOMMENDED_MODE);
   const choose = useAction(() => window.devteam.chooseProjectDirectory());
   const bind = useAction(() => {
     if (path === null) throw new Error('bind requested with no directory chosen');
     return window.devteam.bindProject({
       path,
       ...(providers.size > 0 ? { providers: Array.from(providers) } : {}),
-      ...(mode !== null ? { mode } : {}),
+      mode,
     });
   });
 
   function close() {
     setPath(null);
     setProviders(new Set());
-    setMode(null);
+    setMode(RECOMMENDED_MODE);
     choose.reset();
     bind.reset();
     onOpenChange(false);
@@ -769,12 +785,24 @@ function BindDialog({
 
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Mode</legend>
-              <p className="text-xs text-muted-foreground">Leave unselected to use the CLI&apos;s own default.</p>
               <RadioGroup value={mode} onValueChange={(value) => setMode(value as BindMode)}>
                 {MODES.map((candidate) => (
-                  <div key={candidate} className="flex items-center gap-2">
-                    <RadioGroupItem value={candidate} id={`mode-${candidate}`} />
-                    <Label htmlFor={`mode-${candidate}`}>{candidate}</Label>
+                  <div key={candidate} className="flex items-start gap-2">
+                    <RadioGroupItem
+                      value={candidate}
+                      id={`mode-${candidate}`}
+                      aria-describedby={`mode-${candidate}-description`}
+                      className="mt-1"
+                    />
+                    <div>
+                      <Label htmlFor={`mode-${candidate}`}>
+                        {candidate}
+                        {candidate === RECOMMENDED_MODE ? ' (recommended)' : ''}
+                      </Label>
+                      <p id={`mode-${candidate}-description`} className="text-xs text-muted-foreground">
+                        {MODE_DESCRIPTIONS[candidate]}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </RadioGroup>

@@ -242,6 +242,65 @@ describe('Projects — bind sends no path the app was not given', () => {
   });
 });
 
+describe('Projects — bind defaults to the recommended mode, but lets it be changed', () => {
+  it('opens with link pre-selected and marked recommended, and sends it even though the user touched nothing in the fieldset', async () => {
+    const user = userEvent.setup();
+    const chooseProjectDirectory = vi.fn<() => Promise<DirectoryChoice>>(() =>
+      Promise.resolve({ chosen: true, path: '/Users/dev/my-project' }),
+    );
+    const bindProject = vi.fn(() => Promise.resolve(ok(bindReport())));
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory,
+        bindProject,
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('radio', { name: /link \(recommended\)/i })).toBeChecked();
+
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await within(dialog).findByText('/Users/dev/my-project');
+    await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
+
+    // Unlike `providers`, which stays omitted until the user checks one, `mode` is always
+    // sent — the app has an opinion now, so the pre-selected recommendation goes out as-is.
+    expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ mode: 'link' }));
+  });
+
+  it('sends whatever mode the user switches to instead', async () => {
+    const user = userEvent.setup();
+    const chooseProjectDirectory = vi.fn<() => Promise<DirectoryChoice>>(() =>
+      Promise.resolve({ chosen: true, path: '/Users/dev/my-project' }),
+    );
+    const bindProject = vi.fn(() => Promise.resolve(ok(bindReport({ mode: 'copy' }))));
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory,
+        bindProject,
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('radio', { name: /^copy$/i }));
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await within(dialog).findByText('/Users/dev/my-project');
+    await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
+
+    expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ mode: 'copy' }));
+  });
+});
+
 describe('Projects — a successful write refreshes the list', () => {
   it('calls listProjects again after a write resolves', async () => {
     const user = userEvent.setup();
