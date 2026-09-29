@@ -4,11 +4,20 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ],
     "types": [
       "node"
     ],
+    // Render tests under `test/renderer/**` import components from `src/renderer/**`
+    // and `src/components/**`, which are JSX. `tsconfig.web.json` already type-checks
+    // those files on their own; this mirrors just the two options its program needs
+    // (`jsx`, the DOM lib above) so the same files also type-check as part of this
+    // program when a test imports them — without pulling `src/renderer/**` into this
+    // tsconfig's own root file list, which stays test-owned.
+    "jsx": "react-jsx",
     "noEmit": true,
     "verbatimModuleSyntax": true
   },
@@ -17,6 +26,10 @@
     "src/cli/**/*",
     "src/shared/**/*",
     "src/main/**/*",
+    // The global `Window.devteam` augmentation. It has to be a root file of this
+    // program, not merely reachable through an import, or the renderer test files'
+    // `window.devteam` references type-check against a bare `Window`.
+    "src/renderer/global.d.ts",
     "vite.config.mts",
     "vite.preload.config.mts",
     "vitest.config.mts",
