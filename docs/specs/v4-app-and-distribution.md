@@ -930,5 +930,26 @@ channel. It is what finally compares `min_app_version` against the app's own ver
 been read and displayed and never used. Suite: **226 passing, 1 skipped** under `app/test/` (was 201/1),
 python **420** (was 417).
 
+**2026-09-29 (same day, measured) — the Windows leg is green, and here is what it actually covers.**
+The entry above predicted `npm ci` native deps and git-bash as the two risks. Both were wrong. What the
+first Windows run found instead was **seven real defects and zero infrastructure problems** — recorded in
+the changelog, and two of them security-relevant: absolute-path validation checked only the host's
+pathlib flavour, so each platform waved through the other's tarball-escape shapes; and `devteam cred get`
+could hand a caller a secret carrying a trailing `\r`. Three runs closed all of them. Final state, and
+the number that matters more than "green": **python runs 392 of 422 assertions on Windows** (30 skipped —
+POSIX permission bits, the bash release script, the shebang-invoked staged CLI), against 422 of 422 on
+macOS and Linux. **The app runs only 179 of 229 on Windows** (50 skipped), and that gap is structural
+rather than incidental: the fixtures are POSIX shebang scripts, and a design whose whole point is
+spawning a real binary with `shell: false` cannot be exercised on Windows without a compiled fixture.
+`invoke.test.ts` was rerouted through `process.execPath`, which works everywhere; the five suites where
+production code decides the argv have no such seam. **So the app's Windows leg should not be read as
+parity** — it is a smoke test over three quarters of the suite, and the honest next step is a compiled or
+`node`-shimmed fake CLI rather than more skips. One latent defect was found without any test failing for
+it: `resolve.ts` accepted `devteam.cmd`/`.bat` candidates that `invoke.ts` can never spawn, because Node
+refuses `.cmd`/`.bat` without a shell (the CVE-2024-27980 hardening) — now rejected with the constraint
+named, rather than resolved and then failing on first use. And the `dpapi` backend that `secrets.py`
+marks UNVERIFIED is, for the first time, running on a host where it can be verified; a real round-trip
+test of it is now reachable and still unwritten.
+
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
