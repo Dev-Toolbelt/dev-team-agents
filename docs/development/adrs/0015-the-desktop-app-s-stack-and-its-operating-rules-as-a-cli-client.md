@@ -453,3 +453,16 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > every mutating command this build runs, and the app build. Nothing was removed from the UI, and the
 > write-action enumeration is still derived from `mutatingCommandsRun`, not restated.
 
+> **Amendment — the About tab is replaced by the platform's native About window, and the app is
+> named "Dev Team Agents".** The in-app About tab from the previous amendment is gone; the same facts
+> (CLI path and source, store version, json contract, mutating commands, app build) are set with
+> `app.setAboutPanelOptions` and refreshed each time the renderer re-resolves the CLI. macOS reaches
+> it from the app menu; Windows' default menu has no About, so a Help → About item is added. The
+> display name is `Dev Team Agents` (`app.setName`, the window title, `CFBundleName`/
+> `CFBundleDisplayName` and the NSIS shortcut name) while `productName` stays `dev-team-agents`,
+> because the cask, the dmg name and the winget manifests expect it. **`userData` is now a literal
+> `dev-team-agents-app`**, no longer derived from `app.getName()`: deriving it would have moved the
+> app's settings — the stored project names among them — the moment the name changed. Unpackaged on
+> macOS, the bold app-menu title still reads "Electron": it comes from the stock binary's
+> `Info.plist`, which no runtime call changes.
+
