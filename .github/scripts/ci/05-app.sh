@@ -254,8 +254,27 @@ check_script_contract() {
 # `npm install`: the latter is allowed to resolve newer versions and to rewrite
 # the lockfile, so it would verify a dependency tree that no commit describes.
 # --no-audit/--no-fund only quieten output; neither changes what is installed.
+#
+# --ignore-scripts is the one flag here that changes what runs. Four of the 641
+# locked packages declare install scripts (electron, electron-winstaller, esbuild,
+# fsevents) and `npm ci` executes them — on a runner a fork PR can reach by editing
+# package.json or the lockfile. Measured before adding it: with the scripts skipped
+# and no Electron binary downloaded at all, `typecheck` and `lint` are clean and
+# every test that does not depend on the repository layout passes. This gate never
+# launches Electron, so the binary those scripts fetch is not needed.
+#
+# REVERSE THIS if a test ever needs the real Electron runtime — an actual launch or
+# a screen smoke test, which the v4 spec currently records as its unasserted gap.
+# The symptom would be a module-not-found or a missing-binary error, and the fix is
+# to drop the flag rather than to stub the runtime.
+#
+# ONE LOCAL COST, because `npm ci` reinstalls the tree: running this gate on a
+# developer's machine removes the Electron binary, so a later `npm start` fails with
+# "Electron failed to install correctly". Harmless in CI, where the runner is thrown
+# away. Restore it with:
+#     node app/node_modules/electron/install.js
 npm_ci() {
-  app_npm npm ci --no-audit --no-fund
+  app_npm npm ci --no-audit --no-fund --ignore-scripts
 }
 
 # Non-vacuity is the point of this check, not a bonus. A runner whose glob

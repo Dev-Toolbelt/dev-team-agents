@@ -156,7 +156,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # persist-credentials: false because this is the one job that runs third-party
+      # code — `npm ci` over 641 locked packages, on a `pull_request` event a fork can
+      # trigger. The workflow-level `contents: read` already means the token cannot
+      # write, and no secret is referenced here, so this removes the token from the
+      # runner's git config rather than fixing an exploit. Nothing in this job pushes
+      # or fetches again, so it costs nothing.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Before setup-node, and with no node required: this reports a missing
       # app/, lockfile or version pin in the gate's own words rather than as the
