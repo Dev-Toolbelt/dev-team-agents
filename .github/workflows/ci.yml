@@ -103,17 +103,34 @@ jobs:
       - name: README / docs sync check (EN ↔ pt-BR)
         run: bash .github/scripts/ci/02-readme-sync.sh
 
+  # This is the highest-value cross-OS addition in the workflow: the CLI (`scripts/lib/devteam/`)
+  # is the part of the repository that most directly claims Windows and macOS support — bind's
+  # `copy` mode exists solely for a Windows host without symlink privilege, and `core/current` is
+  # plain text rather than a symlink for the same reason — yet until now every assertion about
+  # that code ran on Linux only. `python3 -m unittest` is portable stdlib, so there is no reason
+  # not to run it for real on the platforms the CLI is shipped for.
   python:
-    name: Python ${{ matrix.python }} (devteam CLI)
-    runs-on: ubuntu-latest
+    name: Python ${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # `os: [ubuntu-latest]` cross-joined with both python versions keeps the floor check
+        # (see below) cheap, then `include` adds one representative run per extra OS at the
+        # newest interpreter only — a full 3-OS × 2-python cross product would burn CI minutes
+        # proving the same interpreter floor a second and third time, which the version matrix
+        # below already covers on Linux.
+        os: [ubuntu-latest]
         # The floor is tested explicitly. Testing only the newest interpreter hid
         # a real defect once already: tarfile's extraction filter defaults to
         # `data` from 3.14 on, which masked an unsafe-member bug on every version
         # a user is actually likely to run.
         python: ["3.9", "3.x"]
+        include:
+          - os: windows-latest
+            python: "3.x"
+          - os: macos-latest
+            python: "3.x"
     steps:
       - uses: actions/checkout@v4
 
@@ -122,7 +139,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      # `shell: bash` is explicit rather than assumed: it is the runner default on ubuntu/macos,
+      # but the default on windows-latest is PowerShell. GitHub ships git-bash on every Windows
+      # runner for exactly this, so the script itself needs no rewrite.
       - name: Byte-compile and run the unit tests
+        shell: bash
         run: bash .github/scripts/ci/03-python.sh
 
   # The first JavaScript gate in a repository ADR-0009 holds at python3 and bash.
@@ -151,9 +172,26 @@ jobs:
   # likely to break unnoticed. The job runs concurrently with the others and
   # setup-node caches on app/package-lock.json, so the filter would save minutes
   # the wall clock never sees.
+  # ADR-0015's desktop client claims Windows and macOS as install targets the same as the CLI
+  # does, so `npm ci`/typecheck/lint/test now run on all three instead of proving only the Linux
+  # leg of a cross-platform Electron app. One node version (from app/.nvmrc) per extra OS — the
+  # node pin itself is not an OS-sensitive fact, so there is nothing a second version would catch
+  # that this job's `check_node_pin` step does not already assert on Linux.
   app:
-    name: Desktop app (TypeScript / Electron client)
-    runs-on: ubuntu-latest
+    name: Desktop app (TypeScript / Electron client, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    # 05-app.sh is bash written against `set -euo pipefail`, mktemp, sed and find — all present
+    # via the git-bash GitHub ships on windows-latest. A job-level default keeps every `run:`
+    # step below on that shell without repeating `shell: bash` on each one; `windows-latest`'s
+    # own PowerShell default is what this overrides.
+    defaults:
+      run:
+        shell: bash
 
     steps:
       # persist-credentials: false because this is the one job that runs third-party
