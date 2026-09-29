@@ -12,7 +12,7 @@
 
 import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -43,6 +43,24 @@ const { available: launcherAvailable } = resolveFixtureBinary(FAKE, launcherMani
 const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
 let root: string;
+
+/**
+ * `platform: 'darwin'` below is deliberate — see the comment on the Homebrew-fallback
+ * test — but `executableNames(platform)` is what it actually decides, and that is the
+ * filename `resolveDevteam` searches for, not merely a label. `plant()` always writes
+ * `devteam.exe` on a real Windows host (`CreateProcess` refuses to run an extensionless
+ * PE — see `plant()`'s own comment), regardless of which platform a test asks
+ * `resolveDevteam` to simulate. So a test that both plants a real Windows binary *and*
+ * simulates `'darwin'` is searching for a name that can never match what is actually on
+ * disk there — not a Windows incompatibility in the behaviour under test, just this
+ * file asking for a filename the real host cannot produce. `crossPlatform` is `'win32'`
+ * only on a real Windows host and `'darwin'` everywhere else, which is a no-op for
+ * macOS/Linux CI: every branch `resolveDevteam` takes off `platform` besides
+ * `executableNames` treats "not `'win32'`" as one case. Tests whose assertions are
+ * themselves Homebrew- or POSIX-mode-specific keep the hardcoded `'darwin'` and are
+ * skipped on Windows instead — the two are not the same fix.
+ */
+const crossPlatform: NodeJS.Platform = process.platform === 'win32' ? 'win32' : 'darwin';
 
 /** Put a copy of the fake CLI at `<root>/<dir>/devteam`, pinned to one scenario. */
 async function plant(dir: string, scenario: string): Promise<string> {
@@ -120,19 +138,25 @@ describe('order', () => {
     const first = await plant('bin-a', 'version-with-compat');
     await plant('bin-b', 'version-with-compat');
     const resolution = await resolveDevteam({
-      env: { PATH: [join(root, 'bin-a'), join(root, 'bin-b')].join(':') },
-      platform: 'darwin',
+      env: { PATH: [join(root, 'bin-a'), join(root, 'bin-b')].join(delimiter) },
+      platform: crossPlatform,
     });
     if (!resolution.found) throw new Error('expected a CLI');
     expect(resolution.cli.path).toBe(first);
     expect(resolution.cli.source).toBe('path');
   });
 
-  // Homebrew itself is not a Windows concept, but `platform: 'darwin'` below is what
-  // `resolveDevteam` actually branches on — the real host only has to be able to spawn
-  // whatever `plant()` puts on disk, which is exactly what the launcher makes true on
-  // Windows too. So this is gated on the launcher, not left Windows-skipped outright.
-  it.skipIf(skipOnWindowsWithoutLauncher)('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
+  // Homebrew itself is not a Windows concept, and `platform: 'darwin'` below is what
+  // `resolveDevteam` actually branches on for the fallback being tested — that part
+  // was always the point. What does not survive a real Windows host is `crossPlatform`
+  // above: `knownBinDirs('win32', …)` ignores `HOMEBREW_PREFIX` entirely, so mapping
+  // this test's `platform` the way the PATH-order tests do would just fail the
+  // assertion for a different reason. A genuinely Windows-skipped behaviour, not a
+  // launcher-gated one — `skipOnWindowsWithoutLauncher` used to gate it on the (wrong)
+  // assumption that spawning the planted binary was the only thing standing in the
+  // way; `plant()`'s `.exe` requirement (see its own comment) means `executableNames`
+  // searching for extensionless `devteam` can never find it there regardless.
+  it.skipIf(skipOnWindows)('falls back to HOMEBREW_PREFIX/bin when PATH has nothing — the Finder-launch case', async () => {
     // Deliberately *not* injecting `knownLocations`: this is the one test whose subject is
     // the derivation, and it stays machine-independent because `knownBinDirs` puts
     // `$HOMEBREW_PREFIX/bin` ahead of the two conventional prefixes, so a real
@@ -150,7 +174,7 @@ describe('order', () => {
 
   it.skipIf(skipOnWindowsWithoutLauncher)('reads the store version and compat block from the probe, so the UI needs no second call', async () => {
     const path = await plant('bin', 'version-with-compat');
-    const resolution = await resolveDevteam({ env: { PATH: join(root, 'bin') }, platform: 'darwin' });
+    const resolution = await resolveDevteam({ env: { PATH: join(root, 'bin') }, platform: crossPlatform });
     if (!resolution.found) throw new Error('expected a CLI');
     expect(resolution.cli.path).toBe(path);
     expect(resolution.cli.storeVersion).toBe('3.0.0');
@@ -200,8 +224,13 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
     if (!resolution.found) throw new Error('expected a CLI');
     expect(resolution.cli.source).toBe('winget');
     expect(resolution.cli.sourceDetail).toContain('winget shim directory');
-    // `executableNames` tries the four shim names; `devteam` is the one planted here.
-    expect(resolution.cli.path).toBe(join(links, 'devteam'));
+    // `executableNames` tries the four shim names; `plant()` decides which one actually
+    // exists to be found, and it decides that from the *real* host, not this test's
+    // simulated `platform: 'win32'` — `devteam.exe` on an actual Windows runner (the
+    // first name tried, so it wins outright), `devteam` everywhere else. A hardcoded
+    // `'devteam'` here happened to match on every CI leg except the one this test is
+    // named after, because only a real Windows host ever writes the `.exe`.
+    expect(resolution.cli.path).toBe(join(links, process.platform === 'win32' ? 'devteam.exe' : 'devteam'));
   });
 });
 
@@ -210,8 +239,8 @@ describe('a candidate must answer, not merely exist', () => {
     await plant('bin', 'version-no-compat');
     const good = await plant('bin2', 'version-with-compat');
     const resolution = await resolveDevteam({
-      env: { PATH: [join(root, 'bin'), join(root, 'bin2')].join(':') },
-      platform: 'darwin',
+      env: { PATH: [join(root, 'bin'), join(root, 'bin2')].join(delimiter) },
+      platform: crossPlatform,
     });
     if (!resolution.found) throw new Error('expected a CLI');
     expect(resolution.cli.path).toBe(good);
@@ -266,7 +295,16 @@ describe('a candidate must answer, not merely exist', () => {
     expect(resolution.rejected[0]?.reason).toContain('not a regular file');
   });
 
-  it('refuses to run a candidate out of a world-writable directory', async () => {
+  // Windows has no POSIX world-writable bit for `chmod(dir, 0o777)` to set — the same
+  // limit the two skips below this one are for — and `worldWritableDirProblem` is
+  // itself `platform === 'win32'`-gated to skip the check outright in production, so
+  // exercising it needs `platform: 'darwin'` simulated. That reintroduces the
+  // extensionless-name mismatch `crossPlatform` exists to avoid (see its own comment
+  // above): mapping this test to `crossPlatform` would find the `.exe` `plant()`
+  // wrote and pass it straight to `probe()`, which would answer and make `found` true,
+  // asserting the opposite of what this test is for. A behaviour the production code
+  // itself disables on Windows has nothing here to prove either way.
+  it.skipIf(skipOnWindows)('refuses to run a candidate out of a world-writable directory', async () => {
     const cli = await plant('bin', 'version-with-compat');
     await chmod(join(root, 'bin'), 0o777);
     const resolution = await resolveDevteam({
