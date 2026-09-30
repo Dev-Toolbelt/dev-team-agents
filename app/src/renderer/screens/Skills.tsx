@@ -531,7 +531,8 @@ function InstallDialog({
           <div className="space-y-1 text-sm" role="status">
             <p>
               Installed <span className="font-mono">{installed.name}</span>
-              {installed.linked ? ' as a link' : ''}:
+              {installed.linked ? ' as a link' : ''}
+              {installed.source_kind === 'file' ? ' from that one file (nothing beside it was copied)' : ''}:
             </p>
             <ul className="text-xs">
               {installed.installed.map((target) => (

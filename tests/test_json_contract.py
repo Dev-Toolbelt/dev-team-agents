@@ -734,7 +734,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "files",
             "files_truncated",
         },
-        "skills install": {"name", "description", "source", "linked", "installed", "also_present"},
+        "skills install": {"name", "description", "source", "linked", "source_kind", "installed", "also_present"},
         "skills install.record": {"root", "path", "providers", "replaced", "quarantined_to"},
         "skills remove": {"name", "root", "path", "providers", "action", "quarantined_to", "link_target"},
         # The app's migrate flow: plan in the bind dialog, then apply with --untrack.

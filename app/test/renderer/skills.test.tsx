@@ -203,6 +203,7 @@ describe('Skills — install', () => {
             description: null,
             source: '/picked/beta',
             linked: true,
+            source_kind: 'folder',
             installed: [{ root: 'claude', path: '/home/u/.claude/skills/beta', providers: ['claude'], replaced: false, quarantined_to: null }],
             also_present: [],
           }),
@@ -250,6 +251,7 @@ describe('Skills — install', () => {
           description: null,
           source: '/picked/clash',
           linked: false,
+          source_kind: 'folder',
           installed: [{ root: 'claude', path: '/home/u/.claude/skills/clash', providers: ['claude'], replaced: true, quarantined_to: '/store/q/clash' }],
           also_present: [],
         }),
@@ -296,6 +298,7 @@ describe('Skills — install', () => {
             description: null,
             source: '/picked/dup',
             linked: false,
+            source_kind: 'folder',
             installed: [{ root: 'claude', path: '/home/u/.claude/skills/dup', providers: ['claude', 'opencode'], replaced: false, quarantined_to: null }],
             also_present: [{ root: 'opencode', path: '/home/u/.config/opencode/skills/dup' }],
           }),
@@ -306,5 +309,23 @@ describe('Skills — install', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
     expect(await within(dialog).findByText(/will see two copies/)).toBeInTheDocument();
+  });
+
+  it('titles an invalid source plainly, not as a malformed request', async () => {
+    const user = userEvent.setup();
+    const installSkill = vi.fn(
+      (): Promise<SkillInstallAnswer> =>
+        Promise.resolve({
+          picked: true,
+          source: '/x/Downloads',
+          result: fail('the source contains a symlink: node_modules/.bin/x', { kind: 'usage', exitCode: 2, reason: 'invalid-source' }),
+        }),
+    );
+    mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
+    await user.click(await screen.findByRole('button', { name: 'Install skill' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
+    expect(await within(dialog).findByText('This source cannot be installed')).toBeInTheDocument();
+    expect(within(dialog).queryByText('The app asked the CLI something malformed')).not.toBeInTheDocument();
   });
 });

@@ -358,13 +358,38 @@ STAGING_PREFIX = ".devteam-staging-"
 ARCHIVE_DEBRIS = ("__MACOSX/",)
 
 
-def _reject_links(tree):
+def _bad_source(message, hint=None):
+    """A source that cannot be installed — exit 2, told apart from a malformed call by
+    ``details.reason`` so a client can say "this source" rather than "your request"."""
+    return UsageError(message, hint=hint, details={"reason": "invalid-source"})
+
+
+def _check_copy_tree(tree):
+    """A folder about to be copied: no symlinks, and no bigger than an archive may be.
+
+    The limits are what stops a mistaken pick — a ``SKILL.md`` lying loose in a
+    downloads folder — from copying that whole folder into every skill root. The walk
+    stops at the first limit, so a huge tree is not read to the end first.
+    """
+    count = 0
+    size = 0
     for current, dirs, names in os.walk(str(tree)):
         for item in dirs + names:
-            if Path(current, item).is_symlink():
-                raise UsageError(
-                    "the source contains a symlink: {}".format(Path(current, item).relative_to(tree)),
+            path = Path(current, item)
+            if path.is_symlink():
+                raise _bad_source(
+                    "the source contains a symlink: {}".format(path.relative_to(tree)),
                     hint="Copy the files it points at, or install the directory with --link.",
+                )
+        for item in names:
+            count += 1
+            size += Path(current, item).stat().st_size
+            if count > MAX_ARCHIVE_MEMBERS or size > MAX_ARCHIVE_BYTES:
+                raise _bad_source(
+                    "{} holds more than {} files or {} MB — it does not look like one skill's folder".format(
+                        tree, MAX_ARCHIVE_MEMBERS, MAX_ARCHIVE_BYTES // (1024 * 1024)
+                    ),
+                    hint="Select the skill's own folder, or just its SKILL.md.",
                 )
 
 
@@ -372,12 +397,12 @@ def _safe_member(info):
     name = info.filename
     posix = PurePosixPath(name.replace("\\", "/"))
     if posix.is_absolute() or ".." in posix.parts or re.match(r"^[A-Za-z]:", name):
-        raise UsageError("the archive has an unsafe path: {!r}".format(name))
+        raise _bad_source("the archive has an unsafe path: {!r}".format(name))
     mode = (info.external_attr >> 16) & 0o170000
     if mode == stat.S_IFLNK:
-        raise UsageError("the archive contains a symlink: {!r}".format(name))
+        raise _bad_source("the archive contains a symlink: {!r}".format(name))
     if info.flag_bits & 0x1:
-        raise UsageError("the archive is encrypted: {!r}".format(name))
+        raise _bad_source("the archive is encrypted: {!r}".format(name))
 
 
 def _extract(archive, into):
@@ -390,9 +415,9 @@ def _extract(archive, into):
                 if not info.filename.replace("\\", "/").startswith(ARCHIVE_DEBRIS)
             ]
             if len(members) > MAX_ARCHIVE_MEMBERS:
-                raise UsageError("the archive has more than {} entries".format(MAX_ARCHIVE_MEMBERS))
+                raise _bad_source("the archive has more than {} entries".format(MAX_ARCHIVE_MEMBERS))
             if sum(info.file_size for info in members) > MAX_ARCHIVE_BYTES:
-                raise UsageError("the archive expands to more than {} MB".format(MAX_ARCHIVE_BYTES // (1024 * 1024)))
+                raise _bad_source("the archive expands to more than {} MB".format(MAX_ARCHIVE_BYTES // (1024 * 1024)))
             for info in members:
                 _safe_member(info)
             for info in members:
@@ -401,9 +426,9 @@ def _extract(archive, into):
                 if mode and not info.is_dir() and os.name == "posix":
                     os.chmod(target, mode | stat.S_IRUSR | stat.S_IWUSR)
     except zipfile.BadZipFile as exc:
-        raise UsageError("{} is not a valid zip archive: {}".format(archive, exc))
+        raise _bad_source("{} is not a valid zip archive: {}".format(archive, exc))
     except RuntimeError as exc:  # an encrypted member the flag check did not catch
-        raise UsageError("{} cannot be extracted: {}".format(archive, exc))
+        raise _bad_source("{} cannot be extracted: {}".format(archive, exc))
 
 
 def _skill_root_in(tree):
@@ -413,7 +438,7 @@ def _skill_root_in(tree):
     entries = [p for p in tree.iterdir() if not p.name.startswith(".") and p.name != "__MACOSX"]
     if len(entries) == 1 and entries[0].is_dir() and (entries[0] / "SKILL.md").is_file():
         return entries[0]
-    raise UsageError("no SKILL.md at the top of the source, nor in its single top-level folder")
+    raise _bad_source("no SKILL.md at the top of the source, nor in its single top-level folder")
 
 
 def _targets(providers, root_ids):
@@ -483,13 +508,13 @@ def _check_link_source(skill_dir, targets):
     real = Path(os.path.realpath(str(skill_dir)))
     core = _core_real()
     if core is not None and _inside(real, core):
-        raise UsageError(
+        raise _bad_source(
             "{} is inside the dev-team-agents core store".format(skill_dir),
             hint="Link a skill you own; the store's skills reach projects through `devteam bind`.",
         )
     for root in targets:
         if _inside(real, Path(os.path.realpath(str(root["path"])))):
-            raise UsageError(
+            raise _bad_source(
                 "{} already lives in the {} root; linking it there would link it to itself".format(
                     skill_dir, root["id"]
                 ),
@@ -510,35 +535,65 @@ def _also_present(name, targets, chosen_roots):
     return found
 
 
+def _source_kind(source):
+    """``folder``, ``archive`` or ``file`` — what a source is installed as.
+
+    A ``.md`` file is the skill's folder only when it is named ``SKILL.md`` **and** that
+    folder carries the skill's own name, as the agentskills.io spec requires of a skill
+    directory. Anything else — a ``SKILL.md`` lying loose in a downloads folder, a
+    ``my-skill.md`` — is a single-file skill: that one file becomes the new skill's
+    ``SKILL.md``, and nothing beside it is copied.
+    """
+    if source.is_dir():
+        return "folder"
+    suffix = source.suffix.lower()
+    if suffix in ARCHIVE_SUFFIXES:
+        return "archive"
+    if suffix == ".md":
+        if source.name.lower() == "skill.md":
+            try:
+                fields, _ = read_frontmatter(source.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                raise _bad_source("not an installable skill: {}".format(exc))
+            if fields.get("name") == source.parent.name:
+                return "folder"
+        return "file"
+    raise _bad_source(
+        "{} is not a folder, a .md file, or a .zip/.skill archive".format(source)
+    )
+
+
 def install(source, providers=None, root_ids=None, replace=False, link=False):
     source = Path(source).expanduser()
     if not source.exists():
-        raise UsageError("{} does not exist".format(source))
+        raise _bad_source("{} does not exist".format(source))
     source = Path(os.path.abspath(str(source)))
-    is_archive = source.is_file()
-    if is_archive and source.suffix.lower() not in ARCHIVE_SUFFIXES:
-        raise UsageError(
-            "{} is neither a directory nor a .zip/.skill archive".format(source)
-        )
-    if is_archive and link:
-        raise UsageError("--link needs a directory source, not an archive")
+    kind = _source_kind(source)
+    if kind != "folder" and link:
+        raise _bad_source("--link needs a folder source, not {}".format(
+            "an archive" if kind == "archive" else "a single file"
+        ))
 
     targets = _targets(providers, root_ids)
 
     with tempfile.TemporaryDirectory(prefix="devteam-skill-") as scratch:
-        if is_archive:
+        if kind == "archive":
             _extract(source, Path(scratch))
             skill_dir = _skill_root_in(Path(scratch))
+        elif kind == "file":
+            skill_dir = Path(scratch) / "skill"
+            skill_dir.mkdir()
+            shutil.copyfile(str(source), str(skill_dir / "SKILL.md"))
         else:
-            skill_dir = _skill_root_in(source)
+            skill_dir = source.parent if source.is_file() else _skill_root_in(source)
             if link:
                 _check_link_source(skill_dir, targets)
             else:
-                _reject_links(skill_dir)
+                _check_copy_tree(skill_dir)
         try:
             name, description, _body = validate_skill_dir(skill_dir)
         except (OSError, UnicodeDecodeError, ValueError) as exc:
-            raise UsageError("not an installable skill: {}".format(exc))
+            raise _bad_source("not an installable skill: {}".format(exc))
 
         with lock.store_lock("global-skills"):
             # Every target is checked before any is written: a conflict in the
@@ -625,6 +680,7 @@ def install(source, providers=None, root_ids=None, replace=False, link=False):
         "description": description,
         "source": str(source),
         "linked": bool(link),
+        "source_kind": kind,
         "installed": installed,
         "also_present": also_present,
     }

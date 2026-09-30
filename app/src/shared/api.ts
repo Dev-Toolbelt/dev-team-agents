@@ -848,6 +848,8 @@ export interface SkillInstallReport {
   readonly description: string | null;
   readonly source: string | null;
   readonly linked: boolean;
+  /** `file`: a loose `.md` became the skill's `SKILL.md`, and nothing beside it was copied. */
+  readonly source_kind: 'folder' | 'archive' | 'file';
   readonly installed: readonly SkillInstalledTo[];
   /** Other roots a target's providers also read that already hold a skill of this name. */
   readonly also_present: readonly { readonly root: string; readonly path: string }[];

@@ -779,6 +779,8 @@ def cmd_skills_install(args, emitter):
         link=args.link,
     )
     lines = []
+    if payload["source_kind"] == "file":
+        lines.append("installed as a single-file skill: only {} was copied".format(payload["source"]))
     for item in payload["installed"]:
         note = ""
         if item["quarantined_to"]:

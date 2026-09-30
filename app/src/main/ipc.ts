@@ -16,7 +16,7 @@
  * while the app was open — and is what the retry button calls.
  */
 
-import { basename, dirname, join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { dialog, ipcMain } from 'electron';
 
@@ -137,14 +137,16 @@ function skillPickerOptions(platform: NodeJS.Platform): Electron.OpenDialogOptio
 }
 
 /**
- * What a picked path is, from its name alone — the CLI validates the content either way.
- * An archive by extension; a `SKILL.md` means its folder; anything else was a folder.
- * Exported for direct testing.
+ * What a picked path is, from its name alone. An archive by extension; a `.md` file goes
+ * to the CLI **as the file**, because only the CLI can tell a skill's own folder (the
+ * `SKILL.md`'s folder carries the skill's name) from a `SKILL.md` lying loose in, say,
+ * Downloads — which must install that one file, never the whole folder around it.
+ * Anything else was a folder. Exported for direct testing.
  */
-export function classifySkillPick(path: string): { readonly path: string; readonly kind: 'folder' | 'archive' } {
+export function classifySkillPick(path: string): { readonly path: string; readonly kind: 'folder' | 'archive' | 'file' } {
   const lower = path.toLowerCase();
   if (SKILL_ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`))) return { path, kind: 'archive' };
-  if (basename(path).toLowerCase() === 'skill.md') return { path: dirname(path), kind: 'folder' };
+  if (lower.endsWith('.md')) return { path, kind: 'file' };
   return { path, kind: 'folder' };
 }
 
@@ -811,7 +813,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
    * supplies the path. That is how "retry with replace" works without the renderer ever
    * holding a path it could substitute.
    */
-  let lastSkillSource: { readonly path: string; readonly kind: 'folder' | 'archive' } | null = null;
+  let lastSkillSource: { readonly path: string; readonly kind: 'folder' | 'archive' | 'file' } | null = null;
 
   handle(CHANNELS.installSkill, async (_event, request: unknown): Promise<SkillInstallAnswer> => {
     const refused = (message: string): SkillInstallAnswer => ({
@@ -832,7 +834,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     const gated = await gatedContext('skills install');
     if (!gated.ready) return { picked: true, source: '', result: gated.problem };
 
-    let chosen: { readonly path: string; readonly kind: 'folder' | 'archive' };
+    let chosen: { readonly path: string; readonly kind: 'folder' | 'archive' | 'file' };
     if (validated.source === 'previous') {
       if (lastSkillSource === null) return refused('There is no previous source to retry; choose one again.');
       chosen = lastSkillSource;

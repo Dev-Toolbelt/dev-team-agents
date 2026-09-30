@@ -66,6 +66,13 @@ that writes into **directories owned by other programs**, which is why it needed
    - A directory that is copied may not contain symlinks. `--link` symlinks the source directory
      instead of copying it.
    - All target roots are checked for a name conflict (exit 4) before any root is written.
+   - **`.md` sources:** a picked `SKILL.md` is the skill's folder only when that folder carries
+     the skill's `name`. Otherwise it, or any other `.md`, is a single-file skill, and nothing
+     beside it is copied.
+   - **Folder limits:** a copied folder has the archive limits. Together with the `.md` rule,
+     this is what stopped a `SKILL.md` lying in Downloads from copying all of Downloads.
+   - **Invalid sources:** they carry `details.reason = "invalid-source"`, so a client can say
+     "this source cannot be installed" rather than "your request was malformed".
    - **Staging and rollback:** the install then stages a copy in every root, and only then swaps
      each one into place. An I/O failure in either phase removes the stages. It also rolls back
      every root already swapped: what was replaced comes back from quarantine, or its symlink is

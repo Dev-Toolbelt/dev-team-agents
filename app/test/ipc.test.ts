@@ -939,11 +939,12 @@ describe('the CLI resolution', () => {
 // ── global skills ─────────────────────────────────────────────────────────────
 
 describe('classifySkillPick', () => {
-  it('reads an archive by extension, a SKILL.md as its folder, and anything else as a folder', async () => {
+  it('reads an archive by extension, passes a .md file through, and treats anything else as a folder', async () => {
     const { classifySkillPick } = await loadIpc();
     expect(classifySkillPick('/x/pack.ZIP')).toEqual({ path: '/x/pack.ZIP', kind: 'archive' });
     expect(classifySkillPick('/x/pack.skill')).toEqual({ path: '/x/pack.skill', kind: 'archive' });
-    expect(classifySkillPick('/x/my-skill/SKILL.md')).toEqual({ path: '/x/my-skill', kind: 'folder' });
+    // The CLI decides whether a SKILL.md stands for its folder; the app passes the file.
+    expect(classifySkillPick('/x/Downloads/SKILL.md')).toEqual({ path: '/x/Downloads/SKILL.md', kind: 'file' });
     expect(classifySkillPick('/x/my-skill')).toEqual({ path: '/x/my-skill', kind: 'folder' });
   });
 });

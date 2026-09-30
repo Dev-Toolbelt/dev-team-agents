@@ -284,7 +284,13 @@ of those directories; its unit is the physical **root**, each listing the provid
 - `list [--provider claude|codex|opencode|all]` and `show <name> [--root <id>]` are read-only and
   create nothing. Dot-entries (Codex's `.system/`) are not skills; a folder without a valid
   `SKILL.md` is reported `malformed`, never fatal.
-- `install --source <dir|.zip|.skill> [--provider …] [--root …] [--replace] [--link]`:
+- `install --source <dir|.md|.zip|.skill> [--provider …] [--root …] [--replace] [--link]`:
+  - **Source kinds** (`source_kind` in the payload): a folder; an archive; or a `.md` file.
+    A `SKILL.md` stands for its folder only when that folder carries the skill's `name`.
+    Any other `.md`, such as a `SKILL.md` loose in Downloads, is a single-file skill: only that
+    file is copied. A copied folder is capped like an archive, so a mistaken pick cannot copy
+    a whole directory tree. A source that cannot be installed is exit 2 with
+    `details.reason = "invalid-source"`.
   - **Validation:** checks the frontmatter and installs under the frontmatter `name`.
   - **Fewest roots:** covers the chosen providers with as few roots as possible. Claude plus
     opencode writes to `~/.claude/skills` only.
@@ -309,7 +315,7 @@ of those directories; its unit is the physical **root**, each listing the provid
 
 - `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error}], count}`
 - `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
-- `skills install`: `{name, description, source, linked, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
+- `skills install`: `{name, description, source, linked, source_kind, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
 - `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`
 
 ## Compatibility block in `version`

@@ -1587,6 +1587,7 @@ export function asSkillInstallReport(body: Record<string, unknown>): SkillInstal
     description: asNullableString(body['description']),
     source: asNullableString(body['source']),
     linked: body['linked'] === true,
+    source_kind: body['source_kind'] === 'archive' || body['source_kind'] === 'file' ? body['source_kind'] : 'folder',
     installed,
     also_present: Array.isArray(body['also_present'])
       ? body['also_present'].flatMap((raw) =>

@@ -23,11 +23,17 @@ const TITLES: Record<ProblemKind, string> = {
   timeout: 'The CLI did not answer in time',
 };
 
+/** Titles for a `reason` the CLI attaches, where it says more than the exit code does. */
+const REASON_TITLES: Record<string, string> = {
+  'invalid-source': 'This source cannot be installed',
+};
+
 export function Problem({ problem }: { problem: Extract<OperationResult<never>, { ok: false }> }) {
+  const title = (problem.reason !== undefined ? REASON_TITLES[problem.reason] : undefined) ?? TITLES[problem.kind];
   return (
     <Alert variant="destructive">
       <AlertTriangle />
-      <AlertTitle>{TITLES[problem.kind]}</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
         <p>{problem.message}</p>
         {problem.hint !== undefined ? <p className="text-muted-foreground">{problem.hint}</p> : null}

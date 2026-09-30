@@ -232,6 +232,53 @@ class InstallTest(GlobalSkillsTestCase):
         self.cli_json("install", "--source", str(source), "--provider", "claude", expect=errors.EXIT_USAGE)
 
 
+class SingleFileSourceTest(GlobalSkillsTestCase):
+    """A picked `.md` file: its folder only when that folder is the skill's own."""
+
+    def test_a_loose_skill_md_installs_only_that_file(self):
+        downloads = self.tmp / "Downloads"
+        write_skill(downloads, "loose")
+        (downloads / "project" / "node_modules").mkdir(parents=True)
+        (downloads / "unrelated.pdf").write_text("x", encoding="utf-8")
+        payload = self.cli_json("install", "--source", str(downloads / "SKILL.md"), "--provider", "claude")
+        self.assertEqual(payload["source_kind"], "file")
+        self.assertEqual(sorted(p.name for p in (self.claude_root / "loose").iterdir()), ["SKILL.md"])
+
+    def test_skill_md_in_the_skills_own_folder_installs_the_folder(self):
+        folder = write_skill(self.tmp / "src" / "alpha", "alpha")
+        (folder / "references").mkdir()
+        (folder / "references" / "more.md").write_text("x", encoding="utf-8")
+        payload = self.cli_json("install", "--source", str(folder / "SKILL.md"), "--provider", "claude")
+        self.assertEqual(payload["source_kind"], "folder")
+        self.assertTrue((self.claude_root / "alpha" / "references" / "more.md").is_file())
+
+    def test_any_md_file_with_frontmatter_is_a_single_file_skill(self):
+        source = self.tmp / "my-note.md"
+        source.write_text("---\nname: note-skill\ndescription: x\n---\nBody\n", encoding="utf-8")
+        payload = self.cli_json("install", "--source", str(source), "--provider", "claude")
+        self.assertEqual(payload["name"], "note-skill")
+        self.assertTrue((self.claude_root / "note-skill" / "SKILL.md").is_file())
+
+    def test_link_needs_a_folder(self):
+        source = write_skill(self.tmp / "Downloads", "loose") / "SKILL.md"
+        body = self.cli_json("install", "--source", str(source), "--provider", "claude", "--link",
+                             expect=errors.EXIT_USAGE)
+        self.assertEqual(body["details"]["reason"], "invalid-source")
+
+    def test_a_folder_too_big_to_be_one_skill_is_refused(self):
+        from unittest import mock
+        from devteam import global_skills
+        from devteam.errors import UsageError
+
+        folder = write_skill(self.tmp / "src" / "alpha", "alpha")
+        for index in range(5):
+            (folder / "f{}.txt".format(index)).write_text("x", encoding="utf-8")
+        with mock.patch.object(global_skills, "MAX_ARCHIVE_MEMBERS", 3):
+            with self.assertRaisesRegex(UsageError, "does not look like one skill"):
+                global_skills.install(str(folder), providers=["claude"])
+        self.assertFalse((self.claude_root / "alpha").exists())
+
+
 class RemoveTest(GlobalSkillsTestCase):
     def test_remove_moves_a_directory_to_quarantine(self):
         write_skill(self.claude_root / "alpha", "alpha")
