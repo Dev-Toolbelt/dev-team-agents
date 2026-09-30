@@ -466,3 +466,29 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > macOS, the bold app-menu title still reads "Electron": it comes from the stock binary's
 > `Info.plist`, which no runtime call changes.
 
+
+> **Amendment — `prefs set` / `prefs unset` are wired, as the screen the second-slice amendment
+> asked for, and only for the project layer.** That amendment kept both unwired because "a UI that
+> edits one layer without showing which layer answered would misrepresent the model". The project
+> settings screen (opened from a project's name) is that screen: every value carries the layer it
+> came from (`Default`, `Global`, `This project`, `Not opted in`), read from `prefs list --json`'s
+> `origin`, and a value set in the project layer offers **Reset to inherited** (`prefs unset`).
+>
+> - **Project scope only.** `--scope project` is fixed in `cli/operations.ts`; no channel reaches the
+>   global layer, which would silently change every other bound project on the machine.
+> - **Keys are checked against the project's own `prefs list` answer** in the main process before
+>   anything is written, and an `unknown` carried key is refused — the renderer cannot create a key.
+> - **Values are checked in the main process too**, against `app/src/shared/preferenceRules.ts` —
+>   the one table the renderer also validates with — for type, range and format. `_coerce` reads
+>   `true`/`false`/`null` before it looks at a key's default, so without this a renderer could store
+>   a boolean in an integer key.
+> - **Turning a consent key on (`telemetry`, `auto_update`) asks in a native dialog** the renderer
+>   can neither draw nor answer; declining writes nothing from the batch.
+> - **"Reset to inherited" shows what it resets to.** The main process reads `prefs list` in the
+>   app's own `userData` — never a project — and trusts it only when the CLI answers
+>   `project_id: null`; that cascade is the value a project key falls back to.
+> - **Staged, not per keystroke.** A save is a batch applied in order and **stopped at the first
+>   failure**; the result names what was written before it, because the batch is not a transaction.
+> - **Not editable here:** `suppress_notifications` as a per-type list (`_coerce` cannot write a list
+>   for a key whose default is a boolean; the app offers on/off and shows an existing list), and
+>   `transcript_multiplier` (deprecated, shown read-only).
