@@ -96,6 +96,13 @@ describe('parsing a PluginView', () => {
     const list = asPluginList({ project_id: 'p', plugins: [raw()] });
     if (typeof list === 'string') throw new Error(list);
     expect(list.plugins).toHaveLength(1);
+    expect(list.invalid).toEqual([]);
+    const withInvalid = asPluginList({
+      plugins: [raw()],
+      invalid: [{ name_or_dir: 'bad', problem: 'no name' }, { problem: 'x' }, 'junk'],
+    });
+    if (typeof withInvalid === 'string') throw new Error(withInvalid);
+    expect(withInvalid.invalid).toEqual([{ name_or_dir: 'bad', problem: 'no name' }]);
     expect(asPluginList({ plugins: 'x' })).toContain('no `plugins` array');
     expect(asPluginList({ plugins: [{ name: 'graphify' }] })).toContain('boolean');
 

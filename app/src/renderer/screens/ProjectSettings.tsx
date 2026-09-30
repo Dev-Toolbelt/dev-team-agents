@@ -137,7 +137,13 @@ export function ProjectSettings({
   // of the page (a short final section never reaches that line). Listened for in the
   // capture phase because the scrolling element is an ancestor, not the window.
   const [activeSection, setActiveSection] = useState<string>(GROUPS[0]?.id ?? '');
+  //
+  // Not computed while the Preferences panel is hidden (Plugins tab, or the whole Projects
+  // tab in the background): every section is `display: none` then, all tops read 0, and the
+  // last group would be highlighted. Re-running on activation recomputes from real layout.
+  const spyActive = tab === 'preferences' && active;
   useEffect(() => {
+    if (!spyActive) return;
     const update = () => {
       const sections = GROUPS.map((group) => document.getElementById(`settings-${group.id}`)).filter(
         (element): element is HTMLElement => element !== null,
@@ -157,7 +163,7 @@ export function ProjectSettings({
     update();
     document.addEventListener('scroll', update, { capture: true, passive: true });
     return () => document.removeEventListener('scroll', update, { capture: true });
-  }, [loaded !== null]);
+  }, [loaded !== null, spyActive]);
 
   // A saved draft is dropped only once the reload has brought the value back from the CLI,
   // so the form never flashes the old value between the save and the reload.

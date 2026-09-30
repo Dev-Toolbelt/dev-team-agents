@@ -50,6 +50,7 @@ import type {
   PluginAction,
   PluginConfigField,
   PluginConfigWrite,
+  InvalidPlugin,
   PluginList,
   PluginRequirement,
   PluginRunResult,
@@ -95,7 +96,7 @@ import type {
  * CLI's own switch for "check the store only, ignoring the cwd".
  */
 export type CliContext = Required<Pick<InvokeOptions, 'binary' | 'cwd'>> &
-  Pick<InvokeOptions, 'env' | 'timeoutMs' | 'declarationFile'>;
+  Pick<InvokeOptions, 'env' | 'timeoutMs' | 'declarationFile' | 'cancelOnQuit'>;
 
 /** Subcommands this build runs that the framework classifies in `compat.READ_ONLY`. */
 export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze([
@@ -916,7 +917,7 @@ export function pluginRun(
     pluginNameProblem(name) ?? (PLUGIN_ACTION_ID.test(actionId) ? null : 'an action id is lowercase letters, digits, dashes and underscores');
   if (problem !== null) return Promise.resolve(refusedPlugin('plugin run', problem));
   return run(
-    { ...context, timeoutMs: pluginRunTimeoutMs(timeoutSeconds) },
+    { ...context, timeoutMs: pluginRunTimeoutMs(timeoutSeconds), cancelOnQuit: true },
     ['plugin', 'run', name, actionId, '--path', path],
     asPluginRunResult,
   );
@@ -1074,7 +1075,21 @@ export function asPluginList(body: Record<string, unknown>): PluginList | string
     if (typeof view === 'string') return view;
     plugins.push(view);
   }
-  return { project_id: asNullableString(body['project_id']), plugins };
+  return { project_id: asNullableString(body['project_id']), plugins, invalid: asInvalidPlugins(body['invalid']) };
+}
+
+/** Additive field: absent, or an entry of the wrong shape, is dropped rather than failing the list. */
+function asInvalidPlugins(value: unknown): InvalidPlugin[] {
+  if (!Array.isArray(value)) return [];
+  const invalid: InvalidPlugin[] = [];
+  for (const raw of value) {
+    if (!isRecord(raw) || typeof raw['name_or_dir'] !== 'string') continue;
+    invalid.push({
+      name_or_dir: raw['name_or_dir'],
+      problem: typeof raw['problem'] === 'string' ? raw['problem'] : 'unknown problem',
+    });
+  }
+  return invalid;
 }
 
 /** `plugin enable --json` and `plugin disable --json`. */

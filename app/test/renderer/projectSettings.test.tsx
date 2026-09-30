@@ -118,6 +118,34 @@ describe('ProjectSettings — the section being read is highlighted', () => {
   });
 });
 
+describe('ProjectSettings — the scroll spy only runs while Preferences is on show', () => {
+  it('does not measure sections while the Plugins tab is open, and measures again on return', async () => {
+    renderSettings();
+    const user = userEvent.setup();
+    await screen.findByRole('navigation', { name: 'Settings sections' });
+    const measure = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+
+    await user.click(screen.getByRole('tab', { name: /Plugins/ }));
+    measure.mockClear();
+    document.dispatchEvent(new Event('scroll'));
+    expect(measure).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('tab', { name: /Preferences/ }));
+    expect(measure).toHaveBeenCalled();
+  });
+
+  it('does not measure while the whole screen is on a background tab', async () => {
+    const { setActive } = renderSettings();
+    await screen.findByRole('navigation', { name: 'Settings sections' });
+    setActive(false);
+    const measure = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    document.dispatchEvent(new Event('scroll'));
+    expect(measure).not.toHaveBeenCalled();
+    setActive(true);
+    expect(measure).toHaveBeenCalled();
+  });
+});
+
 describe('ProjectSettings — navigation', () => {
   it('opens from the project name in the list, and returns with Projects', async () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));

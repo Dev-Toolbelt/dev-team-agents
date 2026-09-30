@@ -292,7 +292,7 @@ switch (command) {
   case 'plugin': {
     const verb = args[1];
     if (verb === 'list') {
-      emit({ ok: true, project_id: PROJECT_ID, plugins: [pluginView(false)] });
+      emit({ ok: true, project_id: PROJECT_ID, plugins: [pluginView(false)], invalid: [{ name_or_dir: 'broken-plugin', problem: 'manifest.json: missing name' }] });
       process.exit(0);
     }
     if (verb === 'enable' || verb === 'disable') {

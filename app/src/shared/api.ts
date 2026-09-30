@@ -543,6 +543,13 @@ export interface PluginView {
 export interface PluginList {
   readonly project_id: string | null;
   readonly plugins: readonly PluginView[];
+  /** Plugin directories whose manifest the CLI rejected and skipped. Absent from the payload → empty. */
+  readonly invalid: readonly InvalidPlugin[];
+}
+
+export interface InvalidPlugin {
+  readonly name_or_dir: string;
+  readonly problem: string;
 }
 
 /** `plugin enable --json` and `plugin disable --json`; `seeded` is always `false` for a disable. */

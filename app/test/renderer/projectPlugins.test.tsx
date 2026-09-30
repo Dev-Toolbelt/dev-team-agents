@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { addListItem } from '../../src/renderer/plugins/ListEditor.js';
+import { Projects } from '../../src/renderer/screens/Projects.js';
 import { ProjectSettings } from '../../src/renderer/screens/ProjectSettings.js';
 import type { PluginConfigChange } from '../../src/shared/api.js';
 import { environment, fail, fakeBridge, installBridge, ok, pluginField, pluginList, pluginView, project, runResult } from './support.js';
@@ -66,6 +67,24 @@ describe('the project screen’s tabs', () => {
     const { bridge } = await openPlugins({ projectPreferences: vi.fn(() => Promise.resolve(fail('prefs unavailable'))) });
     expect(await screen.findByRole('heading', { name: 'Graphify' })).toBeInTheDocument();
     expect(bridge.projectPreferences).toHaveBeenCalled();
+  });
+
+  it('lists plugins the CLI skipped for an invalid manifest', async () => {
+    await openPlugins({
+      projectPlugins: vi.fn(() =>
+        Promise.resolve(ok(pluginList([pluginView()], [{ name_or_dir: 'broken-plugin', problem: 'manifest.json: missing name' }]))),
+      ),
+    });
+    expect(await screen.findByText(/manifest is invalid and it was skipped/)).toBeInTheDocument();
+    expect(screen.getByText('broken-plugin')).toBeInTheDocument();
+    expect(screen.getByText(/missing name/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Graphify' })).toBeInTheDocument();
+  });
+
+  it('shows no skipped-plugin notice when nothing was skipped', async () => {
+    await openPlugins();
+    await screen.findByRole('heading', { name: 'Graphify' });
+    expect(screen.queryByText(/was skipped/)).not.toBeInTheDocument();
   });
 
   it('says so when a version ships no plugins', async () => {
@@ -380,6 +399,39 @@ describe('actions', () => {
     expect(onBack).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
     expect(onBack).toHaveBeenCalled();
+    finish(ok(runResult()));
+  });
+
+  // Leaving by any route must pass the same guard. Switching the app's top-level tab keeps
+  // this screen mounted (`forceMount` in App.tsx), so a running action and its result
+  // survive it; closing the window hides it (background mode). The one other route is a
+  // notification asking for a different project, which `Projects` defers until Back.
+  it('does not let a notification for another project bypass the running-action warning', async () => {
+    let finish: (value: unknown) => void = () => {};
+    const runPluginAction = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    installBridge(
+      fakeBridge({
+        runPluginAction: runPluginAction as never,
+        listProjects: vi.fn(() =>
+          Promise.resolve(ok({ current: '2.48.0', projects: [project(), project({ project_id: 'proj-2', path: '/work/project-2' })] })),
+        ),
+      }),
+    );
+    const user = userEvent.setup();
+    const env = environment();
+    const view = render(<Projects environment={env} openRequest={null} />);
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await user.click(await screen.findByRole('tab', { name: /Plugins/ }));
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
+
+    view.rerender(<Projects environment={env} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    expect(await screen.findByText(/A notification asked to open/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    expect(within(await screen.findByRole('dialog')).getByText(/still running/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /project-1 · Settings/, hidden: true })).toBeInTheDocument();
     finish(ok(runResult()));
   });
 

@@ -329,8 +329,11 @@ export function pluginView(overrides: Partial<PluginView> = {}): PluginView {
   };
 }
 
-export function pluginList(plugins: readonly PluginView[] = [pluginView()]): PluginList {
-  return { project_id: 'proj-1', plugins };
+export function pluginList(
+  plugins: readonly PluginView[] = [pluginView()],
+  invalid: PluginList['invalid'] = [],
+): PluginList {
+  return { project_id: 'proj-1', plugins, invalid };
 }
 
 export function runResult(overrides: Partial<PluginRunResult> = {}): PluginRunResult {

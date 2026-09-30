@@ -13,7 +13,13 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { childEnvironment, invokeDevteam } from '../src/cli/invoke.js';
+import {
+  childEnvironment,
+  hasPendingWrites,
+  invokeDevteam,
+  settleInFlight,
+  terminateInFlight,
+} from '../src/cli/invoke.js';
 import { explain, ranAndAnswered } from '../src/cli/contract.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
@@ -325,5 +331,44 @@ describe('argument and environment handling', () => {
     // untouched by any shell, which is the property this test is about.
     expect(result.command.args).toEqual([FAKE, 'version', '--json']);
     expect(result.command.binary).toBe(process.execPath);
+  });
+});
+
+describe('quitting the app with CLI children in flight', () => {
+  const start = (cancelOnQuit: boolean) =>
+    invokeDevteam({
+      ...fakeCli(['version']),
+      env: { FAKE_DEVTEAM_SCENARIO: 'linger' },
+      timeoutMs: 10_000,
+      cancelOnQuit,
+    });
+
+  it.skipIf(process.platform === 'win32')('does not terminate a write; it lets it finish', async () => {
+    const pending = start(false);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(hasPendingWrites()).toBe(true);
+    terminateInFlight();
+    await settleInFlight(5_000);
+    const result = await pending;
+    expect(result.outcome).toBe('success');
+    expect(hasPendingWrites()).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('terminates a child that opted in with cancelOnQuit', async () => {
+    const pending = start(true);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(hasPendingWrites()).toBe(false);
+    terminateInFlight();
+    const result = await pending;
+    expect(result.outcome).toBe('contract-breach');
+  });
+
+  it.skipIf(process.platform === 'win32')('settleInFlight gives up after its bound', async () => {
+    const pending = start(false);
+    await new Promise((r) => setTimeout(r, 100));
+    const began = Date.now();
+    await settleInFlight(80);
+    expect(Date.now() - began).toBeLessThan(500);
+    await pending;
   });
 });

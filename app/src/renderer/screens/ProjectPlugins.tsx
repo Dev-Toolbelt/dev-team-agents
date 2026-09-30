@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Puzzle } from 'lucide-react';
+import { CircleAlert, Puzzle } from 'lucide-react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { EnvironmentReport, PluginList, ProjectRecord } from '../../shared/api.js';
 import { PluginCard } from '../plugins/PluginCard.js';
@@ -100,6 +101,24 @@ export function ProjectPlugins({
             Try again
           </Button>
         </div>
+      ) : null}
+      {list.invalid.length > 0 ? (
+        <Alert variant="destructive" role="status">
+          <CircleAlert />
+          <AlertTitle>
+            {list.invalid.length === 1 ? 'A plugin was skipped' : `${list.invalid.length} plugins were skipped`}
+          </AlertTitle>
+          <AlertDescription>
+            <p>This plugin&apos;s manifest is invalid and it was skipped.</p>
+            <ul className="mt-1 list-disc pl-5">
+              {list.invalid.map((item) => (
+                <li key={item.name_or_dir}>
+                  <span className="font-mono">{item.name_or_dir}</span>: {item.problem}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       ) : null}
       {list.plugins.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center">
