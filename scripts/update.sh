@@ -2,7 +2,7 @@
 # update.sh — Unified update manager for dev-team-agents.
 #
 # Modes:
-#   --check          Silent TTL-based update check (used by PreToolUse hook)
+#   --check          On-demand update check; see scripts/check-updates.sh
 #   --enable-auto    Enable automatic updates (creates .auto-update flag)
 #   --disable-auto   Disable automatic updates (removes .auto-update flag)
 #   [latest|vX.Y.Z]  Download the latest install.sh from GitHub and run it
@@ -18,10 +18,10 @@ AUTO_UPDATE_FLAG="$USER_DATA_DIR/.auto-update"
 source "$SCRIPTS_DIR/lib/state.sh"
 STATE_FILE="$USER_DATA_DIR/state.json"
 
-# ── Silent check mode — delegates to hook sub-script ─────────────────────────
+# ── Check mode — delegates to the on-demand check ────────────────────────────
 
 if [[ "${1:-}" == "--check" ]]; then
-    exec bash "$(dirname "${BASH_SOURCE[0]}")/hooks/pre-tool-use/01-check-updates.sh"
+    exec bash "$SCRIPTS_DIR/check-updates.sh"
 fi
 
 # ── A v3-bound project is updated by the CLI, never by this script ────────────

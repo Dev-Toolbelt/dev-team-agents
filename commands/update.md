@@ -79,14 +79,11 @@ Then skip Steps 3–5 and stop. Do not add anything else.
 
 ## Step 3 — Check for updates (only when `<current-version>` is a known version)
 
-Force a fresh check (bypass the 24h TTL **and** the cached ETag, so a `304 Not Modified` cannot mask a version mismatch):
-
 ```bash
-source .dev-team-agents/scripts/lib/state.sh
-state_set last_update_check 0 .dev-team-agents/user-data/state.json
-rm -f .dev-team-agents/user-data/.last-releases-etag
 bash .dev-team-agents/scripts/check-updates.sh
 ```
+
+It always asks GitHub afresh and prints at most one line.
 
 **If the script produces no output** → already up to date. Output exactly:
 
@@ -99,7 +96,9 @@ Up to date.
 
 Then stop. Do not add anything else.
 
-**If the script outputs a banner with a new version** → parse current and latest from the output, then continue to Step 4.
+**If the output starts with `Could not check for updates:`** → print that line as is, then stop. Never report "Up to date" in this case.
+
+**If the output is `Update available: <current> → <latest>`** → take the latest version from it, then continue to Step 4.
 
 ---
 
