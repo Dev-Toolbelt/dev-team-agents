@@ -23,6 +23,7 @@
     "dev:app": "node scripts/dev-app.mjs",
     "start": "npm run build && electron .",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
     "build:preload": "vite build -c vite.preload.config.mts"
   },
   "devDependencies": {

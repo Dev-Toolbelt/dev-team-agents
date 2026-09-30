@@ -37,6 +37,27 @@ extraResources:
 
 asar: true
 
+# Electron fuses, flipped in the packaged binary. This app runs no Node CLI mode, takes no
+# NODE_OPTIONS and needs no --inspect in production, so those attack surfaces are closed;
+# app code loads only from the integrity-validated app.asar. The tray icon lives in
+# extraResources (process.resourcesPath), outside the asar search path, so
+# onlyLoadAppFromAsar does not affect it.
+#
+# grantFileProtocolExtraPrivileges stays on (Electron's default). The renderer is loaded
+# over file:// and Vite emits `<script type="module" crossorigin>`; with the fuse off,
+# file:// gets Chromium's plain behaviour, where a module script from the opaque file
+# origin fails its CORS check and the window renders blank. What the fuse would have
+# guarded — navigating to or fetching other file:// URLs — is already refused by
+# `src/main/security.ts`, which confines file:// to the renderer's own directory.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: true
+
 # Stated rather than left to the default lookup. electron-builder would find
 # `build/icon.icns` and `build/icon.png` on its own, but "the icon works because of a
 # filename convention nobody wrote down" is how an unbranded installer ships: on Windows
