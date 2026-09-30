@@ -36,6 +36,7 @@ import {
   listNotifications,
   installSkill,
   listProjects,
+  listTasks,
   listSkills,
   prefsList,
   prefsSet,
@@ -45,6 +46,8 @@ import {
   showSkill,
   unbindProject,
   watchNotifications,
+  watchTasks,
+  type TaskWatchEvent,
   type WatchEvent,
 } from '../src/cli/operations.js';
 
@@ -623,4 +626,226 @@ describe.skipIf(available)('real CLI unavailable', () => {
     else if (!pythonPresent) expect(pythonPresent).toBe(false);
     else expect(canSpawnScriptDirectly).toBe(false);
   });
+});
+
+// ── the task board, end to end: real hooks -> real CLI -> the app's parsers ───────────────
+
+const HOOKS_DIR = join(REPO_ROOT, 'scripts', 'hooks');
+
+/** Drive a hook dispatcher the way a provider does: payload on stdin, cwd = the project. */
+function runHook(dispatcher: string, projectRoot: string, payload: Record<string, unknown>): void {
+  const result = spawnSync('bash', [join(HOOKS_DIR, dispatcher)], {
+    cwd: projectRoot,
+    env: { ...process.env, DEVTEAM_HOME: home },
+    input: JSON.stringify({ cwd: projectRoot, ...payload }),
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  if (result.status !== 0) throw new Error(`hook ${dispatcher} exited ${result.status}: ${result.stderr}`);
+}
+
+const claudeCreate = (root: string, session: string, id: string, subject: string, extra: Record<string, unknown> = {}) =>
+  runHook('post-tool-use.sh', root, {
+    session_id: session,
+    tool_name: 'TaskCreate',
+    tool_input: { subject },
+    tool_response: { task: { id } },
+    ...extra,
+  });
+const claudeUpdate = (root: string, session: string, id: string, status: string, extra: Record<string, unknown> = {}) =>
+  runHook('post-tool-use.sh', root, {
+    session_id: session,
+    tool_name: 'TaskUpdate',
+    tool_input: { taskId: id, status },
+    ...extra,
+  });
+const todoWrite = (root: string, session: string, todos: Array<[string, string]>, extra: Record<string, unknown> = {}) =>
+  runHook('post-tool-use.sh', root, {
+    session_id: session,
+    tool_name: 'TodoWrite',
+    tool_input: { todos: todos.map(([content, status]) => ({ content, status })) },
+    ...extra,
+  });
+const codexPlan = (root: string, session: string, steps: Array<[string, string]>) =>
+  runHook('pre-tool-use.sh', root, {
+    session_id: session,
+    tool_name: 'update_plan',
+    tool_input: { plan: steps.map(([step, status]) => ({ step, status })) },
+  });
+const opencodeTodos = (root: string, session: string, todos: Array<[string, string]>) =>
+  runHook('pre-tool-use.sh', root, {
+    sessionID: session,
+    tool: 'todowrite',
+    args: { todos: todos.map(([content, status], i) => ({ id: String(i + 1), content, status })) },
+  });
+
+async function boardFixture(): Promise<{ a: string; b: string; c: string }> {
+  const a = await bindRealProject('board-a');
+  const b = await bindRealProject('board-b');
+  const c = await bindRealProject('board-c');
+  // A: Claude TaskCreate/TaskUpdate (3), Codex update_plan (5), opencode todowrite (2).
+  claudeCreate(a, 'a-claude', '1', 'A one');
+  claudeCreate(a, 'a-claude', '2', 'A two');
+  claudeCreate(a, 'a-claude', '3', 'A three');
+  claudeUpdate(a, 'a-claude', '1', 'completed');
+  claudeUpdate(a, 'a-claude', '2', 'in_progress');
+  codexPlan(a, 'a-codex', [
+    ['c1', 'completed'], ['c2', 'completed'], ['c3', 'in_progress'], ['c4', 'pending'], ['c5', 'pending'],
+  ]);
+  opencodeTodos(a, 'a-opencode', [['o1', 'completed'], ['o2', 'pending']]);
+  // B: Claude TodoWrite (3) and opencode todowrite (2).
+  todoWrite(b, 'b-claude', [['b1', 'completed'], ['b2', 'in_progress'], ['b3', 'pending']]);
+  opencodeTodos(b, 'b-opencode', [['p1', 'pending'], ['p2', 'pending']]);
+  return { a, b, c };
+}
+
+const boardContext = () => context();
+
+async function board() {
+  const listed = await listTasks(boardContext(), { staleAfterSeconds: 3600 });
+  if (!listed.ok) throw new Error(`tasks list failed: ${listed.message}`);
+  return listed.data.projects;
+}
+
+describe.skipIf(!available)('task board against the real hooks and CLI', () => {
+  it('lists exactly the projects with tasks, with counts, providers, durations and resume commands', async () => {
+    const { a, b, c } = await boardFixture();
+    const projects = await board();
+
+    const roots = await Promise.all([a, b, c].map((p) => realpath(p)));
+    const byRoot = new Map(await Promise.all(projects.map(async (p) => [await realpath(p.root), p] as const)));
+    expect([...byRoot.keys()].sort()).toEqual([roots[0], roots[1]].sort());
+    expect(byRoot.has(roots[2] as string)).toBe(false);
+
+    const pa = byRoot.get(roots[0] as string)!;
+    const pb = byRoot.get(roots[1] as string)!;
+    expect(pa.counts).toEqual({ todo: 4, in_progress: 2, done: 4, total: 10 });
+    expect(pb.counts).toEqual({ todo: 3, in_progress: 1, done: 1, total: 5 });
+    expect([pa.sessions_total, pb.sessions_total]).toEqual([3, 2]);
+    expect([...pa.providers].sort()).toEqual(['claude', 'codex', 'opencode']);
+    expect([...pb.providers].sort()).toEqual(['claude', 'opencode']);
+
+    const sizes = (p: (typeof projects)[number]) => p.sessions.map((s) => s.tasks.length).sort();
+    expect(sizes(pa)).toEqual([2, 3, 5]);
+    expect(sizes(pb)).toEqual([2, 3]);
+
+    const resume = { claude: 'claude --resume', codex: 'codex resume', opencode: 'opencode --session' } as const;
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        // Nothing silently nulled by the app's RESUME_COMMAND regex or session parser.
+        expect(session.resume_command, `${session.session_id} resume`).not.toBeNull();
+        expect(session.resume_command).toContain(`${resume[session.provider as keyof typeof resume]} ${session.session_id}`);
+        expect(session.resume_command?.startsWith('cd ')).toBe(true);
+        expect(session.counts.total).toBe(session.tasks.length);
+        for (const task of session.tasks) {
+          expect(Object.keys(task.durations).length, `${task.key} durations`).toBeGreaterThan(0);
+          expect(task.content.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  }, 120_000);
+
+  it('scopes tasks to their owner: a subagent never overwrites the main list', async () => {
+    const a = await bindRealProject('board-owner');
+    todoWrite(a, 's-own', [['main one', 'pending'], ['main two', 'in_progress']]);
+    todoWrite(a, 's-own', [['sub one', 'in_progress']], { agent_id: 'sub-1', agent_type: 'Explore' });
+    // A second replace by main must leave the subagent's task alone, and vice versa.
+    todoWrite(a, 's-own', [['main one', 'completed'], ['main two', 'in_progress']]);
+
+    const [project] = await board();
+    const tasks = project!.sessions[0]!.tasks;
+    expect(tasks).toHaveLength(3);
+    const subTasks = tasks.filter((t) => t.owner === 'sub-1');
+    expect(subTasks.map((t) => [t.content, t.agent_type, t.column])).toEqual([['sub one', 'Explore', 'in_progress']]);
+    const mainTasks = tasks.filter((t) => t.owner === 'main');
+    expect(mainTasks.map((t) => [t.content, t.column]).sort()).toEqual([
+      ['main one', 'done'],
+      ['main two', 'in_progress'],
+    ]);
+  }, 60_000);
+
+  it('abandons open tasks on session end and raises one tasks.session_abandoned', async () => {
+    const a = await bindRealProject('board-end');
+    claudeCreate(a, 's-end', '1', 'left open');
+    claudeCreate(a, 's-end', '2', 'done one');
+    claudeUpdate(a, 's-end', '2', 'completed');
+    runHook('session-end.sh', a, { session_id: 's-end', hook_event_name: 'SessionEnd' });
+
+    const [project] = await board();
+    const session = project!.sessions[0]!;
+    expect(session.status).toBe('ended');
+    expect(session.tasks.find((t) => t.content === 'left open')?.abandoned).toBe(true);
+    expect(session.tasks.find((t) => t.content === 'done one')?.abandoned).toBe(false);
+    expect(project!.abandoned).toBe(1);
+
+    const notes = await listNotifications(context());
+    if (!notes.ok) throw new Error(notes.message);
+    const abandoned = notes.data.filter((n) => n.code === 'tasks.session_abandoned');
+    expect(abandoned).toHaveLength(1);
+    expect(abandoned[0]).toMatchObject({ sessionId: 's-end', level: 'warning' });
+    expect(abandoned[0]?.message).toContain('1');
+  }, 60_000);
+
+  it('raises exactly one tasks.session_done when every task completes, even if repeated', async () => {
+    const a = await bindRealProject('board-done');
+    claudeCreate(a, 's-done', '1', 'first');
+    claudeCreate(a, 's-done', '2', 'second');
+    claudeUpdate(a, 's-done', '1', 'completed');
+    claudeUpdate(a, 's-done', '2', 'completed');
+    claudeUpdate(a, 's-done', '2', 'completed');
+
+    const notes = await listNotifications(context());
+    if (!notes.ok) throw new Error(notes.message);
+    const done = notes.data.filter((n) => n.code === 'tasks.session_done');
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({ sessionId: 's-done', level: 'info' });
+    expect(notes.data.filter((n) => n.code === 'tasks.session_abandoned')).toHaveLength(0);
+
+    runHook('session-end.sh', a, { session_id: 's-done' });
+    const after = await listNotifications(context());
+    if (!after.ok) throw new Error(after.message);
+    expect(after.data.filter((n) => n.code === 'tasks.session_abandoned')).toHaveLength(0);
+  }, 60_000);
+
+  it('watches: backlog snapshot, then ready, then a new snapshot after a hook call', async () => {
+    const a = await bindRealProject('board-watch');
+    claudeCreate(a, 's-watch', '1', 'before watch');
+
+    const events: TaskWatchEvent[] = [];
+    let finished: (end: StreamEnd) => void = () => undefined;
+    const ended = new Promise<StreamEnd>((resolve) => {
+      finished = resolve;
+    });
+    const invalid: string[] = [];
+    const handle = watchTasks(
+      context(),
+      { staleAfterSeconds: 3600 },
+      { onEvent: (e) => events.push(e), onInvalid: (d) => invalid.push(d), onEnd: finished },
+    );
+    if (handle === null) throw new Error('watch was refused by the allow-list');
+    const until = async (predicate: () => boolean): Promise<void> => {
+      const deadline = Date.now() + 20_000;
+      while (!predicate() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+    };
+    try {
+      await until(() => events.some((e) => e.event === 'ready'));
+      const readyAt = events.findIndex((e) => e.event === 'ready');
+      expect(readyAt).toBeGreaterThan(0);
+      const backlog = events[0];
+      expect(backlog?.event).toBe('snapshot');
+      if (backlog?.event !== 'snapshot') throw new Error('unreachable');
+      expect(backlog.project.counts.total).toBe(1);
+
+      claudeCreate(a, 's-watch', '2', 'after watch');
+      await until(() => events.slice(readyAt + 1).some((e) => e.event === 'snapshot'));
+      const live = events.slice(readyAt + 1).find((e) => e.event === 'snapshot');
+      if (live?.event !== 'snapshot') throw new Error('no live snapshot arrived');
+      expect(live.project.counts.total).toBe(2);
+      expect(live.project.sessions[0]?.resume_command).not.toBeNull();
+      expect(invalid).toEqual([]);
+    } finally {
+      handle.stop();
+    }
+    expect(await ended).toMatchObject({ kind: 'exited', code: 0 });
+  }, 90_000);
 });
