@@ -443,7 +443,7 @@ class CollectTest(BoardCase):
         self.assertEqual(
             set(project),
             {"project_id", "root", "providers", "sessions_total", "sessions_active", "counts", "stale",
-             "abandoned", "last_activity_at", "sessions", "with_findings"},
+             "abandoned", "last_activity_at", "sessions", "with_findings", "as_of"},
         )
         session = project["sessions"][0]
         self.assertEqual(
@@ -575,6 +575,23 @@ class CliTest(BoardCase):
         self.assertEqual(code, 0)
         self.assertFalse(json.loads(out)["recorded"])
 
+    def test_list_stamps_every_project_with_the_time_its_view_was_computed(self):
+        tasks.record(self.root, todo_write("s1", [todo("A", "in_progress")]), now=T0)
+        before = int(time.time())
+        code, out, _ = self.run_cli("--json", "tasks", "list")
+        data = json.loads(out)
+        self.assertEqual(code, 0)
+        for project in data["projects"]:
+            self.assertIsInstance(project["as_of"], int)
+            self.assertEqual(project["as_of"], data["generated_at"])
+            self.assertGreaterEqual(project["as_of"], before)
+
+    def test_as_of_is_the_view_clock_and_never_makes_an_unchanged_view_differ(self):
+        self.rec(todo_write("s1", [todo("A")]), now=T0)
+        first = self.view(now=T0 + 10)[0]
+        second = self.view(now=T0 + 20)[0]
+        self.assertEqual((first["as_of"], second["as_of"]), (T0 + 10, T0 + 20))
+
     def test_list_accepts_the_documented_filters(self):
         tasks.record(self.root, todo_write("s1", [todo("A", "in_progress")]), now=int(time.time()) - 120)
         code, out, _ = self.run_cli("--json", "tasks", "list", "--project", self.project_id, "--since", "0", "--stale-after", "60", "--ended-after", "99999")
@@ -598,6 +615,7 @@ class CliTest(BoardCase):
         lines.extend(json.loads(line) for line in rest if line.strip())
         self.assertEqual(code, 0, stderr)
         self.assertEqual([lines[0]["event"], lines[1]["event"]], ["snapshot", "ready"])
+        self.assertIsInstance(lines[0]["project"]["as_of"], int)
         self.assertEqual(lines[-1], {"event": "end", "reason": "stdin-closed", "ok": True})
         self.assertTrue(all(l["ok"] is True for l in lines))
 
@@ -1006,14 +1024,53 @@ class HooksWiringTest(StoreTestCase):
         self.assertIn(foreign_end, data["hooks"]["SessionEnd"])
         self.assertEqual(data["x"], 1)
 
-    def test_wire_rewrites_a_stale_post_tool_use_matcher_in_place(self):
+    def test_wire_rewrites_a_previously_shipped_post_tool_use_matcher_in_place(self):
         hooks.wire(self.root)
         data = self.read()
-        data["hooks"]["PostToolUse"][0]["matcher"] = ".*"
+        data["hooks"]["PostToolUse"][0]["matcher"] = "TodoWrite|TaskCreate|TaskUpdate"
         self.settings.write_text(json.dumps(data))
         hooks.wire(self.root)
         entries = self.read()["hooks"]["PostToolUse"]
         self.assertEqual([e["matcher"] for e in entries], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task"])
+
+    def test_wire_keeps_a_matcher_the_user_customized_and_warns(self):
+        hooks.wire(self.root)
+        data = self.read()
+        data["hooks"]["PostToolUse"][0]["matcher"] = "TodoWrite"
+        # A stale command path on the same entry is still refreshed; the matcher is not.
+        data["hooks"]["PostToolUse"][0]["hooks"][0]["command"] = hooks.command_for("post-tool-use.sh").replace(
+            hooks.HOOK_DIR, hooks.CORE_POINTER_HOOK_DIR
+        )
+        self.settings.write_text(json.dumps(data))
+        notes = []
+
+        class Emitter:
+            def warn(self, message):
+                notes.append(message)
+
+        hooks.wire(self.root, emitter=Emitter())
+        (post,) = self.ours(self.read(), "PostToolUse")
+        self.assertEqual(post["matcher"], "TodoWrite")
+        self.assertEqual(post["hooks"][0]["command"], hooks.command_for("post-tool-use.sh"))
+        self.assertTrue(any("PostToolUse" in n and "TodoWrite" in n for n in notes), notes)
+
+    def test_wire_warns_on_stderr_without_an_emitter_and_stays_idempotent(self):
+        import contextlib
+        import io
+
+        hooks.wire(self.root)
+        data = self.read()
+        data["hooks"]["PostToolUse"][0]["matcher"] = ".*"
+        self.settings.write_text(json.dumps(data))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            hooks.wire(self.root)
+        self.assertIn("PostToolUse", err.getvalue())
+        first = self.settings.read_text()
+        with contextlib.redirect_stderr(io.StringIO()):
+            hooks.wire(self.root)
+        self.assertEqual(self.settings.read_text(), first)
+        self.assertEqual(self.ours(self.read(), "PostToolUse")[0]["matcher"], ".*")
 
     def test_unwire_removes_only_our_two_new_events_entries(self):
         foreign_post = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}

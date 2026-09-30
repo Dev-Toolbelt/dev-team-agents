@@ -611,11 +611,19 @@ def _sweep_reviews(record, now):
         fix_after = window.get("fix_after")
         if fix_after is None:
             continue
-        fixes = [t for t in record["tasks"] if _shown(t) and t["created_at"] > fix_after]
+        # A fix task is one created at or after the result. Tasks that existed when the result
+        # arrived (`known_keys`, else the window's own members) can never be fixes.
+        excluded = set(window.get("known_keys") or window["task_keys"]) | set(window["task_keys"])
+        fixes = [t for t in record["tasks"] if _shown(t) and t["key"] not in excluded and t["created_at"] >= fix_after]
         if fixes and all(_column(t["status"]) == "done" for t in fixes):
             _resolve(window, now, "fixed")
             changed = True
     return changed
+
+
+def _strong(window):
+    """True when an agent or a review command (not only a prompt keyword) is in the window."""
+    return bool(window.get("strong", window.get("trigger") != "prompt"))
 
 
 def _finalize(record, window, now):
@@ -635,24 +643,33 @@ def _finalize(record, window, now):
                 break
             if earlier.get("resolved_at") is None:
                 _resolve(earlier, now, "fixed")
+    elif findings is None and not _strong(window):
+        # A keyword-only window that closed unread proves nothing about the work: nothing is held.
+        _resolve(window, now, "unread-dismissed")
     else:
         window["fix_after"] = now
+        window["known_keys"] = [t["key"] for t in record["tasks"]]
     _sweep_reviews(record, now)
 
 
 def _reopen(record, before, now):
-    """A completed task the agent sets back to work leaves every window it is in."""
+    """A task the agent moves out of the review leaves every window it is in.
+
+    Out means: a completed task set back to work, or any task leaving ``in_progress`` /
+    ``completed`` (to ``pending``, cancelled) or dropped while unfinished.
+    """
     for window in _windows(record):
         if window.get("resolved_at") is not None:
             continue
         left = window.setdefault("left", {})
         for task in record["tasks"]:
-            if (
-                task["key"] in window["task_keys"]
-                and task["key"] not in left
-                and before.get(task["key"]) == "completed"
-                and task["status"] in ("in_progress", "pending")
-            ):
+            was = before.get(task["key"])
+            if task["key"] not in window["task_keys"] or task["key"] in left:
+                continue
+            out = was in ("in_progress", "completed") and (
+                task["status"] not in ("in_progress", "completed") or not _shown(task)
+            )
+            if out or (was == "completed" and task["status"] == "in_progress"):
                 left[task["key"]] = now
 
 
@@ -675,13 +692,23 @@ def _sync_pending(window):
     window["pending"] = len(fg) + len(bg) + (1 if window.get("scan") else 0)
 
 
+def _synthetic(ident):
+    return not ident or ident.startswith(("anon:", "off:", "legacy:"))
+
+
 def _take_slot(window, ident, kind):
-    """Retire the launch ``ident`` (or, when unknown, the oldest of ``kind``). True if one was."""
+    """Retire the launch ``ident``. True if one was.
+
+    A missing or synthetic id (``anon:``, ``off:``) falls back to the oldest token of ``kind``;
+    a real id the window never launched retires nothing.
+    """
     fg, bg = _tokens(window)
     for tokens in (fg, bg):
         if ident and ident in tokens:
             tokens.remove(ident)
             return True
+    if not _synthetic(ident):
+        return False
     tokens = fg if kind == "fg" else bg
     if tokens:
         tokens.pop(0)
@@ -713,9 +740,19 @@ def _open_window(record):
     return None
 
 
+def _alive(rec, now):
+    """Clear ``ended_at``; when the session had ended, this is a resume: remember when."""
+    if rec.get("ended_at"):
+        rec["resumed_at"] = now
+    rec["ended_at"] = None
+
+
 def _entering_keys(record):
     resolved = [w["resolved_at"] for w in _windows(record) if _number(w.get("resolved_at"))]
     since = max(resolved) if resolved else None
+    # With no earlier window, what counts as "completed since the last review" starts at the
+    # session's own beginning: its creation, or its latest resume (`resumed_at`), whichever is later.
+    floor = max(record.get("created_at") or 0, record.get("resumed_at") or 0)
     keys = []
     for task in sorted(record["tasks"], key=_task_order):
         if task["removed_at"] is not None:
@@ -724,7 +761,9 @@ def _entering_keys(record):
             keys.append(task["key"])
         elif task["status"] == "completed":
             done_at = _completed_at(task)
-            if since is None or (done_at is not None and done_at > since):
+            if done_at is None:
+                continue
+            if (done_at > since) if since is not None else (done_at >= floor):
                 keys.append(task["key"])
     return keys
 
@@ -797,7 +836,14 @@ def review_call(payload):
                 return call
             # `spawn_agent` answers with an agent id, not a report; a background agent's
             # launch answers before it has run. Neither can carry a result.
-            if bare == "spawn_agent" or background or _async_launch(payload):
+            if bare == "spawn_agent" or background:
+                return None
+            if _async_launch(payload):
+                # A foreground launch the tool then ran in the background (no
+                # `run_in_background` in its input): its token moves from fg to bg.
+                if name and call["tool_use_id"]:
+                    call.update(kind="backgrounded", agent=True, source=name)
+                    return call
                 return None
             found = review_triggers.markers(
                 [_output(payload.get("tool_response")), _output(payload.get("tool_output")), payload.get("output")]
@@ -815,7 +861,9 @@ def review_call(payload):
         found = review_triggers.markers(_output(payload.get("tool_response")))
         if not found:
             return None
-        call.update(kind="result", markers=found)
+        # One wait can return several agents' reports: one slot and one marker each. Its own
+        # tool-use id names the wait, not a launch, so it retires no launch token by id.
+        call.update(kind="result", markers=found, per_marker=True, slot_id=None)
         return call
 
     prompt = payload.get("prompt")
@@ -849,7 +897,7 @@ def _review_store(root, payload, now, apply):
             rec["updated_at"] = max(rec["updated_at"], now)
             rec["last_seen_at"] = now
             rec["idle_at"] = None
-            rec["ended_at"] = None
+            _alive(rec, now)
             jsonio.write_json_atomic(path, rec)
         outcome["session"] = call["session_id"]
         return outcome
@@ -893,9 +941,14 @@ def review_open(root, payload, now=None):
                 "task_keys": keys,
                 "left": {},
                 "fix_after": None,
+                "strong": False,
             }
             rec.setdefault("reviews", []).append(window)
         fg, bg = _tokens(window)
+        if call["trigger"] in ("agent", "command"):
+            window["strong"] = True
+        elif "strong" not in window:
+            window["strong"] = window.get("trigger") != "prompt"
         if call["trigger"] != "agent":
             # One flag, not a counter: every prompt/command in the window shares one final
             # message, and `Stop` retires the flag once.
@@ -931,7 +984,8 @@ def _apply_result(rec, call, now):
     """Fold one report into the open window: one report retires one slot and carries one marker.
 
     A report that carries several markers (an orchestrator's summary) counts its LAST one;
-    only distinct reports add up.
+    only distinct reports add up. A Codex ``wait_agent`` (``per_marker``) returns several agents'
+    reports at once: each marker is a report, so each takes a slot and adds up.
     """
     window = _open_window(rec)
     if window is None:
@@ -943,6 +997,13 @@ def _apply_result(rec, call, now):
         window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
     slot = False
+    if call.get("per_marker"):
+        for _ in markers:
+            _take_slot(window, None, "fg")
+        window["markers"] = window.get("markers", 0) + len(markers)
+        window["found"] = window.get("found", 0) + sum(markers)
+        window["last_at"] = now
+        return _finish(rec, window, now)
     if markers or call["agent"]:
         slot = _take_slot(window, call.get("slot_id") or launch, call.get("slot_kind", "fg"))
     if markers:
@@ -952,6 +1013,29 @@ def _apply_result(rec, call, now):
         window["unread"] = window.get("unread", 0) + 1
     window["last_at"] = now
     return _finish(rec, window, now)
+
+
+def _apply_backgrounded(rec, call, now):
+    """A foreground launch turned out to run in the background: move its token fg -> bg.
+
+    Stop then leaves it alone and its later transcript hand-back resolves it by id.
+    """
+    window = _open_window(rec)
+    if window is None:
+        return None
+    fg, bg = _tokens(window)
+    launch = call["tool_use_id"]
+    if launch not in fg:
+        return None
+    fg.remove(launch)
+    bg.append(launch)
+    window["last_at"] = now
+    _sync_pending(window)
+    done = _all_done(rec, _review_members(rec))
+    return {
+        "recorded": True, "window": window["id"], "result": False, "findings": None,
+        "resolved": False, "all_done": done, "became_all_done": False,
+    }
 
 
 def _finish(rec, window, now):
@@ -977,6 +1061,8 @@ def review_result(root, payload, now=None):
     "all_done", "became_all_done"}``; ``result`` is true when this call completed the window.
     """
     def apply(rec, call, at):
+        if call["kind"] == "backgrounded":
+            return _apply_backgrounded(rec, call, at)
         if call["kind"] != "result":
             return None
         was_done = _all_done(rec, _review_members(rec))
@@ -1123,7 +1209,7 @@ def _background_reports(window, path):
         return []
     window["tx_offset"] = offset + (end or len(chunk))
     reports = []
-    for line in chunk[:end].decode("utf-8", "replace").splitlines():
+    for index, line in enumerate(chunk[:end].decode("utf-8", "replace").splitlines()):
         if "<task-notification>" not in line:
             continue
         try:
@@ -1138,7 +1224,7 @@ def _background_reports(window, path):
             continue
         found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
         reports.append({
-            "id": found["tool-use-id"] or found["task-id"] or "off:{}".format(offset),
+            "id": found["tool-use-id"] or found["task-id"] or "off:{}:{}".format(offset, index),
             "markers": review_triggers.markers(found["result"] or text)[-1:],
         })
     return reports
@@ -1278,7 +1364,7 @@ def record(root, payload, provider="auto", now=None):
             rec["idle_at"] = None
             rec["last_seen_at"] = now
             # A call proves the session is alive, even one resumed after `SessionEnd`.
-            rec["ended_at"] = None
+            _alive(rec, now)
             jsonio.write_json_atomic(path, rec)
         members = _review_members(rec)
         done = _all_done(rec, members)
@@ -1316,7 +1402,7 @@ def mark(root, payload, state, now=None):
             scanned = None
             if state == "idle":
                 rec["idle_at"] = now
-                rec["ended_at"] = None
+                _alive(rec, now)
                 was_done = _all_done(rec, _review_members(rec))
                 outcomes = (
                     _expire(rec, now),
@@ -1510,6 +1596,9 @@ def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AF
         "stale": sum(1 for t in all_tasks if t["stale"]),
         "abandoned": sum(1 for t in all_tasks if t["abandoned"]),
         "last_activity_at": sessions[0]["last_activity_at"],
+        # When this derived view was computed: the app renders live figures as
+        # `durations[current] + (now - as_of)`.
+        "as_of": now,
         "sessions": sessions,
     }
 
@@ -1623,7 +1712,8 @@ def watch(
             view = project_view(root, project_id, int(now), since, stale_after, ended_after)
         except DevteamError:
             return
-        serialized = json.dumps(view, sort_keys=True) if view is not None else None
+        # `as_of` moves on every computation; it is not a change.
+        serialized = json.dumps({k: v for k, v in view.items() if k != "as_of"}, sort_keys=True) if view is not None else None
         if project_id in last_view:
             if last_view[project_id] == serialized:
                 return

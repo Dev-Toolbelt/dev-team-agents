@@ -291,6 +291,31 @@ class TriggerAndEntryTest(ReviewCase):
         self.assertEqual(self.window(index=1)["task_keys"], ["t1", "t3", "t4"])
 
 
+class EnteringBoundTest(ReviewCase):
+    def test_a_resumed_session_takes_only_what_completed_since_it_resumed(self):
+        self.start()  # A in progress, B completed at T0
+        tasks.mark(self.root, {"session_id": "s1"}, "ended", now=T0 + 5)
+        self.todos("s1", todo("A", "in_progress"), todo("B", "completed"), todo("C"), todo("D", "completed"), now=T0 + 100)
+        self.assertEqual(self.load("s1")["resumed_at"], T0 + 100)
+        self.open(claude_spawn("s1"), now=T0 + 110)
+        self.assertEqual(self.window()["task_keys"], ["t1", "t4"])
+
+    def test_a_session_that_never_ended_has_no_resume_bound(self):
+        self.start()
+        self.open(claude_spawn("s1"))
+        self.assertNotIn("resumed_at", self.load("s1"))
+        self.assertEqual(self.window()["task_keys"], ["t1", "t2"])
+
+    def test_a_previous_resolution_bounds_it_even_after_a_resume(self):
+        self.start()
+        self.open(claude_spawn("s1"))
+        self.result(claude_return("s1", marker(0)), now=T0 + 20)
+        tasks.mark(self.root, {"session_id": "s1"}, "ended", now=T0 + 25)
+        self.todos("s1", todo("A", "completed"), todo("B", "completed"), todo("C"), now=T0 + 30)
+        self.open(claude_spawn("s1"), now=T0 + 40)
+        self.assertEqual(self.window(index=1)["task_keys"], ["t1"])  # A completed after the resolution; B before it
+
+
 class ResultTest(ReviewCase):
     def test_zero_findings_resolves_the_window_and_releases_the_tasks(self):
         self.start()
@@ -367,6 +392,23 @@ class ResultTest(ReviewCase):
         self.assertFalse(self.result(spawned)["recorded"])
         self.assertFalse(self.result(codex_wait("c1", "just some text"))["recorded"])
         self.assertEqual(self.window("c1")["pending"], 1)
+
+    def test_a_codex_wait_returning_several_agents_takes_one_slot_and_one_marker_each(self):
+        self.start("c1")
+        self.open(dict(codex_spawn("c1"), tool_use_id="cs1"))
+        self.open(dict(codex_spawn("c1", "qa-specialist"), tool_use_id="cs2"))
+        self.assertEqual(self.window("c1")["fg"], ["cs1", "cs2"])
+        out = self.result(codex_wait("c1", marker(1), marker(2)))
+        self.assertEqual((out["result"], out["findings"]), (True, 3))
+        window = self.window("c1")
+        self.assertEqual((window["fg"], window["pending"], window["markers"], window["found"]), ([], 0, 2, 3))
+
+    def test_a_codex_wait_with_fewer_markers_than_launches_leaves_the_rest_pending(self):
+        self.start("c1")
+        for launch in ("cs1", "cs2"):
+            self.open(dict(codex_spawn("c1"), tool_use_id=launch))
+        out = self.result(codex_wait("c1", marker(0)))
+        self.assertEqual((out["result"], self.window("c1")["fg"]), (False, ["cs2"]))
 
     def test_opencode_reads_the_result_from_the_task_output(self):
         self.start("o1")
@@ -481,6 +523,51 @@ class StopScanTest(ReviewCase):
         window = self.window()
         self.assertEqual((window["pending"], window["scan"], window["bg"], window["fg"]), (1, False, ["bg1"], []))
         self.assertEqual(self.result(dict(claude_return("s1", marker(1)), tool_use_id="bg1"))["findings"], 1)
+
+    def test_a_keyword_only_window_that_closes_unread_holds_nothing(self):
+        self.start(items=[todo("A", "in_progress"), todo("Old", "completed")])
+        self.open(prompt("s1", "please review it"))
+        self.assertEqual(self.columns(now=T0 + 15), {"A": "in_review", "Old": "in_review"})
+        out = self.stop({"session_id": "s1", "last_assistant_message": "sure, looks fine"})
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+        window = self.window()
+        self.assertEqual((window["resolution"], window["resolved_at"]), ("unread-dismissed", T0 + 30))
+        self.assertEqual(self.columns(), {"A": "in_progress", "Old": "done"})
+        self.assertIsNone(self.session()["tasks"][0]["review"])
+
+    def test_a_keyword_window_with_a_marker_is_read_normally(self):
+        self.start()
+        self.open(prompt("s1", "revisar isso"))
+        self.stop({"session_id": "s1", "last_assistant_message": marker(2)})
+        self.assertIsNone(self.window()["resolved_at"])
+        self.assertEqual(self.session()["tasks"][0]["review"]["state"], "findings")
+
+    def test_command_and_agent_windows_keep_holding_when_they_close_unread(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"))
+        self.stop({"session_id": "s1", "last_assistant_message": "done"})
+        self.assertIsNone(self.window()["resolved_at"])
+        self.assertEqual(self.session()["tasks"][0]["review"]["state"], "unread")
+        self.start("s2")
+        self.open(prompt("s2", "review it"))
+        self.open(dict(claude_spawn("s2"), tool_use_id="f1"), now=T0 + 11)  # an agent joins: no longer keyword-only
+        self.stop({"session_id": "s2", "last_assistant_message": "done"})
+        self.assertIsNone(self.window("s2")["resolved_at"])
+        self.assertEqual(self.session(sid="s2")["tasks"][0]["review"]["state"], "unread")
+
+    def test_a_keyword_window_joined_by_a_command_is_strong(self):
+        self.start()
+        self.open(prompt("s1", "review it"))
+        self.open(prompt("s1", "/review"), now=T0 + 11)
+        self.stop({"session_id": "s1", "last_assistant_message": "done"})
+        self.assertIsNone(self.window()["resolved_at"])
+
+    def test_an_expired_keyword_window_is_dismissed(self):
+        self.start()
+        self.open(prompt("s1", "review it"))
+        late = T0 + 10 + tasks.PENDING_MAX_AGE + 5
+        self.stop({"session_id": "s1", "last_assistant_message": "x"}, now=late)
+        self.assertEqual(self.window()["resolution"], "unread-dismissed")
 
     def test_a_foreground_launch_still_outstanding_at_stop_is_retired_as_unread(self):
         self.start()
@@ -648,6 +735,25 @@ class LeavingTest(ReviewCase):
         self.result(claude_return("s1", marker(1)), now=T0 + 20)
         self.assertIsNone(self.window()["resolved_at"])
 
+    def test_a_fix_task_created_in_the_same_second_as_the_result_counts(self):
+        self.with_findings()  # the result lands at T0 + 20
+        self.todos("s1", *self.all_items(todo("Fix", "completed")), now=T0 + 20)
+        self.assertEqual(self.window()["resolution"], "fixed")
+
+    def test_a_task_that_existed_when_the_result_arrived_is_never_a_fix_even_in_the_same_second(self):
+        self.start(items=[todo("A", "completed"), todo("B", "in_progress")])
+        self.open(claude_spawn("s1"), now=T0 + 10)
+        self.todos("s1", *self.all_items(todo("Early", "completed"), b="in_progress"), now=T0 + 20)
+        self.result(claude_return("s1", marker(1)), now=T0 + 20)
+        self.assertIsNone(self.window()["resolved_at"])
+
+    def test_the_windows_own_members_are_never_the_fix_list(self):
+        self.start(items=[todo("A", "completed"), todo("B", "in_progress")])
+        self.open(claude_spawn("s1"), now=T0)
+        self.result(claude_return("s1", marker(2)), now=T0)  # members were created in this very second
+        self.todos("s1", *self.all_items(b="completed"), now=T0 + 5)
+        self.assertIsNone(self.window()["resolved_at"])
+
     def test_a_removed_fix_task_is_not_part_of_the_fix_list(self):
         self.with_findings()
         self.todos("s1", *self.all_items(todo("Fix 1"), todo("Fix 2")), now=T0 + 30)
@@ -707,6 +813,23 @@ class LeavingTest(ReviewCase):
         self.assertEqual(window["left"], {"t2": T0 + 15})
         self.assertEqual(self.columns(now=T0 + 16), {"A": "in_review", "B": "in_progress", "C": "todo"})
         self.assertIsNone(self.window()["resolved_at"])
+
+    def test_any_transition_out_of_the_review_states_leaves_the_window_and_stops_accruing(self):
+        self.start()
+        self.open(claude_spawn("s1"), now=T0 + 10)
+        # A: in_progress -> pending; B: completed -> cancelled; both leave.
+        self.todos("s1", todo("A"), todo("B", "cancelled"), todo("C"), now=T0 + 15)
+        self.assertEqual(self.window()["left"], {"t1": T0 + 15, "t2": T0 + 15})
+        view = {t["content"]: t for t in self.session(now=T0 + 500)["tasks"]}
+        self.assertEqual(view["A"]["durations"]["in_review"], 5)
+        self.assertEqual(view["A"]["column"], "todo")
+        self.assertEqual(view["B"]["durations"]["in_review"], 5)
+
+    def test_a_task_dropped_while_unfinished_leaves_the_window(self):
+        self.start()
+        self.open(claude_spawn("s1"), now=T0 + 10)
+        self.todos("s1", todo("B", "completed"), todo("C"), now=T0 + 15)  # A omitted: removed
+        self.assertEqual(self.window()["left"], {"t1": T0 + 15})
 
     def test_a_task_that_is_in_progress_when_the_window_opens_stays_in_it(self):
         self.start()
@@ -1281,14 +1404,59 @@ class BackgroundReviewTest(ReviewCase):
         self.assertFalse(out["review_result"])
         self.assertEqual(self.window()["tx_offset"], other.stat().st_size)
 
-    def test_a_background_hand_back_with_an_unknown_id_never_retires_a_foreground_token(self):
+    def test_a_real_id_the_window_never_launched_retires_nothing(self):
         window = {"fg": ["a"], "bg": ["b"], "pending": 2}
-        self.assertTrue(tasks._take_slot(window, "stranger", "bg"))
-        self.assertEqual((window["fg"], window["bg"]), (["a"], []))  # the unknown id took a bg slot only
         self.assertFalse(tasks._take_slot(window, "stranger", "bg"))
-        self.assertEqual(window["fg"], ["a"])
+        self.assertFalse(tasks._take_slot(window, "stranger", "fg"))
+        self.assertEqual((window["fg"], window["bg"]), (["a"], ["b"]))
         self.assertTrue(tasks._take_slot(window, "a", "bg"))  # a known id wins whatever the kind
-        self.assertEqual(window["fg"], [])
+        self.assertEqual((window["fg"], window["bg"]), ([], ["b"]))
+
+    def test_a_missing_or_synthetic_id_falls_back_to_the_oldest_token_of_its_kind(self):
+        window = {"fg": ["a", "c"], "bg": ["b", "d"], "pending": 4}
+        self.assertTrue(tasks._take_slot(window, None, "fg"))
+        self.assertTrue(tasks._take_slot(window, "anon:3", "bg"))
+        self.assertTrue(tasks._take_slot(window, "off:120:2", "bg"))
+        self.assertEqual((window["fg"], window["bg"]), (["c"], []))
+        self.assertFalse(tasks._take_slot(window, "off:9:9", "bg"))
+
+    def test_a_foreground_agent_backgrounded_after_launch_moves_to_bg_and_resolves_from_the_transcript(self):
+        self.start()
+        spawn = dict(claude_spawn("s1"), tool_use_id="tu1", transcript_path=str(self.path))
+        self.open(spawn)
+        self.assertEqual((self.window()["fg"], self.window()["bg"]), (["tu1"], []))
+        # The input never said run_in_background; the harness ran it in the background anyway.
+        ack = dict(claude_return("s1", "Async agent launched"), tool_use_id="tu1")
+        ack["tool_response"] = {"isAsync": True, "status": "async_launched"}
+        out = self.result(ack)
+        self.assertEqual((out["recorded"], out["result"]), (True, False))
+        self.assertEqual((self.window()["fg"], self.window()["bg"], self.window()["pending"]), ([], ["tu1"], 1))
+        # Stop does not retire it as unread ...
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.window()["unread"], 0)
+        # ... and the later transcript hand-back resolves it.
+        self.append(*self.hand_back(marker(3)))
+        self.assertEqual(self.stop_bg(now=T0 + 40)["review_findings"], 3)
+
+    def test_a_repeated_or_foreign_async_ack_changes_nothing(self):
+        self.start()
+        self.open(dict(claude_spawn("s1"), tool_use_id="tu1"))
+        ack = dict(claude_return("s1", "x"), tool_use_id="tu1", tool_response={"isAsync": True})
+        self.assertTrue(self.result(ack)["recorded"])
+        self.assertFalse(self.result(ack)["recorded"])  # already in bg
+        other = dict(claude_return("s1", "x", agent="Explore"), tool_use_id="zz", tool_response={"isAsync": True})
+        self.assertFalse(self.result(other)["recorded"])
+        self.assertEqual(self.window()["bg"], ["tu1"])
+
+    def test_two_notifications_without_ids_get_distinct_fallback_ids(self):
+        window = {"opened_at": T0, "tx_offset": 0, "tx_path": str(self.path)}
+        body = "<task-notification>\n<result>{}</result>\n</task-notification>".format(marker(1))
+        entry = {"type": "user", "message": {"role": "user", "content": body}, "timestamp": self.stamp()}
+        self.path.write_text(json.dumps(entry) + "\n" + json.dumps(entry) + "\n", encoding="utf-8")
+        ids = [r["id"] for r in tasks._background_reports(window, str(self.path))]
+        self.assertEqual(len(ids), 2)
+        self.assertEqual(len(set(ids)), 2)
+        self.assertTrue(all(i.startswith("off:") for i in ids))
 
     def test_the_bytes_read_per_stop_are_capped_and_resumed(self):
         self.start()
