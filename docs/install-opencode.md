@@ -41,6 +41,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/
 - **`install-opencode.sh: ERROR: source missing cross-CLI plumbing`** — you tried to run `install-opencode.sh` from a slim Claude install that doesn't bundle it. Use the curl-pipe above instead.
 - **`command not found: jq`** — install jq (`brew install jq`, `apt install jq`, or `choco install jq`). The installer needs it to merge `opencode.json`.
 - **Commands aren't appearing in the TUI** — quit and restart opencode. Config is loaded at startup; the running session keeps the old config.
+- **`install-opencode: ERROR: these paths already exist and were not created by dev-team-agents`** (exit 4) — the project has its own file at a path the installer writes (for example `.opencode/agents/code-reviewer.md`). Nothing was written. Rename or move it and re-run, or re-run with `--adopt` to move it into `.dev-team-agents/quarantine/` and install over it. Files the project owns under any other name are never touched.
 - **Hooks aren't firing** — verify `.dev-team-agents/scripts/hooks/` contains `stop.sh`, `pre-tool-use.sh`, `session-start.sh`, `pre-compact.sh`. Missing files mean the opencode plugin can't invoke the dispatchers. Re-run the install curl-pipe to restore them.
 
 ## Model tier → id map

@@ -70,7 +70,8 @@ If the project already has `.dev-team-agents/`, re-running the bundled installer
 - **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
 - **Hooks fire but the session banner still does not appear** — verify `AGENTS.md` contains the managed marker `<!-- dev-team-agents: codex-session-banner -->`. If it does not, re-run the install command.
 - **`$devteam-*` doesn't appear or run** — ensure the project's `.codex/` directory is trusted, restart Codex, and verify `.codex/skills/devteam-<name>/SKILL.md` exists in the project.
-- **Old `devteam-*.md` prompts still appear** — re-run the installer. It removes legacy aliases from `.codex/prompts/` and `~/.codex/prompts/` so the skills-first layout is the only active path.
+- **Old `devteam-*.md` prompts still appear** — the installer lists any it finds in `.codex/prompts/` and `~/.codex/prompts/` but never deletes them. Remove the ones that came from an older dev-team-agents install yourself.
+- **`install-codex: ERROR: these paths already exist and were not created by dev-team-agents`** (exit 4) — the project has its own file at a path the installer writes (for example `.codex/agents/backend-developer.toml`). Nothing was written. Rename or move it and re-run, or re-run with `--adopt` to move it into `.dev-team-agents/quarantine/` and install over it. Files the project owns under any other name are never touched.
 - **`[features] hooks = false`** — Codex defaults hooks to enabled. If disabled via config, re-enable: `[features] hooks = true`.
 
 ## Model tier → id map
