@@ -411,7 +411,7 @@ describe('Board — timers and time in column', () => {
 
     fireEvent.click(await card('storefront'));
     await screen.findByRole('button', { name: /back to the board/i });
-    expect(intervals(spy)).toEqual([60_000, 1_000]);
+    expect(intervals(spy)).toEqual([60_000, 60_000, 1_000]); // kanban: filters each minute, running cards each second
 
     spy.mockClear();
     view.rerender(<Board active={false} clock={() => ms} />);

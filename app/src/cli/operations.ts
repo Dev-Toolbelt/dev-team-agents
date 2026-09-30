@@ -1543,7 +1543,15 @@ export function asTaskWatchEvent(raw: Record<string, unknown>): TaskWatchEvent |
   }
 }
 
-/** Start `devteam tasks watch`, through the same allow-list `run()` enforces. */
+/** `watchTasks` refused its own argv: a bug in the app, distinct from "no CLI was found". */
+export class TaskStreamRefused extends Error {
+  constructor(readonly problem: string) {
+    super(`the task stream was refused by the argument allow-list: ${problem}`);
+    this.name = 'TaskStreamRefused';
+  }
+}
+
+/** Start `devteam tasks watch`, through the same allow-list `run()` enforces. Throws `TaskStreamRefused` on a bad argv. */
 export function watchTasks(
   context: CliContext,
   options: { readonly staleAfterSeconds: number },
@@ -1553,10 +1561,11 @@ export function watchTasks(
     readonly onEnd: (end: StreamEnd) => void;
   },
   spawnStream: typeof streamDevteam = streamDevteam,
-): StreamHandle | null {
+): StreamHandle {
   const stale = secondsArgument(options.staleAfterSeconds);
   const args = ['tasks', 'watch', ...(stale === null ? [] : ['--stale-after', stale])];
-  if (argvProblem(args) !== null) return null;
+  const problem = argvProblem(args);
+  if (problem !== null) throw new TaskStreamRefused(problem);
   return spawnStream({
     binary: context.binary,
     cwd: context.cwd,

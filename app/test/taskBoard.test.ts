@@ -20,6 +20,7 @@ import {
   listTasks,
   watchTasks,
   type TaskWatchEvent,
+  TaskStreamRefused,
 } from '../src/cli/operations.js';
 import {
   BOARD_BACKOFF_MAX_MS,
@@ -527,6 +528,53 @@ describe('TaskBoard — races and restarts', () => {
     await h.board.restart();
     await h.board.start();
     expect(h.streams).toHaveLength(1);
+  });
+});
+
+describe('TaskBoard — round-2 races and failures', () => {
+  it('an argv the allow-list refuses is its own terminal outcome, not "no CLI found" and not a retry loop', async () => {
+    const h = harness({ startStream: () => Promise.reject(new TaskStreamRefused('unknown command')) });
+    await h.board.start();
+    const feed = h.board.snapshot();
+    expect(feed.status).toBe('unavailable');
+    expect(feed.detail).toMatch(/refused by the argument allow-list: unknown command/);
+    expect(feed.detail).not.toMatch(/No devteam CLI/);
+    expect(h.timers.filter((t) => !t.cleared)).toEqual([]);
+  });
+
+  it('overlapping refresh calls share one list and both see the same, latest answer', async () => {
+    let release: (projects: BoardProject[]) => void = () => undefined;
+    const list = vi.fn(
+      () =>
+        new Promise<Awaited<ReturnType<TaskBoardDeps['list']>>>((resolve) => {
+          release = (projects) => resolve({ ok: true, outcome: 'success', data: { projects }, command: 'devteam tasks list', durationMs: 1 });
+        }),
+    );
+    const h = harness({ list });
+    const first = h.board.refresh();
+    const second = h.board.refresh();
+    expect(list).toHaveBeenCalledTimes(1);
+    release([boardProject({ project_id: 'fresh' })]);
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.projects.map((p) => p.project_id)).toEqual(['fresh']);
+    expect(b.projects.map((p) => p.project_id)).toEqual(['fresh']);
+    void h.board.refresh();
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('a restart clears the heartbeat watchdog of the child it drops', async () => {
+    let calls = 0;
+    const h = harness({
+      startStream: () => {
+        calls += 1;
+        return calls === 1 ? Promise.resolve({ stop: vi.fn(), pid: 1 }) : Promise.resolve(null);
+      },
+    });
+    await h.board.start();
+    const watchdog = h.timers.find((t) => t.ms === BOARD_WATCHDOG_MS && !t.cleared);
+    expect(watchdog).toBeDefined();
+    await h.board.restart();
+    expect(watchdog?.cleared).toBe(true);
   });
 });
 

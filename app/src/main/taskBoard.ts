@@ -15,7 +15,7 @@
  */
 
 import type { StreamEnd, StreamHandle } from '../cli/stream.js';
-import type { TaskWatchEvent } from '../cli/operations.js';
+import { TaskStreamRefused, type TaskWatchEvent } from '../cli/operations.js';
 import type { BoardFeed, BoardProject, BoardSettings, BoardSession, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
 
 export const BOARD_BACKOFF_MIN_MS = 1_000;
@@ -58,6 +58,7 @@ export class TaskBoard {
   private healthyTimer: unknown = null;
   private streamError: string | null = null;
   private spawning = false;
+  private refreshing: Promise<BoardFeed> | null = null;
   /** Bumped by every spawn, restart and stop; a stale child's events and exit are ignored. */
   private generation = 0;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -110,6 +111,7 @@ export class TaskBoard {
     this.handle?.stop();
     this.handle = null;
     this.clearRetry();
+    this.clearWatchdog();
     this.clearHealthy();
     this.backoff = BOARD_BACKOFF_MIN_MS;
     this.stopped = false;
@@ -117,7 +119,15 @@ export class TaskBoard {
   }
 
   /** A one-shot `tasks list` that replaces every snapshot. A failure leaves them as they were. */
-  async refresh(): Promise<BoardFeed> {
+  refresh(): Promise<BoardFeed> {
+    // Overlapping calls share one `list`: two answers could otherwise land out of order.
+    this.refreshing ??= this.doRefresh().finally(() => {
+      this.refreshing = null;
+    });
+    return this.refreshing;
+  }
+
+  private async doRefresh(): Promise<BoardFeed> {
     const revision = this.streamRevision;
     const result = await this.deps.list().catch(() => null);
     if (result !== null && result.ok && revision !== this.streamRevision) {
@@ -157,6 +167,11 @@ export class TaskBoard {
         },
       });
     } catch (error) {
+      if (current() && error instanceof TaskStreamRefused) {
+        // Deterministic: the same argv is refused on every retry, so do not loop.
+        this.set({ status: 'unavailable', detail: `The task stream could not be started: ${error.message}.` });
+        return;
+      }
       if (current()) this.scheduleRetry(`the task stream could not start: ${String(error)}`);
       return;
     } finally {

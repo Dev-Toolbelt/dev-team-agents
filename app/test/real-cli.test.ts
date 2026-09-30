@@ -708,6 +708,27 @@ async function board() {
 }
 
 describe.skipIf(!available)('task board against the real hooks and CLI', () => {
+  it('keeps a resume command whose session cwd holds a space and a single quote, exactly as the CLI quoted it', async () => {
+    const root = await bindRealProject('board-quote');
+    const awkward = join(root, "it's a dir");
+    await mkdir(awkward, { recursive: true });
+    claudeCreate(root, 'quote-session', '1', 'quoted', { cwd: awkward });
+    const projects = await board();
+    const rootReal = await realpath(root);
+    let session;
+    for (const project of projects) {
+      if ((await realpath(project.root)) === rootReal) session = project.sessions.find((each) => each.session_id === 'quote-session');
+    }
+    expect(session, 'the session was recorded').toBeDefined();
+    expect(session?.resume_command).not.toBeNull();
+
+    // The CLI's own quoting, asked of python's shlex with the directory it recorded.
+    const recorded = session?.cwd ?? '';
+    expect(recorded).toContain("it's a dir");
+    const quoted = spawnSync('python3', ['-c', 'import shlex,sys; print(shlex.quote(sys.argv[1]))', recorded], { encoding: 'utf8' });
+    expect(session?.resume_command).toBe(`cd ${quoted.stdout.trim()} && claude --resume quote-session`);
+  }, 120_000);
+
   it('lists exactly the projects with tasks, with counts, providers, durations and resume commands', async () => {
     const { a, b, c } = await boardFixture();
     const projects = await board();

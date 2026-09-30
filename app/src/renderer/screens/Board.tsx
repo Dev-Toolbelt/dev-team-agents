@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -34,6 +34,7 @@ import {
   formatDuration,
   isRunning,
   percentLabels,
+  sessionsInPeriod,
   stepDurations,
   timeInColumn,
   viewProject,
@@ -134,6 +135,8 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   const [refreshing, setRefreshing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [projectGone, setProjectGone] = useState(false);
+  const loadFailedRef = useRef(false);
   // The overview only shows whole-minute figures (counts, a period cutoff); the seconds live in the kanban.
   const now = useNow(clock, 60, active);
 
@@ -143,6 +146,11 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
     let pushed = false;
     const unsubscribe = window.devteam.onTaskBoard((next) => {
       pushed = true;
+      if (loadFailedRef.current) {
+        // A push that recovers from a failed first load also retires that load's alert.
+        loadFailedRef.current = false;
+        setProblem(null);
+      }
       setLoadFailed(false);
       setFeed(next);
     });
@@ -152,6 +160,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
       },
       (error: unknown) => {
         if (!live) return;
+        loadFailedRef.current = true;
         setLoadFailed(true);
         setProblem(`The task board could not be loaded: ${errorText(error)}`);
       },
@@ -194,6 +203,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
     setProblem(null);
     try {
       setFeed(await window.devteam.refreshTaskBoard());
+      loadFailedRef.current = false;
       setLoadFailed(false);
     } catch (error) {
       setProblem(`The task board could not be refreshed: ${errorText(error)}`);
@@ -203,6 +213,15 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   }
 
   const project = selected === null ? undefined : feed.projects.find((each) => each.project_id === selected);
+
+  // A project that loses all its tasks leaves the kanban for good: a later snapshot that
+  // brings it back must not pull the user into it again.
+  useEffect(() => {
+    if (selected !== null && project === undefined && !loadFailed && feed.status !== 'starting') {
+      setSelected(null);
+      setProjectGone(true);
+    }
+  }, [selected, project, loadFailed, feed.status]);
 
   return (
     <section aria-labelledby="board-heading" className="space-y-4">
@@ -249,6 +268,12 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
 
       <StreamNotice feed={feed} />
 
+      {projectGone && selected === null ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          That project no longer has tasks.
+        </p>
+      ) : null}
+
       {loadFailed ? null : selected !== null && project !== undefined ? (
         <Kanban
           project={project}
@@ -265,8 +290,10 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
           names={names}
           period={period}
           now={now}
-          gone={selected !== null}
-          onOpen={setSelected}
+          onOpen={(projectId) => {
+            setProjectGone(false);
+            setSelected(projectId);
+          }}
         />
       )}
     </section>
@@ -304,14 +331,12 @@ function Overview({
   names,
   period,
   now,
-  gone,
   onOpen,
 }: {
   feed: BoardFeed;
   names: Readonly<Record<string, string>>;
   period: Period;
   now: number;
-  gone: boolean;
   onOpen: (projectId: string) => void;
 }) {
   const views = useMemo(
@@ -338,7 +363,6 @@ function Overview({
 
   return (
     <>
-      {gone ? <p className="text-sm text-muted-foreground">That project no longer has tasks.</p> : null}
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Projects with tasks">
         {views.map((view) => (
           <li key={view.project.project_id}>
@@ -465,19 +489,24 @@ function Kanban({
   active: boolean;
   onBack: () => void;
 }) {
-  // Durations show seconds here, so this is the one place that ticks every second.
-  const now = useNow(clock, 1, active);
+  // Filtering (period cutoff, done retention) only needs whole minutes; the per-second
+  // tick below exists for running cards alone, and only while one is on screen.
+  const coarseNow = useNow(clock, 60, active);
   const [sessionId, setSessionId] = useState<string>('all');
   const [hideOldDone, setHideOldDone] = useState(true);
   const hideId = useId();
 
-  // A session that vanished from the snapshot must not leave the filter selecting nothing.
-  const effectiveSession = project.sessions.some((each) => each.session_id === sessionId) ? sessionId : 'all';
+  const sessionsInRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
+  // A session that vanished from the snapshot or fell out of the period must not leave the filter selecting nothing.
+  const effectiveSession = sessionsInRange.some((each) => each.session_id === sessionId) ? sessionId : 'all';
   const view = useMemo(
-    () => buildKanban(project, { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays }, now),
-    [project, effectiveSession, period, hideOldDone, settings.doneRetentionDays, now],
+    () =>
+      buildKanban(project, { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays }, coarseNow),
+    [project, effectiveSession, period, hideOldDone, settings.doneRetentionDays, coarseNow],
   );
-  const shownSessions = project.sessions.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession);
+  const anyRunning = [...view.todo, ...view.in_progress].some((item) => isRunning(item.session, item.task));
+  const tick = useNow(clock, 1, active && anyRunning);
+  const shownSessions = sessionsInRange.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession);
 
   return (
     <div className="space-y-4">
@@ -501,7 +530,7 @@ function Kanban({
           className={SELECT_CLASS}
         >
           <option value="all">All sessions</option>
-          {project.sessions.map((each) => (
+          {sessionsInRange.map((each) => (
             <option key={each.session_id} value={each.session_id}>
               {sessionLabel(each)}
             </option>
@@ -518,12 +547,12 @@ function Kanban({
       <SessionStrip projectId={project.project_id} sessions={shownSessions} />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Column title="To do" items={view.todo} now={now} />
-        <Column title="In progress" items={view.in_progress} now={now} />
+        <Column title="To do" items={view.todo} now={tick} />
+        <Column title="In progress" items={view.in_progress} now={tick} />
         <Column
           title="Done"
           items={view.done}
-          now={now}
+          now={tick}
           note={view.hiddenDone > 0 ? `${view.hiddenDone} older done ${view.hiddenDone === 1 ? 'task is' : 'tasks are'} hidden` : null}
         />
       </div>
@@ -630,8 +659,9 @@ function Column({
     <section aria-labelledby={headingId} className="min-w-0 rounded-lg bg-muted/40 p-3">
       <h4 id={headingId} className="mb-3 flex items-center justify-between text-sm font-semibold">
         {title}
-        <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums" aria-label={`${items.length} tasks`}>
-          {items.length}
+        <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums">
+          <span aria-hidden="true">{items.length}</span>
+          <span className="sr-only">{items.length === 1 ? '1 task' : `${items.length} tasks`}</span>
         </span>
       </h4>
       {items.length === 0 ? (
@@ -639,7 +669,11 @@ function Column({
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
-            <TaskCard key={`${item.session.session_id}:${item.task.key}`} item={item} now={now} />
+            <TaskCard
+              key={`${item.session.session_id}:${item.task.key}`}
+              item={item}
+              now={isRunning(item.session, item.task) ? now : 0}
+            />
           ))}
         </ul>
       )}
@@ -652,7 +686,7 @@ function Column({
  * One task. The per-step times sit behind a disclosure button, not a hover tooltip: one tab
  * stop per card instead of two, nothing that overlaps its neighbours, and Escape closes it.
  */
-function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
+const TaskCard = memo(function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
   const { session, task } = item;
   const ids = useId();
   const contentId = `${ids}-content`;
@@ -664,7 +698,7 @@ function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
   const steps = stepDurations(task, now, running, inColumn);
   const where = session.branch ?? 'no branch';
   return (
-    <li>
+    <li className="min-w-0">
       <article
         aria-labelledby={contentId}
         onKeyDown={(event) => {
@@ -676,7 +710,7 @@ function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
         }}
         className="rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs"
       >
-        <p id={contentId} className={task.column === 'done' ? 'text-muted-foreground' : undefined}>
+        <p id={contentId} className={`break-words [overflow-wrap:anywhere] ${task.column === 'done' ? 'text-muted-foreground' : ''}`}>
           {task.content}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -720,7 +754,7 @@ function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
       </article>
     </li>
   );
-}
+});
 
 // ── settings ──────────────────────────────────────────────────────────────────
 
@@ -729,6 +763,8 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
   const [stale, setStale] = useState(String(settings.staleAfterMinutes));
   const [retention, setRetention] = useState(String(settings.doneRetentionDays));
   const [problem, setProblem] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const staleBounds = BOARD_SETTING_BOUNDS.staleAfterMinutes;
   const retentionBounds = BOARD_SETTING_BOUNDS.doneRetentionDays;
 
@@ -739,7 +775,11 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
     setProblem(null);
   }, [open, settings]);
 
-  async function save() {
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const answer = await window.devteam.setBoardSettings({
         staleAfterMinutes: Number(stale),
@@ -753,6 +793,9 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
       }
     } catch (error) {
       setProblem(`The settings could not be saved: ${errorText(error)}`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -764,46 +807,48 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
           Board settings
         </Button>
       </PopoverTrigger>
-      <PopoverContent aria-label="Board settings" className="space-y-3 p-4">
-        <div className="space-y-1">
-          <Label htmlFor="board-stale-after">Stale after (minutes)</Label>
-          <Input
-            id="board-stale-after"
-            type="number"
-            inputMode="numeric"
-            min={staleBounds.min}
-            max={staleBounds.max}
-            value={stale}
-            onChange={(event) => setStale(event.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            An in-progress task older than this, in a running session, is flagged stale ({staleBounds.min} to{' '}
-            {staleBounds.max}).
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="board-done-retention">Show done for (days)</Label>
-          <Input
-            id="board-done-retention"
-            type="number"
-            inputMode="numeric"
-            min={retentionBounds.min}
-            max={retentionBounds.max}
-            value={retention}
-            onChange={(event) => setRetention(event.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            The kanban hides done tasks older than this by default ({retentionBounds.min} to {retentionBounds.max}).
-          </p>
-        </div>
-        {problem !== null ? (
-          <p role="alert" className="text-xs text-destructive">
-            {problem}
-          </p>
-        ) : null}
-        <Button size="sm" onClick={() => void save()}>
-          Save
-        </Button>
+      <PopoverContent aria-label="Board settings" className="p-4">
+        <form onSubmit={(event) => void save(event)} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="board-stale-after">Stale after (minutes)</Label>
+            <Input
+              id="board-stale-after"
+              type="number"
+              inputMode="numeric"
+              min={staleBounds.min}
+              max={staleBounds.max}
+              value={stale}
+              onChange={(event) => setStale(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              An in-progress task older than this, in a running session, is flagged stale ({staleBounds.min} to{' '}
+              {staleBounds.max}).
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="board-done-retention">Show done for (days)</Label>
+            <Input
+              id="board-done-retention"
+              type="number"
+              inputMode="numeric"
+              min={retentionBounds.min}
+              max={retentionBounds.max}
+              value={retention}
+              onChange={(event) => setRetention(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The kanban hides done tasks older than this by default ({retentionBounds.min} to {retentionBounds.max}).
+            </p>
+          </div>
+          {problem !== null ? (
+            <p role="alert" className="text-xs text-destructive">
+              {problem}
+            </p>
+          ) : null}
+          <Button size="sm" type="submit" disabled={saving}>
+            Save
+          </Button>
+        </form>
       </PopoverContent>
     </Popover>
   );
