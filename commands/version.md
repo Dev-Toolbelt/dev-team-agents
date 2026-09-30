@@ -17,13 +17,28 @@ Run this exactly, substituting nothing:
 
 ```bash
 bash -c '
-USER_DATA_DIR=".dev-team-agents/user-data"
-STATE_FILE="$USER_DATA_DIR/state.json"
-PREFS_FILE="$USER_DATA_DIR/preferences.json"
+ROOT=""
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+[ -n "$GIT_COMMON_DIR" ] && ROOT="$(cd "$GIT_COMMON_DIR/.." 2>/dev/null && pwd)"
+[ -n "$ROOT" ] || ROOT="$PWD"
+
+# Paths are resolved by the same helper session-start.sh uses, so a bound project reads its
+# machine-local state.json (state-dir pointer) and the resolved preference projection.
+unset STATE_FILE USER_DATA_DIR
+for LIB in "$ROOT/.dev-team-agents/scripts/hooks/lib/data-dirs.sh" "$ROOT/scripts/hooks/lib/data-dirs.sh"; do
+  [ -f "$LIB" ] && . "$LIB" && break
+done
+if command -v devteam_state_dir >/dev/null 2>&1; then
+  STATE_FILE="$(devteam_state_dir "$ROOT")/state.json"
+  PREFS_FILE="$(devteam_prefs_file "$ROOT")"
+else
+  STATE_FILE="$ROOT/.dev-team-agents/user-data/state.json"
+  PREFS_FILE="$ROOT/.dev-team-agents/user-data/preferences.json"
+fi
 
 DT_VERSION="$(grep -oE "\"installed_version\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$STATE_FILE" 2>/dev/null | grep -oE "[^\"]+\"?$" | tr -d "\"")"
 if [ -z "$DT_VERSION" ]; then
-  DT_VERSION="$(grep -m1 -oE "^## \[[0-9]+\.[0-9]+\.[0-9]+\]" CHANGELOG.md 2>/dev/null | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")"
+  DT_VERSION="$(grep -m1 -oE "^## \[[0-9]+\.[0-9]+\.[0-9]+\]" "$ROOT/CHANGELOG.md" 2>/dev/null | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")"
 fi
 [ -n "$DT_VERSION" ] || DT_VERSION="unknown"
 case "$DT_VERSION" in v*) ;; *) DT_VERSION="v${DT_VERSION}" ;; esac
