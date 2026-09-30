@@ -71,6 +71,43 @@ reason.
 Electron's default `userData` collided with `dev-team-agents/` exactly, so `main.ts`
 calls `app.setPath('userData', …)` to move it aside.
 
+`settings.json` also records `openAtLogin`, the user's start-at-login choice — only the choice;
+whether the OS registered it is read live and is what the UI shows.
+
+## Notifications and running in the background
+
+Hooks queue notifications; this app shows them (ADR-0017). The main process runs one
+`devteam notifications watch` and turns each record into a native notification titled with the
+project's name, acknowledging it as it is shown. Because the stream lives in the main process:
+
+- **closing the window hides it** — the tray (Windows) / menu-bar icon (macOS) reopens the app,
+  shows recent notifications, pauses banners, or quits;
+- **one instance only** — launching it again shows the running one;
+- **start at login** is opt-in, from the bell's panel, and shows what the OS actually recorded.
+
+### Manual check, packaged build
+
+Automated tests cover the supervisor, the stream, the bell and the login-item logic against a
+simulated OS. What only a packaged build on a real desktop can show is checked by hand —
+`npm run dist:mac` (or the Windows installer), install, then:
+
+| # | Do | Expect |
+|---|----|--------|
+| 1 | Open the app, then close its window | The app keeps running: menu-bar / tray icon present, no Dock icon (macOS) |
+| 2 | In a bound project, append a record to its queue (see below), or work in Claude Code until a notice fires | A native notification titled with the project's **name** (never an id) within ~2 s |
+| 3 | Click the notification | The window opens on that project's settings |
+| 4 | Append a `critical` record | It stays on screen (Windows); on macOS, persistence follows System Settings → Notifications → Banners/Alerts |
+| 5 | Quit from the tray, reopen | The notification from step 2 is **not** shown again (acknowledged on display) |
+| 6 | Launch the app a second time while it runs | The running window comes forward; no second tray icon |
+| 7 | Bell → **Start at login** on, log out and in | The app starts hidden. If macOS refuses the unsigned app, the panel says so (`not-registered` / `requires-approval`) |
+| 8 | Bell → **Pause system notifications**, append a record | No banner; the record is in the bell |
+
+A record to append by hand (the project's state directory is the path in its `.dev-team-agents/state-dir`):
+
+```bash
+echo '{"id":"'$(date +%s)'-1-1","ts":'$(date +%s)',"project_id":"<id>","session_id":"manual","level":"warning","code":"manual.test","message":"Manual check","dedupe_key":"","expires_at":0}' >> "$(cat .dev-team-agents/state-dir)/notifications.jsonl"
+```
+
 **Project preferences are not app data.** The settings screen (click a project's name) reads
 `devteam prefs list` and writes through `devteam prefs set|unset --scope project`, so every
 change lands in the store's project layer and in the project's `resolved/preferences.json`,
