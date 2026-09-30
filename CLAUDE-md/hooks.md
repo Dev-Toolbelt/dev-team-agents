@@ -27,7 +27,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh`, `03d-design-token-lint.sh`, `03e-adr-gap-check.sh` |
-| `04-` | User-facing notifications | `04-notifier.sh`; `04b-task-board.sh` — marks the session idle on the task board (ADR-0018), forking python only when `<state-dir>/tasks/<session>.json` already exists |
+| `04-` | User-facing notifications | `04-notifier.sh`; `04b-task-board.sh` — marks the session idle on the task board (ADR-0018), forking python only when `<state-dir>/task-board/<session>.json` already exists |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | `99b-archive-index.sh` (graphify refresh disabled — see § Disabled Hooks) |
 
@@ -78,7 +78,7 @@ Each sub-script must:
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
 | `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard, credential-guard (update checks disabled, see § Disabled Hooks) |
 | `PostToolUse` | `scripts/hooks/post-tool-use.sh` | Dispatcher | Runs `post-tool-use/` (same filename convention and exit propagation as `pre-tool-use.sh`). Registered with the matcher `TodoWrite\|TaskCreate\|TaskUpdate`, so no other tool forks it. `01-task-board.sh` folds Claude's todo tools into the task board (ADR-0018). Claude Code only |
-| `SessionEnd` | `scripts/hooks/session-end.sh` | — | Single script (nothing else listens to this event). Marks the session ended on the task board and raises `tasks.session_abandoned` when it still has open tasks. Forks python only when `<state-dir>/tasks/<session>.json` exists. Claude Code only |
+| `SessionEnd` | `scripts/hooks/session-end.sh` | — | Single script (nothing else listens to this event). Marks the session ended on the task board and raises `tasks.session_abandoned` when it still has open tasks. Forks python only when `<state-dir>/task-board/<session>.json` exists. Claude Code only |
 | — | `scripts/hooks/lib/task-board.sh` | Shared library | Not a hook. Sourced by the task-board hooks: resolves the main checkout root and state dir, calls `devteam tasks record\|mark`, raises `tasks.session_done` / `tasks.session_abandoned` through `notify.sh` (dedupe per session, message in the user's `language`). Reads prefs with `sed`, not python; every function returns 0 and prints nothing |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
 | `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, session-progress notifications (`04-notifier.sh` — context window, uncommitted work, tip of the day, raised through `lib/notify.sh`), telemetry flush (including per-agent usage, see `lib/agent-usage.sh` below), archive rotation (graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |

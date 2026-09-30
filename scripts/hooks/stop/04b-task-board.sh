@@ -14,6 +14,6 @@ INPUT="$(cat "$PAYLOAD_FILE" 2>/dev/null)"
 SESSION="$(devteam_task_board_session_id "$INPUT")"
 [ -n "$SESSION" ] || exit 0
 devteam_task_board_init || exit 0
-[ -f "${TB_STATE_DIR}/tasks/${SESSION}.json" ] || exit 0
+[ -f "${TB_STATE_DIR}/task-board/${SESSION}.json" ] || exit 0
 devteam_task_board_mark idle "$INPUT" >/dev/null 2>&1
 exit 0

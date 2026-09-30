@@ -5,7 +5,7 @@ Why this exists (ADR-0018). Agents keep a todo list through their provider's nat
 `todowrite`). A hook captures every call into one record per session, so the desktop app
 can show what is pending, in progress and done across every bound project.
 
-One file per session, ``<state-dir>/tasks/<session-key>.json``, in the project's
+One file per session, ``<state-dir>/task-board/<session-key>.json``, in the project's
 machine-local state directory (ADR-0013). Per session, not per project, so two sessions
 never contend for one lock. Written only by :func:`record` and :func:`mark`, under a
 per-session lock and atomically; **never deleted** by anything here (No-Destruction Rule).
@@ -37,7 +37,7 @@ from . import jsonio, lock, project
 from .errors import DevteamError
 
 SCHEMA = 1
-TASKS_DIR = "tasks"
+TASKS_DIR = "task-board"
 HISTORY_CAP = 50
 
 PROVIDERS = ("claude", "codex", "opencode")
@@ -141,6 +141,8 @@ def _items(raw, id_name=None, content_names=("content",)):
     """Normalized ``{id, content, status}`` items from a list, or ``None`` if unreadable."""
     if not isinstance(raw, list):
         return None
+    if not raw:
+        return []
     items = []
     for entry in raw:
         if not isinstance(entry, dict):
@@ -155,7 +157,9 @@ def _items(raw, id_name=None, content_names=("content",)):
                 "status": norm_status(entry.get("status")),
             }
         )
-    return items
+    # A non-empty list with nothing readable is a payload we misunderstood, not the
+    # owner clearing their list: returning [] would mark every task removed.
+    return items or None
 
 
 def _created_id(payload):
@@ -296,7 +300,35 @@ def _load(path):
         return None
     if not isinstance(data, dict) or data.get("schema") != SCHEMA or not isinstance(data.get("tasks"), list):
         return None
+    if not _valid_record(data):
+        return None
     return data
+
+
+def _optional_number(value):
+    return value is None or _number(value)
+
+
+def _valid_record(data):
+    """Structural check, so one damaged file is refused instead of poisoning every reader."""
+    if not isinstance(data.get("session_id"), str):
+        return False
+    for name in ("created_at", "updated_at", "last_seen_at"):
+        if not _number(data.get(name)):
+            return False
+    if not (_optional_number(data.get("idle_at")) and _optional_number(data.get("ended_at"))):
+        return False
+    for task in data["tasks"]:
+        if not isinstance(task, dict):
+            return False
+        for name in ("key", "content", "status", "owner"):
+            if not isinstance(task.get(name), str):
+                return False
+        if not _number(task.get("created_at")) or "removed_at" not in task:
+            return False
+        if not _optional_number(task["removed_at"]) or not isinstance(task.get("history", []), list):
+            return False
+    return True
 
 
 def _push(task, status, now):
@@ -347,7 +379,10 @@ def _apply_replace(record, call, items, now):
     removed, not deleted. Duplicates are paired in order, live before removed.
     """
     mine = [t for t in record["tasks"] if t["owner"] == call["owner"]]
-    candidates = [t for t in mine if t["removed_at"] is None] + [t for t in mine if t["removed_at"] is not None]
+    # A task removed after it finished is history: a new item that reads the same is a
+    # new task, not that one coming back to life as pending.
+    revivable = [t for t in mine if t["removed_at"] is not None and t["status"] not in ("completed", "cancelled")]
+    candidates = [t for t in mine if t["removed_at"] is None] + revivable
     matched = set()
     for item in items:
         found = None
@@ -366,6 +401,8 @@ def _apply_replace(record, call, items, now):
 
 
 def _next_sequential_id(record):
+    # Session-wide on purpose: Claude numbers TaskCreate calls across the whole session,
+    # main agent and subagents alike, so the next id is the max over every owner.
     numbers = [int(t["id"]) for t in record["tasks"] if isinstance(t.get("id"), str) and t["id"].isdigit()]
     return str(max(numbers) + 1) if numbers else "1"
 
@@ -382,7 +419,10 @@ def _apply_create(record, call, item, now):
 
 
 def _apply_update(record, call, item, now):
-    found = next((t for t in record["tasks"] if t.get("id") == item["id"]), None)
+    same_id = [t for t in record["tasks"] if t.get("id") == item["id"]]
+    # Same owner first; another owner's task only when this owner has none with that id
+    # (Claude's task ids are shared by a session's main agent and its subagents).
+    found = next((t for t in same_id if t["owner"] == call["owner"]), None) or (same_id[0] if same_id else None)
     if found is None:
         # Created before the hook existed (or its output was unreadable): keep the update.
         if item["status"] == "deleted":
@@ -452,8 +492,13 @@ def _git_branch(cwd):
     return branch if result.returncode == 0 and branch else None
 
 
+#: Long enough to outlast a concurrent hook's whole critical section (a read, a diff and an
+#: atomic write, all local) yet well inside a hook's budget: a lock timeout loses the call.
+LOCK_TIMEOUT = 10.0
+
+
 def _session_lock(path):
-    return lock.Lock(str(path)[: -len(".json")] + ".lock", timeout=3.0, stale_after=30.0)
+    return lock.Lock(str(path)[: -len(".json")] + ".lock", timeout=LOCK_TIMEOUT, stale_after=30.0)
 
 
 def _bound_id(root):
@@ -478,6 +523,10 @@ def record(root, payload, provider="auto", now=None):
         if path is None:
             return result
         now = int(time.time() if now is None else now)
+        # Resolved before the lock: `git` can take seconds, and holding the lock across it
+        # made a concurrent hook time out and its call vanish for good.
+        stored = _load(path)
+        branch = _git_branch(call["cwd"] or (stored or {}).get("cwd"))
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -491,8 +540,11 @@ def record(root, payload, provider="auto", now=None):
             rec["provider"] = call["provider"]
             if call["cwd"]:
                 rec["cwd"] = call["cwd"]
-            rec["branch"] = _git_branch(rec["cwd"]) or rec.get("branch")
+            rec["branch"] = branch or rec.get("branch")
             rec["updated_at"] = now
+            # Activity after the last idle mark means the session is working again; without
+            # this a same-second tie kept showing it idle.
+            rec["idle_at"] = None
             rec["last_seen_at"] = now
             # A call proves the session is alive, even one resumed after `SessionEnd`.
             rec["ended_at"] = None
@@ -585,11 +637,24 @@ def _task_view(task, session_status, now, stale_after, until):
     }
 
 
-def resume_command(root, provider, session_id):
+def _task_order(task):
+    """Creation time, then creation sequence: ``t2`` before ``t10``, not after it."""
+    match = re.search(r"(\d+)$", str(task.get("key", "")))
+    return (task.get("created_at", 0), int(match.group(1)) if match else 0)
+
+
+def resume_command(root, provider, session_id, cwd=None):
+    """One line that reopens the session where it was started.
+
+    Providers look a session up by working directory, so a session begun in a linked
+    worktree or a subdirectory only resumes from there; the project root is the fallback
+    when the recorded directory is gone or was never recorded.
+    """
     base = RESUME.get(provider)
     if not base:
         return None
-    return "cd {} && {} {}".format(shlex.quote(str(root)), base, shlex.quote(session_id))
+    where = cwd if isinstance(cwd, str) and cwd and os.path.isdir(cwd) else root
+    return "cd {} && {} {}".format(shlex.quote(str(where)), base, shlex.quote(session_id))
 
 
 def _counts(views):
@@ -608,7 +673,7 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
         until = rec.get("ended_at") or rec.get("last_seen_at") or now
     views = [
         _task_view(task, status, now, stale_after, until)
-        for task in sorted(rec["tasks"], key=lambda t: (t.get("created_at", 0), t.get("key", "")))
+        for task in sorted(rec["tasks"], key=_task_order)
         if isinstance(task, dict) and _shown(task)
     ]
     if not views:
@@ -623,7 +688,7 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
         "created_at": rec.get("created_at"),
         "last_activity_at": activity,
         "ended_at": rec.get("ended_at"),
-        "resume_command": resume_command(root, rec.get("provider"), rec["session_id"]),
+        "resume_command": resume_command(root, rec.get("provider"), rec["session_id"], rec.get("cwd")),
         "counts": _counts(views),
         "tasks": views,
     }
@@ -647,7 +712,10 @@ def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AF
     """One project as the board shows it, or ``None`` when no session has a task."""
     sessions = []
     for rec in _project_records(root, project_id):
-        view = session_view(rec, root, now, stale_after, ended_after)
+        try:
+            view = session_view(rec, root, now, stale_after, ended_after)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
         if view is None:
             continue
         if since is not None and view["last_activity_at"] < since:

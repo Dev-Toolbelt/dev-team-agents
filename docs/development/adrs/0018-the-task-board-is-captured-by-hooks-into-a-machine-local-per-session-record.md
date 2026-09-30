@@ -33,7 +33,7 @@ Verified while writing this ADR:
    matcher is limited to the todo tools, plus a `SessionEnd` entry. Codex and opencode reuse the
    `PreToolUse` dispatcher they already have; a sub-script there filters on the tool name in bash
    before forking anything. Agents are not asked to report progress.
-2. **One record per session**, `<state-dir>/tasks/<session>.json`, machine-local (ADR-0013). Only the
+2. **One record per session**, `<state-dir>/task-board/<session>.json`, machine-local (ADR-0013). Only the
    CLI writes it (`devteam tasks record|mark`, invoked by the hook through the project's own
    `scripts/cli/devteam`), under a per-session lock, atomically. Per-session files mean two sessions
    never contend for a lock and a corrupt file costs one session, not the board.

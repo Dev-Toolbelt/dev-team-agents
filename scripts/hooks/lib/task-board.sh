@@ -27,9 +27,11 @@ devteam_task_board_init() {
     roots="$(git rev-parse --show-toplevel --git-common-dir 2>/dev/null)" || return 1
     TB_ROOT="$(printf '%s\n' "$roots" | sed -n 1p)"
     common="$(printf '%s\n' "$roots" | sed -n 2p)"
-    case "$common" in /*) ;; *) common="${TB_ROOT}/${common}" ;; esac
+    # `--git-common-dir` is relative to the working directory (`../.git` from a
+    # subdirectory), not to the toplevel, so resolve it from here before walking up.
+    common="$(cd "$common" 2>/dev/null && pwd -P)" || return 1
     local main
-    main="$(cd "${common}/.." 2>/dev/null && pwd)"
+    main="$(cd "${common}/.." 2>/dev/null && pwd -P)"
     [ -n "$main" ] && TB_ROOT="$main"
     [ -n "$TB_ROOT" ] || return 1
     TB_STATE_DIR="$(devteam_state_dir "$TB_ROOT")"

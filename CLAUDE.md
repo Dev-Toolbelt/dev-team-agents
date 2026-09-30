@@ -358,7 +358,7 @@ When a rule or script path references "helpers", state which of the two it means
 | `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
 | `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
 
-The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references), **`audit.log`**, **`notifications.jsonl`** and **`notifications-seen.json`** (ADR-0017), the **`tasks/`** directory of per-session task records (ADR-0018), plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references), **`audit.log`**, **`notifications.jsonl`** and **`notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
 
 ---
 

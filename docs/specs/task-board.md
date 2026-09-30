@@ -14,7 +14,7 @@ only in the provider's UI. Decision record: [ADR-0018](../development/adrs/0018-
 Data flow, mirroring the notification channel (ADR-0017):
 
 ```
-provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/tasks/<session>.json
+provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/task-board/<session>.json
                                                         │
                                   devteam tasks watch ◀─┘ ──▶ app main ──IPC──▶ Board / Kanban
 ```
@@ -37,7 +37,7 @@ cannot be read is a no-op, and both `tool_response` and `tool_output` are accept
 Codex coverage is best-effort: whether Codex fires `PreToolUse` for `update_plan` could not be
 verified empirically. When it does not, Codex sessions simply never appear; nothing fails.
 
-#### The record — `<state-dir>/tasks/<session-key>.json`
+#### The record — `<state-dir>/task-board/<session-key>.json`
 
 Machine-local (ADR-0013), one file per session so two sessions never contend for one lock.
 Written only by `devteam tasks record|mark`, under a per-session lock, atomically. Never deleted by
@@ -152,8 +152,10 @@ the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
   the retention setting. Per-session header with status and a **Copy resume command** button.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
   (days, default 7). Not preferences.json keys.
-- Resume commands: `cd <root> && claude --resume <id>`, `cd <root> && codex resume <id>`,
-  `cd <root> && opencode --session <id>`.
+- Resume commands: `cd <dir> && claude --resume <id>`, `cd <dir> && codex resume <id>`,
+  `cd <dir> && opencode --session <id>`, where `<dir>` is the session's recorded `cwd` when that
+  directory still exists (a linked worktree or subdirectory), else the project root. Always one
+  line, shell-quoted.
 
 ### Acceptance Criteria
 
@@ -193,3 +195,6 @@ the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 |---|---|---|
 | 2026-09-30 | `sessions_active` counts sessions whose status is not `ended` (active or idle); `tasks watch` also re-emits a project's `snapshot` on a 30 s clock refresh when the derived view changed (stale/abandoned move with time, not with the file); `record`/`mark` `--project-root` is optional (defaults to the resolved root); Stop marks idle through `stop/04b-task-board.sh`; the opencode plugin's `session.idle` payload now carries `session_id` so that hook can name the session | Spec was silent on these; each is needed for the stated behavior to hold |
 | 2026-09-30 | `ready` carries no extra keys; session ids that are not filename-safe are hashed by `record`, but the bash-side `mark` callers (Stop, SessionEnd) skip them, so such a session is never marked idle/ended | Provider ids in practice are UUIDs; skipping avoids a bash re-implementation of the hashing |
+| 2026-09-30 | Resume command `cd`s into the record's `cwd` when it is still a directory, else the project root | Providers find a session by working directory; one started in a linked worktree or subdirectory did not resume from the root |
+| 2026-09-30 | A removed task whose last status was `completed` or `cancelled` is not a match candidate for a later replace; the equal item becomes a new task | Reviving it as pending erased the completion the board still showed |
+| 2026-09-30 | The state directory is `<state-dir>/task-board/` (was `tasks/`); tasks are ordered by creation time then numeric key; `record` clears `idle_at`; a non-empty todo list with no readable entry is a no-op rather than "clear all"; a structurally invalid record is skipped by readers | `tasks` is too generic a basename for the machine-local classifier (`wiki/tasks/` would match); the rest are correctness fixes from review |

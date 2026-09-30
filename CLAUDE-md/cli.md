@@ -64,7 +64,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), the v2
 `credentials.local.json` (values, not references), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
-machine's app has shown), and the `tasks/` directory of per-session task-board records (ADR-0018:
+machine's app has shown), and the `task-board/` directory of per-session task-board records (ADR-0018:
 what this machine's agent sessions planned). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
@@ -218,7 +218,7 @@ against a real stream instead.
 `devteam tasks` ([ADR-0018](../docs/development/adrs/0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md),
 spec `docs/specs/task-board.md`). Hooks capture each provider's todo tool (Claude `TodoWrite` /
 `TaskCreate` / `TaskUpdate`, Codex `update_plan`, opencode `todowrite`) into one record per session,
-`<state-dir>/tasks/<session-key>.json` — machine-local, one file per session so two sessions never
+`<state-dir>/task-board/<session-key>.json` — machine-local, one file per session so two sessions never
 share a lock. `scripts/lib/devteam/tasks.py` owns it: normalizers (defensive, a payload it cannot read
 is a no-op), the per-session lock and atomic write, and every derived field — session `status`,
 task `column`, `stale`, `abandoned`, `durations` — which is computed on read and **never stored**.

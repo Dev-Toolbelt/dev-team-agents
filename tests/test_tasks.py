@@ -20,7 +20,9 @@ from pathlib import Path
 
 from devteam_support import CLI, REPO_ROOT, StoreTestCase, requires_bash
 
-from devteam import bind, tasks
+from unittest import mock
+
+from devteam import bind, hooks, project, tasks
 
 HOOKS = REPO_ROOT / "scripts" / "hooks"
 PRE_TOOL_USE = HOOKS / "pre-tool-use" / "04-task-board.sh"
@@ -179,7 +181,7 @@ class RecordTest(BoardCase):
         self.assertIsNotNone(record["branch"])
         self.assertEqual([t["key"] for t in record["tasks"]], ["t1", "t2"])
         path = tasks.record_path(self.root, self.project_id, "s1")
-        self.assertEqual(path.parent.name, "tasks")
+        self.assertEqual(path.parent.name, "task-board")
 
     def test_history_appends_only_on_status_change_and_drives_durations(self):
         self.rec(todo_write("s1", [todo("A")]), now=T0)
@@ -290,7 +292,7 @@ class RecordTest(BoardCase):
         self.assertTrue(self.rec(todo_write("odd id: 1", [todo("A")]))["recorded"])
         written = list(tasks.tasks_dir(self.root, self.project_id).glob("*.json"))
         self.assertEqual(len(written), 1)
-        self.assertEqual(written[0].parent.name, "tasks")
+        self.assertEqual(written[0].parent.name, "task-board")
 
     def test_malformed_payloads_and_unbound_roots_are_a_quiet_no_op(self):
         for payload in (None, "junk", {"tool_name": "TodoWrite", "session_id": "s", "tool_input": []}, {}):
@@ -585,11 +587,11 @@ class HookTest(BoardCase):
     def python_calls(self):
         return len(self.calls.read_text().splitlines()) if self.calls.is_file() else 0
 
-    def run_script(self, script, payload, extra_env=None):
+    def run_script(self, script, payload, extra_env=None, cwd=None):
         env = dict(os.environ, PATH="{}{}{}".format(self.shim, os.pathsep, os.environ["PATH"]))
         env.update(extra_env or {})
         return subprocess.run(
-            ["bash", str(script)], cwd=str(self.root), env=env,
+            ["bash", str(script)], cwd=str(cwd or self.root), env=env,
             input=(payload if isinstance(payload, str) else json.dumps(payload)).encode(),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
         )
@@ -609,7 +611,7 @@ class HookTest(BoardCase):
             result = self.run_script(PRE_TOOL_USE, payload)
             self.assertEqual((result.stdout, result.stderr), (b"", b""))
         self.assertEqual(self.python_calls(), 0)
-        self.assertEqual(list((self.state / "tasks").glob("*")) if (self.state / "tasks").exists() else [], [])
+        self.assertEqual(list((self.state / "task-board").glob("*")) if (self.state / "task-board").exists() else [], [])
 
     def test_pre_tool_use_records_codex_and_opencode_todo_calls(self):
         self.assertEqual(self.run_script(PRE_TOOL_USE, codex_plan("c1", [("Ship", "in_progress")])).stdout, b"")
@@ -663,6 +665,30 @@ class HookTest(BoardCase):
         self.assertEqual(self.python_calls(), before + 1)
         self.assertIsNotNone(self.load("s1")["idle_at"])
 
+    def test_a_hook_run_from_a_subdirectory_records_into_the_main_project(self):
+        sub = self.root / "pkg"
+        sub.mkdir(parents=True)
+        # An enclosing repository is what made a relative `--git-common-dir` resolve wrongly.
+        subprocess.run(["git", "init", "-q", str(self.tmp)], check=True)
+        self.run_script(POST_TOOL_USE, todo_write("s1", [todo("A")], cwd=str(sub)), cwd=sub)
+        self.assertEqual(len(self.load("s1")["tasks"]), 1)
+        self.run_script(SESSION_END, {"session_id": "s1"}, cwd=sub)
+        self.assertIsNotNone(self.load("s1")["ended_at"])
+
+    def test_a_layout_2_project_resolves_the_same_state_dir_in_bash_and_python(self):
+        self.assertGreaterEqual(project.layout(self.root), project.LAYOUT_MEMORY_IN_STORE)
+        expected = Path(project.state_dir(self.root, self.project_id))
+        expected.mkdir(parents=True, exist_ok=True)
+        resolved = subprocess.run(
+            ["bash", "-c", '. "$1/lib/data-dirs.sh" && devteam_state_dir "$2"', "_", str(HOOKS), str(self.root)],
+            stdout=subprocess.PIPE, check=True,
+        ).stdout.decode().strip()
+        self.assertEqual(Path(resolved).resolve(), expected.resolve())
+        self.assertIn("machines", expected.parts)
+        self.run_script(POST_TOOL_USE, todo_write("s1", [todo("A")], cwd=str(self.root)))
+        self.assertTrue((expected / "task-board" / "s1.json").is_file())
+        self.assertEqual(len(self.load("s1")["tasks"]), 1)
+
     def test_every_hook_exits_zero_and_silent_on_garbage(self):
         for script in (PRE_TOOL_USE, POST_TOOL_USE, POST_DISPATCHER, SESSION_END):
             result = self.run_script(script, "not json at all")
@@ -687,6 +713,306 @@ class HookTest(BoardCase):
         self.run_script(POST_TOOL_USE, todo_write("s1", [todo("A")]))
         self.run_script(POST_TOOL_USE, todo_write("s1", [todo("A", "completed")]))
         self.assertEqual(self.queue(), [])
+
+
+def lots(prefix, n, status="pending"):
+    return [todo("{}{}".format(prefix, i), status) for i in range(1, n + 1)]
+
+
+class ReviewRegressionTest(BoardCase):
+    def session(self, now=T0 + 10, **kwargs):
+        return self.view(now=now, **kwargs)[0]["sessions"][0]
+
+    def test_more_than_nine_tasks_created_in_one_second_keep_their_creation_order(self):
+        self.rec(todo_write("s1", lots("task ", 12)))
+        views = self.session()["tasks"]
+        self.assertEqual([t["key"] for t in views], ["t{}".format(i) for i in range(1, 13)])
+        self.assertEqual(views[9]["content"], "task 10")
+
+    def test_resume_command_uses_the_recorded_cwd_when_it_still_exists(self):
+        sub = self.root / "wt dir"
+        sub.mkdir()
+        self.rec(todo_write("s1", [todo("A")], cwd=str(sub)))
+        project = self.view()[0]
+        command = self.session()["resume_command"]
+        self.assertEqual(command, "cd {} && claude --resume s1".format(shlex.quote(str(sub))))
+        self.assertEqual(len(command.splitlines()), 1)
+        self.assertNotIn(shlex.quote(project["root"]) + " &&", command)
+
+    def test_resume_command_falls_back_to_the_root_for_a_missing_or_absent_cwd(self):
+        self.rec(todo_write("s1", [todo("A")], cwd=str(self.root / "gone")))
+        self.rec(todo_write("s2", [todo("A")]), now=T0 + 1)
+        root = self.view()[0]["root"]
+        for session in self.view()[0]["sessions"]:
+            self.assertEqual(session["resume_command"], "cd {} && claude --resume {}".format(shlex.quote(root), session["session_id"]))
+
+    def test_a_non_empty_list_with_nothing_readable_does_not_wipe_the_owners_tasks(self):
+        self.rec(todo_write("s1", [todo("A"), todo("B")]))
+        result = self.rec(todo_write("s1", [1, "x", {"status": "pending"}, None]), now=T0 + 5)
+        self.assertFalse(result["recorded"])
+        self.assertEqual([t["removed_at"] for t in self.load("s1")["tasks"]], [None, None])
+        self.assertEqual(self.load("s1")["updated_at"], T0)
+        self.assertEqual(tasks._items([1, "x"]), None)
+
+    def test_a_genuinely_empty_list_still_clears(self):
+        self.rec(todo_write("s1", [todo("A")]))
+        self.assertTrue(self.rec(todo_write("s1", []), now=T0 + 5)["recorded"])
+        self.assertIsNotNone(self.load("s1")["tasks"][0]["removed_at"])
+
+    def test_an_update_prefers_the_task_of_the_same_owner(self):
+        self.rec(task_create("s1", "main one", {"id": "1"}))
+        sub = task_create("s1", "sub one", {"id": "1"})
+        sub.update(agent_id="ag-1", agent_type="Explore")
+        self.rec(sub, now=T0 + 1)
+        update = task_update("s1", "1", "completed")
+        update.update(agent_id="ag-1", agent_type="Explore")
+        self.rec(update, now=T0 + 2)
+        by = {t["owner"]: t["status"] for t in self.load("s1")["tasks"]}
+        self.assertEqual(by, {"main": "pending", "ag-1": "completed"})
+
+    def test_an_update_falls_back_to_another_owners_task_when_the_owner_has_none(self):
+        self.rec(task_create("s1", "main one", {"id": "1"}))
+        update = task_update("s1", "1", "in_progress")
+        update.update(agent_id="ag-2", agent_type="Explore")
+        self.rec(update, now=T0 + 1)
+        recorded = self.load("s1")["tasks"]
+        self.assertEqual([(t["owner"], t["status"]) for t in recorded], [("main", "in_progress")])
+
+    def test_a_created_task_without_an_id_takes_the_next_session_wide_number(self):
+        self.rec(task_create("s1", "main", {"id": "1"}))
+        sub = task_create("s1", "sub", {"id": "2"})
+        sub.update(agent_id="ag-1", agent_type="Explore")
+        self.rec(sub, now=T0 + 1)
+        self.rec(task_create("s1", "unnumbered"), now=T0 + 2)
+        self.assertEqual([t["id"] for t in self.load("s1")["tasks"]], ["1", "2", "3"])
+
+    def write_raw(self, name, body):
+        directory = tasks.tasks_dir(self.root, self.project_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(json.dumps(body), encoding="utf-8")
+
+    def test_one_structurally_bad_record_does_not_hide_the_projects_other_sessions(self):
+        self.rec(todo_write("good", [todo("A")]))
+        bad_task = {"key": "t1", "content": "x", "owner": "main", "created_at": T0}  # no status / removed_at
+        self.write_raw("bad1.json", dict(self.load("good"), session_id="bad1", tasks=[bad_task]))
+        self.write_raw("bad2.json", dict(self.load("good"), session_id="bad2", last_seen_at=None))
+        self.write_raw("bad3.json", dict(self.load("good"), session_id="bad3", tasks=["nope"]))
+        sessions = self.view()[0]["sessions"]
+        self.assertEqual([s["session_id"] for s in sessions], ["good"])
+
+    def test_a_record_that_passes_validation_but_breaks_the_view_is_skipped_per_record(self):
+        self.rec(todo_write("good", [todo("A")]))
+        broken = self.load("good")
+        broken.update(session_id="odd")
+        broken["tasks"][0]["history"] = [{"at": T0}]  # no status: fails only when durations are derived
+        self.write_raw("odd.json", broken)
+        self.assertEqual([s["session_id"] for s in self.view()[0]["sessions"]], ["good"])
+        events = []
+        stop = tasks._Stop()
+        stop.set("test")
+        tasks.watch(events.append, watch_stdin=False, stop=stop)
+        self.assertEqual(events[-1]["event"], "end")
+
+    def test_an_unreadable_record_is_never_overwritten_by_record(self):
+        self.rec(todo_write("s1", [todo("A")]))
+        path = tasks.record_path(self.root, self.project_id, "s1")
+        damaged = self.load("s1")
+        damaged["last_seen_at"] = None
+        path.write_text(json.dumps(damaged), encoding="utf-8")
+        self.assertFalse(self.rec(todo_write("s1", [todo("B")]), now=T0 + 5)["recorded"])
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), damaged)
+
+    def test_git_runs_outside_the_session_lock(self):
+        def slow_branch(cwd):
+            time.sleep(0.4)
+            return "feat/x"
+
+        results = []
+        with mock.patch.object(tasks, "_git_branch", slow_branch), mock.patch.object(tasks, "LOCK_TIMEOUT", 0.2):
+            threads = [
+                threading.Thread(target=lambda n=n: results.append(
+                    self.rec(task_create("s1", "task {}".format(n), {"id": str(n)}), now=T0 + n)["recorded"]))
+                for n in (1, 2)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(results, [True, True])
+        self.assertEqual(len(self.load("s1")["tasks"]), 2)
+        self.assertEqual(self.load("s1")["branch"], "feat/x")
+
+    def test_racing_records_lose_no_update(self):
+        errors = []
+
+        def worker(owner, count):
+            for n in range(count):
+                payload = task_create("s1", "{} task {}".format(owner, n), {"id": "{}-{}".format(owner, n)})
+                if owner != "main":
+                    payload.update(agent_id=owner, agent_type="Explore")
+                if not self.rec(payload, now=T0 + n)["recorded"]:
+                    errors.append((owner, n))
+
+        threads = [threading.Thread(target=worker, args=(owner, 8)) for owner in ("main", "ag-1", "ag-2")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(len(self.load("s1")["tasks"]), 24)
+
+    def test_a_record_racing_a_mark_loses_neither(self):
+        self.rec(todo_write("s1", [todo("seed")]))
+        failures = []
+
+        def recorder():
+            for n in range(10):
+                if not self.rec(task_create("s1", "t{}".format(n), {"id": str(n)}), now=T0 + n)["recorded"]:
+                    failures.append(n)
+
+        def marker():
+            for _ in range(10):
+                if not tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 3)["marked"]:
+                    failures.append("mark")
+
+        threads = [threading.Thread(target=recorder), threading.Thread(target=marker)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(failures, [])
+        self.assertEqual(len(self.load("s1")["tasks"]), 11)
+
+    def test_activity_in_the_same_second_as_an_idle_mark_shows_the_session_active(self):
+        self.rec(todo_write("s1", [todo("A")]), now=T0)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 5)
+        self.assertEqual(self.session(now=T0 + 6)["status"], "idle")
+        self.rec(todo_write("s1", [todo("A", "in_progress")]), now=T0 + 5)
+        self.assertIsNone(self.load("s1")["idle_at"])
+        self.assertEqual(self.session(now=T0 + 6)["status"], "active")
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 7)
+        self.assertEqual(self.session(now=T0 + 8)["status"], "idle")
+
+    def test_a_task_removed_after_completing_is_not_revived_by_an_equal_item(self):
+        self.rec(todo_write("s1", [todo("Ship", "completed")]), now=T0)
+        self.rec(todo_write("s1", []), now=T0 + 1)
+        self.rec(todo_write("s1", [todo("Ship")]), now=T0 + 2)
+        recorded = self.load("s1")["tasks"]
+        self.assertEqual([(t["status"], t["removed_at"] is None) for t in recorded], [("completed", False), ("pending", True)])
+
+    def test_a_task_removed_before_finishing_is_still_revived(self):
+        self.rec(todo_write("s1", [todo("Ship")]), now=T0)
+        self.rec(todo_write("s1", []), now=T0 + 1)
+        self.rec(todo_write("s1", [todo("Ship", "in_progress")]), now=T0 + 2)
+        recorded = self.load("s1")["tasks"]
+        self.assertEqual([(t["status"], t["removed_at"]) for t in recorded], [("in_progress", None)])
+
+
+class HooksWiringTest(StoreTestCase):
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "wired"
+        (self.root / ".claude").mkdir(parents=True)
+        self.settings = self.root / ".claude" / "settings.json"
+
+    def read(self):
+        return json.loads(self.settings.read_text(encoding="utf-8"))
+
+    def ours(self, data, event):
+        return [e for e in data["hooks"].get(event, []) if hooks._is_devteam_entry(e, dict(hooks.EVENTS)[event])]
+
+    def test_wire_registers_post_tool_use_narrowed_and_session_end(self):
+        hooks.wire(self.root)
+        data = self.read()
+        (post,) = self.ours(data, "PostToolUse")
+        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate")
+        self.assertIn("post-tool-use.sh", post["hooks"][0]["command"])
+        (end,) = self.ours(data, "SessionEnd")
+        self.assertNotIn("matcher", end)
+        self.assertIn("session-end.sh", end["hooks"][0]["command"])
+
+    def test_wire_is_idempotent_and_keeps_foreign_entries(self):
+        foreign_post = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}
+        foreign_end = {"hooks": [{"type": "command", "command": "notify-me"}]}
+        self.settings.write_text(json.dumps({"hooks": {"PostToolUse": [foreign_post], "SessionEnd": [foreign_end]}, "x": 1}))
+        hooks.wire(self.root)
+        first = self.settings.read_text()
+        hooks.wire(self.root)
+        self.assertEqual(self.settings.read_text(), first)
+        data = self.read()
+        self.assertEqual(len(self.ours(data, "PostToolUse")), 1)
+        self.assertEqual(len(self.ours(data, "SessionEnd")), 1)
+        self.assertIn(foreign_post, data["hooks"]["PostToolUse"])
+        self.assertIn(foreign_end, data["hooks"]["SessionEnd"])
+        self.assertEqual(data["x"], 1)
+
+    def test_wire_rewrites_a_stale_post_tool_use_matcher_in_place(self):
+        hooks.wire(self.root)
+        data = self.read()
+        data["hooks"]["PostToolUse"][0]["matcher"] = ".*"
+        self.settings.write_text(json.dumps(data))
+        hooks.wire(self.root)
+        entries = self.read()["hooks"]["PostToolUse"]
+        self.assertEqual([e["matcher"] for e in entries], ["TodoWrite|TaskCreate|TaskUpdate"])
+
+    def test_unwire_removes_only_our_two_new_events_entries(self):
+        foreign_post = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}
+        foreign_end = {"hooks": [{"type": "command", "command": "notify-me"}]}
+        self.settings.write_text(json.dumps({"hooks": {"PostToolUse": [foreign_post], "SessionEnd": [foreign_end]}}))
+        hooks.wire(self.root)
+        removed = hooks.unwire(self.root)
+        self.assertIn("PostToolUse", removed)
+        self.assertIn("SessionEnd", removed)
+        data = self.read()
+        self.assertEqual(data["hooks"], {"PostToolUse": [foreign_post], "SessionEnd": [foreign_end]})
+
+    def test_unwire_drops_an_event_that_held_only_our_entry(self):
+        hooks.wire(self.root)
+        hooks.unwire(self.root)
+        self.assertNotIn("hooks", self.read())
+
+
+@requires_bash()
+class InstallInjectHookTest(StoreTestCase):
+    """`install.sh`'s `_inject_hook`, extracted verbatim, against an existing settings.json."""
+
+    POST = "env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/post-tool-use.sh"
+    END = "env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-end.sh"
+
+    def setUp(self):
+        super().setUp()
+        text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+        start = text.index("    _inject_hook() {")
+        end = text.index("\n    }\n", start) + len("\n    }\n")
+        self.function = text[start:end]
+        self.settings = self.tmp / "settings.json"
+
+    def inject(self):
+        script = self.function + (
+            '_inject_hook "PostToolUse" "$POST" "hooks/post-tool-use.sh"\n'
+            '_inject_hook "SessionEnd" "$END" "hooks/session-end.sh"\n'
+        )
+        subprocess.run(
+            ["bash", "-c", script],
+            env=dict(os.environ, SETTINGS_FILE=str(self.settings), POST=self.POST, END=self.END),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+
+    def test_the_two_new_events_are_injected_once_beside_foreign_entries(self):
+        foreign = {"hooks": [{"type": "command", "command": "echo keep"}]}
+        self.settings.write_text(json.dumps({"hooks": {"PostToolUse": [foreign]}, "other": True}))
+        self.inject()
+        first = self.settings.read_text()
+        self.inject()
+        self.assertEqual(self.settings.read_text(), first)
+        data = json.loads(first)
+        post = data["hooks"]["PostToolUse"]
+        self.assertEqual(post[0], foreign)
+        self.assertEqual(len(post), 2)
+        self.assertEqual(post[1]["matcher"], "TodoWrite|TaskCreate|TaskUpdate")
+        self.assertEqual(post[1]["hooks"][0]["command"], self.POST)
+        self.assertEqual(data["hooks"]["SessionEnd"], [{"hooks": [{"type": "command", "command": self.END}]}])
+        self.assertTrue(data["other"])
 
 
 if __name__ == "__main__":
