@@ -40,6 +40,7 @@ export function App() {
   const [environment, setEnvironment] = useState<EnvironmentReport | null>(null);
   const [handshake, setHandshake] = useState<OperationResult<HandshakeView> | null>(null);
   const [busy, setBusy] = useState(true);
+  const [tab, setTab] = useState('projects');
 
   async function load() {
     setBusy(true);
@@ -119,14 +120,16 @@ export function App() {
         ) : (
           <>
             <HandshakeBanner handshake={handshake} />
-            <Tabs defaultValue="projects">
+            <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
               </TabsList>
-              <TabsContent value="projects" className="pt-4">
-                <Projects environment={environment} />
+              {/* Kept mounted while another tab is shown: the project settings screen lives
+                  inside this tab, and unmounting it would silently drop unsaved edits. */}
+              <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
+                <Projects environment={environment} active={tab === 'projects'} />
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
                 <Catalog />

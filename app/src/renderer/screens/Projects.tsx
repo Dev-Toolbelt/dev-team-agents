@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
 import { Empty, Loading, Problem } from '../Problem.js';
+import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
 import type {
@@ -209,7 +210,14 @@ function WriteButton({
  * semantics to a screen reader for free, and there is no interaction here that a kit
  * component would buy anything for.
  */
-export function Projects({ environment }: { environment: EnvironmentReport | null }) {
+export function Projects({
+  environment,
+  active = true,
+}: {
+  environment: EnvironmentReport | null;
+  /** Whether this tab is the visible one. The tab stays mounted (see `App.tsx`), so it refetches on return. */
+  active?: boolean;
+}) {
   const { state, refreshing, reload: reloadList } = useOperation((): ReturnType<typeof window.devteam.listProjects> => window.devteam.listProjects());
   const [bindOpen, setBindOpen] = useState(false);
   const syncAll = useAction(() => window.devteam.syncAllProjects());
@@ -238,11 +246,46 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
   const [filterText, setFilterText] = useState('');
   const [filterMode, setFilterMode] = useState<BindMode | 'all'>('all');
   const [filterProviders, setFilterProviders] = useState<ReadonlySet<BindProvider>>(new Set());
+  // The project whose settings are open, by id — the record itself is looked up in the
+  // current listing, so a reload never leaves the screen holding a stale one.
+  const [openSettings, setOpenSettings] = useState<string | null>(null);
+  // The project whose settings just closed: focus goes back to its name, not to <body>.
+  const [returnFocusTo, setReturnFocusTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (returnFocusTo === null || openSettings !== null) return;
+    document.getElementById(settingsButtonId(returnFocusTo))?.focus();
+    setReturnFocusTo(null);
+  });
+
+  // Keeping the tab mounted preserves unsaved settings, but it also stopped the refetch a
+  // remount used to give for free; returning to the tab asks `list` again.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) reload();
+    wasActive.current = active;
+  });
 
   if (state.phase === 'loading') return <Loading what="devteam list" />;
   if (!state.result.ok) return <Problem problem={state.result} />;
 
   const { current, projects } = state.result.data;
+
+  const settingsFor = openSettings === null ? undefined : projects.find((project) => project.project_id === openSettings);
+  if (settingsFor !== undefined) {
+    return (
+      <ProjectSettings
+        project={settingsFor}
+        name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
+        environment={environment}
+        active={active}
+        onBack={() => {
+          setReturnFocusTo(settingsFor.project_id);
+          setOpenSettings(null);
+          reload();
+        }}
+      />
+    );
+  }
 
   const normalizedFilterText = filterText.trim().toLowerCase();
   const filteredProjects = projects.filter((project) => {
@@ -375,6 +418,7 @@ export function Projects({ environment }: { environment: EnvironmentReport | nul
                     projectNames={projectNames}
                     current={current}
                     onChanged={reload}
+                    onOpenSettings={() => setOpenSettings(project.project_id)}
                   />
                 ))}
               </TableBody>
@@ -485,6 +529,10 @@ function ProjectFilters({
   );
 }
 
+function settingsButtonId(projectId: string): string {
+  return `open-settings-${projectId}`;
+}
+
 type RowDialog = 'pin' | 'unbind' | 'upgrade' | null;
 
 /**
@@ -499,12 +547,14 @@ function ProjectRow({
   projectNames,
   current,
   onChanged,
+  onOpenSettings,
 }: {
   project: ProjectRecord;
   environment: EnvironmentReport | null;
   projectNames: Readonly<Record<string, string>>;
   current: string | null;
   onChanged: () => void;
+  onOpenSettings: () => void;
 }) {
   const [dialog, setDialog] = useState<RowDialog>(null);
   const sync = useAction(() => window.devteam.syncProject(project.project_id));
@@ -514,8 +564,20 @@ function ProjectRow({
     <TableRow>
       <TableCell>
         {/* The name only. `project_id` is a UUID that means nothing to the reader and is
-            never rendered — `devteam list` in a terminal is where a debugger gets it. */}
-        <span className="font-medium">{name}</span>
+            never rendered — `devteam list` in a terminal is where a debugger gets it. The
+            name is the way into the project's settings, so it is a real button. */}
+        <Hint content="Open this project's settings">
+          <button
+            type="button"
+            id={settingsButtonId(project.project_id)}
+            onClick={onOpenSettings}
+            className="group inline-flex items-center gap-1 rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            aria-label={`${name} — open settings`}
+          >
+            {name}
+            <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
+          </button>
+        </Hint>
       </TableCell>
       <TableCell>
         <span className="flex items-center gap-2 whitespace-nowrap">
