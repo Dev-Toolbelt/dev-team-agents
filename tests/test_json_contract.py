@@ -53,6 +53,11 @@ VALID_EXIT_CODES = {
 SKIP_INVOCATION = {
     ("update",): "reaches the network to fetch a release",
     ("uninstall",): "removes the core store the rest of the sweep still needs",
+    # Runs until its stdin closes or it is sent SIGTERM, and its `--json` stdout is
+    # JSON Lines, not one document — the one streaming exception. Its contract (one
+    # compact document per event, each with `ok`, `end` last) is pinned in
+    # `test_notifications.WatchTest`, against a real stream.
+    ("notifications", "watch"): "streams until stdin closes; covered by test_notifications",
 }
 
 

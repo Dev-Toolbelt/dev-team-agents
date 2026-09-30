@@ -416,6 +416,11 @@ MACHINE_LOCAL_RECORDS = (
     # appending to one portable log would need merge semantics nothing here has, and an
     # audit trail that silently interleaves two hosts is worse than two separate ones.
     "audit.log",
+    # What a hook on THIS machine noticed about a session on THIS machine, and which of
+    # those this machine's app has already shown. A context warning or an unseen mark
+    # means nothing on another host.
+    "notifications.jsonl",
+    "notifications-seen.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:

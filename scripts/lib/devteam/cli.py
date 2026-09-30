@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import catalog, compat, creds, doctor, migrate, notifications, paths, prefs, project, providers, registry, store, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -568,6 +568,33 @@ def cmd_catalog_show(args, emitter):
     return payload, "\n".join(lines)
 
 
+def _notification_line(record):
+    return "{:<8} {}  {}".format(record["level"], _short(record["project_id"]), record["message"])
+
+
+def cmd_notifications_list(args, emitter):
+    records = notifications.collect(args.project or None, unseen_only=args.unseen)
+    payload = {"notifications": records, "count": len(records)}
+    human = "\n".join(_notification_line(r) for r in records) or "no notifications"
+    return payload, human
+
+
+def cmd_notifications_ack(args, emitter):
+    marked = notifications.ack(args.ids, all_=args.all, project_ids=args.project or None)
+    return {"acknowledged": marked, "count": len(marked)}, "acknowledged {}".format(len(marked))
+
+
+def cmd_notifications_watch(args, emitter):
+    def emit(event):
+        human = None
+        if event["event"] == "notification":
+            human = _notification_line(event["notification"])
+        emitter.stream(event, human)
+
+    reason = notifications.watch(emit, interval=args.interval)
+    return {"reason": reason}, None
+
+
 def cmd_prefs_list(args, emitter):
     root, project_id = _bound_project(args.path, required=False)
     version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
@@ -1002,6 +1029,26 @@ def build_parser():
     migrate_parser.add_argument("--pin")
     migrate_parser.set_defaults(func=cmd_migrate)
 
+    notif_parser = leaf(
+        sub, "notifications", help="the notification queue the hooks write and the app shows"
+    ).add_subparsers(dest="notifications_cmd")
+    notif_list = leaf(notif_parser, "list", help="live notifications across bound projects")
+    notif_list.add_argument("--project", action="append", metavar="PROJECT_ID")
+    notif_list.add_argument("--unseen", action="store_true", help="only those not yet acknowledged")
+    notif_list.set_defaults(func=cmd_notifications_list)
+    notif_ack = leaf(notif_parser, "ack", help="mark notifications seen")
+    notif_ack.add_argument("ids", nargs="*", metavar="ID")
+    notif_ack.add_argument("--all", action="store_true", help="every live notification")
+    notif_ack.add_argument("--project", action="append", metavar="PROJECT_ID")
+    notif_ack.set_defaults(func=cmd_notifications_ack)
+    notif_watch = leaf(
+        notif_parser,
+        "watch",
+        help="stream new notifications until stdin closes or SIGTERM (JSON Lines with --json)",
+    )
+    notif_watch.add_argument("--interval", type=float, default=1.0, help="seconds between checks")
+    notif_watch.set_defaults(func=cmd_notifications_watch)
+
     prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
         dest="prefs_cmd"
     )
@@ -1311,6 +1358,8 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(
                 UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends")
             )
+        if getattr(args, "command", None) == "notifications":
+            return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:
@@ -1366,6 +1415,11 @@ def main(argv=None, stdout=None, stderr=None):
         # to sync N projects is not a success.
         ok = False
         exit_code = 1
+
+    if emitter.streamed:
+        # A streaming command's stdout is JSON Lines and already carried its last
+        # event (`end`); a trailing indented document would be unparseable there.
+        return exit_code
 
     payload = dict(payload)
     # `warn` only reaches stderr, and ADR-0011 makes the desktop app a client of this

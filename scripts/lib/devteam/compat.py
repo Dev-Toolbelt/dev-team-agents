@@ -408,6 +408,8 @@ MUTATING = {
     ("cred", "set"): "writes a credential reference and a value into a secret backend",
     ("cred", "unset"): "removes a reference, and the value with --forget-value",
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
+    ("notifications", "ack"): "writes notifications-seen.json in each project's machine-local "
+    "state directory",
     ("upgrade",): "relocates this project's memory into the store",
     ("export",): "creates an archive — durable state outside the store, and a restorable "
     "copy of shapes the declaring client just said it cannot read, which `import` on the "
@@ -442,6 +444,9 @@ READ_ONLY = {
     "(ADR-0010), and leaving it ungated is what keeps that refusal the answer a client "
     "gets on this command",
     ("cred", "check"): "reports references with no value or an insecure backend",
+    ("notifications", "list"): "reads each project's queue and seen marks",
+    ("notifications", "watch"): "stats each project's queue and streams new records; writes "
+    "nothing — acknowledging is `notifications ack`",
     ("cred", "backends"): "probes which secret stores this machine offers",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
@@ -474,6 +479,10 @@ READ_ONLY = {
 NEEDS_MACHINE_LAYOUT = {
     ("list",): "reads the registry, which resolves only at the post-split path — on a "
     "pre-split store it reports every bound project as unbound, with exit 0",
+    ("notifications", "list"): "finds each project's queue through the registry — on a "
+    "pre-split store it would report no notifications at all, with exit 0",
+    ("notifications", "watch"): "the same registry walk as `notifications list`, repeated "
+    "for as long as it runs",
 }
 
 

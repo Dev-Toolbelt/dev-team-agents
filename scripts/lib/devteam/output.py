@@ -17,6 +17,7 @@ class Emitter:
         self.stdout = stdout if stdout is not None else sys.stdout
         self.stderr = stderr if stderr is not None else sys.stderr
         self._emitted = False
+        self.streamed = False
 
     def warn(self, message):
         """Advisory text. Always stderr, so ``--json`` stdout stays parseable."""
@@ -56,6 +57,26 @@ class Emitter:
         else:
             self.stdout.write(payload)
         self._emitted = True
+
+    def stream(self, event, human=None):
+        """One event of a long-running command: a single JSON line, flushed at once.
+
+        The one exception to "exactly one JSON document": `devteam notifications
+        watch --json` runs until its reader goes away, so its stdout is JSON Lines —
+        one compact document per line, each carrying ``ok``. Compact, not indented,
+        because a reader splits on newlines. Flushed per event, because a reader
+        waiting on a pipe sees nothing a buffer is still holding. Once anything has
+        been streamed, ``main`` emits no final document of its own.
+        """
+        body = dict(event)
+        body.setdefault("ok", True)
+        if self.as_json:
+            self.stdout.write(json.dumps(body, ensure_ascii=False, sort_keys=True) + "\n")
+        elif human:
+            self.stdout.write("{}\n".format(human))
+        self.stdout.flush()
+        self._emitted = True
+        self.streamed = True
 
     def emit(self, payload, human=None):
         """Terminal output for a successful command.
