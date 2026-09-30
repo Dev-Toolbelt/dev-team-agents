@@ -111,6 +111,9 @@ QUIZ_MC_RE="\\?[[:space:]\"'\`*]*\\([[:space:]]*${QUIZ_OPT}([[:space:]]*/[[:spac
 ERRORS=()
 WARNINGS=()
 
+# Agents whose final report closes a review or QA pass (docs/specs/task-board.md § In Review).
+REVIEW_RESULT_AGENTS="qa-specialist code-reviewer backend-reviewer frontend-reviewer"
+
 # "<name><TAB><file>" entries, scanned for duplicates after all skills are read.
 SKILL_NAMES=()
 
@@ -200,6 +203,17 @@ check_agent() {
   elif [ "$(grep -c '^## ' "$file")" -gt 0 ] && [ "$(grep -n '^## ' "$file" | tail -1 | cut -d: -f2-)" != "## Before You Finish" ]; then
     ERRORS+=("  · ${file}: '## Before You Finish' must be the last section — it works by recency")
   fi
+
+  # The task board reads a review's outcome only from this marker; a reviewer
+  # that stops emitting it leaves every card at "result not read". Same recency
+  # reason as above: the requirement lives in the closing section.
+  case " $REVIEW_RESULT_AGENTS " in
+    *" $name_fm "*)
+      if ! sed -n '/^## Before You Finish$/,$p' "$file" | grep -q 'review-result: findings=N'; then
+        ERRORS+=("  · ${file}: review/QA agent must name the '<!-- review-result: findings=N -->' marker in '## Before You Finish' (skills/shared/review-result/SKILL.md)")
+      fi
+      ;;
+  esac
 
   # Same `|| true` reason: without it, an agent missing the banner exits the
   # script instead of reporting the very thing this check looks for.
