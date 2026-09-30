@@ -35,6 +35,13 @@ async function openPlugins(overrides: Parameters<typeof fakeBridge>[0] = {}, env
 
 const card = (title = 'Graphify') => screen.getByRole('region', { name: title });
 
+/** Cards start collapsed; open one the way a person does, through its trigger. */
+async function expand(title = 'Graphify') {
+  await userEvent.setup().click(screen.getByRole('button', { name: `Show ${title} details` }));
+}
+const trigger = (title = 'Graphify') => within(card(title)).getByRole('button', { name: new RegExp(`^(Show|Hide) ${title} details$`) });
+const body = (title = 'Graphify') => card(title).querySelector<HTMLElement>('[data-slot="collapsible-content"]') as HTMLElement;
+
 describe('the project screen’s tabs', () => {
   it('shows Preferences first and loads plugins only when the tab is opened', async () => {
     const bridge = fakeBridge();
@@ -136,6 +143,7 @@ describe('a plugin card', () => {
       ),
     });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const alert = within(card()).getByRole('alert');
     expect(within(alert).getByText('jq')).toBeInTheDocument();
     expect(within(alert).getByText('/devteam:install jq').tagName).toBe('CODE');
@@ -145,6 +153,7 @@ describe('a plugin card', () => {
   it('says the switch is committed to the repository and names the settings file', async () => {
     await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByText(/committed to the repository and applies to everyone on the project/)).toBeInTheDocument();
     expect(within(card()).getByText('.dev-team-agents/plugin-settings/graphify.json')).toBeInTheDocument();
   });
@@ -152,6 +161,7 @@ describe('a plugin card', () => {
   it('notes a legacy config', async () => {
     await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([pluginView({ source: 'legacy', enabled: true })])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByText('legacy config')).toBeInTheDocument();
     expect(within(card()).getByText(/still reads a legacy config file/)).toBeInTheDocument();
   });
@@ -163,6 +173,7 @@ describe('a plugin card', () => {
       ),
     });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByText('Graph is current')).toBeInTheDocument();
     expect(within(card()).getByText('Nodes').tagName).toBe('DT');
     expect(within(card()).getByText('128').tagName).toBe('DD');
@@ -174,6 +185,7 @@ describe('a plugin card', () => {
     await user.click(within(card()).getByRole('switch', { name: /Enable/ }));
     expect(bridge.setPluginEnabled).toHaveBeenCalledWith('proj-1', 'graphify', true);
     expect(await within(card()).findByRole('status')).toHaveTextContent(/is on for this project/);
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
     await waitFor(() => expect(bridge.projectPlugins).toHaveBeenCalledTimes(2));
   });
 
@@ -186,6 +198,7 @@ describe('a plugin card', () => {
     });
     await openPlugins({}, withheld);
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByRole('switch', { name: /Enable/ })).toBeDisabled();
     expect(within(card()).getByRole('button', { name: 'Detect paths' })).toBeDisabled();
     expect(within(card()).getAllByText(/Withheld: the store is ahead of this app/)).toHaveLength(2);
@@ -210,6 +223,7 @@ describe('the config form', () => {
   it('renders a control per type from the field alone', async () => {
     await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     expect(scope.getByRole('list', { name: 'Source paths' })).toBeInTheDocument();
     expect(scope.getByRole('textbox', { name: /Depth/ })).toHaveValue('3');
@@ -221,6 +235,7 @@ describe('the config form', () => {
   it('stages edits, saves them in one batch, and does nothing until then', async () => {
     const { bridge, user } = await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
 
     await user.type(scope.getByRole('textbox', { name: 'Source paths' }), 'lib{Enter}');
@@ -251,6 +266,7 @@ describe('the config form', () => {
       .mockResolvedValueOnce(fail('reload exploded'));
     const { user } = await openPlugins({ projectPlugins: list });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     await user.click(scope.getByRole('switch', { name: /Refresh at session end/ }));
     await user.click(scope.getByRole('button', { name: /Save changes/ }));
@@ -263,6 +279,7 @@ describe('the config form', () => {
   it('blocks Save while a value is invalid, and says which', async () => {
     const { bridge, user } = await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     const depth = scope.getByRole('textbox', { name: /Depth/ });
     await user.clear(depth);
@@ -276,6 +293,7 @@ describe('the config form', () => {
   it('discards staged edits', async () => {
     const { user } = await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     await user.click(scope.getByRole('switch', { name: /Refresh at session end/ }));
     expect(scope.getByRole('switch', { name: /Refresh at session end/ })).toBeChecked();
@@ -289,6 +307,7 @@ describe('the config form', () => {
     );
     const { user } = await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))), updatePluginConfig });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     await user.click(scope.getByRole('switch', { name: /Refresh at session end/ }));
     await user.selectOptions(scope.getByRole('combobox', { name: /Mode/ }), 'b');
@@ -302,6 +321,7 @@ describe('the string list editor', () => {
   it('adds on Enter and on the button, trims, and removes by name', async () => {
     const { user } = await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     const input = scope.getByRole('textbox', { name: 'Source paths' });
 
@@ -318,6 +338,7 @@ describe('the string list editor', () => {
   it('rejects a duplicate and an empty entry with a message', async () => {
     const { user } = await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     const input = scope.getByRole('textbox', { name: 'Source paths' });
 
@@ -343,6 +364,7 @@ describe('actions', () => {
   it('disables an enabled-only action while the plugin is off, and says why', async () => {
     await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByRole('button', { name: 'Rebuild graph' })).toBeDisabled();
     expect(within(card()).getByText('Enable this plugin to run this action.')).toBeInTheDocument();
     expect(within(card()).getByRole('button', { name: 'Detect paths' })).toBeEnabled();
@@ -355,6 +377,7 @@ describe('actions', () => {
       ),
     });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     expect(within(card()).getByRole('button', { name: 'Detect paths' })).toBeDisabled();
     expect(within(card()).getByRole('button', { name: 'Rebuild graph' })).toBeDisabled();
   });
@@ -363,6 +386,7 @@ describe('actions', () => {
     const runPluginAction = vi.fn(() => Promise.resolve(ok(runResult({ output: { targetPaths: ['src', 'app'], auto_refresh: true, rogue: 1 } }))));
     const { bridge, user } = await openPlugins({ runPluginAction });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
 
     await user.click(scope.getByRole('button', { name: 'Detect paths' }));
@@ -388,6 +412,7 @@ describe('actions', () => {
       .mockResolvedValueOnce(ok(runResult({ ok: false, exit_code: 3, log_tail: 'no manifest found' })));
     const { user } = await openPlugins({ runPluginAction });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     await user.click(scope.getByRole('button', { name: 'Detect paths' }));
     expect(await scope.findByText(/matches the current settings/)).toBeInTheDocument();
@@ -400,6 +425,7 @@ describe('actions', () => {
     const runPluginAction = vi.fn(() => Promise.resolve(ok(runResult({ output: { targetPaths: [] } }))));
     const { user } = await openPlugins({ runPluginAction });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
     expect(await within(card()).findByText(/found nothing to propose/)).toBeInTheDocument();
     expect(within(card()).queryByText(/matches the current settings/)).not.toBeInTheDocument();
@@ -410,6 +436,7 @@ describe('actions', () => {
     const runPluginAction = vi.fn(() => new Promise((resolve) => (finish = resolve)));
     const { user, onBack } = await openPlugins({ runPluginAction: runPluginAction as never });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
     await user.click(screen.getByRole('button', { name: 'Projects' }));
     const dialog = await screen.findByRole('dialog');
@@ -441,6 +468,7 @@ describe('actions', () => {
     await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
     await user.click(await screen.findByRole('tab', { name: /Plugins/ }));
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
 
     view.rerender(<Projects environment={env} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
@@ -460,6 +488,7 @@ describe('actions', () => {
       projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([pluginView({ enabled: true, configured: true })])))),
     });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     const scope = within(card());
     await user.click(scope.getByRole('button', { name: 'Rebuild graph' }));
     expect(await scope.findByText('Succeeded')).toBeInTheDocument();
@@ -477,6 +506,7 @@ describe('actions', () => {
     const runPluginAction = vi.fn(() => Promise.resolve(ok(runResult({ action: 'probe', output: { nodes: 3 } }))));
     const { user } = await openPlugins({ runPluginAction, projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([view])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('button', { name: 'Probe' }));
     expect(await within(card()).findByText(/"nodes": 3/)).toBeInTheDocument();
   });
@@ -485,8 +515,119 @@ describe('actions', () => {
     const runPluginAction = vi.fn(() => Promise.resolve(fail('graphify declares no action detect', { kind: 'refused' })));
     const { user } = await openPlugins({ runPluginAction });
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
     expect(await within(card()).findByText('graphify declares no action detect')).toBeInTheDocument();
+  });
+});
+
+describe('collapsing a card', () => {
+  const rich = pluginView({ enabled: true, configured: true });
+  const withRich = () => ({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
+
+  it('starts collapsed, expands on click and collapses again, keeping the content mounted', async () => {
+    const { user } = await openPlugins();
+    await screen.findByRole('heading', { name: 'Graphify' });
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger()).toHaveAccessibleName('Show Graphify details');
+    expect(body()).toHaveAttribute('data-state', 'closed');
+    expect(body()).toHaveAttribute('hidden');
+    expect(body()).toHaveClass('data-[state=closed]:hidden');
+    expect(within(body()).getByRole('textbox', { name: 'Source paths', hidden: true })).toBeInTheDocument();
+
+    await user.click(trigger());
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger()).toHaveAccessibleName('Hide Graphify details');
+    expect(trigger()).toHaveAttribute('aria-controls', body().id);
+    expect(body()).toHaveAttribute('data-state', 'open');
+    expect(body()).not.toHaveAttribute('hidden');
+
+    await user.click(trigger());
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(body()).toHaveAttribute('data-state', 'closed');
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('keeps the header, standing and switch visible while collapsed, and the switch does not expand the card', async () => {
+    const { bridge, user } = await openPlugins();
+    await screen.findByRole('heading', { name: 'Graphify' });
+    expect(body()).not.toContainElement(screen.getByRole('heading', { name: 'Graphify' }));
+    expect(body()).not.toContainElement(within(card()).getByRole('switch', { name: /Enable/ }));
+    await user.click(within(card()).getByRole('switch', { name: /Enable/ }));
+    expect(bridge.setPluginEnabled).toHaveBeenCalledWith('proj-1', 'graphify', true);
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(body()).toHaveAttribute('data-state', 'closed');
+  });
+
+  it('is forced open by a draft, cannot collapse until it is discarded, and keeps the draft', async () => {
+    const { user } = await openPlugins(withRich());
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    await user.type(within(card()).getByRole('textbox', { name: 'Source paths' }), 'lib');
+    await user.click(within(card()).getByRole('switch', { name: /Refresh at session end/ }));
+    await waitFor(() => expect(trigger()).toBeDisabled());
+    expect(trigger()).toHaveAttribute('title', 'Save or discard changes first');
+    expect(body()).toHaveAttribute('data-state', 'open');
+    expect(within(card()).getByRole('textbox', { name: 'Source paths' })).toHaveValue('lib');
+
+    await user.click(within(card()).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(trigger()).toBeEnabled());
+    expect(body()).toHaveAttribute('data-state', 'open');
+    await user.click(trigger());
+    expect(body()).toHaveAttribute('data-state', 'closed');
+  });
+
+  it('keeps the form mounted, and its typed text, across collapsing and expanding', async () => {
+    const { user } = await openPlugins(withRich());
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const input = within(card()).getByRole('textbox', { name: 'Source paths' });
+    await user.type(input, 'draft-in-input');
+    await user.clear(input);
+    await user.type(input, 'kept');
+    expect(trigger()).toBeEnabled();
+    await user.click(trigger());
+    await user.click(trigger());
+    expect(within(card()).getByRole('textbox', { name: 'Source paths' })).toBe(input);
+    expect(input).toHaveValue('kept');
+  });
+
+  it('stays open while an action runs, and cannot be collapsed', async () => {
+    let finish: (value: unknown) => void = () => {};
+    const runPluginAction = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    const { user } = await openPlugins({ runPluginAction: runPluginAction as never });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
+    await waitFor(() => expect(trigger()).toBeDisabled());
+    expect(trigger()).toHaveAttribute('title', 'An action is running');
+    expect(body()).toHaveAttribute('data-state', 'open');
+    finish(ok(runResult()));
+    await waitFor(() => expect(trigger()).toBeEnabled());
+  });
+
+  it('remembers which cards are open across a reload of the list after a save', async () => {
+    const { bridge, user } = await openPlugins(withRich());
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    await user.click(within(card()).getByRole('switch', { name: /Refresh at session end/ }));
+    await user.click(within(card()).getByRole('button', { name: /Save changes/ }));
+    await waitFor(() => expect(bridge.projectPlugins).toHaveBeenCalledTimes(2));
+    expect(await within(card()).findByText(/Saved 1 change/)).toBeInTheDocument();
+    await waitFor(() => expect(trigger()).toBeEnabled());
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    expect(body()).toHaveAttribute('data-state', 'open');
+  });
+
+  it('signals a plugin that needs attention in the header while collapsed', async () => {
+    await openPlugins({
+      projectPlugins: vi.fn(() =>
+        Promise.resolve(ok(pluginList([pluginView({ ready: false, requirements: [{ binary: 'graphify', found: false, install_hint: null }] })]))),
+      ),
+    });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    const badge = within(card()).getByText('Missing requirements', { selector: '[data-slot="badge"]' });
+    expect(body()).not.toContainElement(badge);
   });
 });
 
@@ -494,6 +635,7 @@ describe('leaving with unsaved plugin edits', () => {
   it('asks first, counts the plugin edits, and keeps them across a tab switch', async () => {
     const { user, onBack } = await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
     await user.click(within(card()).getByRole('switch', { name: /Refresh at session end/ }));
 
     await user.click(screen.getByRole('tab', { name: /Preferences/ }));

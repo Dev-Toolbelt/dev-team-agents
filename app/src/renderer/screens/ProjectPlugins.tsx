@@ -30,6 +30,10 @@ export function ProjectPlugins({
 }) {
   const projectId = project.project_id;
   const { state, refreshing, reload } = useOperation(() => window.devteam.projectPlugins(projectId), [projectId]);
+  const [openCards, setOpenCards] = useState<Readonly<Record<string, boolean>>>({});
+  const setCardOpen = useCallback((name: string, open: boolean) => {
+    setOpenCards((previous) => (previous[name] === open ? previous : { ...previous, [name]: open }));
+  }, []);
   const [dirty, setDirty] = useState<Readonly<Record<string, number>>>({});
 
   // The last list that loaded. A reload that fails must not unmount the cards: their drafts
@@ -38,6 +42,7 @@ export function ProjectPlugins({
   if (state.phase === 'done' && state.result.ok) lastGood.current = state.result.data;
 
   const cardDirty = useCallback((name: string, count: number) => {
+    if (count > 0) setCardOpen(name, true);
     setDirty((previous) => {
       if ((previous[name] ?? 0) === count) return previous;
       const next = { ...previous };
@@ -45,10 +50,11 @@ export function ProjectPlugins({
       else next[name] = count;
       return next;
     });
-  }, []);
+  }, [setCardOpen]);
 
   const [running, setRunning] = useState<Readonly<Record<string, number>>>({});
   const cardRunning = useCallback((name: string, count: number) => {
+    if (count > 0) setCardOpen(name, true);
     setRunning((previous) => {
       if ((previous[name] ?? 0) === count) return previous;
       const next = { ...previous };
@@ -56,7 +62,7 @@ export function ProjectPlugins({
       else next[name] = count;
       return next;
     });
-  }, []);
+  }, [setCardOpen]);
   const runningTotal = Object.values(running).reduce((sum, count) => sum + count, 0);
   useEffect(() => {
     onRunningChange(runningTotal);
@@ -138,6 +144,11 @@ export function ProjectPlugins({
             onChanged={reload}
             onDirtyChange={cardDirty}
             onRunningChange={cardRunning}
+            open={openCards[plugin.name] ?? false}
+            onOpenChange={setCardOpen}
+            lockedReason={
+              (dirty[plugin.name] ?? 0) > 0 ? 'Save or discard changes first' : (running[plugin.name] ?? 0) > 0 ? 'An action is running' : null
+            }
           />
         ))
       )}

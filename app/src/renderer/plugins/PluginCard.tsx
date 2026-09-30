@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, GitBranch, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, GitBranch, Info } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -56,6 +58,9 @@ export function PluginCard({
   onChanged,
   onDirtyChange,
   onRunningChange,
+  open,
+  onOpenChange,
+  lockedReason,
 }: {
   projectId: ProjectRecord['project_id'];
   plugin: PluginView;
@@ -70,6 +75,11 @@ export function PluginCard({
   onChanged: () => void;
   onDirtyChange: (name: string, count: number) => void;
   onRunningChange: (name: string, count: number) => void;
+  /** Whether the details are shown; owned by the screen so it survives list reloads. */
+  open: boolean;
+  onOpenChange: (name: string, open: boolean) => void;
+  /** Why the card cannot collapse right now (unsaved edits, a running action), or null. */
+  lockedReason: string | null;
 }) {
   const uid = useId();
   const titleId = `${uid}-title`;
@@ -218,9 +228,24 @@ export function PluginCard({
     />
   );
 
+  const expanded = open || lockedReason !== null;
+  const trigger = (
+    <CollapsibleTrigger asChild disabled={lockedReason !== null}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${expanded ? 'Hide' : 'Show'} ${plugin.title} details`}
+        title={lockedReason ?? undefined}
+      >
+        <ChevronRight className={cn('transition-transform', expanded && 'rotate-90')} aria-hidden="true" />
+      </Button>
+    </CollapsibleTrigger>
+  );
+
   return (
     <section aria-labelledby={titleId} className="rounded-xl border bg-card text-card-foreground shadow-sm" data-plugin={plugin.name}>
-      <header className="space-y-3 border-b px-5 py-4">
+      <Collapsible open={expanded} onOpenChange={(next) => onOpenChange(plugin.name, next)}>
+      <header className="px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -239,6 +264,7 @@ export function PluginCard({
             <p className="text-sm text-muted-foreground">{plugin.description}</p>
           </div>
           <div className="flex items-center gap-2">
+            {lockedReason !== null ? <Hint content={lockedReason}><span className="inline-flex">{trigger}</span></Hint> : trigger}
             <label htmlFor={`${uid}-enabled`} className="text-sm font-medium">
               Enable<span className="sr-only"> {plugin.title}</span>
             </label>
@@ -251,6 +277,31 @@ export function PluginCard({
             )}
           </div>
         </div>
+      </header>
+      <p aria-live="polite" className="sr-only">
+        {toggling ? 'Updating…' : saving ? 'Saving…' : unconfirmed ? 'Saved; the list could not be reloaded.' : (toggleNote ?? status)}
+      </p>
+
+      {toggleGate.withheld || (lastToggle !== null && !lastToggle.ok) || toggleNote !== null ? (
+        <div className="space-y-3 px-5 pb-4">
+        {toggleGate.withheld ? (
+          <p className="text-xs text-muted-foreground">Changing this plugin is unavailable right now: {toggleGate.reason}.</p>
+        ) : null}
+        {lastToggle !== null && !lastToggle.ok ? <Problem problem={lastToggle} /> : null}
+        {toggleNote !== null ? (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200"
+          >
+            <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+            {toggleNote}
+          </div>
+        ) : null}
+        </div>
+      ) : null}
+
+      <CollapsibleContent forceMount hidden={!expanded} className="data-[state=closed]:hidden">
+      <div className="space-y-3 border-t px-5 py-4">
         <p id={`${uid}-commit`} className="flex items-start gap-2 text-xs text-muted-foreground">
           <GitBranch className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           <span>
@@ -267,12 +318,9 @@ export function PluginCard({
             </span>
           </p>
         ) : null}
-      </header>
+      </div>
 
-      <div className="space-y-4 px-5 py-4">
-        <p aria-live="polite" className="sr-only">
-          {toggling ? 'Updating…' : saving ? 'Saving…' : unconfirmed ? 'Saved; the list could not be reloaded.' : (toggleNote ?? status)}
-        </p>
+      <div className="space-y-4 border-t px-5 py-4">
 
         {missing.length > 0 ? (
           <Alert variant="destructive">
@@ -294,20 +342,6 @@ export function PluginCard({
               </ul>
             </AlertDescription>
           </Alert>
-        ) : null}
-
-        {toggleGate.withheld ? (
-          <p className="text-xs text-muted-foreground">Changing this plugin is unavailable right now: {toggleGate.reason}.</p>
-        ) : null}
-        {lastToggle !== null && !lastToggle.ok ? <Problem problem={lastToggle} /> : null}
-        {toggleNote !== null ? (
-          <div
-            role="status"
-            className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200"
-          >
-            <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-            {toggleNote}
-          </div>
         ) : null}
 
         {plugin.status !== null ? (
@@ -431,6 +465,8 @@ export function PluginCard({
           While enabled, this plugin also runs at: {plugin.hooks.join(', ')}.
         </p>
       ) : null}
+      </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
