@@ -315,7 +315,8 @@ describe('Project kanban', () => {
     });
     const { user } = await openKanban(boardProject({ sessions: [boardSession({ last_activity_at: NOW, tasks: [task] })] }));
     const item = screen.getByText('Ship it').closest('article')!;
-    expect(item).toHaveTextContent('2m 5s');
+    expect(item).toHaveTextContent('2m');
+    expect(item).not.toHaveTextContent('2m 5s');
     expect(item).toHaveAccessibleName('Ship it');
     // A disclosure, not a hover tooltip: closed until asked, opened by a real button.
     const toggle = within(item).getByRole('button', { name: /time per step/i });

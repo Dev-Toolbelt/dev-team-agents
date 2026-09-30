@@ -61,6 +61,20 @@ export function formatDuration(seconds: number): string {
   return '0s';
 }
 
+/**
+ * `formatDuration` for figures that refresh once a minute: from one minute up the seconds are
+ * dropped (`12m`, `2h 5m`), since they would be a minute stale; under a minute they stay.
+ */
+export function formatDurationMinutes(seconds: number): string {
+  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  return formatDuration(total < 60 ? total : Math.floor(total / 60) * 60);
+}
+
+/** Tasks the CLI counts in these sessions that were not parsed into a card (unknown column and status). */
+export function countUnshown(sessions: readonly BoardSession[]): number {
+  return sessions.reduce((n, session) => n + Math.max(0, session.counts.total - session.tasks.length), 0);
+}
+
 export function percent(part: number, total: number): number {
   return total <= 0 ? 0 : Math.round((part / total) * 100);
 }

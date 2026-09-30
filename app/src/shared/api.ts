@@ -1112,7 +1112,8 @@ export interface BackgroundSettings {
 // ── the task board (ADR-0018) ─────────────────────────────────────────────────
 
 export type BoardColumn = 'todo' | 'in_progress' | 'in_review' | 'done';
-export type BoardReviewState = 'pending' | 'findings' | 'unread';
+/** `unknown`: the CLI sent no review state this app knows; the card claims nothing about the result. */
+export type BoardReviewState = 'pending' | 'findings' | 'unread' | 'unknown';
 export type BoardSessionStatus = 'active' | 'idle' | 'ended';
 
 export interface BoardCounts {

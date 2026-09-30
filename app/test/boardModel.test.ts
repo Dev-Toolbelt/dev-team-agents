@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 import {
   boardProjectName,
   buildKanban,
+  countUnshown,
   formatDuration,
+  formatDurationMinutes,
   percent,
   percentLabels,
   timeInColumn,
@@ -16,6 +18,30 @@ import {
   viewProject,
 } from '../src/renderer/boardModel.js';
 import { NOW, boardProject, boardSession, boardTask, tasksOf } from './fixtures/board.js';
+
+describe('formatDurationMinutes', () => {
+  it.each([
+    [0, '0s'],
+    [59, '59s'],
+    [60, '1m'],
+    [752, '12m'],
+    [7530, '2h 5m'],
+    [90_061, '1d 1h'],
+    [-4, '0s'],
+    [Number.NaN, '0s'],
+  ])('formats %s as %s', (seconds, expected) => {
+    expect(formatDurationMinutes(seconds)).toBe(expected);
+  });
+});
+
+describe('countUnshown', () => {
+  it('sums what each session counts beyond its cards, never below zero', () => {
+    const a = boardSession({ tasks: [boardTask({ key: 'a' })] });
+    const b = boardSession({ session_id: 'b', tasks: [boardTask({ key: 'b' })] });
+    expect(countUnshown([a, { ...b, counts: { ...b.counts, total: 4 } }])).toBe(3);
+    expect(countUnshown([{ ...a, counts: { ...a.counts, total: 0 } }])).toBe(0);
+  });
+});
 
 describe('formatDuration', () => {
   it.each([
