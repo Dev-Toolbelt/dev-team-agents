@@ -65,7 +65,7 @@ Help me set up this project with dev-team-agents
 | List what's available | `devteam catalog agents|skills|commands` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
-| Convert an existing v2 install | `devteam migrate --apply` |
+| Convert an existing v2 install (`bind` refuses one) | `devteam migrate --apply`, then the `git rm -r --cached` it prints |
 | Move a project's memory into the store | `devteam upgrade --apply` |
 | Manage credentials (set, get, audit, migrate v2) | `devteam cred set|get|list|unset|import|check|backends` |
 

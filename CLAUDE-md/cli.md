@@ -143,19 +143,19 @@ mode.
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
-| `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent |
+| `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()` |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
 | `devteam list` | Bound projects, mode, resolved version, pin drift |
 | `devteam sync [path] [--all]` | Rebuild artifacts from the store |
 | `devteam pin <v> \| --release` | Hold a project on a version, or return it to `current` |
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
-| `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply` |
+| `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply`. Reports, never runs, the `git rm -r --cached` the user owes: `git_tracked` (the vendored trees) and `git_tracked_artifacts` (committed links a bind replaced with machine-local ones) |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
 | `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
-| `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout |
+| `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add` |
 
 ## The `--json` contract
 

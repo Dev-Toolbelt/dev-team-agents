@@ -65,7 +65,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Listar o que está disponível | `devteam catalog agents|skills|commands` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
-| Converter uma instalação v2 existente | `devteam migrate --apply` |
+| Converter uma instalação v2 existente (o `bind` recusa) | `devteam migrate --apply`, depois o `git rm -r --cached` que ele imprime |
 | Mover a memória de um projeto para o store | `devteam upgrade --apply` |
 | Gerenciar credenciais (definir, obter, auditar, migrar v2) | `devteam cred set\|get\|list\|unset\|import\|check\|backends` |
 
