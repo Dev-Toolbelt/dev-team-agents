@@ -18,6 +18,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   CHANNELS,
   type BindRequest,
+  type ProjectFolders,
   type BoardFeed,
   type BoardSettings,
   type CopyResumeRequest,
@@ -49,6 +50,10 @@ const bridge: DevteamBridge = {
   handshake: () => ipcRenderer.invoke(CHANNELS.handshake),
   listProjects: () => ipcRenderer.invoke(CHANNELS.listProjects),
   projectNames: () => ipcRenderer.invoke(CHANNELS.projectNames),
+  projectFolders: () => ipcRenderer.invoke(CHANNELS.projectFolders),
+  // Rebuilt into plain JSON rather than passed through; the main process validates it again.
+  saveProjectFolders: (folders: ProjectFolders) =>
+    ipcRenderer.invoke(CHANNELS.saveProjectFolders, JSON.parse(JSON.stringify(folders)) as unknown),
   catalogSummary: () => ipcRenderer.invoke(CHANNELS.catalogSummary),
   // The argument is coerced to a string here and validated again in the main process.
   // The renderer is not trusted to have sent a member of the union just because the type
