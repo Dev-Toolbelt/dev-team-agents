@@ -64,6 +64,7 @@ Help me set up this project with dev-team-agents
 | Bind a project | `devteam bind /path/to/project` |
 | List what's available | `devteam catalog agents|skills|commands` |
 | Manage your global Claude / Codex / opencode skills | `devteam skills list\|show\|install\|remove` |
+| See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
 | Convert an existing v2 install (`bind` refuses one) | `devteam migrate --apply`, then the `git rm -r --cached` it prints |
@@ -289,7 +290,11 @@ Project-level overrides, precedence rules, and customization guidance now live i
 
 **Update check seems stuck / not firing** — the check runs once per session from `SessionStart` (`scripts/hooks/session-start.sh`), not on every tool call. Verify `.dev-team-agents/user-data/state.json` is a writable file (not a directory) and that `session-start.sh` is executable — the `last_update_check` key lives there now. The automatic Graphify refresh hook is disabled by default — see `CLAUDE-md/hooks.md` § Disabled Hooks for status and how to re-enable.
 
-**Notifications never appear in the terminal** — by design. A provider shows none of a hook's stdout to the user (`SessionStart` output is model context, `Stop` output is not displayed), so hooks queue notifications instead — context window, uncommitted work, stale docs, updates, the tip of the day — and the desktop app shows them as system notifications, including with its window closed. Without the app they wait in the queue: `devteam notifications list` shows them. Details: `CLAUDE-md/notifications.md`.
+**Notifications and the task board reach the desktop app.** A provider shows none of a hook's stdout to the user (`SessionStart` output is model context, `Stop` output is not displayed), so hooks capture task updates and queue notifications instead — context window, uncommitted work, stale docs, updates, the tip of the day. The desktop app shows:
+- **Notifications** as system alerts, even with its window closed
+- **Board** — a Kanban view of every task the agents create, from every bound project, with time spent in each step. Sessions are captured automatically by hooks for Claude Code and opencode (best-effort for Codex); the board is read-only. CLI equivalent: `devteam tasks list` and `watch`.
+
+Without the app, notifications and task records wait in the queue: `devteam notifications list` and `devteam tasks list` show them. Details: `CLAUDE-md/notifications.md`.
 
 **`setup-assistant` ran but the `## dev-team-agents` section is missing from CLAUDE.md** — tell your CLI: `"As the setup-assistant, the dev-team-agents section is missing from CLAUDE.md — please add it."`
 

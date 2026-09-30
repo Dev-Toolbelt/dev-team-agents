@@ -110,12 +110,24 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 > **Skill `name` must equal the skill's directory basename, and must be unique across all categories.** This is a cross-provider invariant, not a style rule: the render engine resolves opencode skills by frontmatter `name`, while the installers symlink by directory. A skill whose `name` disagrees with its directory loads under Claude and Codex but not under opencode. `helpers/agent-lint.sh` enforces both the match and the uniqueness.
 
-**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,stop}.sh` are the same bash scripts across all three providers. Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with `PreToolUse` / `Stop` / `PreCompact` / `SessionStart` event names (which coincide with Claude's).
+**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,post-tool-use,session-end,stop}.sh` are the same bash scripts across all three providers. Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with `SessionStart` / `PreToolUse` / `PostToolUse` / `PreCompact` / `SessionEnd` / `Stop` event names (new in this release: `PostToolUse` and `SessionEnd` for task board capture).
 
 **Context-window notification payload is provider-specific — by design, not oversight.** `stop/04-notifier.sh` estimates context usage from whatever JSON its stdin's `transcript_path` points at, reading the last usage entry's `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` (see `CLAUDE-md/notifications.md`). Each provider's stdin comes from a different source:
 - **Claude Code** passes its own transcript JSONL directly — the native format, no adaptation needed.
 - **Codex** hook stdin is documented to coincide with Claude's shape, and OpenAI's own usage schema (`input_tokens`/`output_tokens`, no separate cache fields) parses correctly under the same keys with zero code change — a cached-token subtotal there is informational, not additive, so leaving the Anthropic-only cache keys absent naturally falls back to `input_tokens` alone, which is already the full context size for that schema.
 - **opencode** has no on-disk transcript file at all. `opencode/plugin/dev-team-agents.ts`'s `buildContextPayload()` calls `client.session.messages()`, reads the last assistant message's `tokens: {input, output, cache: {read, write}}` from the SDK, and writes a **synthetic one-line JSONL** shaped like Claude's transcript before invoking `stop.sh` — so the same bash-side parsing works unmodified. Before this, the opencode plugin called `stop.sh` with no stdin at all, so the transcript-based method could never activate there; every session silently used the coarser turn-count fallback regardless of `preferences.json`.
+
+**Task board capture per provider — automatic, no agent cooperation needed.** Agents create todo lists using each provider's native tool (Claude Code `TaskCreate`/`TaskUpdate`, Codex `update_plan`, opencode `todowrite`). Hooks capture and normalize them into per-session machine-local records, one file per session, never deleted. The board shows time spent in each status and which subagent owns each task (ADR-0018).
+
+| Provider | Hook point | Tool | Replace or incremental | Ownership |
+| --- | --- | --- | --- | --- |
+| **Claude Code** | `PostToolUse` (matcher: `TodoWrite\|TaskCreate\|TaskUpdate`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
+| **Claude Code** | `PostToolUse` (same matcher) | `TodoWrite` (legacy, disabled by default) | Replace — full list each call | Matched by normalized content |
+| **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
+| **Codex** | Existing `PreToolUse` | `update_plan` | Replace | Matched by normalized content |
+| **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `todos[].id` from the tool response |
+
+Codex coverage is best-effort: whether `PreToolUse` fires for `update_plan` could not be verified empirically. When it does not, Codex sessions simply do not appear on the board; nothing fails.
 
 ---
 
