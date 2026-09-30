@@ -551,6 +551,36 @@ def check_project(project_root):
                 "Run `devteam sync`.",
             )
         )
+
+    # The unbound-v2 branch above never runs once a bind has written `project.json`,
+    # so a bind over a v2 install left the vendored tree behind with nothing to say
+    # so: this project reported `status: ok` with 324 framework files still in git.
+    leftover = migrate.leftover_trees(root)
+    if leftover:
+        findings.append(
+            _finding(
+                WARN,
+                "project",
+                "a v2 vendored install is still here ({} under {}/) — nothing reads it "
+                "since the bind".format(", ".join(leftover), project.PROJECT_DIR),
+                "Run `devteam migrate` — it shows a plan first and moves the old tree into "
+                "a dated quarantine rather than deleting it.",
+            )
+        )
+
+    tracked = bind_module.tracked_artifacts(root, manifest)
+    if tracked:
+        findings.append(
+            _finding(
+                WARN,
+                "bind",
+                "{} bind artifact(s) are tracked by git — ignoring them has no effect "
+                "while they are, and a commit would hand teammates links into this "
+                "machine's store".format(len(tracked)),
+                "Untrack them (the files stay on disk) and commit the removal: "
+                "git rm -r --cached {}".format(" ".join(tracked)),
+            )
+        )
     return findings, actions
 
 

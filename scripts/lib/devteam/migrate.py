@@ -15,6 +15,7 @@ short of rewriting their history.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -56,6 +57,103 @@ def detect(project_root):
         "has_user_data": (install_dir / "user-data").is_dir(),
         "already_bound": project.load(root) is not None,
     }
+
+
+def leftover_trees(project_root):
+    """The v2 trees still vendored under ``.dev-team-agents/``, or ``[]``.
+
+    Empty for a project registered in vendored mode: a v3 `--mode vendored` bind puts
+    the same trees in the same place on purpose, and reporting it as a leftover would
+    tell the user to quarantine the one layout they chose. This is the single answer
+    to "is there a v2 install here?" for `bind`'s refusal and `doctor`'s warning, so
+    the two can never disagree about the same directory.
+    """
+    found = detect(project_root)
+    if not found["is_v2"]:
+        return []
+    identity = project.load(project_root)
+    if identity is not None:
+        entry = registry.get(identity["project_id"])
+        if entry is not None and entry.get("mode") == "vendored":
+            return []
+    return found["vendored_trees"]
+
+
+def _tracked_v2_links(project_root):
+    """Tracked symlinks that point into the project's own ``.dev-team-agents/``.
+
+    What a v2 install committed, and what a bind replaces with links into this
+    machine's store — before any bind has run there is no manifest to read, so the
+    plan finds them from git's own record: mode 120000 entries whose target resolves
+    inside the install directory.
+    """
+    root = Path(project_root)
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-s", "-z"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    links = []
+    for record in result.stdout.decode("utf-8", "replace").split("\0"):
+        meta, _, path = record.partition("\t")
+        if path and meta.startswith("120000 "):
+            links.append((path, meta.split()[1]))
+    if not links:
+        return []
+    # The committed target, not the working tree's: after a bind the link on disk
+    # already points into the store, and the plan must still name it. One
+    # `cat-file --batch` for every blob — a Claude install commits ~155 links.
+    try:
+        shown = subprocess.run(
+            ["git", "cat-file", "--batch"],
+            cwd=str(root),
+            input="".join(blob + "\n" for _, blob in links).encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return []
+    output = shown.stdout
+    install_dir = os.path.abspath(str(root / project.PROJECT_DIR))
+    found = []
+    offset = 0
+    for path, _blob in links:
+        # Each answer is "<sha> <type> <size>\n<content>\n".
+        header_end = output.index(b"\n", offset)
+        size = int(output[offset:header_end].split()[2])
+        start = header_end + 1
+        target = Path(output[start : start + size].decode("utf-8", "replace"))
+        offset = start + size + 1
+        if not target.is_absolute():
+            target = (root / path).parent / target
+        resolved = os.path.normpath(os.path.abspath(str(target)))
+        try:
+            if os.path.commonpath([install_dir, resolved]) == install_dir:
+                found.append(path)
+        except ValueError:
+            continue
+    return sorted(found)
+
+
+def tracked_artifacts(project_root):
+    """Bind artifacts git tracks — from the manifest once bound, from git before."""
+    identity = project.load(project_root)
+    # Only a registered project's manifest is current: an unbind that kept its
+    # artifacts leaves the last manifest behind, and trusting it would report what a
+    # bind that no longer exists once wrote.
+    if identity is not None and registry.get(identity["project_id"]) is not None:
+        manifest = bind_module.read_manifest(identity["project_id"])
+        if manifest.get("artifacts"):
+            return bind_module.tracked_artifacts(project_root, manifest)
+    return _tracked_v2_links(project_root)
 
 
 def _git_tracked(project_root, relative):
@@ -116,10 +214,11 @@ def plan(root=None, provider_names=None, mode="auto"):
             "move .dev-team-agents/{} into the data-store quarantine".format(name)
         )
     actions.append("write the managed .gitignore block")
-    if tracked:
+    tracked_links = tracked_artifacts(project_root)
+    if tracked or tracked_links:
         actions.append(
             "REPORT ONLY: {} path(s) are tracked by git and need an explicit "
-            "`git rm -r --cached` commit".format(len(tracked))
+            "`git rm -r --cached` commit".format(len(tracked) + len(tracked_links))
         )
 
     return {
@@ -129,6 +228,7 @@ def plan(root=None, provider_names=None, mode="auto"):
         "mode": mode,
         "actions": actions,
         "git_tracked": tracked,
+        "git_tracked_artifacts": tracked_links,
         "preserved": list(PRESERVED),
     }
 
@@ -176,6 +276,9 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         if quarantined
         else None,
         "git_tracked": preview["git_tracked"],
+        # Recomputed from the manifest the bind just wrote: that is the authoritative
+        # list, and it can differ from the plan's git-derived guess.
+        "git_tracked_artifacts": tracked_artifacts(project_root),
         "preserved": list(PRESERVED),
         "unrecognised": preview["detected"]["unrecognised"],
     }

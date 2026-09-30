@@ -15,7 +15,7 @@ from pathlib import Path
 from . import bind as bind_module
 from . import catalog, compat, creds, doctor, migrate, paths, prefs, project, providers, registry, store, update, upgrade, versions
 from . import secrets as secrets_module
-from .errors import DevteamError, EnvError, UsageError
+from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
 
 PROGRAM = "devteam"
@@ -200,6 +200,23 @@ def cmd_store_gc(args, emitter):
 
 
 def cmd_bind(args, emitter):
+    # Here, not in `bind_module.bind()`: `sync`, `sync --all` and `migrate` all call
+    # that function, and a refusal there would stop a project that was already bound
+    # over a v2 install from ever syncing again. Only a bind the user asked for is
+    # refused. Binding over a v2 install used to succeed — it adopted the old relative
+    # links and left the vendored tree tracked in git, where `doctor` could no longer
+    # see it. `--mode vendored` is let through: that path already quarantines any
+    # existing tree before re-vendoring.
+    if args.mode != "vendored":
+        root = project.resolve_root(args.path)
+        leftover = migrate.leftover_trees(root) if root.is_dir() else []
+        if leftover:
+            raise ConflictError(
+                "{} is a v2 vendored install ({} under {}/) — bind would leave that tree "
+                "behind".format(root, ", ".join(leftover), project.PROJECT_DIR),
+                hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+                "old tree into a dated quarantine rather than deleting it.",
+            )
     result = bind_module.bind(
         args.path,
         provider_names=args.provider,
@@ -387,13 +404,12 @@ def cmd_migrate(args, emitter):
             "  quarantine {}".format(result["quarantine_dir"] or "(nothing moved)"),
             "  preserved  {}".format(", ".join(result["preserved"])),
         ]
-        if result["git_tracked"]:
+        untrack = result["git_tracked"] + result["git_tracked_artifacts"]
+        if untrack:
             lines.append(
-                "  git        {} path(s) still tracked — commit their removal:".format(
-                    len(result["git_tracked"])
-                )
+                "  git        {} path(s) still tracked — commit their removal:".format(len(untrack))
             )
-            lines.append("               git rm -r --cached {}".format(" ".join(result["git_tracked"])))
+            lines.append("               git rm -r --cached {}".format(" ".join(untrack)))
         if result["unrecognised"]:
             lines.append("  left alone {}".format(", ".join(result["unrecognised"])))
         return result, "\n".join(lines)
@@ -401,6 +417,10 @@ def cmd_migrate(args, emitter):
     result = migrate.plan(args.path, provider_names=args.provider, mode=args.mode)
     lines = ["migration plan for {} (nothing changed)".format(result["path"])]
     lines.extend("  - {}".format(action) for action in result["actions"])
+    untrack = result["git_tracked"] + result["git_tracked_artifacts"]
+    if untrack:
+        lines.append("  after --apply, untrack them (the files stay on disk):")
+        lines.append("    git rm -r --cached {}".format(" ".join(untrack)))
     lines.append("  run again with --apply to execute")
     return result, "\n".join(lines)
 

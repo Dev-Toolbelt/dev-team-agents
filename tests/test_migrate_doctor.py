@@ -1,5 +1,6 @@
 """v2 -> v3 migration, and the diagnostics that reconcile identity."""
 
+import json
 import shutil
 import subprocess
 import unittest
@@ -33,6 +34,17 @@ class MigrationTest(StoreTestCase):
             env=self._git_env(),
         )
         bind.unbind(root, keep_artifacts=True)
+        return root
+
+    def _install_sh_project(self, name="installed"):
+        """A v2 install as `install.sh` left it: no bind ever ran, so no manifest.
+
+        `_legacy_project` builds its tree with a vendored bind, whose manifest outlives
+        the unbind — and a later bind prunes whatever that manifest names, removing the
+        very tree a real v2 project keeps. Deleting it reproduces what users have.
+        """
+        root = self._legacy_project(name)
+        bind.manifest_file(project.load(root)["project_id"]).unlink()
         return root
 
     @staticmethod
@@ -112,6 +124,113 @@ class MigrationTest(StoreTestCase):
             check=True,
         ).stdout.decode()
         self.assertIn(".dev-team-agents/agents", still_tracked)
+
+    def test_plan_names_the_committed_v2_links_before_any_bind(self):
+        # Before a bind there is no manifest; the plan reads the committed link
+        # targets from git instead, so the untrack list is complete up front.
+        root = self._install_sh_project()
+        preview = migrate.plan(root)
+        self.assertIn(".claude/agents/dev-team", preview["git_tracked_artifacts"])
+        self.assertTrue(all(not p.startswith(".dev-team-agents/") for p in preview["git_tracked_artifacts"]))
+
+    def test_apply_lists_the_bind_artifacts_git_still_tracks(self):
+        root = self._legacy_project()
+        result = migrate.apply(root)
+        self.assertIn(".claude/agents/dev-team", result["git_tracked_artifacts"])
+
+
+class BindOverV2Test(StoreTestCase):
+    """A bind run straight over a v2 install — the path a user took before `bind` refused it.
+
+    `bind` adopted the old relative links and left the vendored tree in git; `doctor`
+    then reported `status: ok`, because its v2 check only ran without `project.json`.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.install_version("3.0.0", activate=True)
+
+    _git_env = staticmethod(MigrationTest._git_env)
+    _legacy_project = MigrationTest._legacy_project
+    _install_sh_project = MigrationTest._install_sh_project
+
+    def _bound_over_v2(self):
+        root = self._install_sh_project("bound-over-v2")
+        bind.bind(root, provider_names=["claude"], mode="link")
+        return root
+
+    def test_the_bind_command_refuses_a_v2_install_and_points_at_migrate(self):
+        root = self._install_sh_project()
+        code, out, _ = self.run_cli("--json", "bind", str(root), "--provider", "claude", "--mode", "link")
+        self.assertEqual(code, 4)
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertIn("devteam migrate", payload["hint"])
+        self.assertIsNone(project.load(root) and registry.get(project.load(root)["project_id"]))
+
+    def test_the_bind_command_still_accepts_an_explicit_vendored_bind(self):
+        root = self._install_sh_project()
+        code, _, err = self.run_cli("bind", str(root), "--provider", "claude", "--mode", "vendored")
+        self.assertEqual(code, 0, err)
+
+    def test_sync_keeps_working_on_a_project_already_bound_over_v2(self):
+        # The refusal lives in the command, not in `bind()`: sync calls `bind()`, and
+        # a project bound before the refusal existed must not become unsyncable.
+        root = self._bound_over_v2()
+        project_id = project.load(root)["project_id"]
+        result = bind.sync_project(project_id)
+        self.assertEqual(result["version"], "3.0.0")
+
+    def test_doctor_reports_the_leftover_tree_after_a_bind(self):
+        root = self._bound_over_v2()
+        report = doctor.run(project_root=root)
+        leftover = [f for f in report["findings"] if f["category"] == "project" and f["level"] == "warn"]
+        self.assertTrue(leftover, report["findings"])
+        self.assertIn("devteam migrate", leftover[0]["hint"])
+
+    def test_doctor_reports_tracked_artifacts_with_the_exact_untrack_command(self):
+        root = self._bound_over_v2()
+        report = doctor.run(project_root=root)
+        tracked = [f for f in report["findings"] if f["category"] == "bind" and "tracked by git" in f["message"]]
+        self.assertEqual(len(tracked), 1, report["findings"])
+        self.assertIn("git rm -r --cached", tracked[0]["hint"])
+        self.assertIn(".claude/agents/dev-team", tracked[0]["hint"])
+        # The project's own settings file is merged into, not owned: never untracked.
+        self.assertNotIn(".claude/settings.json", tracked[0]["hint"])
+
+    def test_a_vendored_bind_is_neither_a_leftover_nor_a_tracking_problem(self):
+        root = self.new_project("vendored-by-choice")
+        bind.bind(root, provider_names=["claude"], mode="vendored")
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        report = doctor.run(project_root=root)
+        messages = [f["message"] for f in report["findings"] if f["level"] != "ok"]
+        self.assertFalse(any("v2 vendored install" in m or "tracked by git" in m for m in messages), messages)
+
+    def test_migrate_json_shapes_are_exact_for_plan_and_apply(self):
+        # Pinned here until the app consumes `migrate` (roadmap phase 2); at that point
+        # these two sets move into `test_json_contract.AppFacingKeySetContractTest`.
+        root = self._install_sh_project()
+        code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(
+            set(json.loads(out)) - {"ok"},
+            {"path", "detected", "providers", "mode", "actions", "git_tracked",
+             "git_tracked_artifacts", "preserved"},
+        )
+        code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude", "--apply")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(
+            set(json.loads(out)) - {"ok"},
+            {"path", "project_id", "version", "mode", "providers", "quarantined",
+             "quarantine_dir", "git_tracked", "git_tracked_artifacts", "preserved", "unrecognised"},
+        )
+
+    def test_a_clean_link_bind_reports_no_tracked_artifacts(self):
+        root = self.new_project("clean")
+        bind.bind(root, provider_names=["claude"], mode="link")
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        manifest = bind.read_manifest(project.load(root)["project_id"])
+        self.assertEqual(bind.tracked_artifacts(root, manifest), [])
 
 
 class DoctorTest(StoreTestCase):
