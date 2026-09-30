@@ -38,7 +38,7 @@ if (mode === 'indented3') {
   process.exit(3);
 }
 if (mode === 'tasks') {
-  const counts = { todo: 1, in_progress: 0, done: 0, total: 1 };
+  const counts = { todo: 1, in_progress: 0, in_review: 0, done: 0, total: 1 };
   const project = (id) => ({
     project_id: id,
     root: `/repo/${id}`,
@@ -48,6 +48,7 @@ if (mode === 'tasks') {
     counts,
     stale: 0,
     abandoned: 0,
+    with_findings: 0,
     last_activity_at: 1790000000,
     sessions: [],
   });

@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import unittest
 
 from devteam_support import CLI, StoreTestCase, make_git_project
@@ -1144,6 +1145,45 @@ class AppFacingKeySetContractTest(StoreTestCase):
         populated = json.loads(out)
         self._assert_exact_keys("cred check", populated, self.EXPECTED["cred check"])
         self.assertTrue(populated["problems"])
+
+
+class TasksBoardAsOfContractTest(StoreTestCase):
+    """`tasks list` and each `tasks watch` snapshot stamp a project with `as_of` (additive)."""
+
+    def setUp(self):
+        super().setUp()
+        import test_tasks as tt
+
+        self.tt = tt
+        self.install_version("3.0.0", activate=True)
+        self.root = self.new_project("proj-as-of")
+        self.project_id = bind_module.bind(self.root, provider_names=["claude"], mode="link")["project_id"]
+        self.tt.tasks.record(
+            self.root, self.tt.todo_write("s1", [self.tt.todo("A", "in_progress")]), now=int(time.time()) - 30
+        )
+
+    def test_list_projects_carry_an_integer_as_of_equal_to_generated_at(self):
+        code, out, _ = self.run_cli("--json", "tasks", "list")
+        data = json.loads(out)
+        self.assertEqual(code, 0)
+        self.assertTrue(data["projects"])
+        for project in data["projects"]:
+            self.assertIsInstance(project["as_of"], int)
+            self.assertEqual(project["as_of"], data["generated_at"])
+
+    def test_every_watch_snapshot_project_carries_as_of(self):
+        proc = subprocess.Popen(
+            [sys.executable, str(CLI), "--json", "tasks", "watch", "--interval", "0.05"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(os.environ),
+        )
+        first = json.loads(proc.stdout.readline())
+        proc.stdin.close()
+        proc.stdout.read()
+        proc.wait(timeout=10)
+        proc.stdout.close()
+        proc.stderr.close()
+        self.assertEqual(first["event"], "snapshot")
+        self.assertIsInstance(first["project"]["as_of"], int)
 
 
 if __name__ == "__main__":

@@ -309,7 +309,7 @@ Project-level overrides, precedence rules, and customization guidance now live i
 
 **Notifications and the task board reach the desktop app.** A provider shows none of a hook's stdout to the user (`SessionStart` output is model context, `Stop` output is not displayed), so hooks capture task updates and queue notifications instead — context window, uncommitted work, stale docs, updates, the tip of the day. The desktop app shows:
 - **Notifications** as system alerts, even with its window closed
-- **Board** — a Kanban view of every task the agents create, from every bound project, with time spent in each step. Sessions are captured automatically by hooks for Claude Code, Codex and opencode; the board is read-only. CLI equivalent: `devteam tasks list` and `watch`.
+- **Board** — a Kanban view of every task the agents create, from every bound project, with time spent in each step. Sessions are captured automatically by hooks for Claude Code, Codex and opencode; the board is read-only. An optional **In Review** column appears when a review is triggered, showing tasks with their review findings; tasks leave when the review passes or its findings are fixed. CLI equivalent: `devteam tasks list` and `watch`.
 
 Without the app, notifications and task records wait in the queue: `devteam notifications list` and `devteam tasks list` show them. Details: `CLAUDE-md/notifications.md`.
 

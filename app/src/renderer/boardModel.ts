@@ -61,33 +61,49 @@ export function formatDuration(seconds: number): string {
   return '0s';
 }
 
+/**
+ * `formatDuration` for figures that refresh once a minute: from one minute up the seconds are
+ * dropped (`12m`, `2h 5m`), since they would be a minute stale; under a minute they stay.
+ */
+export function formatDurationMinutes(seconds: number): string {
+  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  return formatDuration(total < 60 ? total : Math.floor(total / 60) * 60);
+}
+
+/** Tasks the CLI counts in these sessions that were not parsed into a card (unknown column and status). */
+export function countUnshown(sessions: readonly BoardSession[]): number {
+  return sessions.reduce((n, session) => n + Math.max(0, session.counts.total - session.tasks.length), 0);
+}
+
 export function percent(part: number, total: number): number {
   return total <= 0 ? 0 : Math.round((part / total) * 100);
 }
 
 /**
- * The three percentages of a counts row, by the largest-remainder method, so they always
- * sum to 100 (independent rounding turns 1/1/1 into 33+33+33). All zero when nothing counts.
+ * The four percentages of a counts row (to do, in progress, in review, done), by the
+ * largest-remainder method, so they always sum to 100 (independent rounding turns 1/1/1 into
+ * 33+33+33). All zero when nothing counts.
  */
-export function percentLabels(counts: BoardCounts): readonly [number, number, number] {
-  const parts = [counts.todo, counts.in_progress, counts.done] as const;
-  const total = parts[0] + parts[1] + parts[2];
-  if (total <= 0) return [0, 0, 0];
+export function percentLabels(counts: BoardCounts): readonly [number, number, number, number] {
+  const parts = [counts.todo, counts.in_progress, counts.in_review, counts.done] as const;
+  const total = parts[0] + parts[1] + parts[2] + parts[3];
+  if (total <= 0) return [0, 0, 0, 0];
   const exact = parts.map((part) => (part * 100) / total);
   const floors = exact.map(Math.floor);
   let left = 100 - floors.reduce((a, b) => a + b, 0);
-  const order = [0, 1, 2].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
+  const order = [0, 1, 2, 3].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
   for (const index of order) {
     if (left <= 0) break;
     floors[index]! += 1;
     left -= 1;
   }
-  return [floors[0]!, floors[1]!, floors[2]!];
+  return [floors[0]!, floors[1]!, floors[2]!, floors[3]!];
 }
 
 export const STEP_LABELS: Readonly<Record<string, string>> = {
   pending: 'To do',
   in_progress: 'In progress',
+  in_review: 'In Review',
   completed: 'Done',
   cancelled: 'Cancelled',
 };
@@ -96,41 +112,73 @@ export function stepLabel(status: string): string {
   return STEP_LABELS[status] ?? status.replace(/_/g, ' ');
 }
 
-const STEP_ORDER = ['pending', 'in_progress', 'completed', 'cancelled'];
+const STEP_ORDER = ['pending', 'in_progress', 'in_review', 'completed', 'cancelled'];
 
-/**
- * How long a task has been in its current column. A running task keeps growing; anything
- * else stopped growing when its session ended (or, without an end time, at the session's
- * last activity), so it is measured to that instant and no further.
- */
-export function timeInColumn(session: BoardSession, task: BoardTask, nowSeconds: number, running: boolean): number {
-  const until = running ? nowSeconds : (session.ended_at ?? session.last_activity_at);
-  return Math.max(0, until - task.status_since);
+/** The step a task is in: the review window while in review, else the provider's own status. */
+function currentStep(task: BoardTask): string {
+  return task.column === 'in_review' ? 'in_review' : task.status;
 }
 
 /**
- * Time per step, in the order a task moves through them. The step a task is in right now
- * is read from `currentSeconds` (see `timeInColumn`) when that is longer than the CLI's
- * figure, because the CLI's number stopped growing when it last spoke. Passing the same
- * `currentSeconds` the card shows keeps the two from disagreeing.
+ * The current step's figure when the CLI stamped its snapshot (`as_of`): its own number for
+ * that step plus the time since it spoke, while the task runs; frozen at its number otherwise.
+ * The CLI partitions a task's lifetime, so this is the whole story and no other clock enters.
+ */
+function liveFromSnapshot(task: BoardTask, nowSeconds: number, running: boolean, asOf: number): number {
+  const base = task.durations[currentStep(task)] ?? 0;
+  return running ? base + Math.max(0, nowSeconds - asOf) : base;
+}
+
+/**
+ * How long a task has been in its current column. With `asOf` (the CLI's snapshot time) it is
+ * the same figure `stepDurations` shows on the current row, so headline and hover agree. Without
+ * it (an older CLI) a running task grows from its column's start; anything else stopped growing
+ * when its session ended (or, without an end time, at the session's last activity).
+ */
+export function timeInColumn(
+  session: BoardSession,
+  task: BoardTask,
+  nowSeconds: number,
+  running: boolean,
+  asOf?: number,
+): number {
+  if (asOf !== undefined) return liveFromSnapshot(task, nowSeconds, running, asOf);
+  const until = running ? nowSeconds : (session.ended_at ?? session.last_activity_at);
+  return Math.max(0, until - (task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since));
+}
+
+/**
+ * Time per step, in the order a task moves through them. With `asOf`, only the current step
+ * is live (CLI figure plus time since `as_of`) and every other row stays at the CLI's figure.
+ * Without it (an older CLI), the current row is read from `currentSeconds` (see `timeInColumn`)
+ * when longer than the CLI's figure, minus review time when the step is `in_progress`, since
+ * `status_since` predates any review window the task came back from.
  */
 export function stepDurations(
   task: BoardTask,
   nowSeconds: number,
   running: boolean,
   currentSeconds?: number,
+  asOf?: number,
 ): readonly { readonly status: string; readonly label: string; readonly seconds: number; readonly current: boolean }[] {
   const merged: Record<string, number> = { ...task.durations };
-  const live = currentSeconds ?? (running ? nowSeconds - task.status_since : undefined);
-  if (live !== undefined) merged[task.status] = Math.max(merged[task.status] ?? 0, live);
+  const step = currentStep(task);
+  if (asOf !== undefined) {
+    merged[step] = liveFromSnapshot(task, nowSeconds, running, asOf);
+  } else {
+    const since = task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since;
+    let live = currentSeconds ?? (running ? nowSeconds - since : undefined);
+    if (live !== undefined && step === 'in_progress') live = Math.max(0, live - (merged['in_review'] ?? 0));
+    if (live !== undefined) merged[step] = Math.max(merged[step] ?? 0, live);
+  }
   const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
   return statuses
-    .filter((status) => (merged[status] ?? 0) > 0 || status === task.status)
+    .filter((status) => (merged[status] ?? 0) > 0 || status === step)
     .map((status) => ({
       status,
       label: stepLabel(status),
       seconds: merged[status] ?? 0,
-      current: status === task.status,
+      current: status === step,
     }));
 }
 
@@ -155,13 +203,15 @@ export interface ProjectView {
   readonly counts: BoardCounts;
   readonly stale: number;
   readonly abandoned: number;
+  readonly withFindings: number;
 }
 
 function sumCounts(sessions: readonly BoardSession[]): BoardCounts {
-  const counts = { todo: 0, in_progress: 0, done: 0, total: 0 };
+  const counts = { todo: 0, in_progress: 0, in_review: 0, done: 0, total: 0 };
   for (const session of sessions) {
     counts.todo += session.counts.todo;
     counts.in_progress += session.counts.in_progress;
+    counts.in_review += session.counts.in_review;
     counts.done += session.counts.done;
     counts.total += session.counts.total;
   }
@@ -195,7 +245,18 @@ export function viewProject(project: BoardProject, period: Period, nowSeconds: n
     counts,
     stale: whole ? project.stale : tasks.filter((task) => task.stale).length,
     abandoned: whole ? project.abandoned : tasks.filter((task) => task.abandoned).length,
+    withFindings: whole ? project.with_findings : tasks.filter(hasFindings).length,
   };
+}
+
+/** Tasks in review with findings among the sessions given. */
+export function countFindings(sessions: readonly BoardSession[]): number {
+  return sessions.reduce((n, session) => n + session.tasks.filter(hasFindings).length, 0);
+}
+
+/** A task sitting in review with findings to fix. */
+export function hasFindings(task: BoardTask): boolean {
+  return task.column === 'in_review' && task.review?.state === 'findings';
 }
 
 // ── the kanban ────────────────────────────────────────────────────────────────
@@ -207,6 +268,8 @@ export interface KanbanFilters {
   /** Hide done tasks completed longer ago than `retentionDays`. */
   readonly hideOldDone: boolean;
   readonly retentionDays: number;
+  /** Only tasks in review with findings. Optional so a caller that predates the filter keeps working. */
+  readonly onlyFindings?: boolean;
 }
 
 export interface KanbanItem {
@@ -217,6 +280,7 @@ export interface KanbanItem {
 export interface KanbanView {
   readonly todo: readonly KanbanItem[];
   readonly in_progress: readonly KanbanItem[];
+  readonly in_review: readonly KanbanItem[];
   readonly done: readonly KanbanItem[];
   /** Done tasks the retention setting is hiding. */
   readonly hiddenDone: number;
@@ -230,6 +294,7 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   const doneCutoff = nowSeconds - filters.retentionDays * DAY;
   let hiddenDone = 0;
   const visible = items.filter(({ task }) => {
+    if (filters.onlyFindings === true && !hasFindings(task)) return false;
     if (task.column !== 'done' || !filters.hideOldDone) return true;
     const finished = task.completed_at ?? task.status_since;
     if (finished >= doneCutoff) return true;
@@ -240,6 +305,7 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   return {
     todo: visible.filter((i) => i.task.column === 'todo').sort(byCreated),
     in_progress: visible.filter((i) => i.task.column === 'in_progress').sort(byCreated),
+    in_review: visible.filter((i) => i.task.column === 'in_review').sort(byCreated),
     done: visible
       .filter((i) => i.task.column === 'done')
       .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),

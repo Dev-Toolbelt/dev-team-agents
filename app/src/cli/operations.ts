@@ -30,6 +30,8 @@ import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/plug
 import type {
   BoardColumn,
   BoardCounts,
+  BoardReview,
+  BoardReviewState,
   BoardProject,
   BoardSession,
   BoardSessionStatus,
@@ -1806,7 +1808,15 @@ export function watchNotifications(
 
 // ── the task board ────────────────────────────────────────────────────────────
 
-const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'done'];
+const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'in_review', 'done'];
+const REVIEW_STATES: readonly BoardReviewState[] = ['pending', 'findings', 'unread'];
+/** The board column a provider status maps to when the CLI's own `column` is one this app does not know. */
+const COLUMN_FOR_STATUS: Readonly<Record<string, BoardColumn>> = {
+  pending: 'todo',
+  in_progress: 'in_progress',
+  completed: 'done',
+  cancelled: 'done',
+};
 const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ended'];
 const MAX_TASK_TEXT = 2_000;
 const MAX_ID = 512;
@@ -1846,18 +1856,49 @@ function asBoardCounts(value: unknown): BoardCounts | string {
   if (todo === null || inProgress === null || done === null || total === null) {
     return '`counts` needs non-negative numeric todo, in_progress, done and total';
   }
-  return { todo, in_progress: inProgress, done, total };
+  // An absent or malformed `in_review` is derived from what the other columns leave of the total,
+  // so the bar, the figures and the total agree; an older CLI (no review column) derives 0.
+  const inReview = nonNegative(value['in_review']) ?? Math.max(0, total - todo - inProgress - done);
+  return { todo, in_progress: inProgress, in_review: inReview, done, total };
+}
+
+/**
+ * A review window, or null when absent or malformed. A state this app does not know (a newer
+ * CLI) is kept as `unknown`, which claims nothing, instead of guessing what it meant.
+ */
+function asBoardReview(value: unknown): BoardReview | null {
+  if (!isRecord(value)) return null;
+  const state = value['state'];
+  if (typeof state !== 'string') return null;
+  const since = nonNegative(value['since']);
+  if (since === null) return null;
+  if (!(REVIEW_STATES as readonly string[]).includes(state)) return { state: 'unknown', findings: null, since };
+  const raw = value['findings'];
+  let findings: number | null = null;
+  if (raw !== undefined && raw !== null) {
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0) return null;
+    findings = raw;
+  }
+  return { state: state as BoardReviewState, findings, since };
+}
+
+function boardColumnOf(column: unknown, status: unknown): BoardColumn | null {
+  if (typeof column === 'string' && (BOARD_COLUMNS as readonly string[]).includes(column)) return column as BoardColumn;
+  return typeof status === 'string' ? (COLUMN_FOR_STATUS[status] ?? null) : null;
 }
 
 /** `null` for a task this app cannot draw honestly; the caller drops it. */
 export function asBoardTask(raw: unknown): BoardTask | null {
   if (!isRecord(raw)) return null;
   const key = boundedString(raw['key'], MAX_ID);
-  const column = raw['column'];
+  const rawColumn = raw['column'];
   const createdAt = nonNegative(raw['created_at']);
   const statusSince = nonNegative(raw['status_since']);
   if (key === null || createdAt === null || statusSince === null) return null;
-  if (typeof column !== 'string' || !(BOARD_COLUMNS as readonly string[]).includes(column)) return null;
+  // An unknown column (a newer CLI) falls back to the column its provider status implies; only when
+  // neither is known is the card dropped, and the kanban says so from the session's counts.
+  const column = boardColumnOf(rawColumn, raw['status']);
+  if (column === null) return null;
   const content = typeof raw['content'] === 'string' ? raw['content'].slice(0, MAX_TASK_TEXT) : '';
   const durations: Record<string, number> = {};
   if (isRecord(raw['durations'])) {
@@ -1866,19 +1907,24 @@ export function asBoardTask(raw: unknown): BoardTask | null {
       if (n !== null) durations[status] = n;
     }
   }
+  let review = asBoardReview(raw['review']);
+  // A task the CLI puts in review always has a window; when it is missing or malformed there is no
+  // evidence about the result, so the card is in review with no claim about it.
+  if (review === null && column === 'in_review') review = { state: 'unknown', findings: null, since: statusSince };
   return {
     key,
     content,
     owner: typeof raw['owner'] === 'string' ? raw['owner'].slice(0, MAX_ID) : 'main',
     agent_type: asNullableString(raw['agent_type']),
     status: typeof raw['status'] === 'string' ? raw['status'] : column,
-    column: column as BoardColumn,
+    column,
     created_at: createdAt,
     status_since: statusSince,
     completed_at: nonNegative(raw['completed_at']),
     durations,
     stale: raw['stale'] === true,
     abandoned: raw['abandoned'] === true,
+    review,
   };
 }
 
@@ -1891,6 +1937,8 @@ function asBoardSession(raw: unknown): BoardSession | null {
   if (sessionId === null || provider === null || typeof counts === 'string') return null;
   if (typeof status !== 'string' || !(SESSION_STATUSES as readonly string[]).includes(status)) return null;
   const resume = raw['resume_command'];
+  // A card that cannot be drawn is dropped, but the CLI's `counts` are kept as sent; the kanban
+  // reports the difference (`counts.total` minus the cards kept) rather than hiding it.
   const tasks: BoardTask[] = [];
   if (Array.isArray(raw['tasks'])) {
     for (const entry of raw['tasks'].slice(0, MAX_TASKS_PER_SESSION)) {
@@ -1925,6 +1973,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
   const sessionsActive = nonNegative(raw['sessions_active']);
   if (sessionsTotal === null || sessionsActive === null) return `project ${projectId} has no numeric sessions_total / sessions_active`;
   if (!Array.isArray(raw['sessions'])) return `project ${projectId} has no sessions array`;
+  const asOf = nonNegative(raw['as_of']);
   const sessions: BoardSession[] = [];
   for (const entry of raw['sessions']) {
     const session = asBoardSession(entry);
@@ -1939,6 +1988,8 @@ export function asBoardProject(raw: unknown): BoardProject | string {
     counts,
     stale: nonNegative(raw['stale']) ?? 0,
     abandoned: nonNegative(raw['abandoned']) ?? 0,
+    with_findings: nonNegative(raw['with_findings']) ?? 0,
+    ...(asOf === null ? {} : { as_of: asOf }),
     last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
     sessions,
   };

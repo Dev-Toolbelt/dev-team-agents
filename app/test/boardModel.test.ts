@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 import {
   boardProjectName,
   buildKanban,
+  countUnshown,
   formatDuration,
+  formatDurationMinutes,
   percent,
   percentLabels,
   timeInColumn,
@@ -16,6 +18,30 @@ import {
   viewProject,
 } from '../src/renderer/boardModel.js';
 import { NOW, boardProject, boardSession, boardTask, tasksOf } from './fixtures/board.js';
+
+describe('formatDurationMinutes', () => {
+  it.each([
+    [0, '0s'],
+    [59, '59s'],
+    [60, '1m'],
+    [752, '12m'],
+    [7530, '2h 5m'],
+    [90_061, '1d 1h'],
+    [-4, '0s'],
+    [Number.NaN, '0s'],
+  ])('formats %s as %s', (seconds, expected) => {
+    expect(formatDurationMinutes(seconds)).toBe(expected);
+  });
+});
+
+describe('countUnshown', () => {
+  it('sums what each session counts beyond its cards, never below zero', () => {
+    const a = boardSession({ tasks: [boardTask({ key: 'a' })] });
+    const b = boardSession({ session_id: 'b', tasks: [boardTask({ key: 'b' })] });
+    expect(countUnshown([a, { ...b, counts: { ...b.counts, total: 4 } }])).toBe(3);
+    expect(countUnshown([{ ...a, counts: { ...a.counts, total: 0 } }])).toBe(0);
+  });
+});
 
 describe('formatDuration', () => {
   it.each([
@@ -45,18 +71,32 @@ describe('percent', () => {
 });
 
 describe('percentLabels', () => {
-  const c = (todo: number, in_progress: number, done: number) => ({ todo, in_progress, done, total: todo + in_progress + done });
+  const c = (todo: number, in_progress: number, done: number, in_review = 0) => ({
+    todo,
+    in_progress,
+    in_review,
+    done,
+    total: todo + in_progress + in_review + done,
+  });
 
   it('always sums to 100 (largest remainder), where independent rounding gave 99', () => {
-    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 33]);
+    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 0, 33]);
     for (const counts of [c(1, 1, 1), c(1, 2, 4), c(3, 3, 1), c(7, 11, 13), c(1, 0, 6), c(5, 0, 0)]) {
       expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
     }
   });
 
   it('keeps exact shares exact, and is all zero for an empty board', () => {
-    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 50]);
-    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0]);
+    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 0, 50]);
+    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('splits four parts by largest remainder and still sums to 100', () => {
+    expect(percentLabels(c(1, 1, 1, 1))).toEqual([25, 25, 25, 25]);
+    for (const counts of [c(1, 1, 1, 2), c(1, 2, 4, 1), c(3, 3, 1, 7), c(7, 11, 13, 5), c(0, 0, 1, 2)]) {
+      expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
+    }
+    expect(percentLabels({ todo: 1, in_progress: 1, in_review: 1, done: 0, total: 3 })).toEqual([34, 33, 33, 0]);
   });
 });
 
@@ -79,6 +119,90 @@ describe('timeInColumn', () => {
     const ended = boardSession({ status: 'ended', ended_at: NOW - 400, tasks: [task] });
     const inColumn = timeInColumn(ended, task, NOW + 5000, false);
     expect(stepDurations(task, NOW + 5000, false, inColumn).find((s) => s.current)?.seconds).toBe(600);
+  });
+});
+
+describe('in review', () => {
+  const review = boardTask({
+    key: 'rv',
+    column: 'in_review',
+    status: 'in_progress',
+    status_since: NOW - 5000,
+    review: { state: 'findings', findings: 2, since: NOW - 300 },
+    durations: { pending: 60, in_progress: 900, in_review: 120 },
+  });
+
+  it('measures time in column from review.since, not from the provider status change', () => {
+    expect(timeInColumn(boardSession({ tasks: [review] }), review, NOW, true)).toBe(300);
+    const noReview = { ...review, review: null };
+    expect(timeInColumn(boardSession({ tasks: [noReview] }), noReview, NOW, true)).toBe(5000);
+  });
+
+  it('lists In Review between In progress and Done, when it has time', () => {
+    const steps = stepDurations({ ...review, durations: { ...review.durations, completed: 0 } }, NOW, true);
+    expect(steps.map((s) => [s.label, s.seconds])).toEqual([
+      ['To do', 60],
+      ['In progress', 900],
+      ['In Review', 300],
+    ]);
+    expect(steps.find((s) => s.current)?.label).toBe('In Review');
+  });
+
+  it('keeps provider-status rows frozen while in review: only In Review is live, and the rows sum to the lifetime', () => {
+    const task = boardTask({
+      key: 'sum',
+      column: 'in_review',
+      status: 'in_progress',
+      created_at: NOW - 1200,
+      status_since: NOW - 1000,
+      review: { state: 'pending', findings: null, since: NOW - 300 },
+      durations: { pending: 200, in_progress: 700, in_review: 0, completed: 0 },
+    });
+    const at = (later: number) => stepDurations(task, NOW + later, true, timeInColumn(boardSession({ tasks: [task] }), task, NOW + later, true));
+    const first = at(0);
+    const later = at(600);
+    const row = (steps: typeof first, label: string) => steps.find((s) => s.label === label)?.seconds;
+    expect(row(later, 'To do')).toBe(row(first, 'To do'));
+    expect(row(later, 'In progress')).toBe(row(first, 'In progress'));
+    expect(row(first, 'In Review')).toBe(300);
+    expect(row(later, 'In Review')).toBe(900);
+    expect(first.reduce((n, s) => n + s.seconds, 0)).toBe(1200);
+    expect(later.filter((s) => s.current).map((s) => s.label)).toEqual(['In Review']);
+  });
+
+  it('does not count a past review window as in-progress time when the task returns to in progress', () => {
+    const task = boardTask({
+      column: 'in_progress',
+      status: 'in_progress',
+      status_since: NOW - 1000,
+      durations: { pending: 0, in_progress: 100, in_review: 400 },
+    });
+    const steps = stepDurations(task, NOW, true, NOW - task.status_since);
+    expect(steps.find((s) => s.label === 'In progress')?.seconds).toBe(600);
+    expect(steps.find((s) => s.label === 'In Review')?.seconds).toBe(400);
+  });
+
+  it('drops an empty In Review step for a task that is not in review', () => {
+    const task = boardTask({ status: 'completed', column: 'done', durations: { in_progress: 10, in_review: 0, completed: 0 } });
+    expect(stepDurations(task, NOW, false).map((s) => s.label)).toEqual(['In progress', 'Done']);
+  });
+
+  it('puts in-review tasks in their own column and filters to findings only', () => {
+    const clean = boardTask({ key: 'clean', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 10 } });
+    const project = boardProject({ sessions: [boardSession({ tasks: [review, clean, boardTask({ key: 'plain' })] })] });
+    const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionDays: 7 } as const;
+    expect(buildKanban(project, filters, NOW).in_review.map((i) => i.task.key)).toEqual(['rv', 'clean']);
+    const only = buildKanban(project, { ...filters, onlyFindings: true }, NOW);
+    expect(only.in_review.map((i) => i.task.key)).toEqual(['rv']);
+    expect(only.todo).toHaveLength(0);
+  });
+
+  it('recomputes with_findings and in_review counts for a narrower period', () => {
+    const old = boardSession({ session_id: 'old', last_activity_at: NOW - 20 * 86_400, tasks: [review] });
+    const recent = boardSession({ session_id: 'recent', tasks: [boardTask({ key: 'x' })] });
+    const project = boardProject({ sessions: [recent, old] });
+    expect(viewProject(project, 'all', NOW)).toMatchObject({ withFindings: 1, counts: { in_review: 1 } });
+    expect(viewProject(project, '7d', NOW)).toMatchObject({ withFindings: 0, counts: { in_review: 0 } });
   });
 });
 
@@ -133,7 +257,7 @@ describe('viewProject', () => {
 
   it('a narrower period recomputes from the sessions that remain', () => {
     const view = viewProject(project, '7d', NOW)!;
-    expect(view.counts).toEqual({ todo: 1, in_progress: 1, done: 1, total: 3 });
+    expect(view.counts).toEqual({ todo: 1, in_progress: 1, in_review: 0, done: 1, total: 3 });
     expect(view.sessionsTotal).toBe(1);
     expect(view.providers).toEqual(['claude']);
     expect(view.stale).toBe(0);
@@ -193,5 +317,59 @@ describe('boardProjectName', () => {
     expect(boardProjectName(project, { 'uuid-1': 'Shop' })).toBe('Shop');
     expect(boardProjectName(project, {})).toBe('storefront');
     expect(boardProjectName(boardProject({ project_id: 'uuid-1', root: '' }), {})).toBe('uuid-1');
+  });
+});
+
+describe('live figures from the CLI snapshot (as_of)', () => {
+  const session = boardSession();
+  const headlineAndRow = (task: ReturnType<typeof boardTask>, later: number, running = true, asOf = NOW) => {
+    const headline = timeInColumn(session, task, NOW + later, running, asOf);
+    const steps = stepDurations(task, NOW + later, running, headline, asOf);
+    return { headline, steps, current: steps.find((s) => s.current)! };
+  };
+
+  it('a task reviewed in two windows: In Review carries both, In progress is frozen, headline equals the row', () => {
+    const task = boardTask({
+      column: 'in_review',
+      status: 'in_progress',
+      status_since: NOW - 9000,
+      review: { state: 'pending', findings: null, since: NOW - 50 },
+      durations: { pending: 60, in_progress: 400, in_review: 350 },
+    });
+    const at = headlineAndRow(task, 40);
+    expect(at.current).toMatchObject({ status: 'in_review', seconds: 390 });
+    expect(at.headline).toBe(390);
+    expect(at.steps.find((s) => s.status === 'in_progress')?.seconds).toBe(400);
+    expect(headlineAndRow(task, 100).steps.find((s) => s.status === 'pending')?.seconds).toBe(60);
+  });
+
+  it('reopening after a review: In progress grows from its own figure and In Review stays frozen', () => {
+    const task = boardTask({
+      column: 'in_progress',
+      status: 'in_progress',
+      status_since: NOW - 9000,
+      durations: { pending: 60, in_progress: 400, in_review: 350 },
+    });
+    const at = headlineAndRow(task, 25);
+    expect(at.current).toMatchObject({ status: 'in_progress', seconds: 425 });
+    expect(at.headline).toBe(425);
+    expect(at.steps.find((s) => s.status === 'in_review')?.seconds).toBe(350);
+  });
+
+  it('a task that is not running is frozen at the CLI figure however late the clock reads', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', durations: { in_progress: 400 } });
+    const at = headlineAndRow(task, 99_999, false);
+    expect(at.current.seconds).toBe(400);
+    expect(at.headline).toBe(400);
+  });
+
+  it('never runs backwards when the clock reads earlier than as_of', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', durations: { in_progress: 400 } });
+    expect(headlineAndRow(task, -500).headline).toBe(400);
+  });
+
+  it('falls back to the status_since arithmetic without as_of', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', status_since: NOW - 1000, durations: { in_progress: 100 } });
+    expect(timeInColumn(session, task, NOW, true)).toBe(1000);
   });
 });

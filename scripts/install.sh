@@ -689,6 +689,7 @@ SESSION_START_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/sessio
 PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-compact.sh"
 POST_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/post-tool-use.sh"
 SESSION_END_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-end.sh"
+USER_PROMPT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/user-prompt-submit.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -738,7 +739,18 @@ if [ ! -f "$SETTINGS_FILE" ]; then
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|TaskCreate|TaskUpdate",
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$POST_TOOL_USE_HOOK"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Agent|Task",
         "hooks": [
           {
             "type": "command",
@@ -756,6 +768,16 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$USER_PROMPT_HOOK"
+          }
+        ]
+      }
     ]
   }
 }
@@ -769,6 +791,36 @@ else
         local check_str="$3"
 
         if grep -q "$check_str" "$SETTINGS_FILE" 2>/dev/null; then
+            if [ "$hook_type" = "PostToolUse" ] && command -v python3 >/dev/null 2>&1; then
+                # An entry written before review capture only matched the todo tools. Only OUR
+                # entry, and only when its matcher is exactly a value we shipped before, is
+                # widened; anything else is the user's own choice and is left alone.
+                python3 - "$SETTINGS_FILE" "$check_str" <<'PYEOF'
+import sys, json
+
+settings_file, check_str = sys.argv[1], sys.argv[2]
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"
+previous = ("TodoWrite|TaskCreate|TaskUpdate",)
+changed = False
+for entry in data.get('hooks', {}).get('PostToolUse', []):
+    if not isinstance(entry, dict):
+        continue
+    commands = [h.get('command', '') for h in entry.get('hooks', []) if isinstance(h, dict)]
+    if not any(check_str in c for c in commands) or entry.get('matcher') == wanted:
+        continue
+    if entry.get('matcher') in previous:
+        entry['matcher'] = wanted
+        changed = True
+    else:
+        print("→ NOTE: PostToolUse matcher %r left as is; review capture needs %r" % (entry.get('matcher'), wanted), file=sys.stderr)
+if changed:
+    with open(settings_file, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+PYEOF
+            fi
             echo "→ $hook_type hook already present in .claude/settings.json"
             return
         fi
@@ -789,7 +841,7 @@ new_entry = {"hooks": [{"type": "command", "command": hook_cmd}]}
 if hook_type == "PreToolUse":
     new_entry["matcher"] = ".*"
 elif hook_type == "PostToolUse":
-    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate"
+    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"
 
 entries.append(new_entry)
 
@@ -806,7 +858,7 @@ PYEOF
 
     # Migrate existing hook commands to use `env -u BASH_ENV -u ENV` wrapper
     # (fixes WSL /etc/bash.bashrc noise from start-systemd-namespace).
-    if grep -q "hooks/pre-tool-use.sh\|hooks/stop.sh\|hooks/session-start.sh\|hooks/pre-compact.sh\|hooks/post-tool-use.sh\|hooks/session-end.sh" "$SETTINGS_FILE" 2>/dev/null; then
+    if grep -q "hooks/pre-tool-use.sh\|hooks/stop.sh\|hooks/session-start.sh\|hooks/pre-compact.sh\|hooks/post-tool-use.sh\|hooks/session-end.sh\|hooks/user-prompt-submit.sh" "$SETTINGS_FILE" 2>/dev/null; then
         if ! grep -q "env -u BASH_ENV" "$SETTINGS_FILE" 2>/dev/null; then
             if command -v python3 >/dev/null 2>&1; then
                 python3 - "$SETTINGS_FILE" <<'PYEOF'
@@ -817,7 +869,7 @@ with open(settings_file, 'r') as f:
     content = f.read()
 
 # Replace bare hook paths with env-wrapped versions
-hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh", "post-tool-use.sh", "session-end.sh"]
+hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh", "post-tool-use.sh", "session-end.sh", "user-prompt-submit.sh"]
 for hook in hooks:
     pattern = r'(\.dev-team-agents/scripts/hooks/' + re.escape(hook) + r')'
     replacement = r'env -u BASH_ENV -u ENV \1'
@@ -839,6 +891,30 @@ PYEOF
     _inject_hook "PreCompact"   "$PRE_COMPACT_HOOK"    "hooks/pre-compact.sh"
     _inject_hook "PostToolUse"  "$POST_TOOL_USE_HOOK"  "hooks/post-tool-use.sh"
     _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
+    _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
+
+    # A failed subagent launch never reaches PostToolUse: the same dispatcher retires it.
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$SETTINGS_FILE" "$POST_TOOL_USE_HOOK" <<'PYEOF'
+import sys, json
+
+settings_file, hook_cmd = sys.argv[1], sys.argv[2]
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+entries = data.setdefault('hooks', {}).setdefault('PostToolUseFailure', [])
+ours = [
+    e for e in entries
+    if isinstance(e, dict) and any(
+        "hooks/post-tool-use.sh" in h.get('command', '') for h in e.get('hooks', []) if isinstance(h, dict)
+    )
+]
+if not ours:
+    entries.append({"matcher": "Agent|Task", "hooks": [{"type": "command", "command": hook_cmd}]})
+    with open(settings_file, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+PYEOF
+    fi
 
     # Ensure includeCoAuthoredBy is set to false (idempotent)
     if ! grep -q '"includeCoAuthoredBy"' "$SETTINGS_FILE" 2>/dev/null; then

@@ -17,6 +17,7 @@ replaces a stale v2 path with the current one, and leaves every other key alone.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from . import jsonio, project
@@ -50,14 +51,27 @@ EVENTS = (
     ("PreCompact", "pre-compact.sh"),
     ("PostToolUse", "post-tool-use.sh"),
     ("SessionEnd", "session-end.sh"),
+    ("UserPromptSubmit", "user-prompt-submit.sh"),
+    # A subagent launch that failed never reaches PostToolUse; the same dispatcher retires it.
+    ("PostToolUseFailure", "post-tool-use.sh"),
 )
 
 #: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
 #: (its sub-scripts filter cheaply themselves); `PostToolUse` is narrowed to the todo
-#: tools so no other tool call forks the dispatcher at all.
+#: tools and the subagent tool (`Agent`, `Task` in older builds — where a review agent's
+#: report comes back) so no other tool call forks the dispatcher at all; `PostToolUseFailure` is
+#: narrowed to the subagent tool for the same reason.
 MATCHERS = {
     "PreToolUse": ".*",
-    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate",
+    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
+    "PostToolUseFailure": "Agent|Task",
+}
+
+
+#: Matchers a previous release of ours wrote, per event. Only these are rewritten to the current
+#: one; any other matcher on our entry is the user's own choice and is left alone.
+PREVIOUS_MATCHERS = {
+    "PostToolUse": ("TodoWrite|TaskCreate|TaskUpdate",),
 }
 
 
@@ -76,6 +90,13 @@ def _is_devteam_entry(entry, script):
         if script in command and any(owned in command for owned in OWNED_HOOK_DIRS):
             return True
     return False
+
+
+def _warn(emitter, message):
+    if emitter is not None:
+        emitter.warn(message)
+    else:
+        print("-> NOTE: " + message, file=sys.stderr)
 
 
 def wire(project_root, emitter=None):
@@ -114,11 +135,25 @@ def wire(project_root, emitter=None):
         if existing_index is None:
             entries.append(desired)
             changed = True
-        elif entries[existing_index] != desired:
-            # A v2 entry pointing at the pre-pointer path, or a stale variant:
-            # rewrite it in place rather than adding a second one.
-            entries[existing_index] = desired
-            changed = True
+        else:
+            # A v2 entry pointing at the pre-pointer path, or a stale variant: rewrite it in
+            # place rather than adding a second one. A matcher we never shipped is kept.
+            current = entries[existing_index]
+            merged = desired
+            has, wanted = current.get("matcher"), desired.get("matcher")
+            if has != wanted and has not in PREVIOUS_MATCHERS.get(event, ()):
+                merged = dict(desired)
+                if has is None:
+                    merged.pop("matcher", None)
+                else:
+                    merged["matcher"] = has
+                _warn(
+                    emitter,
+                    "{} matcher {!r} left as is; dev-team-agents needs {!r}".format(event, has, wanted),
+                )
+            if current != merged:
+                entries[existing_index] = merged
+                changed = True
         wired.append(event)
 
     # v2 set this so Claude Code does not add a Co-Authored-By trailer. Only fill

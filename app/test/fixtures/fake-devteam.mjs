@@ -80,7 +80,7 @@ switch (scenario) {
     // `devteam tasks list --json`: one project with one session and one task, plus a
     // project and a task the client must drop as unusable. The argv is echoed so a test
     // can assert what the app passed.
-    const counts = { todo: 1, in_progress: 0, done: 0, total: 1 };
+    const counts = { todo: 1, in_progress: 0, in_review: 1, done: 0, total: 2 };
     emit({
       ok: true,
       argv,
@@ -97,6 +97,7 @@ switch (scenario) {
           counts,
           stale: 0,
           abandoned: 0,
+          with_findings: 1,
           last_activity_at: 1790000000,
           sessions: [
             {
@@ -111,8 +112,9 @@ switch (scenario) {
               resume_command: "cd '/repo/a' && claude --resume 's1'",
               counts,
               tasks: [
-                { key: 't1', content: 'ok', owner: 'main', agent_type: null, status: 'pending', column: 'todo', created_at: 1, status_since: 1, completed_at: null, durations: { pending: 5 }, stale: false, abandoned: false },
-                { key: 't2', content: 'no column', status: 'pending', created_at: 1, status_since: 1 },
+                { key: 't1', content: 'ok', owner: 'main', agent_type: null, status: 'pending', column: 'todo', created_at: 1, status_since: 1, completed_at: null, durations: { pending: 5 }, stale: false, abandoned: false, review: null },
+                { key: 't3', content: 'reviewed', owner: 'main', agent_type: null, status: 'in_progress', column: 'in_review', created_at: 1, status_since: 1, completed_at: null, durations: { in_progress: 5, in_review: 3 }, stale: false, abandoned: false, review: { state: 'findings', findings: 2, since: 4 } },
+                { key: 't2', content: 'no column and no status', created_at: 1, status_since: 1 },
               ],
             },
           ],

@@ -64,6 +64,27 @@ Verified while writing this ADR:
   command, never an automatic side effect (No-Destruction Rule).
 - `devteam tasks list|watch --json` are public API from their first release.
 
+## Amendment — 2026-09-30: an inferred In Review column
+
+**Decision.** Tasks can pass through an optional In Review column. A review is a *window* recorded
+per session, opened by a hook when a review/QA agent is spawned, a review command runs, or the user
+asks for a review in the prompt; the tasks in progress and those completed since the last review
+enter it. The window's result is read from a `<!-- review-result: findings=N -->` marker that our
+review/QA agents emit; zero findings releases the tasks, findings keep them in review until the fix
+list created afterwards is completed or a later review returns zero. Full rules:
+`docs/specs/task-board.md` § In Review.
+
+**Why a marker and not the report text.** Every reviewer formats findings differently; a heuristic
+count would be wrong silently. A missing marker is shown as "result not read", never as a pass.
+
+**Why inferred and not agent-reported.** Same reason as the rest of this ADR: capture must not depend
+on an agent remembering to report. Triggers come from hooks; only the result needs the agent, and
+its absence is visible.
+
+**Consequences.** `UserPromptSubmit` joins the Claude and Codex hook sets, `PostToolUse` joins the
+Codex set (for `wait_agent`), and the opencode plugin binds `chat.message` and `tool.execute.after`.
+Keyword triggers can produce false positives; they cost a badge, not a wrong Done.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |

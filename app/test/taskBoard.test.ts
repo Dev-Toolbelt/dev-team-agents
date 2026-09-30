@@ -41,7 +41,7 @@ import {
 import type * as IpcModule from '../src/main/taskBoardIpc.js';
 import type * as ApiModule from '../src/shared/api.js';
 import type { BoardFeed, BoardProject } from '../src/shared/api.js';
-import { boardProject, boardSession, boardTask, counts } from './fixtures/board.js';
+import { NOW, boardProject, boardSession, boardTask, counts } from './fixtures/board.js';
 import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE_WATCH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-watch.mjs');
@@ -92,9 +92,171 @@ describe('asBoardProject', () => {
     expect(typeof asBoardProject(raw)).toBe('string');
   });
 
-  it('drops a task with an unknown column or a missing time, and keeps the rest', () => {
+  it('accepts output without the review fields (an older CLI): in_review 0, with_findings 0, review null', () => {
+    const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask()] })] }))) as {
+      with_findings?: number;
+      counts: { in_review?: number };
+      sessions: { counts: { in_review?: number }; tasks: { review?: unknown }[] }[];
+    };
+    delete raw.with_findings;
+    delete raw.counts.in_review;
+    delete raw.sessions[0]!.counts.in_review;
+    delete raw.sessions[0]!.tasks[0]!.review;
+    const parsed = asBoardProject(raw) as BoardProject;
+    expect(parsed.counts.in_review).toBe(0);
+    expect(parsed.with_findings).toBe(0);
+    expect(parsed.sessions[0]?.counts.in_review).toBe(0);
+    expect(parsed.sessions[0]?.tasks[0]?.review).toBeNull();
+  });
+
+  it.each([['a string', 'x'], ['a negative number', -3], ['null', null], ['an object', {}]])(
+    'degrades a malformed optional review field (%s) to 0 instead of rejecting the project',
+    (_name, bad) => {
+      const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask()] })] }))) as {
+        with_findings: unknown;
+        counts: { in_review: unknown };
+        sessions: { counts: { in_review: unknown } }[];
+      };
+      raw.with_findings = bad;
+      raw.counts.in_review = bad;
+      raw.sessions[0]!.counts.in_review = bad;
+      const parsed = asBoardProject(raw);
+      expect(typeof parsed).toBe('object');
+      const project = parsed as BoardProject;
+      expect(project.with_findings).toBe(0);
+      expect(project.counts.in_review).toBe(0);
+      expect(project.sessions[0]?.counts.in_review).toBe(0);
+    },
+  );
+
+  it('keeps a card with an unknown future column in the column its provider status implies', () => {
+    const columnFor = { pending: 'todo', in_progress: 'in_progress', completed: 'done', cancelled: 'done' } as const;
+    for (const column of ['archived', 'in_qa', '', 7, null]) {
+      for (const [status, expected] of Object.entries(columnFor)) {
+        const session = boardSession({ tasks: [boardTask({ key: 'ok' }), { ...boardTask({ key: 'new', status }), column: column as never }] });
+        const parsed = asBoardProject(boardProject({ sessions: [session] })) as BoardProject;
+        expect(parsed.sessions[0]?.tasks.map((t) => [t.key, t.column])).toEqual([['ok', 'todo'], ['new', expected]]);
+        expect(parsed.sessions[0]?.tasks[1]?.review).toBeNull();
+      }
+    }
+  });
+
+  it('drops a card whose column and status are both unknown, leaving the CLI counts as sent', () => {
+    for (const status of ['blocked', 7, undefined]) {
+      const bad = { ...boardTask({ key: 'new' }), column: 'archived' as never, status: status as never };
+      const session = boardSession({ tasks: [boardTask({ key: 'ok' }), bad] });
+      const raw = { ...session, counts: { ...session.counts, todo: 2, total: 2 } };
+      const parsed = asBoardProject(boardProject({ sessions: [raw] })) as BoardProject;
+      expect(parsed.sessions[0]?.tasks.map((t) => t.key)).toEqual(['ok']);
+      expect(parsed.sessions[0]?.counts.total).toBe(2);
+    }
+  });
+
+  it('derives a malformed or absent in_review count from the total so the figures agree', () => {
+    for (const bad of [undefined, 'x', -1, null]) {
+      const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask()] })] }))) as {
+        counts: Record<string, unknown>;
+        sessions: { counts: Record<string, unknown> }[];
+      };
+      raw.counts = { todo: 1, in_progress: 2, in_review: bad, done: 3, total: 9 };
+      raw.sessions[0]!.counts = { todo: 0, in_progress: 0, in_review: bad, done: 0, total: 0 };
+      const project = asBoardProject(raw) as BoardProject;
+      expect(project.counts.in_review, String(bad)).toBe(3);
+      expect(project.sessions[0]?.counts.in_review).toBe(0);
+    }
+    const over = JSON.parse(JSON.stringify(boardProject())) as { counts: Record<string, unknown> };
+    over.counts = { todo: 5, in_progress: 5, in_review: 'x', done: 5, total: 3 };
+    expect((asBoardProject(over) as BoardProject).counts.in_review).toBe(0);
+  });
+
+  it('keeps an explicit in_review count over the derived one', () => {
+    const raw = JSON.parse(JSON.stringify(boardProject())) as { counts: Record<string, unknown> };
+    raw.counts = { todo: 1, in_progress: 1, in_review: 2, done: 1, total: 9 };
+    expect((asBoardProject(raw) as BoardProject).counts.in_review).toBe(2);
+  });
+
+  it('parses an old-CLI payload with no in_review, no review windows and no as_of', () => {
+    const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask(), boardTask({ key: 'd', column: 'done', status: 'completed' })] })] }))) as {
+      as_of?: unknown;
+      with_findings?: unknown;
+      counts: Record<string, unknown>;
+      sessions: { counts: Record<string, unknown>; tasks: Record<string, unknown>[] }[];
+    };
+    delete raw.as_of;
+    delete raw.with_findings;
+    delete raw.counts.in_review;
+    delete raw.sessions[0]!.counts.in_review;
+    for (const task of raw.sessions[0]!.tasks) delete task.review;
+    const parsed = asBoardProject(raw) as BoardProject;
+    expect(parsed.as_of).toBeUndefined();
+    expect(parsed.counts).toEqual({ todo: 1, in_progress: 0, in_review: 0, done: 1, total: 2 });
+    expect(parsed.sessions[0]?.tasks.map((t) => t.review)).toEqual([null, null]);
+  });
+
+  it('reads the review window: column, state, findings, since, and the counts', () => {
+    const review = { state: 'findings', findings: 3, since: NOW - 50 } as const;
+    const task = boardTask({ key: 'r', column: 'in_review', status: 'in_progress', review });
+    const parsed = asBoardProject(boardProject({ sessions: [boardSession({ tasks: [task] })] })) as BoardProject;
+    expect(parsed.counts.in_review).toBe(1);
+    expect(parsed.with_findings).toBe(1);
+    expect(parsed.sessions[0]?.tasks[0]).toMatchObject({ column: 'in_review', review });
+  });
+
+  it.each([
+    ['an unknown state', { state: 'done', findings: null, since: 1 }],
+    ['negative findings', { state: 'findings', findings: -1, since: 1 }],
+    ['fractional findings', { state: 'findings', findings: 1.5, since: 1 }],
+    ['non-numeric findings', { state: 'findings', findings: '2', since: 1 }],
+    ['a missing since', { state: 'pending', findings: null }],
+    ['a non-object', 'pending'],
+  ])('replaces the malformed review of a task with %s by a neutral unknown window, keeping the task', (_name, review) => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review', status: 'in_progress' }), review });
+    expect(task).not.toBeNull();
+    expect(task?.review).toMatchObject({ state: 'unknown', findings: null });
+  });
+
+  it.each(['passed', 'archived', ''])('keeps a well-formed window with the unrecognised state %j as unknown, not unread', (state) => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review', status: 'in_progress' }), review: { state, findings: 4, since: 9 } });
+    expect(task?.review).toEqual({ state: 'unknown', findings: null, since: 9 });
+  });
+
+  it('keeps an explicit unread window as unread', () => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review' }), review: { state: 'unread', findings: null, since: 5 } });
+    expect(task?.review).toEqual({ state: 'unread', findings: null, since: 5 });
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['malformed', { state: 'pending', since: 'x' }],
+  ])('gives a task in review whose review is %s a neutral unknown window from status_since', (_name, review) => {
+    const raw = { ...boardTask({ column: 'in_review', status: 'in_progress', status_since: 777 }), review };
+    if (review === undefined) delete (raw as { review?: unknown }).review;
+    expect(asBoardTask(raw)?.review).toEqual({ state: 'unknown', findings: null, since: 777 });
+  });
+
+  it('leaves a task outside review with no window', () => {
+    expect(asBoardTask({ ...boardTask({ column: 'in_progress' }), review: null })?.review).toBeNull();
+  });
+
+  it('reads as_of when it is a non-negative number and ignores it otherwise', () => {
+    const base = JSON.parse(JSON.stringify(boardProject())) as Record<string, unknown>;
+    expect((asBoardProject({ ...base, as_of: 1_790_000_123 }) as BoardProject).as_of).toBe(1_790_000_123);
+    for (const bad of ['x', -1, null, {}, Number.NaN]) {
+      const parsed = asBoardProject({ ...base, as_of: bad }) as BoardProject;
+      expect(parsed.as_of, JSON.stringify(bad)).toBeUndefined();
+    }
+    expect((asBoardProject(base) as BoardProject).as_of).toBeUndefined();
+  });
+
+  it('keeps a pending review with null findings', () => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review' }), review: { state: 'pending', findings: null, since: 5 } });
+    expect(task?.review).toEqual({ state: 'pending', findings: null, since: 5 });
+  });
+
+  it('drops a task with an unknown column and status, or a missing time, and keeps the rest', () => {
     const session = boardSession({
-      tasks: [boardTask({ key: 'ok' }), { ...boardTask({ key: 'bad' }), column: 'blocked' as never }],
+      tasks: [boardTask({ key: 'ok' }), { ...boardTask({ key: 'bad' }), column: 'blocked' as never, status: 'blocked' }],
     });
     const parsed = asBoardProject(boardProject({ sessions: [session] }));
     expect(typeof parsed).toBe('object');
@@ -199,7 +361,8 @@ describe('watchTasks and listTasks', () => {
     if (!result.ok) return;
     // The project without the documented fields is dropped; the task without a column too.
     expect(result.data.projects.map((p) => p.project_id)).toEqual(['proj-a']);
-    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1']);
+    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1', 't3']);
+    expect(result.data.projects[0]?.sessions[0]?.tasks[1]?.review).toEqual({ state: 'findings', findings: 2, since: 4 });
   });
 });
 

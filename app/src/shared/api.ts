@@ -1111,14 +1111,25 @@ export interface BackgroundSettings {
 
 // ── the task board (ADR-0018) ─────────────────────────────────────────────────
 
-export type BoardColumn = 'todo' | 'in_progress' | 'done';
+export type BoardColumn = 'todo' | 'in_progress' | 'in_review' | 'done';
+/** `unknown`: the CLI sent no review state this app knows; the card claims nothing about the result. */
+export type BoardReviewState = 'pending' | 'findings' | 'unread' | 'unknown';
 export type BoardSessionStatus = 'active' | 'idle' | 'ended';
 
 export interface BoardCounts {
   readonly todo: number;
   readonly in_progress: number;
+  /** Tasks in the review window; 0 when an older CLI does not emit the field. */
+  readonly in_review: number;
   readonly done: number;
   readonly total: number;
+}
+
+/** A task's review window; `findings` is null until a result is read. `since` is epoch seconds. */
+export interface BoardReview {
+  readonly state: BoardReviewState;
+  readonly findings: number | null;
+  readonly since: number;
 }
 
 /** One task, as `devteam tasks list|watch --json` derives it. Epoch fields are seconds. */
@@ -1137,6 +1148,8 @@ export interface BoardTask {
   readonly durations: Readonly<Record<string, number>>;
   readonly stale: boolean;
   readonly abandoned: boolean;
+  /** Null when the task is not in review (and for a CLI that predates the review window). */
+  readonly review: BoardReview | null;
 }
 
 export interface BoardSession {
@@ -1164,6 +1177,10 @@ export interface BoardProject {
   readonly counts: BoardCounts;
   readonly stale: number;
   readonly abandoned: number;
+  /** Tasks in review with findings; 0 from an older CLI. */
+  readonly with_findings: number;
+  /** Epoch seconds the CLI computed this view at; absent from an older CLI. Live figures grow from it. */
+  readonly as_of?: number;
   readonly last_activity_at: number;
   readonly sessions: readonly BoardSession[];
 }

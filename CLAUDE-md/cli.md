@@ -108,8 +108,9 @@ directory at either path is a v2 tree: `bind` and `sync` refuse with exit 4 and 
 The v2 tools that now resolve there (`update.sh`, `rollback.sh`, `fix-symlinks.sh`) refuse to run
 in a bound project (`scripts/lib/bound-project-guard.sh`) and name the `devteam` command instead.
 
-**The bind registers the six hook dispatchers** (`SessionStart`, `Stop`, `PreCompact`,
-`PreToolUse`, `PostToolUse`, `SessionEnd`) by merging into the project's own `.claude/settings.json`; a stale v2 path is
+**The bind registers the hook dispatchers** (`SessionStart`, `Stop`, `PreCompact`,
+`PreToolUse`, `PostToolUse`, `SessionEnd`, `UserPromptSubmit`, and `PostToolUseFailure` for a failed
+subagent launch) by merging into the project's own `.claude/settings.json`; a stale v2 path is
 rewritten in place rather than duplicated, and `unbind` removes only those entries. Without them
 the session banner, session-summary enforcement, orphan-skill scan, agent lint and ADR-gap check
 do not run in that project at all.
@@ -188,7 +189,9 @@ mode.
 | `devteam notifications ack <id>… \| --all [--project <id>]` | Mark notifications seen. Writes `notifications-seen.json` under a lock; **never rewrites the queue** a hook may be appending to |
 | `devteam notifications watch [--interval <s>]` | Stream the unseen backlog, then each new record, until stdin closes or SIGTERM. `--json` is JSON Lines — see § The `--json` contract |
 | `devteam tasks record --project-root <dir> [--provider auto]` | **Hook-only.** Reads a hook payload on stdin and folds a todo-tool call into its session's record; prints `{recorded, session, all_done, became_all_done}`. Never fails on bad input — exit 0 with `recorded: false` (ADR-0018) |
-| `devteam tasks mark --project-root <dir> --state idle\|ended` | **Hook-only.** Marks the payload's session idle or ended; no-op without a record. Prints `{marked, open}` |
+| `devteam tasks mark --project-root <dir> --state idle\|ended` | **Hook-only.** Marks the payload's session idle or ended; no-op without a record. Prints `{marked, open, review_result, review_window, review_findings, became_all_done}` — on `idle` it also settles a command/prompt review window from the turn's final message |
+| `devteam tasks review-open --project-root <dir>` | **Hook-only.** Reads a review trigger on stdin (a review/QA agent spawn, a review command or an explicit request in a prompt) and opens or joins the session's review window. Prints `{recorded, session, window, joined}`. Never fails on bad input |
+| `devteam tasks review-result --project-root <dir>` | **Hook-only.** Reads a finished review agent's output on stdin, sums its `<!-- review-result: findings=N -->` markers and records the window's result once every source answered. Prints `{recorded, session, window, result, findings, resolved, all_done, became_all_done}` |
 | `devteam tasks list [--project <id>…] [--since <epoch>] [--stale-after S] [--ended-after S]` | The task board: every bound project with ≥ 1 task, sessions, tasks and derived state; see § Task board below |
 | `devteam tasks watch [same filters] [--interval <s>]` | Stream `snapshot` events per changed project, then `ready`, `heartbeat`, `end`. `--json` is JSON Lines |
 | `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add` |
@@ -240,12 +243,18 @@ is a no-op), the per-session lock and atomic write, and every derived field — 
 task `column`, `stale`, `abandoned`, `durations` — which is computed on read and **never stored**.
 Nothing deletes a record or a task: a task a replace-style call omits gets `removed_at` and stays.
 
-- `record` and `mark` are **mutating** in `compat.MUTATING` but **hook-safe**: they swallow every
+- `record`, `mark`, `review-open` and `review-result` are **mutating** in `compat.MUTATING` but **hook-safe**: they swallow every
   error and exit 0 with `recorded: false` / `marked: false`, and refuse a session id containing a
   path separator.
 - `list` and `watch` are read-only. `watch` is JSON Lines like `notifications watch` (same stdin-EOF /
   SIGTERM / 30 s heartbeat lifecycle); because "stale" moves with the clock, it recomputes every
   project every 30 s and emits a `snapshot` only when the view differs from the last one sent.
+- **In Review** is an optional fourth column inferred from *review windows* stored in the record
+  (`reviews`, absent on older files). `review_triggers.py` decides what opens a window and reads the
+  marker; `tasks.py` owns the window lifecycle (open/join, result, Stop scan, fix rule, re-review rule,
+  reopen) and the derived `column: "in_review"`, task `review`, `counts.in_review`, project
+  `with_findings` and `durations.in_review` — all additive to the `--json` contract. `session_done`
+  requires every task in the Done column, so it waits for the review to resolve.
 - `sessions_active` counts sessions whose status is not `ended` (active **or** idle).
 - `tasks watch` is excluded from the bulk contract sweep and pinned by `tests/test_tasks.py`.
 
