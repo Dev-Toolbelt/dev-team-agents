@@ -1,0 +1,31 @@
+{
+  "_comment": "CANONICAL map of the user-level (global) skill directories each provider reads, consumed by scripts/lib/devteam/global_skills.py (ADR-0017). One entry per PHYSICAL directory: several providers can read the same one, so a skill is listed once with every provider that sees it. `~` is the user's home ($DEVTEAM_USER_HOME overrides it, for tests). `install_target` names the root a new skill is written to for each provider.",
+  "roots": [
+    {
+      "id": "claude",
+      "path": "~/.claude/skills",
+      "read_by": ["claude", "opencode"]
+    },
+    {
+      "id": "agents",
+      "path": "~/.agents/skills",
+      "read_by": ["codex", "opencode"]
+    },
+    {
+      "id": "codex",
+      "path": "~/.codex/skills",
+      "read_by": ["codex"]
+    },
+    {
+      "id": "opencode",
+      "path": "~/.config/opencode/skills",
+      "read_by": ["opencode"]
+    }
+  ],
+  "install_target": {
+    "claude": "claude",
+    "codex": "agents",
+    "opencode": "opencode"
+  },
+  "_why_codex_targets_agents": "Codex reads user skills from ~/.agents/skills; ~/.codex/skills is its older location and also holds the provider's own bundled skills under .system/. It is still listed so what is already there stays visible and removable, but nothing new is written to it."
+}
