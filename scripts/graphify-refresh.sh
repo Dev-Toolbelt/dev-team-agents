@@ -8,6 +8,8 @@ cd "$PROJECT_ROOT"
 
 # shellcheck source=scripts/lib/state.sh
 . "$SCRIPT_DIR/lib/state.sh"
+# shellcheck source=scripts/hooks/lib/data-dirs.sh
+. "$SCRIPT_DIR/hooks/lib/data-dirs.sh"
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "❌ Not inside a git repository." >&2
@@ -32,7 +34,12 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 OUTPUT_PATH="graphify-out"
-USER_DATA_DIR=".dev-team-agents/user-data"
+# state.json is machine-local: in an upgraded project it lives behind the
+# state-dir pointer, not in user-data/ (which keeps only graphify.json). The
+# pointer lives in the main checkout, so resolve from there, not --show-toplevel.
+MAIN_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+unset STATE_FILE USER_DATA_DIR
+STATE_DIR="$(devteam_state_dir "$MAIN_ROOT")"
 
 SOURCES=()
 while IFS= read -r line; do
@@ -50,7 +57,7 @@ done < <(jq -r '.manifestPaths[]? // empty' "$CONFIG_FILE")
 
 # ── Change detection ──────────────────────────────────────────────────────────
 CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-STATE_FILE="$USER_DATA_DIR/state.json"
+STATE_FILE="$STATE_DIR/state.json"
 LAST_BUILD_COMMIT="$(state_get graphify_last_run "$STATE_FILE")"
 
 # Returns 0 if the given filepath falls under any targetPath
@@ -86,8 +93,8 @@ if [ ! -d "$OUTPUT_PATH" ]; then
   HAS_STRUCTURAL=1
 fi
 
-# Ensure user-data directory exists for the last-run marker
-mkdir -p "$USER_DATA_DIR"
+# Ensure the state directory exists for the last-run marker
+mkdir -p "$STATE_DIR"
 
 # Check uncommitted structural changes in targetPaths
 if [ "$HAS_STRUCTURAL" -eq 0 ] && has_uncommitted_structural_changes; then
