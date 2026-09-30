@@ -682,7 +682,12 @@ describe.skipIf(available)('real CLI unavailable', () => {
 const HOOKS_DIR = join(REPO_ROOT, 'scripts', 'hooks');
 
 /** Drive a hook dispatcher the way a provider does: payload on stdin, cwd = the project. */
-function runHook(dispatcher: string, projectRoot: string, payload: Record<string, unknown>): void {
+function runHook(
+  dispatcher: string,
+  projectRoot: string,
+  payload: Record<string, unknown>,
+  okStatuses: number[] = [0],
+): void {
   const result = spawnSync('bash', [join(HOOKS_DIR, dispatcher)], {
     cwd: projectRoot,
     env: { ...process.env, DEVTEAM_HOME: home },
@@ -690,7 +695,7 @@ function runHook(dispatcher: string, projectRoot: string, payload: Record<string
     encoding: 'utf8',
     timeout: 30_000,
   });
-  if (result.status !== 0) throw new Error(`hook ${dispatcher} exited ${result.status}: ${result.stderr}`);
+  if (result.status === null || !okStatuses.includes(result.status)) throw new Error(`hook ${dispatcher} exited ${result.status}: ${result.stderr}`);
 }
 
 const claudeCreate = (root: string, session: string, id: string, subject: string, extra: Record<string, unknown> = {}) =>
@@ -789,8 +794,8 @@ describe.skipIf(!available)('task board against the real hooks and CLI', () => {
 
     const pa = byRoot.get(roots[0] as string)!;
     const pb = byRoot.get(roots[1] as string)!;
-    expect(pa.counts).toEqual({ todo: 4, in_progress: 2, done: 4, total: 10 });
-    expect(pb.counts).toEqual({ todo: 3, in_progress: 1, done: 1, total: 5 });
+    expect(pa.counts).toEqual({ todo: 4, in_progress: 2, in_review: 0, done: 4, total: 10 });
+    expect(pb.counts).toEqual({ todo: 3, in_progress: 1, in_review: 0, done: 1, total: 5 });
     expect([pa.sessions_total, pb.sessions_total]).toEqual([3, 2]);
     expect([...pa.providers].sort()).toEqual(['claude', 'codex', 'opencode']);
     expect([...pb.providers].sort()).toEqual(['claude', 'opencode']);
@@ -917,5 +922,179 @@ describe.skipIf(!available)('task board against the real hooks and CLI', () => {
       handle.stop();
     }
     expect(await ended).toMatchObject({ kind: 'exited', code: 0 });
+  }, 90_000);
+});
+
+// ── the In Review column, end to end: real hooks -> real CLI -> listTasks ────────────────
+
+const reviewMarker = (n: number) => `Report.\n<!-- review-result: findings=${n} -->`;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const spawnReviewer = (root: string, session: string, extra: Record<string, unknown> = {}, toolInput: Record<string, unknown> = {}) =>
+  runHook('pre-tool-use.sh', root, {
+    session_id: session,
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Agent',
+    tool_input: { description: 'qa', prompt: 'validate', subagent_type: 'qa-specialist', ...toolInput },
+    ...extra,
+  });
+const reviewerReturns = (root: string, session: string, response: unknown, extra: Record<string, unknown> = {}, toolInput: Record<string, unknown> = {}) =>
+  runHook('post-tool-use.sh', root, {
+    session_id: session,
+    hook_event_name: 'PostToolUse',
+    tool_name: 'Agent',
+    tool_input: { description: 'qa', prompt: 'validate', subagent_type: 'qa-specialist', ...toolInput },
+    tool_response: response,
+    ...extra,
+  });
+const textResponse = (text: string) => ({ content: [{ type: 'text', text }] });
+const stopHook = (root: string, session: string, extra: Record<string, unknown> = {}) =>
+  // The Stop dispatcher exits 2 when its session-summary sub-script blocks; the board still ran.
+  runHook('stop.sh', root, { session_id: session, hook_event_name: 'Stop', ...extra }, [0, 2]);
+
+async function newTranscript(lines: unknown[]): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'devteam-transcript-'));
+  scratch.push(dir);
+  const path = join(dir, 'session.jsonl');
+  await writeFile(path, lines.map((l) => `${JSON.stringify(l)}\n`).join(''));
+  return path;
+}
+
+async function sessionTasks(id: string) {
+  const projects = await board();
+  const session = projects.flatMap((p) => p.sessions).find((s) => s.session_id === id);
+  if (!session) throw new Error(`session ${id} not on the board`);
+  return session;
+}
+const columnsOf = (tasks: readonly { content: string; column: string }[]) =>
+  Object.fromEntries(tasks.map((t) => [t.content, t.column]));
+
+async function reviewNotifications(session: string) {
+  const notes = await listNotifications(context());
+  if (!notes.ok) throw new Error(notes.message);
+  return notes.data.filter((n) => n.code === 'tasks.review_findings' && n.sessionId === session);
+}
+
+describe.skipIf(!available)('the In Review column against the real hooks and CLI', () => {
+  const threeCompleted = (root: string, session: string) => {
+    for (const id of ['1', '2', '3']) claudeCreate(root, session, id, `task ${id}`);
+    for (const id of ['1', '2', '3']) claudeUpdate(root, session, id, 'completed');
+  };
+
+  it('(a) a QA spawn moves three completed tasks to In Review, and findings=0 releases them to Done', async () => {
+    const root = await bindRealProject('review-pass');
+    threeCompleted(root, 's-pass');
+    spawnReviewer(root, 's-pass');
+
+    const during = await sessionTasks('s-pass');
+    expect(Object.values(columnsOf(during.tasks))).toEqual(['in_review', 'in_review', 'in_review']);
+    expect(during.tasks.every((t) => t.review?.state === 'pending')).toBe(true);
+    expect(during.counts.in_review).toBe(3);
+
+    reviewerReturns(root, 's-pass', textResponse(reviewMarker(0)));
+    const after = await sessionTasks('s-pass');
+    expect(Object.values(columnsOf(after.tasks))).toEqual(['done', 'done', 'done']);
+    expect(after.tasks.every((t) => t.review === null && 'in_review' in t.durations)).toBe(true);
+    expect(after.counts.in_review).toBe(0);
+    expect(await reviewNotifications('s-pass')).toHaveLength(0);
+  }, 90_000);
+
+  it('(b) findings=2 keeps the tasks In Review with a notification until two fix tasks are done', async () => {
+    const root = await bindRealProject('review-findings');
+    threeCompleted(root, 's-find');
+    spawnReviewer(root, 's-find');
+    reviewerReturns(root, 's-find', textResponse(reviewMarker(2)));
+
+    const held = await sessionTasks('s-find');
+    expect(Object.values(columnsOf(held.tasks))).toEqual(['in_review', 'in_review', 'in_review']);
+    for (const task of held.tasks) expect(task.review).toMatchObject({ state: 'findings', findings: 2 });
+    const notes = await reviewNotifications('s-find');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ level: 'warning' });
+
+    await sleep(1_100); // the fix rule compares created_at strictly after the result second
+    claudeCreate(root, 's-find', '4', 'fix one');
+    claudeCreate(root, 's-find', '5', 'fix two');
+    claudeUpdate(root, 's-find', '4', 'completed');
+    const half = await sessionTasks('s-find');
+    expect(columnsOf(half.tasks)['task 1']).toBe('in_review');
+    claudeUpdate(root, 's-find', '5', 'completed');
+
+    const fixed = await sessionTasks('s-find');
+    expect(Object.values(columnsOf(fixed.tasks))).toEqual(['done', 'done', 'done', 'done', 'done']);
+  }, 90_000);
+
+  it('(c) a task that never met a review goes in progress to Done, never through In Review', async () => {
+    const root = await bindRealProject('review-none');
+    claudeCreate(root, 's-plain', '1', 'plain');
+    claudeUpdate(root, 's-plain', '1', 'in_progress');
+    expect(columnsOf((await sessionTasks('s-plain')).tasks)).toEqual({ plain: 'in_progress' });
+    claudeUpdate(root, 's-plain', '1', 'completed');
+    const session = await sessionTasks('s-plain');
+    expect(columnsOf(session.tasks)).toEqual({ plain: 'done' });
+    expect(session.tasks[0]?.review).toBeNull();
+    expect(session.counts.in_review).toBe(0);
+  }, 60_000);
+
+  it('(d) /devteam:review with no marker at Stop leaves the result unread', async () => {
+    const root = await bindRealProject('review-unread');
+    claudeCreate(root, 's-unread', '1', 'work');
+    claudeUpdate(root, 's-unread', '1', 'in_progress');
+    claudeCreate(root, 's-unread', '2', 'finished');
+    claudeUpdate(root, 's-unread', '2', 'completed');
+    runHook('user-prompt-submit.sh', root, { session_id: 's-unread', hook_event_name: 'UserPromptSubmit', prompt: '/devteam:review' });
+    expect(columnsOf((await sessionTasks('s-unread')).tasks)).toEqual({ work: 'in_review', finished: 'in_review' });
+
+    const transcript = await newTranscript([
+      { type: 'user', message: { role: 'user', content: '/devteam:review' } },
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Looks fine to me.' }] } },
+    ]);
+    stopHook(root, 's-unread', { transcript_path: transcript });
+    const session = await sessionTasks('s-unread');
+    expect(session.tasks.map((t) => t.review?.state)).toEqual(['unread', 'unread']);
+    expect(session.tasks.every((t) => t.column === 'in_review')).toBe(true);
+  }, 60_000);
+
+  it('(e) a background reviewer stays pending on its launch ack and reports through the transcript', async () => {
+    const root = await bindRealProject('review-background');
+    threeCompleted(root, 's-bg');
+    const transcript = await newTranscript([{ type: 'user', message: { role: 'user', content: 'run qa' } }]);
+    const background = { run_in_background: true };
+    spawnReviewer(root, 's-bg', { tool_use_id: 'toolu_bg1', transcript_path: transcript }, background);
+    reviewerReturns(
+      root,
+      's-bg',
+      { isAsync: true, status: 'async_launched', agentId: 'a1' },
+      { tool_use_id: 'toolu_bg1', transcript_path: transcript },
+      background,
+    );
+    stopHook(root, 's-bg', { transcript_path: transcript });
+    const waiting = await sessionTasks('s-bg');
+    expect(waiting.tasks.every((t) => t.review?.state === 'pending' && t.column === 'in_review')).toBe(true);
+
+    const body = [
+      '<task-notification>',
+      '<task-id>a1</task-id>',
+      '<tool-use-id>toolu_bg1</tool-use-id>',
+      '<status>completed</status>',
+      '<summary>Agent "qa" finished</summary>',
+      `<result>${reviewMarker(2)}</result>`,
+      '</task-notification>',
+    ].join('\n');
+    const stamp = new Date(Date.now() + 1_000).toISOString();
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(
+      transcript,
+      [
+        { type: 'queue-operation', operation: 'enqueue', timestamp: stamp, content: body },
+        { type: 'user', timestamp: stamp, message: { role: 'user', content: body } },
+      ].map((l) => `${JSON.stringify(l)}\n`).join(''),
+    );
+    stopHook(root, 's-bg', { transcript_path: transcript });
+    stopHook(root, 's-bg', { transcript_path: transcript });
+
+    const done = await sessionTasks('s-bg');
+    for (const task of done.tasks) expect(task.review).toMatchObject({ state: 'findings', findings: 2 });
+    expect(await reviewNotifications('s-bg')).toHaveLength(1);
   }, 90_000);
 });
