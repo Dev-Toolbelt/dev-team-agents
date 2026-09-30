@@ -189,12 +189,13 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   sessions used, `N sessions (M active)`, To do / In progress / Done with counts and percentages,
   a stacked bar, and stale / abandoned badges. A period filter (today, 7 days, 30 days, all)
   narrows it by each session's last activity.
-- **Kanban.** Click a card for three columns. Each task shows its session (provider and branch)
-  and the time it has spent in its column, kept live between snapshots; the time spent in each
-  step opens on hover **and** on keyboard focus. Filter by session or period, and hide done tasks
-  older than the retention. Each session has a status (active, idle, ended) and a **Copy resume
-  command** button; the text copied is the command the CLI sent for that session, never a string
-  the window supplies.
+- **Kanban.** Click a card for three columns, or an optional fourth **In Review** column when a review is
+  active. Each task shows its session (provider and branch) and the time it has spent in its column,
+  kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
+  Tasks in review show a findings badge (count of issues found, or **result not read**). Filter by
+  session or period, hide done tasks older than the retention, and show/hide tasks with findings.
+  Each session has a status (active, idle, ended) and a **Copy resume command** button; the text
+  copied is the command the CLI sent for that session, never a string the window supplies.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.
