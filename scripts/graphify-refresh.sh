@@ -34,12 +34,11 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 OUTPUT_PATH="graphify-out"
-# state.json is machine-local: in an upgraded project it lives behind the
-# state-dir pointer, not in user-data/ (which keeps only graphify.json). The
-# pointer lives in the main checkout, so resolve from there, not --show-toplevel.
-MAIN_ROOT="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
-unset STATE_FILE USER_DATA_DIR
-STATE_DIR="$(devteam_state_dir "$MAIN_ROOT")"
+# The commit a build reflects is recorded next to the graph it describes, so it is
+# per checkout: every linked worktree has its own graphify-out/, and a marker shared
+# through the main checkout's state.json would let one worktree's build stand in for
+# another's. It is versioned with the graph, which is what it describes.
+BUILD_MARKER="$OUTPUT_PATH/.build-commit"
 
 SOURCES=()
 while IFS= read -r line; do
@@ -57,8 +56,23 @@ done < <(jq -r '.manifestPaths[]? // empty' "$CONFIG_FILE")
 
 # ── Change detection ──────────────────────────────────────────────────────────
 CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-STATE_FILE="$STATE_DIR/state.json"
-LAST_BUILD_COMMIT="$(state_get graphify_last_run "$STATE_FILE")"
+LAST_BUILD_COMMIT="$(tr -d '[:space:]' 2>/dev/null < "$BUILD_MARKER" || true)"
+if [ -z "$LAST_BUILD_COMMIT" ]; then
+  # Earlier versions kept the marker as the graphify_last_run key of state.json,
+  # which described the main checkout. Honour it there only; a linked worktree
+  # without a marker falls through to the full-history scan below.
+  # A linked worktree has its own git dir; the main checkout's is the common dir.
+  # Compared as directories, not paths, so it also holds in a submodule or with
+  # --separate-git-dir, where the git dir is not <root>/.git.
+  GIT_DIR_ABS="$(git rev-parse --absolute-git-dir)"
+  COMMON_DIR_ABS="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"
+  if [ "$(cd "$GIT_DIR_ABS" && pwd -P)" = "$COMMON_DIR_ABS" ]; then
+    # devteam_state_dir honours an inherited STATE_FILE/USER_DATA_DIR as an
+    # override; drop them so the state-dir pointer decides.
+    unset STATE_FILE USER_DATA_DIR
+    LAST_BUILD_COMMIT="$(state_get graphify_last_run "$(devteam_state_dir "$PROJECT_ROOT")/state.json")"
+  fi
+fi
 
 # Returns 0 if the given filepath falls under any targetPath
 in_target_paths() {
@@ -92,9 +106,6 @@ if [ ! -d "$OUTPUT_PATH" ]; then
   echo "📦 $OUTPUT_PATH not found — first-time build."
   HAS_STRUCTURAL=1
 fi
-
-# Ensure the state directory exists for the last-run marker
-mkdir -p "$STATE_DIR"
 
 # Check uncommitted structural changes in targetPaths
 if [ "$HAS_STRUCTURAL" -eq 0 ] && has_uncommitted_structural_changes; then
@@ -144,7 +155,8 @@ for src in "${SOURCES[@]}"; do
   rsync -a "$src/" "graphify-src/$src/"
 done
 
-for manifest in "${MANIFESTS[@]}"; do
+# `${arr[@]+…}`: bash 3.2 (macOS) treats an empty array as unbound under `set -u`.
+for manifest in ${MANIFESTS[@]+"${MANIFESTS[@]}"}; do
   [ -z "$manifest" ] && continue
   if [ ! -f "$manifest" ]; then
     echo "⚠️  Manifest '$manifest' not found — skipping." >&2
@@ -170,8 +182,8 @@ fi
 rm -rf "$OUTPUT_PATH"
 mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
 
-# Record the commit that triggered this build (used to skip redundant rebuilds)
-state_set graphify_last_run "$CURRENT_COMMIT" "$STATE_FILE"
+# Record the commit this build reflects (used to skip redundant rebuilds)
+printf '%s\n' "$CURRENT_COMMIT" > "$BUILD_MARKER"
 
 echo "✅ Done!" >&2
 exit 0
