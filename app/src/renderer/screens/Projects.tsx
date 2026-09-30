@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -17,10 +16,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Empty, Loading, Problem } from '../Problem.js';
+import { ProjectList, useProjectSyncs } from './ProjectList.js';
+import { basename, displayName, settingsButtonId } from './ProjectRow.js';
 import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
@@ -34,11 +34,7 @@ import type {
   MigrationReport,
   OperationResult,
   PreferencesImport,
-  ProjectRecord,
   SyncAllReport,
-  UnbindReport,
-  UpgradePlan,
-  UpgradeReport,
 } from '../../shared/api.js';
 
 const PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
@@ -103,77 +99,6 @@ function boundDirectory(chosen: string, bound: readonly BoundDirectory[]): Bound
 }
 
 /**
- * The last path segment, POSIX or Windows — the picker can hand back either. Falls back
- * to the whole string on the degenerate input a directory picker never actually returns
- * (empty, or all separators), so a caller always has something to render.
- */
-function basename(path: string): string {
-  const trimmed = path.replace(/[/\\]+$/, '');
-  const segments = trimmed.split(/[/\\]/);
-  const last = segments[segments.length - 1];
-  return last !== undefined && last !== '' ? last : path;
-}
-
-/**
- * The name shown for a project: its stored name, or the directory's own basename.
- *
- * The fallback is load-bearing, not cosmetic — see `DevteamBridge.projectNames`'s doc
- * comment in `shared/api.ts`. It applies identically to a project this app never had the
- * chance to name (bound from the terminal) and one bound here and left unnamed, so
- * **no row anywhere in this screen ever renders a bare UUID**.
- */
-function displayName(path: string, projectId: string, names: Readonly<Record<string, string>>): string {
-  return names[projectId] ?? basename(path);
-}
-
-/**
- * Three states, because the payload has three.
- *
- * `path_exists` is `null` when the CLI did not say, and that is **not** the same claim as
- * "the directory is gone". A red `missing` badge beside a path that exists is the shape
- * ADR-0015's own unmitigated risk names — "a bound project shown unbound leads the user to
- * a destructive action in the terminal" — so an unknown is labelled as one.
- */
-function PathState({ exists }: { exists: boolean | null }) {
-  if (exists === true) return null;
-  if (exists === false) return <Badge variant="destructive">missing</Badge>;
-  return (
-    <Badge variant="outline" title="`devteam list --json` returned no boolean `path_exists` for this row">
-      not checked
-    </Badge>
-  );
-}
-
-/**
- * Whether a project resolves to the store's current version.
- *
- * Nothing at all when the store has no current version: "outdated" relative to nothing is
- * a claim the payload cannot support. The icon is never the only signal — the tooltip text
- * is also the accessible name, so a colour-blind or screen-reader user gets the same fact.
- */
-function VersionState({ resolvesTo, current }: { resolvesTo: string; current: string | null }) {
-  if (current === null) return null;
-  if (resolvesTo === current) {
-    const label = `Up to date — the store's current version is ${current}.`;
-    return (
-      <Hint content={label}>
-        <span role="img" aria-label={label} className="inline-flex text-green-600 dark:text-green-500">
-          <CheckCircle2 className="size-4" aria-hidden="true" />
-        </span>
-      </Hint>
-    );
-  }
-  const label = `Outdated — the store's current version is ${current}.`;
-  return (
-    <Hint content={label}>
-      <span role="img" aria-label={label} className="inline-flex text-amber-600 dark:text-amber-500">
-        <AlertTriangle className="size-4" aria-hidden="true" />
-      </span>
-    </Hint>
-  );
-}
-
-/**
  * `devteam list --json`, plus the project lifecycle: bind, sync, pin, unbind, upgrade.
  *
  * A real `<table>`, not a grid of divs: the data is tabular, the browser gives row/column
@@ -225,6 +150,9 @@ export function Projects({
     reloadList();
     setNamesNonce((n) => n + 1);
   }
+
+  // Every sync on the screen goes through one coordinator, so none runs beside another.
+  const syncs = useProjectSyncs(reload);
 
   const [filterText, setFilterText] = useState('');
   const [filterMode, setFilterMode] = useState<BindMode | 'all'>('all');
@@ -327,6 +255,8 @@ export function Projects({
     return true;
   });
 
+  const filtering = normalizedFilterText !== '' || filterMode !== 'all' || filterProviders.size > 0;
+
   return (
     <section aria-labelledby="projects-heading" className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-4">
@@ -355,7 +285,7 @@ export function Projects({
               variant="outline"
               size="sm"
               tooltip="Re-apply the current store version to every bound project that is not pinned"
-              disabled={syncAll.state.phase === 'pending'}
+              disabled={syncAll.state.phase === 'pending' || syncs.busy}
               onClick={() => {
                 void syncAll.run().then((result) => {
                   if (result.ok) reload();
@@ -407,45 +337,19 @@ export function Projects({
               });
             }}
           />
-          {/* Announced the same way `refreshing`, above, is — a filter that silently changes
-              which rows are on screen is exactly the kind of update a screen reader user
-              would otherwise miss entirely. */}
-          <p aria-live="polite" className="text-xs text-muted-foreground">
-            Showing {filteredProjects.length} of {projects.length} project{projects.length === 1 ? '' : 's'}.
-          </p>
-          {filteredProjects.length === 0 ? (
-            // Distinct from the "nothing is bound yet" empty state above: that one means
-            // there is nothing to show the user at all, this one means there is something,
-            // just not anything these filters let through — the fix is "loosen a filter",
-            // not "go bind a project".
-            <Empty>No bound project matches these filters.</Empty>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Project</TableHead>
-                  <TableHead scope="col">Version</TableHead>
-                  <TableHead scope="col">Mode</TableHead>
-                  <TableHead scope="col">Providers</TableHead>
-                  <TableHead scope="col">Path</TableHead>
-                  <TableHead scope="col">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjects.map((project) => (
-                  <ProjectRow
-                    key={project.project_id}
-                    project={project}
-                    environment={environment}
-                    projectNames={projectNames}
-                    current={current}
-                    onChanged={reload}
-                    onOpenSettings={() => setOpenSettings(project.project_id)}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <ProjectList
+            projects={projects}
+            filteredProjects={filteredProjects}
+            filtering={filtering}
+            textFiltering={normalizedFilterText !== ''}
+            projectNames={projectNames}
+            environment={environment}
+            current={current}
+            syncs={syncs}
+            syncAllPending={syncAll.state.phase === 'pending'}
+            onChanged={reload}
+            onOpenSettings={setOpenSettings}
+          />
         </>
       )}
 
@@ -548,515 +452,6 @@ function ProjectFilters({
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-function settingsButtonId(projectId: string): string {
-  return `open-settings-${projectId}`;
-}
-
-type RowDialog = 'pin' | 'unbind' | 'upgrade' | null;
-
-/**
- * One bound project's row, plus the dialogs its actions open.
- *
- * Only one dialog is open per row at a time — `dialog` is a single field, not three
- * booleans, so opening one can never leave another half-open behind it.
- */
-function ProjectRow({
-  project,
-  environment,
-  projectNames,
-  current,
-  onChanged,
-  onOpenSettings,
-}: {
-  project: ProjectRecord;
-  environment: EnvironmentReport | null;
-  projectNames: Readonly<Record<string, string>>;
-  current: string | null;
-  onChanged: () => void;
-  onOpenSettings: () => void;
-}) {
-  const [dialog, setDialog] = useState<RowDialog>(null);
-  const sync = useAction(() => window.devteam.syncProject(project.project_id));
-  const name = displayName(project.path, project.project_id, projectNames);
-
-  return (
-    <TableRow>
-      <TableCell>
-        {/* The name only. `project_id` is a UUID that means nothing to the reader and is
-            never rendered — `devteam list` in a terminal is where a debugger gets it. The
-            name is the way into the project's settings, so it is a real button. */}
-        <Hint content="Open this project's settings">
-          <button
-            type="button"
-            id={settingsButtonId(project.project_id)}
-            onClick={onOpenSettings}
-            className="group inline-flex items-center gap-1 rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-label={`${name} — open settings`}
-          >
-            {name}
-            <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
-          </button>
-        </Hint>
-      </TableCell>
-      <TableCell>
-        <span className="flex items-center gap-2 whitespace-nowrap">
-          {project.resolves_to !== null ? (
-            <>
-              <Badge variant="outline">{project.resolves_to}</Badge>
-              <VersionState resolvesTo={project.resolves_to} current={current} />
-            </>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-          {project.pin !== null ? <Badge variant="secondary">pinned {project.pin}</Badge> : null}
-        </span>
-      </TableCell>
-      <TableCell>{project.mode ?? '—'}</TableCell>
-      <TableCell>{project.providers.length === 0 ? '—' : project.providers.join(', ')}</TableCell>
-      {/* The badge sits outside the truncating span, not inside it. A `truncate` cell
-          clipped it at the ellipsis, so the one row that most needed a `missing` badge — a
-          long path — was the one row that never showed it. */}
-      <TableCell className="font-mono text-xs">
-        <span className="flex items-center gap-2">
-          <span className="max-w-[24rem] truncate" title={project.path}>
-            {project.path}
-          </span>
-          <PathState exists={project.path_exists} />
-        </span>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
-          <WriteButton
-            command="sync"
-            environment={environment}
-            variant="outline"
-            size="xs"
-            tooltip="Re-apply this project's store version to its files"
-            disabled={sync.state.phase === 'pending'}
-            onClick={() => {
-              void sync.run().then((result) => {
-                if (result.ok) onChanged();
-              });
-            }}
-          >
-            {sync.state.phase === 'pending' ? 'Syncing…' : 'Sync'}
-          </WriteButton>
-          <WriteButton
-            command="pin"
-            environment={environment}
-            variant="outline"
-            size="xs"
-            tooltip="Hold this project on a specific version, or release the pin"
-            onClick={() => setDialog('pin')}
-          >
-            Pin…
-          </WriteButton>
-          <WriteButton
-            command="upgrade"
-            environment={environment}
-            variant="outline"
-            size="xs"
-            tooltip="Move this project's memory into the store — shows the plan first"
-            onClick={() => setDialog('upgrade')}
-          >
-            Upgrade…
-          </WriteButton>
-          <WriteButton
-            command="unbind"
-            environment={environment}
-            variant="destructive"
-            size="xs"
-            tooltip="Remove this project from the store — asks for confirmation first"
-            onClick={() => setDialog('unbind')}
-          >
-            Unbind…
-          </WriteButton>
-        </div>
-        {sync.state.phase === 'done' && !sync.state.result.ok ? (
-          <div className="pt-2">
-            <Problem problem={sync.state.result} />
-          </div>
-        ) : null}
-        {sync.state.phase === 'done' ? <Notice result={sync.state.result} /> : null}
-      </TableCell>
-
-      <PinDialog
-        open={dialog === 'pin'}
-        onOpenChange={(open) => setDialog(open ? 'pin' : null)}
-        projectId={project.project_id}
-        name={name}
-        currentPin={project.pin}
-        onChanged={onChanged}
-      />
-      <UnbindDialog
-        open={dialog === 'unbind'}
-        onOpenChange={(open) => setDialog(open ? 'unbind' : null)}
-        project={project}
-        name={name}
-        onUnbound={onChanged}
-      />
-      <UpgradeDialog
-        open={dialog === 'upgrade'}
-        onOpenChange={(open) => setDialog(open ? 'upgrade' : null)}
-        projectId={project.project_id}
-        name={name}
-        onApplied={onChanged}
-      />
-    </TableRow>
-  );
-}
-
-/** Set or release a pin. `setPin(id, null)` releases it — not `setPin(id, '')`. */
-function PinDialog({
-  open,
-  onOpenChange,
-  projectId,
-  name,
-  currentPin,
-  onChanged,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  name: string;
-  currentPin: string | null;
-  onChanged: () => void;
-}) {
-  const [version, setVersion] = useState('');
-  const pin = useAction((v: string | null) => window.devteam.setPin(projectId, v));
-
-  function close() {
-    pin.reset();
-    setVersion('');
-    onOpenChange(false);
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) onOpenChange(true);
-        else if (pin.state.phase !== 'pending') close();
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Pin {name}</DialogTitle>
-          <DialogDescription>
-            {currentPin !== null
-              ? `Currently pinned to ${currentPin}. Set a different version, or release the pin to track the store's current version again.`
-              : 'Not pinned — this project tracks the store’s current version. Set a version to pin it.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-2">
-          <Label htmlFor="pin-version">Version</Label>
-          <Input
-            id="pin-version"
-            value={version}
-            onChange={(event) => setVersion(event.target.value)}
-            placeholder="e.g. 2.48.0"
-          />
-        </div>
-
-        {pin.state.phase === 'done' && !pin.state.result.ok ? <Problem problem={pin.state.result} /> : null}
-        {pin.state.phase === 'done' && pin.state.result.ok ? (
-          <p className="text-sm text-muted-foreground">
-            {pin.state.result.data.pin !== null ? `Pinned to ${pin.state.result.data.pin}.` : 'Pin released.'}
-          </p>
-        ) : null}
-        {pin.state.phase === 'done' ? <Notice result={pin.state.result} /> : null}
-
-        <DialogFooter>
-          {currentPin !== null ? (
-            <Button
-              variant="outline"
-              disabled={pin.state.phase === 'pending'}
-              onClick={() => {
-                void pin.run(null).then((result) => {
-                  if (result.ok) onChanged();
-                });
-              }}
-            >
-              Release pin
-            </Button>
-          ) : null}
-          <Button
-            disabled={pin.state.phase === 'pending' || version.trim() === ''}
-            onClick={() => {
-              void pin.run(version.trim()).then((result) => {
-                if (result.ok) onChanged();
-              });
-            }}
-          >
-            {pin.state.phase === 'pending' ? 'Setting…' : 'Set pin'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Unbind's explicit confirm step. States what will happen before the destructive action can
- * fire — a single stray click on a row action must not be able to unbind a project.
- */
-function UnbindDialog({
-  open,
-  onOpenChange,
-  project,
-  name,
-  onUnbound,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  project: ProjectRecord;
-  name: string;
-  onUnbound: () => void;
-}) {
-  const unbind = useAction(() => window.devteam.unbindProject(project.project_id));
-  const pending = unbind.state.phase === 'pending';
-  const unbound = unbind.state.phase === 'done' && unbind.state.result.ok;
-
-  // The list reloads when the dialog closes, not when the write lands: a successful unbind
-  // removes this very row, and with it this dialog and the quarantine report the user has
-  // to read. Every way out — Done, Cancel, Esc, a click outside — comes through here, so a
-  // dismissal after success cannot leave the list stale.
-  function close() {
-    if (pending) return;
-    unbind.reset();
-    onOpenChange(false);
-    if (unbound) onUnbound();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Unbind {name}?</DialogTitle>
-          <DialogDescription>
-            This removes the store&apos;s link to <span className="font-mono">{project.path}</span>. Files this store
-            manages are quarantined, not deleted; the project&apos;s own files are left alone.
-          </DialogDescription>
-        </DialogHeader>
-
-        {unbind.state.phase === 'done' && !unbind.state.result.ok ? <Problem problem={unbind.state.result} /> : null}
-        {unbind.state.phase === 'done' && unbind.state.result.ok ? (
-          <UnbindResultSummary report={unbind.state.result.data} />
-        ) : null}
-        {unbind.state.phase === 'done' ? <Notice result={unbind.state.result} /> : null}
-
-        <DialogFooter>
-          <Button variant="outline" disabled={pending} onClick={close}>
-            Cancel
-          </Button>
-          {unbound ? (
-            <Button onClick={close}>Done</Button>
-          ) : (
-            <Button
-              variant="destructive"
-              disabled={unbind.state.phase === 'pending'}
-              onClick={() => void unbind.run()}
-            >
-              {unbind.state.phase === 'pending' ? 'Unbinding…' : 'Unbind'}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * `quarantined` is the one the user must read — it names where their files went.
- * `unlinked` is ~159 entries on a claude-only bind, so its length is shown, not the list.
- */
-
-function UnbindResultSummary({ report }: { report: UnbindReport }) {
-  return (
-    <div className="space-y-1 text-sm">
-      <p>{report.unlinked.length} link{report.unlinked.length === 1 ? '' : 's'} removed.</p>
-      {report.quarantined.length > 0 ? (
-        <div>
-          <p className="font-medium">Quarantined to:</p>
-          <ul className="list-inside list-disc font-mono text-xs text-muted-foreground">
-            {report.quarantined.map((entry, index) => (
-              <li key={index}>{entry.to ?? '(no destination reported)'}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {report.problems.length > 0 ? (
-        <p className="text-destructive">{report.problems.length} problem{report.problems.length === 1 ? '' : 's'} reported.</p>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * The two-step upgrade, structurally enforced: `apply` is not offered until `plan` has
- * resolved, and the plan is what shows `collisions`, `git_tracked` and `actions` before
- * anything happens. The plan is fetched automatically on open — it only reads — and the
- * apply step still needs its own explicit click.
- */
-function UpgradeDialog({
-  open,
-  onOpenChange,
-  projectId,
-  name,
-  onApplied,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  name: string;
-  onApplied: () => void;
-}) {
-  const plan = useAction(() => window.devteam.planUpgrade(projectId));
-  const apply = useAction(() => window.devteam.applyUpgrade(projectId));
-
-  useEffect(() => {
-    if (open) {
-      void plan.run();
-    } else {
-      plan.reset();
-      apply.reset();
-    }
-    // `plan`/`apply` are re-created every render (fresh closures from `useAction`), but
-    // their `run`/`reset` identities are what would matter here and `reset` is stable;
-    // this effect is keyed on the dialog's own open/target, not on those closures.
-  }, [open, projectId]);
-
-  const planData = plan.state.phase === 'done' && plan.state.result.ok ? plan.state.result.data : null;
-  const nothingToDo = planData !== null && planData.actions.length === 0;
-  const applying = apply.state.phase === 'pending';
-
-  return (
-    // Closing mid-apply would drop the report of a write that is still running.
-    <Dialog open={open} onOpenChange={(next) => (next || !applying ? onOpenChange(next) : undefined)}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Upgrade {name}</DialogTitle>
-          <DialogDescription>
-            Moves this project&apos;s memory into the store and quarantines what it moved. Nothing changes until
-            Apply is confirmed below.
-          </DialogDescription>
-        </DialogHeader>
-
-        <DialogBody className="space-y-4">
-        {plan.state.phase !== 'done' ? <Loading what="devteam upgrade (plan)" /> : null}
-        {plan.state.phase === 'done' && !plan.state.result.ok ? <Problem problem={plan.state.result} /> : null}
-        {planData !== null ? <UpgradePlanSummary plan={planData} /> : null}
-
-        {apply.state.phase === 'done' && !apply.state.result.ok ? <Problem problem={apply.state.result} /> : null}
-        {apply.state.phase === 'done' && apply.state.result.ok ? (
-          <UpgradeReportSummary report={apply.state.result.data} />
-        ) : null}
-        {apply.state.phase === 'done' ? <Notice result={apply.state.result} /> : null}
-        </DialogBody>
-
-        <DialogFooter>
-          <Button variant="outline" disabled={applying} onClick={() => onOpenChange(false)}>
-            {apply.state.phase === 'done' && apply.state.result.ok ? 'Close' : 'Cancel'}
-          </Button>
-          {apply.state.phase === 'done' && apply.state.result.ok ? (
-            <Button onClick={() => onOpenChange(false)}>Done</Button>
-          ) : (
-            <Button
-              disabled={planData === null || nothingToDo || apply.state.phase === 'pending'}
-              onClick={() => {
-                void apply.run().then((result) => {
-                  if (result.ok) onApplied();
-                });
-              }}
-              title={nothingToDo ? 'The plan has no actions — there is nothing to apply.' : undefined}
-            >
-              {apply.state.phase === 'pending' ? 'Applying…' : 'Apply'}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function UpgradePlanSummary({ plan }: { plan: UpgradePlan }) {
-  return (
-    <div className="space-y-2 text-sm">
-      <p>
-        Layout {plan.from_layout} → {plan.to_layout} · {plan.files} file{plan.files === 1 ? '' : 's'} · destination{' '}
-        <span className="font-mono text-xs">{plan.destination}</span>
-      </p>
-      {plan.actions.length === 0 ? (
-        <p className="text-muted-foreground">The plan has no actions — this project has nothing to upgrade.</p>
-      ) : (
-        <div>
-          <p className="font-medium">Actions:</p>
-          <ul className="list-inside list-disc text-xs text-muted-foreground">
-            {plan.actions.map((action, index) => (
-              <li key={index}>{action}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {plan.collisions.length > 0 ? (
-        <div>
-          <p className="font-medium text-destructive">Collisions:</p>
-          <ul className="list-inside list-disc font-mono text-xs text-destructive">
-            {plan.collisions.map((path) => (
-              <li key={path}>{path}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {plan.git_tracked.length > 0 ? (
-        <div>
-          <p className="font-medium">Git-tracked paths this touches:</p>
-          <ul className="list-inside list-disc font-mono text-xs text-muted-foreground">
-            {plan.git_tracked.map((path) => (
-              <li key={path}>{path}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * `state_pointer`/`memory_pointer` and `git_tracked` are surfaced because they are exactly
- * what changed on disk and what the user still owes a commit — the same honesty `bind`'s
- * `merged_project_files` needs, for the same reason.
- */
-function UpgradeReportSummary({ report }: { report: UpgradeReport }) {
-  return (
-    <div className="space-y-2 text-sm">
-      <p>
-        Copied {report.copied} file{report.copied === 1 ? '' : 's'} to{' '}
-        <span className="font-mono text-xs">{report.destination}</span>.
-      </p>
-      {report.quarantined !== null ? (
-        <p>
-          Quarantined to <span className="font-mono text-xs">{report.quarantined}</span>.
-        </p>
-      ) : null}
-      <p className="font-mono text-xs text-muted-foreground">
-        state → {report.state_pointer} · memory → {report.memory_pointer}
-      </p>
-      {report.git_tracked.length > 0 ? (
-        <div>
-          <p className="font-medium">Commit these yourself:</p>
-          <ul className="list-inside list-disc font-mono text-xs text-muted-foreground">
-            {report.git_tracked.map((path) => (
-              <li key={path}>{path}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }

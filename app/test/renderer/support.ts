@@ -397,6 +397,8 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     handshake: vi.fn(() => Promise.resolve(ok(handshakeView()))),
     listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
     projectNames: vi.fn(() => Promise.resolve({})),
+    projectFolders: vi.fn(() => Promise.resolve({ folders: [], membership: {} })),
+    saveProjectFolders: vi.fn((folders) => Promise.resolve({ ok: true as const, folders })),
     catalogSummary: vi.fn(),
     catalogListing: vi.fn(),
     catalogEntry: vi.fn(),

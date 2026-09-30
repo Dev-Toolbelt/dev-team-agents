@@ -21,6 +21,7 @@ import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { BOARD_SETTING_BOUNDS, type BoardSettings } from '../shared/api.js';
+import { isEmptyFolders, normalizeProjectFolders, NO_FOLDERS, type ProjectFolders } from '../shared/projectFolders.js';
 
 export const SETTINGS_FILE_NAME = 'settings.json';
 
@@ -50,6 +51,12 @@ export interface AppSettings {
   readonly openAtLogin: boolean;
   /** The task board's thresholds (ADR-0018). App-local: never a `preferences.json` key. */
   readonly board: BoardSettings;
+  /**
+   * The Projects screen's folders (ADR-0021). App-local, like `projectNames`, and read the
+   * same forgiving way: `normalizeProjectFolders` salvages what it can and never turns a
+   * malformed value into a `problem`.
+   */
+  readonly projectFolders: ProjectFolders;
 }
 
 export const DEFAULT_BOARD_SETTINGS: BoardSettings = Object.freeze({
@@ -114,16 +121,17 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
       projectNames: NO_NAMES,
       openAtLogin: false,
       board: DEFAULT_BOARD_SETTINGS,
+      projectFolders: NO_FOLDERS,
     };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS };
+    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS };
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS };
+    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS };
   }
   const record = parsed as Record<string, unknown>;
   // Read independently of the `cliPath` checks below, so a bad `cliPath` never costs the
@@ -132,13 +140,14 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
   // Anything but a literal `true` is "not chosen": starting at login is opt-in.
   const openAtLogin = record['openAtLogin'] === true;
   const board = readBoardSettings(record);
+  const projectFolders = normalizeProjectFolders(record['projectFolders']);
 
   const value = record['cliPath'];
-  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin, board };
+  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin, board, projectFolders };
   if (typeof value !== 'string' || value.trim() === '') {
-    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin, board };
+    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin, board, projectFolders };
   }
-  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin, board };
+  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin, board, projectFolders };
 }
 
 /**
@@ -167,6 +176,11 @@ export async function writeProjectName(userDataDir: string, projectId: string, n
 /** Record the user's start-at-login choice. The OS registration is `index.ts`'s job. */
 export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): Promise<void> {
   await writeSettings(userDataDir, () => ({ openAtLogin: enabled }));
+}
+
+/** Record the Projects screen's folders. The caller validates with `projectFoldersProblem` first. */
+export async function writeProjectFolders(userDataDir: string, projectFolders: ProjectFolders): Promise<void> {
+  await writeSettings(userDataDir, () => ({ projectFolders }));
 }
 
 /** Record the board's thresholds. The caller validates with `boardSettingsProblem` first. */
@@ -199,7 +213,7 @@ let writeChain: Promise<unknown> = Promise.resolve();
  */
 function writeSettings(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders'>>,
 ): Promise<void> {
   const run = writeChain.then(() => writeSettingsNow(userDataDir, patchFrom));
   // The chain continues past a failure; the failure itself still reaches this caller.
@@ -209,7 +223,7 @@ function writeSettings(
 
 async function writeSettingsNow(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders'>>,
 ): Promise<void> {
   const path = join(userDataDir, SETTINGS_FILE_NAME);
   const current = await readSettings(userDataDir);
@@ -227,6 +241,8 @@ async function writeSettingsNow(
   const board = patch.board ?? current.board;
   if (board.staleAfterMinutes !== DEFAULT_BOARD_SETTINGS.staleAfterMinutes) payload['boardStaleAfterMinutes'] = board.staleAfterMinutes;
   if (board.doneRetentionDays !== DEFAULT_BOARD_SETTINGS.doneRetentionDays) payload['boardDoneRetentionDays'] = board.doneRetentionDays;
+  const projectFolders = patch.projectFolders ?? current.projectFolders;
+  if (!isEmptyFolders(projectFolders)) payload['projectFolders'] = projectFolders;
 
   const tempPath = join(userDataDir, `.${SETTINGS_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
   await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {

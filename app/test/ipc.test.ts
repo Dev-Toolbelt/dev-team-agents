@@ -102,6 +102,59 @@ async function registerAgainstFake(registerIpc: typeof IpcModule.registerIpc): P
   registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
 }
 
+// ── project folders — the app's own file, no CLI ──────────────────────────────────
+
+describe('project folders (ADR-0021)', () => {
+  const valid = { folders: [{ id: 'sites', name: 'Sites', parentId: null, collapsed: false }], membership: { p1: 'sites' } };
+
+  it('saves a valid state and reads it back, spawning nothing', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+    expect(await handlers.get(CHANNELS.projectFolders)?.(TRUSTED)).toEqual({ folders: [], membership: {} });
+    expect(await handlers.get(CHANNELS.saveProjectFolders)?.(TRUSTED, valid)).toEqual({ ok: true, folders: valid });
+    const stored = JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8')) as Record<string, unknown>;
+    expect(stored['projectFolders']).toEqual(valid);
+    // The cached settings are dropped by the write, so the next read sees it.
+    expect(await handlers.get(CHANNELS.projectFolders)?.(TRUSTED)).toEqual(valid);
+  });
+
+  it('refuses a nested folder and a duplicate name before writing anything', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+    const save = handlers.get(CHANNELS.saveProjectFolders)!;
+    const nested = {
+      folders: [
+        { id: 'a', name: 'A', parentId: null, collapsed: false },
+        { id: 'b', name: 'B', parentId: 'a', collapsed: false },
+      ],
+      membership: {},
+    };
+    const duplicate = {
+      folders: [
+        { id: 'a', name: 'Sites', parentId: null, collapsed: false },
+        { id: 'b', name: 'sites', parentId: null, collapsed: false },
+      ],
+      membership: {},
+    };
+    expect(await save(TRUSTED, nested)).toMatchObject({ ok: false, message: expect.stringMatching(/nested deeper/) });
+    expect(await save(TRUSTED, duplicate)).toMatchObject({ ok: false, message: expect.stringMatching(/already exists/) });
+    expect(await save(TRUSTED, 'not an object')).toMatchObject({ ok: false });
+    expect(await save(TRUSTED, { ...valid, extra: 'x'.repeat(10_000) })).toMatchObject({ ok: false, message: expect.stringMatching(/unknown key/) });
+    await expect(readFile(join(dir, 'settings.json'), 'utf8')).rejects.toThrow();
+  });
+
+  it('reports a write that failed rather than claiming success', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await writeFile(join(dir, 'settings.json'), 'not json', 'utf8');
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+    expect(await handlers.get(CHANNELS.saveProjectFolders)?.(TRUSTED, valid)).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/could not be saved/),
+    });
+    expect(await readFile(join(dir, 'settings.json'), 'utf8')).toBe('not json');
+  });
+});
+
 // ── validateBindRequest — pure, no electron, no CLI ────────────────────────────────
 
 describe('validateBindRequest', () => {

@@ -7,7 +7,7 @@ export type Load<T> =
   | { readonly phase: 'done'; readonly result: OperationResult<T> };
 
 /** What a rejected bridge call becomes: the same `unavailable` shape the CLI layer produces. */
-function unreachable(error: unknown): Extract<OperationResult<never>, { ok: false }> {
+export function unreachable(error: unknown): Extract<OperationResult<never>, { ok: false }> {
   return {
     ok: false,
     kind: 'unavailable',

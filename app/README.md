@@ -143,6 +143,32 @@ echo '{"id":"'$(date +%s)'-1-1","ts":'$(date +%s)',"project_id":"<id>","session_
 change lands in the store's project layer and in the project's `resolved/preferences.json`,
 exactly as if it had been made in a terminal. The app keeps no copy of any preference.
 
+## Project folders
+
+The Projects screen groups bound projects into folders (ADR-0021). Like a project's display name
+(ADR-0016), folders are the app's own record — `projectFolders` in `settings.json` — and never
+reach the CLI, `project.json` or the store. They are per machine.
+
+- **New folder** above the table; **Rename…**, **Delete folder…** from a folder's `⋯` menu. Deleting
+  a folder moves its projects to **No folder**; it never unbinds anything.
+- **Move** a project by dragging its handle onto a folder, or with the row's folder button — the
+  keyboard path to the same result. Dragging a selected row carries the whole selection.
+- **Select** rows, a whole folder, or everything shown; the bar that appears moves, removes from a
+  folder, or syncs the selection one project at a time (**Stop after this one** ends it between
+  projects). Bulk actions act only on rows on screen: never on rows a filter hides or a collapsed
+  folder holds — selecting a collapsed folder opens it. While any sync runs, every other sync
+  button waits.
+- A collapsed folder stays collapsed across restarts; a text filter opens it while it has matches,
+  and hides folders that have none.
+
+One level of folders today. The model in `src/shared/projectFolders.ts` is a tree
+(`parentId`) capped by `MAX_FOLDER_DEPTH`; subfolders mean raising that constant, with no change to
+the stored format. The main process validates every save against the same module, writes a copy
+rebuilt from the model's own fields, and writes nothing it refuses; the screen then undoes the
+change and says why. If the folders cannot be read, the screen shows projects ungrouped and blocks
+every folder change until a retry succeeds, so a failed read can never be saved over the real
+grouping.
+
 ## The Board screen
 
 Agents keep a todo list through their provider's own tool; hooks record it per session

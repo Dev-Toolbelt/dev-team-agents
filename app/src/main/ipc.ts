@@ -67,7 +67,8 @@ import {
 } from '../shared/pluginRules.js';
 import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
 import { trustedHandler, type RendererTarget } from './security.js';
-import { readSettings, writeProjectName, type AppSettings } from './settings.js';
+import { readSettings, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
+import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, type ProjectFoldersAnswer } from '../shared/projectFolders.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
   CHANNELS,
@@ -592,6 +593,29 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
   handle(CHANNELS.projectNames, async (): Promise<Readonly<Record<string, string>>> => {
     const current = await ensureSettings();
     return current.projectNames;
+  });
+
+  // Spawns nothing — the folders are this app's own record (ADR-0021).
+  handle(CHANNELS.projectFolders, async (): Promise<ProjectFolders> => {
+    const current = await ensureSettings();
+    return current.projectFolders;
+  });
+
+  handle(CHANNELS.saveProjectFolders, async (_event, raw: unknown): Promise<ProjectFoldersAnswer> => {
+    const problem = projectFoldersProblem(raw);
+    if (problem !== null) return { ok: false, message: `The folders were not saved: ${problem}.` };
+    // Written from a rebuilt copy, never from the renderer's own object: the check above
+    // proves the shape, and this makes sure the shape is all that gets stored.
+    const folders = sanitizeProjectFolders(raw as ProjectFolders);
+    try {
+      await writeProjectFolders(deps.userDataDir, folders);
+    } catch (error) {
+      return { ok: false, message: `The folders could not be saved: ${error instanceof Error ? error.message : String(error)}` };
+    } finally {
+      // Stale either way: a failed write may still have been preceded by a successful read.
+      settings = null;
+    }
+    return { ok: true, folders };
   });
 
   handle(CHANNELS.catalogSummary, async () => {

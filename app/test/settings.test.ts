@@ -12,7 +12,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETTINGS_FILE_NAME, readSettings, writeOpenAtLogin, writeProjectName } from '../src/main/settings.js';
+import { SETTINGS_FILE_NAME, readSettings, writeOpenAtLogin, writeProjectFolders, writeProjectName } from '../src/main/settings.js';
 
 let dir: string;
 
@@ -273,6 +273,39 @@ describe('concurrent writes do not lose each other', () => {
     expect(Object.keys(result.projectNames)).toHaveLength(12);
     expect(result.openAtLogin).toBe(true);
     expect(result.problem).toBeUndefined();
+  });
+});
+
+describe('projectFolders (ADR-0021)', () => {
+  const folders = {
+    folders: [{ id: 'sites', name: 'Sites', parentId: null, collapsed: true }],
+    membership: { p1: 'sites' },
+  };
+
+  it('round-trips, and keeps cliPath, project names and the login choice as found', async () => {
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ cliPath: '/opt/devteam', projectNames: { p1: 'A' }, openAtLogin: true }), 'utf8');
+    await writeProjectFolders(dir, folders);
+    expect(await readSettings(dir)).toMatchObject({ cliPath: '/opt/devteam', projectNames: { p1: 'A' }, openAtLogin: true, projectFolders: folders });
+  });
+
+  it('survives a later write of another field', async () => {
+    await writeProjectFolders(dir, folders);
+    await writeProjectName(dir, 'p2', 'B');
+    expect((await readSettings(dir)).projectFolders).toEqual(folders);
+  });
+
+  it('writes no key at all for the empty state', async () => {
+    await writeProjectFolders(dir, folders);
+    await writeProjectFolders(dir, { folders: [], membership: {} });
+    const raw = JSON.parse(await readFile(join(dir, SETTINGS_FILE_NAME), 'utf8')) as Record<string, unknown>;
+    expect(raw).not.toHaveProperty('projectFolders');
+  });
+
+  it('reads a malformed value as salvaged folders, never as a settings problem', async () => {
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ projectFolders: { folders: 'nope', membership: { p1: 'x' } } }), 'utf8');
+    const result = await readSettings(dir);
+    expect(result.problem).toBeUndefined();
+    expect(result.projectFolders).toEqual({ folders: [], membership: {} });
   });
 });
 

@@ -11,6 +11,10 @@
  * command means adding a named operation here and a handler in `main/ipc.ts`.
  */
 
+import type { ProjectFolders, ProjectFoldersAnswer } from './projectFolders.js';
+
+export type { ProjectFolders, ProjectFoldersAnswer };
+
 export type ProblemKind =
   | 'usage'
   | 'environment'
@@ -900,6 +904,17 @@ export interface DevteamBridge {
    * bare UUID**, including for a project bound from the terminal and never named here.
    */
   readonly projectNames: () => Promise<Readonly<Record<string, string>>>;
+  /**
+   * The Projects screen's folders (ADR-0021). Spawns nothing; app-local, like
+   * `projectNames`. See `shared/projectFolders.ts` for the model.
+   */
+  readonly projectFolders: () => Promise<ProjectFolders>;
+  /**
+   * Replace the whole folder state. The main process validates it with
+   * `projectFoldersProblem` and writes nothing when it is refused. Spawns nothing — this is
+   * the app's own file, so it is not gated by the CLI's write gate.
+   */
+  readonly saveProjectFolders: (folders: ProjectFolders) => Promise<ProjectFoldersAnswer>;
 
   // Write actions. Each one spawns a command in `compat.MUTATING`, so each one is
   // refused at exit 4 by the framework's own gate whenever the store is ahead of this
@@ -1189,6 +1204,8 @@ export const CHANNELS = {
   catalogEntry: 'devteam:catalog-entry',
   doctor: 'devteam:doctor',
   projectNames: 'devteam:project-names',
+  projectFolders: 'devteam:project-folders',
+  saveProjectFolders: 'devteam:save-project-folders',
   chooseProjectDirectory: 'devteam:choose-project-directory',
   bindProject: 'devteam:bind-project',
   unbindProject: 'devteam:unbind-project',
