@@ -247,3 +247,9 @@ has no plugin-specific code; a new plugin appears in it with zero app changes.
 >   may not be `.`, start with `.git`, `.dev-team-agents`, `.worktrees`, `graphify-out` or
 >   `graphify-src` (case-insensitive), or resolve into them or the git dir; the shell `realpath`
 >   fallback resolves the deepest existing ancestor physically.
+> - **Additive presentation hints.** A status fact may carry an optional `tone`
+>   (`positive` | `warning` | `neutral`; anything else is omitted by the CLI, never an error) that the
+>   app renders as a badge. A `string` / `string_list` config field may carry an optional `picker`
+>   (`directory` | `file`; invalid value or another type makes the manifest invalid) that the app renders
+>   as a native picker. The renderer never sees absolute paths: main converts the choice to
+>   project-relative and refuses anything outside the project.
