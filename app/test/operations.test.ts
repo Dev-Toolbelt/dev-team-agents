@@ -4,6 +4,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALLOWED_COMMANDS,
+  asIntegrationList,
+  asIntegrationTestReport,
+  integrationConfigSet,
+  integrationConfigUnset,
+  integrationConnect,
+  integrationDisconnect,
+  integrationList,
+  integrationResources,
+  integrationShow,
+  integrationTest,
+  INTEGRATION_NAME,
   COMMAND_SHAPES,
   GATED_COMMANDS,
   READ_ONLY_COMMANDS,
@@ -170,6 +182,13 @@ describe('what this slice is allowed to run', () => {
       'plugin config set',
       'plugin config unset',
       'plugin run',
+      // ADR-0023: connect writes the account config and the token (over stdin), test writes the
+      // machine-local status record.
+      'integration connect',
+      'integration disconnect',
+      'integration config set',
+      'integration config unset',
+      'integration test',
       // Acknowledging a notification writes that project's seen marks — admitted as a
       // write rather than dressed up as a read.
       'notifications ack',
@@ -1011,5 +1030,177 @@ describe('the top-level JSON scanner', () => {
 
   it('reports an unterminated value rather than silently dropping it', () => {
     expect(scanTopLevelJson('{"ok": true, "a": [').unterminated).not.toBeNull();
+  });
+});
+
+// ── integrations (ADR-0023) ────────────────────────────────────────────────────────────
+
+const FAKE_WRITE = fileURLToPath(new URL('./fixtures/fake-devteam-write.mjs', import.meta.url));
+const NO_SPAWN_CONTEXT = { binary: '/nonexistent/devteam', cwd: '/tmp' } as const;
+const skipWithoutShebang = process.platform === 'win32';
+
+function integrationRaw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    name: 'github',
+    title: 'GitHub',
+    description: 'd',
+    homepage: null,
+    auth: { kind: 'token', label: 'Token', help: null, has_token: true, stale: false, backend: 'keychain' },
+    fields: [
+      { key: 'api_url', scope: 'account', type: 'string', label: 'API URL', required: true, default: 'https://api.github.com', options: null, resource: null, visible_when: null },
+      { key: 'deployment', scope: 'account', type: 'enum', label: 'D', options: [{ value: 'cloud', label: 'Cloud' }], visible_when: { key: 'x', equals: 'y' } },
+    ],
+    account: { api_url: 'https://api.github.com' },
+    project: null,
+    detected: {},
+    connected: true,
+    project_configured: false,
+    status: { state: 'unknown', checked_at: null, summary: '', facts: [] },
+    ...overrides,
+  };
+}
+
+describe('the integration commands are admitted with the right shapes', () => {
+  it('lists the reads as read-only and the writes as gated, each with its own argv shape', () => {
+    const flat = (list: readonly (readonly string[])[]) => list.map((c) => c.join(' '));
+    expect(flat(READ_ONLY_COMMANDS)).toEqual(expect.arrayContaining(['integration list', 'integration show', 'integration resources']));
+    expect(flat(GATED_COMMANDS)).toEqual(
+      expect.arrayContaining(['integration connect', 'integration disconnect', 'integration config set', 'integration config unset', 'integration test']),
+    );
+    expect(argvProblem(['integration', 'connect', 'github', '--field', 'a=b', '--field', 'c=d', '--path', '/p'])).toBeNull();
+    expect(argvProblem(['integration', 'disconnect', 'github', '--keep-token'])).toBeNull();
+    // A token is never an argument: there is no flag that could carry one, and disconnect takes no path.
+    expect(argvProblem(['integration', 'connect', 'github', '--token', 'x'])).not.toBeNull();
+    expect(argvProblem(['integration', 'disconnect', 'github', '--path', '/p'])).not.toBeNull();
+  });
+});
+
+describe('the integration operations refuse before spawning', () => {
+  it('rejects names, keys, kinds, values, fields and tokens that do not match', async () => {
+    const results = await Promise.all([
+      integrationShow(NO_SPAWN_CONTEXT, null, '--all'),
+      integrationShow(NO_SPAWN_CONTEXT, null, 'Has Caps'),
+      integrationShow(NO_SPAWN_CONTEXT, null, `a${'b'.repeat(32)}`),
+      integrationTest(NO_SPAWN_CONTEXT, null, '../x'),
+      integrationDisconnect(NO_SPAWN_CONTEXT, '1github', false),
+      integrationConfigSet(NO_SPAWN_CONTEXT, '/p', 'github', 'bad-key', 'x'),
+      integrationConfigSet(NO_SPAWN_CONTEXT, '/p', 'github', '1key', 'x'),
+      integrationConfigSet(NO_SPAWN_CONTEXT, '/p', 'github', 'key', '--flag'),
+      integrationConfigSet(NO_SPAWN_CONTEXT, '/p', 'github', 'key', ''),
+      integrationConfigSet(NO_SPAWN_CONTEXT, '/p', 'github', 'key', 'a\nb'),
+      integrationConfigUnset(NO_SPAWN_CONTEXT, '/p', 'github', '--all'),
+      integrationResources(NO_SPAWN_CONTEXT, '/p', 'github', 'Repos'),
+      integrationResources(NO_SPAWN_CONTEXT, '/p', 'github', '--x'),
+      integrationConnect(NO_SPAWN_CONTEXT, null, 'github', { 'bad key': 'v' }, null),
+      integrationConnect(NO_SPAWN_CONTEXT, null, 'github', { key: 'a\nb' }, null),
+      integrationConnect(NO_SPAWN_CONTEXT, null, 'github', {}, 'tok\nen'),
+      integrationConnect(NO_SPAWN_CONTEXT, null, 'github', {}, 'x'.repeat(5000)),
+      integrationConnect(NO_SPAWN_CONTEXT, null, 'github', [] as unknown as Record<string, string>, null),
+    ]);
+    for (const [index, result] of results.entries()) {
+      expect(result.ok, `case ${index}`).toBe(false);
+      if (result.ok) continue;
+      expect(result.kind).toBe('refused');
+      expect(result.durationMs).toBe(0);
+    }
+    expect(INTEGRATION_NAME.test('github')).toBe(true);
+  });
+});
+
+describe('what an integration payload must contain', () => {
+  it('reads a view and keeps scope, visibility and status', () => {
+    const list = asIntegrationList({ project_id: null, integrations: [integrationRaw()] });
+    if (typeof list === 'string') throw new Error(list);
+    const view = list.integrations[0];
+    expect(view?.fields.map((f) => [f.key, f.scope, f.visible_when?.equals ?? null])).toEqual([
+      ['api_url', 'account', null],
+      ['deployment', 'account', 'y'],
+    ]);
+    expect(view?.project).toBeNull();
+    expect(view?.status.state).toBe('unknown');
+  });
+
+  it('reads auth.stale, treating an absent key (an older CLI) as false', () => {
+    const read = (auth: Record<string, unknown>) => {
+      const list = asIntegrationList({ integrations: [integrationRaw({ auth })] });
+      if (typeof list === 'string') throw new Error(list);
+      return list.integrations[0]?.auth.stale;
+    };
+    expect(read({ has_token: true, stale: true })).toBe(true);
+    expect(read({ has_token: true, stale: false })).toBe(false);
+    expect(read({ has_token: true })).toBe(false);
+    expect(read({ has_token: true, stale: 'yes' })).toBe(false);
+  });
+
+  it('normalises an empty help to null so nothing renders an empty paragraph', () => {
+    const list = asIntegrationList({
+      integrations: [
+        integrationRaw({
+          auth: { kind: 'token', label: 'T', help: '', has_token: true, backend: null },
+          fields: [{ key: 'api_url', scope: 'account', type: 'string', label: 'U', help: '' }],
+        }),
+      ],
+    });
+    if (typeof list === 'string') throw new Error(list);
+    expect(list.integrations[0]?.fields[0]?.help).toBeNull();
+    expect(list.integrations[0]?.auth.help).toBeNull();
+  });
+
+  it('refuses documents the UI cannot render', () => {
+    expect(asIntegrationList({})).toContain('integrations');
+    expect(asIntegrationList({ integrations: [integrationRaw({ name: 'Bad Name' })] })).toContain('name');
+    expect(asIntegrationList({ integrations: [integrationRaw({ connected: 'yes' })] })).toContain('connected');
+    expect(asIntegrationList({ integrations: [integrationRaw({ auth: {} })] })).toContain('auth');
+    expect(asIntegrationList({ integrations: [integrationRaw({ fields: [{ key: 'k', scope: 'team', type: 'string' }] })] })).toContain('scope');
+    expect(asIntegrationTestReport({ integration: integrationRaw() })).toContain('test');
+    expect(asIntegrationTestReport({ integration: integrationRaw(), test: { ok: 'true', state: 'connected' } })).toContain('ok');
+  });
+});
+
+describe.skipIf(skipWithoutShebang)('the integration operations against the fixture CLI', () => {
+  const cwd = tmpdir();
+  const context = { binary: FAKE_WRITE, cwd };
+
+  it('builds the argv with repeated --field pairs and the resolved path', async () => {
+    const result = await integrationConnect(context, '/repo/project-1', 'demo', { api_url: 'https://x.test', mode: 'a' }, null);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.command).toContain('integration connect demo --field api_url=https://x.test --field mode=a --path /repo/project-1 --json');
+    expect(result.data.test.ok).toBe(true);
+  });
+
+  it('sends the token over stdin only, and sends nothing when there is no token', async () => {
+    const withToken = await integrationConnect(context, null, 'demo', {}, 'ghp_secret_token_value');
+    if (!withToken.ok) throw new Error(withToken.message);
+    expect(withToken.command).not.toContain('ghp_secret_token_value');
+    expect(JSON.stringify(withToken)).not.toContain('ghp_secret_token_value');
+    expect(withToken.data.integration.status.summary).toBe('stdin_bytes=22');
+
+    for (const token of [null, '']) {
+      const kept = await integrationConnect(context, null, 'demo', {}, token);
+      if (!kept.ok) throw new Error(kept.message);
+      expect(kept.data.integration.status.summary).toBe('stdin_bytes=0');
+    }
+  });
+
+  it('falls back to the context directory when there is no project, and passes --keep-token', async () => {
+    const list = await integrationList(context, null);
+    expect(list.command).toContain(`integration list --path ${cwd} --json`);
+    if (!list.ok) throw new Error(list.message);
+    expect(list.data.project_id).toBeNull();
+
+    const kept = await integrationDisconnect(context, 'demo', true);
+    expect(kept.command).toContain('integration disconnect demo --keep-token --json');
+    const gone = await integrationDisconnect(context, 'demo', false);
+    expect(gone.command).not.toContain('--keep-token');
+
+    const set = await integrationConfigSet(context, '/p', 'demo', 'repository', 'o/r');
+    expect(set.command).toContain('integration config set demo repository o/r --path /p --json');
+    const unset = await integrationConfigUnset(context, '/p', 'demo', 'repository');
+    if (!unset.ok) throw new Error(unset.message);
+    expect(unset.data.removed).toBe(true);
+
+    const resources = await integrationResources(context, '/p', 'demo', 'repos');
+    if (!resources.ok) throw new Error(resources.message);
+    expect(resources.data).toEqual({ items: [{ value: 'o/r', label: 'o/r' }], truncated: false });
   });
 });

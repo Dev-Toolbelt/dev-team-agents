@@ -22,6 +22,8 @@
  * `test/ipc.test.ts` can assert on `result.data`, not only on `result.command`.
  */
 
+import { readFileSync } from 'node:fs';
+
 const rawArgs = process.argv.slice(2);
 const args = [...rawArgs];
 
@@ -73,6 +75,37 @@ function pluginView(enabled) {
     hooks: [],
     status: null,
   };
+}
+
+// One generic integration. `stdin_bytes` is what the CLI read from stdin, reported in the summary
+// so a test can tell "a token arrived" from "nothing arrived" without the token ever being echoed.
+function integrationView(stdinBytes, connected) {
+  return {
+    name: 'demo',
+    title: 'Demo',
+    description: 'An integration the fixture declares.',
+    homepage: null,
+    auth: { kind: 'token', label: 'Token', help: null, has_token: connected, stale: false, backend: connected ? 'keychain' : null },
+    fields: [
+      { key: 'api_url', scope: 'account', type: 'string', label: 'API URL', help: null, required: true, default: 'https://api.example.test', placeholder: null, options: null, resource: null, visible_when: null },
+      { key: 'mode', scope: 'account', type: 'enum', label: 'Mode', help: null, required: false, default: 'a', placeholder: null, options: [{ value: 'a', label: 'A' }], resource: null, visible_when: { key: 'api_url', equals: 'x' } },
+      { key: 'repository', scope: 'project', type: 'string', label: 'Repository', help: null, required: false, default: null, placeholder: null, options: null, resource: 'repos', visible_when: null },
+    ],
+    account: { api_url: 'https://api.example.test' },
+    project: flagValue('--path') === PROJECT_PATH ? { repository: 'o/r' } : null,
+    detected: {},
+    connected,
+    project_configured: flagValue('--path') === PROJECT_PATH,
+    status: { state: connected ? 'connected' : 'not_connected', checked_at: null, summary: `stdin_bytes=${stdinBytes}`, facts: [{ label: 'Account', value: 'octocat', tone: 'positive' }] },
+  };
+}
+
+function readStdin() {
+  try {
+    return readFileSync(0, 'utf8').length;
+  } catch {
+    return 0;
+  }
 }
 
 const PROJECT_ID = 'proj-1';
@@ -317,6 +350,41 @@ switch (command) {
     }
     if (verb === 'run') {
       emit({ ok: true, plugin: args[2], action: args[3], exit_code: 0, duration_ms: 12, output: args[3] === 'detect' ? { paths: ['src'] } : null, log_tail: 'done' });
+      process.exit(0);
+    }
+    process.exit(64);
+    break;
+  }
+
+  case 'integration': {
+    const verb = args[1];
+    if (verb === 'list') {
+      emit({ ok: true, project_id: flagValue('--path') === PROJECT_PATH ? PROJECT_ID : null, integrations: [integrationView(0, true)] });
+      process.exit(0);
+    }
+    if (verb === 'show') {
+      emit({ ok: true, integration: integrationView(0, true) });
+      process.exit(0);
+    }
+    if (verb === 'connect' || verb === 'test') {
+      const stdinBytes = verb === 'connect' ? readStdin() : 0;
+      emit({
+        ok: true,
+        integration: integrationView(stdinBytes, true),
+        test: { ok: true, state: 'connected', summary: 'Signed in', facts: [{ label: 'Account', value: 'octocat', tone: 'positive' }], checked_at: '2026-09-30T12:00:00Z' },
+      });
+      process.exit(0);
+    }
+    if (verb === 'disconnect') {
+      emit({ ok: true, integration: integrationView(0, args.includes('--keep-token')), changed: true });
+      process.exit(0);
+    }
+    if (verb === 'config') {
+      emit({ ok: true, integration: integrationView(0, true), key: args[4], ...(args[2] === 'unset' ? { removed: true } : {}) });
+      process.exit(0);
+    }
+    if (verb === 'resources') {
+      emit({ ok: true, items: [{ value: 'o/r', label: 'o/r' }], truncated: false });
       process.exit(0);
     }
     process.exit(64);

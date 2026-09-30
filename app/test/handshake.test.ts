@@ -79,6 +79,7 @@ describe('the declaration is the app’s own constant', () => {
     expect(Object.keys(APP_STORE_SCHEMAS).sort()).toEqual([
       'bind_manifest',
       'credentials',
+      'integrations',
       'plugin_settings',
       'project',
       'project_layout',

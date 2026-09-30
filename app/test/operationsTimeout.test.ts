@@ -12,7 +12,15 @@ vi.mock('../src/cli/invoke.js', () => ({
   DEFAULT_TIMEOUT_MS: 20_000,
 }));
 
-import { GATED_COMMANDS, GATED_TIMEOUT_MS, run } from '../src/cli/operations.js';
+import {
+  GATED_COMMANDS,
+  GATED_TIMEOUT_MS,
+  INTEGRATION_NETWORK_TIMEOUT_MS,
+  integrationConnect,
+  integrationResources,
+  integrationTest,
+  run,
+} from '../src/cli/operations.js';
 
 beforeEach(() => {
   invokeDevteam.mockReset();
@@ -49,6 +57,11 @@ const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
   'plugin config set': ['plugin', 'config', 'set', 'demo', 'key', 'v', '--path', '/p'],
   'plugin config unset': ['plugin', 'config', 'unset', 'demo', 'key', '--path', '/p'],
   'plugin run': ['plugin', 'run', 'demo', 'detect', '--path', '/p'],
+  'integration connect': ['integration', 'connect', 'github', '--field', 'api_url=https://x', '--path', '/p'],
+  'integration disconnect': ['integration', 'disconnect', 'github', '--keep-token'],
+  'integration test': ['integration', 'test', 'github', '--path', '/p'],
+  'integration config set': ['integration', 'config', 'set', 'github', 'repository', 'a/b', '--path', '/p'],
+  'integration config unset': ['integration', 'config', 'unset', 'github', 'repository', '--path', '/p'],
 };
 
 describe('run() deadlines', () => {
@@ -74,5 +87,20 @@ describe('run() deadlines', () => {
   it('lets the caller\'s own timeoutMs win', async () => {
     await run({ ...CONTEXT, timeoutMs: 1234 }, ['sync', '--all'], (body) => body);
     expect(invokeDevteam.mock.calls[0]?.[0].timeoutMs).toBe(1234);
+  });
+});
+
+describe('integration network deadlines', () => {
+  it('gives connect and test the gated deadline, never the short read one', async () => {
+    // Mutation: restoring the 30 s override would kill a write whose side effects already landed.
+    await integrationConnect(CONTEXT, null, 'github', {}, null);
+    await integrationTest(CONTEXT, null, 'github');
+    expect(invokeDevteam.mock.calls.map((call: { timeoutMs?: number }[]) => call[0]?.timeoutMs)).toEqual([GATED_TIMEOUT_MS, GATED_TIMEOUT_MS]);
+  });
+
+  it('keeps the short deadline for the read-only resources call', async () => {
+    await integrationResources(CONTEXT, null, 'github', 'repos');
+    expect(invokeDevteam.mock.calls[0]?.[0].timeoutMs).toBe(INTEGRATION_NETWORK_TIMEOUT_MS);
+    expect(INTEGRATION_NETWORK_TIMEOUT_MS).toBeLessThan(GATED_TIMEOUT_MS);
   });
 });

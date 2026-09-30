@@ -425,6 +425,13 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     updatePluginConfig: vi.fn((_projectId: string, _name: string, changes: readonly PluginConfigChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
+    integrationList: vi.fn(() => Promise.resolve(ok({ project_id: null, integrations: [] }))),
+    integrationConnect: vi.fn(() => Promise.reject(new Error('integrationConnect is not stubbed'))),
+    integrationTest: vi.fn(() => Promise.reject(new Error('integrationTest is not stubbed'))),
+    integrationDisconnect: vi.fn(() => Promise.reject(new Error('integrationDisconnect is not stubbed'))),
+    integrationConfigSet: vi.fn(() => Promise.reject(new Error('integrationConfigSet is not stubbed'))),
+    integrationConfigUnset: vi.fn(() => Promise.reject(new Error('integrationConfigUnset is not stubbed'))),
+    integrationResources: vi.fn(() => Promise.resolve(ok({ items: [], truncated: false }))),
     runPluginAction: vi.fn(() => Promise.resolve(ok(runResult()))),
     pickProjectPath: vi.fn(() => Promise.resolve({ picked: false as const })),
     notificationFeed: vi.fn(() => Promise.resolve(notificationFeed())),

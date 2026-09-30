@@ -230,6 +230,27 @@ switch (scenario) {
     }, 600);
     break;
 
+  case 'echo-stdin': {
+    // Reads stdin to EOF and reports what arrived. With FAKE_DEVTEAM_ECHO=1 it also leaks
+    // the value to stdout and stderr, so a test can prove the layer scrubs a careless child.
+    const echo = process.env['FAKE_DEVTEAM_ECHO'] === '1';
+    const chunks = [];
+    process.stdin.on('data', (c) => chunks.push(c));
+    process.stdin.on('end', () => {
+      const stdin = Buffer.concat(chunks).toString('utf8');
+      if (echo) process.stderr.write(`got ${stdin}\n`);
+      emit({ ok: true, argv, stdin: echo ? stdin : undefined, stdin_length: stdin.length });
+      process.exit(0);
+    });
+    break;
+  }
+
+  case 'no-read-exit':
+    // Exits without reading stdin, so the parent's write hits a closed pipe.
+    emit({ ok: true, argv });
+    process.exit(0);
+    break;
+
   case 'echo-env':
     emit({ ok: true, env: process.env, argv });
     process.exit(0);
