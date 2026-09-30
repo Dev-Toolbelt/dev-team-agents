@@ -169,7 +169,7 @@ describe('a plugin card', () => {
   it('shows the status summary and facts as a definition list', async () => {
     await openPlugins({
       projectPlugins: vi.fn(() =>
-        Promise.resolve(ok(pluginList([pluginView({ enabled: true, status: { summary: 'Graph is current', facts: [{ label: 'Nodes', value: '128' }] } })]))),
+        Promise.resolve(ok(pluginList([pluginView({ enabled: true, status: { summary: 'Graph is current', facts: [{ label: 'Nodes', value: '128', tone: null }] } })]))),
       ),
     });
     await screen.findByRole('heading', { name: 'Graphify' });
@@ -177,6 +177,43 @@ describe('a plugin card', () => {
     expect(within(card()).getByText('Graph is current')).toBeInTheDocument();
     expect(within(card()).getByText('Nodes').tagName).toBe('DT');
     expect(within(card()).getByText('128').tagName).toBe('DD');
+  });
+
+  it('renders a toned fact as a badge and an untoned one as plain monospace text', async () => {
+    await openPlugins({
+      projectPlugins: vi.fn(() =>
+        Promise.resolve(
+          ok(
+            pluginList([
+              pluginView({
+                enabled: true,
+                status: {
+                  summary: 'ok',
+                  facts: [
+                    { label: 'graph.json', value: 'present', tone: 'positive' },
+                    { label: 'report', value: 'missing', tone: 'warning' },
+                    { label: 'mode', value: 'auto', tone: 'neutral' },
+                    { label: 'Last build', value: '2026-09-30 09:41', tone: null },
+                  ],
+                },
+              }),
+            ]),
+          ),
+        ),
+      ),
+    });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const scope = within(card());
+    expect(scope.getByText('present')).toHaveAttribute('data-slot', 'badge');
+    expect(scope.getByText('present').className).toContain('green');
+    expect(scope.getByText('missing')).toHaveAttribute('data-slot', 'badge');
+    expect(scope.getByText('missing').className).toContain('amber');
+    expect(scope.getByText('auto')).toHaveAttribute('data-slot', 'badge');
+    const plain = scope.getByText('2026-09-30 09:41');
+    expect(plain).not.toHaveAttribute('data-slot', 'badge');
+    expect(plain.tagName).toBe('DD');
+    expect(plain.className).toContain('font-mono');
   });
 
   it('enables through the bridge and says what happened', async () => {
@@ -314,6 +351,88 @@ describe('the config form', () => {
     await user.click(scope.getByRole('button', { name: /Save changes/ }));
     expect(await scope.findByText(/1 change was saved before one failed/)).toBeInTheDocument();
     expect(scope.getByText('depth is reserved')).toBeInTheDocument();
+  });
+});
+
+describe('a field with a native picker', () => {
+  const pickerView = () =>
+    pluginView({ config_fields: [pluginField({ picker: 'directory' })], config: { targetPaths: [] } });
+  const open = (pick: ReturnType<typeof vi.fn>) =>
+    openPlugins({
+      projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([pickerView()])))),
+      pickProjectPath: pick as never,
+    });
+
+  it('fills the pending value from Choose…, adds only on Add, and never offers a text input', async () => {
+    const pick = vi.fn(() => Promise.resolve({ picked: true as const, path: 'src/app' }));
+    const { user, bridge } = await open(pick);
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const scope = within(card());
+    const pending = scope.getByRole('textbox', { name: 'Source paths' });
+    expect(pending).toHaveAttribute('readonly');
+
+    await user.click(scope.getByRole('button', { name: /^Choose/ }));
+    expect(bridge.pickProjectPath).toHaveBeenCalledWith('proj-1', 'directory');
+    expect(pending).toHaveValue('src/app');
+    expect(scope.queryByRole('list', { name: 'Source paths' })).not.toBeInTheDocument();
+
+    await user.click(scope.getByRole('button', { name: /^Add/ }));
+    expect(within(scope.getByRole('list', { name: 'Source paths' })).getAllByRole('listitem').map((i) => i.textContent)).toEqual(['src/app']);
+    expect(pending).toHaveValue('');
+
+    await user.click(scope.getByRole('button', { name: /^Choose/ }));
+    await user.click(scope.getByRole('button', { name: /^Add/ }));
+    expect(await scope.findByRole('alert')).toHaveTextContent('"src/app" is already in the list.');
+  });
+
+  it('rejects adding with nothing chosen', async () => {
+    const { user } = await open(vi.fn());
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const scope = within(card());
+    await user.click(scope.getByRole('button', { name: /^Add/ }));
+    expect(await scope.findByRole('alert')).toBeInTheDocument();
+    expect(scope.queryByRole('list', { name: 'Source paths' })).not.toBeInTheDocument();
+  });
+
+  it('shows the refusal from main inline and leaves the pending value alone', async () => {
+    const pick = vi.fn(() => Promise.resolve({ picked: false as const, refused: 'That location is outside the project. Choose something inside it.' }));
+    const { user } = await open(pick);
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const scope = within(card());
+    await user.click(scope.getByRole('button', { name: /^Choose/ }));
+    expect(await scope.findByRole('alert')).toHaveTextContent('outside the project');
+    expect(scope.getByRole('textbox', { name: 'Source paths' })).toHaveValue('');
+  });
+
+  it('fills a single string field directly', async () => {
+    const pick = vi.fn(() => Promise.resolve({ picked: true as const, path: 'graph/manifest.json' }));
+    const { user, bridge } = await openPlugins({
+      projectPlugins: vi.fn(() =>
+        Promise.resolve(
+          ok(pluginList([pluginView({ config_fields: [pluginField({ key: 'manifest', type: 'string', label: 'Manifest', picker: 'file', required: false, default: '' })], config: { manifest: '' } })])),
+        ),
+      ),
+      pickProjectPath: pick,
+    });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const scope = within(card());
+    await user.click(scope.getByRole('button', { name: /^Choose/ }));
+    expect(bridge.pickProjectPath).toHaveBeenCalledWith('proj-1', 'file');
+    expect(scope.getByRole('textbox', { name: 'Manifest' })).toHaveValue('graph/manifest.json');
+  });
+
+  it('keeps a text input for a field without a picker', async () => {
+    const { bridge } = await openPlugins();
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    const input = within(card()).getByRole('textbox', { name: 'Source paths' });
+    expect(input).not.toHaveAttribute('readonly');
+    expect(within(card()).queryByRole('button', { name: /^Choose/ })).not.toBeInTheDocument();
+    expect(bridge.pickProjectPath).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,8 @@ import { Plus, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { PluginFieldPicker, ProjectId } from '../../shared/api.js';
+import { PathPicker } from './PathPicker.js';
 import { listItemProblem } from '../../shared/pluginRules.js';
 
 /**
@@ -36,6 +38,8 @@ export function ListEditor({
   disabled = false,
   describedBy,
   invalid = false,
+  picker = null,
+  projectId,
 }: {
   id: string;
   /** The field's label, used to name the list and the buttons for assistive technology. */
@@ -46,6 +50,9 @@ export function ListEditor({
   disabled?: boolean;
   describedBy?: string | undefined;
   invalid?: boolean;
+  /** When set the entry is chosen with the OS picker, not typed; Add is still the person's click. */
+  picker?: PluginFieldPicker | null;
+  projectId?: ProjectId | undefined;
 }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +70,13 @@ export function ListEditor({
     onChange(result.list);
     inputRef.current?.focus();
   }
+
+  const addButton = (
+    <Button type="button" variant="outline" disabled={disabled} onClick={add}>
+      <Plus aria-hidden="true" />
+      Add<span className="sr-only"> to {label}</span>
+    </Button>
+  );
 
   return (
     <div className="space-y-2">
@@ -92,35 +106,51 @@ export function ListEditor({
       ) : (
         <p className="text-xs italic text-muted-foreground">Nothing listed yet.</p>
       )}
-      <div className="flex gap-2">
-        <Input
-          ref={inputRef}
+      {picker !== null && projectId !== undefined ? (
+        <PathPicker
           id={id}
+          label={label}
+          picker={picker}
+          projectId={projectId}
           value={text}
-          disabled={disabled}
           placeholder={placeholder}
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={invalid || error !== null || undefined}
-          aria-describedby={[describedBy, error !== null ? errorId : null].filter(Boolean).join(' ') || undefined}
-          className="font-mono"
-          onChange={(event) => {
-            setText(event.target.value);
-            if (error !== null) setError(null);
+          disabled={disabled}
+          describedBy={[describedBy, error !== null ? errorId : null].filter(Boolean).join(' ') || undefined}
+          invalid={invalid || error !== null}
+          onPick={(path) => {
+            setText(path);
+            setError(null);
           }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              // Not a form submit: the card has no <form>, and Enter here means "add this entry".
-              event.preventDefault();
-              add();
-            }
-          }}
+          trailing={addButton}
         />
-        <Button type="button" variant="outline" disabled={disabled} onClick={add}>
-          <Plus aria-hidden="true" />
-          Add<span className="sr-only"> to {label}</span>
-        </Button>
-      </div>
+      ) : (
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            id={id}
+            value={text}
+            disabled={disabled}
+            placeholder={placeholder}
+            spellCheck={false}
+            autoComplete="off"
+            aria-invalid={invalid || error !== null || undefined}
+            aria-describedby={[describedBy, error !== null ? errorId : null].filter(Boolean).join(' ') || undefined}
+            className="font-mono"
+            onChange={(event) => {
+              setText(event.target.value);
+              if (error !== null) setError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                // Not a form submit: the card has no <form>, and Enter here means "add this entry".
+                event.preventDefault();
+                add();
+              }
+            }}
+          />
+          {addButton}
+        </div>
+      )}
       {error !== null ? (
         <p id={errorId} role="alert" className="text-xs text-destructive">
           {error}

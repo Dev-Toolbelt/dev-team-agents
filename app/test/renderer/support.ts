@@ -344,6 +344,7 @@ export function pluginField(overrides: Partial<PluginConfigField> = {}): PluginC
     options: [],
     min: null,
     max: null,
+    picker: null,
     ...overrides,
   };
 }
@@ -425,6 +426,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
     runPluginAction: vi.fn(() => Promise.resolve(ok(runResult()))),
+    pickProjectPath: vi.fn(() => Promise.resolve({ picked: false as const })),
     notificationFeed: vi.fn(() => Promise.resolve(notificationFeed())),
     markNotificationsRead: vi.fn(() => Promise.resolve(notificationFeed())),
     setNotificationsPaused: vi.fn((paused: boolean) => Promise.resolve(notificationFeed({ paused }))),

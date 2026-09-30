@@ -76,7 +76,7 @@ function pluginView(enabled) {
 }
 
 const PROJECT_ID = 'proj-1';
-const PROJECT_PATH = '/repo/project-1';
+const PROJECT_PATH = process.env.FAKE_PROJECT_PATH ?? '/repo/project-1';
 
 const PROJECT_ROW = {
   project_id: PROJECT_ID,

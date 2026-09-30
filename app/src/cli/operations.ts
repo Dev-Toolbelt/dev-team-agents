@@ -60,6 +60,7 @@ import type {
   PluginRequirement,
   PluginRunResult,
   PluginStatus,
+  PluginStatusFact,
   PluginToggleReport,
   PluginView,
   PreferencesImport,
@@ -1028,6 +1029,11 @@ function asPluginConfigField(raw: unknown): PluginConfigField | string {
     options,
     min: typeof raw['min'] === 'number' ? raw['min'] : null,
     max: typeof raw['max'] === 'number' ? raw['max'] : null,
+    // Only on the two text-like types; an unknown value leaves the field free text.
+    picker:
+      (raw['type'] === 'string' || raw['type'] === 'string_list') && (raw['picker'] === 'directory' || raw['picker'] === 'file')
+        ? raw['picker']
+        : null,
   };
 }
 
@@ -1057,11 +1063,16 @@ function asFactValue(value: unknown): string {
 
 function asPluginStatus(raw: unknown): PluginStatus | null {
   if (!isRecord(raw) || typeof raw['summary'] !== 'string') return null;
-  const facts: { label: string; value: string }[] = [];
+  const facts: PluginStatusFact[] = [];
   if (Array.isArray(raw['facts'])) {
     for (const fact of raw['facts']) {
       if (isRecord(fact) && typeof fact['label'] === 'string') {
-        facts.push({ label: fact['label'], value: asFactValue(fact['value']) });
+        const tone = fact['tone'];
+        facts.push({
+          label: fact['label'],
+          value: asFactValue(fact['value']),
+          tone: tone === 'positive' || tone === 'warning' || tone === 'neutral' ? tone : null,
+        });
       }
     }
   }

@@ -48,6 +48,15 @@ function prefsWith(values: Record<string, unknown>, origin: Record<string, strin
   );
 }
 
+describe('ProjectSettings — header', () => {
+  it('no longer carries the inheritance notice', async () => {
+    installBridge(fakeBridge());
+    render(<ProjectSettings project={project()} name="project-1" environment={environment()} active onBack={vi.fn()} />);
+    await screen.findByRole('heading', { name: /project-1 · Settings/ });
+    expect(screen.queryByText(/Changes are saved to this project only/)).not.toBeInTheDocument();
+  });
+});
+
 describe('ProjectSettings — a notification asking for another project', () => {
   it('never replaces an open settings screen, says so, and opens the project on leaving', async () => {
     const projects = [project(), project({ project_id: 'proj-2', path: '/repo/project-2' })];

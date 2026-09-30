@@ -16,7 +16,8 @@
  * while the app was open — and is what the retry button calls.
  */
 
-import { basename, join } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { basename, isAbsolute, join, relative, sep } from 'node:path';
 
 import { dialog, ipcMain } from 'electron';
 
@@ -95,6 +96,7 @@ import {
   type PreferenceChange,
   type PreferenceUpdateReport,
   type PreferenceValue,
+  type ProjectPathPick,
   type ProjectPreferencesView,
   type SkillDetail,
   type SkillInstallAnswer,
@@ -313,6 +315,29 @@ export interface IpcHandle {
   readonly gatedContext: (command: string) => Promise<CliContext | null>;
   /** The app's name for a project, else its directory's basename — never the UUID. */
   readonly projectName: (projectId: string) => Promise<string>;
+}
+
+/** Folders a plugin path setting must never point into: version control and the harness's own state. */
+const FORBIDDEN_PROJECT_DIRS = ['.git', '.dev-team-agents'];
+
+/**
+ * Turn the picker's absolute answer into a project-relative POSIX path, or say why not.
+ * Both sides go through `realpath`, so a symlink inside the project that leads out of it
+ * is judged by where it lands, and only the relative path ever leaves the main process.
+ */
+export async function projectRelativeChoice(realRoot: string, chosen: string): Promise<ProjectPathPick> {
+  const real = await realpath(chosen).catch(() => null);
+  if (real === null) return { picked: false, refused: 'That location could not be read.' };
+  const rel = relative(realRoot, real);
+  if (rel === '') return { picked: false, refused: 'Choose something inside the project, not the project folder itself.' };
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    return { picked: false, refused: 'That location is outside the project. Choose something inside it.' };
+  }
+  const parts = rel.split(sep);
+  if (parts.some((part) => FORBIDDEN_PROJECT_DIRS.includes(part))) {
+    return { picked: false, refused: 'That location is inside .git or .dev-team-agents, which a setting cannot point to.' };
+  }
+  return { picked: true, path: parts.join('/') };
 }
 
 export function registerIpc(deps: IpcDependencies): IpcHandle {
@@ -1099,6 +1124,27 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       };
     },
   );
+
+  handle(CHANNELS.pickProjectPath, async (_event, projectId: unknown, picker: unknown): Promise<ProjectPathPick> => {
+    if (typeof projectId !== 'string' || (picker !== 'directory' && picker !== 'file')) {
+      return { picked: false, refused: 'That request was not a project and a picker kind this app knows.' };
+    }
+    const resolved = await resolveProject(projectId);
+    if (!('path' in resolved)) {
+      return { picked: false, refused: resolved.ok ? 'That project could not be resolved.' : resolved.message };
+    }
+    const root = await realpath(resolved.path).catch(() => null);
+    if (root === null) return { picked: false, refused: 'The project folder could not be found on disk.' };
+    const dir = picker === 'directory';
+    const chosen = await dialog.showOpenDialog({
+      title: dir ? 'Choose a source directory' : 'Choose a file',
+      defaultPath: root,
+      properties: dir ? ['openDirectory', 'dontAddToRecent'] : ['openFile', 'dontAddToRecent'],
+    });
+    const path = chosen.filePaths[0];
+    if (chosen.canceled || path === undefined) return { picked: false };
+    return projectRelativeChoice(root, path);
+  });
 
   handle(
     CHANNELS.runPluginAction,

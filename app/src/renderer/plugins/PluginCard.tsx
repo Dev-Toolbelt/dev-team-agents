@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import type {
   EnvironmentReport,
   PluginConfigUpdateReport,
+  PluginFactTone,
   PluginView,
   ProjectRecord,
 } from '../../shared/api.js';
@@ -21,6 +22,12 @@ import { PLUGIN_COMMANDS, isAnyWithheld, type Withheld } from '../writeActionGat
 import { ActionRow } from './ActionRow.js';
 import { ConfigField } from './ConfigField.js';
 import { draftBatch, fieldDraftState, proposalToDrafts, type Drafts } from './drafts.js';
+
+const FACT_TONE_CLASS: Record<PluginFactTone, string> = {
+  positive: 'border-green-600 bg-green-50 text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200',
+  warning: 'border-amber-500/50 text-amber-700 dark:text-amber-400',
+  neutral: '',
+};
 
 type Standing = { readonly label: string; readonly variant: 'default' | 'secondary' | 'destructive' | 'outline'; readonly className?: string };
 
@@ -353,7 +360,15 @@ export function PluginCard({
                 {plugin.status.facts.map((fact) => (
                   <div key={fact.label} className="contents">
                     <dt className="text-muted-foreground">{fact.label}</dt>
-                    <dd className="min-w-0 break-words font-mono text-xs leading-5">{fact.value}</dd>
+                    <dd className={cn('min-w-0 break-words text-xs leading-5', fact.tone === null && 'font-mono')}>
+                      {fact.tone !== null ? (
+                        <Badge variant="outline" className={FACT_TONE_CLASS[fact.tone]}>
+                          {fact.value}
+                        </Badge>
+                      ) : (
+                        fact.value
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -376,6 +391,7 @@ export function PluginCard({
               <ConfigField
                 key={field.key}
                 idPrefix={`${uid}-cfg`}
+                projectId={projectId}
                 field={field}
                 state={fieldDraftState(field, plugin.config, drafts)}
                 disabled={busy}

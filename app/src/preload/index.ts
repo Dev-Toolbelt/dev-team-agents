@@ -26,6 +26,7 @@ import {
   type MigrateRequest,
   type DevteamBridge,
   type PluginConfigChange,
+  type PluginFieldPicker,
   type NotificationFeed,
   type PreferenceChange,
   type ProjectId,
@@ -126,6 +127,8 @@ const bridge: DevteamBridge = {
     ),
   runPluginAction: (projectId: ProjectId, name: string, actionId: string) =>
     ipcRenderer.invoke(CHANNELS.runPluginAction, String(projectId), String(name), String(actionId)),
+  pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) =>
+    ipcRenderer.invoke(CHANNELS.pickProjectPath, String(projectId), String(picker)),
   notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),
   markNotificationsRead: () => ipcRenderer.invoke(CHANNELS.markNotificationsRead),
   setNotificationsPaused: (paused: boolean) => ipcRenderer.invoke(CHANNELS.setNotificationsPaused, paused === true),

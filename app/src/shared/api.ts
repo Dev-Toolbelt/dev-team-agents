@@ -574,7 +574,15 @@ export interface PluginConfigField {
   /** `integer` only; `null` when the manifest sets no bound. */
   readonly min: number | null;
   readonly max: number | null;
+  /**
+   * `string` / `string_list` only. When set the value is chosen with the OS picker rather
+   * than typed; `null` when the manifest declares none (or a CLI that predates the key).
+   */
+  readonly picker: PluginFieldPicker | null;
 }
+
+/** What a picker chooses. Anything else a newer CLI sends is dropped, the field stays free text. */
+export type PluginFieldPicker = 'directory' | 'file';
 
 export interface PluginRequirement {
   readonly binary: string;
@@ -595,9 +603,18 @@ export interface PluginAction {
   readonly timeout_seconds: number | null;
 }
 
+/** How a status fact's value should read; absent (`null`) on a CLI that predates it. */
+export type PluginFactTone = 'positive' | 'warning' | 'neutral';
+
+export interface PluginStatusFact {
+  readonly label: string;
+  readonly value: string;
+  readonly tone: PluginFactTone | null;
+}
+
 export interface PluginStatus {
   readonly summary: string;
-  readonly facts: readonly { readonly label: string; readonly value: string }[];
+  readonly facts: readonly PluginStatusFact[];
 }
 
 /** `plugin list` → `plugins[]`, and `plugin show`. */
@@ -619,6 +636,12 @@ export interface PluginView {
   readonly hooks: readonly string[];
   readonly status: PluginStatus | null;
 }
+
+/** `pickProjectPath`: dismissed, chosen (relative POSIX path), or refused with a reason. */
+export type ProjectPathPick =
+  | { readonly picked: true; readonly path: string }
+  | { readonly picked: false; readonly refused?: undefined }
+  | { readonly picked: false; readonly refused: string };
 
 /** `plugin list --json`. */
 export interface PluginList {
@@ -994,6 +1017,13 @@ export interface DevteamBridge {
     name: string,
     actionId: string,
   ) => Promise<OperationResult<PluginRunResult>>;
+  /**
+   * Opens the OS picker at the project's root for a field that declares a `picker` and
+   * answers with a **project-relative** path only. The renderer never holds an absolute
+   * path; main refuses a choice outside the project (symlinks resolved), the root itself,
+   * and anything under `.git` / `.dev-team-agents`. Spawns nothing.
+   */
+  readonly pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) => Promise<ProjectPathPick>;
   // Notifications. The main process owns the stream (`devteam notifications watch`) and
   // shows each one natively, so they arrive with the window closed; the renderer only
   // reads the feed for the bell. Spawns nothing from the renderer's side.
@@ -1253,6 +1283,7 @@ export const CHANNELS = {
   setPluginEnabled: 'devteam:set-plugin-enabled',
   updatePluginConfig: 'devteam:update-plugin-config',
   runPluginAction: 'devteam:run-plugin-action',
+  pickProjectPath: 'devteam:pick-project-path',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

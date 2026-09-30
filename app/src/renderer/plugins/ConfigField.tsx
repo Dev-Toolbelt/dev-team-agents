@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import type { PluginConfigField } from '../../shared/api.js';
+import type { PluginConfigField, ProjectId } from '../../shared/api.js';
 import { isEditable } from '../../shared/pluginRules.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import type { FieldDraftState } from './drafts.js';
 import { ListEditor } from './ListEditor.js';
+import { PathPicker } from './PathPicker.js';
 
 /**
  * One row of a plugin's config form, built only from the `PluginConfigField` the CLI
@@ -18,6 +19,7 @@ import { ListEditor } from './ListEditor.js';
  */
 export function ConfigField({
   idPrefix,
+  projectId,
   field,
   state,
   disabled,
@@ -25,6 +27,7 @@ export function ConfigField({
   onUndo,
 }: {
   idPrefix: string;
+  projectId?: ProjectId | undefined;
   field: PluginConfigField;
   state: FieldDraftState;
   disabled: boolean;
@@ -68,6 +71,7 @@ export function ConfigField({
       <div className="min-w-0 space-y-1.5">
         <Control
           id={id}
+          projectId={projectId}
           field={field}
           shown={shown}
           disabled={disabled}
@@ -87,6 +91,7 @@ export function ConfigField({
 
 function Control({
   id,
+  projectId,
   field,
   shown,
   disabled,
@@ -95,6 +100,7 @@ function Control({
   onDraft,
 }: {
   id: string;
+  projectId: ProjectId | undefined;
   field: PluginConfigField;
   shown: unknown;
   disabled: boolean;
@@ -142,6 +148,8 @@ function Control({
         disabled={disabled}
         invalid={invalid}
         describedBy={describedBy}
+        picker={field.picker}
+        projectId={projectId}
         onChange={(next) => onDraft(next)}
       />
     );
@@ -196,6 +204,23 @@ function Control({
         />
         {bounds !== null ? <p className="text-xs text-muted-foreground">{bounds}</p> : null}
       </div>
+    );
+  }
+
+  if (field.picker !== null && projectId !== undefined) {
+    return (
+      <PathPicker
+        id={id}
+        label={field.label}
+        picker={field.picker}
+        projectId={projectId}
+        value={typeof shown === 'string' ? shown : ''}
+        placeholder={field.placeholder ?? undefined}
+        disabled={disabled}
+        describedBy={describedBy}
+        invalid={invalid}
+        onPick={(path) => onDraft(path)}
+      />
     );
   }
 

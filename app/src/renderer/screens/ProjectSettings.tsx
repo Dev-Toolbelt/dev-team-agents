@@ -374,14 +374,6 @@ export function ProjectSettings({
           </WriteButton>
         </div>
       </div>
-      <p className="flex items-start gap-2 text-sm text-muted-foreground">
-        <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <span>
-          Changes are saved to this project only. A value marked <OriginBadge origin="global" /> or{' '}
-          <OriginBadge origin="defaults" /> is inherited; editing it overrides it here, and{' '}
-          <span className="font-medium text-foreground">Reset</span> brings the inherited value back.
-        </span>
-      </p>
     </header>
   );
 

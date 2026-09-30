@@ -12,7 +12,7 @@
  * knows one project, `proj-1` at `/repo/project-1`.
  */
 
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -863,6 +863,83 @@ describe('projectName names a burst of notifications with one `devteam list`', (
     const names = await Promise.all(Array.from({ length: 5 }, () => ipc.projectName('proj-1')));
     expect(names).toEqual(Array.from({ length: 5 }, () => 'project-1'));
     expect((await readFile(log, 'utf8')).trim().split('\n')).toEqual(['list']);
+  });
+});
+
+// ── pickProjectPath ───────────────────────────────────────────────────────────
+
+describe.skipIf(skipOnWindows)('pickProjectPath', () => {
+  /** A real project dir (`proj-1` resolves to it) plus a sibling dir a symlink can escape to. */
+  async function setup() {
+    const ipc = await loadIpc();
+    const project = join(dir, 'project');
+    const outside = join(dir, 'outside');
+    await mkdir(join(project, 'src', 'lib'), { recursive: true });
+    await mkdir(join(project, '.git'), { recursive: true });
+    await mkdir(join(project, '.dev-team-agents'), { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(project, 'src', 'main.py'), '', 'utf8');
+    await symlink(outside, join(project, 'escape'));
+    const wrapper = join(dir, 'devteam-wrapper');
+    await writeFile(wrapper, `#!/bin/sh\nFAKE_PROJECT_PATH='${project}' exec '${FAKE_BINARY}' "$@"\n`, 'utf8');
+    await chmod(wrapper, 0o755);
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: wrapper }), 'utf8');
+    ipc.registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+    const pick = (...args: unknown[]) => ipc.handlers.get(ipc.CHANNELS.pickProjectPath)?.(TRUSTED, ...args) as Promise<Record<string, unknown>>;
+    return { ...ipc, project, outside, pick };
+  }
+
+  it('answers with a project-relative POSIX path and opens the dialog at the project root', async () => {
+    const { pick, showOpenDialog, project } = await setup();
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [join(project, 'src', 'lib')] });
+    expect(await pick('proj-1', 'directory')).toEqual({ picked: true, path: 'src/lib' });
+    const options = showOpenDialog.mock.calls[0]?.[0] as { properties: string[]; defaultPath: string; title: string };
+    expect(options.properties).toContain('openDirectory');
+    expect(options.defaultPath).toBe(await realpath(project));
+    expect(options.title).toBe('Choose a source directory');
+
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [join(project, 'src', 'main.py')] });
+    expect(await pick('proj-1', 'file')).toEqual({ picked: true, path: 'src/main.py' });
+    expect((showOpenDialog.mock.calls[1]?.[0] as { properties: string[] }).properties).toContain('openFile');
+  });
+
+  it('answers picked: false when the dialog is dismissed', async () => {
+    const { pick } = await setup();
+    expect(await pick('proj-1', 'directory')).toEqual({ picked: false });
+  });
+
+  it('refuses a path outside the project, a symlink that escapes it, the root, and .git / .dev-team-agents', async () => {
+    const { pick, showOpenDialog, project, outside } = await setup();
+    const cases: [string, RegExp][] = [
+      [outside, /outside the project/],
+      [join(project, 'escape'), /outside the project/],
+      [project, /project folder itself/],
+      [join(project, '.git'), /\.git/],
+      [join(project, '.dev-team-agents'), /\.dev-team-agents/],
+      [join(project, 'nope'), /could not be read/],
+    ];
+    for (const [chosen, message] of cases) {
+      showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [chosen] });
+      const answer = await pick('proj-1', 'directory');
+      expect(answer['picked'], chosen).toBe(false);
+      expect(answer['refused'], chosen).toMatch(message);
+      expect(answer['path']).toBeUndefined();
+    }
+  });
+
+  it('refuses bad arguments and an unknown project without opening a dialog', async () => {
+    const { pick, showOpenDialog } = await setup();
+    for (const args of [[], [1, 'directory'], ['proj-1', 'folder'], ['proj-1', undefined], ['no-such-project', 'directory']]) {
+      const answer = await pick(...args);
+      expect(answer['picked']).toBe(false);
+      expect(typeof answer['refused']).toBe('string');
+    }
+    expect(showOpenDialog).not.toHaveBeenCalled();
+  });
+
+  it('refuses a sender that is not the renderer', async () => {
+    const { handlers, CHANNELS } = await setup();
+    await expect(Promise.resolve().then(() => handlers.get(CHANNELS.pickProjectPath)?.({ senderFrame: null }, 'proj-1', 'directory'))).rejects.toThrow(/refused/);
   });
 });
 

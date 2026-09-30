@@ -50,9 +50,36 @@ describe('parsing a PluginView', () => {
     expect(view.actions.map((action) => action.output)).toEqual(['config', 'log']);
     expect(view.actions[1]?.timeout_seconds).toBe(1800);
     expect(view.status?.facts).toEqual([
-      { label: 'Nodes', value: '12' },
-      { label: 'Files', value: '3' },
+      { label: 'Nodes', value: '12', tone: null },
+      { label: 'Files', value: '3', tone: null },
     ]);
+  });
+
+  it('reads a fact tone and a field picker, and drops values it does not know without failing the list', () => {
+    const view = asPluginView(
+      raw({
+        status: {
+          summary: 's',
+          facts: [
+            { label: 'a', value: 'present', tone: 'positive' },
+            { label: 'b', value: 'missing', tone: 'warning' },
+            { label: 'c', value: 'x', tone: 'neutral' },
+            { label: 'd', value: 'y', tone: 'shouting' },
+            { label: 'e', value: 'z', tone: 3 },
+          ],
+        },
+        config_fields: [
+          { key: 'dirs', type: 'string_list', label: 'Dirs', picker: 'directory' },
+          { key: 'file', type: 'string', label: 'File', picker: 'file' },
+          { key: 'odd', type: 'string', label: 'Odd', picker: 'folder' },
+          { key: 'flag', type: 'boolean', label: 'Flag', picker: 'directory' },
+          { key: 'plain', type: 'string', label: 'Plain' },
+        ],
+      }),
+    );
+    if (typeof view === 'string') throw new Error(view);
+    expect(view.status?.facts.map((fact) => fact.tone)).toEqual(['positive', 'warning', 'neutral', null, null]);
+    expect(view.config_fields.map((field) => field.picker)).toEqual(['directory', 'file', null, null, null]);
   });
 
   it.each([
