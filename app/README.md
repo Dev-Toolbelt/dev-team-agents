@@ -70,3 +70,8 @@ reason.
 `client-schemas.json` (the ADR-0014 declaration). Deliberately **not** the store root:
 Electron's default `userData` collided with `dev-team-agents/` exactly, so `main.ts`
 calls `app.setPath('userData', …)` to move it aside.
+
+**Project preferences are not app data.** The settings screen (click a project's name) reads
+`devteam prefs list` and writes through `devteam prefs set|unset --scope project`, so every
+change lands in the store's project layer and in the project's `resolved/preferences.json`,
+exactly as if it had been made in a terminal. The app keeps no copy of any preference.
