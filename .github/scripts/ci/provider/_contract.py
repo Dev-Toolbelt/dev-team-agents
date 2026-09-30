@@ -349,7 +349,7 @@ def check_installer_references(source):
     someone renames a helper script and the installer silently fails."""
     errs = 0
     lib = Path(source) / "scripts" / "lib"
-    expected = ("strip-tarball.sh", "ensure-claude-framework.sh")
+    expected = ("strip-tarball.sh", "ensure-claude-framework.sh", "provider-ownership.sh")
     for name in expected:
         if not (lib / name).exists():
             errs += fail(f"scripts/lib/{name}: installer-required helper missing")
@@ -362,6 +362,8 @@ def check_installer_references(source):
         text = p.read_text()
         if "ensure-claude-framework.sh" not in text:
             errs += fail(f"scripts/{inst}: does not source `ensure-claude-framework.sh` — .dev-team-agents/ will not be materialized and hook paths will be unresolvable")
+        if "provider-ownership.sh" not in text:
+            errs += fail(f"scripts/{inst}: does not source `provider-ownership.sh` — it would overwrite files the project owns")
     return errs
 
 
