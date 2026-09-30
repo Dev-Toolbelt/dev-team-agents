@@ -43,7 +43,7 @@ We follow coordinated disclosure:
 | `scripts/install.sh` and `scripts/update.sh` | Issues in third-party tools invoked by agents |
 | Hook scripts in `scripts/hooks/` | Claude model behavior or Anthropic API issues |
 | Agent instructions that could cause harmful actions | Issues in the user's own project (not this repo) |
-| Update check mechanism (`01-check-updates.sh`) | |
+| Update check mechanism (`scripts/hooks/lib/update-check.sh`, `scripts/check-updates.sh`) | |
 
 ## Private Vulnerability Reporting
 
