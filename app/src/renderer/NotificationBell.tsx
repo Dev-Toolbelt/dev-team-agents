@@ -1,0 +1,213 @@
+import { useEffect, useState } from 'react';
+import { Bell, BellOff, CircleAlert, Info, TriangleAlert } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
+import type {
+  AppNotification,
+  BackgroundSettings,
+  NotificationFeed,
+  NotificationLevel,
+  ProjectId,
+} from '../shared/api.js';
+
+const EMPTY: NotificationFeed = { status: 'starting', detail: null, items: [], unread: 0, paused: false };
+
+const LEVEL_ICON: Readonly<Record<NotificationLevel, typeof Info>> = {
+  info: Info,
+  warning: TriangleAlert,
+  critical: CircleAlert,
+};
+
+const LEVEL_TONE: Readonly<Record<NotificationLevel, string>> = {
+  info: 'text-muted-foreground',
+  warning: 'text-amber-600 dark:text-amber-500',
+  critical: 'text-destructive',
+};
+
+const LEVEL_WORD: Readonly<Record<NotificationLevel, string>> = {
+  info: 'Info',
+  warning: 'Warning',
+  critical: 'Critical',
+};
+
+/**
+ * The header's bell: what the hooks raised, newest first, and the controls for how the
+ * app delivers it.
+ *
+ * The feed is owned by the main process, which shows each notification natively the
+ * moment it lands — with this window closed, too. This component only mirrors it: it
+ * subscribes, renders, and tells the main process when the list has been looked at.
+ */
+export function NotificationBell({ onOpenProject }: { onOpenProject: (projectId: ProjectId) => void }) {
+  const [feed, setFeed] = useState<NotificationFeed>(EMPTY);
+  const [background, setBackground] = useState<BackgroundSettings | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void window.devteam.notificationFeed().then((initial) => {
+      if (live) setFeed(initial);
+    });
+    const unsubscribe = window.devteam.onNotificationFeed((next) => setFeed(next));
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    // Opening the list is reading it.
+    void window.devteam.markNotificationsRead().then(setFeed);
+    void window.devteam.backgroundSettings().then(setBackground);
+  }, [open]);
+
+  const label =
+    feed.unread > 0 ? `Notifications, ${feed.unread} new` : feed.paused ? 'Notifications, paused' : 'Notifications';
+  const BellIcon = feed.paused ? BellOff : Bell;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label={label} title={label} className="relative">
+          <BellIcon className="size-4" aria-hidden="true" />
+          {feed.unread > 0 ? (
+            <span
+              aria-hidden="true"
+              className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-semibold text-primary-foreground"
+            >
+              {feed.unread > 99 ? '99+' : feed.unread}
+            </span>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent aria-label="Notifications">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h2 className="text-sm font-semibold">Notifications</h2>
+          <StreamStatus feed={feed} />
+        </div>
+
+        {feed.items.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+            Nothing yet. Notices from your agent sessions appear here and as system notifications.
+          </p>
+        ) : (
+          <ul className="max-h-80 divide-y overflow-auto">
+            {feed.items.map((item) => (
+              <NotificationRow
+                key={item.id}
+                item={item}
+                onOpen={() => {
+                  setOpen(false);
+                  onOpenProject(item.projectId);
+                }}
+              />
+            ))}
+          </ul>
+        )}
+
+        <div className="space-y-3 border-t px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="notifications-paused" className="text-sm">
+              Pause system notifications
+            </Label>
+            <Switch
+              id="notifications-paused"
+              checked={feed.paused}
+              onCheckedChange={(checked) => void window.devteam.setNotificationsPaused(checked).then(setFeed)}
+            />
+          </div>
+          <LoginItemControl settings={background} onChange={setBackground} />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function NotificationRow({ item, onOpen }: { item: AppNotification; onOpen: () => void }) {
+  const Icon = LEVEL_ICON[item.level];
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-hidden"
+      >
+        {/* The icon is not the only signal: the level word is in the accessible name. */}
+        <Icon className={`mt-0.5 size-4 shrink-0 ${LEVEL_TONE[item.level]}`} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-sm font-medium">{item.projectName}</span>
+            <time className="shrink-0 text-xs text-muted-foreground" dateTime={new Date(item.ts * 1000).toISOString()}>
+              {relativeTime(item.ts)}
+            </time>
+          </span>
+          <span className="sr-only">{LEVEL_WORD[item.level]}: </span>
+          <span className="block text-sm whitespace-pre-line text-muted-foreground">{item.message}</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function StreamStatus({ feed }: { feed: NotificationFeed }) {
+  if (feed.status === 'live') {
+    return (
+      <Badge variant="outline" className="text-xs">
+        live
+      </Badge>
+    );
+  }
+  const word = feed.status === 'unavailable' ? 'off' : feed.status === 'retrying' ? 'reconnecting' : 'starting';
+  return (
+    <Badge variant={feed.status === 'unavailable' ? 'destructive' : 'secondary'} className="text-xs" title={feed.detail ?? undefined}>
+      {word}
+    </Badge>
+  );
+}
+
+/**
+ * "Start at login", with what the OS actually recorded beside it. The switch shows the
+ * user's choice; the line under it is the system's answer, and on an unsigned macOS build
+ * the two can differ — which this says rather than hides.
+ */
+function LoginItemControl({
+  settings,
+  onChange,
+}: {
+  settings: BackgroundSettings | null;
+  onChange: (settings: BackgroundSettings) => void;
+}) {
+  if (settings === null) return null;
+  const disabled = settings.loginItemStatus === 'unsupported';
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor="open-at-login" className="text-sm">
+          Start at login, in the background
+        </Label>
+        <Switch
+          id="open-at-login"
+          checked={settings.openAtLogin}
+          disabled={disabled}
+          onCheckedChange={(checked) => void window.devteam.setOpenAtLogin(checked).then(onChange)}
+        />
+      </div>
+      {settings.detail !== null ? <p className="text-xs text-muted-foreground">{settings.detail}</p> : null}
+    </div>
+  );
+}
+
+function relativeTime(epochSeconds: number): string {
+  const seconds = Math.max(0, Math.round(Date.now() / 1000 - epochSeconds));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return new Date(epochSeconds * 1000).toLocaleDateString();
+}

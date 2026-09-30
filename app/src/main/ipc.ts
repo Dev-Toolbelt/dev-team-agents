@@ -16,7 +16,7 @@
  * while the app was open — and is what the retry button calls.
  */
 
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { dialog, ipcMain } from 'electron';
 
@@ -194,7 +194,21 @@ function undeclaredRefusal(command: string, detail: string): OperationResult<nev
   };
 }
 
-export function registerIpc(deps: IpcDependencies): void {
+/**
+ * What the rest of the main process needs from the IPC layer, so nothing resolves the CLI
+ * or writes the declaration a second time: the notification center runs `watch` and
+ * `notifications ack` with exactly the binary, working directory and declaration every
+ * channel below uses.
+ */
+export interface IpcHandle {
+  readonly context: () => Promise<CliContext | null>;
+  /** `context()` for a command in `compat.MUTATING`, or `null` when it must not run ungated. */
+  readonly gatedContext: (command: string) => Promise<CliContext | null>;
+  /** The app's name for a project, else its directory's basename — never the UUID. */
+  readonly projectName: (projectId: string) => Promise<string>;
+}
+
+export function registerIpc(deps: IpcDependencies): IpcHandle {
   let resolution: Resolution | null = null;
   let declaration: DeclarationState | null = null;
   let settings: AppSettings | null = null;
@@ -651,6 +665,36 @@ export function registerIpc(deps: IpcDependencies): void {
       };
     },
   );
+
+  // Paths from `list`, kept for a minute: a burst of notifications must not start one
+  // `devteam list` each just to name the project in a banner title.
+  let pathsCache: { at: number; paths: Map<string, string> } | null = null;
+  async function projectPaths(): Promise<Map<string, string>> {
+    if (pathsCache !== null && Date.now() - pathsCache.at < 60_000) return pathsCache.paths;
+    const ctx = await context();
+    const paths = new Map<string, string>();
+    if (ctx !== null) {
+      const listed = await listProjects(ctx);
+      if (listed.ok) for (const project of listed.data.projects) paths.set(project.project_id, project.path);
+    }
+    pathsCache = { at: Date.now(), paths };
+    return paths;
+  }
+
+  return {
+    context,
+    gatedContext: async (command) => {
+      const gated = await gatedContext(command);
+      return gated.ready ? gated.ctx : null;
+    },
+    projectName: async (projectId) => {
+      const names = (await readSettings(deps.userDataDir)).projectNames;
+      const named = names[projectId];
+      if (named !== undefined) return named;
+      const path = (await projectPaths()).get(projectId);
+      return path !== undefined ? basename(path) : 'a bound project';
+    },
+  };
 }
 
 const CONSENT_LABELS: Readonly<Record<string, string>> = {

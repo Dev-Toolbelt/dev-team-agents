@@ -214,10 +214,16 @@ function WriteButton({
 export function Projects({
   environment,
   active = true,
+  openRequest = null,
 }: {
   environment: EnvironmentReport | null;
   /** Whether this tab is the visible one. The tab stays mounted (see `App.tsx`), so it refetches on return. */
   active?: boolean;
+  /**
+   * A notification asked to show this project. The nonce makes a second request for the
+   * same project a new request rather than an unchanged prop.
+   */
+  openRequest?: { readonly projectId: string; readonly nonce: number } | null;
 }) {
   const { state, refreshing, reload: reloadList } = useOperation((): ReturnType<typeof window.devteam.listProjects> => window.devteam.listProjects());
   const [bindOpen, setBindOpen] = useState(false);
@@ -257,6 +263,13 @@ export function Projects({
     document.getElementById(settingsButtonId(returnFocusTo))?.focus();
     setReturnFocusTo(null);
   });
+
+  // Opened only when no settings screen is: one that is open may hold unsaved edits, and
+  // its own "leave with unsaved changes?" guard must not be bypassed by a notification.
+  useEffect(() => {
+    if (openRequest === null) return;
+    setOpenSettings((current) => current ?? openRequest.projectId);
+  }, [openRequest?.nonce]);
 
   // Keeping the tab mounted preserves unsaved settings, but it also stopped the refetch a
   // remount used to give for free; returning to the tab asks `list` again.

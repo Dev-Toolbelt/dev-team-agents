@@ -20,6 +20,7 @@ import {
   type BindRequest,
   type CatalogKind,
   type DevteamBridge,
+  type NotificationFeed,
   type PreferenceChange,
   type ProjectId,
 } from '../shared/api.js';
@@ -76,6 +77,30 @@ const bridge: DevteamBridge = {
           : { key: String(change.key), action: 'set', value: change.value },
       ),
     ),
+
+  notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),
+  markNotificationsRead: () => ipcRenderer.invoke(CHANNELS.markNotificationsRead),
+  setNotificationsPaused: (paused: boolean) => ipcRenderer.invoke(CHANNELS.setNotificationsPaused, paused === true),
+  // Subscriptions hand the listener the payload only — never Electron's `event`, whose
+  // `sender` is a handle into the main process the renderer has no business holding.
+  onNotificationFeed: (listener: (feed: NotificationFeed) => void) => {
+    const handler = (_event: unknown, feed: NotificationFeed): void => listener(feed);
+    ipcRenderer.on(CHANNELS.notificationFeedChanged, handler);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.notificationFeedChanged, handler);
+    };
+  },
+  onOpenProject: (listener: (projectId: ProjectId) => void) => {
+    const handler = (_event: unknown, projectId: unknown): void => {
+      if (typeof projectId === 'string') listener(projectId);
+    };
+    ipcRenderer.on(CHANNELS.openProject, handler);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.openProject, handler);
+    };
+  },
+  backgroundSettings: () => ipcRenderer.invoke(CHANNELS.backgroundSettings),
+  setOpenAtLogin: (enabled: boolean) => ipcRenderer.invoke(CHANNELS.setOpenAtLogin, enabled === true),
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

@@ -17,7 +17,7 @@
 
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,16 +27,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { invokeDevteam } from '../src/cli/invoke.js';
 import { ranAndAnswered } from '../src/cli/contract.js';
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
+import type { StreamEnd } from '../src/cli/stream.js';
 import {
+  ackNotification,
   bindProject,
   catalogSummary,
   doctor,
+  listNotifications,
   listProjects,
   prefsList,
   prefsSet,
   prefsUnset,
   setPin,
   unbindProject,
+  watchNotifications,
+  type WatchEvent,
 } from '../src/cli/operations.js';
 
 /** `app/test/` → the repository root → `scripts/cli/devteam`. */
@@ -486,6 +491,60 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     if (!listed.ok) throw new Error(listed.message);
     expect(listed.data.values['session_no_commit_turns']).toBe(13);
     expect(listed.data.origin['session_no_commit_turns']).toBe('project');
+  });
+
+  it('streams a queued notification through the real `watch`, and a real ack marks it seen', async () => {
+    installStoreVersion();
+    const bound = await bindProject(context(), work, {});
+    if (!bound.ok) throw new Error(`expected a successful bind: ${bound.message}`);
+    // Where a hook writes: the project's own `state-dir` pointer, exactly as notify.sh reads it.
+    const stateDir = (await readFile(join(work, '.dev-team-agents', 'state-dir'), 'utf8')).trim();
+    const record = {
+      id: '1790000000-4242-1',
+      ts: Math.floor(Date.now() / 1000),
+      project_id: bound.data.project_id,
+      session_id: 's1',
+      level: 'critical',
+      code: 'context.critical',
+      message: 'Context window at ≈65%.',
+      dedupe_key: 'context.critical:s1',
+      expires_at: 0,
+    };
+    await writeFile(join(stateDir, 'notifications.jsonl'), `${JSON.stringify(record)}\n`);
+
+    const events: WatchEvent[] = [];
+    let finished: (end: StreamEnd) => void = () => undefined;
+    const ended = new Promise<StreamEnd>((resolve) => {
+      finished = resolve;
+    });
+    const handle = watchNotifications(context(), {
+      onEvent: (event) => events.push(event),
+      onInvalid: (detail) => {
+        throw new Error(detail);
+      },
+      onEnd: finished,
+    });
+    if (handle === null) throw new Error('watch was refused by the allow-list');
+    const deadline = Date.now() + 15_000;
+    while (!events.some((e) => e.event === 'ready') && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    handle.stop();
+    expect(await ended).toMatchObject({ kind: 'exited', code: 0 });
+    const streamed = events.find((e) => e.event === 'notification');
+    expect(streamed?.event === 'notification' ? streamed.notification : null).toMatchObject({
+      id: record.id,
+      level: 'critical',
+      projectId: bound.data.project_id,
+    });
+    expect(events[events.length - 1]).toEqual({ event: 'end', reason: 'stdin-closed' });
+
+    const acked = await ackNotification(context(), record.id);
+    if (!acked.ok) throw new Error(`expected an ack: ${acked.message}`);
+    expect(acked.data.acknowledged).toEqual([record.id]);
+    const listed = await listNotifications(context());
+    if (!listed.ok) throw new Error(`expected a list: ${listed.message}`);
+    expect(listed.data.map((n) => [n.id, n.seen])).toEqual([[record.id, true]]);
   });
 
   it('surfaces the exit-4 write gate as OperationResult.kind "conflict", a problem the UI can render', async () => {

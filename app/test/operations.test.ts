@@ -150,6 +150,9 @@ describe('what this slice is allowed to run', () => {
       'upgrade',
       'prefs set',
       'prefs unset',
+      // Acknowledging a notification writes that project's seen marks — admitted as a
+      // write rather than dressed up as a read.
+      'notifications ack',
     ]);
     for (const command of GATED_COMMANDS) {
       const tuple = tupleLiteral(command);

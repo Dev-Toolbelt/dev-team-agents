@@ -533,7 +533,7 @@ describe('buildInfo reports write actions honestly', () => {
     // — `sync` covers both the per-row sync and Sync All, because the framework
     // classifies one `("sync",)` leaf in `compat.MUTATING`, not two.
     expect([...info.mutatingCommandsRun].sort()).toEqual(
-      ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
+      ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
     );
   });
 });
@@ -560,7 +560,7 @@ describe('environment withholds every gated command when the declaration could n
         return;
       }
       expect([...report.withheld.map((w) => w.command)].sort()).toEqual(
-        ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
+        ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
       );
       for (const entry of report.withheld) {
         expect(entry.reason).toContain('schema declaration');
