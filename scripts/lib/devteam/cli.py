@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -825,6 +825,113 @@ def cmd_prefs_unset(args, emitter):
     return result, human
 
 
+def _plugin_context(args):
+    root, project_id = _bound_project(args.path)
+    return plugins.Context(root, project_id)
+
+
+def _plugin_line(view):
+    state = "enabled" if view["enabled"] else "disabled"
+    notes = []
+    if not view["ready"]:
+        notes.append("missing: " + ", ".join(r["binary"] for r in view["requirements"] if not r["found"]))
+    if view["enabled"] and not view["configured"]:
+        notes.append("not configured")
+    if view["status"]:
+        notes.append(view["status"]["summary"])
+    return (view["name"], state, "; ".join(notes))
+
+
+def _plugin_human(view):
+    lines = [
+        "{} ({})".format(view["title"], view["name"]),
+        "  {}".format(view["description"]),
+        "  state     {}{}".format(
+            "enabled" if view["enabled"] else "disabled",
+            "  [legacy graphify.json]" if view["source"] == "legacy" else "",
+        ),
+        "  settings  {}".format(view["settings_file"]),
+    ]
+    for req in view["requirements"]:
+        lines.append(
+            "  requires  {} {}".format(
+                req["binary"], "found" if req["found"] else "MISSING ({})".format(req["install_hint"])
+            )
+        )
+    for key in sorted(view["config"]):
+        lines.append("  config    {} = {}".format(key, json.dumps(view["config"][key])))
+    for action in view["actions"]:
+        lines.append("  action    {}: {}".format(action["id"], action["label"]))
+    if view["unknown_config"]:
+        lines.append("  unknown   {}".format(", ".join(view["unknown_config"])))
+    if view["status"]:
+        lines.append("  status    {}".format(view["status"]["summary"]))
+        for fact in view["status"]["facts"]:
+            lines.append("            {}: {}".format(fact["label"], fact["value"]))
+    return "\n".join(lines)
+
+
+def cmd_plugin_list(args, emitter):
+    ctx = _plugin_context(args)
+    views = plugins.list_views(ctx)
+    payload = {"project_id": ctx.project_id, "plugins": views}
+    human = _table([_plugin_line(v) for v in views], ["PLUGIN", "STATE", "NOTES"]) if views else "no plugins"
+    return payload, human
+
+
+def cmd_plugin_show(args, emitter):
+    ctx = _plugin_context(args)
+    view = plugins.build_view(ctx, ctx.plugin(args.name))
+    return view, _plugin_human(view)
+
+
+def cmd_plugin_enable(args, emitter):
+    result = plugins.enable(_plugin_context(args), args.name, force=args.force)
+    verb = "enabled" if result["changed"] else "already enabled"
+    human = "{} {}{}".format(verb, args.name, " (config seeded)" if result["seeded"] else "")
+    if result["changed"]:
+        human += "\n  {} is committed: the team gets this on the next pull".format(
+            result["plugin"]["settings_file"]
+        )
+    return result, human
+
+
+def cmd_plugin_disable(args, emitter):
+    result = plugins.disable(_plugin_context(args), args.name)
+    return result, "{} {}".format("disabled" if result["changed"] else "already disabled", args.name)
+
+
+def cmd_plugin_config_get(args, emitter):
+    result = plugins.config_get(_plugin_context(args), args.name, args.key)
+    if args.key:
+        return result, "{} = {}".format(args.key, json.dumps(result["value"]))
+    return result, "\n".join("{} = {}".format(k, json.dumps(v)) for k, v in sorted(result["config"].items()))
+
+
+def cmd_plugin_config_set(args, emitter):
+    result = plugins.config_set(_plugin_context(args), args.name, args.key, args.value)
+    return result, "{}.{} = {}".format(args.name, args.key, json.dumps(result["value"]))
+
+
+def cmd_plugin_config_unset(args, emitter):
+    result = plugins.config_unset(_plugin_context(args), args.name, args.key)
+    human = "{} {}.{}".format("removed" if result["removed"] else "was not set:", args.name, args.key)
+    return result, human
+
+
+def cmd_plugin_run(args, emitter):
+    result = plugins.run(_plugin_context(args), args.name, args.action)
+    lines = ["{} {}: {} in {} ms".format(
+        args.name, args.action, "ok" if result["ok"] else "FAILED (exit {})".format(result["exit_code"]),
+        result["duration_ms"],
+    )]
+    if result["output"] is not None:
+        lines.append(json.dumps(result["output"], indent=2, sort_keys=True))
+    if result["log_tail"]:
+        lines.append(result["log_tail"].rstrip("\n"))
+    return result, "\n".join(lines)
+
+
 def _cred_project_id(args):
     """``None`` for the global layer, this project's id otherwise."""
     if getattr(args, "global_layer", False):
@@ -1267,6 +1374,48 @@ def build_parser():
         "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
     )
     tasks_watch.set_defaults(func=cmd_tasks_watch)
+    plugin_parser = leaf(sub, "plugin", help="per-project integrations declared by the core")
+    plugin_sub = plugin_parser.add_subparsers(dest="plugin_cmd")
+    plugin_list = leaf(plugin_sub, "list", help="every plugin, its state and status")
+    plugin_list.add_argument("--path")
+    plugin_list.set_defaults(func=cmd_plugin_list)
+    plugin_show = leaf(plugin_sub, "show", help="one plugin")
+    plugin_show.add_argument("name")
+    plugin_show.add_argument("--path")
+    plugin_show.set_defaults(func=cmd_plugin_show)
+    plugin_enable = leaf(plugin_sub, "enable", help="turn a plugin on for this project")
+    plugin_enable.add_argument("name")
+    plugin_enable.add_argument("--force", action="store_true", help="enable although a requirement is missing")
+    plugin_enable.add_argument("--path")
+    plugin_enable.set_defaults(func=cmd_plugin_enable)
+    plugin_disable = leaf(plugin_sub, "disable", help="turn a plugin off, keeping its config")
+    plugin_disable.add_argument("name")
+    plugin_disable.add_argument("--path")
+    plugin_disable.set_defaults(func=cmd_plugin_disable)
+    plugin_config = leaf(plugin_sub, "config", help="read and write a plugin's config").add_subparsers(
+        dest="plugin_config_cmd"
+    )
+    plugin_config_get = leaf(plugin_config, "get", help="the effective config, or one key")
+    plugin_config_get.add_argument("name")
+    plugin_config_get.add_argument("key", nargs="?")
+    plugin_config_get.add_argument("--path")
+    plugin_config_get.set_defaults(func=cmd_plugin_config_get)
+    plugin_config_set = leaf(plugin_config, "set", help="write one key, parsed by its declared type")
+    plugin_config_set.add_argument("name")
+    plugin_config_set.add_argument("key")
+    plugin_config_set.add_argument("value")
+    plugin_config_set.add_argument("--path")
+    plugin_config_set.set_defaults(func=cmd_plugin_config_set)
+    plugin_config_unset = leaf(plugin_config, "unset", help="drop a key so its default applies")
+    plugin_config_unset.add_argument("name")
+    plugin_config_unset.add_argument("key")
+    plugin_config_unset.add_argument("--path")
+    plugin_config_unset.set_defaults(func=cmd_plugin_config_unset)
+    plugin_run = leaf(plugin_sub, "run", help="run an action the plugin's manifest declares")
+    plugin_run.add_argument("name")
+    plugin_run.add_argument("action")
+    plugin_run.add_argument("--path")
+    plugin_run.set_defaults(func=cmd_plugin_run)
 
     prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
         dest="prefs_cmd"
@@ -1629,6 +1778,10 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
         if getattr(args, "command", None) == "prefs":
             return emitter.fail(UsageError("prefs needs a subcommand: list, get, set, unset"))
+        if getattr(args, "command", None) == "plugin":
+            return emitter.fail(
+                UsageError("plugin needs a subcommand: list, show, enable, disable, config, run")
+            )
         if getattr(args, "command", None) == "cred":
             return emitter.fail(
                 UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends")
@@ -1707,6 +1860,10 @@ def main(argv=None, stdout=None, stderr=None):
     # asked a read-only question — nothing moved, so there is nothing to report.
     if adopted and (adopted["moved"] or adopted["quarantined"]):
         payload["store_relocation"] = adopted
-    payload["ok"] = ok
+    # `plugin run` answers with a `RunResult`, whose own `ok` says whether the *script*
+    # succeeded (ADR-0017 § 3). The command itself did succeed (exit 0), so that field
+    # must survive instead of being overwritten with the command's own verdict.
+    if not (args.command == "plugin" and "ok" in payload):
+        payload["ok"] = ok
     emitter.emit(payload, human)
     return exit_code

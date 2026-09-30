@@ -29,7 +29,7 @@ from devteam_support import CLI, StoreTestCase, make_git_project
 
 from devteam import bind as bind_module
 from devteam import cli as devteam_cli
-from devteam import compat, creds, errors, paths, project, registry
+from devteam import compat, creds, errors, paths, plugins, project, registry
 
 
 VALID_EXIT_CODES = {
@@ -496,6 +496,7 @@ class CompatContractTest(StoreTestCase):
             "registry": registry.SCHEMA,
             "bind_manifest": bind_module.MANIFEST_SCHEMA,
             "credentials": creds.SCHEMA,
+            "plugin_settings": plugins.SCHEMA,
         }
         self.assertEqual(compat.store_schemas(), expected)
         for value in expected.values():

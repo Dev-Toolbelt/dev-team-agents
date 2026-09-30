@@ -98,7 +98,7 @@ class MigrationTest(StoreTestCase):
         # and the bind this migration performs writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["memory-dir", "project.json", "resolved", "scripts", "state-dir", "templates", "user-data"],
+            ["memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates", "user-data"],
         )
         moved = {item["from"] for item in result["quarantined"]}
         self.assertIn(".dev-team-agents/agents", moved)
@@ -164,6 +164,9 @@ class BindOverV2Test(StoreTestCase):
         install_dir = root / project.PROJECT_DIR
         parked = {}
         for name in bind.RUNTIME_TREES:
+            if not (install_dir / name).exists():
+                # A tree v2's installer never shipped (`plugins/`, ADR-0017).
+                continue
             parked[name] = install_dir.parent / ("parked-" + name)
             (install_dir / name).rename(parked[name])
         bind.bind(root, provider_names=["claude"], mode="link")

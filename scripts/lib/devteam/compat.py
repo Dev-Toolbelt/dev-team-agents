@@ -69,7 +69,7 @@ import json
 import stat
 from pathlib import Path
 
-from . import bind, creds, project, registry
+from . import bind, creds, plugins, project, registry
 from .errors import ConflictError, EnvError, UsageError
 
 #: Bumped when a released app version stops being able to write this store safely.
@@ -96,6 +96,7 @@ def store_schemas():
         "registry": registry.SCHEMA,
         "bind_manifest": bind.MANIFEST_SCHEMA,
         "credentials": creds.SCHEMA,
+        "plugin_settings": plugins.SCHEMA,
     }
 
 
@@ -405,6 +406,13 @@ MUTATING = {
     "Previews without --apply, but the classification is per command, not per flag",
     ("prefs", "set"): "writes a preference layer and re-materialises resolved/preferences.json",
     ("prefs", "unset"): "drops a key from a layer and re-materialises the same file",
+    ("plugin", "enable"): "writes plugin-settings/<name>.json, and may run a config-output "
+    "action to seed it",
+    ("plugin", "disable"): "rewrites plugin-settings/<name>.json",
+    ("plugin", "config", "set"): "writes a value into plugin-settings/<name>.json",
+    ("plugin", "config", "unset"): "drops a key from plugin-settings/<name>.json",
+    ("plugin", "run"): "runs a script the manifest declares, and most actions write "
+    "(graph output, caches). Classified per command, not per action",
     ("cred", "set"): "writes a credential reference and a value into a secret backend",
     ("cred", "unset"): "removes a reference, and the value with --forget-value",
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
@@ -442,6 +450,9 @@ READ_ONLY = {
     ("list",): "lists bound projects",
     ("prefs", "list"): "reads the resolved cascade",
     ("prefs", "get"): "reads one key",
+    ("plugin", "list"): "reads manifests and settings; runs only the cheap status scripts",
+    ("plugin", "show"): "reads one manifest and its settings",
+    ("plugin", "config", "get"): "reads the effective config",
     ("cred", "list"): "reference layer only — never a value",
     ("cred", "get"): "reads one value. It appends an audit line, so it is not literally "
     "side-effect-free — but that line is the framework's own record *about* the caller, "

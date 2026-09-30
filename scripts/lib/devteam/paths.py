@@ -483,9 +483,13 @@ MACHINE_LOCAL_RECORDS = (
 
 #: Records that belong to the **project**, not to the user's personal memory:
 #: committed, shared by every developer on the repository, and therefore not moved
-#: into a per-user store at all. `graphify.json` carries its own gitignore exception
-#: (`!.dev-team-agents/user-data/graphify.json`) precisely so the team shares one.
-PROJECT_OWNED_RECORDS = ("graphify.json",)
+#: into a per-user store at all. `plugin-settings/` (ADR-0017) is the directory form of
+#: the same idea: which integrations a project uses, and over which paths, describes the
+#: project. `graphify.json` is the pre-plugin record for the graphify plugin; it stays
+#: listed until the next major, carries its own gitignore exception
+#: (`!.dev-team-agents/user-data/graphify.json`) so the team shares one, and is moved into
+#: `plugin-settings/graphify.json` by `plugins.migrate_legacy` on bind/sync.
+PROJECT_OWNED_RECORDS = ("graphify.json", "plugin-settings")
 
 #: Top-level entries of ``data/`` that never leave this machine.
 MACHINE_LOCAL_STORE_ENTRIES = (MACHINE_ID_FILE, MACHINES_DIR, "locks")
