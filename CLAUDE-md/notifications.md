@@ -64,7 +64,7 @@ not retried.
 | `stop/04-notifier.sh` | Context window warning/critical, uncommitted progress, tip of the day |
 | `post-tool-use/01-task-board.sh`, `pre-tool-use/04-task-board.sh` | `tasks.session_done` (info) — a session's last open task was completed; once per session; a pass that releases the last task in review raises it too |
 | `post-tool-use/01-task-board.sh`, `stop/04b-task-board.sh` | `tasks.review_findings` (warning) — a review window recorded `findings > 0`; once per window (dedupe key `tasks.review_findings:<session>:<window>`) |
-| `session-end.sh` | `tasks.session_abandoned` (warning) — the session ended with open tasks; Claude Code only, the other providers have no end event |
+| `session-end.sh` | `tasks.session_abandoned` (warning) — the session ended with open tasks; Claude Code and Codex; opencode has no end event |
 
 ### Suppression
 

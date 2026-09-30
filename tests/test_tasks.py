@@ -1074,6 +1074,47 @@ class InstallInjectHookTest(StoreTestCase):
         self.assertEqual(data["hooks"]["SessionEnd"], [{"hooks": [{"type": "command", "command": self.END}]}])
         self.assertTrue(data["other"])
 
+    def widen(self, matcher, command=None):
+        entry = {"matcher": matcher, "hooks": [{"type": "command", "command": command or self.POST}]}
+        self.settings.write_text(json.dumps({"hooks": {"PostToolUse": [entry]}}))
+        result = subprocess.run(
+            ["bash", "-c", self.function + '_inject_hook "PostToolUse" "$POST" "hooks/post-tool-use.sh"\n'],
+            env=dict(os.environ, SETTINGS_FILE=str(self.settings), POST=self.POST),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        return json.loads(self.settings.read_text())["hooks"]["PostToolUse"], result.stderr.decode()
+
+    def test_our_entry_with_a_matcher_we_shipped_before_is_widened(self):
+        post, _ = self.widen("TodoWrite|TaskCreate|TaskUpdate")
+        self.assertEqual([e["matcher"] for e in post], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task"])
+
+    def test_our_entry_with_the_users_own_matcher_is_left_alone_and_warned_about(self):
+        for custom in (".*", "TodoWrite", "Bash|Edit"):
+            post, warning = self.widen(custom)
+            self.assertEqual([e["matcher"] for e in post], [custom], custom)
+            self.assertIn("left as is", warning)
+
+    def test_a_foreign_entry_is_never_widened(self):
+        post, warning = self.widen("TodoWrite|TaskCreate|TaskUpdate", command="echo mine hooks-elsewhere")
+        # Ours is added beside it; the foreign entry keeps its matcher.
+        self.assertEqual(post[0]["matcher"], "TodoWrite|TaskCreate|TaskUpdate")
+        self.assertEqual(post[0]["hooks"][0]["command"], "echo mine hooks-elsewhere")
+        self.assertEqual(warning, "")
+
+    def failure_block(self):
+        text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+        start = text.index('        python3 - "$SETTINGS_FILE" "$POST_TOOL_USE_HOOK" <<\'PYEOF\'\n') + len(
+            '        python3 - "$SETTINGS_FILE" "$POST_TOOL_USE_HOOK" <<\'PYEOF\'\n')
+        return text[start:text.index("\nPYEOF\n", start)]
+
+    def test_the_failure_hook_is_injected_once_and_never_duplicated(self):
+        self.settings.write_text(json.dumps({"hooks": {"PostToolUseFailure": [{"hooks": [{"type": "command", "command": "echo mine"}]}]}}))
+        for _ in range(2):
+            subprocess.run([sys.executable, "-c", self.failure_block(), str(self.settings), self.POST], check=True)
+        entries = json.loads(self.settings.read_text())["hooks"]["PostToolUseFailure"]
+        self.assertEqual(len(entries), 2)
+        self.assertEqual((entries[1]["matcher"], entries[1]["hooks"][0]["command"]), ("Agent|Task", self.POST))
+
 
 if __name__ == "__main__":
     unittest.main()

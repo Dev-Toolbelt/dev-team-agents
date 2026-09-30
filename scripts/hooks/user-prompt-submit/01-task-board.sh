@@ -9,9 +9,15 @@ set -uo pipefail
 
 INPUT="$(cat)"
 # Only what follows the "prompt" key is tested: the path fields before it (cwd,
-# transcript_path) could contain "test" or "review" and would defeat the gate.
-TAIL="${INPUT#*\"prompt\"}"
-[ "$TAIL" != "$INPUT" ] || exit 0
+# transcript_path) could contain "test" or "review" and would defeat the gate. Every provider
+# puts that key within the first few KiB, and bash's prefix removal and `case` are quadratic in
+# the text, so the key is searched in the head and only the first 16 KiB after it are glob-tested
+# (a pasted log must not stall every prompt). A command sits at the start of the prompt; the
+# detector, not this gate, reads the whole of it.
+HEAD="${INPUT:0:4096}"
+BEFORE="${HEAD%%\"prompt\"*}"
+[ "$BEFORE" != "$HEAD" ] || exit 0
+TAIL="${INPUT:$((${#BEFORE} + 8)):16384}"
 
 shopt -s nocasematch
 case "$TAIL" in

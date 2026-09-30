@@ -25,7 +25,7 @@ for script in "$HOOKS_DIR"/*.sh; do
     fi
     SCRIPT_EXIT=0
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:user-prompt-submit] running: $(basename "$script")" >&2
-    echo "$INPUT" | env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
+    printf '%s\n' "$INPUT" | env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:user-prompt-submit] exit ${SCRIPT_EXIT}: $(basename "$script")" >&2
     if [ "$SCRIPT_EXIT" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
         EXIT_CODE=$SCRIPT_EXIT

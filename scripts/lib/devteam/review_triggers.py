@@ -22,9 +22,17 @@ COMMANDS = ("/devteam:review", "/devteam:qa", "/review", "$devteam-review", "$de
 #: Words that mean "review this" when the user writes them in a prompt (English, Portuguese).
 KEYWORDS = ("review", "revisar", "revisão", "revisao", "revise", "qa", "testar", "test it")
 
-#: A keyword preceded by one of these within three words is a refusal, not a request.
+#: A keyword directly governed by one of these is a refusal, not a request.
 NEGATIONS = ("não", "nao", "sem", "no", "not", "don't", "dont", "without", "skip")
-NEGATION_WINDOW = 3
+#: "Directly governed": the negation is one of the two words before the keyword, with no
+#: punctuation between them and none of :data:`NEGATION_BREAKS` in between ("not only review
+#: but fix" and "no problem, review it" are requests).
+NEGATION_WINDOW = 2
+NEGATION_BREAKS = ("only", "just", "apenas", "somente")
+
+#: A sentence that opens with one of these and ends in "?" asks about a thing; it does not order it.
+QUESTION_OPENERS = ("what", "how", "why", "o que", "como", "por que", "por quê", "por que")
+QUESTION_LOOKAROUND = 240
 
 _COMMAND_RE = re.compile(
     r"^\s*(" + "|".join(re.escape(c) for c in COMMANDS) + r")(?=\s|$)", re.IGNORECASE
@@ -34,6 +42,8 @@ _KEYWORD_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 _WORD_RE = re.compile(r"[\w'’]+", re.UNICODE)
+_BREAK_RE = re.compile(r"[,;:.!?()\n]")
+_SENTENCE_END_RE = re.compile(r"[.!?\n]")
 _MARKER_RE = re.compile(r"<!--\s*review-result:\s*findings\s*=\s*(\d{1,6})\s*-->", re.IGNORECASE)
 
 
@@ -48,27 +58,55 @@ def agent_name(value):
     return name if name in REVIEW_AGENTS else None
 
 
-def _negated(text, start):
-    words = _WORD_RE.findall(text[:start].replace("’", "'"))
-    return any(w.lower() in NEGATIONS for w in words[-NEGATION_WINDOW:])
+def _is_question(text, start):
+    """True when the keyword at ``start`` sits in a question that opens with an interrogative."""
+    head = text[max(0, start - QUESTION_LOOKAROUND):start]
+    ends = list(_SENTENCE_END_RE.finditer(head))
+    sentence_start = ends[-1].end() if ends else 0
+    opening = head[sentence_start:].lstrip().lower()
+    if not any(opening.startswith(o) and not opening[len(o):len(o) + 1].isalnum() for o in QUESTION_OPENERS):
+        return False
+    tail = text[start:start + QUESTION_LOOKAROUND]
+    end = _SENTENCE_END_RE.search(tail)
+    return end is not None and tail[end.start()] == "?"
 
 
 def prompt_trigger(prompt):
     """``(kind, source)`` when ``prompt`` asks for a review, else ``None``.
 
     ``kind`` is ``"command"`` (a review command at the start of the prompt) or ``"prompt"``
-    (a keyword the user wrote). A keyword is word-bounded, case-insensitive and skipped when
-    a negation stands within three words before it.
+    (a keyword the user wrote). A keyword is word-bounded and case-insensitive; it is skipped
+    when a negation directly governs it or it sits in a question ("what does the QA agent do?").
+    One pass over the words with a two-word window: the cost is linear in the prompt.
     """
     if not isinstance(prompt, str) or not prompt.strip():
         return None
     command = _COMMAND_RE.match(prompt)
     if command:
         return ("command", command.group(1).lower())
-    for match in _KEYWORD_RE.finditer(prompt):
-        if not _negated(prompt, match.start()):
-            return ("prompt", match.group(1).lower())
+    text = prompt.replace("’", "'")
+    words = [(m.start(), m.end(), m.group().lower()) for m in _WORD_RE.finditer(text)]
+    cursor = 0
+    for match in _KEYWORD_RE.finditer(text):
+        while cursor < len(words) and words[cursor][0] < match.start():
+            cursor += 1
+        if _negated(text, words, cursor, match.start()) or _is_question(text, match.start()):
+            continue
+        return ("prompt", match.group(1).lower())
     return None
+
+
+def _negated(text, words, index, start):
+    """Whether a negation among the ``NEGATION_WINDOW`` words before word ``index`` governs it."""
+    for at in range(max(0, index - NEGATION_WINDOW), index):
+        _, end, word = words[at]
+        if word not in NEGATIONS:
+            continue
+        between = words[at + 1:index]
+        if any(w[2] in NEGATION_BREAKS for w in between) or _BREAK_RE.search(text, end, start):
+            continue
+        return True
+    return False
 
 
 def _strings(value, depth=0):

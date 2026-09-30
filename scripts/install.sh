@@ -748,6 +748,17 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$POST_TOOL_USE_HOOK"
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
@@ -781,7 +792,9 @@ else
 
         if grep -q "$check_str" "$SETTINGS_FILE" 2>/dev/null; then
             if [ "$hook_type" = "PostToolUse" ] && command -v python3 >/dev/null 2>&1; then
-                # An entry written before review capture only matched the todo tools.
+                # An entry written before review capture only matched the todo tools. Only OUR
+                # entry, and only when its matcher is exactly a value we shipped before, is
+                # widened; anything else is the user's own choice and is left alone.
                 python3 - "$SETTINGS_FILE" "$check_str" <<'PYEOF'
 import sys, json
 
@@ -789,12 +802,19 @@ settings_file, check_str = sys.argv[1], sys.argv[2]
 with open(settings_file, 'r') as f:
     data = json.load(f)
 wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"
+previous = ("TodoWrite|TaskCreate|TaskUpdate",)
 changed = False
 for entry in data.get('hooks', {}).get('PostToolUse', []):
+    if not isinstance(entry, dict):
+        continue
     commands = [h.get('command', '') for h in entry.get('hooks', []) if isinstance(h, dict)]
-    if any(check_str in c for c in commands) and entry.get('matcher') != wanted:
+    if not any(check_str in c for c in commands) or entry.get('matcher') == wanted:
+        continue
+    if entry.get('matcher') in previous:
         entry['matcher'] = wanted
         changed = True
+    else:
+        print("→ NOTE: PostToolUse matcher %r left as is; review capture needs %r" % (entry.get('matcher'), wanted), file=sys.stderr)
 if changed:
     with open(settings_file, 'w') as f:
         json.dump(data, f, indent=2)
@@ -872,6 +892,29 @@ PYEOF
     _inject_hook "PostToolUse"  "$POST_TOOL_USE_HOOK"  "hooks/post-tool-use.sh"
     _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
     _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
+
+    # A failed subagent launch never reaches PostToolUse: the same dispatcher retires it.
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$SETTINGS_FILE" "$POST_TOOL_USE_HOOK" <<'PYEOF'
+import sys, json
+
+settings_file, hook_cmd = sys.argv[1], sys.argv[2]
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+entries = data.setdefault('hooks', {}).setdefault('PostToolUseFailure', [])
+ours = [
+    e for e in entries
+    if isinstance(e, dict) and any(
+        "hooks/post-tool-use.sh" in h.get('command', '') for h in e.get('hooks', []) if isinstance(h, dict)
+    )
+]
+if not ours:
+    entries.append({"matcher": "Agent|Task", "hooks": [{"type": "command", "command": hook_cmd}]})
+    with open(settings_file, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+PYEOF
+    fi
 
     # Ensure includeCoAuthoredBy is set to false (idempotent)
     if ! grep -q '"includeCoAuthoredBy"' "$SETTINGS_FILE" 2>/dev/null; then

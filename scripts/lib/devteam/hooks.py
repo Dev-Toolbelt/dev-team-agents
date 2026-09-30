@@ -51,15 +51,19 @@ EVENTS = (
     ("PostToolUse", "post-tool-use.sh"),
     ("SessionEnd", "session-end.sh"),
     ("UserPromptSubmit", "user-prompt-submit.sh"),
+    # A subagent launch that failed never reaches PostToolUse; the same dispatcher retires it.
+    ("PostToolUseFailure", "post-tool-use.sh"),
 )
 
 #: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
 #: (its sub-scripts filter cheaply themselves); `PostToolUse` is narrowed to the todo
 #: tools and the subagent tool (`Agent`, `Task` in older builds — where a review agent's
-#: report comes back) so no other tool call forks the dispatcher at all.
+#: report comes back) so no other tool call forks the dispatcher at all; `PostToolUseFailure` is
+#: narrowed to the subagent tool for the same reason.
 MATCHERS = {
     "PreToolUse": ".*",
     "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
+    "PostToolUseFailure": "Agent|Task",
 }
 
 

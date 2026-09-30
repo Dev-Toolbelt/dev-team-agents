@@ -147,7 +147,8 @@ No provider has a review status, so the column is inferred by the hooks.
 "reviews": [
   {
     "id": "r1", "trigger": "agent|command|prompt", "source": "qa-specialist|/devteam:review|…",
-    "opened_at": 0, "pending": 1, "result_at": null, "findings": null,
+    "opened_at": 0, "last_at": 0, "pending": 1, "fg": ["toolu_1"], "bg": [], "scan": false,
+    "result_at": null, "findings": null,
     "resolved_at": null, "resolution": null,
     "task_keys": ["t1", "t2"], "fix_after": null
   }
@@ -155,7 +156,7 @@ No provider has a review status, so the column is inferred by the hooks.
 ```
 
 **Triggers — open a window** (at most one open window per session; a second trigger while one is
-open joins it and increments `pending`):
+open joins it and adds its token — see *Pending tokens* below):
 
 | Trigger | Claude Code | Codex | opencode |
 |---|---|---|---|
@@ -163,8 +164,22 @@ open joins it and increments `pending`):
 | Command: `/devteam:review`, `/devteam:qa`, `/review` | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message`, text parts |
 | Explicit request in the prompt: review, revisar, revisão, revise, QA, testar, test it | same as commands | same | same |
 
-Keyword matching is word-bounded and case-insensitive, and skips a match preceded within three
-words by a negation (`não`, `sem`, `no`, `don't`, `without`, `skip`). It lives in one tested file.
+Keyword matching is word-bounded and case-insensitive. It skips a match that a negation (`não`,
+`sem`, `no`, `don't`, `without`, `skip`) directly governs — one of the two words before it, with no
+punctuation between them and no `only`/`just`/`apenas`/`somente` in between (`no problem, review the
+code` and `not only review but fix` are requests) — and a match inside a question that opens with
+`what`/`how`/`why`/`o que`/`como`/`por que` (`what does the QA agent do?`). One linear pass; it lives
+in one tested file.
+
+**Pending tokens.** `pending` is derived from what the window still waits for, tracked by kind:
+foreground agent launches (`fg`, by tool-use id), background agent launches (`bg`) and one
+command/prompt scan flag (`scan`, a flag — joining with it already set adds nothing). A finished
+turn (`Stop`) retires the scan flag against the final message and retires every foreground launch
+still outstanding as **unread** (a turn that ended has no agent running in front of it: its result
+was lost to a failed launch, `Esc`, or a Codex wait that never returned it); background launches
+survive until their hand-back. Claude `PostToolUseFailure` on `Agent`/`Task` retires that launch as
+unread at once. A window with no activity for more than `PENDING_MAX_AGE` (6 h, `tasks.py`) is
+settled as unread instead of being joined, on the next open, `Stop` and every view.
 
 **Which tasks enter.** At the moment the window opens: every non-removed task of the session that is
 `in_progress`, plus every task `completed` after the previous window was resolved (or ever, if there
@@ -174,11 +189,13 @@ is none). Tasks created after the window opened do not enter it.
 `<!-- review-result: findings=N -->` (rule in `skills/shared/review-result/SKILL.md`, emitted from
 each agent's `## Before You Finish`). The hook scans the agent's returned output for it:
 Claude `PostToolUse` on `Agent`/`Task` (`tool_response`), Codex `PostToolUse` on `wait_agent`
-(`tool_response`), opencode `tool.execute.after` on `task` (`output.output`). Several markers in one
-response (parallel reviewers) are summed. Each marker decrements `pending`; the result is recorded
-when `pending` reaches 0. For a command/prompt-triggered window, the next `Stop` scans the transcript's
+(`tool_response`), opencode `tool.execute.after` on `task` (`output.output`). Only the agent's answer is
+read, never the echoed `prompt`/input. One report retires one slot and carries one marker (the last in
+the report); markers of distinct reports (parallel reviewers) are summed. The result is recorded when
+no token is left. For a command/prompt-triggered window, the next `Stop` scans the transcript's
 last assistant message (Claude `transcript_path`) for the marker; with no marker anywhere, the window
-records `findings: null` — shown as **result not read**.
+records `findings: null` — shown as **result not read**. A routing-only pass (`code-reviewer` in router
+mode, which only delegates) emits no marker; the specialists it spawns do.
 
 **Leaving In Review.**
 
@@ -188,14 +205,14 @@ records `findings: null` — shown as **result not read**.
 | Result `findings > 0` | Cards show **N findings**; tasks stay in In Review; `fix_after` = result time; notification `tasks.review_findings` |
 | Fix rule | Every task created after `fix_after` in the session (the fix list) is completed, and there is at least one → resolved (`"fixed"`) |
 | Re-review rule | A later window in the same session returns `findings = 0` → earlier unresolved windows resolved (`"fixed"`) |
-| Result not read | Stays in In Review with the **result not read** badge until the fix or re-review rule resolves it |
+| Result not read | Stays in In Review with the **result not read** badge until the fix or re-review rule resolves it; both rules apply to any window that has a result, unread included (a lost, failed or expired launch settles as unread) |
 | Reopened | A task in review that the agent sets back to `in_progress` leaves the window at once (column In progress) |
 
 **Derived fields** (added, nothing removed — additive to the JSON contract):
 
 - task `column` gains `in_review`; task gains `review: {"state": "pending|findings|unread|null", "findings": N|null, "since": epoch}` (null when not in review);
 - `counts` gain `in_review` (project and session); project gains `with_findings` (tasks in review with findings);
-- `durations` gain `in_review`: time between entering and leaving the window;
+- `durations` gain `in_review`: time between entering and leaving the window. Durations **partition** the task's life: while a task is inside a review window its seconds count to `in_review` only, not to its provider status (`pending`/`in_progress`/`completed`), so the values sum to the elapsed time;
 - the `status` field keeps the provider's own status; only `column` reflects review.
 
 #### Notifications (emitted by the hook through `notify.sh`, the only emitter)
@@ -204,7 +221,7 @@ records `findings: null` — shown as **result not read**.
 |---|---|
 | `tasks.session_done` | A record call moves a session from "some open" to "all done" (≥ 1 task) |
 | `tasks.review_findings` | A review window records `findings > 0` (dedupe per window) |
-| `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude only; other providers have no end event) |
+| `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude Code and Codex; opencode has no session-end event) |
 
 #### Desktop app
 
@@ -269,4 +286,5 @@ records `findings: null` — shown as **result not read**.
 | 2026-09-30 | Background reviewers (Claude Code): a `run_in_background` agent's `PostToolUse` is a launch ack (`isAsync`/`status: async_launched`, or `run_in_background` in the input) and never a result, so the window stays `pending`. Its report arrives later as a `<task-notification>` (transcript entries of type `queue-operation` and `user`, carrying `<tool-use-id>` of the launch and `<result>`). At `Stop`, inside the same `tasks mark --state idle`, the transcript is read incrementally from `tx_offset` (recorded at window open from `transcript_path`, else the tail), at most 2 MiB and only complete lines per Stop. Each notification newer than `opened_at` and not yet consumed is attributed to the open window: its markers decrement `pending`; a notification whose id is a recorded launch (`launch_ids`) with no marker is `unread`; a marker-less notification of an unknown agent is ignored. Consumption is idempotent by id (`consumed`: the notification's tool-use-id, shared with the foreground result's `tool_use_id`, so a result is never counted twice, nor the queue and user copies of one notification). opencode's `task` is synchronous and Codex's `wait_agent` is already read, so neither needs the scan | The main path in this harness: reviewers run in the background, and the window would otherwise stay pending forever |
 | 2026-09-30 | `tasks.session_done` requires every task in the Done column, so it does not fire while a task is in review; the pass of the review (`review-result`, or the `Stop` scan) raises it when that releases the last open task | A session is not finished while its review is unresolved; reusing the same notification keeps the app's contract unchanged |
 | 2026-09-30 | Detector additions: commands `$devteam-review` / `$devteam-qa` (Codex skill aliases of the two slash commands); keyword `revisao` (unaccented); negations `nao`, `not`, `dont` beside the spec list (`do not review`, `don't`, `dont`). Bash gates are substring tests (`review`, `revis`, `qa`, `test`) on the text after the `"prompt"` key; the detector in `scripts/lib/devteam/review_triggers.py` is the authority | The Codex commands are skills, not slash commands, and "do not review" is the same refusal the list already meant |
-| 2026-09-30 | Hooks wiring: Claude `PostToolUse` matcher widened to `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task` and `install.sh` upgrades an existing narrow entry in place; new `UserPromptSubmit` dispatcher; Codex managed events gain `PostToolUse` (matcher `*`), `UserPromptSubmit` and `SessionEnd`; the opencode plugin's `runHook` now spawns the script and writes the payload to its stdin (`exec` ignores an `input` option, so every plugin hook previously waited on an empty stdin until its timeout) | Required for the triggers to reach the CLI |
+| 2026-09-30 | Hooks wiring: Claude `PostToolUse` matcher widened to `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task` and `install.sh` upgrades an existing narrow entry in place; new `UserPromptSubmit` dispatcher; Codex managed events gain `PostToolUse` (matcher `*`, narrowed to `.*wait_agent` in the round-1 fixes below), `UserPromptSubmit` and `SessionEnd`; the opencode plugin's `runHook` now spawns the script and writes the payload to its stdin (`exec` ignores an `input` option, so every plugin hook previously waited on an empty stdin until its timeout) | Required for the triggers to reach the CLI |
+| 2026-09-30 | In Review round-1 review fixes: (1) pending accounting is by kind (`fg`, `bg`, `scan`) instead of a counter; `Stop` retires foreground launches as unread and the scan flag against the final message, background launches survive; `PostToolUseFailure` (Claude, `Agent\|Task`, same dispatcher, wired by `bind` and `install.sh`) retires a failed launch as unread; `PENDING_MAX_AGE` = 6 h settles a stalled window as unread on open/`Stop`/view; a late result is still folded in. A Codex `spawn_agent` is a foreground launch, so an unmarked or timed-out `wait_agent` now settles at `Stop` as unread (it no longer wedges the window). Records written with only `pending` migrate: each agent slot becomes a foreground token. (2) A prompt/command joining with the scan flag set adds nothing. (3) One report = one slot and its LAST marker; only reports add up; only the agent's answer is scanned (`prompt`/input echoes in `tool_response` are dropped). (4) The negation scan is one linear pass with a two-word window. (5) Background scan: only `queue-operation` (top-level `content`) and `user`-role entries; an entry without a timestamp is ignored; a transcript shorter than the stored offset (compaction) or a different path continues from its end instead of byte 0. (6) Codex has `SessionEnd` (openai/codex `92bc601`, `codex-rs/hooks/src/events/session_end.rs`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`); docs corrected. (7) opencode plugin: stderr ignored, process group killed on timeout, final text stops at the last user message, the fallback payload keeps `last_assistant_message`. (8) Codex `PostToolUse` matcher `*` -> `.*wait_agent`; dispatchers pipe the payload with `printf '%s\n'`. (9) `install.sh` widens only its own `PostToolUse` entry and only from a matcher it shipped before (`TodoWrite\|TaskCreate\|TaskUpdate`), else warns; detector: negation must directly govern the keyword (no `only`/`just`, no punctuation between) and a keyword in a question opened by `what/how/why/o que/como/por que` is ignored. (10) `durations` partition time (in-review seconds are no longer also counted under the provider status); this supersedes item (9) of the implementation-details row above. | Findings of the first review of the In Review column |

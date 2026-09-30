@@ -58,12 +58,21 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
 
   // `exec` has no stdin option (only the sync variants do), so the payload is written to a
   // spawned child; a hook that reads stdin would otherwise wait for it until the timeout.
+  // stderr is ignored: nothing reads it, and an unread pipe fills and blocks the script. The
+  // child leads its own process group, so a timeout kills the python children the dispatcher
+  // forked too, not just bash.
   const runScript = (script: string, stdin?: string): Promise<string> =>
     new Promise((resolve, reject) => {
-      const child = spawn("bash", [script], { stdio: ["pipe", "pipe", "pipe"] })
+      const posix = process.platform !== "win32"
+      const child = spawn("bash", [script], { stdio: ["pipe", "pipe", "ignore"], detached: posix })
       let stdout = ""
       const timer = setTimeout(() => {
-        child.kill("SIGKILL")
+        try {
+          if (posix && child.pid) process.kill(-child.pid, "SIGKILL")
+          else child.kill("SIGKILL")
+        } catch {
+          child.kill("SIGKILL")
+        }
         reject(new Error(`timed out after ${HOOK_TIMEOUT_MS}ms`))
       }, HOOK_TIMEOUT_MS)
       child.stdout.on("data", (chunk) => {
@@ -120,12 +129,16 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const buildContextPayload = async (
     sessionID: string,
   ): Promise<{ stdin?: string; cleanup?: () => Promise<void> }> => {
+    let lastText = ""
     try {
       const res = await client.session.messages({ path: { id: sessionID } })
       const messages = res.data ?? []
-      let lastText = ""
+      // The final text of THIS turn: stop at the last user message, never reach into an
+      // earlier turn's report.
       for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]?.info?.role === "assistant") {
+        const role = messages[i]?.info?.role
+        if (role === "user") break
+        if (role === "assistant") {
           lastText = textOf(messages[i])
           if (lastText.trim()) break
         }
@@ -159,7 +172,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // turn-count heuristic, same as it does today.
     }
     // No token usage yet: still name the session, so stop/04b-task-board.sh can mark it idle.
-    return { stdin: JSON.stringify({ session_id: sessionID }) }
+    return { stdin: JSON.stringify({ session_id: sessionID, last_assistant_message: lastText }) }
   }
 
   const safe = async (label: string, fn: () => Promise<unknown>) => {

@@ -48,6 +48,9 @@ MAIN_OWNER = "main"
 
 DEFAULT_STALE_AFTER = 3600
 DEFAULT_ENDED_AFTER = 6 * 3600
+#: A review window still waiting on an agent this long after its last activity is settled as
+#: unread instead of being joined: a lost result must not wedge the column forever.
+PENDING_MAX_AGE = 6 * 3600
 
 #: Per-provider command that reopens a session, for the board's "Copy resume command".
 RESUME = {
@@ -344,6 +347,10 @@ def _valid_record(data):
             return False
         if not isinstance(window.get("pending", 0), int) or not isinstance(window.get("left", {}), dict):
             return False
+        if not (isinstance(window.get("fg", []), list) and isinstance(window.get("bg", []), list)):
+            return False
+        if not _optional_number(window.get("last_at")):
+            return False
     return True
 
 
@@ -558,8 +565,8 @@ def _review_members(record):
     return members
 
 
-def _review_seconds(record, until):
-    """Seconds each task spent inside a review window, overlapping windows merged."""
+def _review_spans(record, until):
+    """``{task key: [(start, end), ...]}`` inside a review window, overlapping windows merged."""
     spans = {}
     for window in _windows(record):
         end_of_window = window.get("resolved_at")
@@ -568,18 +575,22 @@ def _review_seconds(record, until):
             end = min(x for x in (left.get(key), end_of_window, until) if x is not None)
             if end > window["opened_at"]:
                 spans.setdefault(key, []).append((window["opened_at"], end))
-    totals = {}
+    merged = {}
     for key, items in spans.items():
-        total, current_end = 0, None
+        out = []
         for start, end in sorted(items):
-            if current_end is None or start > current_end:
-                total += end - start
-                current_end = end
-            elif end > current_end:
-                total += end - current_end
-                current_end = end
-        totals[key] = int(total)
-    return totals
+            if out and start <= out[-1][1]:
+                if end > out[-1][1]:
+                    out[-1] = (out[-1][0], end)
+            else:
+                out.append((start, end))
+        merged[key] = out
+    return merged
+
+
+def _review_seconds(record, until):
+    """Seconds each task spent inside a review window, overlapping windows merged."""
+    return {key: int(sum(end - start for start, end in items)) for key, items in _review_spans(record, until).items()}
 
 
 def _resolve(window, now, resolution):
@@ -645,6 +656,56 @@ def _reopen(record, before, now):
                 left[task["key"]] = now
 
 
+def _tokens(window):
+    """The window's outstanding work as ``(foreground ids, background ids)``, created on demand.
+
+    A record written before tokens were tracked by kind only has ``pending``: each of its
+    agent slots becomes a foreground token, which the next ``Stop`` retires as unread.
+    """
+    if "fg" not in window:
+        window["fg"] = ["legacy:{}".format(i) for i in range(max(0, window.get("pending", 0) - (1 if window.get("scan") else 0)))]
+        window.setdefault("bg", [])
+    window.setdefault("bg", [])
+    return window["fg"], window["bg"]
+
+
+def _sync_pending(window):
+    """``pending`` mirrors the tokens: foreground launches + background launches + the scan flag."""
+    fg, bg = _tokens(window)
+    window["pending"] = len(fg) + len(bg) + (1 if window.get("scan") else 0)
+
+
+def _take_slot(window, ident, kind):
+    """Retire the launch ``ident`` (or, when unknown, the oldest of ``kind``). True if one was."""
+    fg, bg = _tokens(window)
+    for tokens in (fg, bg):
+        if ident and ident in tokens:
+            tokens.remove(ident)
+            return True
+    tokens = fg if kind == "fg" else bg
+    if tokens:
+        tokens.pop(0)
+        return True
+    return False
+
+
+def _expire(rec, now):
+    """Settle every window that has waited too long for an agent. Returns the last outcome."""
+    outcome = None
+    for window in _windows(rec):
+        if window.get("resolved_at") is not None or window.get("result_at") is not None:
+            continue
+        last = window.get("last_at")
+        if now - (window["opened_at"] if last is None else last) <= PENDING_MAX_AGE:
+            continue
+        fg, bg = _tokens(window)
+        window["unread"] = window.get("unread", 0) + len(fg) + len(bg)
+        del fg[:], bg[:]
+        window["scan"] = False
+        outcome = _finish(rec, window, now)
+    return outcome
+
+
 def _open_window(record):
     for window in reversed(_windows(record)):
         if window.get("resolved_at") is None and window.get("result_at") is None:
@@ -677,6 +738,17 @@ def _async_launch(payload):
     return False
 
 
+#: Keys of a tool response that echo what the agent was asked, not what it answered.
+_ECHO_KEYS = ("prompt", "description", "input", "tool_input", "instructions")
+
+
+def _output(value):
+    """An agent's answer without the fields that echo its input (Claude's ``Agent`` response)."""
+    if isinstance(value, dict):
+        return {k: v for k, v in value.items() if k not in _ECHO_KEYS}
+    return value
+
+
 def review_call(payload):
     """Normalize a hook payload into a review event, or ``None``.
 
@@ -704,6 +776,7 @@ def review_call(payload):
         "source": None,
         "markers": [],
         "agent": False,
+        "background": False,
         "tool_use_id": _first_text(payload, "tool_use_id", "toolUseId"),
         "transcript_path": _first_text(payload, "transcript_path"),
     }
@@ -712,14 +785,22 @@ def review_call(payload):
         name = review_triggers.agent_name(
             _first_text(tool_input, "subagent_type", "agent_type") or _first_text(args, "subagent_type", "agent_type")
         )
-        after = event == "PostToolUse" or any(k in payload for k in ("output", "tool_response", "tool_output"))
+        failed = event == "PostToolUseFailure"
+        after = failed or event == "PostToolUse" or any(k in payload for k in ("output", "tool_response", "tool_output"))
+        background = tool_input.get("run_in_background") is True or args.get("run_in_background") is True
         if after:
+            if failed:
+                # The launch died before it reported: retire it as unread, whatever its kind.
+                if not name:
+                    return None
+                call.update(kind="result", markers=[], agent=True, source=name)
+                return call
             # `spawn_agent` answers with an agent id, not a report; a background agent's
             # launch answers before it has run. Neither can carry a result.
-            if bare == "spawn_agent" or tool_input.get("run_in_background") is True or _async_launch(payload):
+            if bare == "spawn_agent" or background or _async_launch(payload):
                 return None
             found = review_triggers.markers(
-                [payload.get("tool_response"), payload.get("tool_output"), payload.get("output")]
+                [_output(payload.get("tool_response")), _output(payload.get("tool_output")), payload.get("output")]
             )
             if not name and not found:
                 return None
@@ -727,11 +808,11 @@ def review_call(payload):
             return call
         if not name:
             return None
-        call.update(kind="open", trigger="agent", source=name)
+        call.update(kind="open", trigger="agent", source=name, background=background)
         return call
 
     if bare == "wait_agent":
-        found = review_triggers.markers(payload.get("tool_response"))
+        found = review_triggers.markers(_output(payload.get("tool_response")))
         if not found:
             return None
         call.update(kind="result", markers=found)
@@ -785,6 +866,7 @@ def review_open(root, payload, now=None):
     def apply(rec, call, at):
         if call["kind"] != "open":
             return None
+        _expire(rec, at)
         window = _open_window(rec)
         joined = window is not None
         if window is None:
@@ -796,7 +878,10 @@ def review_open(root, payload, now=None):
                 "trigger": call["trigger"],
                 "source": call["source"],
                 "opened_at": at,
+                "last_at": at,
                 "pending": 0,
+                "fg": [],
+                "bg": [],
                 "scan": False,
                 "markers": 0,
                 "unread": 0,
@@ -810,12 +895,18 @@ def review_open(root, payload, now=None):
                 "fix_after": None,
             }
             rec.setdefault("reviews", []).append(window)
-        window["pending"] += 1
+        fg, bg = _tokens(window)
         if call["trigger"] != "agent":
+            # One flag, not a counter: every prompt/command in the window shares one final
+            # message, and `Stop` retires the flag once.
             window["scan"] = True
         else:
-            if call.get("tool_use_id"):
-                window.setdefault("launch_ids", []).append(call["tool_use_id"])
+            window["anon"] = window.get("anon", 0) + 1
+            ident = call.get("tool_use_id") or "anon:{}".format(window["anon"])
+            if ident not in fg and ident not in bg:
+                (bg if call.get("background") else fg).append(ident)
+        window["last_at"] = at
+        _sync_pending(window)
         _remember_transcript(window, call)
         return {"recorded": True, "window": window["id"], "joined": joined}
 
@@ -837,6 +928,11 @@ def _remember_transcript(window, call):
 
 
 def _apply_result(rec, call, now):
+    """Fold one report into the open window: one report retires one slot and carries one marker.
+
+    A report that carries several markers (an orchestrator's summary) counts its LAST one;
+    only distinct reports add up.
+    """
     window = _open_window(rec)
     if window is None:
         return None
@@ -846,21 +942,20 @@ def _apply_result(rec, call, now):
             return None
         window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
-    # A marker never consumes the transcript-scan token: that one is retired at `Stop`.
-    room = max(0, window["pending"] - (1 if window.get("scan") else 0))
-    taken = min(room, len(markers)) if markers else 0
-    unread = 0
+    slot = False
+    if markers or call["agent"]:
+        slot = _take_slot(window, call.get("slot_id") or launch, call.get("slot_kind", "fg"))
     if markers:
-        window["markers"] = window.get("markers", 0) + len(markers)
-        window["found"] = window.get("found", 0) + sum(markers)
-    elif call["agent"] and room:
-        taken, unread = 1, 1
-    window["unread"] = window.get("unread", 0) + unread
-    window["pending"] -= taken
+        window["markers"] = window.get("markers", 0) + 1
+        window["found"] = window.get("found", 0) + markers[-1]
+    elif slot:
+        window["unread"] = window.get("unread", 0) + 1
+    window["last_at"] = now
     return _finish(rec, window, now)
 
 
 def _finish(rec, window, now):
+    _sync_pending(window)
     complete = window["pending"] <= 0
     if complete:
         window["pending"] = 0
@@ -900,7 +995,7 @@ def review_result(root, payload, now=None):
     return result
 
 
-# ── the Stop scan: a command/prompt-triggered window reads the final message ─
+# ── the Stop scan: a finished turn settles what it can ────────────────────────
 
 
 def _content_text(content):
@@ -970,11 +1065,22 @@ _TAG_RE = {
 
 
 def _entry_text(entry):
-    """Text of a transcript entry that could carry a task notification, else ``""``."""
-    content = entry.get("content")
-    if not isinstance(content, str):
-        message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
-        content = _content_text(message.get("content"))
+    """Text of a transcript entry that could carry a task notification, else ``""``.
+
+    Only what the harness itself writes counts: a ``queue-operation`` entry (top-level
+    ``content``) and a ``user``-role entry. An assistant message that merely quotes the tag,
+    or a tool result echoing a file that contains it, is never a hand-back.
+    """
+    kind = entry.get("type")
+    message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
+    if kind == "queue-operation":
+        content = entry.get("content")
+    elif kind == "user" or message.get("role") == "user":
+        content = message.get("content", entry.get("content"))
+        if not isinstance(content, str):
+            content = _content_text(content)
+    else:
+        return ""
     return content if isinstance(content, str) and "<task-notification>" in content else ""
 
 
@@ -998,8 +1104,13 @@ def _background_reports(window, path):
     try:
         size = os.path.getsize(path)
         offset = window.get("tx_offset")
-        if window.get("tx_path") != path or not isinstance(offset, int) or offset > size:
-            offset = max(0, size - BACKGROUND_SCAN_BYTES) if window.get("tx_path") is None else 0
+        if window.get("tx_path") is None:
+            offset = max(0, size - BACKGROUND_SCAN_BYTES)
+            window["tx_path"] = path
+        elif window["tx_path"] != path or not isinstance(offset, int) or offset > size:
+            # A compacted or rotated transcript: what is there now is not ours to replay from
+            # byte 0. Continue from its end; ids already consumed stay consumed.
+            offset = size
             window["tx_path"] = path
         with open(path, "rb") as handle:
             handle.seek(offset)
@@ -1008,6 +1119,7 @@ def _background_reports(window, path):
         return []
     end = chunk.rfind(b"\n") + 1
     if end == 0 and len(chunk) < BACKGROUND_SCAN_BYTES:
+        window["tx_offset"] = offset
         return []
     window["tx_offset"] = offset + (end or len(chunk))
     reports = []
@@ -1022,12 +1134,12 @@ def _background_reports(window, path):
         if not text:
             continue
         at = _entry_epoch(entry)
-        if at is not None and int(at) < window["opened_at"]:
+        if at is None or int(at) < window["opened_at"]:
             continue
         found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
         reports.append({
             "id": found["tool-use-id"] or found["task-id"] or "off:{}".format(offset),
-            "markers": review_triggers.markers(found["result"] or text),
+            "markers": review_triggers.markers(found["result"] or text)[-1:],
         })
     return reports
 
@@ -1048,30 +1160,45 @@ def _scan_background(rec, payload, now):
         window = _open_window(rec)
         if window is None:
             break
-        known = report["id"] in window.get("launch_ids", [])
+        known = report["id"] in _tokens(window)[1]
         if report["id"] in window.get("consumed", []) or not (report["markers"] or known):
             continue
         window.setdefault("consumed", []).append(report["id"])
-        applied = _apply_result(rec, {"markers": report["markers"], "agent": True}, now)
+        applied = _apply_result(
+            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, now
+        )
         if applied is not None and applied["result"]:
             outcome = applied
     return outcome
 
 
-def _scan_at_stop(rec, payload, now):
-    """Retire the transcript-scan token of every window that has one. Returns the last outcome."""
+def _retire_at_stop(rec, payload, now):
+    """What a finished turn settles in every open window. Returns the last outcome.
+
+    * the prompt/command scan flag is read against the final message and cleared;
+    * foreground agent launches still outstanding are retired as unread — a turn that ended
+      cannot have an agent still running in front of it, so its result was lost (a failed
+      launch, an interrupted turn, a wait that never returned it);
+    * background launches survive: their hand-back arrives in a later turn.
+    """
     outcome = None
     text = None
     for window in _windows(rec):
-        if not window.get("scan") or window.get("resolved_at") is not None or window.get("result_at") is not None:
+        if window.get("resolved_at") is not None or window.get("result_at") is not None:
             continue
-        if text is None:
-            text = review_triggers.markers(last_assistant_text(payload))
-        if window.get("markers", 0) == 0 and text:
-            window["markers"] = len(text)
-            window["found"] = window.get("found", 0) + sum(text)
-        window["scan"] = False
-        window["pending"] = max(0, window["pending"] - 1)
+        fg, _ = _tokens(window)
+        if not fg and not window.get("scan"):
+            continue
+        if window.get("scan"):
+            if text is None:
+                text = review_triggers.markers(last_assistant_text(payload))[-1:]
+            if window.get("markers", 0) == 0 and text:
+                window["markers"] = 1
+                window["found"] = window.get("found", 0) + text[0]
+            window["scan"] = False
+        if fg:
+            window["unread"] = window.get("unread", 0) + len(fg)
+            del fg[:]
         outcome = _finish(rec, window, now)
     return outcome
 
@@ -1191,9 +1318,13 @@ def mark(root, payload, state, now=None):
                 rec["idle_at"] = now
                 rec["ended_at"] = None
                 was_done = _all_done(rec, _review_members(rec))
-                scanned = _scan_background(rec, payload, now)
-                after = _scan_at_stop(rec, payload, now)
-                scanned = after if after is not None and after["result"] else scanned or after
+                outcomes = (
+                    _expire(rec, now),
+                    _scan_background(rec, payload, now),
+                    _retire_at_stop(rec, payload, now),
+                )
+                done = [o for o in outcomes if o is not None and o["result"]]
+                scanned = done[-1] if done else None
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
@@ -1226,16 +1357,19 @@ def _session_status(rec, now, ended_after):
     return "active"
 
 
-def _durations(history, until):
+def _durations(history, until, review_spans=()):
+    """Seconds per provider status. Time inside a review window belongs to ``in_review`` only,
+    so the columns partition the task's life instead of overlapping."""
     totals = {"pending": 0, "in_progress": 0, "completed": 0}
     for index, entry in enumerate(history):
         end = history[index + 1]["at"] if index + 1 < len(history) else until
-        seconds = max(0, int(end - entry["at"]))
+        inside = sum(max(0, min(end, b) - max(entry["at"], a)) for a, b in review_spans)
+        seconds = max(0, int(end - entry["at"] - inside))
         totals[entry["status"]] = totals.get(entry["status"], 0) + seconds
     return totals
 
 
-def _task_view(task, session_status, now, stale_after, until, member=None, review_seconds=0):
+def _task_view(task, session_status, now, stale_after, until, member=None, review_spans=()):
     history = [h for h in task.get("history", []) if isinstance(h, dict) and _number(h.get("at"))]
     if not history:
         history = [{"status": task["status"], "at": task["created_at"]}]
@@ -1254,7 +1388,10 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "created_at": task["created_at"],
         "status_since": since,
         "completed_at": completed_at,
-        "durations": dict(_durations(history, until), in_review=review_seconds),
+        "durations": dict(
+            _durations(history, until, review_spans),
+            in_review=int(sum(end - start for start, end in review_spans)),
+        ),
         "review": dict(member) if member else None,
         "stale": task["status"] == "in_progress"
         and not member
@@ -1303,11 +1440,12 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     # The fix rule depends on task state, so it is re-evaluated here on a copy; the stored
     # record only ever changes through a hook call.
     rec = copy.deepcopy(rec)
+    _expire(rec, now)
     _sweep_reviews(rec, rec.get("updated_at") or now)
     members = _review_members(rec)
-    seconds = _review_seconds(rec, until)
+    spans = _review_spans(rec, until)
     views = [
-        _task_view(task, status, now, stale_after, until, members.get(task["key"]), seconds.get(task["key"], 0))
+        _task_view(task, status, now, stale_after, until, members.get(task["key"]), spans.get(task["key"], ()))
         for task in sorted(rec["tasks"], key=_task_order)
         if isinstance(task, dict) and _shown(task)
     ]

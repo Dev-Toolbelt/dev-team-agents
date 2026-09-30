@@ -4,8 +4,10 @@
 #   a review agent's report   Claude Code `Agent`/`Task` (tool_response),
 #                             Codex `wait_agent` (tool_response),
 #                             opencode `task` (the plugin adds "output")  → review result
+#   a subagent launch that failed  Claude Code `PostToolUseFailure` on `Agent`/`Task`
+#                             (same payload shape, no tool_response)      → retired as unread
 # The settings matcher already narrows the event; the string tests below repeat it so a
-# stray registration with a wider matcher (Codex uses `*`) forks nothing for another tool.
+# stray registration with a wider matcher forks nothing for another tool.
 # Exits 0 always, prints nothing.
 set -uo pipefail
 
