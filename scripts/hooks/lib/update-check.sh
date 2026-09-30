@@ -154,6 +154,39 @@ uc_fetch_latest() {
     printf '%s' "$latest"
 }
 
+# ── Version comparison ────────────────────────────────────────────────────────
+# uc_semver <version> — prints "major minor patch" for vX.Y.Z / X.Y.Z; returns 1
+# otherwise. The suffix rule mirrors scripts/lib/devteam/versions.py:parse_semver
+# (a -pre or +build suffix is ignored) — change one, check the other. Unlike it,
+# a leading "v" is accepted: release tags carry one, installed_version does not.
+# A part over 9 digits is refused, since bash arithmetic wraps silently past 2^63.
+uc_semver() {
+    local v="${1#v}" core major minor patch rest
+    core="${v%%[-+]*}"
+    case "$core" in
+        *[!0-9.]*|.*|*.|*..*) return 1 ;;
+    esac
+    IFS=. read -r major minor patch rest <<< "$core"
+    [ -n "$major" ] && [ -n "$minor" ] && [ -n "$patch" ] && [ -z "$rest" ] || return 1
+    [ "${#major}" -le 9 ] && [ "${#minor}" -le 9 ] && [ "${#patch}" -le 9 ] || return 1
+    printf '%s %s %s' "$((10#$major))" "$((10#$minor))" "$((10#$patch))"
+}
+
+# uc_is_newer <current> <latest> — succeeds only when latest is strictly newer.
+# A string inequality offered a downgrade to anyone ahead of the release, and an
+# "update" to anyone on it, since the tag carries a "v" the stored version does
+# not. An unparseable version raises nothing: a missed notice is harmless.
+uc_is_newer() {
+    local cur lat c1 c2 c3 l1 l2 l3
+    cur="$(uc_semver "$1")" || return 1
+    lat="$(uc_semver "$2")" || return 1
+    read -r c1 c2 c3 <<< "$cur"
+    read -r l1 l2 l3 <<< "$lat"
+    [ "$l1" -ne "$c1" ] && { [ "$l1" -gt "$c1" ]; return; }
+    [ "$l2" -ne "$c2" ] && { [ "$l2" -gt "$c2" ]; return; }
+    [ "$l3" -gt "$c3" ]
+}
+
 # ── Notifications ─────────────────────────────────────────────────────────────
 # uc_is_suppressed <type> — reads the UC_SUPPRESS global ("true"/"false"/csv list)
 uc_is_suppressed() {
@@ -178,7 +211,7 @@ uc_notify() {
 
 # uc_message <updated|available> <lang> <current> <latest>
 uc_message() {
-    local kind="$1" lang="$2" current="$3" latest="$4"
+    local kind="$1" lang="$2" current="${3#v}" latest="${4#v}"
     if [ "$kind" = "updated" ]; then
         case "$lang" in
             pt-BR|pt*) printf '%s' "dev-team-agents atualizado para $latest. Execute um health check para verificar: \"Faça um health check neste projeto\"." ;;
@@ -246,14 +279,14 @@ uc_perform_auto_update() {
 
     if [ ! -f "$fetch_lib" ]; then
         echo ""
-        echo "→ Update available ($current → $latest), but the installer"
+        echo "→ Update available (${current#v} → ${latest#v}), but the installer"
         echo "  verification library is missing. Skipping the automatic update."
         echo "  Run /devteam:update to upgrade with verification."
         return 1
     fi
 
     echo ""
-    echo "→ Auto-updating dev-team-agents: $current → $latest"
+    echo "→ Auto-updating dev-team-agents: ${current#v} → ${latest#v}"
 
     # shellcheck source=/dev/null
     . "$fetch_lib" || return 1

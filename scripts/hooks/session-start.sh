@@ -180,8 +180,7 @@ if [ -f "$UC_LIB_FILE" ]; then
             UC_LATEST=$(uc_fetch_latest "$UC_GITHUB_API" "$UC_ETAG_FILE" "$UC_VERSION_CACHE_FILE")
             UC_CURRENT=$(state_get installed_version "$STATE_FILE")
             [ -n "$UC_CURRENT" ] || UC_CURRENT="unknown"
-            if [ -n "$UC_LATEST" ] && [ "$UC_LATEST" != "unknown" ] \
-                && [ "$UC_CURRENT" != "unknown" ] && [ "$UC_CURRENT" != "$UC_LATEST" ]; then
+            if uc_is_newer "$UC_CURRENT" "$UC_LATEST"; then
                 export UC_SUPPRESS="$SUPPRESS"
                 # Legacy .auto-update flag file is a dot-marker too — checked
                 # in STATE_DIR, not USER_DATA_DIR.
