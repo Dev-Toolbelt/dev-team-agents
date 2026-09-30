@@ -77,6 +77,14 @@ class PluginLintTest(unittest.TestCase):
         self.assert_fails(self.build(lambda m: m["config"][0].update(options=[{"value": "a", "label": "A"}])),
                           "options only allowed")
 
+    def test_bad_picker(self):
+        self.assert_fails(self.build(lambda m: m["config"][0].update(picker="folder")), "picker must be")
+        self.assert_fails(self.build(lambda m: m["config"][1].update(picker="file")), "picker is only allowed")
+
+    def test_valid_picker(self):
+        r = self.run_lint(self.build(lambda m: m["config"][0].update(picker="file")))
+        self.assertEqual(r.returncode, 0, r.stdout)
+
     def test_bash_syntax(self):
         root = self.build()
         (root / "demo/scripts/run.sh").write_text("if then\n")

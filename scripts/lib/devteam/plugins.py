@@ -59,6 +59,8 @@ _SCRIPT_RE = re.compile(r"^(?!/)(?!.*(^|/)\.\.(/|$))[A-Za-z0-9._/-]+$")
 _INT_RE = re.compile(r"^[+-]?[0-9]+$")
 
 CONFIG_TYPES = ("boolean", "string", "integer", "string_list", "enum")
+PICKERS = ("directory", "file")
+FACT_TONES = ("positive", "warning", "neutral")
 RUNTIMES = ("bash", "python3")
 OUTPUTS = ("config", "json", "log")
 HOOK_EVENTS = ("pre_tool_use", "stop")
@@ -186,7 +188,7 @@ def _validate_config(config, problems):
         problems.append("config must be an array")
         return
     seen = set()
-    allowed = ("key", "type", "label", "help", "required", "default", "placeholder", "min", "max", "options")
+    allowed = ("key", "type", "label", "help", "required", "default", "placeholder", "min", "max", "options", "picker")
     for index, field in enumerate(config):
         where = "config[{}]".format(index)
         if not _check_keys(field, where, ("key", "type", "label", "help", "default"), allowed, problems):
@@ -208,6 +210,11 @@ def _validate_config(config, problems):
             problems.append("{}.required must be a boolean".format(where))
         if "placeholder" in field and not isinstance(field["placeholder"], str):
             problems.append("{}.placeholder must be a string".format(where))
+        if "picker" in field:
+            if field["picker"] not in PICKERS:
+                problems.append("{}.picker must be one of {}".format(where, ", ".join(PICKERS)))
+            elif kind not in ("string", "string_list"):
+                problems.append("{}.picker is only allowed on string or string_list fields".format(where))
         for bound in ("min", "max"):
             if bound in field and not _is_int(field[bound]):
                 problems.append("{}.{} must be an integer".format(where, bound))
@@ -816,7 +823,10 @@ def _read_status(ctx, plugin, config):
     facts = []
     for fact in parsed.get("facts") or []:
         if isinstance(fact, dict) and "label" in fact and "value" in fact:
-            facts.append({"label": str(fact["label"]), "value": str(fact["value"])})
+            item = {"label": str(fact["label"]), "value": str(fact["value"])}
+            if isinstance(fact.get("tone"), str) and fact["tone"] in FACT_TONES:
+                item["tone"] = fact["tone"]
+            facts.append(item)
     return {"summary": parsed["summary"], "facts": facts}
 
 

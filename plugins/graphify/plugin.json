@@ -15,7 +15,8 @@
       "help": "Directories, relative to the project root, that go into the graph.",
       "required": true,
       "default": [],
-      "placeholder": "src"
+      "placeholder": "src",
+      "picker": "directory"
     },
     {
       "key": "manifestPaths",
@@ -23,7 +24,8 @@
       "label": "Manifest files",
       "help": "Dependency manifests and lock files copied alongside the sources, such as package.json.",
       "default": [],
-      "placeholder": "package.json"
+      "placeholder": "package.json",
+      "picker": "file"
     },
     {
       "key": "auto_refresh",

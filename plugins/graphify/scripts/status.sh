@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Graphify plugin status: one JSON object {"summary": str, "facts": [{"label","value"}]}.
+# Graphify plugin status: one JSON object {"summary": str, "facts": [{"label","value","tone"?}]}.
 # Cheap by contract (runs on every `plugin list`), and always exits 0 with valid JSON.
 set -uo pipefail
 
@@ -15,7 +15,9 @@ json_escape() {
 FACTS=""
 add_fact() {
   [ -n "$FACTS" ] && FACTS="$FACTS,"
-  FACTS="$FACTS{\"label\":\"$(json_escape "$1")\",\"value\":\"$(json_escape "$2")\"}"
+  local tone=""
+  [ -n "${3:-}" ] && tone=",\"tone\":\"$3\""
+  FACTS="$FACTS{\"label\":\"$(json_escape "$1")\",\"value\":\"$(json_escape "$2")\"$tone}"
 }
 
 emit() {
@@ -38,34 +40,32 @@ build_time() {
   local epoch
   epoch="$(stat -c %Y "$MARKER" 2>/dev/null || stat -f %m "$MARKER" 2>/dev/null || true)"
   case "$epoch" in ''|*[!0-9]*) return 0 ;; esac
-  date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true
+  date -d "@$epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$epoch" '+%Y-%m-%d %H:%M' 2>/dev/null || true
 }
 LAST_AT=""
 [ -n "$LAST_COMMIT" ] && LAST_AT="$(build_time)"
 
 if [ ! -f "$GRAPH" ]; then
-  add_fact "Graph" "not built"
+  add_fact "graphify-out/graph.json" "missing" warning
   emit "No graph yet - run Rebuild graph"
 fi
 
-add_fact "Graph" "graphify-out/graph.json present"
+add_fact "graphify-out/graph.json" "present" positive
 
 if [ -n "$LAST_COMMIT" ]; then
-  when=""
-  [ -n "$LAST_AT" ] && when=" at $LAST_AT"
-  add_fact "Last build" "${LAST_COMMIT:0:7}$when"
+  if [ -n "$LAST_AT" ]; then add_fact "Last build" "$LAST_AT"; else add_fact "Last build" "not recorded" warning; fi
   if [ -n "$HEAD_COMMIT" ] && [ "$HEAD_COMMIT" != "$LAST_COMMIT" ]; then
     ahead="$(git -C "$ROOT" rev-list --count "$LAST_COMMIT..HEAD" 2>/dev/null || true)"
     if [ -n "$ahead" ]; then
-      add_fact "Since build" "$ahead commit(s) ahead"
+      add_fact "Since build" "$ahead commit(s) ahead" warning
     else
-      add_fact "Since build" "HEAD moved"
+      add_fact "Since build" "HEAD moved" warning
     fi
     emit "Graph built at ${LAST_COMMIT:0:7}, HEAD has moved"
   fi
-  add_fact "Since build" "up to date"
+  add_fact "Since build" "up to date" positive
   emit "Graph built at ${LAST_COMMIT:0:7}"
 fi
 
-add_fact "Last build" "unknown"
+add_fact "Last build" "not recorded" warning
 emit "Graph present, last build not recorded"

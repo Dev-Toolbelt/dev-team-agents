@@ -90,7 +90,7 @@ def check(plugin, d):
         err("config must be an array")
         cfg = []
     keys = set()
-    cfg_allowed = {"key", "type", "label", "help", "required", "default", "placeholder", "min", "max", "options"}
+    cfg_allowed = {"key", "type", "label", "help", "required", "default", "placeholder", "min", "max", "options", "picker"}
     for i, c in enumerate(cfg):
         w = f"config[{i}]"
         if not isinstance(c, dict):
@@ -117,6 +117,11 @@ def check(plugin, d):
             err(f"{w}: required must be boolean")
         if "placeholder" in c and not isinstance(c["placeholder"], str):
             err(f"{w}: placeholder must be a string")
+        if "picker" in c:
+            if c["picker"] not in ("directory", "file"):
+                err(f"{w}: picker must be 'directory' or 'file'")
+            elif c.get("type") not in ("string", "string_list"):
+                err(f"{w}: picker is only allowed on string or string_list fields")
         for k in ("min", "max"):
             if k in c and not is_int(c[k]):
                 err(f"{w}: {k} must be an integer")

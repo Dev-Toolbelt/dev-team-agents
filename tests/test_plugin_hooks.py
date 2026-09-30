@@ -283,7 +283,10 @@ class PluginHookTest(unittest.TestCase):
         data = json.loads(self.run_script(PLUGIN / "scripts" / "status.sh",
                                           DEVTEAM_PROJECT_ROOT=str(self.root)).stdout)
         facts = {f["label"]: f["value"] for f in data["facts"]}
-        self.assertRegex(facts["Last build"], r"^[0-9a-f]{7} at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+        self.assertRegex(facts["Last build"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertNotRegex(facts["Last build"], r"[0-9a-f]{7}")
+        tones = {f["label"]: f.get("tone") for f in data["facts"]}
+        self.assertEqual((facts["graphify-out/graph.json"], tones["graphify-out/graph.json"]), ("present", "positive"))
         self.assertEqual(facts["Since build"], "up to date")
 
     def test_status_without_a_marker_reports_an_unknown_build(self):
@@ -522,6 +525,7 @@ class PluginHookTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         data = json.loads(r.stdout)
         self.assertIn("No graph", data["summary"])
+        self.assertEqual(data["facts"], [{"label": "graphify-out/graph.json", "value": "missing", "tone": "warning"}])
         self.assertTrue(all({"label", "value"} <= set(f) for f in data["facts"]))
 
     def test_status_after_build_reports_commit(self):

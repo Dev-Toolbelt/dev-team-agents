@@ -33,7 +33,7 @@ Key fields:
 | `requires` | array | Binaries needed (e.g., `graphify`, `jq`). Each has `binary` name and `install_hint` (command to install) |
 | `config` | array | Configurable fields users can set via `devteam plugin config set` |
 | `actions` | array | Named operations (e.g., `detect`, `rebuild`) that users can trigger |
-| `status` | object | Optional script that prints status facts |
+| `status` | object | Optional script that prints `{ "summary": str, "facts": [{ "label": str, "value": str, "tone"?: "positive"\|"warning"\|"neutral" }] }`. `tone` is optional; the app renders it as a badge, and any other value is dropped |
 | `hooks` | object | Optional `pre_tool_use` and `stop` hook scripts |
 
 ## Config Field Types
@@ -45,6 +45,10 @@ Key fields:
 | `integer` | `{ type: "integer", min: 1, max: 100, default: 10 }` | Number input |
 | `string_list` | `{ type: "string_list", default: [] }` | JSON array: `'["src","lib"]'` from CLI |
 | `enum` | `{ type: "enum", options: [{value:"a",label:"A"}], default: "a" }` | Dropdown |
+
+Optional `picker` (`"directory"` or `"file"`, only on `string` / `string_list`) asks the app to offer a native
+chooser; the renderer never sees absolute paths, main stores project-relative paths and refuses anything
+outside the project. The CLI ignores it.
 
 Every field also needs `key`, `label` and `help`; `required: true` makes an empty value mark the plugin
 as not configured. The default must match the type — `helpers/plugin-lint.sh` checks it.

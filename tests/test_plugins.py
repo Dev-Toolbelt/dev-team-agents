@@ -35,7 +35,8 @@ DEMO = {
     "homepage": "https://example.com/demo",
     "requires": [{"binary": "sh", "install_hint": "install sh"}],
     "config": [
-        {"key": "names", "type": "string_list", "label": "Names", "help": "h", "required": True, "default": []},
+        {"key": "names", "type": "string_list", "label": "Names", "help": "h", "required": True, "default": [],
+         "picker": "directory"},
         {"key": "flag", "type": "boolean", "label": "Flag", "help": "h", "default": False},
         {"key": "count", "type": "integer", "label": "Count", "help": "h", "default": 5, "min": 1, "max": 10},
         {
@@ -114,7 +115,7 @@ SCRIPTS = {
         "import json, os, sys\n"
         'if os.path.exists(os.path.join(os.environ["DEVTEAM_PROJECT_ROOT"], ".status-fail")):\n'
         "    sys.exit(3)\n"
-        'print(json.dumps({"summary": "all good", "facts": [{"label": "Nodes", "value": 42}]}))\n'
+        'print(json.dumps({"summary": "all good", "facts": [{"label": "Nodes", "value": 42}, {"label": "A", "value": "x", "tone": "positive"}, {"label": "B", "value": "y", "tone": "loud"}, {"label": "C", "value": "z", "tone": 5}]}))\n'
     ),
     "demo/hooks/stop.sh": "exit 0\n",
     "needy/scripts/go.sh": "echo went\n",
@@ -217,6 +218,12 @@ class ManifestValidationTest(unittest.TestCase):
         self.assertTrue(self.problems(lambda m: m["config"][1].update(default="yes")))
         self.assertTrue(self.problems(lambda m: m["config"][3].update(default="missing")))
 
+    def test_picker_is_validated_by_value_and_type(self):
+        self.assertEqual(self.problems(lambda m: m["config"][0].update(picker="directory")), [])
+        self.assertEqual(self.problems(lambda m: m["config"][0].update(picker="file")), [])
+        self.assertTrue(self.problems(lambda m: m["config"][0].update(picker="folder")))
+        self.assertTrue(self.problems(lambda m: m["config"][1].update(picker="file")))
+
     def test_requires_and_hooks_shape(self):
         self.assertTrue(self.problems(lambda m: m["requires"][0].pop("install_hint")))
         self.assertTrue(self.problems(lambda m: m["requires"][0].update(binary="a b")))
@@ -267,6 +274,12 @@ class ViewShapeTest(PluginTestCase):
         for view in body["plugins"]:
             self.assertEqual(set(view), self.VIEW_KEYS)
 
+    def test_picker_reaches_the_config_fields_payload(self):
+        _, body, _ = self.cli("show", "demo")
+        pickers = {f["key"]: f.get("picker") for f in body["config_fields"]}
+        self.assertEqual(pickers["names"], "directory")
+        self.assertIsNone(pickers["flag"])
+
     def test_show_payload_for_a_disabled_plugin(self):
         code, body, _ = self.cli("show", "demo")
         self.assertEqual(code, 0)
@@ -315,7 +328,12 @@ class ViewShapeTest(PluginTestCase):
     def test_status_appears_only_while_enabled_and_a_failing_script_yields_null(self):
         plugins.enable(self.ctx, "demo")
         _, body, _ = self.cli("show", "demo")
-        self.assertEqual(body["status"], {"summary": "all good", "facts": [{"label": "Nodes", "value": "42"}]})
+        self.assertEqual(body["status"], {"summary": "all good", "facts": [
+            {"label": "Nodes", "value": "42"},
+            {"label": "A", "value": "x", "tone": "positive"},
+            {"label": "B", "value": "y"},
+            {"label": "C", "value": "z"},
+        ]})
         (self.root / ".status-fail").write_text("x", encoding="utf-8")
         code, body, _ = self.cli("show", "demo")
         self.assertEqual(code, 0)

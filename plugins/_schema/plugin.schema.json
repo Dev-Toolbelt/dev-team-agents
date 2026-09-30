@@ -38,6 +38,7 @@
           "required": { "type": "boolean" },
           "default": {},
           "placeholder": { "type": "string" },
+          "picker": { "enum": ["directory", "file"] },
           "min": { "type": "integer" },
           "max": { "type": "integer" },
           "options": {
