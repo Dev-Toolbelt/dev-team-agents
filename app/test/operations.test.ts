@@ -897,6 +897,20 @@ describe.skipIf(skipOnWindowsWithoutLauncher)('the project row mapping', () => {
     expect(byId.get('p-absent')?.path_exists).toBeNull();
     expect(byId.get('p-junk')?.path_exists).toBeNull();
 
+    // `preferences`: kept when the CLI sent it, with anything of the wrong type reduced to
+    // `null` (silence), and left out entirely when the CLI predates the field.
+    expect(byId.get('p-true')?.preferences).toEqual({
+      auto_update: true,
+      worktree_active: false,
+      suppress_notifications: ['session-end'],
+    });
+    expect(byId.get('p-false')?.preferences).toEqual({
+      auto_update: null,
+      worktree_active: null,
+      suppress_notifications: true,
+    });
+    expect(byId.get('p-absent')?.preferences).toBeUndefined();
+
     expect(byId.get('p-true')?.providers).toEqual(['claude']);
     expect(byId.get('p-true')?.mode).toBe('link');
     expect(byId.get('p-false')?.pin).toBe('2.9.0');

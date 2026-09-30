@@ -27,7 +27,7 @@ async function openPlugins(overrides: Parameters<typeof fakeBridge>[0] = {}, env
   const bridge = fakeBridge(overrides);
   installBridge(bridge);
   const onBack = vi.fn();
-  render(<ProjectSettings project={project()} name="project-1" environment={env} active onBack={onBack} />);
+  render(<ProjectSettings project={project()} name="project-1" environment={env} active onBack={onBack} onChanged={vi.fn()} onUnbound={vi.fn()} />);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('tab', { name: /Plugins/ }));
   return { bridge, user, onBack };
@@ -46,7 +46,7 @@ describe('the project screen’s tabs', () => {
   it('shows Preferences first and loads plugins only when the tab is opened', async () => {
     const bridge = fakeBridge();
     installBridge(bridge);
-    render(<ProjectSettings project={project()} name="project-1" environment={environment()} active onBack={vi.fn()} />);
+    render(<ProjectSettings project={project()} name="project-1" environment={environment()} active onBack={vi.fn()} onChanged={vi.fn()} onUnbound={vi.fn()} />);
     const user = userEvent.setup();
 
     expect(await screen.findByRole('tab', { name: 'Preferences', selected: true })).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('the project screen’s tabs', () => {
 
   it('points a pinned project at releasing its pin instead of updating', async () => {
     installBridge(fakeBridge({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([])))) }));
-    render(<ProjectSettings project={project({ pin: '2.47.0', resolves_to: '2.47.0' })} name="p" environment={environment()} active onBack={vi.fn()} />);
+    render(<ProjectSettings project={project({ pin: '2.47.0', resolves_to: '2.47.0' })} name="p" environment={environment()} active onBack={vi.fn()} onChanged={vi.fn()} onUnbound={vi.fn()} />);
     await userEvent.setup().click(await screen.findByRole('tab', { name: /Plugins/ }));
     expect(await screen.findByText(/It is pinned to 2\.47\.0/)).toBeInTheDocument();
     expect(screen.getByText('devteam pin --release')).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('the project screen’s tabs', () => {
 
   it('says the version could not be resolved rather than naming none', async () => {
     installBridge(fakeBridge({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([])))) }));
-    render(<ProjectSettings project={project({ resolves_to: null })} name="p" environment={environment()} active onBack={vi.fn()} />);
+    render(<ProjectSettings project={project({ resolves_to: null })} name="p" environment={environment()} active onBack={vi.fn()} onChanged={vi.fn()} onUnbound={vi.fn()} />);
     await userEvent.setup().click(await screen.findByRole('tab', { name: /Plugins/ }));
     expect(await screen.findByText(/could not be resolved/)).toBeInTheDocument();
   });

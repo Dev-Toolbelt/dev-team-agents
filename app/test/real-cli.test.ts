@@ -292,6 +292,10 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     expect(row.pin).toBeNull();
     expect(row.mode).toBeTypeOf('string');
     expect(row.providers.length).toBeGreaterThan(0);
+    // The real CLI resolves the three badge preferences per row; `auto_update` is a consent
+    // key, so a project that never opted in reads `false`.
+    expect(row.preferences?.auto_update).toBe(false);
+    expect(typeof row.preferences?.worktree_active).toBe('boolean');
   });
 
   it('reports a removed project directory as false, and never as unknown', async () => {
