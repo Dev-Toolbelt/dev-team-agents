@@ -164,6 +164,20 @@ export interface ProjectRecord {
    * terminal", and this is that shape. Silence is reported as silence.
    */
   readonly path_exists: boolean | null;
+  /**
+   * The resolved values the Projects table shows as badges, from `list --json`. Absent
+   * entirely on a CLI that predates the field, and each key is `null` when the CLI could
+   * not resolve it — either way the UI renders a neutral dash, never "Off". Silence is
+   * silence, as with `path_exists`.
+   *
+   * `suppress_notifications` is `true`/`false` or the list of muted notification types;
+   * suppressing is the *negative* reading, so `true` is "Off" and `false` or `[]` is "On".
+   */
+  readonly preferences?: {
+    readonly auto_update: boolean | null;
+    readonly worktree_active: boolean | null;
+    readonly suppress_notifications: boolean | readonly string[] | null;
+  };
 }
 
 export interface ProjectList {
