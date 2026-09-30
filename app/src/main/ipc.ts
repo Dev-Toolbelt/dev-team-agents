@@ -33,6 +33,12 @@ import {
   listSkills,
   pinProblem,
   planUpgrade,
+  pluginConfigSet,
+  pluginConfigUnset,
+  pluginDisable,
+  pluginEnable,
+  pluginList,
+  pluginRun,
   preferenceArgumentProblem,
   prefsList,
   prefsSet,
@@ -48,6 +54,14 @@ import {
   type CliContext,
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
+import {
+  PLUGIN_ACTION_ID,
+  PLUGIN_CONFIG_KEY,
+  PLUGIN_NAME,
+  isEditable,
+  pluginValueProblem,
+  serializePluginValue,
+} from '../shared/pluginRules.js';
 import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
 import { trustedHandler, type RendererTarget } from './security.js';
 import { readSettings, writeProjectName, type AppSettings } from './settings.js';
@@ -66,6 +80,14 @@ import {
   type HandshakeView,
   type OperationResult,
   type PinReport,
+  type PluginConfigChange,
+  type PluginConfigField,
+  type PluginConfigUpdateReport,
+  type PluginConfigValue,
+  type PluginList,
+  type PluginRunResult,
+  type PluginToggleReport,
+  type PluginView,
   type PreferenceChange,
   type PreferenceUpdateReport,
   type PreferenceValue,
@@ -876,6 +898,136 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     },
   );
 
+  // ── plugins (ADR-0017) ─────────────────────────────────────────────────────────────
+  //
+  // Every plugin write first re-reads **this project's own `plugin list`** and checks the
+  // plugin, the action and each config key against it: the renderer names things, this
+  // process decides whether they exist. The set of runnable things changes only with a
+  // core release, and `plugin run` never receives anything but two identifiers.
+
+  /** The plugin `name` in this project's own list, or the problem to return instead. */
+  async function findPlugin(
+    ctx: CliContext,
+    path: string,
+    name: string,
+    command: string,
+  ): Promise<{ readonly plugin: PluginView } | OperationResult<never>> {
+    const listing = await pluginList(ctx, path);
+    if (!listing.ok) return listing;
+    const plugin = listing.data.plugins.find((entry) => entry.name === name);
+    if (plugin === undefined) return refusedPlugin(command, `\`${name}\` is not a plugin this project's \`plugin list\` returned.`);
+    return { plugin };
+  }
+
+  handle(CHANNELS.projectPlugins, async (_event, projectId: unknown): Promise<OperationResult<PluginList>> => {
+    if (typeof projectId !== 'string') return refusedBadArgument('plugin list');
+    const resolved = await resolveProject(projectId);
+    if (!('path' in resolved)) return resolved;
+    const ctx = await context();
+    if (ctx === null) return NO_CLI;
+    return pluginList(ctx, resolved.path);
+  });
+
+  handle(
+    CHANNELS.setPluginEnabled,
+    async (_event, projectId: unknown, name: unknown, enabled: unknown): Promise<OperationResult<PluginToggleReport>> => {
+      const command = enabled === false ? 'plugin disable' : 'plugin enable';
+      if (typeof projectId !== 'string' || typeof name !== 'string' || typeof enabled !== 'boolean') {
+        return refusedBadArgument(command);
+      }
+      if (!PLUGIN_NAME.test(name)) return refusedPlugin(command, 'a plugin name is lowercase letters, digits and dashes');
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext(command);
+      if (!gated.ready) return gated.problem;
+      const found = await findPlugin(gated.ctx, resolved.path, name, command);
+      if (!('plugin' in found)) return found;
+      return enabled ? pluginEnable(gated.ctx, resolved.path, name) : pluginDisable(gated.ctx, resolved.path, name);
+    },
+  );
+
+  handle(
+    CHANNELS.updatePluginConfig,
+    async (
+      _event,
+      projectId: unknown,
+      name: unknown,
+      changes: unknown,
+    ): Promise<OperationResult<PluginConfigUpdateReport>> => {
+      if (typeof projectId !== 'string' || typeof name !== 'string') return refusedBadArgument('plugin config set');
+      const parsed = parsePluginConfigChanges(changes);
+      if (typeof parsed === 'string') return refusedPlugin('plugin config set', `\`devteam plugin config set\` was refused: ${parsed}`);
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('plugin config set');
+      if (!gated.ready) return gated.problem;
+      const found = await findPlugin(gated.ctx, resolved.path, name, 'plugin config set');
+      if (!('plugin' in found)) return found;
+
+      const fields = new Map<string, PluginConfigField>(found.plugin.config_fields.map((field) => [field.key, field]));
+      for (const change of parsed) {
+        const field = fields.get(change.key);
+        if (field === undefined) {
+          return refusedPlugin('plugin config set', `\`${change.key}\` is not a setting \`${name}\` declares.`);
+        }
+        if (!isEditable(field)) {
+          return refusedPlugin('plugin config set', `\`${change.key}\` is a ${field.type} setting this app cannot edit.`);
+        }
+        if (change.action === 'set') {
+          const problem = pluginValueProblem(field, change.value);
+          if (problem !== null) return refusedPlugin('plugin config set', `\`${change.key}\`: ${problem}`);
+        }
+      }
+
+      const started = Date.now();
+      const applied: PluginConfigChange[] = [];
+      for (const change of parsed) {
+        const field = fields.get(change.key) as PluginConfigField;
+        const result =
+          change.action === 'unset'
+            ? await pluginConfigUnset(gated.ctx, resolved.path, name, change.key)
+            : await pluginConfigSet(gated.ctx, resolved.path, name, change.key, serializePluginValue(field, change.value));
+        if (!result.ok) {
+          return {
+            ok: true,
+            outcome: 'success',
+            data: { applied, failed: { change, problem: result } },
+            command: result.command,
+            durationMs: Date.now() - started,
+          };
+        }
+        applied.push(change);
+      }
+      return {
+        ok: true,
+        outcome: 'success',
+        data: { applied, failed: null },
+        command: 'devteam plugin config set',
+        durationMs: Date.now() - started,
+      };
+    },
+  );
+
+  handle(
+    CHANNELS.runPluginAction,
+    async (_event, projectId: unknown, name: unknown, actionId: unknown): Promise<OperationResult<PluginRunResult>> => {
+      if (typeof projectId !== 'string' || typeof name !== 'string' || typeof actionId !== 'string') {
+        return refusedBadArgument('plugin run');
+      }
+      if (!PLUGIN_NAME.test(name) || !PLUGIN_ACTION_ID.test(actionId)) {
+        return refusedPlugin('plugin run', 'a plugin name or action id has a shape no manifest can declare');
+      }
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('plugin run');
+      if (!gated.ready) return gated.problem;
+      const found = await findPlugin(gated.ctx, resolved.path, name, 'plugin run');
+      if (!('plugin' in found)) return found;
+      const action = found.plugin.actions.find((entry) => entry.id === actionId);
+      if (action === undefined) return refusedPlugin('plugin run', `\`${name}\` declares no action \`${actionId}\`.`);
+      return pluginRun(gated.ctx, resolved.path, name, actionId, action.timeout_seconds);
+    },
+  );
   // Paths from `list`, kept for a minute: a burst of notifications must not start one
   // `devteam list` each just to name the project in a banner title.
   //
@@ -974,6 +1126,33 @@ export function parsePreferenceChanges(raw: unknown): PreferenceChange[] | strin
     changes.push(
       action === 'unset' ? { key: name, action } : { key: name, action, value: value as PreferenceValue },
     );
+  }
+  return changes;
+}
+
+function refusedPlugin(command: string, message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
+}
+
+/**
+ * The renderer's batch of plugin config edits, rebuilt from `unknown`. At most one change
+ * per key, 64 in total. The values are only shape-checked here — whether a value suits its
+ * field is decided against the field, after the plugin's own list has been read.
+ */
+export function parsePluginConfigChanges(raw: unknown): PluginConfigChange[] | string {
+  if (!Array.isArray(raw)) return 'the changes are not a list';
+  if (raw.length === 0) return 'there is nothing to change';
+  if (raw.length > 64) return 'too many changes in one batch';
+  const seen = new Set<string>();
+  const changes: PluginConfigChange[] = [];
+  for (const entry of raw as unknown[]) {
+    if (entry === null || typeof entry !== 'object') return 'a change is not an object';
+    const { key, action, value } = entry as { key?: unknown; action?: unknown; value?: unknown };
+    if (action !== 'set' && action !== 'unset') return 'a change has no `set` or `unset` action';
+    if (typeof key !== 'string' || !PLUGIN_CONFIG_KEY.test(key)) return 'a config key is letters, digits and underscores';
+    if (seen.has(key)) return `\`${key}\` appears twice in one batch`;
+    seen.add(key);
+    changes.push(action === 'unset' ? { key, action } : { key, action, value: value as PluginConfigValue });
   }
   return changes;
 }

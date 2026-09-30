@@ -468,6 +468,122 @@ export interface PreferenceUpdateReport {
   } | null;
 }
 
+// ── plugins ──────────────────────────────────────────────────────────────────
+
+/**
+ * What a plugin's config field holds. `string_list` is the only structured one; the CLI takes
+ * it as a JSON array string, which `shared/pluginRules.ts` builds.
+ */
+export type PluginConfigValue = string | number | boolean | readonly string[];
+
+/** The field types ADR-0017 § 1 defines. A type a newer CLI adds is carried as a plain string. */
+export type PluginConfigType = 'boolean' | 'string' | 'integer' | 'string_list' | 'enum' | (string & {});
+
+/** One entry of a manifest's `config`, as `plugin list` returns it. */
+export interface PluginConfigField {
+  readonly key: string;
+  readonly type: PluginConfigType;
+  readonly label: string;
+  readonly help: string | null;
+  readonly required: boolean;
+  readonly default: unknown;
+  readonly placeholder: string | null;
+  /** `enum` only. */
+  readonly options: readonly { readonly value: string; readonly label: string }[];
+  /** `integer` only; `null` when the manifest sets no bound. */
+  readonly min: number | null;
+  readonly max: number | null;
+}
+
+export interface PluginRequirement {
+  readonly binary: string;
+  readonly found: boolean;
+  readonly install_hint: string | null;
+}
+
+export type PluginActionOutput = 'config' | 'json' | 'log' | (string & {});
+
+export interface PluginAction {
+  readonly id: string;
+  readonly label: string;
+  readonly help: string | null;
+  readonly output: PluginActionOutput;
+  readonly requires_enabled: boolean;
+  readonly writes: boolean;
+  /** Not in ADR-0017's `PluginView` shape; read when the CLI sends it, so a long action gets its full budget. */
+  readonly timeout_seconds: number | null;
+}
+
+export interface PluginStatus {
+  readonly summary: string;
+  readonly facts: readonly { readonly label: string; readonly value: string }[];
+}
+
+/** `plugin list` → `plugins[]`, and `plugin show`. */
+export interface PluginView {
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly homepage: string | null;
+  readonly enabled: boolean;
+  readonly source: 'settings' | 'legacy' | 'none' | (string & {});
+  readonly settings_file: string;
+  readonly requirements: readonly PluginRequirement[];
+  readonly ready: boolean;
+  readonly configured: boolean;
+  readonly config_fields: readonly PluginConfigField[];
+  readonly config: Readonly<Record<string, unknown>>;
+  readonly unknown_config: readonly string[];
+  readonly actions: readonly PluginAction[];
+  readonly hooks: readonly string[];
+  readonly status: PluginStatus | null;
+}
+
+/** `plugin list --json`. */
+export interface PluginList {
+  readonly project_id: string | null;
+  readonly plugins: readonly PluginView[];
+}
+
+/** `plugin enable --json` and `plugin disable --json`; `seeded` is always `false` for a disable. */
+export interface PluginToggleReport {
+  readonly plugin: PluginView;
+  readonly changed: boolean;
+  readonly seeded: boolean;
+}
+
+/** `plugin config set --json` and `plugin config unset --json`. */
+export interface PluginConfigWrite {
+  readonly plugin: PluginView;
+  readonly key: string;
+  readonly removed?: boolean;
+}
+
+/** `plugin run --json`. A script that exits non-zero is `ok: false` here, not a CLI error. */
+export interface PluginRunResult {
+  readonly plugin: string;
+  readonly action: string;
+  readonly ok: boolean;
+  readonly exit_code: number;
+  readonly duration_ms: number;
+  readonly output: Readonly<Record<string, unknown>> | null;
+  readonly log_tail: string;
+}
+
+/** One pending edit of a plugin's config. `unset` drops the key so the manifest default applies. */
+export type PluginConfigChange =
+  | { readonly key: string; readonly action: 'set'; readonly value: PluginConfigValue }
+  | { readonly key: string; readonly action: 'unset' };
+
+/** Like `PreferenceUpdateReport`: applied in order, stopped at the first failure. */
+export interface PluginConfigUpdateReport {
+  readonly applied: readonly PluginConfigChange[];
+  readonly failed: {
+    readonly change: PluginConfigChange;
+    readonly problem: Extract<OperationResult<never>, { ok: false }>;
+  } | null;
+}
+
 // ── the bridge ───────────────────────────────────────────────────────────────
 
 /** Static facts about the build, so the UI can be honest about what it is. */
@@ -739,6 +855,37 @@ export interface DevteamBridge {
     changes: readonly PreferenceChange[],
   ) => Promise<OperationResult<PreferenceUpdateReport>>;
 
+  /** `plugin list` for one project. Read-only; runs the status script of each enabled plugin. */
+  readonly projectPlugins: (projectId: ProjectId) => Promise<OperationResult<PluginList>>;
+  /**
+   * `plugin enable` / `plugin disable`. Changes a **committed** file in the project. The
+   * plugin `name` must be one this project's own `plugin list` answer returned.
+   */
+  readonly setPluginEnabled: (
+    projectId: ProjectId,
+    name: string,
+    enabled: boolean,
+  ) => Promise<OperationResult<PluginToggleReport>>;
+  /**
+   * `plugin config set/unset`, applied in order and stopped at the first failure. Every key
+   * must be a `config_fields` entry of that plugin in the project's own `plugin list`
+   * answer, and every value must pass `pluginValueProblem` for that field's type.
+   */
+  readonly updatePluginConfig: (
+    projectId: ProjectId,
+    name: string,
+    changes: readonly PluginConfigChange[],
+  ) => Promise<OperationResult<PluginConfigUpdateReport>>;
+  /**
+   * `plugin run`. `name` and `actionId` are checked against the project's own `plugin list`
+   * answer before anything is spawned; an `output: "config"` action proposes values and
+   * writes nothing.
+   */
+  readonly runPluginAction: (
+    projectId: ProjectId,
+    name: string,
+    actionId: string,
+  ) => Promise<OperationResult<PluginRunResult>>;
   // Notifications. The main process owns the stream (`devteam notifications watch`) and
   // shows each one natively, so they arrive with the window closed; the renderer only
   // reads the feed for the bell. Spawns nothing from the renderer's side.
@@ -973,6 +1120,10 @@ export const CHANNELS = {
   applyUpgrade: 'devteam:apply-upgrade',
   projectPreferences: 'devteam:project-preferences',
   updateProjectPreferences: 'devteam:update-project-preferences',
+  projectPlugins: 'devteam:project-plugins',
+  setPluginEnabled: 'devteam:set-plugin-enabled',
+  updatePluginConfig: 'devteam:update-plugin-config',
+  runPluginAction: 'devteam:run-plugin-action',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

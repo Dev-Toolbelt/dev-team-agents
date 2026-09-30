@@ -15,3 +15,26 @@ export function isWithheld(entries: EnvironmentReport['withheld'], command: stri
   const match = entries.find((entry) => entry.command === command);
   return match === undefined ? { withheld: false } : { withheld: true, reason: match.reason };
 }
+
+/**
+ * The exact subcommand keys the Plugins tab's write buttons run, which is what
+ * `EnvironmentReport.withheld` is keyed by. `plugin config set` and `plugin config unset`
+ * are two leaves in the framework's table; a config save may use either, so it is withheld
+ * when either is (`isAnyWithheld`).
+ */
+export const PLUGIN_COMMANDS = {
+  enable: 'plugin enable',
+  disable: 'plugin disable',
+  configSet: 'plugin config set',
+  configUnset: 'plugin config unset',
+  run: 'plugin run',
+} as const;
+
+/** The first of `commands` that is withheld, so one reason is reported when several are. */
+export function isAnyWithheld(entries: EnvironmentReport['withheld'], commands: readonly string[]): Withheld {
+  for (const command of commands) {
+    const result = isWithheld(entries, command);
+    if (result.withheld) return result;
+  }
+  return { withheld: false };
+}

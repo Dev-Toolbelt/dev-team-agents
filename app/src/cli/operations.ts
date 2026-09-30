@@ -26,6 +26,7 @@ import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import { textProblem } from '../shared/preferenceRules.js';
+import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/pluginRules.js';
 import type {
   BoardColumn,
   BoardCounts,
@@ -46,6 +47,15 @@ import type {
   NotificationLevel,
   OperationResult,
   PinReport,
+  PluginAction,
+  PluginConfigField,
+  PluginConfigWrite,
+  PluginList,
+  PluginRequirement,
+  PluginRunResult,
+  PluginStatus,
+  PluginToggleReport,
+  PluginView,
   PreferencesImport,
   QueuedNotification,
   PreferenceValue,
@@ -98,6 +108,7 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['catalog', 'commands'],
   ['catalog', 'show'],
   ['prefs', 'list'],
+  ['plugin', 'list'],
   ['notifications', 'list'],
   ['notifications', 'watch'],
   ['skills', 'list'],
@@ -147,6 +158,13 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['upgrade'],
   ['prefs', 'set'],
   ['prefs', 'unset'],
+  // ADR-0017. `plugin run` is listed here although only some actions write: the framework
+  // cannot know which, and the app has no way to tell the gate a script is harmless.
+  ['plugin', 'enable'],
+  ['plugin', 'disable'],
+  ['plugin', 'config', 'set'],
+  ['plugin', 'config', 'unset'],
+  ['plugin', 'run'],
   // Writes `notifications-seen.json` in one project's machine-local state directory —
   // the smallest write this app makes, and still a write, so it is declared and gated
   // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
@@ -193,8 +211,8 @@ export const CATALOG_KINDS: readonly CatalogKind[] = Object.freeze(['agents', 's
  * would read as a flag is refused here even if a call site stops validating it.
  */
 export interface CommandShape {
-  /** Positional operands the app may pass after the command words. `prefs set` is the one with two: key and value. */
-  readonly operands: 0 | 1 | 2;
+  /** Positional operands the app may pass after the command words. `prefs set` takes two (key and value); `plugin config set` takes three. */
+  readonly operands: 0 | 1 | 2 | 3;
   /**
    * Flags this command may be passed, and how each is used.
    *
@@ -241,6 +259,15 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'prefs list': { operands: 0, flags: { '--path': 'value' } },
   'prefs set': { operands: 2, flags: { '--scope': 'value', '--path': 'value' } },
   'prefs unset': { operands: 1, flags: { '--scope': 'value', '--path': 'value' } },
+  // ADR-0017 § 3. Every plugin command resolves its project from `--path` alone, so the path
+  // is one `main/ipc.ts` resolved from a `project_id`. `--force` (enable anyway) is
+  // deliberately absent: the UI has no way to say "I know a requirement is missing".
+  'plugin list': { operands: 0, flags: { '--path': 'value' } },
+  'plugin enable': { operands: 1, flags: { '--path': 'value' } },
+  'plugin disable': { operands: 1, flags: { '--path': 'value' } },
+  'plugin config set': { operands: 3, flags: { '--path': 'value' } },
+  'plugin config unset': { operands: 2, flags: { '--path': 'value' } },
+  'plugin run': { operands: 2, flags: { '--path': 'value' } },
   // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
   // — an ack the user did not see happen is a notification they never got.
   'notifications list': { operands: 0, flags: { '--unseen': 'bare' } },
@@ -267,7 +294,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
 });
 
-const MAX_COMMAND_WORDS = 2;
+const MAX_COMMAND_WORDS = 3;
 
 /**
  * Why this argv may not be spawned, or `null` when it may.
@@ -797,6 +824,287 @@ export function asPreferenceWrite(body: Record<string, unknown>): PreferenceWrit
     key: body['key'],
     scope: body['scope'],
     ...(typeof body['removed'] === 'boolean' ? { removed: body['removed'] } : {}),
+  };
+}
+
+// ── plugins (ADR-0017) ───────────────────────────────────────────────────────────────
+//
+// `path` is resolved by `main/ipc.ts` from a `project_id`, as for `prefsList`. `name`,
+// `key` and `actionId` are checked there against the project's own `plugin list` answer;
+// the shape checks here are the second line, so an operand that would read as a flag or
+// that no manifest could declare never reaches an argv.
+
+/** `plugin list` runs the status script of every enabled plugin, so it gets more than the default. */
+export const PLUGIN_LIST_TIMEOUT_MS = 60_000;
+/** `plugin enable` may run a `config` action to seed the settings (`seeded: true`). */
+export const PLUGIN_ENABLE_TIMEOUT_MS = 120_000;
+/** The longest a manifest may declare, and what an action with no declared timeout gets. */
+export const PLUGIN_RUN_MAX_SECONDS = 1800;
+/** Added to the action's own timeout so the CLI's deadline trips, and reports, before ours. */
+export const PLUGIN_RUN_MARGIN_SECONDS = 30;
+
+function refusedPlugin(command: string, message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
+}
+
+export function pluginNameProblem(name: unknown): string | null {
+  return typeof name === 'string' && PLUGIN_NAME.test(name) ? null : 'a plugin name is lowercase letters, digits and dashes';
+}
+
+export function pluginListArgs(path: string): readonly string[] {
+  return ['plugin', 'list', '--path', path];
+}
+
+export function pluginList(context: CliContext, path: string): Promise<OperationResult<PluginList>> {
+  return run({ ...context, timeoutMs: PLUGIN_LIST_TIMEOUT_MS }, pluginListArgs(path), asPluginList);
+}
+
+export function pluginEnable(context: CliContext, path: string, name: string): Promise<OperationResult<PluginToggleReport>> {
+  const problem = pluginNameProblem(name);
+  if (problem !== null) return Promise.resolve(refusedPlugin('plugin enable', problem));
+  return run({ ...context, timeoutMs: PLUGIN_ENABLE_TIMEOUT_MS }, ['plugin', 'enable', name, '--path', path], asPluginToggle);
+}
+
+export function pluginDisable(context: CliContext, path: string, name: string): Promise<OperationResult<PluginToggleReport>> {
+  const problem = pluginNameProblem(name);
+  if (problem !== null) return Promise.resolve(refusedPlugin('plugin disable', problem));
+  return run(context, ['plugin', 'disable', name, '--path', path], asPluginToggle);
+}
+
+/** `value` is already the CLI's spelling — see `serializePluginValue`. */
+export function pluginConfigSet(
+  context: CliContext,
+  path: string,
+  name: string,
+  key: string,
+  value: string,
+): Promise<OperationResult<PluginConfigWrite>> {
+  const problem = pluginNameProblem(name) ?? pluginKeyProblem(key) ?? pluginArgumentProblem(value);
+  if (problem !== null) return Promise.resolve(refusedPlugin('plugin config set', problem));
+  return run(context, ['plugin', 'config', 'set', name, key, value, '--path', path], asPluginConfigWrite);
+}
+
+export function pluginConfigUnset(
+  context: CliContext,
+  path: string,
+  name: string,
+  key: string,
+): Promise<OperationResult<PluginConfigWrite>> {
+  const problem = pluginNameProblem(name) ?? pluginKeyProblem(key);
+  if (problem !== null) return Promise.resolve(refusedPlugin('plugin config unset', problem));
+  return run(context, ['plugin', 'config', 'unset', name, key, '--path', path], asPluginConfigWrite);
+}
+
+/**
+ * `timeoutSeconds` is the action's own `timeout_seconds` from the last `plugin list`, or
+ * `null` when the CLI did not send one. Either way the deadline is capped, so a hostile
+ * or malformed number cannot hold a process open for longer than the manifest maximum.
+ */
+export function pluginRun(
+  context: CliContext,
+  path: string,
+  name: string,
+  actionId: string,
+  timeoutSeconds: number | null,
+): Promise<OperationResult<PluginRunResult>> {
+  const problem =
+    pluginNameProblem(name) ?? (PLUGIN_ACTION_ID.test(actionId) ? null : 'an action id is lowercase letters, digits, dashes and underscores');
+  if (problem !== null) return Promise.resolve(refusedPlugin('plugin run', problem));
+  return run(
+    { ...context, timeoutMs: pluginRunTimeoutMs(timeoutSeconds) },
+    ['plugin', 'run', name, actionId, '--path', path],
+    asPluginRunResult,
+  );
+}
+
+export function pluginRunTimeoutMs(timeoutSeconds: number | null): number {
+  const declared =
+    timeoutSeconds !== null && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+      ? Math.min(timeoutSeconds, PLUGIN_RUN_MAX_SECONDS)
+      : PLUGIN_RUN_MAX_SECONDS;
+  return (declared + PLUGIN_RUN_MARGIN_SECONDS) * 1000;
+}
+
+function pluginKeyProblem(key: unknown): string | null {
+  return typeof key === 'string' && PLUGIN_CONFIG_KEY.test(key) ? null : 'a config key is letters, digits and underscores';
+}
+
+/** `argparse` would read a value beginning with `-` as a flag, and `''` is not a value. */
+function pluginArgumentProblem(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return 'a config value must be a non-empty string';
+  if (value.startsWith('-')) return 'a config value cannot begin with "-"; it would be read as a flag';
+  return null;
+}
+
+// ── plugin payload validation ───────────────────────────────────────────────────────
+
+const PLUGIN_ACTION_OUTPUTS = ['config', 'json', 'log'];
+
+function asPluginConfigField(raw: unknown): PluginConfigField | string {
+  if (!isRecord(raw)) return 'a `config_fields` entry is not an object';
+  if (typeof raw['key'] !== 'string') return 'a `config_fields` entry has no string `key`';
+  if (typeof raw['type'] !== 'string') return `\`config_fields.${raw['key']}\` has no string \`type\``;
+  const options: { value: string; label: string }[] = [];
+  if (Array.isArray(raw['options'])) {
+    for (const option of raw['options']) {
+      if (isRecord(option) && typeof option['value'] === 'string') {
+        options.push({ value: option['value'], label: typeof option['label'] === 'string' ? option['label'] : option['value'] });
+      }
+    }
+  }
+  return {
+    key: raw['key'],
+    type: raw['type'],
+    label: typeof raw['label'] === 'string' ? raw['label'] : raw['key'],
+    help: asNullableString(raw['help']),
+    required: raw['required'] === true,
+    default: raw['default'] ?? null,
+    placeholder: asNullableString(raw['placeholder']),
+    options,
+    min: typeof raw['min'] === 'number' ? raw['min'] : null,
+    max: typeof raw['max'] === 'number' ? raw['max'] : null,
+  };
+}
+
+function asPluginAction(raw: unknown): PluginAction | string {
+  if (!isRecord(raw)) return 'an `actions` entry is not an object';
+  if (typeof raw['id'] !== 'string') return 'an `actions` entry has no string `id`';
+  const output = typeof raw['output'] === 'string' ? raw['output'] : 'log';
+  return {
+    id: raw['id'],
+    label: typeof raw['label'] === 'string' ? raw['label'] : raw['id'],
+    help: asNullableString(raw['help']),
+    // An output kind a newer CLI adds is kept, and shown as a log: that is the only way to
+    // render an unfamiliar answer without inventing a meaning for it.
+    output: PLUGIN_ACTION_OUTPUTS.includes(output) ? output : 'log',
+    requires_enabled: raw['requires_enabled'] === true,
+    writes: raw['writes'] === true,
+    timeout_seconds: typeof raw['timeout_seconds'] === 'number' ? raw['timeout_seconds'] : null,
+  };
+}
+
+/** A fact is display text; a number or boolean the script printed is still shown, an object is not guessed at. */
+function asFactValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function asPluginStatus(raw: unknown): PluginStatus | null {
+  if (!isRecord(raw) || typeof raw['summary'] !== 'string') return null;
+  const facts: { label: string; value: string }[] = [];
+  if (Array.isArray(raw['facts'])) {
+    for (const fact of raw['facts']) {
+      if (isRecord(fact) && typeof fact['label'] === 'string') {
+        facts.push({ label: fact['label'], value: asFactValue(fact['value']) });
+      }
+    }
+  }
+  return { summary: raw['summary'], facts };
+}
+
+/** One `PluginView`: `plugin show`, and each entry of `plugin list`'s `plugins`. */
+export function asPluginView(raw: unknown): PluginView | string {
+  if (!isRecord(raw)) return 'a plugin entry is not an object';
+  const name = raw['name'];
+  if (typeof name !== 'string' || !PLUGIN_NAME.test(name)) return 'a plugin entry has no valid string `name`';
+  for (const key of ['enabled', 'ready', 'configured'] as const) {
+    if (typeof raw[key] !== 'boolean') return `plugin \`${name}\` has no boolean \`${key}\``;
+  }
+  if (!Array.isArray(raw['config_fields'])) return `plugin \`${name}\` has no \`config_fields\` array`;
+  if (!Array.isArray(raw['actions'])) return `plugin \`${name}\` has no \`actions\` array`;
+  if (raw['config'] !== undefined && !isRecord(raw['config'])) return `plugin \`${name}\` has a \`config\` that is not an object`;
+
+  const config_fields: PluginConfigField[] = [];
+  for (const entry of raw['config_fields']) {
+    const field = asPluginConfigField(entry);
+    if (typeof field === 'string') return `plugin \`${name}\`: ${field}`;
+    config_fields.push(field);
+  }
+  const actions: PluginAction[] = [];
+  for (const entry of raw['actions']) {
+    const action = asPluginAction(entry);
+    if (typeof action === 'string') return `plugin \`${name}\`: ${action}`;
+    actions.push(action);
+  }
+  const requirements: PluginRequirement[] = [];
+  if (Array.isArray(raw['requirements'])) {
+    for (const entry of raw['requirements']) {
+      if (!isRecord(entry) || typeof entry['binary'] !== 'string') return `plugin \`${name}\`: a requirement has no string \`binary\``;
+      requirements.push({
+        binary: entry['binary'],
+        // A requirement the CLI did not say was found is treated as missing: the safe
+        // direction, since it only ever withholds a switch.
+        found: entry['found'] === true,
+        install_hint: asNullableString(entry['install_hint']),
+      });
+    }
+  }
+  return {
+    name,
+    title: typeof raw['title'] === 'string' ? raw['title'] : name,
+    description: typeof raw['description'] === 'string' ? raw['description'] : '',
+    homepage: asNullableString(raw['homepage']),
+    enabled: raw['enabled'] as boolean,
+    source: typeof raw['source'] === 'string' ? raw['source'] : 'none',
+    settings_file: typeof raw['settings_file'] === 'string' ? raw['settings_file'] : `.dev-team-agents/plugin-settings/${name}.json`,
+    requirements,
+    ready: raw['ready'] as boolean,
+    configured: raw['configured'] as boolean,
+    config_fields,
+    config: isRecord(raw['config']) ? { ...raw['config'] } : {},
+    unknown_config: asStringArray(raw['unknown_config']),
+    actions,
+    hooks: asStringArray(raw['hooks']),
+    status: asPluginStatus(raw['status']),
+  };
+}
+
+/** `plugin list --json`. */
+export function asPluginList(body: Record<string, unknown>): PluginList | string {
+  if (!Array.isArray(body['plugins'])) return 'no `plugins` array';
+  const plugins: PluginView[] = [];
+  for (const raw of body['plugins']) {
+    const view = asPluginView(raw);
+    if (typeof view === 'string') return view;
+    plugins.push(view);
+  }
+  return { project_id: asNullableString(body['project_id']), plugins };
+}
+
+/** `plugin enable --json` and `plugin disable --json`. */
+export function asPluginToggle(body: Record<string, unknown>): PluginToggleReport | string {
+  const plugin = asPluginView(body['plugin']);
+  if (typeof plugin === 'string') return `\`plugin\`: ${plugin}`;
+  if (typeof body['changed'] !== 'boolean') return 'no boolean `changed`';
+  return { plugin, changed: body['changed'], seeded: body['seeded'] === true };
+}
+
+/** `plugin config set --json` and `plugin config unset --json`. */
+export function asPluginConfigWrite(body: Record<string, unknown>): PluginConfigWrite | string {
+  const plugin = asPluginView(body['plugin']);
+  if (typeof plugin === 'string') return `\`plugin\`: ${plugin}`;
+  if (typeof body['key'] !== 'string') return 'no string `key`';
+  return { plugin, key: body['key'], ...(typeof body['removed'] === 'boolean' ? { removed: body['removed'] } : {}) };
+}
+
+/** `plugin run --json`. */
+export function asPluginRunResult(body: Record<string, unknown>): PluginRunResult | string {
+  if (typeof body['plugin'] !== 'string') return 'no string `plugin`';
+  if (typeof body['action'] !== 'string') return 'no string `action`';
+  if (typeof body['ok'] !== 'boolean') return 'no boolean `ok`';
+  if (typeof body['exit_code'] !== 'number') return 'no numeric `exit_code`';
+  if (typeof body['duration_ms'] !== 'number') return 'no numeric `duration_ms`';
+  const output = body['output'];
+  if (output !== null && output !== undefined && !isRecord(output)) return '`output` is neither an object nor null';
+  return {
+    plugin: body['plugin'],
+    action: body['action'],
+    ok: body['ok'],
+    exit_code: body['exit_code'],
+    duration_ms: body['duration_ms'],
+    output: isRecord(output) ? { ...output } : null,
+    log_tail: typeof body['log_tail'] === 'string' ? body['log_tail'] : '',
   };
 }
 

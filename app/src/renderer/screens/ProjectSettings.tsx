@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Info, RotateCcw, Undo2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -16,9 +16,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { SaveBar } from '../SaveBar.js';
+import { SELECT_CLASS } from '../formStyles.js';
 import { Loading, Problem } from '../Problem.js';
+import { ProjectPlugins } from './ProjectPlugins.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
 import {
@@ -106,6 +110,12 @@ export function ProjectSettings({
   const [drafts, setDrafts] = useState<Drafts>({});
   const [resets, setResets] = useState<ReadonlySet<string>>(new Set());
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [tab, setTab] = useState<'preferences' | 'plugins'>('preferences');
+  // The Plugins tab loads (and runs each plugin's status script) on first visit, then stays
+  // mounted so switching tabs never discards a half-edited config form.
+  const [pluginsVisited, setPluginsVisited] = useState(false);
+  const [pluginDirty, setPluginDirty] = useState(0);
+  const onPluginDirty = useCallback((count: number) => setPluginDirty(count), []);
   const [saved, setSaved] = useState<PreferenceUpdateReport | null>(null);
   const [awaiting, setAwaiting] = useState<AwaitingReload | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -279,7 +289,7 @@ export function ProjectSettings({
   const saveShortcut = useRef(runSave);
   saveShortcut.current = runSave;
   const shortcutLive = useRef(false);
-  shortcutLive.current = active && !confirmLeave;
+  shortcutLive.current = active && !confirmLeave && tab === 'preferences';
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (!shortcutLive.current) return;
@@ -292,8 +302,10 @@ export function ProjectSettings({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const unsavedTotal = dirtyCount + pluginDirty;
+
   function requestBack() {
-    if (dirty) setConfirmLeave(true);
+    if (unsavedTotal > 0) setConfirmLeave(true);
     else onBack();
   }
 
@@ -334,28 +346,8 @@ export function ProjectSettings({
     </header>
   );
 
-  if (state.phase === 'loading') {
-    return (
-      <section aria-labelledby="settings-heading" className="space-y-4">
-        {header}
-        <Loading what="devteam prefs list" />
-      </section>
-    );
-  }
-  if (!state.result.ok) {
-    return (
-      <section aria-labelledby="settings-heading" className="space-y-4">
-        {header}
-        <Problem problem={state.result} />
-        <Button variant="outline" size="sm" onClick={reload}>
-          Try again
-        </Button>
-      </section>
-    );
-  }
-
-  const data = state.result.data;
-  const others = Object.keys(data.values)
+  const problem = state.phase === 'done' && !state.result.ok ? state.result : null;
+  const others = (loaded === null ? [] : Object.keys(loaded.values))
     .filter((key) => !FIELD_BY_KEY.has(key) && !key.startsWith('_'))
     .sort();
   const groups = GROUPS.map((group) => ({
@@ -371,170 +363,213 @@ export function ProjectSettings({
     <section aria-labelledby="settings-heading" className="space-y-5">
       {header}
 
-      {/* Mounted for the screen's whole life, so a change of text is announced; a region
-          created together with its text is often missed by screen readers. */}
-      <p aria-live="polite" className="sr-only">
-        {busy ? 'Saving…' : refreshing ? 'Reloading preferences…' : status}
-      </p>
+      <Tabs
+        value={tab}
+        onValueChange={(next) => {
+          setTab(next as 'preferences' | 'plugins');
+          if (next === 'plugins') setPluginsVisited(true);
+        }}
+      >
+        <TabsList aria-label="Project settings sections">
+          <TabsTrigger value="preferences">
+            Preferences
+            <TabCount count={dirtyCount} />
+          </TabsTrigger>
+          <TabsTrigger value="plugins">
+            Plugins
+            <TabCount count={pluginDirty} />
+          </TabsTrigger>
+        </TabsList>
 
-      {gate.withheld ? (
-        <Alert>
-          <Info />
-          <AlertTitle>Saving is unavailable right now</AlertTitle>
-          <AlertDescription>You can still review every value. Reason: {gate.reason}.</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {saved !== null ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200"
-        >
-          <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-          Saved {saved.applied.length} change{saved.applied.length === 1 ? '' : 's'} to this project. Agents read the new
-          values from their next run.
-        </div>
-      ) : null}
-      {lastSave !== null && !lastSave.ok ? <Problem problem={lastSave} /> : null}
-      {lastSave !== null && lastSave.ok && lastSave.data.failed !== null ? (
-        <div className="space-y-2">
-          <p className="text-sm">
-            {lastSave.data.applied.length === 0
-              ? 'Nothing was saved.'
-              : `${lastSave.data.applied.length} change${lastSave.data.applied.length === 1 ? ' was' : 's were'} saved (${lastSave.data.applied.map((change) => FIELD_BY_KEY.get(change.key)?.label ?? change.key).join(', ')}) before one failed.`}{' '}
-            <span className="font-medium">
-              {FIELD_BY_KEY.get(lastSave.data.failed.change.key)?.label ?? lastSave.data.failed.change.key}
-            </span>{' '}
-            and anything after it are still unsaved.
+        {/* Both panels stay mounted (`forceMount`) so switching tabs keeps every draft. */}
+        <TabsContent value="preferences" forceMount className="mt-3 space-y-5">
+          {/* Mounted for the screen's whole life, so a change of text is announced; a region
+              created together with its text is often missed by screen readers. */}
+          <p aria-live="polite" className="sr-only">
+            {busy ? 'Saving…' : refreshing ? 'Reloading preferences…' : status}
           </p>
-          <Problem problem={lastSave.data.failed.problem} />
-        </div>
-      ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[11rem_minmax(0,1fr)]">
-        <nav aria-label="Settings sections" className="hidden lg:block">
-          <ul className="sticky top-0 space-y-1 text-sm">
-            {groups.map(({ group }) => {
-              const count = changedIn(group.id);
-              return (
-                <li key={group.id}>
-                  <a
-                    href={`#settings-${group.id}`}
-                    aria-current={activeSection === group.id ? 'location' : undefined}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setActiveSection(group.id);
-                      document.getElementById(`settings-${group.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    className={cn(
-                      'flex items-center justify-between rounded-md border-l-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground',
-                      activeSection === group.id
-                        ? 'border-primary bg-accent font-medium text-foreground'
-                        : 'border-transparent text-muted-foreground',
-                    )}
-                  >
-                    {group.title}
-                    {count > 0 ? (
-                      <span className="rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
-                        <span className="sr-only">, changed: </span>
-                        {count}
-                      </span>
-                    ) : null}
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
 
-        {/* Disabled while a save is in flight and until its reload lands — see `busy`. */}
-        <fieldset disabled={busy} aria-busy={busy} className="min-w-0 space-y-6">
-          {groups.map(({ group, fields }) => (
-            <section
-              key={group.id}
-              id={`settings-${group.id}`}
-              aria-labelledby={`settings-${group.id}-title`}
-              className="scroll-mt-4 rounded-xl border bg-card text-card-foreground shadow-sm"
-            >
-              <header className="border-b px-5 py-4">
-                <h3 id={`settings-${group.id}-title`} className="font-semibold">
-                  {group.title}
-                </h3>
-                <p className="text-sm text-muted-foreground">{group.description}</p>
-              </header>
-              <div className="divide-y px-5">
-                {fields.map((field) => {
-                  const fieldState = fieldStates.get(field.key) as FieldState;
-                  const dependency = field.dependsOn;
-                  const dimmed =
-                    dependency !== undefined && fieldStates.get(dependency.key)?.effective === false;
-                  return (
-                    <div key={field.key}>
-                      <FieldRow
-                        field={field}
-                        state={fieldState}
-                        dimmed={dimmed}
-                        onDraft={(input) => setDraft(field.key, input)}
-                        onUndo={() => undo(field.key)}
-                        onReset={() => markReset(field.key)}
-                      />
-                      {/* Right under the pair it draws, not at the end of the group. */}
-                      {field.key === 'context_window_percent_limit' ? <ContextMeter states={fieldStates} /> : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-
-          {others.length > 0 ? (
-            <section
-              aria-labelledby="settings-other-title"
-              className="rounded-xl border bg-card text-card-foreground shadow-sm"
-            >
-              <header className="border-b px-5 py-4">
-                <h3 id="settings-other-title" className="font-semibold">
-                  Other
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Keys this app does not know how to edit yet. Change them with{' '}
-                  <code className="font-mono text-xs">devteam prefs set</code>.
-                </p>
-              </header>
-              <dl className="divide-y px-5">
-                {others.map((key) => (
-                  <div key={key} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                    <dt className="flex items-center gap-2 font-mono text-xs">
-                      {key}
-                      <OriginBadge origin={data.origin[key]} />
-                      {data.unknown.includes(key) ? <Badge variant="destructive">unknown key</Badge> : null}
-                    </dt>
-                    <dd className="font-mono text-xs text-muted-foreground">{JSON.stringify(data.values[key])}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
+          {state.phase === 'loading' ? <Loading what="devteam prefs list" /> : null}
+          {problem !== null ? (
+            <div className="space-y-4">
+              <Problem problem={problem} />
+              <Button variant="outline" size="sm" onClick={reload}>
+                Try again
+              </Button>
+            </div>
           ) : null}
-        </fieldset>
-      </div>
 
-      <SaveBar
-        dirtyCount={dirtyCount}
-        invalid={blockingErrors}
-        status={status}
-        saving={busy}
-        canSave={canSave}
-        withheld={gate.withheld ? gate.reason : null}
-        onDiscard={discard}
-        onSave={() => void runSave()}
-      />
+          {loaded !== null ? (
+            <>
+              {gate.withheld ? (
+                <Alert>
+                  <Info />
+                  <AlertTitle>Saving is unavailable right now</AlertTitle>
+                  <AlertDescription>You can still review every value. Reason: {gate.reason}.</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {saved !== null ? (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200"
+                >
+                  <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                  Saved {saved.applied.length} change{saved.applied.length === 1 ? '' : 's'} to this project. Agents read the new
+                  values from their next run.
+                </div>
+              ) : null}
+              {lastSave !== null && !lastSave.ok ? <Problem problem={lastSave} /> : null}
+              {lastSave !== null && lastSave.ok && lastSave.data.failed !== null ? (
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    {lastSave.data.applied.length === 0
+                      ? 'Nothing was saved.'
+                      : `${lastSave.data.applied.length} change${lastSave.data.applied.length === 1 ? ' was' : 's were'} saved (${lastSave.data.applied.map((change) => FIELD_BY_KEY.get(change.key)?.label ?? change.key).join(', ')}) before one failed.`}{' '}
+                    <span className="font-medium">
+                      {FIELD_BY_KEY.get(lastSave.data.failed.change.key)?.label ?? lastSave.data.failed.change.key}
+                    </span>{' '}
+                    and anything after it are still unsaved.
+                  </p>
+                  <Problem problem={lastSave.data.failed.problem} />
+                </div>
+              ) : null}
+
+              <div className="grid gap-6 lg:grid-cols-[11rem_minmax(0,1fr)]">
+                <nav aria-label="Settings sections" className="hidden lg:block">
+                  <ul className="sticky top-0 space-y-1 text-sm">
+                    {groups.map(({ group }) => {
+                      const count = changedIn(group.id);
+                      return (
+                        <li key={group.id}>
+                          <a
+                            href={`#settings-${group.id}`}
+                            aria-current={activeSection === group.id ? 'location' : undefined}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setActiveSection(group.id);
+                              document.getElementById(`settings-${group.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                            className={cn(
+                              'flex items-center justify-between rounded-md border-l-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground',
+                              activeSection === group.id
+                                ? 'border-primary bg-accent font-medium text-foreground'
+                                : 'border-transparent text-muted-foreground',
+                            )}
+                          >
+                            {group.title}
+                            {count > 0 ? (
+                              <span className="rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
+                                <span className="sr-only">, changed: </span>
+                                {count}
+                              </span>
+                            ) : null}
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+
+                {/* Disabled while a save is in flight and until its reload lands — see `busy`. */}
+                <fieldset disabled={busy} aria-busy={busy} className="min-w-0 space-y-6">
+                  {groups.map(({ group, fields }) => (
+                    <section
+                      key={group.id}
+                      id={`settings-${group.id}`}
+                      aria-labelledby={`settings-${group.id}-title`}
+                      className="scroll-mt-4 rounded-xl border bg-card text-card-foreground shadow-sm"
+                    >
+                      <header className="border-b px-5 py-4">
+                        <h3 id={`settings-${group.id}-title`} className="font-semibold">
+                          {group.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">{group.description}</p>
+                      </header>
+                      <div className="divide-y px-5">
+                        {fields.map((field) => {
+                          const fieldState = fieldStates.get(field.key) as FieldState;
+                          const dependency = field.dependsOn;
+                          const dimmed =
+                            dependency !== undefined && fieldStates.get(dependency.key)?.effective === false;
+                          return (
+                            <div key={field.key}>
+                              <FieldRow
+                                field={field}
+                                state={fieldState}
+                                dimmed={dimmed}
+                                onDraft={(input) => setDraft(field.key, input)}
+                                onUndo={() => undo(field.key)}
+                                onReset={() => markReset(field.key)}
+                              />
+                              {/* Right under the pair it draws, not at the end of the group. */}
+                              {field.key === 'context_window_percent_limit' ? <ContextMeter states={fieldStates} /> : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+
+                  {others.length > 0 ? (
+                    <section
+                      aria-labelledby="settings-other-title"
+                      className="rounded-xl border bg-card text-card-foreground shadow-sm"
+                    >
+                      <header className="border-b px-5 py-4">
+                        <h3 id="settings-other-title" className="font-semibold">
+                          Other
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Keys this app does not know how to edit yet. Change them with{' '}
+                          <code className="font-mono text-xs">devteam prefs set</code>.
+                        </p>
+                      </header>
+                      <dl className="divide-y px-5">
+                        {others.map((key) => (
+                          <div key={key} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                            <dt className="flex items-center gap-2 font-mono text-xs">
+                              {key}
+                              <OriginBadge origin={loaded?.origin[key]} />
+                              {loaded?.unknown.includes(key) ? <Badge variant="destructive">unknown key</Badge> : null}
+                            </dt>
+                            <dd className="font-mono text-xs text-muted-foreground">{JSON.stringify(loaded?.values[key])}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
+                  ) : null}
+                </fieldset>
+              </div>
+
+              <SaveBar
+                dirtyCount={dirtyCount}
+                invalid={blockingErrors}
+                status={status}
+                saving={busy}
+                canSave={canSave}
+                withheld={gate.withheld ? gate.reason : null}
+                onDiscard={discard}
+                onSave={() => void runSave()}
+              />
+            </>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="plugins" forceMount className="mt-3">
+          {pluginsVisited ? (
+            <ProjectPlugins project={project} environment={environment} onDirtyChange={onPluginDirty} />
+          ) : null}
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={confirmLeave} onOpenChange={setConfirmLeave}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Discard unsaved changes?</DialogTitle>
             <DialogDescription>
-              {dirtyCount} change{dirtyCount === 1 ? '' : 's'} to {name} will be lost.
+              {unsavedTotal} change{unsavedTotal === 1 ? '' : 's'} to {name} will be lost.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -554,6 +589,17 @@ export function ProjectSettings({
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+/** The unsaved-edit count on a tab, announced as text and not only as a number. */
+function TabCount({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
+      <span className="sr-only">, unsaved changes: </span>
+      {count}
+    </span>
   );
 }
 
@@ -705,9 +751,6 @@ function encode(value: unknown): string {
   if (value === null || value === undefined) return NULL_OPTION;
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
-
-const SELECT_CLASS =
-  'h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive dark:bg-input/30';
 
 function Control({
   id,
@@ -981,62 +1024,6 @@ function ContextMeter({ states }: { states: ReadonlyMap<string, FieldState> }) {
         {tokens(warning)} and go critical at <span className="font-medium text-foreground">{limit}%</span>
         {tokens(limit)}.
       </p>
-    </div>
-  );
-}
-
-// ── the save bar ────────────────────────────────────────────────────────────────
-
-function SaveBar({
-  dirtyCount,
-  invalid,
-  status,
-  saving,
-  canSave,
-  withheld,
-  onDiscard,
-  onSave,
-}: {
-  dirtyCount: number;
-  invalid: number;
-  /** The same sentence the screen's always-mounted live region announces. */
-  status: string;
-  saving: boolean;
-  canSave: boolean;
-  withheld: string | null;
-  onDiscard: () => void;
-  onSave: () => void;
-}) {
-  if (dirtyCount === 0 && !saving) return null;
-  const saveButton = (
-    <Button size="sm" disabled={!canSave} onClick={onSave}>
-      {saving ? 'Saving…' : 'Save changes'}
-      {!saving ? (
-        <kbd className="ml-1 rounded border border-current/30 px-1 font-sans text-[10px] opacity-70">⌘S</kbd>
-      ) : null}
-    </Button>
-  );
-  return (
-    <div
-      role="region"
-      aria-label="Unsaved changes"
-      className="sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center justify-between gap-3 border-t bg-card/95 px-6 py-3 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] backdrop-blur"
-    >
-      <p className={cn('text-sm', invalid > 0 ? 'text-destructive' : 'text-muted-foreground')}>
-        {saving ? 'Saving…' : status}
-      </p>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" disabled={saving} onClick={onDiscard}>
-          Discard
-        </Button>
-        {withheld !== null ? (
-          <Hint content={`Withheld: ${withheld}`}>
-            <span className="inline-flex">{saveButton}</span>
-          </Hint>
-        ) : (
-          saveButton
-        )}
-      </div>
     </div>
   );
 }

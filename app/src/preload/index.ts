@@ -23,6 +23,7 @@ import {
   type CopyResumeRequest,
   type CatalogKind,
   type DevteamBridge,
+  type PluginConfigChange,
   type NotificationFeed,
   type PreferenceChange,
   type ProjectId,
@@ -84,6 +85,29 @@ const bridge: DevteamBridge = {
       ),
     ),
 
+  // Plugins (ADR-0017). Names and ids are coerced to strings and the change list is rebuilt
+  // into plain objects, as above; `main/ipc.ts` validates each against the project's own
+  // `plugin list` answer regardless.
+  projectPlugins: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.projectPlugins, String(projectId)),
+  setPluginEnabled: (projectId: ProjectId, name: string, enabled: boolean) =>
+    ipcRenderer.invoke(CHANNELS.setPluginEnabled, String(projectId), String(name), enabled === true),
+  updatePluginConfig: (projectId: ProjectId, name: string, changes: readonly PluginConfigChange[]) =>
+    ipcRenderer.invoke(
+      CHANNELS.updatePluginConfig,
+      String(projectId),
+      String(name),
+      changes.map((change) =>
+        change.action === 'unset'
+          ? { key: String(change.key), action: 'unset' }
+          : {
+              key: String(change.key),
+              action: 'set',
+              value: Array.isArray(change.value) ? [...(change.value as readonly string[])] : change.value,
+            },
+      ),
+    ),
+  runPluginAction: (projectId: ProjectId, name: string, actionId: string) =>
+    ipcRenderer.invoke(CHANNELS.runPluginAction, String(projectId), String(name), String(actionId)),
   notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),
   markNotificationsRead: () => ipcRenderer.invoke(CHANNELS.markNotificationsRead),
   setNotificationsPaused: (paused: boolean) => ipcRenderer.invoke(CHANNELS.setNotificationsPaused, paused === true),
