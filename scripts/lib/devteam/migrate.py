@@ -22,7 +22,7 @@ from pathlib import Path
 
 from . import bind as bind_module
 from . import project, providers, quarantine, registry, versions
-from .errors import UsageError
+from .errors import ConflictError, UsageError
 
 #: Everything a v2 install placed under ``.dev-team-agents/`` that a bind
 #: replaces. Anything else found there is reported and left alone.
@@ -31,6 +31,53 @@ VENDORED_FILES = ("VERSION", "CHANGELOG.md", "CLAUDE.md", "README.md")
 
 #: Never quarantined, never rewritten.
 PRESERVED = ("user-data", "project.json", ".worktree-session", ".learn-last-run")
+
+
+#: Where a v2 install lived before v2.1.0 moved it to the project root.
+PRE_ROOT_DIR = Path(".claude") / "dev-team-agents"
+
+
+def pre_root_install(project_root):
+    """True when a pre-v2.1.0 install still sits at ``.claude/dev-team-agents/``.
+
+    The single answer for `bind`, `migrate` and `doctor`. `detect` looks only at the
+    project root, so this shape passed `bind`'s v2 refusal and collided halfway through,
+    on the relative links it had committed (`.claude/agents/dev-team ->
+    ../dev-team-agents/agents`).
+    """
+    return (Path(project_root) / PRE_ROOT_DIR).is_dir()
+
+
+def _migrate_to_root_script():
+    # The copy in the active store version, which is the one this CLI ships with; a
+    # pre-v2.1.0 install does not carry the script itself.
+    try:
+        script = versions.version_dir(versions.resolve()) / "scripts" / "migrate-to-root.sh"
+    except Exception:  # noqa: BLE001 - a hint must never be the reason a refusal fails
+        script = None
+    return str(script) if script is not None and script.is_file() else "scripts/migrate-to-root.sh"
+
+
+def pre_root_error(project_root):
+    """The refusal for a pre-root install: move it first, then migrate."""
+    root = Path(project_root)
+    hint = (
+        "Move it first: from {} run `bash \"{}\"`, commit the move, then run "
+        "`devteam migrate`.".format(root, _migrate_to_root_script())
+    )
+    if (root / project.PROJECT_DIR).exists():
+        # migrate-to-root.sh refuses to move onto an existing directory — typically
+        # one an earlier, failed bind attempt left holding only project.json.
+        hint += (
+            " {}/ already exists here, and the script will not move onto it: move it "
+            "aside first.".format(project.PROJECT_DIR)
+        )
+    return ConflictError(
+        "{} has a v2 install from before v2.1.0 at {}/ — binding would collide with the "
+        "links it committed".format(root, PRE_ROOT_DIR.as_posix()),
+        hint=hint,
+        details={"path": str(root / PRE_ROOT_DIR)},
+    )
 
 
 def detect(project_root):
@@ -174,6 +221,10 @@ def _git_tracked(project_root, relative):
 def plan(root=None, provider_names=None, mode="auto"):
     """Describe what a migration would do. Reads only."""
     project_root = project.resolve_root(root)
+    # Before `detect`, which would call this "nothing to migrate": the tree is one
+    # directory deeper, and `migrate-to-root.sh` is what moves it (and its links).
+    if pre_root_install(project_root):
+        raise pre_root_error(project_root)
     found = detect(project_root)
     if not found["is_v2"]:
         raise UsageError(

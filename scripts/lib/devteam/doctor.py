@@ -42,18 +42,6 @@ def _points_into(target, version):
         return False
 
 
-def _legacy_root_install(root):
-    """True when a pre-root install still sits at ``.claude/dev-team-agents/``.
-
-    That path predates ADR's move of the install to the project root, and
-    ``scripts/migrate-to-root.sh`` is the one thing that knows how to relocate it —
-    it rewrites the Claude Code symlinks and the hook paths in ``.claude/settings.json``
-    along with the move. No python module tracks this shape today, so it is checked
-    directly rather than invented as a new helper on ``project`` for a single caller.
-    """
-    return (Path(root) / ".claude" / "dev-team-agents").is_dir()
-
-
 def _finding(level, category, message, hint=None):
     item = {"level": level, "category": category, "message": message}
     if hint:
@@ -283,18 +271,11 @@ def check_project(project_root):
                     "tree into a dated quarantine rather than deleting it.",
                 )
             )
-        elif _legacy_root_install(root):
-            findings.append(
-                _finding(
-                    WARN,
-                    "project",
-                    "{} still has the pre-root install at .claude/dev-team-agents/".format(root),
-                    "Run `scripts/migrate-to-root.sh` — it moves the install to "
-                    "{}/ and updates the Claude Code symlinks and hook paths.".format(
-                        project.PROJECT_DIR
-                    ),
-                )
-            )
+        elif migrate.pre_root_install(root):
+            # The same words `bind` and `migrate` refuse with, so the three never
+            # disagree about what to run.
+            refusal = migrate.pre_root_error(root)
+            findings.append(_finding(WARN, "project", refusal.message, refusal.hint))
         else:
             findings.append(
                 _finding(

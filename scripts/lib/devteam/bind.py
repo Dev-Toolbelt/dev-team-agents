@@ -149,6 +149,10 @@ def symlink_supported(project_root):
     attempt answers the question.
     """
     probe_root = Path(project_root) / project.PROJECT_DIR
+    # A probe that created the directory removes it again: the bind may still be
+    # refused, and a refused bind must leave no `.dev-team-agents/` behind (a pre-v2.1.0
+    # install's `migrate-to-root.sh` refuses to move onto one).
+    created = not probe_root.exists()
     try:
         probe_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=str(probe_root)) as tmp:
@@ -159,6 +163,12 @@ def symlink_supported(project_root):
             return link.is_symlink()
     except (OSError, NotImplementedError, AttributeError):
         return False
+    finally:
+        if created:
+            try:
+                probe_root.rmdir()  # only ever empty here; never removes content
+            except OSError:
+                pass
 
 
 def resolve_mode(requested, project_root):
@@ -318,6 +328,56 @@ def _retire_artifact(path, project_id, project_root, group="replaced"):
     return "quarantined", destination
 
 
+def _foreign_path_error(dest):
+    return ConflictError(
+        "{} already exists and was not created by dev-team-agents".format(dest),
+        # `bind`, not only `sync`: a first bind lands here too, on a project that has
+        # nothing to sync yet.
+        hint="Move or remove it, then run `devteam bind` again (or `devteam sync` for a "
+        "project that is already bound).",
+        details={"path": str(dest)},
+    )
+
+
+def _v2_runtime_tree_error(dest, rel):
+    return ConflictError(
+        "{} is a v2 vendored tree, where this bind links {}".format(dest, rel),
+        hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+        "old tree into a dated quarantine rather than deleting it.",
+        details={"path": str(dest)},
+    )
+
+
+def _preflight(version_dir, project_root, mode, selected, previous_paths, previous_copies):
+    """Refuse a bind that would collide, before anything is written.
+
+    The same conditions `_materialize` and `_runtime_root` refuse on, checked for every
+    destination up front. Found in the middle of the bind, a collision left
+    `project.json` behind on a project that was never bound — and a pre-v2.1.0 install's
+    own `migrate-to-root.sh` then refused to run, because `.dev-team-agents/` existed.
+    Vendored mode quarantines what it finds, so it has nothing to refuse here.
+    """
+    if mode == "vendored":
+        return
+    root = Path(project_root)
+    if "claude" in selected:
+        for rel_path, _source in providers.claude_artifacts(version_dir):
+            dest = root / rel_path
+            if (dest.exists() or dest.is_symlink()) and not _is_managed_path(
+                rel_path.as_posix(), dest, previous_paths, project_root
+            ):
+                raise _foreign_path_error(dest)
+    for name in RUNTIME_TREES:
+        rel = (Path(project.PROJECT_DIR) / name).as_posix()
+        dest = root / rel
+        if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
+            raise _v2_runtime_tree_error(dest, rel)
+        if name == "plugins" and not (Path(version_dir) / name).exists():
+            continue  # `_runtime_root` skips it too
+        if (dest.exists() or dest.is_symlink()) and not _is_managed_path(rel, dest, previous_paths, project_root):
+            raise _foreign_path_error(dest)
+
+
 def _materialize(source, dest, mode, previous_paths, rel, project_root, project_id, retired):
     """Create one artifact, returning ``link`` or ``copy``.
 
@@ -332,11 +392,7 @@ def _materialize(source, dest, mode, previous_paths, rel, project_root, project_
 
     if dest.exists() or dest.is_symlink():
         if not _is_managed_path(rel, dest, previous_paths, project_root):
-            raise ConflictError(
-                "{} already exists and was not created by dev-team-agents".format(dest),
-                hint="Move or remove it, then run `devteam sync` again.",
-                details={"path": str(dest)},
-            )
+            raise _foreign_path_error(dest)
         action, destination = _retire_artifact(dest, project_id, project_root)
         if action == "quarantined":
             retired.append({"path": rel, "to": str(destination)})
@@ -527,12 +583,7 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
         rel = rel_path.as_posix()
         dest = Path(project_root) / rel_path
         if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
-            raise ConflictError(
-                "{} is a v2 vendored tree, where this bind links {}".format(dest, rel),
-                hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
-                "old tree into a dated quarantine rather than deleting it.",
-                details={"path": str(dest)},
-            )
+            raise _v2_runtime_tree_error(dest, rel)
         if not (Path(version_dir) / name).exists() and name == "plugins":
             # A core version older than ADR-0019 has no plugins tree; refusing the whole
             # bind for that would strand a project pinned to it.
@@ -579,14 +630,17 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     if fallback_reason and emitter:
         emitter.warn("mode=copy: {}".format(fallback_reason))
 
-    data, created_identity = project.ensure(project_root)
-    project_id = data["project_id"]
+    # The identity is READ here and written only after the preflight below: a first
+    # bind that collides must leave the project exactly as it found it. `known_id` is
+    # None for a project never bound, which has no registry entry and no manifest.
+    identity = project.load(project_root)
+    known_id = identity["project_id"] if identity is not None else None
 
     # `pin=None` means "leave the pin alone", not "clear it". Reading the stored
     # pin here is what stops a bare `devteam bind` from silently moving a pinned
     # project to `current` — the spec calls bind idempotent, and it is the one
     # command a user re-runs casually.
-    existing = registry.get(project_id)
+    existing = registry.get(known_id) if known_id is not None else None
     effective_pin = pin if pin is not None else (existing or {}).get("pin")
 
     # The registry collision check must also precede the writes, so a refused
@@ -604,22 +658,27 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
                 is_worktree_of_bound = True
             else:
                 raise ConflictError(
-                    "project_id {} is already bound to {}".format(project_id, other),
+                    "project_id {} is already bound to {}".format(known_id, other),
                     hint=(
                         "Two checkouts share one identity. Run `devteam doctor "
                         "--reassign-identity` in the copy that should get a new one."
                     ),
-                    details={"project_id": project_id, "bound_path": str(other)},
+                    details={"project_id": known_id, "bound_path": str(other)},
                 )
 
     version = versions.resolve(effective_pin)
     version_dir = versions.require(version)
 
-    previous = read_manifest(project_id)
+    previous = read_manifest(known_id) if known_id is not None else {}
     previous_paths = {item.get("path") for item in previous.get("artifacts", [])}
     previous_copies = {
         item.get("path") for item in previous.get("artifacts", []) if item.get("kind") == "copy"
     }
+    _preflight(version_dir, project_root, resolved_mode, selected, previous_paths, previous_copies)
+
+    # The first write.
+    data, created_identity = project.ensure(project_root)
+    project_id = data["project_id"]
 
     artifacts = []
     retired = []

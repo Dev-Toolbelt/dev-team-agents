@@ -208,8 +208,13 @@ def cmd_bind(args, emitter):
     # links and left the vendored tree tracked in git, where `doctor` could no longer
     # see it. `--mode vendored` is let through: that path already quarantines any
     # existing tree before re-vendoring.
+    #
+    # The pre-v2.1.0 shape, `.claude/dev-team-agents/`, is refused in every mode: no
+    # mode moves it, and its committed links collide with the ones any bind writes.
+    root = project.resolve_root(args.path)
+    if root.is_dir() and migrate.pre_root_install(root):
+        raise migrate.pre_root_error(root)
     if args.mode != "vendored":
-        root = project.resolve_root(args.path)
         leftover = migrate.leftover_trees(root) if root.is_dir() else []
         if leftover:
             raise ConflictError(

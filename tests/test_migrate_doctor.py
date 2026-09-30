@@ -1,6 +1,7 @@
 """v2 -> v3 migration, and the diagnostics that reconcile identity."""
 
 import json
+import os
 import shutil
 import subprocess
 import unittest
@@ -183,6 +184,58 @@ class BindOverV2Test(StoreTestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("devteam migrate", payload["hint"])
         self.assertIsNone(project.load(root) and registry.get(project.load(root)["project_id"]))
+
+    def _pre_root_project(self, name="pre-root"):
+        """A pre-v2.1.0 install: the tree under `.claude/`, and the link it committed."""
+        root = self.new_project(name)
+        legacy = root / ".claude" / "dev-team-agents" / "agents"
+        legacy.mkdir(parents=True)
+        (legacy / "backend-developer.md").write_text("# agent\n", encoding="utf-8")
+        (root / ".claude" / "agents").mkdir()
+        os.symlink("../dev-team-agents/agents", str(root / ".claude" / "agents" / "dev-team"))
+        return root
+
+    def test_the_bind_command_refuses_a_pre_root_install_in_every_mode_and_writes_nothing(self):
+        # Found binding a real project: this shape passed the v2 refusal, collided on
+        # its own committed link, and left `project.json` — which then made
+        # `migrate-to-root.sh` refuse, since `.dev-team-agents/` existed.
+        for mode in ("link", "vendored"):
+            with self.subTest(mode):
+                root = self._pre_root_project("pre-root-" + mode)
+                code, out, _ = self.run_cli(
+                    "--json", "bind", str(root), "--provider", "claude", "--mode", mode
+                )
+                self.assertEqual(code, 4)
+                payload = json.loads(out)
+                self.assertIn(".claude/dev-team-agents", payload["error"])
+                self.assertIn("migrate-to-root.sh", payload["hint"])
+                self.assertIn("devteam migrate", payload["hint"])
+                self.assertFalse((root / project.PROJECT_DIR).exists())
+
+    def test_the_pre_root_hint_says_when_a_stale_install_dir_is_in_the_way(self):
+        root = self._pre_root_project()
+        (root / project.PROJECT_DIR).mkdir()
+        (root / project.PROJECT_DIR / "project.json").write_text("{}", encoding="utf-8")
+        self.assertIn("move it aside", migrate.pre_root_error(root).hint)
+
+    def test_migrate_refuses_a_pre_root_install_with_the_same_words(self):
+        root = self._pre_root_project()
+        with self.assertRaises(ConflictError) as caught:
+            migrate.plan(root)
+        resolved = project.resolve_root(root)
+        self.assertEqual(caught.exception.message, migrate.pre_root_error(resolved).message)
+
+    def test_a_first_bind_that_collides_leaves_no_project_json(self):
+        # Every destination is checked before the identity is written.
+        root = self.new_project("collides")
+        (root / ".claude" / "agents").mkdir(parents=True)
+        (root / ".claude" / "agents" / "dev-team").write_text("mine\n", encoding="utf-8")
+        with self.assertRaises(ConflictError) as caught:
+            bind.bind(root, provider_names=["claude"], mode="link")
+        self.assertIn("devteam bind", caught.exception.hint)
+        self.assertIsNone(project.load(root))
+        self.assertFalse((root / project.PROJECT_DIR).exists())
+        self.assertEqual((root / ".claude" / "agents" / "dev-team").read_text(encoding="utf-8"), "mine\n")
 
     def test_the_bind_command_still_accepts_an_explicit_vendored_bind(self):
         root = self._install_sh_project()
