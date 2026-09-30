@@ -45,6 +45,11 @@ const { binary: FAKE_BINARY, available: launcherAvailable } = resolveFixtureBina
   readLauncherManifest()?.fakeDevteamWrite,
 );
 
+/** Where the renderer lives; the sender check trusts a main frame at exactly this URL. */
+const TRUSTED_RENDERER = { indexUrl: 'file:///app/dist/renderer/index.html', devServerOrigin: null } as const;
+/** The event a handler receives from the renderer's own main frame. */
+const TRUSTED = { senderFrame: { url: TRUSTED_RENDERER.indexUrl, parent: null } };
+
 const skipOnWindows = process.platform === 'win32';
 const skipOnWindowsWithoutLauncher = skipOnWindows && !launcherAvailable;
 
@@ -93,7 +98,7 @@ async function loadIpc(): Promise<{
 
 async function registerAgainstFake(registerIpc: typeof IpcModule.registerIpc): Promise<void> {
   await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE_BINARY }), 'utf8');
-  registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
+  registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
 }
 
 // ── validateBindRequest — pure, no electron, no CLI ────────────────────────────────
@@ -173,7 +178,7 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
     await registerAgainstFake(registerIpc);
 
-    const result = await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    const result = await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
     expect(result).toEqual({ chosen: true, path: '/chosen/dir' });
   });
 
@@ -182,14 +187,14 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] });
     await registerAgainstFake(registerIpc);
 
-    const choice = await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    const choice = await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
     expect(choice).toEqual({ chosen: false });
 
     // Nothing was offered, so bindProject must refuse any path at all — including one
     // that merely looks plausible.
     const bound = (await handlers
       .get(CHANNELS.bindProject)
-      ?.({}, { path: '/looks/plausible' })) as { readonly ok: false; readonly kind: string; readonly message: string };
+      ?.(TRUSTED, { path: '/looks/plausible' })) as { readonly ok: false; readonly kind: string; readonly message: string };
     expect(bound.ok).toBe(false);
     expect(bound.kind).toBe('refused');
     expect(bound.message).toContain('never offered');
@@ -199,7 +204,7 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const result = (await handlers.get(CHANNELS.bindProject)?.({}, { path: '/repo/project-1' })) as {
+    const result = (await handlers.get(CHANNELS.bindProject)?.(TRUSTED, { path: '/repo/project-1' })) as {
       readonly ok: false;
       readonly kind: string;
       readonly command: string;
@@ -218,9 +223,9 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
     showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
     await registerAgainstFake(registerIpc);
 
-    await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
     const result = (await handlers.get(CHANNELS.bindProject)?.(
-      {},
+      TRUSTED,
       { path: '/chosen/dir', providers: ['claude', 'codex'], mode: 'link' },
     )) as { readonly command: string };
 
@@ -237,11 +242,11 @@ describe('bindProject stores a name only after the bind succeeds, and never in t
     await registerAgainstFake(registerIpc);
 
     // Nothing stored before the bind.
-    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({});
 
-    await handlers.get(CHANNELS.chooseProjectDirectory)?.();
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
     const bound = (await handlers.get(CHANNELS.bindProject)?.(
-      {},
+      TRUSTED,
       { path: '/chosen/dir', name: 'My Project' },
     )) as { readonly command: string; readonly ok: boolean };
     expect(bound.ok).toBe(true);
@@ -250,7 +255,7 @@ describe('bindProject stores a name only after the bind succeeds, and never in t
     // nowhere in the one that did run.
     expect(bound.command).not.toContain('My Project');
 
-    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({ 'proj-1': 'My Project' });
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({ 'proj-1': 'My Project' });
   });
 
   it.skipIf(skipOnWindowsWithoutLauncher)('stores nothing when bindProject is called with no name', async () => {
@@ -258,10 +263,10 @@ describe('bindProject stores a name only after the bind succeeds, and never in t
     showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
     await registerAgainstFake(registerIpc);
 
-    await handlers.get(CHANNELS.chooseProjectDirectory)?.();
-    await handlers.get(CHANNELS.bindProject)?.({}, { path: '/chosen/dir' });
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
+    await handlers.get(CHANNELS.bindProject)?.(TRUSTED, { path: '/chosen/dir' });
 
-    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({});
   });
 
   it('a refused bind (path never offered) never reaches name storage', async () => {
@@ -269,12 +274,12 @@ describe('bindProject stores a name only after the bind succeeds, and never in t
     await registerAgainstFake(registerIpc);
 
     const bound = (await handlers.get(CHANNELS.bindProject)?.(
-      {},
+      TRUSTED,
       { path: '/never/offered', name: 'Should Not Be Stored' },
     )) as { readonly ok: boolean };
     expect(bound.ok).toBe(false);
 
-    expect(await handlers.get(CHANNELS.projectNames)?.()).toEqual({});
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({});
   });
 });
 
@@ -295,7 +300,7 @@ describe('write actions resolve project_id against list, never trust a path from
     for (const [channel, args] of channels) {
       const handler = handlers.get(channel);
       if (handler === undefined) throw new Error(`no handler registered for ${channel}`);
-      const result = (await handler({}, ...args)) as {
+      const result = (await handler(TRUSTED, ...args)) as {
         readonly ok: false;
         readonly kind: string;
         readonly message: string;
@@ -314,21 +319,21 @@ describe('write actions resolve project_id against list, never trust a path from
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const unbind = (await handlers.get(CHANNELS.unbindProject)?.({}, 'proj-1')) as { readonly command: string };
+    const unbind = (await handlers.get(CHANNELS.unbindProject)?.(TRUSTED, 'proj-1')) as { readonly command: string };
     expect(unbind.command).toContain('unbind --project-id proj-1 --json');
 
-    const sync = (await handlers.get(CHANNELS.syncProject)?.({}, 'proj-1')) as { readonly command: string };
+    const sync = (await handlers.get(CHANNELS.syncProject)?.(TRUSTED, 'proj-1')) as { readonly command: string };
     expect(sync.command).toContain('sync --project-id proj-1 --json');
 
-    const syncAll = (await handlers.get(CHANNELS.syncAllProjects)?.({})) as { readonly command: string };
+    const syncAll = (await handlers.get(CHANNELS.syncAllProjects)?.(TRUSTED)) as { readonly command: string };
     expect(syncAll.command).toContain('sync --all --json');
 
-    const plan = (await handlers.get(CHANNELS.planUpgrade)?.({}, 'proj-1')) as { readonly command: string };
+    const plan = (await handlers.get(CHANNELS.planUpgrade)?.(TRUSTED, 'proj-1')) as { readonly command: string };
     // `upgrade` takes a path, resolved from the id — never the id itself, and never a
     // path the renderer could have supplied.
     expect(plan.command).toContain('upgrade /repo/project-1 --json');
 
-    const apply = (await handlers.get(CHANNELS.applyUpgrade)?.({}, 'proj-1')) as { readonly command: string };
+    const apply = (await handlers.get(CHANNELS.applyUpgrade)?.(TRUSTED, 'proj-1')) as { readonly command: string };
     expect(apply.command).toContain('upgrade /repo/project-1 --apply --json');
   });
 
@@ -336,12 +341,12 @@ describe('write actions resolve project_id against list, never trust a path from
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const released = (await handlers.get(CHANNELS.setPin)?.({}, 'proj-1', null)) as { readonly command: string };
+    const released = (await handlers.get(CHANNELS.setPin)?.(TRUSTED, 'proj-1', null)) as { readonly command: string };
     expect(released.command).toContain('pin --path /repo/project-1 --release --json');
     expect(released.command).not.toContain("pin ''");
     expect(released.command).not.toContain('pin ""');
 
-    const versioned = (await handlers.get(CHANNELS.setPin)?.({}, 'proj-1', '3.1.0')) as { readonly command: string };
+    const versioned = (await handlers.get(CHANNELS.setPin)?.(TRUSTED, 'proj-1', '3.1.0')) as { readonly command: string };
     expect(versioned.command).toContain('pin 3.1.0 --path /repo/project-1 --json');
   });
 
@@ -349,7 +354,7 @@ describe('write actions resolve project_id against list, never trust a path from
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const badId = (await handlers.get(CHANNELS.unbindProject)?.({}, 42)) as {
+    const badId = (await handlers.get(CHANNELS.unbindProject)?.(TRUSTED, 42)) as {
       readonly ok: false;
       readonly kind: string;
       readonly durationMs: number;
@@ -358,7 +363,7 @@ describe('write actions resolve project_id against list, never trust a path from
     expect(badId.kind).toBe('refused');
     expect(badId.durationMs).toBe(0);
 
-    const badVersion = (await handlers.get(CHANNELS.setPin)?.({}, 'proj-1', 42)) as {
+    const badVersion = (await handlers.get(CHANNELS.setPin)?.(TRUSTED, 'proj-1', 42)) as {
       readonly ok: false;
       readonly kind: string;
       readonly durationMs: number;
@@ -376,7 +381,7 @@ describe('project preferences are written to the project layer only, for keys th
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const result = (await handlers.get(CHANNELS.projectPreferences)?.({}, 'proj-1')) as ApiModule.OperationResult<ApiModule.ProjectPreferencesView>;
+    const result = (await handlers.get(CHANNELS.projectPreferences)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.ProjectPreferencesView>;
     expect(result.command).toContain('prefs list --path /repo/project-1 --json');
     if (!result.ok) throw new Error(result.message);
     expect(result.data.origin['model_max_tokens']).toBe('global');
@@ -394,7 +399,7 @@ describe('project preferences are written to the project layer only, for keys th
       { key: 'worktree_active', action: 'set', value: false },
       { key: 'model_max_tokens', action: 'unset' },
     ];
-    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
     if (!result.ok) throw new Error(result.message);
     expect(result.data.failed).toBeNull();
     expect(result.data.applied.map((change) => change.key)).toEqual(['language', 'worktree_active', 'model_max_tokens']);
@@ -409,7 +414,7 @@ describe('project preferences are written to the project layer only, for keys th
       { key: 'model_max_tokens', action: 'set', value: 5000 },
       { key: 'worktree_active', action: 'set', value: false },
     ];
-    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
     if (!result.ok) throw new Error(result.message);
     expect(result.data.applied.map((change) => change.key)).toEqual(['language']);
     expect(result.data.failed?.change.key).toBe('model_max_tokens');
@@ -422,7 +427,7 @@ describe('project preferences are written to the project layer only, for keys th
     await registerAgainstFake(registerIpc);
 
     for (const key of ['not_a_pref', 'mystery_key']) {
-      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', [
         { key: 'language', action: 'set', value: 'es' },
         { key, action: 'set', value: 2 },
       ])) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
@@ -450,7 +455,7 @@ describe('project preferences are written to the project layer only, for keys th
       { key: 'transcript_multiplier', action: 'set', value: 2 },
       { key: 'transcript_multiplier', action: 'unset' },
     ]) {
-      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [change])) as {
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', [change])) as {
         readonly ok: boolean;
         readonly kind: string;
         readonly durationMs: number;
@@ -469,7 +474,7 @@ describe('project preferences are written to the project layer only, for keys th
       { key: 'telemetry', action: 'set', value: true },
     ];
 
-    const declined = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    const declined = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
     expect(showMessageBox).toHaveBeenCalledOnce();
     expect(declined.ok).toBe(false);
     if (declined.ok) throw new Error('unreachable');
@@ -477,13 +482,13 @@ describe('project preferences are written to the project layer only, for keys th
     expect(declined.message).toContain('not confirmed');
 
     showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
-    const accepted = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    const accepted = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
     if (!accepted.ok) throw new Error(accepted.message);
     expect(accepted.data.applied.map((change) => change.key)).toEqual(['language', 'telemetry']);
 
     // Turning one off needs no confirmation.
     showMessageBox.mockClear();
-    const off = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [
+    const off = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', [
       { key: 'telemetry', action: 'set', value: false },
     ])) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
     expect(off.ok).toBe(true);
@@ -506,7 +511,7 @@ describe('project preferences are written to the project layer only, for keys th
         { key: 'language', action: 'unset' },
       ],
     ]) {
-      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as {
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', batch)) as {
         readonly ok: boolean;
         readonly kind: string;
         readonly durationMs: number;
@@ -525,7 +530,7 @@ describe('buildInfo reports write actions honestly', () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const info = (await handlers.get(CHANNELS.buildInfo)?.()) as {
+    const info = (await handlers.get(CHANNELS.buildInfo)?.(TRUSTED)) as {
       readonly hasWriteActions: boolean;
       readonly mutatingCommandsRun: readonly string[];
     };
@@ -543,7 +548,7 @@ describe('environment withholds every gated command when the declaration could n
   it('lists every gated command in withheld, spelled as exact subcommand words', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE }), 'utf8');
-    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
 
     // No write permission on the directory itself: `writeDeclarationFile` creates a new
     // temp file there, which fails closed rather than silently succeeding. Restored in
@@ -551,7 +556,7 @@ describe('environment withholds every gated command when the declaration could n
     // does not run early enough to beat the outer `afterEach`'s `rm(dir, ...)`.
     await chmod(dir, 0o500);
     try {
-      const report = (await handlers.get(CHANNELS.environment)?.()) as {
+      const report = (await handlers.get(CHANNELS.environment)?.(TRUSTED)) as {
         readonly declaration: { readonly state: string };
         readonly withheld: readonly { readonly command: string; readonly reason: string }[];
       };
@@ -567,7 +572,7 @@ describe('environment withholds every gated command when the declaration could n
         expect(entry.reason).toContain('schema declaration');
       }
 
-      const unbind = (await handlers.get(CHANNELS.unbindProject)?.({}, 'proj-1')) as {
+      const unbind = (await handlers.get(CHANNELS.unbindProject)?.(TRUSTED, 'proj-1')) as {
         readonly ok: false;
         readonly kind: string;
         readonly message: string;
@@ -594,11 +599,134 @@ describe('projectName names a burst of notifications with one `devteam list`', (
     );
     await chmod(wrapper, 0o755);
     await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: wrapper }), 'utf8');
-    const ipc = registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
+    const ipc = registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
 
     const names = await Promise.all(Array.from({ length: 5 }, () => ipc.projectName('proj-1')));
     expect(names).toEqual(Array.from({ length: 5 }, () => 'project-1'));
     expect((await readFile(log, 'utf8')).trim().split('\n')).toEqual(['list']);
+  });
+});
+
+// ── the IPC sender check ──────────────────────────────────────────────────────
+
+describe('every channel refuses a sender that is not the renderer\'s main frame', () => {
+  it('rejects a foreign page, a subframe and a missing frame on every registered channel', async () => {
+    const { handlers, registerIpc } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const { registerNotificationIpc } = await import('../src/main/notificationIpc.js');
+    registerNotificationIpc({
+      trustedRenderer: TRUSTED_RENDERER,
+      feed: () => ({ status: 'live', detail: null, items: [], unread: 0, paused: false }),
+      markRead: () => ({ status: 'live', detail: null, items: [], unread: 0, paused: false }),
+      setPaused: () => ({ status: 'live', detail: null, items: [], unread: 0, paused: false }),
+      backgroundSettings: () => Promise.reject(new Error('must not run')),
+      setOpenAtLogin: () => Promise.reject(new Error('must not run')),
+      takePendingProject: () => null,
+    });
+    expect(handlers.size).toBeGreaterThan(20);
+
+    const strangers = [
+      { senderFrame: { url: 'file:///tmp/evil.html', parent: null } },
+      { senderFrame: { url: TRUSTED_RENDERER.indexUrl, parent: {} } },
+      { senderFrame: null },
+      {},
+    ];
+    for (const [channel, handler] of handlers) {
+      for (const stranger of strangers) {
+        // Sync throw or rejection are both a refusal; what must not happen is an answer.
+        await expect(Promise.resolve().then(() => handler(stranger)), channel).rejects.toThrow(/refused/);
+      }
+    }
+  });
+
+  it('lets the renderer\'s main frame through, with or without a hash', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const withHash = { senderFrame: { url: `${TRUSTED_RENDERER.indexUrl}#/projects`, parent: null } };
+    expect(await handlers.get(CHANNELS.projectNames)?.(withHash)).toEqual({});
+  });
+});
+
+// ── pin validation ────────────────────────────────────────────────────────────
+
+describe('a pin must look like a version', () => {
+  const HOSTILE = ['../x', '../../etc', '/abs/path', 'a/b', '-x', '--release', '', ' ', '1.2.3 ', ' 1.2.3', '1.2', '1.2.3/..', '1.2.3\n', 'latest', 'v1.2.3;rm'];
+  const VALID = ['3.1.0', 'v3.1.0', '3.1.0-rc.1', '3.1.0+build.5', '10.20.30'];
+
+  it('validateBindRequest refuses a hostile pin and accepts a version or null', async () => {
+    const { validateBindRequest } = await loadIpc();
+    const offered = new Set(['/p']);
+    for (const pin of HOSTILE) {
+      expect(typeof validateBindRequest({ path: '/p', pin }, offered), JSON.stringify(pin)).toBe('string');
+    }
+    for (const pin of VALID) {
+      expect(validateBindRequest({ path: '/p', pin }, offered), pin).toMatchObject({ pin });
+    }
+    expect(validateBindRequest({ path: '/p', pin: null }, offered)).toMatchObject({ pin: null });
+  });
+
+  it('the setPin channel refuses a hostile version before any command is built', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    for (const version of HOSTILE) {
+      const result = (await handlers.get(CHANNELS.setPin)?.(TRUSTED, 'proj-1', version)) as {
+        readonly ok: boolean;
+        readonly kind: string;
+        readonly durationMs: number;
+      };
+      expect(result.ok, JSON.stringify(version)).toBe(false);
+      expect(result.kind).toBe('refused');
+      expect(result.durationMs).toBe(0);
+    }
+  });
+
+  it('setPin in operations refuses on its own, for a caller that skipped the handler', async () => {
+    const { setPin } = await import('../src/cli/operations.js');
+    const result = await setPin({ binary: '/no/such/binary', cwd: dir }, '/repo/p', '../x');
+    expect(result).toMatchObject({ ok: false, kind: 'refused', durationMs: 0 });
+  });
+});
+
+// ── resolution caching ────────────────────────────────────────────────────────
+
+describe('the CLI resolution', () => {
+  it.skipIf(skipOnWindows)('is probed once for callers that arrive while it is in flight', async () => {
+    const { registerIpc } = await loadIpc();
+    const log = join(dir, 'probes.log');
+    const wrapper = join(dir, 'devteam');
+    await writeFile(
+      wrapper,
+      `#!/bin/sh\ncase " $* " in *" version "*) echo v >> '${log}'; sleep 0.3 ;; esac\nexec '${FAKE_BINARY}' "$@"\n`,
+      'utf8',
+    );
+    await chmod(wrapper, 0o755);
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: wrapper }), 'utf8');
+    const ipc = registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+
+    const contexts = await Promise.all(Array.from({ length: 5 }, () => ipc.context()));
+    expect(new Set(contexts.map((ctx) => ctx?.binary)).size).toBe(1);
+    // Mutation: caching only the finished result starts one probe per caller.
+    expect((await readFile(log, 'utf8')).trim().split('\n')).toHaveLength(1);
+  });
+
+  it.skipIf(skipOnWindows)('does not let a probe that started before a reset fill the cache', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    const slow = join(dir, 'slow-devteam');
+    const fast = join(dir, 'fast-devteam');
+    await writeFile(slow, `#!/bin/sh\ncase " $* " in *" version "*) sleep 0.8 ;; esac\nexec '${FAKE_BINARY}' "$@"\n`, 'utf8');
+    await writeFile(fast, `#!/bin/sh\nexec '${FAKE_BINARY}' "$@"\n`, 'utf8');
+    await chmod(slow, 0o755);
+    await chmod(fast, 0o755);
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: slow }), 'utf8');
+    const ipc = registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+
+    const stale = ipc.context();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: fast }), 'utf8');
+    await handlers.get(CHANNELS.resolveCli)?.(TRUSTED);
+    await stale;
+    // The reset picked `fast`; the stale probe finishing afterwards must not put `slow` back.
+    expect((await ipc.context())?.binary).toBe(fast);
   });
 });
 
@@ -628,11 +756,11 @@ describe('the skills handlers', () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
 
-    const listed = (await handlers.get(CHANNELS.listSkills)?.({}, 'codex')) as { readonly command: string; readonly ok: boolean };
+    const listed = (await handlers.get(CHANNELS.listSkills)?.(TRUSTED, 'codex')) as { readonly command: string; readonly ok: boolean };
     expect(listed.ok).toBe(true);
     expect(listed.command).toContain('skills list --provider codex --json');
 
-    const refused = (await handlers.get(CHANNELS.listSkills)?.({}, '--all')) as { readonly ok: boolean; readonly kind: string };
+    const refused = (await handlers.get(CHANNELS.listSkills)?.(TRUSTED, '--all')) as { readonly ok: boolean; readonly kind: string };
     expect(refused.ok).toBe(false);
     expect(refused.kind).toBe('refused');
   });
@@ -643,7 +771,7 @@ describe('the skills handlers', () => {
     showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/my-skill'] });
 
     const answer = (await handlers.get(CHANNELS.installSkill)?.(
-      {},
+      TRUSTED,
       { source: 'folder', providers: ['claude', 'opencode'], replace: false, link: true },
     )) as { readonly picked: true; readonly source: string; readonly result: { readonly ok: boolean; readonly command: string } };
 
@@ -662,7 +790,7 @@ describe('the skills handlers', () => {
     await registerAgainstFake(registerIpc);
 
     const linked = (await handlers.get(CHANNELS.installSkill)?.(
-      {},
+      TRUSTED,
       { source: 'archive', providers: ['claude'], replace: false, link: true },
     )) as { readonly result: { readonly ok: boolean; readonly kind: string } };
     expect(linked.result.ok).toBe(false);
@@ -670,7 +798,7 @@ describe('the skills handlers', () => {
     expect(showOpenDialog).not.toHaveBeenCalled();
 
     showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/pack.skill'] });
-    await handlers.get(CHANNELS.installSkill)?.({}, { source: 'archive', providers: ['claude'], replace: false, link: false });
+    await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { source: 'archive', providers: ['claude'], replace: false, link: false });
     expect(showOpenDialog.mock.calls[0]?.[0]).toMatchObject({
       properties: ['openFile'],
       filters: [{ extensions: ['zip', 'skill'] }],
@@ -680,7 +808,7 @@ describe('the skills handlers', () => {
   it.skipIf(skipOnWindowsWithoutLauncher)('a dismissed picker runs nothing', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
-    const answer = await handlers.get(CHANNELS.installSkill)?.({}, { source: 'folder', providers: ['claude'], replace: false, link: false });
+    const answer = await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { source: 'folder', providers: ['claude'], replace: false, link: false });
     expect(answer).toEqual({ picked: false });
   });
 
@@ -690,13 +818,13 @@ describe('the skills handlers', () => {
     showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/clash'] });
     const request = { providers: ['claude'], replace: false, link: false };
 
-    const first = (await handlers.get(CHANNELS.installSkill)?.({}, { ...request, source: 'folder' })) as {
+    const first = (await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { ...request, source: 'folder' })) as {
       readonly result: { readonly ok: boolean; readonly kind?: string; readonly exitCode?: number };
     };
     expect(first.result.ok).toBe(false);
     expect(first.result.kind).toBe('conflict');
 
-    const retry = (await handlers.get(CHANNELS.installSkill)?.({}, { ...request, source: 'previous', replace: true })) as {
+    const retry = (await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { ...request, source: 'previous', replace: true })) as {
       readonly source: string;
       readonly result: { readonly ok: boolean; readonly command: string };
     };
@@ -712,18 +840,18 @@ describe('the skills handlers', () => {
     const remove = handlers.get(CHANNELS.removeSkill);
     if (remove === undefined) throw new Error('no removeSkill handler');
 
-    const unknown = (await remove({}, { name: 'ghost', root: 'claude' })) as { readonly ok: boolean; readonly command: string };
+    const unknown = (await remove(TRUSTED, { name: 'ghost', root: 'claude' })) as { readonly ok: boolean; readonly command: string };
     expect(unknown.ok).toBe(false);
     expect(unknown.command).toBe('devteam skills list');
 
-    const managed = (await remove({}, { name: 'framework-owned', root: 'claude' })) as { readonly ok: boolean; readonly message: string };
+    const managed = (await remove(TRUSTED, { name: 'framework-owned', root: 'claude' })) as { readonly ok: boolean; readonly message: string };
     expect(managed.ok).toBe(false);
     expect(managed.message).toContain('managed');
 
-    const flagLike = (await remove({}, { name: '--root', root: 'claude' })) as { readonly ok: boolean; readonly kind: string };
+    const flagLike = (await remove(TRUSTED, { name: '--root', root: 'claude' })) as { readonly ok: boolean; readonly kind: string };
     expect(flagLike.kind).toBe('refused');
 
-    const removed = (await remove({}, { name: 'alpha', root: 'claude' })) as { readonly ok: boolean; readonly command: string };
+    const removed = (await remove(TRUSTED, { name: 'alpha', root: 'claude' })) as { readonly ok: boolean; readonly command: string };
     expect(removed.ok).toBe(true);
     expect(removed.command).toContain('skills remove alpha --root claude --json');
   });

@@ -103,6 +103,23 @@ describe('streamDevteam — JSON Lines over a real pipe', () => {
     expect(await ended).toMatchObject({ kind: 'exited', code: 3 });
   });
 
+  it('ends when the child exits even if a descendant still holds its pipes', async () => {
+    const startedAt = Date.now();
+    const events: Record<string, unknown>[] = [];
+    const end = await new Promise<StreamEnd>((resolve) =>
+      streamDevteam({
+        binary: process.execPath,
+        args: [FAKE, 'orphan'],
+        pipeGraceMs: 200,
+        onEvent: (event) => events.push(event),
+        onEnd: resolve,
+      }),
+    );
+    expect(end).toMatchObject({ kind: 'exited', code: 0 });
+    expect(events.map((e) => e['event'])).toEqual(['ready']);
+    expect(Date.now() - startedAt).toBeLessThan(4_000);
+  });
+
   it('reports a binary that does not exist as spawn-failed, not as an exit', async () => {
     const end = await new Promise<StreamEnd>((resolve) =>
       streamDevteam({ binary: '/no/such/devteam', args: ['x'], onEvent: () => undefined, onEnd: resolve }),

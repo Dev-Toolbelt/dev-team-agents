@@ -252,6 +252,22 @@ describe('timeout', () => {
   });
 });
 
+describe('a descendant that keeps the pipes open', () => {
+  it('settles on the child\'s own exit instead of waiting for the pipes to close', async () => {
+    // The fixture exits 0 with a document and leaves a grandchild holding the inherited
+    // stdout for 6 s. Waiting for `close` alone returns after ~6 s (and would trip the
+    // deadline on a slower one); settling on `exit` returns within the pipe grace.
+    const startedAt = Date.now();
+    const result = await invokeDevteam({
+      ...fakeCli(['version']),
+      env: { FAKE_DEVTEAM_SCENARIO: 'orphan-grandchild' },
+      pipeGraceMs: 200,
+    });
+    expect(result.outcome).toBe('success');
+    expect(Date.now() - startedAt).toBeLessThan(4_000);
+  });
+});
+
 describe('argument and environment handling', () => {
   it('appends --json itself so no operation can forget it', async () => {
     const result = await run('ok', ['catalog', 'agents']);

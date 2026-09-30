@@ -12,7 +12,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETTINGS_FILE_NAME, readSettings, writeProjectName } from '../src/main/settings.js';
+import { SETTINGS_FILE_NAME, readSettings, writeOpenAtLogin, writeProjectName } from '../src/main/settings.js';
 
 let dir: string;
 
@@ -227,6 +227,55 @@ describe('writeProjectName', () => {
   });
 });
 
+describe('writes never destroy a file that could not be read', () => {
+  it('refuses to write over non-JSON content and leaves the file byte for byte as found', async () => {
+    const path = join(dir, SETTINGS_FILE_NAME);
+    await writeFile(path, '{ "cliPath": "/opt/devteam", oops', 'utf8');
+    // Mutation: dropping the `current.problem` guard rebuilds the file from "no settings".
+    await expect(writeProjectName(dir, 'p1', 'Name')).rejects.toThrow(/not overwriting/);
+    await expect(writeOpenAtLogin(dir, true)).rejects.toThrow(/not overwriting/);
+    expect(await readFile(path, 'utf8')).toBe('{ "cliPath": "/opt/devteam", oops');
+  });
+
+  it('refuses a top-level array and a hand-edited bad cliPath rather than dropping it', async () => {
+    const path = join(dir, SETTINGS_FILE_NAME);
+    await writeFile(path, '[1, 2]', 'utf8');
+    await expect(writeProjectName(dir, 'p1', 'Name')).rejects.toThrow(/not overwriting/);
+    await writeFile(path, JSON.stringify({ cliPath: 42, extra: true }), 'utf8');
+    await expect(writeProjectName(dir, 'p1', 'Name')).rejects.toThrow(/not overwriting/);
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ cliPath: 42, extra: true });
+  });
+
+  it('still creates the file when it does not exist yet', async () => {
+    await writeProjectName(dir, 'p1', 'Name');
+    expect((await readSettings(dir)).projectNames).toEqual({ p1: 'Name' });
+  });
+
+  it('keeps writing after one write was refused', async () => {
+    const path = join(dir, SETTINGS_FILE_NAME);
+    await writeFile(path, 'garbage', 'utf8');
+    await expect(writeProjectName(dir, 'p1', 'A')).rejects.toThrow();
+    await writeFile(path, JSON.stringify({ cliPath: '/opt/devteam' }), 'utf8');
+    await writeProjectName(dir, 'p1', 'A');
+    expect(await readSettings(dir)).toMatchObject({ cliPath: '/opt/devteam', projectNames: { p1: 'A' } });
+  });
+});
+
+describe('concurrent writes do not lose each other', () => {
+  it('keeps every project name and the login choice when they are written at once', async () => {
+    // Mutation: without the write chain each call reads the same empty file and the last
+    // rename wins, leaving one field.
+    await Promise.all([
+      ...Array.from({ length: 12 }, (_unused, index) => writeProjectName(dir, `p${index}`, `Name ${index}`)),
+      writeOpenAtLogin(dir, true),
+    ]);
+    const result = await readSettings(dir);
+    expect(Object.keys(result.projectNames)).toHaveLength(12);
+    expect(result.openAtLogin).toBe(true);
+    expect(result.problem).toBeUndefined();
+  });
+});
+
 describe('the round trip: a settings problem must survive into EnvironmentReport', () => {
   it('surfaces problem through registerIpc\'s environment handler, not silently dropped', async () => {
     vi.resetModules();
@@ -249,11 +298,12 @@ describe('the round trip: a settings problem must survive into EnvironmentReport
       appVersion: '0.0.0-test',
       electronVersion: '39.8.10',
       packaged: false,
+      trustedRenderer: { indexUrl: 'file:///app/index.html', devServerOrigin: null },
     });
 
     const environmentHandler = handlers.get(CHANNELS.environment);
     expect(environmentHandler).toBeDefined();
-    const report = (await environmentHandler?.()) as {
+    const report = (await environmentHandler?.({ senderFrame: { url: 'file:///app/index.html', parent: null } })) as {
       settings: { problem: string | null; cliPathConfigured: boolean };
     };
     // Mutation: `problem: current.problem ?? null` replaced with `problem: null`, or the
