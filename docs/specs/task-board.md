@@ -135,11 +135,75 @@ or {"project_id": "…", "removed": true} when it no longer has tasks>}`, then `
 after the backlog, `{"event":"heartbeat","ts":…}` every 30 s, and `{"event":"end","reason":…}` —
 the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 
+#### In Review — an optional fourth column (amendment 2026-09-30)
+
+A task may go from In progress straight to Done. It passes through **In Review** only when a review
+is triggered in its session, and leaves only when the review passed or its findings were fixed.
+No provider has a review status, so the column is inferred by the hooks.
+
+**Review window.** A review is a window stored in the session record:
+
+```json
+"reviews": [
+  {
+    "id": "r1", "trigger": "agent|command|prompt", "source": "qa-specialist|/devteam:review|…",
+    "opened_at": 0, "pending": 1, "result_at": null, "findings": null,
+    "resolved_at": null, "resolution": null,
+    "task_keys": ["t1", "t2"], "fix_after": null
+  }
+]
+```
+
+**Triggers — open a window** (at most one open window per session; a second trigger while one is
+open joins it and increments `pending`):
+
+| Trigger | Claude Code | Codex | opencode |
+|---|---|---|---|
+| Review/QA agent spawned: `qa-specialist`, `code-reviewer`, `backend-reviewer`, `frontend-reviewer` | `PreToolUse` on `Agent`/`Task`, `tool_input.subagent_type` | `PreToolUse` on `spawn_agent`, `tool_input.agent_type` | `tool.execute.before` on `task`, `args.subagent_type` |
+| Command: `/devteam:review`, `/devteam:qa`, `/review` | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message`, text parts |
+| Explicit request in the prompt: review, revisar, revisão, revise, QA, testar, test it | same as commands | same | same |
+
+Keyword matching is word-bounded and case-insensitive, and skips a match preceded within three
+words by a negation (`não`, `sem`, `no`, `don't`, `without`, `skip`). It lives in one tested file.
+
+**Which tasks enter.** At the moment the window opens: every non-removed task of the session that is
+`in_progress`, plus every task `completed` after the previous window was resolved (or ever, if there
+is none). Tasks created after the window opened do not enter it.
+
+**Result — read from a marker.** Our four review/QA agents end their final report with
+`<!-- review-result: findings=N -->` (rule in `skills/shared/review-result/SKILL.md`, emitted from
+each agent's `## Before You Finish`). The hook scans the agent's returned output for it:
+Claude `PostToolUse` on `Agent`/`Task` (`tool_response`), Codex `PostToolUse` on `wait_agent`
+(`tool_response`), opencode `tool.execute.after` on `task` (`output.output`). Several markers in one
+response (parallel reviewers) are summed. Each marker decrements `pending`; the result is recorded
+when `pending` reaches 0. For a command/prompt-triggered window, the next `Stop` scans the transcript's
+last assistant message (Claude `transcript_path`) for the marker; with no marker anywhere, the window
+records `findings: null` — shown as **result not read**.
+
+**Leaving In Review.**
+
+| Case | What happens |
+|---|---|
+| Result `findings = 0` | Window resolved (`resolution: "passed"`); its tasks go to Done if completed, else back to In progress |
+| Result `findings > 0` | Cards show **N findings**; tasks stay in In Review; `fix_after` = result time; notification `tasks.review_findings` |
+| Fix rule | Every task created after `fix_after` in the session (the fix list) is completed, and there is at least one → resolved (`"fixed"`) |
+| Re-review rule | A later window in the same session returns `findings = 0` → earlier unresolved windows resolved (`"fixed"`) |
+| Result not read | Stays in In Review with the **result not read** badge until the fix or re-review rule resolves it |
+| Reopened | A task in review that the agent sets back to `in_progress` leaves the window at once (column In progress) |
+
+**Derived fields** (added, nothing removed — additive to the JSON contract):
+
+- task `column` gains `in_review`; task gains `review: {"state": "pending|findings|unread|null", "findings": N|null, "since": epoch}` (null when not in review);
+- `counts` gain `in_review` (project and session); project gains `with_findings` (tasks in review with findings);
+- `durations` gain `in_review`: time between entering and leaving the window;
+- the `status` field keeps the provider's own status; only `column` reflects review.
+
 #### Notifications (emitted by the hook through `notify.sh`, the only emitter)
 
 | Code | When |
 |---|---|
 | `tasks.session_done` | A record call moves a session from "some open" to "all done" (≥ 1 task) |
+| `tasks.review_findings` | A review window records `findings > 0` (dedupe per window) |
 | `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude only; other providers have no end event) |
 
 #### Desktop app
@@ -200,3 +264,4 @@ the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 | 2026-09-30 | A removed task whose last status was `completed` or `cancelled` is not a match candidate for a later replace; the equal item becomes a new task | Reviving it as pending erased the completion the board still showed |
 | 2026-09-30 | The state directory is `<state-dir>/task-board/` (was `tasks/`); tasks are ordered by creation time then numeric key; `record` clears `idle_at`; a non-empty todo list with no readable entry is a no-op rather than "clear all"; a structurally invalid record is skipped by readers | `tasks` is too generic a basename for the machine-local classifier (`wiki/tasks/` would match); the rest are correctness fixes from review |
 | 2026-09-30 | Codex capture confirmed: `PreToolUse` fires for `update_plan` with the parsed arguments, `session_id`, `cwd` and a subagent's `agent_id`/`agent_type` (openai/codex @ `92bc601`); a test replays that exact payload through the dispatcher | The spec had recorded Codex as unverified because the local Codex binary could not run |
+| 2026-09-30 | Optional In Review column: review windows opened by review/QA agents, review commands and explicit prompt requests; result read from a `review-result` marker; tasks leave when the review passes or its findings are fixed | User request: a review state between In progress and Done that is not mandatory |
