@@ -50,14 +50,16 @@ EVENTS = (
     ("PreCompact", "pre-compact.sh"),
     ("PostToolUse", "post-tool-use.sh"),
     ("SessionEnd", "session-end.sh"),
+    ("UserPromptSubmit", "user-prompt-submit.sh"),
 )
 
 #: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
 #: (its sub-scripts filter cheaply themselves); `PostToolUse` is narrowed to the todo
-#: tools so no other tool call forks the dispatcher at all.
+#: tools and the subagent tool (`Agent`, `Task` in older builds — where a review agent's
+#: report comes back) so no other tool call forks the dispatcher at all.
 MATCHERS = {
     "PreToolUse": ".*",
-    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate",
+    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
 }
 
 

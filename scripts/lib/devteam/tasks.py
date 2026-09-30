@@ -21,6 +21,7 @@ no-op, never an error.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -33,7 +34,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import jsonio, lock, project
+from . import jsonio, lock, project, review_triggers
 from .errors import DevteamError
 
 SCHEMA = 1
@@ -328,6 +329,20 @@ def _valid_record(data):
             return False
         if not _optional_number(task["removed_at"]) or not isinstance(task.get("history", []), list):
             return False
+    reviews = data.get("reviews", [])
+    if not isinstance(reviews, list):
+        return False
+    for window in reviews:
+        if not isinstance(window, dict) or not isinstance(window.get("id"), str):
+            return False
+        if not _number(window.get("opened_at")) or not isinstance(window.get("task_keys"), list):
+            return False
+        if not (_optional_number(window.get("result_at")) and _optional_number(window.get("resolved_at"))):
+            return False
+        if not (_optional_number(window.get("findings")) and _optional_number(window.get("fix_after"))):
+            return False
+        if not isinstance(window.get("pending", 0), int) or not isinstance(window.get("left", {}), dict):
+            return False
     return True
 
 
@@ -470,13 +485,464 @@ def _column(status):
     return {"pending": "todo", "in_progress": "in_progress"}.get(status, "done")
 
 
+def _task_column(task, members):
+    """The board column: a task inside an unresolved review window is In Review."""
+    return "in_review" if task["key"] in members else _column(task["status"])
+
+
+def _open_keys(record, members):
+    return {t["key"] for t in record["tasks"] if _shown(t) and _task_column(t, members) != "done"}
+
+
 def _open_count(record):
-    return sum(1 for t in record["tasks"] if _shown(t) and _column(t["status"]) != "done")
+    return len(_open_keys(record, _review_members(record)))
 
 
-def _all_done(record):
+def _all_done(record, members):
     shown = [t for t in record["tasks"] if _shown(t)]
-    return bool(shown) and all(_column(t["status"]) == "done" for t in shown)
+    return bool(shown) and all(_task_column(t, members) == "done" for t in shown)
+
+
+# ── review windows (In Review column) ────────────────────────────────────────
+
+
+def _windows(record):
+    return record.get("reviews") or []
+
+
+def _completed_at(task):
+    """When the task last entered ``completed``, or ``None`` if it is not completed."""
+    if task["status"] != "completed":
+        return None
+    for entry in reversed(task.get("history") or []):
+        if isinstance(entry, dict) and entry.get("status") == "completed" and _number(entry.get("at")):
+            return entry["at"]
+    return task["created_at"]
+
+
+def _window_state(window):
+    if window.get("result_at") is None:
+        return "pending"
+    findings = window.get("findings")
+    if findings is None:
+        return "unread"
+    return "findings" if findings > 0 else "passed"
+
+
+def _review_members(record):
+    """``{task key: {"state", "findings", "since"}}`` for every task inside an unresolved window.
+
+    A later window wins over an earlier one for the same task. A task leaves when the agent
+    reopens it (``left``), when it is removed unfinished, or when it is no longer in progress or
+    completed.
+    """
+    windows = _windows(record)
+    if not windows:
+        return {}
+    by_key = {t["key"]: t for t in record["tasks"] if isinstance(t, dict)}
+    members = {}
+    for window in windows:
+        if window.get("resolved_at") is not None:
+            continue
+        left = window.get("left") or {}
+        for key in window["task_keys"]:
+            task = by_key.get(key)
+            if key in left or task is None or not _shown(task) or task["status"] not in ("in_progress", "completed"):
+                continue
+            members[key] = {
+                "state": _window_state(window),
+                "findings": window.get("findings"),
+                "since": window["opened_at"],
+            }
+    return members
+
+
+def _review_seconds(record, until):
+    """Seconds each task spent inside a review window, overlapping windows merged."""
+    spans = {}
+    for window in _windows(record):
+        end_of_window = window.get("resolved_at")
+        left = window.get("left") or {}
+        for key in window["task_keys"]:
+            end = min(x for x in (left.get(key), end_of_window, until) if x is not None)
+            if end > window["opened_at"]:
+                spans.setdefault(key, []).append((window["opened_at"], end))
+    totals = {}
+    for key, items in spans.items():
+        total, current_end = 0, None
+        for start, end in sorted(items):
+            if current_end is None or start > current_end:
+                total += end - start
+                current_end = end
+            elif end > current_end:
+                total += end - current_end
+                current_end = end
+        totals[key] = int(total)
+    return totals
+
+
+def _resolve(window, now, resolution):
+    window["resolved_at"] = now
+    window["resolution"] = resolution
+
+
+def _sweep_reviews(record, now):
+    """Apply the fix rule to every recorded-but-unresolved window. Returns True on a change.
+
+    The re-review rule lives in :func:`_finalize`, at the moment a zero result arrives; the fix
+    rule depends on task state, so it is evaluated on every record and every view.
+    """
+    changed = False
+    for window in _windows(record):
+        if window.get("resolved_at") is not None or window.get("result_at") is None:
+            continue
+        fix_after = window.get("fix_after")
+        if fix_after is None:
+            continue
+        fixes = [t for t in record["tasks"] if _shown(t) and t["created_at"] > fix_after]
+        if fixes and all(_column(t["status"]) == "done" for t in fixes):
+            _resolve(window, now, "fixed")
+            changed = True
+    return changed
+
+
+def _finalize(record, window, now):
+    """Record the result of a window whose sources have all answered."""
+    if window.get("markers", 0) == 0:
+        findings = None
+    elif window.get("unread", 0) and window.get("found", 0) == 0:
+        findings = None
+    else:
+        findings = window.get("found", 0)
+    window["findings"] = findings
+    window["result_at"] = now
+    if findings == 0:
+        _resolve(window, now, "passed")
+        for earlier in _windows(record):
+            if earlier is window:
+                break
+            if earlier.get("resolved_at") is None:
+                _resolve(earlier, now, "fixed")
+    else:
+        window["fix_after"] = now
+    _sweep_reviews(record, now)
+
+
+def _reopen(record, before, now):
+    """A completed task the agent sets back to work leaves every window it is in."""
+    for window in _windows(record):
+        if window.get("resolved_at") is not None:
+            continue
+        left = window.setdefault("left", {})
+        for task in record["tasks"]:
+            if (
+                task["key"] in window["task_keys"]
+                and task["key"] not in left
+                and before.get(task["key"]) == "completed"
+                and task["status"] in ("in_progress", "pending")
+            ):
+                left[task["key"]] = now
+
+
+def _open_window(record):
+    for window in reversed(_windows(record)):
+        if window.get("resolved_at") is None and window.get("result_at") is None:
+            return window
+    return None
+
+
+def _entering_keys(record):
+    resolved = [w["resolved_at"] for w in _windows(record) if _number(w.get("resolved_at"))]
+    since = max(resolved) if resolved else None
+    keys = []
+    for task in sorted(record["tasks"], key=_task_order):
+        if task["removed_at"] is not None:
+            continue
+        if task["status"] == "in_progress":
+            keys.append(task["key"])
+        elif task["status"] == "completed":
+            done_at = _completed_at(task)
+            if since is None or (done_at is not None and done_at > since):
+                keys.append(task["key"])
+    return keys
+
+
+def review_call(payload):
+    """Normalize a hook payload into a review event, or ``None``.
+
+    Returns ``{"kind": "open"|"result", "session_id", "cwd", "trigger", "source", "markers",
+    "agent"}``. ``open`` comes from a review/QA agent spawn or a prompt; ``result`` from a
+    finished agent (Claude ``PostToolUse`` on ``Agent``/``Task``, Codex ``wait_agent``, the
+    opencode plugin's ``task`` output).
+    """
+    if not isinstance(payload, dict):
+        return None
+    session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
+    if not session_id:
+        return None
+    tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
+    bare = tool_name.split(".")[-1]
+    tool = payload.get("tool") if isinstance(payload.get("tool"), str) else ""
+    tool_input = _dict(payload.get("tool_input"))
+    args = _dict(payload.get("args"))
+    event = _text(payload.get("hook_event_name"))
+    call = {
+        "session_id": session_id,
+        "cwd": _first_text(payload, "cwd"),
+        "kind": None,
+        "trigger": None,
+        "source": None,
+        "markers": [],
+        "agent": False,
+    }
+
+    if bare in ("Agent", "Task", "spawn_agent") or tool.lower() == "task":
+        name = review_triggers.agent_name(
+            _first_text(tool_input, "subagent_type", "agent_type") or _first_text(args, "subagent_type", "agent_type")
+        )
+        after = event == "PostToolUse" or any(k in payload for k in ("output", "tool_response", "tool_output"))
+        if after:
+            # `spawn_agent` answers with an agent id, not a report; a background agent's
+            # launch answers before it has run. Neither can carry a result.
+            if bare == "spawn_agent" or tool_input.get("run_in_background") is True:
+                return None
+            found = review_triggers.markers(
+                [payload.get("tool_response"), payload.get("tool_output"), payload.get("output")]
+            )
+            if not name and not found:
+                return None
+            call.update(kind="result", markers=found, agent=bool(name), source=name)
+            return call
+        if not name:
+            return None
+        call.update(kind="open", trigger="agent", source=name)
+        return call
+
+    if bare == "wait_agent":
+        found = review_triggers.markers(payload.get("tool_response"))
+        if not found:
+            return None
+        call.update(kind="result", markers=found)
+        return call
+
+    prompt = payload.get("prompt")
+    if isinstance(prompt, str) and not tool_name and not tool:
+        hit = review_triggers.prompt_trigger(prompt)
+        if hit is None:
+            return None
+        call.update(kind="open", trigger=hit[0], source=hit[1])
+        return call
+    return None
+
+
+def _review_store(root, payload, now, apply):
+    """Run ``apply(record, call, now)`` on the session record under its lock. Never raises."""
+    try:
+        call = review_call(payload)
+        if call is None:
+            return None
+        project_id = _bound_id(root)
+        path = record_path(root, project_id, call["session_id"]) if project_id else None
+        if path is None or not path.is_file():
+            return None
+        now = int(time.time() if now is None else now)
+        with _session_lock(path):
+            rec = _load(path)
+            if rec is None:
+                return None
+            outcome = apply(rec, call, now)
+            if outcome is None:
+                return None
+            rec["updated_at"] = max(rec["updated_at"], now)
+            rec["last_seen_at"] = now
+            rec["idle_at"] = None
+            rec["ended_at"] = None
+            jsonio.write_json_atomic(path, rec)
+        outcome["session"] = call["session_id"]
+        return outcome
+    except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def review_open(root, payload, now=None):
+    """Open a review window for the payload's session, or join the one already open.
+
+    Returns ``{"recorded", "session", "window", "joined"}``. Nothing is recorded when the payload
+    is not a review trigger, the session has no record, or no task would enter the window.
+    """
+    def apply(rec, call, at):
+        if call["kind"] != "open":
+            return None
+        window = _open_window(rec)
+        joined = window is not None
+        if window is None:
+            keys = _entering_keys(rec)
+            if not keys:
+                return None
+            window = {
+                "id": "r{}".format(len(_windows(rec)) + 1),
+                "trigger": call["trigger"],
+                "source": call["source"],
+                "opened_at": at,
+                "pending": 0,
+                "scan": False,
+                "markers": 0,
+                "unread": 0,
+                "found": 0,
+                "result_at": None,
+                "findings": None,
+                "resolved_at": None,
+                "resolution": None,
+                "task_keys": keys,
+                "left": {},
+                "fix_after": None,
+            }
+            rec.setdefault("reviews", []).append(window)
+        window["pending"] += 1
+        if call["trigger"] != "agent":
+            window["scan"] = True
+        return {"recorded": True, "window": window["id"], "joined": joined}
+
+    result = {"recorded": False, "session": None, "window": None, "joined": False}
+    result.update(_review_store(root, payload, now, apply) or {})
+    return result
+
+
+def _apply_result(rec, call, now):
+    window = _open_window(rec)
+    if window is None:
+        return None
+    markers = call["markers"]
+    # A marker never consumes the transcript-scan token: that one is retired at `Stop`.
+    room = max(0, window["pending"] - (1 if window.get("scan") else 0))
+    taken = min(room, len(markers)) if markers else 0
+    unread = 0
+    if markers:
+        window["markers"] = window.get("markers", 0) + len(markers)
+        window["found"] = window.get("found", 0) + sum(markers)
+    elif call["agent"] and room:
+        taken, unread = 1, 1
+    window["unread"] = window.get("unread", 0) + unread
+    window["pending"] -= taken
+    return _finish(rec, window, now)
+
+
+def _finish(rec, window, now):
+    complete = window["pending"] <= 0
+    if complete:
+        window["pending"] = 0
+        _finalize(rec, window, now)
+    return {
+        "recorded": True,
+        "window": window["id"],
+        "result": complete,
+        "findings": window.get("findings") if complete else None,
+        "resolved": window.get("resolved_at") is not None,
+        "_all_done_now": _all_done(rec, _review_members(rec)),
+    }
+
+
+def review_result(root, payload, now=None):
+    """Fold a finished review agent's output into the open window.
+
+    Returns ``{"recorded", "session", "window", "result", "findings", "resolved",
+    "all_done", "became_all_done"}``; ``result`` is true when this call completed the window.
+    """
+    def apply(rec, call, at):
+        if call["kind"] != "result":
+            return None
+        was_done = _all_done(rec, _review_members(rec))
+        outcome = _apply_result(rec, call, at)
+        if outcome is None:
+            return None
+        done = outcome.pop("_all_done_now")
+        outcome.update(all_done=done, became_all_done=done and not was_done)
+        return outcome
+
+    result = {
+        "recorded": False, "session": None, "window": None, "result": False,
+        "findings": None, "resolved": False, "all_done": False, "became_all_done": False,
+    }
+    result.update(_review_store(root, payload, now, apply) or {})
+    return result
+
+
+# ── the Stop scan: a command/prompt-triggered window reads the final message ─
+
+
+def _content_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            block["text"] for block in content
+            if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str)
+        )
+    return ""
+
+
+TRANSCRIPT_TAIL = 512 * 1024
+
+
+def last_assistant_text(payload):
+    """The final assistant message of the turn that just ended, or ``""``.
+
+    Codex and the opencode plugin hand it over as ``last_assistant_message``; Claude Code's
+    ``Stop`` gives a ``transcript_path`` (JSONL) whose last text-bearing assistant entry, after
+    the last real user prompt, is the final text.
+    """
+    direct = payload.get("last_assistant_message")
+    if isinstance(direct, str) and direct:
+        return direct
+    path = payload.get("transcript_path")
+    if not isinstance(path, str) or not path or not os.path.isfile(path):
+        return ""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as handle:
+            handle.seek(max(0, size - TRANSCRIPT_TAIL))
+            lines = handle.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
+        role = message.get("role") or entry.get("type")
+        if role == "assistant":
+            text = _content_text(message.get("content", entry.get("content")))
+            if text.strip():
+                return text
+        elif role == "user":
+            content = message.get("content", entry.get("content"))
+            if isinstance(content, str) or (
+                isinstance(content, list)
+                and any(isinstance(b, dict) and b.get("type") != "tool_result" for b in content)
+            ):
+                return ""
+    return ""
+
+
+def _scan_at_stop(rec, payload, now):
+    """Retire the transcript-scan token of every window that has one. Returns the last outcome."""
+    outcome = None
+    text = None
+    for window in _windows(rec):
+        if not window.get("scan") or window.get("resolved_at") is not None or window.get("result_at") is not None:
+            continue
+        if text is None:
+            text = review_triggers.markers(last_assistant_text(payload))
+        if window.get("markers", 0) == 0 and text:
+            window["markers"] = len(text)
+            window["found"] = window.get("found", 0) + sum(text)
+        window["scan"] = False
+        window["pending"] = max(0, window["pending"] - 1)
+        outcome = _finish(rec, window, now)
+    return outcome
 
 
 def _git_branch(cwd):
@@ -539,8 +1005,11 @@ def record(root, payload, provider="auto", now=None):
                     # overwrite what we cannot read.
                     return result
                 rec = _new_record(call, project_id, now)
-            open_before = {t["key"] for t in rec["tasks"] if _shown(t) and _column(t["status"]) != "done"}
+            open_before = _open_keys(rec, _review_members(rec))
+            before = {t["key"]: t["status"] for t in rec["tasks"]}
             _apply(rec, call, now)
+            _reopen(rec, before, now)
+            _sweep_reviews(rec, now)
             rec["provider"] = call["provider"]
             if call["cwd"]:
                 rec["cwd"] = call["cwd"]
@@ -553,10 +1022,13 @@ def record(root, payload, provider="auto", now=None):
             # A call proves the session is alive, even one resumed after `SessionEnd`.
             rec["ended_at"] = None
             jsonio.write_json_atomic(path, rec)
-        done = _all_done(rec)
+        members = _review_members(rec)
+        done = _all_done(rec, members)
         # Dropping an unfinished task is abandonment, not completion: the transition counts
         # only when a task that was open is now actually completed or cancelled.
-        finished = any(t["key"] in open_before and _shown(t) and _column(t["status"]) == "done" for t in rec["tasks"])
+        finished = any(
+            t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+        )
         result.update(recorded=True, session=call["session_id"], all_done=done, became_all_done=done and finished)
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
@@ -565,7 +1037,10 @@ def record(root, payload, provider="auto", now=None):
 
 def mark(root, payload, state, now=None):
     """Mark a session ``idle`` or ``ended``. No-op when it has no record. Never raises."""
-    result = {"marked": False, "open": 0}
+    result = {
+        "marked": False, "open": 0,
+        "review_result": False, "review_window": None, "review_findings": None, "became_all_done": False,
+    }
     try:
         if state not in ("idle", "ended") or not isinstance(payload, dict):
             return result
@@ -580,13 +1055,23 @@ def mark(root, payload, state, now=None):
             if rec is None:
                 return result
             rec["last_seen_at"] = now
+            scanned = None
             if state == "idle":
                 rec["idle_at"] = now
                 rec["ended_at"] = None
+                was_done = _all_done(rec, _review_members(rec))
+                scanned = _scan_at_stop(rec, payload, now)
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
         result.update(marked=True, open=_open_count(rec))
+        if scanned is not None and scanned["result"]:
+            result.update(
+                review_result=True,
+                review_window=scanned["window"],
+                review_findings=scanned["findings"],
+                became_all_done=scanned["_all_done_now"] and not was_done,
+            )
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["marked"] = False
     return result
@@ -617,12 +1102,12 @@ def _durations(history, until):
     return totals
 
 
-def _task_view(task, session_status, now, stale_after, until):
+def _task_view(task, session_status, now, stale_after, until, member=None, review_seconds=0):
     history = [h for h in task.get("history", []) if isinstance(h, dict) and _number(h.get("at"))]
     if not history:
         history = [{"status": task["status"], "at": task["created_at"]}]
     since = history[-1]["at"]
-    column = _column(task["status"])
+    column = "in_review" if member else _column(task["status"])
     completed_at = None
     if task["status"] == "completed":
         completed_at = since
@@ -636,8 +1121,10 @@ def _task_view(task, session_status, now, stale_after, until):
         "created_at": task["created_at"],
         "status_since": since,
         "completed_at": completed_at,
-        "durations": _durations(history, until),
+        "durations": dict(_durations(history, until), in_review=review_seconds),
+        "review": dict(member) if member else None,
         "stale": task["status"] == "in_progress"
+        and not member
         and session_status != "ended"
         and now - since > stale_after,
         "abandoned": column != "done" and session_status == "ended",
@@ -667,7 +1154,7 @@ def resume_command(root, provider, session_id, cwd=None):
 
 
 def _counts(views):
-    counts = {"todo": 0, "in_progress": 0, "done": 0}
+    counts = {"todo": 0, "in_progress": 0, "done": 0, "in_review": 0}
     for view in views:
         counts[view["column"]] += 1
     counts["total"] = len(views)
@@ -680,8 +1167,14 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     until = now
     if status == "ended":
         until = rec.get("ended_at") or rec.get("last_seen_at") or now
+    # The fix rule depends on task state, so it is re-evaluated here on a copy; the stored
+    # record only ever changes through a hook call.
+    rec = copy.deepcopy(rec)
+    _sweep_reviews(rec, rec.get("updated_at") or now)
+    members = _review_members(rec)
+    seconds = _review_seconds(rec, until)
     views = [
-        _task_view(task, status, now, stale_after, until)
+        _task_view(task, status, now, stale_after, until, members.get(task["key"]), seconds.get(task["key"], 0))
         for task in sorted(rec["tasks"], key=_task_order)
         if isinstance(task, dict) and _shown(task)
     ]
@@ -742,6 +1235,7 @@ def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AF
         "sessions_total": len(sessions),
         "sessions_active": sum(1 for s in sessions if s["status"] != "ended"),
         "counts": _counts(all_tasks),
+        "with_findings": sum(1 for t in all_tasks if (t["review"] or {}).get("state") == "findings"),
         "stale": sum(1 for t in all_tasks if t["stale"]),
         "abandoned": sum(1 for t in all_tasks if t["abandoned"]),
         "last_activity_at": sessions[0]["last_activity_at"],

@@ -110,7 +110,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 > **Skill `name` must equal the skill's directory basename, and must be unique across all categories.** This is a cross-provider invariant, not a style rule: the render engine resolves opencode skills by frontmatter `name`, while the installers symlink by directory. A skill whose `name` disagrees with its directory loads under Claude and Codex but not under opencode. `helpers/agent-lint.sh` enforces both the match and the uniqueness.
 
-**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,post-tool-use,session-end,stop}.sh` are the same bash scripts across providers (`post-tool-use.sh` and `session-end.sh` are wired for Claude Code only). Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with its own event set. `PostToolUse` and `SessionEnd` are registered for **Claude Code only** (task board capture and session end); Codex and opencode are captured through the `PreToolUse` path (`pre-tool-use/04-task-board.sh`).
+**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,post-tool-use,session-end,stop}.sh` are the same bash scripts across providers (`post-tool-use.sh` and `session-end.sh` are wired for Claude Code only). Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with its own event set. Todo capture for Codex and opencode goes through the `PreToolUse` path (`pre-tool-use/04-task-board.sh`); Claude Code's todo tools come through `PostToolUse`. The In Review column (below) additionally binds `UserPromptSubmit` (Claude Code, Codex; opencode via the plugin's `chat.message`), `PostToolUse` (Claude `Agent`/`Task`, Codex `wait_agent` — Codex registers `*` and the sub-script gates — and opencode `tool.execute.after` for `task`) and, for Codex, `SessionEnd`.
 
 **Context-window notification payload is provider-specific — by design, not oversight.** `stop/04-notifier.sh` estimates context usage from whatever JSON its stdin's `transcript_path` points at, reading the last usage entry's `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` (see `CLAUDE-md/notifications.md`). Each provider's stdin comes from a different source:
 - **Claude Code** passes its own transcript JSONL directly — the native format, no adaptation needed.
@@ -121,11 +121,22 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 | Provider | Hook point | Tool | Replace or incremental | Ownership |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | `PostToolUse` (matcher: `TodoWrite\|TaskCreate\|TaskUpdate`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
+| **Claude Code** | `PostToolUse` (matcher: `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
 | **Claude Code** | `PostToolUse` (same matcher) | `TodoWrite` (legacy, disabled by default) | Replace — full list each call | Matched by normalized content |
 | **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | Existing `PreToolUse` | `update_plan` | Replace | Matched by normalized content |
 | **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `args.todos[].id` |
+
+**In Review capture per provider** (spec `docs/specs/task-board.md` § In Review; payload shapes verified from source — Claude Code hooks reference, openai/codex @ `92bc601`, `@opencode-ai/plugin` 1.18.33):
+
+| Signal | Claude Code | Codex | opencode |
+| --- | --- | --- | --- |
+| Review/QA agent spawned | `PreToolUse` on `Agent` (older `Task`), `tool_input.subagent_type` | `PreToolUse` on `spawn_agent`, `tool_input.agent_type` | `tool.execute.before` on `task`, `args.subagent_type` |
+| Review command / explicit request | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message`, text parts → `{session_id, prompt}` |
+| Agent result (marker) | `PostToolUse` on `Agent`/`Task`, `tool_response` | `PostToolUse` on `wait_agent` (maybe `<ns>.wait_agent`), `tool_response` | `tool.execute.after` on `task`, `output.output` → `{tool, args, output, sessionID}` |
+| Final message (Stop scan) | `Stop`: last assistant text in `transcript_path` | `Stop`: `last_assistant_message` | `session.idle`: plugin adds `last_assistant_message` |
+
+Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, so its result is not read (the window shows *pending* until a marker arrives another way or the fix/re-review rule resolves it); Codex `spawn_agent`'s `PostToolUse` carries an agent id, not a report, and is ignored; a Codex `wait_agent` without a marker is ignored because it does not say which agent it waited on.
 
 Codex fires `PreToolUse` for `update_plan` — confirmed in the Codex source (openai/codex @ `92bc601`) and pinned by a test replaying that exact payload, not yet observed in a live session. If a Codex release stops firing it, Codex sessions simply do not appear on the board; nothing fails.
 

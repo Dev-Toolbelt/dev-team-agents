@@ -35,8 +35,9 @@
 #      layout. It never deletes them.
 #   6. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
 #   7. Writes a hooks.json file at <project>/.codex/hooks.json that wires
-#      scripts/hooks/{pre-tool-use,session-start,pre-compact,stop}.sh to the
-#      Codex PreToolUse/SessionStart/PreCompact/Stop events. Idempotent: only
+#      scripts/hooks/{pre-tool-use,post-tool-use,user-prompt-submit,session-start,
+#      pre-compact,stop,session-end}.sh to the Codex PreToolUse/PostToolUse/
+#      UserPromptSubmit/SessionStart/PreCompact/Stop/SessionEnd events. Idempotent: only
 #      dev-team-managed hook entries are touched.
 #   8. Records the installed version.
 
@@ -209,7 +210,7 @@ hooks_file, hooks_dir = sys.argv[1], sys.argv[2]
 #   { "hooks": { "<Event>": [ { "matcher": "...", "hooks": [ { type, command, ... } ] } ] } }
 # — an OBJECT keyed by event name, each value an array of matcher groups.
 # Each hook `command` is a STRING, not an array.
-MANAGED_EVENTS = ("SessionStart", "PreToolUse", "PreCompact", "Stop")
+MANAGED_EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd")
 MANAGED_MARKER  = "_dev_team_agents_managed"
 
 def cmd(script):
@@ -229,8 +230,11 @@ managed_groups = {
                     "command": cmd({
                         "SessionStart": "session-start.sh",
                         "PreToolUse":   "pre-tool-use.sh",
+                        "PostToolUse":  "post-tool-use.sh",
+                        "UserPromptSubmit": "user-prompt-submit.sh",
                         "PreCompact":   "pre-compact.sh",
                         "Stop":         "stop.sh",
+                        "SessionEnd":   "session-end.sh",
                     }[event]),
                     "statusMessage": f"dev-team-agents {event.lower()} hook {MANAGED_MARKER}",
                 }

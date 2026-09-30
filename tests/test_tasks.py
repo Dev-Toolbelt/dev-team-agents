@@ -192,7 +192,7 @@ class RecordTest(BoardCase):
         self.assertEqual([h["status"] for h in history], ["pending", "in_progress", "completed"])
         session = self.view(now=T0 + 500)[0]["sessions"][0]
         task = session["tasks"][0]
-        self.assertEqual(task["durations"], {"pending": 120, "in_progress": 300, "completed": 80})
+        self.assertEqual(task["durations"], {"pending": 120, "in_progress": 300, "completed": 80, "in_review": 0})
         self.assertEqual((task["column"], task["completed_at"]), ("done", T0 + 420))
 
     def test_history_is_capped_at_fifty_entries(self):
@@ -350,10 +350,14 @@ class MarkAndDerivedStateTest(BoardCase):
         return self.view(now=now, **kwargs)[0]["sessions"][0]
 
     def test_mark_is_a_no_op_without_a_record_and_reports_open_tasks(self):
-        self.assertEqual(tasks.mark(self.root, {"session_id": "ghost"}, "idle"), {"marked": False, "open": 0})
+        def marked(*args, **kwargs):
+            result = tasks.mark(*args, **kwargs)
+            return {"marked": result["marked"], "open": result["open"]}
+
+        self.assertEqual(marked(self.root, {"session_id": "ghost"}, "idle"), {"marked": False, "open": 0})
         self.rec(todo_write("s1", [todo("A"), todo("B", "completed")]))
-        self.assertEqual(tasks.mark(self.root, {"session_id": "s1"}, "ended", now=T0 + 1), {"marked": True, "open": 1})
-        self.assertEqual(tasks.mark(self.root, {"session_id": "s1"}, "bogus"), {"marked": False, "open": 0})
+        self.assertEqual(marked(self.root, {"session_id": "s1"}, "ended", now=T0 + 1), {"marked": True, "open": 1})
+        self.assertEqual(marked(self.root, {"session_id": "s1"}, "bogus"), {"marked": False, "open": 0})
 
     def test_status_active_then_idle_then_active_again(self):
         self.rec(todo_write("s1", [todo("A")]), now=T0)
@@ -439,7 +443,7 @@ class CollectTest(BoardCase):
         self.assertEqual(
             set(project),
             {"project_id", "root", "providers", "sessions_total", "sessions_active", "counts", "stale",
-             "abandoned", "last_activity_at", "sessions"},
+             "abandoned", "last_activity_at", "sessions", "with_findings"},
         )
         session = project["sessions"][0]
         self.assertEqual(
@@ -450,9 +454,9 @@ class CollectTest(BoardCase):
         self.assertEqual(
             set(session["tasks"][0]),
             {"key", "content", "owner", "agent_type", "status", "column", "created_at", "status_since",
-             "completed_at", "durations", "stale", "abandoned"},
+             "completed_at", "durations", "stale", "abandoned", "review"},
         )
-        self.assertEqual(set(session["counts"]), {"todo", "in_progress", "done", "total"})
+        self.assertEqual(set(session["counts"]), {"todo", "in_progress", "done", "in_review", "total"})
         self.assertTrue(session["resume_command"].startswith("cd "))
         self.assertIn("claude --resume", session["resume_command"])
 
@@ -981,7 +985,7 @@ class HooksWiringTest(StoreTestCase):
         hooks.wire(self.root)
         data = self.read()
         (post,) = self.ours(data, "PostToolUse")
-        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate")
+        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task")
         self.assertIn("post-tool-use.sh", post["hooks"][0]["command"])
         (end,) = self.ours(data, "SessionEnd")
         self.assertNotIn("matcher", end)
@@ -1009,7 +1013,7 @@ class HooksWiringTest(StoreTestCase):
         self.settings.write_text(json.dumps(data))
         hooks.wire(self.root)
         entries = self.read()["hooks"]["PostToolUse"]
-        self.assertEqual([e["matcher"] for e in entries], ["TodoWrite|TaskCreate|TaskUpdate"])
+        self.assertEqual([e["matcher"] for e in entries], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task"])
 
     def test_unwire_removes_only_our_two_new_events_entries(self):
         foreign_post = {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}
@@ -1065,7 +1069,7 @@ class InstallInjectHookTest(StoreTestCase):
         post = data["hooks"]["PostToolUse"]
         self.assertEqual(post[0], foreign)
         self.assertEqual(len(post), 2)
-        self.assertEqual(post[1]["matcher"], "TodoWrite|TaskCreate|TaskUpdate")
+        self.assertEqual(post[1]["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task")
         self.assertEqual(post[1]["hooks"][0]["command"], self.POST)
         self.assertEqual(data["hooks"]["SessionEnd"], [{"hooks": [{"type": "command", "command": self.END}]}])
         self.assertTrue(data["other"])

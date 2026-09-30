@@ -15,6 +15,10 @@
  *   ─────────────────────────────────────────────────────────────
  *   `session.created`                 → scripts/hooks/session-start.sh
  *   `tool.execute.before`             → scripts/hooks/pre-tool-use.sh
+ *   `tool.execute.after` (`task` only) → scripts/hooks/post-tool-use.sh
+ *     (a review agent's report: the task board reads its review-result marker)
+ *   `chat.message`                    → scripts/hooks/user-prompt-submit.sh
+ *     (the user's prompt text, for review commands and requests on the task board)
  *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh
  *   `session.idle` (event bus)        → scripts/hooks/stop.sh
  *     (stdin carries a synthetic transcript_path built from the SDK's
@@ -35,14 +39,11 @@
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { exec } from "node:child_process"
-import { promisify } from "node:util"
+import { spawn } from "node:child_process"
 import { writeFile, mkdtemp, rm } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-
-const execAsync = promisify(exec)
 
 // Hook timeout: 5 seconds max. Prevents slow/broken hooks from freezing opencode.
 const HOOK_TIMEOUT_MS = 5000
@@ -55,14 +56,34 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const CORE_POINTER_HOOKS = `${directory}/.dev-team-agents/core/scripts/hooks`
   const HOOKS = existsSync(SCRIPTS_HOOKS) ? SCRIPTS_HOOKS : CORE_POINTER_HOOKS
 
+  // `exec` has no stdin option (only the sync variants do), so the payload is written to a
+  // spawned child; a hook that reads stdin would otherwise wait for it until the timeout.
+  const runScript = (script: string, stdin?: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const child = spawn("bash", [script], { stdio: ["pipe", "pipe", "pipe"] })
+      let stdout = ""
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL")
+        reject(new Error(`timed out after ${HOOK_TIMEOUT_MS}ms`))
+      }, HOOK_TIMEOUT_MS)
+      child.stdout.on("data", (chunk) => {
+        if (stdout.length < 1024 * 1024) stdout += String(chunk)
+      })
+      child.on("error", (err) => {
+        clearTimeout(timer)
+        reject(err)
+      })
+      child.on("close", () => {
+        clearTimeout(timer)
+        resolve(stdout)
+      })
+      child.stdin.on("error", () => {})
+      child.stdin.end(stdin ?? "")
+    })
+
   const runHook = async (script: string, stdin?: string): Promise<string> => {
     try {
-      const { stdout } = await execAsync(`bash ${script}`, {
-        input: stdin,
-        maxBuffer: 1024 * 1024,
-        timeout: HOOK_TIMEOUT_MS,
-      })
-      return stdout
+      return await runScript(script, stdin)
     } catch (err) {
       // Timeout or error — log but don't block
       await client.app.log({
@@ -89,12 +110,26 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // call stop.sh with no stdin at all, so the transcript-based method could
   // never activate on opencode — it silently fell back to the much coarser
   // turn-count heuristic on every session.
+  // The text of an assistant message, for the task board's review-result scan at Stop.
+  const textOf = (message: any): string =>
+    (message?.parts ?? [])
+      .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+      .map((p: any) => p.text)
+      .join("\n")
+
   const buildContextPayload = async (
     sessionID: string,
   ): Promise<{ stdin?: string; cleanup?: () => Promise<void> }> => {
     try {
       const res = await client.session.messages({ path: { id: sessionID } })
       const messages = res.data ?? []
+      let lastText = ""
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]?.info?.role === "assistant") {
+          lastText = textOf(messages[i])
+          if (lastText.trim()) break
+        }
+      }
       for (let i = messages.length - 1; i >= 0; i--) {
         const info: any = messages[i]?.info
         if (info?.role !== "assistant" || !info.tokens) continue
@@ -111,7 +146,11 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         })
         await writeFile(file, `${line}\n`)
         return {
-          stdin: JSON.stringify({ transcript_path: file, session_id: sessionID }),
+          stdin: JSON.stringify({
+            transcript_path: file,
+            session_id: sessionID,
+            last_assistant_message: lastText,
+          }),
           cleanup: () => rm(dir, { recursive: true, force: true }),
         }
       }
@@ -157,6 +196,29 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     "tool.execute.before": async (input, output) => {
       const payload = JSON.stringify({ tool: input.tool, args: output.args, sessionID: input.sessionID })
       await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload))
+    },
+
+    "tool.execute.after": async (input, output) => {
+      // Only a subagent's report can carry a review result; every other tool stays free.
+      if (input.tool !== "task") return
+      const payload = JSON.stringify({
+        tool: input.tool,
+        args: input.args,
+        output: output.output,
+        sessionID: input.sessionID,
+      })
+      await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload))
+    },
+
+    "chat.message": async (input, output) => {
+      const text = (output.parts ?? [])
+        .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+        .map((p: any) => p.text)
+        .join("\n")
+      if (!text.trim()) return
+      // `prompt` last: the bash gate only looks at what follows that key.
+      const payload = JSON.stringify({ session_id: input.sessionID, prompt: text })
+      await safe("user-prompt-submit", () => runHook(`${HOOKS}/user-prompt-submit.sh`, payload))
     },
 
     "experimental.session.compacting": async (_input, output) => {

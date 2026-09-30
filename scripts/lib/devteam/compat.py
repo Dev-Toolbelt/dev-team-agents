@@ -422,6 +422,10 @@ MUTATING = {
     "state directory (hook-only)",
     ("tasks", "mark"): "rewrites a session's task record in the machine-local state "
     "directory (hook-only)",
+    ("tasks", "review-open"): "opens or joins a review window in a session's task record "
+    "in the machine-local state directory (hook-only)",
+    ("tasks", "review-result"): "records a review agent's result in a session's task record "
+    "in the machine-local state directory (hook-only)",
     ("upgrade",): "relocates this project's memory into the store",
     ("export",): "creates an archive — durable state outside the store, and a restorable "
     "copy of shapes the declaring client just said it cannot read, which `import` on the "

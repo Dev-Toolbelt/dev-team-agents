@@ -696,6 +696,16 @@ def cmd_tasks_mark(args, emitter):
     return result, "marked ({} open)".format(result["open"]) if result["marked"] else "nothing marked"
 
 
+def cmd_tasks_review_open(args, emitter):
+    result = tasks.review_open(_hook_root(args), _hook_payload())
+    return result, "review window {}".format(result["window"]) if result["recorded"] else "no review window"
+
+
+def cmd_tasks_review_result(args, emitter):
+    result = tasks.review_result(_hook_root(args), _hook_payload())
+    return result, "review result recorded" if result["recorded"] else "nothing recorded"
+
+
 def _tasks_filters(args):
     return dict(
         project_ids=args.project or None,
@@ -716,10 +726,11 @@ def cmd_tasks_list(args, emitter):
     for item in board["projects"]:
         counts = item["counts"]
         lines.append(
-            "{}  todo {} · in progress {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
+            "{}  todo {} · in progress {} · in review {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
                 _short(item["project_id"]),
                 counts["todo"],
                 counts["in_progress"],
+                counts["in_review"],
                 counts["done"],
                 item["sessions_total"],
                 item["stale"],
@@ -729,7 +740,15 @@ def cmd_tasks_list(args, emitter):
         for session in item["sessions"]:
             lines.append("  {} {} [{}] {}".format(session["provider"], session["session_id"], session["status"], session["branch"] or ""))
             for task in session["tasks"]:
-                lines.append("    {:<11} {}  ({})".format(task["column"], task["content"], _duration(task["durations"].get(task["status"], 0))))
+                review = task.get("review")
+                note = ""
+                if review:
+                    note = {
+                        "findings": "  [{} findings]".format(review["findings"]),
+                        "unread": "  [result not read]",
+                    }.get(review["state"], "  [in review]")
+                spent = task["durations"]["in_review"] if review else task["durations"].get(task["status"], 0)
+                lines.append("    {:<11} {}  ({}){}".format(task["column"], task["content"], _duration(spent), note))
     return board, "\n".join(lines) or "no tasks"
 
 
@@ -1429,6 +1448,16 @@ def build_parser():
     tasks_mark.add_argument("--project-root", metavar="DIR")
     tasks_mark.add_argument("--state", required=True, choices=("idle", "ended"))
     tasks_mark.set_defaults(func=cmd_tasks_mark)
+    tasks_open = leaf(
+        tasks_parser, "review-open", help="hook-only: open or join a review window from a review trigger on stdin"
+    )
+    tasks_open.add_argument("--project-root", metavar="DIR")
+    tasks_open.set_defaults(func=cmd_tasks_review_open)
+    tasks_result = leaf(
+        tasks_parser, "review-result", help="hook-only: fold a finished review agent's output from stdin into its window"
+    )
+    tasks_result.add_argument("--project-root", metavar="DIR")
+    tasks_result.set_defaults(func=cmd_tasks_review_result)
     tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
     tasks_filters(tasks_list)
     tasks_list.set_defaults(func=cmd_tasks_list)
@@ -1857,7 +1886,7 @@ def main(argv=None, stdout=None, stderr=None):
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
         if getattr(args, "command", None) == "tasks":
-            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, list, watch"))
+            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, review-open, review-result, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
