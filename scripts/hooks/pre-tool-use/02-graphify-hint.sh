@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# DEPRECATED (ADR-0017): the graphify hint now lives in plugins/graphify/hooks/pre-tool-use.sh
+# and is run by 02d-plugins.sh. This file stays one minor version for projects that
+# have not migrated: it does nothing once a plugin-settings/graphify.json exists, so
+# the hint cannot fire twice (both paths also share the once-per-session marker below).
 # PreToolUse sub-script: injects graphify context hint when Claude searches the codebase.
 # Only fires when graph.json exists and the current tool is Glob or Grep — and
 # only ONCE per session. Without the marker below this used to re-inject the
@@ -9,6 +13,8 @@
 # a linked worktree shares it with the main checkout) and is cleared by
 # session-start.sh so the hint fires again at the start of the next session.
 set -euo pipefail
+
+[ -f "${CLAUDE_PROJECT_DIR:-$PWD}/.dev-team-agents/plugin-settings/graphify.json" ] && exit 0
 
 GRAPH="graphify-out/graph.json"
 [ -f "$GRAPH" ] || exit 0

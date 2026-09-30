@@ -370,7 +370,7 @@ PREV_CHECK="$(state_get last_update_check "$USER_DATA_DIR/state.json")"
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Allowlist: only these top-level entries are distributed to users
-KEEP_ROOT=(agents scripts skills templates commands)
+KEEP_ROOT=(agents scripts skills templates commands plugins)
 
 for item in "$EXTRACTED_ROOT"/*; do
     name=$(basename "$item")
