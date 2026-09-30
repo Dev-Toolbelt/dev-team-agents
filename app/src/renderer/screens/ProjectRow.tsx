@@ -17,8 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -30,7 +28,6 @@ import type {
   EnvironmentReport,
   OperationResult,
   ProjectRecord,
-  UnbindReport,
   UpgradePlan,
   UpgradeReport,
 } from '../../shared/api.js';
@@ -112,17 +109,51 @@ function VersionState({ resolvesTo, current }: { resolvesTo: string; current: st
 }
 
 
+/**
+ * One boolean preference as a positive or negative badge.
+ *
+ * `null` is "the CLI did not say" and renders a neutral dash, not "Off": an unknown shown as
+ * a negative is a false claim about the project (same rule as `path_exists`). The word is
+ * always there, so the colour is never the only signal. `detail` is the tooltip.
+ */
+function PreferenceBadge({ on, detail }: { on: boolean | null; detail?: string }) {
+  if (on === null) {
+    return (
+      <span className="text-muted-foreground" title="Not reported by this devteam CLI">
+        —
+      </span>
+    );
+  }
+  const badge = on ? (
+    <Badge variant="outline" className="border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
+      On
+    </Badge>
+  ) : (
+    <Badge variant="secondary" className="text-muted-foreground">
+      Off
+    </Badge>
+  );
+  return detail !== undefined ? <Hint content={detail}>{badge}</Hint> : badge;
+}
+
+/** `suppress_notifications` is bool-or-list, and *suppressing* is the negative: `true` means Off. */
+function notificationsBadge(value: boolean | readonly string[] | null | undefined) {
+  if (value === null || value === undefined) return <PreferenceBadge on={null} />;
+  if (typeof value === 'boolean') return <PreferenceBadge on={!value} />;
+  if (value.length === 0) return <PreferenceBadge on />;
+  return <PreferenceBadge on detail={`Muted: ${value.join(', ')}`} />;
+}
+
 export function settingsButtonId(projectId: string): string {
   return `open-settings-${projectId}`;
 }
 
-type RowDialog = 'pin' | 'unbind' | 'upgrade' | null;
+type RowDialog = 'upgrade' | null;
 
 /**
  * One bound project's row, plus the dialogs its actions open.
  *
- * Only one dialog is open per row at a time — `dialog` is a single field, not three
- * booleans, so opening one can never leave another half-open behind it.
+ * Pin and Unbind are not here: they live on the project's own screen (`ProjectDialogs`).
  */
 export function ProjectRow({
   project,
@@ -198,18 +229,28 @@ export function ProjectRow({
         {/* The name only. `project_id` is a UUID that means nothing to the reader and is
             never rendered — `devteam list` in a terminal is where a debugger gets it. The
             name is the way into the project's settings, so it is a real button. */}
-        <Hint content="Open this project's settings">
-          <button
-            type="button"
-            id={settingsButtonId(project.project_id)}
-            onClick={onOpenSettings}
-            className="group inline-flex items-center gap-1 rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-label={`${name} — open settings`}
+        <span className="flex items-center gap-2">
+          <Hint
+            content={
+              <span className="block max-w-sm space-y-0.5">
+                <span className="block">Open this project&apos;s settings</span>
+                <span className="block break-all font-mono text-xs opacity-80">{project.path}</span>
+              </span>
+            }
           >
-            {name}
-            <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
-          </button>
-        </Hint>
+            <button
+              type="button"
+              id={settingsButtonId(project.project_id)}
+              onClick={onOpenSettings}
+              className="group inline-flex items-center gap-1 rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label={`${name} — open settings`}
+            >
+              {name}
+              <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
+            </button>
+          </Hint>
+          <PathState exists={project.path_exists} />
+        </span>
       </TableCell>
       <TableCell>
         <span className="flex items-center gap-2 whitespace-nowrap">
@@ -226,17 +267,13 @@ export function ProjectRow({
       </TableCell>
       <TableCell>{project.mode ?? '—'}</TableCell>
       <TableCell>{project.providers.length === 0 ? '—' : project.providers.join(', ')}</TableCell>
-      {/* The badge sits outside the truncating span, not inside it. A `truncate` cell
-          clipped it at the ellipsis, so the one row that most needed a `missing` badge — a
-          long path — was the one row that never showed it. */}
-      <TableCell className="font-mono text-xs">
-        <span className="flex items-center gap-2">
-          <span className="max-w-[24rem] truncate" title={project.path}>
-            {project.path}
-          </span>
-          <PathState exists={project.path_exists} />
-        </span>
+      <TableCell>
+        <PreferenceBadge on={project.preferences?.auto_update ?? null} />
       </TableCell>
+      <TableCell>
+        <PreferenceBadge on={project.preferences?.worktree_active ?? null} />
+      </TableCell>
+      <TableCell>{notificationsBadge(project.preferences?.suppress_notifications)}</TableCell>
       <TableCell>
         <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
           <WriteButton
@@ -251,16 +288,6 @@ export function ProjectRow({
             {syncState.phase === 'pending' ? 'Syncing…' : 'Sync'}
           </WriteButton>
           <WriteButton
-            command="pin"
-            environment={environment}
-            variant="outline"
-            size="xs"
-            tooltip="Hold this project on a specific version, or release the pin"
-            onClick={() => setDialog('pin')}
-          >
-            Pin…
-          </WriteButton>
-          <WriteButton
             command="upgrade"
             environment={environment}
             variant="outline"
@@ -269,16 +296,6 @@ export function ProjectRow({
             onClick={() => setDialog('upgrade')}
           >
             Upgrade…
-          </WriteButton>
-          <WriteButton
-            command="unbind"
-            environment={environment}
-            variant="destructive"
-            size="xs"
-            tooltip="Remove this project from the store — asks for confirmation first"
-            onClick={() => setDialog('unbind')}
-          >
-            Unbind…
           </WriteButton>
           <Hint content="Move to a folder">
             <span className="inline-flex">{moveMenu}</span>
@@ -292,21 +309,6 @@ export function ProjectRow({
         {syncState.phase === 'done' ? <Notice result={syncState.result} /> : null}
       </TableCell>
 
-      <PinDialog
-        open={dialog === 'pin'}
-        onOpenChange={(open) => setDialog(open ? 'pin' : null)}
-        projectId={project.project_id}
-        name={name}
-        currentPin={project.pin}
-        onChanged={onChanged}
-      />
-      <UnbindDialog
-        open={dialog === 'unbind'}
-        onOpenChange={(open) => setDialog(open ? 'unbind' : null)}
-        project={project}
-        name={name}
-        onUnbound={onChanged}
-      />
       <UpgradeDialog
         open={dialog === 'upgrade'}
         onOpenChange={(open) => setDialog(open ? 'upgrade' : null)}
@@ -315,193 +317,6 @@ export function ProjectRow({
         onApplied={onChanged}
       />
     </TableRow>
-  );
-}
-
-/** Set or release a pin. `setPin(id, null)` releases it — not `setPin(id, '')`. */
-function PinDialog({
-  open,
-  onOpenChange,
-  projectId,
-  name,
-  currentPin,
-  onChanged,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  name: string;
-  currentPin: string | null;
-  onChanged: () => void;
-}) {
-  const [version, setVersion] = useState('');
-  const pin = useAction((v: string | null) => window.devteam.setPin(projectId, v));
-
-  function close() {
-    pin.reset();
-    setVersion('');
-    onOpenChange(false);
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) onOpenChange(true);
-        else if (pin.state.phase !== 'pending') close();
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Pin {name}</DialogTitle>
-          <DialogDescription>
-            {currentPin !== null
-              ? `Currently pinned to ${currentPin}. Set a different version, or release the pin to track the store's current version again.`
-              : 'Not pinned — this project tracks the store’s current version. Set a version to pin it.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-2">
-          <Label htmlFor="pin-version">Version</Label>
-          <Input
-            id="pin-version"
-            value={version}
-            onChange={(event) => setVersion(event.target.value)}
-            placeholder="e.g. 2.48.0"
-          />
-        </div>
-
-        {pin.state.phase === 'done' && !pin.state.result.ok ? <Problem problem={pin.state.result} /> : null}
-        {pin.state.phase === 'done' && pin.state.result.ok ? (
-          <p className="text-sm text-muted-foreground">
-            {pin.state.result.data.pin !== null ? `Pinned to ${pin.state.result.data.pin}.` : 'Pin released.'}
-          </p>
-        ) : null}
-        {pin.state.phase === 'done' ? <Notice result={pin.state.result} /> : null}
-
-        <DialogFooter>
-          {currentPin !== null ? (
-            <Button
-              variant="outline"
-              disabled={pin.state.phase === 'pending'}
-              onClick={() => {
-                void pin.run(null).then((result) => {
-                  if (result.ok) onChanged();
-                });
-              }}
-            >
-              Release pin
-            </Button>
-          ) : null}
-          <Button
-            disabled={pin.state.phase === 'pending' || version.trim() === ''}
-            onClick={() => {
-              void pin.run(version.trim()).then((result) => {
-                if (result.ok) onChanged();
-              });
-            }}
-          >
-            {pin.state.phase === 'pending' ? 'Setting…' : 'Set pin'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Unbind's explicit confirm step. States what will happen before the destructive action can
- * fire — a single stray click on a row action must not be able to unbind a project.
- */
-function UnbindDialog({
-  open,
-  onOpenChange,
-  project,
-  name,
-  onUnbound,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  project: ProjectRecord;
-  name: string;
-  onUnbound: () => void;
-}) {
-  const unbind = useAction(() => window.devteam.unbindProject(project.project_id));
-  const pending = unbind.state.phase === 'pending';
-  const unbound = unbind.state.phase === 'done' && unbind.state.result.ok;
-
-  // The list reloads when the dialog closes, not when the write lands: a successful unbind
-  // removes this very row, and with it this dialog and the quarantine report the user has
-  // to read. Every way out — Done, Cancel, Esc, a click outside — comes through here, so a
-  // dismissal after success cannot leave the list stale.
-  function close() {
-    if (pending) return;
-    unbind.reset();
-    onOpenChange(false);
-    if (unbound) onUnbound();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Unbind {name}?</DialogTitle>
-          <DialogDescription>
-            This removes the store&apos;s link to <span className="font-mono">{project.path}</span>. Files this store
-            manages are quarantined, not deleted; the project&apos;s own files are left alone.
-          </DialogDescription>
-        </DialogHeader>
-
-        {unbind.state.phase === 'done' && !unbind.state.result.ok ? <Problem problem={unbind.state.result} /> : null}
-        {unbind.state.phase === 'done' && unbind.state.result.ok ? (
-          <UnbindResultSummary report={unbind.state.result.data} />
-        ) : null}
-        {unbind.state.phase === 'done' ? <Notice result={unbind.state.result} /> : null}
-
-        <DialogFooter>
-          <Button variant="outline" disabled={pending} onClick={close}>
-            Cancel
-          </Button>
-          {unbound ? (
-            <Button onClick={close}>Done</Button>
-          ) : (
-            <Button
-              variant="destructive"
-              disabled={unbind.state.phase === 'pending'}
-              onClick={() => void unbind.run()}
-            >
-              {unbind.state.phase === 'pending' ? 'Unbinding…' : 'Unbind'}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * `quarantined` is the one the user must read — it names where their files went.
- * `unlinked` is ~159 entries on a claude-only bind, so its length is shown, not the list.
- */
-
-function UnbindResultSummary({ report }: { report: UnbindReport }) {
-  return (
-    <div className="space-y-1 text-sm">
-      <p>{report.unlinked.length} link{report.unlinked.length === 1 ? '' : 's'} removed.</p>
-      {report.quarantined.length > 0 ? (
-        <div>
-          <p className="font-medium">Quarantined to:</p>
-          <ul className="list-inside list-disc font-mono text-xs text-muted-foreground">
-            {report.quarantined.map((entry, index) => (
-              <li key={index}>{entry.to ?? '(no destination reported)'}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {report.problems.length > 0 ? (
-        <p className="text-destructive">{report.problems.length} problem{report.problems.length === 1 ? '' : 's'} reported.</p>
-      ) : null}
-    </div>
   );
 }
 

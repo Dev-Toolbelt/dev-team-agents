@@ -232,6 +232,13 @@ export function Projects({
             setDeferredOpen(null);
             reload();
           }}
+          onChanged={reload}
+          onUnbound={() => {
+            // The project is gone, so there is no row to return focus to.
+            setOpenSettings(null);
+            setDeferredOpen(null);
+            reload();
+          }}
         />
       </>
     );

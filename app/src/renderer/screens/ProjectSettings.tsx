@@ -22,9 +22,11 @@ import { cn } from '@/lib/utils';
 import { SaveBar } from '../SaveBar.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import { Loading, Problem } from '../Problem.js';
+import { PinDialog, UnbindDialog } from './ProjectDialogs.js';
 import { ProjectPlugins } from './ProjectPlugins.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
+import { WriteButton } from '../WriteButton.js';
 import {
   BOOLEAN_SELECT_KEYS,
   FIELD_BY_KEY,
@@ -97,6 +99,8 @@ export function ProjectSettings({
   environment,
   active,
   onBack,
+  onChanged,
+  onUnbound,
 }: {
   project: ProjectRecord;
   name: string;
@@ -104,7 +108,12 @@ export function ProjectSettings({
   /** Whether the tab holding this screen is the visible one; it stays mounted while hidden. */
   active: boolean;
   onBack: () => void;
+  /** A pin was set or released: the list's record for this project is now stale. */
+  onChanged: () => void;
+  /** The project was unbound and its dialog dismissed: leave this screen and refresh the list. */
+  onUnbound: () => void;
 }) {
+  const [dialog, setDialog] = useState<'pin' | 'unbind' | null>(null);
   const projectId = project.project_id;
   const { state, refreshing, reload } = useOperation(() => window.devteam.projectPreferences(projectId), [projectId]);
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -341,7 +350,29 @@ export function ProjectSettings({
             {project.path}
           </p>
         </div>
-        {loaded !== null ? <Badge variant="outline">store {loaded.version}</Badge> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {loaded !== null ? <Badge variant="outline">store {loaded.version}</Badge> : null}
+          <WriteButton
+            command="pin"
+            environment={environment}
+            variant="outline"
+            size="sm"
+            tooltip="Hold this project on a specific version, or release the pin"
+            onClick={() => setDialog('pin')}
+          >
+            Pin…
+          </WriteButton>
+          <WriteButton
+            command="unbind"
+            environment={environment}
+            variant="destructive"
+            size="sm"
+            tooltip="Remove this project from the store — asks for confirmation first"
+            onClick={() => setDialog('unbind')}
+          >
+            Unbind…
+          </WriteButton>
+        </div>
       </div>
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -613,6 +644,22 @@ export function ProjectSettings({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PinDialog
+        open={dialog === 'pin'}
+        onOpenChange={(open) => setDialog(open ? 'pin' : null)}
+        projectId={projectId}
+        name={name}
+        currentPin={project.pin}
+        onChanged={onChanged}
+      />
+      <UnbindDialog
+        open={dialog === 'unbind'}
+        onOpenChange={(open) => setDialog(open ? 'unbind' : null)}
+        project={project}
+        name={name}
+        onUnbound={onUnbound}
+      />
     </section>
   );
 }

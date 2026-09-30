@@ -50,8 +50,8 @@ type FolderDialog =
   | { readonly kind: 'rename'; readonly folder: ProjectFolder }
   | null;
 
-/** The selection cell (checkbox and drag handle share it), then the six data columns. */
-const COLUMNS = 7;
+/** The selection cell (checkbox and drag handle share it), then eight data columns. */
+const COLUMNS = 9;
 
 const IDLE_BULK: BulkSyncState = { phase: 'idle', done: 0, total: 0, failures: [], stopped: false };
 const IDLE_ROW: RowSyncState = { phase: 'idle' };
@@ -513,7 +513,9 @@ export function ProjectList({
                 <TableHead scope="col">Version</TableHead>
                 <TableHead scope="col">Mode</TableHead>
                 <TableHead scope="col">Providers</TableHead>
-                <TableHead scope="col">Path</TableHead>
+                <TableHead scope="col">Auto-update</TableHead>
+                <TableHead scope="col">Worktree</TableHead>
+                <TableHead scope="col">Notifications</TableHead>
                 <TableHead scope="col">Actions</TableHead>
               </TableRow>
             </TableHeader>
