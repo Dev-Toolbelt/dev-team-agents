@@ -968,6 +968,8 @@ _add_gitignore "!.dev-team-agents/user-data/graphify.json"
 _add_gitignore ".dev-team-agents/user-data/credentials.local.json"
 _add_gitignore ".dev-team-agents/.worktree-session"
 _add_gitignore ".dev-team-agents/.learn-last-run"
+# Where install-opencode.sh / install-codex.sh --adopt move the files they replace.
+_add_gitignore ".dev-team-agents/quarantine/"
 _add_gitignore ".worktrees/"
 
 echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + learn-last-run + worktrees dir)"

@@ -11,6 +11,16 @@ Stack-agnostic, project-aware. Installed at the project level (`.dev-team-agents
 
 The canonical source (`agents/`, `commands/`, `skills/`, `scripts/hooks/`) is **provider-agnostic**. Claude Code is the default provider; opencode and OpenAI Codex CLI are supported via a render engine (`scripts/render-provider.sh`) that emits the provider-specific file tree per target project. See `docs/providers.md` for the tier → model id map and the per-provider install scripts.
 
+### Provider Parity Rule
+
+**Any change to provider-facing behavior is implemented and tested for every supported provider, never for Claude Code alone.** The supported set is `scripts/lib/devteam/providers.py:ALL_PROVIDERS` (today: `claude`, `opencode`, `codex`) — read it, do not restate it.
+
+Provider-facing means anything a provider's install observes: `bind` / `sync` / `unbind` / `doctor` / `migrate`, the installers (`install-opencode.sh`, `install-codex.sh`, `install-provider.sh`, `update.sh`), the render engine, hook wiring, and the agents, commands and skills a provider receives.
+
+- A plan for such a change lists each provider in scope. Excluding one is a decision: the plan names it and says why, and the PR template's parity checkbox records it.
+- Tests iterate `ALL_PROVIDERS` rather than naming providers, and keep a per-provider fixture map that fails when a provider is added without a case — `tests/test_provider_ownership.py` is the pattern.
+- A guarantee that `bind.py` enforces for Claude natively must be enforced for the delegated providers through their installers too. Claude being the identity case is not a reason for the others to skip a check (ADR-0022 is what that gap cost).
+
 ---
 
 ## Language
@@ -294,6 +304,7 @@ dev-team-agents/
 │   │   ├── installer-fetch.sh     ← shared ref-pinned download + payload verification
 │   │   │                            (update.sh, rollback.sh, the auto-update hook path)
 │   │   ├── telemetry-guard.sh     ← single fail-closed definition of _telemetry_enabled
+│   │   ├── provider-ownership.sh  ← which paths the opencode/Codex installers may write (ADR-0022)
 │   │   └── ensure-claude-framework.sh
 │   ├── helpers/     ← SHIPS and runs in user projects — telemetry-send.sh (called by install.sh, update.sh)
 │   └── hooks/       ← session-start.sh, pre-compact.sh + pre-tool-use.sh, stop.sh (dispatchers)

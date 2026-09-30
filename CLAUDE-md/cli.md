@@ -114,9 +114,17 @@ rewritten in place rather than duplicated, and `unbind` removes only those entri
 the session banner, session-summary enforcement, orphan-skill scan, agent lint and ADR-gap check
 do not run in that project at all.
 
-**Files the installers merge into** — `.claude/settings.json`, `.opencode/opencode.json`,
-`AGENTS.md` — belong to the project. They are neither ignored nor removed; the project commits
-them.
+**Files the installers merge into** — `.claude/settings.json`, `.codex/hooks.json`,
+`.opencode/opencode.json`, `AGENTS.md` — belong to the project. They are never ignored; the project
+commits them, and `unbind` removes only the entries the framework marked (`settings`, `codex-hooks`).
+
+**Every provider's artifacts are files, never the directory that holds them** (ADR-0022). The
+project's own agents, commands and skills sit beside them in `.claude/`, `.opencode/` and `.codex/`
+and are not claimed, excluded or retired. opencode and Codex artifacts come from their installers,
+which answer `--list-targets`; `bind`'s preflight refuses a project-owned path at any target with
+exit 4 before the first write, the same as for Claude. A manifest from before ADR-0022 records whole
+directories: the next `sync` or `unbind` expands each to the installer's targets under it and never
+retires the directory.
 
 Bind artifacts cannot be committed: they carry an absolute path into one developer's store. They are
 excluded through **`.git/info/exclude`**, which is local to the clone — a bind links one entry per
@@ -131,6 +139,13 @@ preferences, markers, `.worktrees/`), between managed markers.
 | `link` | symlinks into `core/versions/<v>` | macOS, Linux | `devteam update` re-points every project at once |
 | `copy` | real copies, refreshed by `sync` | Windows without native symlink support | Recorded in `registry.json`, so the fallback is never silent |
 | `vendored` | full tree in the project, relative links — v2 behaviour | opt-in | CI, containers, air-gapped, repos that must ship the harness |
+
+**Every mode serves every provider** (Provider Parity Rule). In `vendored` mode the opencode and
+Codex installers run too: their agents, command skills, plugin and `.codex/hooks.json` are regular
+files, their skills link is relative (`../../.dev-team-agents/skills`), and every hook path points into
+the vendored `scripts/`, so the whole tree resolves on any clone. A project-owned path at any
+provider target is refused in every mode; vendored re-vendors (quarantines) only its own trees under
+`.dev-team-agents/`.
 
 `auto` probes for symlink support rather than guessing from the platform name. An explicit
 `--mode=link` on a filesystem that cannot do it **fails** instead of silently downgrading.

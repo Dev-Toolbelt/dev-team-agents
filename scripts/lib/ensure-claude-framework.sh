@@ -78,6 +78,11 @@ ensure_claude_framework() {
   # Bootstrap runtime state dirs/files expected by shared hooks and the
   # health-check. Hooks will overwrite these on first real use; touching them
   # here avoids a fresh Codex/opencode bootstrap looking partially incomplete.
+  # Not in a bound project: its state lives behind the `state-dir` pointer, and
+  # recreating user-data/ here undoes what `devteam upgrade` retired.
+  if [[ -f "$framework_dir/project.json" ]]; then
+    return 0
+  fi
   mkdir -p "$framework_dir/user-data"
   # session_id used to live as a standalone .session-id dotfile placeholder;
   # it is now a key in the consolidated state.json. Just ensure the file

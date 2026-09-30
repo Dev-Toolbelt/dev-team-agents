@@ -12,6 +12,7 @@
 #   bash <(curl -sSL .../install-provider.sh) codex
 #   bash <(curl -sSL .../install-provider.sh) opencode --source /abs/path/to/dev-team-agents-clone   # dev mode
 #   bash <(curl -sSL .../install-provider.sh) opencode --version v1.11.0                              # pin a version
+#   bash <(curl -sSL .../install-provider.sh) codex --adopt       # quarantine same-named project files first
 #
 # What it does:
 #   1. Parses the provider arg (opencode | codex).
@@ -39,10 +40,12 @@ fi
 # ── parse remaining flags ────────────────────────────────────────────
 SOURCE_OVERRIDE=""
 VERSION="main"
+INSTALLER_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source) SOURCE_OVERRIDE="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
+    --adopt) INSTALLER_ARGS+=("--adopt"); shift ;;
     *) echo "install-provider: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -96,4 +99,4 @@ if [[ ! -f "$INSTALLER" ]]; then
 fi
 
 # ── run the provider installer with --source ────────────────────────
-bash "$INSTALLER" --source "$STAGING"
+bash "$INSTALLER" --source "$STAGING" ${INSTALLER_ARGS[@]+"${INSTALLER_ARGS[@]}"}

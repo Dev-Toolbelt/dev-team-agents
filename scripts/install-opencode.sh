@@ -14,6 +14,14 @@
 #   bash <path-to-dev-team-agents>/scripts/install-opencode.sh
 #   bash <path-to-dev-team-agents>/scripts/install-opencode.sh --source /abs/path
 #   bash <path-to-dev-team-agents>/scripts/install-opencode.sh --dry-run
+#   bash <path-to-dev-team-agents>/scripts/install-opencode.sh --list-targets
+#   bash <path-to-dev-team-agents>/scripts/install-opencode.sh --adopt
+#
+# Ownership (scripts/lib/provider-ownership.sh): an existing target path that
+# dev-team-agents did not create is never overwritten or deleted. The installer
+# exits 4 naming it, unless --adopt moves it to .dev-team-agents/quarantine/
+# first. --owned <file> lists paths a caller (`devteam bind`) vouches for;
+# --list-targets prints the project-relative paths an install would write.
 #
 # What it does:
 #   1. Resolves source: --source flag, $DEV_TEAM_AGENTS_SOURCE env, or
@@ -33,14 +41,23 @@ set -euo pipefail
 PROJECT_ROOT="$(pwd)"
 DRY_RUN=0
 SOURCE_ARG=""
+LIST_TARGETS=0
+ADOPT=0
+OWNED_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source) SOURCE_ARG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --list-targets) LIST_TARGETS=1; DRY_RUN=1; shift ;;
+    --adopt) ADOPT=1; shift ;;
+    --owned) OWNED_FILE="$2"; shift 2 ;;
     *) echo "install-opencode: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+
+# --list-targets owns stdout: everything else goes to stderr.
+if [[ $LIST_TARGETS -eq 1 ]]; then exec 3>&1 1>&2; fi
 
 # ── locate dev-team-agents source ─────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -104,9 +121,41 @@ trap 'rm -rf "$STAGING"' EXIT
 bash "$SOURCE_DIR/scripts/render-provider.sh" \
   --provider opencode --source-dir "$SOURCE_DIR" --target-dir "$STAGING"
 
+# ── ownership guard — before the first write ──────────────────────────
+# shellcheck source=scripts/lib/provider-ownership.sh
+source "$SCRIPT_DIR/lib/provider-ownership.sh"
+TARGETS="$STAGING/.targets"
+{
+  for f in "$STAGING/.opencode/agents/"*.md; do
+    [[ -e "$f" ]] && echo ".opencode/agents/$(basename "$f")"
+  done
+  echo ".opencode/skills/dev-team-agents"
+  if [[ -f "$SOURCE_DIR/opencode/plugin/dev-team-agents.ts" ]]; then
+    echo ".opencode/plugins/dev-team-agents.ts"
+  fi
+} > "$TARGETS"
+
+if [[ $LIST_TARGETS -eq 1 ]]; then
+  cat "$TARGETS" >&3
+  exit 0
+fi
+po_guard "$PROJECT_ROOT" "$SOURCE_DIR" opencode "$OWNED_FILE" "$TARGETS" "$ADOPT" "$DRY_RUN"
+
 # ── write or symlink into project ────────────────────────────────────
 OPENCODE_DIR="$PROJECT_ROOT/.opencode"
 mkdir -p "$OPENCODE_DIR/agents" "$OPENCODE_DIR/plugins"
+
+# 0 — materialize .dev-team-agents/ subset so the plugin's
+# `${directory}/.dev-team-agents/scripts/hooks/...` paths resolve.
+# Sourced helper mirrors the slim Claude install. First, so the skills link
+# below finds the project's own skills/ copy when this creates one.
+if [[ $DRY_RUN -eq 0 ]]; then
+  SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
+  # shellcheck source=scripts/lib/ensure-claude-framework.sh
+  source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
+  ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
+  echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
+fi
 
 # 1. agents — copy (renderer already shaped frontmatter + body)
 if [[ $DRY_RUN -eq 0 ]]; then
@@ -118,9 +167,7 @@ fi
 SKILLS_LINK="$OPENCODE_DIR/skills/dev-team-agents"
 if [[ $DRY_RUN -eq 0 ]]; then
   mkdir -p "$OPENCODE_DIR/skills"
-  if [[ -L "$SKILLS_LINK" || -e "$SKILLS_LINK" ]]; then rm -rf "$SKILLS_LINK"; fi
-  ln -s "$SOURCE_DIR/skills" "$SKILLS_LINK"
-  echo "  + symlinked skills/ -> $SKILLS_LINK"
+  po_link_skills "$PROJECT_ROOT" "$SOURCE_DIR" "$SKILLS_LINK"
 fi
 
 # 3. plugin
@@ -131,17 +178,6 @@ if [[ $DRY_RUN -eq 0 ]]; then
   else
     echo "  ! plugin not found at $SOURCE_DIR/opencode/plugin/dev-team-agents.ts (hooks layer will not auto-wire)" >&2
   fi
-fi
-
-# 3.1 — materialize .dev-team-agents/ subset so the plugin's
-# `${directory}/.dev-team-agents/scripts/hooks/...` paths resolve.
-# Sourced helper mirrors the slim Claude install.
-if [[ $DRY_RUN -eq 0 ]]; then
-  SCRIPT_DIR_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
-  # shellcheck source=scripts/lib/ensure-claude-framework.sh
-  source "$SCRIPT_DIR_LIB/ensure-claude-framework.sh"
-  ensure_claude_framework "$PROJECT_ROOT" "$SOURCE_DIR"
-  echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
 # 4. merge command snippet into project opencode.json(.jsonc)
@@ -202,10 +238,16 @@ JSON
   echo "  + merged ${CMD_COUNT} command keys into .opencode/opencode.json (key: devteam:<name>)"
 fi
 
-# 5. record version (reuse Claude installer's VERSION file if present)
-if [[ $DRY_RUN -eq 0 && -f "$SOURCE_DIR/VERSION" ]]; then
+# 5. record version (reuse Claude installer's VERSION file if present). Not in a
+# bound project: `devteam` records the version in its manifest, and a stray
+# .dev-team-agents/VERSION there is a file nothing owns or removes.
+if [[ $DRY_RUN -eq 0 && -f "$SOURCE_DIR/VERSION" && ! -f "$PROJECT_ROOT/.dev-team-agents/project.json" ]]; then
   mkdir -p "$PROJECT_ROOT/.dev-team-agents"
   cp -f "$SOURCE_DIR/VERSION" "$PROJECT_ROOT/.dev-team-agents/VERSION" 2>/dev/null || true
+fi
+
+if [[ $DRY_RUN -eq 0 && -z "$OWNED_FILE" ]]; then
+  po_record_ledger "$PROJECT_ROOT" opencode "$TARGETS"
 fi
 
 echo ""

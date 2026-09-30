@@ -356,26 +356,39 @@ def _v2_runtime_tree_error(dest, rel):
     )
 
 
-def _preflight(version_dir, project_root, mode, selected, previous_paths, previous_copies):
+def _preflight(
+    version_dir, project_root, mode, selected, previous_paths, previous_copies, previous_artifacts=()
+):
     """Refuse a bind that would collide, before anything is written.
 
-    The same conditions `_materialize` and `_runtime_root` refuse on, checked for every
-    destination up front. Found in the middle of the bind, a collision left
-    `project.json` behind on a project that was never bound — and a pre-v2.1.0 install's
-    own `migrate-to-root.sh` then refused to run, because `.dev-team-agents/` existed.
-    Vendored mode quarantines what it finds, so it has nothing to refuse here.
+    The same conditions `_materialize`, `_runtime_root` and the delegated installers
+    refuse on, checked for every destination of every selected provider up front.
+    Found in the middle of the bind, a collision left `project.json` behind on a
+    project that was never bound — and a pre-v2.1.0 install's own
+    `migrate-to-root.sh` then refused to run, because `.dev-team-agents/` existed.
+
+    Every mode, vendored included: vendored re-vendors (quarantines) only its own
+    trees under `.dev-team-agents/`. A provider path outside them that the project
+    owns is refused there exactly as in link mode — moving a project's own agent out
+    of the way to install one of the same name silently changes which agent runs.
+
+    Returns ``{provider: targets}`` for the delegated providers, and the subset of
+    those targets that already exist and are framework-owned, which the installer is
+    told to trust. Both are computed once here and reused by the bind.
     """
-    if mode == "vendored":
-        return
+    delegated = {}
+    owned = {}
     root = Path(project_root)
-    if "claude" in selected:
+    # Vendored links the Claude tree whatever the selection (`_vendored_tree`).
+    if "claude" in selected or mode == "vendored":
         for rel_path, _source in providers.claude_artifacts(version_dir):
             dest = root / rel_path
             if (dest.exists() or dest.is_symlink()) and not _is_managed_path(
                 rel_path.as_posix(), dest, previous_paths, project_root
             ):
                 raise _foreign_path_error(dest)
-    for name in RUNTIME_TREES:
+    # Vendored mode puts real trees at these paths on purpose; it has no runtime links.
+    for name in RUNTIME_TREES if mode != "vendored" else ():
         rel = (Path(project.PROJECT_DIR) / name).as_posix()
         dest = root / rel
         if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
@@ -384,6 +397,22 @@ def _preflight(version_dir, project_root, mode, selected, previous_paths, previo
             continue  # `_runtime_root` skips it too
         if (dest.exists() or dest.is_symlink()) and not _is_managed_path(rel, dest, previous_paths, project_root):
             raise _foreign_path_error(dest)
+    for provider_name in selected:
+        if provider_name not in providers.DELEGATED_INSTALLERS:
+            continue
+        targets = providers.delegated_targets(provider_name, version_dir, project_root)
+        claimed = set(previous_paths) | set(providers.legacy_owned(previous_artifacts, targets))
+        existing = []
+        for rel in targets:
+            dest = root / rel
+            if not (dest.exists() or dest.is_symlink()):
+                continue
+            if not _is_managed_path(rel, dest, claimed, project_root):
+                raise _foreign_path_error(dest)
+            existing.append(rel)
+        delegated[provider_name] = targets
+        owned[provider_name] = existing
+    return delegated, owned
 
 
 def _materialize(source, dest, mode, previous_paths, rel, project_root, project_id, retired):
@@ -425,7 +454,10 @@ def _materialize(source, dest, mode, previous_paths, rel, project_root, project_
 def _vendored_tree(version_dir, project_root, previous_paths, project_id, retired):
     """v2 layout: the framework inside the project, with relative links.
 
-    Every existing tree is **quarantined**, never deleted. The previous code had
+    Every existing framework tree under `.dev-team-agents/` is **quarantined**, never
+    deleted, and re-vendored. A Claude artifact path is replaced only when
+    `_preflight` found it framework-owned; a project-owned one refused the bind before
+    this ran. The previous code had
     a delete branch justified as "a v2 install being re-vendored is the
     documented update" — which is exactly the judgment call the No-Destruction
     Rule says not to make: a hand-written agent sitting in that directory is
@@ -682,7 +714,15 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     previous_copies = {
         item.get("path") for item in previous.get("artifacts", []) if item.get("kind") == "copy"
     }
-    _preflight(version_dir, project_root, resolved_mode, selected, previous_paths, previous_copies)
+    delegated_targets, delegated_owned = _preflight(
+        version_dir,
+        project_root,
+        resolved_mode,
+        selected,
+        previous_paths,
+        previous_copies,
+        previous.get("artifacts", []),
+    )
 
     # The first write.
     data, created_identity = project.ensure(project_root)
@@ -752,18 +792,30 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             )
         )
 
-    if resolved_mode != "vendored":
-        if "opencode" in selected:
-            providers.install_opencode(version_dir, project_root)
-            artifacts.extend(providers.delegated_artifacts("opencode", project_root))
-            merged.extend(providers.merged_project_files("opencode", project_root))
-        if "codex" in selected:
-            providers.install_codex(version_dir, project_root)
-            artifacts.extend(providers.delegated_artifacts("codex", project_root))
-            merged.extend(providers.merged_project_files("codex", project_root))
+    # Every mode. In vendored mode the installers find the vendored `skills/` and link
+    # it relatively, and the hook paths they write point into the vendored `scripts/`,
+    # so everything they produce is portable and committed with the rest of the tree.
+    if "opencode" in selected:
+        providers.install_opencode(
+            version_dir, project_root, owned=delegated_owned.get("opencode")
+        )
+        artifacts.extend(
+            providers.delegated_artifacts(
+                "opencode", project_root, delegated_targets.get("opencode", [])
+            )
+        )
+        merged.extend(providers.merged_project_files("opencode", project_root))
+    if "codex" in selected:
+        providers.install_codex(version_dir, project_root, owned=delegated_owned.get("codex"))
+        artifacts.extend(
+            providers.delegated_artifacts(
+                "codex", project_root, delegated_targets.get("codex", [])
+            )
+        )
+        merged.extend(providers.merged_project_files("codex", project_root))
 
     stale = _prune_stale(
-        project_root, previous, {item["path"] for item in artifacts}, project_id
+        project_root, previous, {item["path"] for item in artifacts}, project_id, version_dir
     )
 
     manifest = {
@@ -829,13 +881,62 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     }
 
 
-def _prune_stale(project_root, previous, current_paths, project_id):
+def _expand_legacy_delegated(item, version_dir, project_root):
+    """The framework-owned paths hidden behind an old directory-level record.
+
+    Never the directory itself — it may hold the project's own agents and skills.
+    Only the targets the installer writes, under that directory. Without a core
+    version to ask, nothing: leaving a framework file behind is recoverable,
+    moving a project file is not what the user asked for.
+    """
+    if version_dir is None or item.get("provider") not in providers.DELEGATED_INSTALLERS:
+        return []
+    try:
+        targets = providers.delegated_targets(item["provider"], version_dir, project_root)
+    except (EnvError, ConflictError):
+        return []
+    base = item["path"]
+    return [rel for rel in targets if rel.startswith(base + "/")]
+
+
+def _stale_candidates(previous_artifacts, current_paths, version_dir, project_root):
+    """``(rel, kind)`` pairs a previous manifest claims that the current bind does not.
+
+    An old directory-level delegated record is expanded to the files under it that
+    the installer owns (see :func:`_expand_legacy_delegated`); an old record of the
+    Codex hooks file is treated as the merged file it is.
+    """
+    out = []
+    for item in previous_artifacts:
+        rel = item.get("path")
+        if not rel or rel in current_paths:
+            continue
+        if providers.is_legacy_delegated(item):
+            if rel == providers.CODEX_HOOKS_FILE:
+                out.append((rel, "codex-hooks"))
+                continue
+            for child in _expand_legacy_delegated(item, version_dir, project_root):
+                if child not in current_paths:
+                    out.append((child, "delegated"))
+            continue
+        out.append((rel, item.get("kind")))
+    return out
+
+
+def _prune_stale(project_root, previous, current_paths, project_id, version_dir=None):
     """Retire artifacts a previous bind made that this one no longer needs."""
     unlinked = []
     quarantined = []
-    for item in previous.get("artifacts", []):
-        rel = item.get("path")
-        if not rel or rel in current_paths:
+    for rel, kind in _stale_candidates(
+        previous.get("artifacts", []), current_paths, version_dir, project_root
+    ):
+        if kind == "codex-hooks":
+            try:
+                events = providers.unwire_codex_hooks(project_root)
+            except OSError:
+                continue
+            if events:
+                unlinked.append("{} (hooks: {})".format(rel, ", ".join(events)))
             continue
         candidate = Path(project_root) / rel
         if not (candidate.exists() or candidate.is_symlink()):
@@ -994,7 +1095,24 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
     # Observed on this repository's own unbind, not derived from reading the code.
     keep_pointers = project.layout(project_root) >= project.CURRENT_LAYOUT
     if not keep_artifacts:
+        legacy_version_dir = None
+        if any(providers.is_legacy_delegated(item) for item in manifest.get("artifacts", [])):
+            try:
+                legacy_version_dir = versions.require(manifest.get("version"))
+            except (EnvError, UsageError, TypeError):
+                legacy_version_dir = None
+        items = []
         for item in manifest.get("artifacts", []):
+            if not providers.is_legacy_delegated(item):
+                items.append(item)
+            elif item.get("path") == providers.CODEX_HOOKS_FILE:
+                items.append(dict(item, kind="codex-hooks"))
+            else:
+                items.extend(
+                    {"path": child, "kind": "delegated", "provider": item.get("provider")}
+                    for child in _expand_legacy_delegated(item, legacy_version_dir, project_root)
+                )
+        for item in items:
             rel = item.get("path")
             # An entry with no path used to become `Path(project_root) / ""`,
             # which IS the project root — and the removal helper then deleted the
@@ -1024,6 +1142,16 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
                         unlinked.append(rel)
                     except OSError as exc:
                         problems.append({"path": rel, "error": str(exc)})
+                continue
+            if item.get("kind") == "codex-hooks":
+                # Merged into, like `.claude/settings.json`: only our entries go.
+                try:
+                    events = providers.unwire_codex_hooks(project_root)
+                except OSError as exc:
+                    problems.append({"path": rel, "error": str(exc)})
+                else:
+                    if events:
+                        unlinked.append("{} (hooks: {})".format(rel, ", ".join(events)))
                 continue
             if item.get("kind") == "settings":
                 # `.claude/settings.json` belongs to the project and may be
