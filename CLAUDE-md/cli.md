@@ -64,7 +64,8 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), the v2
 `credentials.local.json` (values, not references), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
-machine's app has shown). Never re-derive that rule at a call site.
+machine's app has shown), and the `tasks/` directory of per-session task-board records (ADR-0018:
+what this machine's agent sessions planned). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -170,6 +171,10 @@ mode.
 | `devteam notifications list [--project <id>] [--unseen]` | Live notifications across bound projects: what the hooks queued (`scripts/hooks/lib/notify.sh`), minus the expired, each with `seen` (ADR-0017) |
 | `devteam notifications ack <id>… \| --all [--project <id>]` | Mark notifications seen. Writes `notifications-seen.json` under a lock; **never rewrites the queue** a hook may be appending to |
 | `devteam notifications watch [--interval <s>]` | Stream the unseen backlog, then each new record, until stdin closes or SIGTERM. `--json` is JSON Lines — see § The `--json` contract |
+| `devteam tasks record --project-root <dir> [--provider auto]` | **Hook-only.** Reads a hook payload on stdin and folds a todo-tool call into its session's record; prints `{recorded, session, all_done, became_all_done}`. Never fails on bad input — exit 0 with `recorded: false` (ADR-0018) |
+| `devteam tasks mark --project-root <dir> --state idle\|ended` | **Hook-only.** Marks the payload's session idle or ended; no-op without a record. Prints `{marked, open}` |
+| `devteam tasks list [--project <id>…] [--since <epoch>] [--stale-after S] [--ended-after S]` | The task board: every bound project with ≥ 1 task, sessions, tasks and derived state; see § Task board below |
+| `devteam tasks watch [same filters] [--interval <s>]` | Stream `snapshot` events per changed project, then `ready`, `heartbeat`, `end`. `--json` is JSON Lines |
 | `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add` |
 
 ## The `--json` contract
@@ -207,6 +212,26 @@ reads as a protocol error and hides the exit code that explains it. `--interval`
 against a real stream instead.
 
 **Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.
+
+## Task board
+
+`devteam tasks` ([ADR-0018](../docs/development/adrs/0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md),
+spec `docs/specs/task-board.md`). Hooks capture each provider's todo tool (Claude `TodoWrite` /
+`TaskCreate` / `TaskUpdate`, Codex `update_plan`, opencode `todowrite`) into one record per session,
+`<state-dir>/tasks/<session-key>.json` — machine-local, one file per session so two sessions never
+share a lock. `scripts/lib/devteam/tasks.py` owns it: normalizers (defensive, a payload it cannot read
+is a no-op), the per-session lock and atomic write, and every derived field — session `status`,
+task `column`, `stale`, `abandoned`, `durations` — which is computed on read and **never stored**.
+Nothing deletes a record or a task: a task a replace-style call omits gets `removed_at` and stays.
+
+- `record` and `mark` are **mutating** in `compat.MUTATING` but **hook-safe**: they swallow every
+  error and exit 0 with `recorded: false` / `marked: false`, and refuse a session id containing a
+  path separator.
+- `list` and `watch` are read-only. `watch` is JSON Lines like `notifications watch` (same stdin-EOF /
+  SIGTERM / 30 s heartbeat lifecycle); because "stale" moves with the clock, it recomputes every
+  project every 30 s and emits a `snapshot` only when the view differs from the last one sent.
+- `sessions_active` counts sessions whose status is not `ended` (active **or** idle).
+- `tasks watch` is excluded from the bulk contract sweep and pinned by `tests/test_tasks.py`.
 
 ## Catalog
 

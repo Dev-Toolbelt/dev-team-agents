@@ -43,7 +43,17 @@ EVENTS = (
     ("Stop", "stop.sh"),
     ("SessionStart", "session-start.sh"),
     ("PreCompact", "pre-compact.sh"),
+    ("PostToolUse", "post-tool-use.sh"),
+    ("SessionEnd", "session-end.sh"),
 )
+
+#: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
+#: (its sub-scripts filter cheaply themselves); `PostToolUse` is narrowed to the todo
+#: tools so no other tool call forks the dispatcher at all.
+MATCHERS = {
+    "PreToolUse": ".*",
+    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate",
+}
 
 
 def command_for(script):
@@ -64,7 +74,7 @@ def _is_devteam_entry(entry, script):
 
 
 def wire(project_root, emitter=None):
-    """Ensure the four dispatchers are registered. Returns manifest records.
+    """Ensure every dispatcher in :data:`EVENTS` are registered. Returns manifest records.
 
     The returned records carry ``kind: "settings"``; ``unbind`` routes them to
     :func:`unwire` instead of removing a file the project owns.
@@ -90,8 +100,8 @@ def wire(project_root, emitter=None):
         if not isinstance(entries, list):
             raise EnvError("{}: hooks.{} must be a list".format(settings_path, event))
         desired = {"hooks": [{"type": "command", "command": command_for(script)}]}
-        if event == "PreToolUse":
-            desired["matcher"] = ".*"
+        if event in MATCHERS:
+            desired["matcher"] = MATCHERS[event]
 
         existing_index = next(
             (i for i, entry in enumerate(entries) if _is_devteam_entry(entry, script)), None

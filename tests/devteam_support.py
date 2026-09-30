@@ -171,7 +171,10 @@ def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "t
         encoding="utf-8",
     )
     (root / "scripts" / "hooks").mkdir(parents=True, exist_ok=True)
-    for script in ("pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"):
+    for script in (
+        "pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh",
+        "post-tool-use.sh", "session-end.sh",
+    ):
         (root / "scripts" / "hooks" / script).write_text(
             "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8"
         )

@@ -191,3 +191,5 @@ the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 ### Amendment Log
 | Date | Change | Reason |
 |---|---|---|
+| 2026-09-30 | `sessions_active` counts sessions whose status is not `ended` (active or idle); `tasks watch` also re-emits a project's `snapshot` on a 30 s clock refresh when the derived view changed (stale/abandoned move with time, not with the file); `record`/`mark` `--project-root` is optional (defaults to the resolved root); Stop marks idle through `stop/04b-task-board.sh`; the opencode plugin's `session.idle` payload now carries `session_id` so that hook can name the session | Spec was silent on these; each is needed for the stated behavior to hold |
+| 2026-09-30 | `ready` carries no extra keys; session ids that are not filename-safe are hashed by `record`, but the bash-side `mark` callers (Stop, SessionEnd) skip them, so such a session is never marked idle/ended | Provider ids in practice are UUIDs; skipping avoids a bash re-implementation of the hashing |

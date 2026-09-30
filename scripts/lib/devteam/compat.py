@@ -410,6 +410,10 @@ MUTATING = {
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
     ("notifications", "ack"): "writes notifications-seen.json in each project's machine-local "
     "state directory",
+    ("tasks", "record"): "writes a session's task record in the project's machine-local "
+    "state directory (hook-only)",
+    ("tasks", "mark"): "rewrites a session's task record in the machine-local state "
+    "directory (hook-only)",
     ("upgrade",): "relocates this project's memory into the store",
     ("export",): "creates an archive — durable state outside the store, and a restorable "
     "copy of shapes the declaring client just said it cannot read, which `import` on the "
@@ -451,6 +455,9 @@ READ_ONLY = {
     ("notifications", "list"): "reads each project's queue and seen marks",
     ("notifications", "watch"): "stats each project's queue and streams new records; writes "
     "nothing — acknowledging is `notifications ack`",
+    ("tasks", "list"): "reads each project's session records; writes nothing",
+    ("tasks", "watch"): "stats each project's session records and streams snapshots; "
+    "writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
@@ -489,6 +496,10 @@ NEEDS_MACHINE_LAYOUT = {
     "pre-split store it would report no notifications at all, with exit 0",
     ("notifications", "watch"): "the same registry walk as `notifications list`, repeated "
     "for as long as it runs",
+    ("tasks", "list"): "finds each project's session records through the registry — on a "
+    "pre-split store it would report an empty board, with exit 0",
+    ("tasks", "watch"): "the same registry walk as `tasks list`, repeated for as long as "
+    "it runs",
 }
 
 

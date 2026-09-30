@@ -250,6 +250,7 @@ class IncompatibleDeclarationRefusesEveryMutatingCommandTest(ClientGateTestCase)
             ("store", "use"): ("3.0.0",),
             ("prefs", "set"): ("language", "en"),
             ("prefs", "unset"): ("language",),
+            ("tasks", "mark"): ("--state", "idle"),
             ("cred", "set"): ("probe-key", "--purpose", "gate probe"),
             ("cred", "unset"): ("probe-key",),
             ("cred", "import"): (str(self.tmp / "no-such-credentials.local.json"),),
@@ -1020,7 +1021,7 @@ class PreSplitStoreTest(ClientGateTestCase):
     # `notifications watch` streams until its stdin closes, so it cannot be run for "one
     # answer" twice and compared; its pre-split behaviour is the refusal
     # `NEEDS_MACHINE_LAYOUT` gives it, which the migration-error tests already cover.
-    READ_SWEEP_EXCLUDED = {("cred", "get"), ("notifications", "watch")}
+    READ_SWEEP_EXCLUDED = {("cred", "get"), ("notifications", "watch"), ("tasks", "watch")}
 
     def setUp(self):
         super().setUp()

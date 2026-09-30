@@ -8,12 +8,13 @@ cannot be broken by a stray ``print``.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -611,6 +612,83 @@ def cmd_notifications_watch(args, emitter):
     return {"reason": reason}, None
 
 
+def _hook_payload():
+    """The hook JSON on stdin, or ``{}`` — a hook must never fail on what it was fed."""
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        data = json.loads(sys.stdin.read() or "null")
+    except (OSError, ValueError, RecursionError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _hook_root(args):
+    try:
+        return project.resolve_root(args.project_root)
+    except DevteamError:
+        return Path(args.project_root) if args.project_root else Path.cwd()
+
+
+def cmd_tasks_record(args, emitter):
+    result = tasks.record(_hook_root(args), _hook_payload(), provider=args.provider)
+    return result, "recorded" if result["recorded"] else "nothing recorded"
+
+
+def cmd_tasks_mark(args, emitter):
+    result = tasks.mark(_hook_root(args), _hook_payload(), args.state)
+    return result, "marked ({} open)".format(result["open"]) if result["marked"] else "nothing marked"
+
+
+def _tasks_filters(args):
+    return dict(
+        project_ids=args.project or None,
+        since=args.since,
+        stale_after=args.stale_after,
+        ended_after=args.ended_after,
+    )
+
+
+def _duration(seconds):
+    minutes = int(seconds) // 60
+    return "{}h{:02d}m".format(minutes // 60, minutes % 60) if minutes >= 60 else "{}m".format(minutes)
+
+
+def cmd_tasks_list(args, emitter):
+    board = tasks.collect(**_tasks_filters(args))
+    lines = []
+    for item in board["projects"]:
+        counts = item["counts"]
+        lines.append(
+            "{}  todo {} · in progress {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
+                _short(item["project_id"]),
+                counts["todo"],
+                counts["in_progress"],
+                counts["done"],
+                item["sessions_total"],
+                item["stale"],
+                item["abandoned"],
+            )
+        )
+        for session in item["sessions"]:
+            lines.append("  {} {} [{}] {}".format(session["provider"], session["session_id"], session["status"], session["branch"] or ""))
+            for task in session["tasks"]:
+                lines.append("    {:<11} {}  ({})".format(task["column"], task["content"], _duration(task["durations"].get(task["status"], 0))))
+    return board, "\n".join(lines) or "no tasks"
+
+
+def cmd_tasks_watch(args, emitter):
+    def emit(event):
+        human = None
+        if event["event"] == "snapshot" and not event["project"].get("removed"):
+            human = "{} {}".format(_short(event["project"]["project_id"]), event["project"]["counts"])
+        emitter.stream(event, human)
+
+    kwargs = _tasks_filters(args)
+    reason = tasks.watch(emit, interval=args.interval, **kwargs)
+    return {"reason": reason}, None
+
+
 def _skill_row(entry):
     flags = []
     if entry["is_symlink"]:
@@ -1152,6 +1230,44 @@ def build_parser():
     )
     notif_watch.set_defaults(func=cmd_notifications_watch)
 
+    tasks_parser = leaf(
+        sub, "tasks", help="the cross-project task board the hooks feed and the app shows"
+    ).add_subparsers(dest="tasks_cmd")
+
+    def tasks_filters(action):
+        action.add_argument("--project", action="append", metavar="PROJECT_ID")
+        action.add_argument("--since", type=float, metavar="EPOCH", help="drop sessions idle since before this")
+        action.add_argument(
+            "--stale-after", type=int, default=tasks.DEFAULT_STALE_AFTER, metavar="SECONDS",
+            help="an in-progress task older than this is stale (default 3600)",
+        )
+        action.add_argument(
+            "--ended-after", type=int, default=tasks.DEFAULT_ENDED_AFTER, metavar="SECONDS",
+            help="a session unseen for this long counts as ended (default 21600)",
+        )
+
+    tasks_record = leaf(tasks_parser, "record", help="hook-only: fold a todo-tool payload from stdin into its session")
+    tasks_record.add_argument("--project-root", metavar="DIR")
+    tasks_record.add_argument("--provider", default="auto", choices=("auto",) + tasks.PROVIDERS)
+    tasks_record.set_defaults(func=cmd_tasks_record)
+    tasks_mark = leaf(tasks_parser, "mark", help="hook-only: mark the payload's session idle or ended")
+    tasks_mark.add_argument("--project-root", metavar="DIR")
+    tasks_mark.add_argument("--state", required=True, choices=("idle", "ended"))
+    tasks_mark.set_defaults(func=cmd_tasks_mark)
+    tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
+    tasks_filters(tasks_list)
+    tasks_list.set_defaults(func=cmd_tasks_list)
+    tasks_watch = leaf(
+        tasks_parser,
+        "watch",
+        help="stream project snapshots until stdin closes or SIGTERM (JSON Lines with --json)",
+    )
+    tasks_filters(tasks_watch)
+    tasks_watch.add_argument(
+        "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
+    )
+    tasks_watch.set_defaults(func=cmd_tasks_watch)
+
     prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
         dest="prefs_cmd"
     )
@@ -1344,7 +1460,7 @@ def build_parser():
 
 #: Commands whose `--json` stdout is JSON Lines rather than one document. Every line,
 #: a failure included, is then one compact object (`Emitter.lines`).
-STREAMING_COMMANDS = frozenset({("notifications", "watch")})
+STREAMING_COMMANDS = frozenset({("notifications", "watch"), ("tasks", "watch")})
 
 
 def _looks_streaming(raw):
@@ -1519,6 +1635,8 @@ def main(argv=None, stdout=None, stderr=None):
             )
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
+        if getattr(args, "command", None) == "tasks":
+            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
