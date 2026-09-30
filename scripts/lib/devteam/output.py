@@ -18,6 +18,11 @@ class Emitter:
         self.stderr = stderr if stderr is not None else sys.stderr
         self._emitted = False
         self.streamed = False
+        #: Set by `main` for a streaming command. Its stdout is JSON Lines, so even a
+        #: failure has to be one compact line — an indented document there is a first
+        #: line of `{`, which a reader can only call a protocol error, and the exit code
+        #: that explains the failure is never looked at.
+        self.lines = False
 
     def warn(self, message):
         """Advisory text. Always stderr, so ``--json`` stdout stays parseable."""
@@ -98,7 +103,14 @@ class Emitter:
 
     def fail(self, error):
         """Render a :class:`~devteam.errors.DevteamError` and return its code."""
-        if self.as_json:
+        if self.as_json and self.lines:
+            # The stream's terminal event: `{"event": "error", "ok": false, ...}`, the
+            # same keys every failed command carries plus the event name a line reader
+            # dispatches on.
+            body = dict(error.payload(), event="error")
+            self.stdout.write(json.dumps(body, ensure_ascii=False, sort_keys=True) + "\n")
+            self.stdout.flush()
+        elif self.as_json:
             json.dump(
                 error.payload(), self.stdout, indent=2, ensure_ascii=False, sort_keys=True
             )

@@ -65,6 +65,21 @@ class CollectAndAckTest(QueueCase):
         self.append(record("b"))
         self.assertEqual([r["id"] for r in notifications.collect()], ["a", "b"])
 
+    def test_a_record_with_a_mistyped_field_is_skipped_not_fatal(self):
+        # `"ts": null` used to reach the sort in `collect` and raise, taking `list`,
+        # `ack` and `watch` down until 200 newer lines trimmed it away.
+        bad = [
+            dict(record("null-ts"), ts=None),
+            dict(record("str-ts"), ts="yesterday"),
+            dict(record("bool-ts"), ts=True),
+            dict(record("str-expiry"), expires_at="soon"),
+            dict(record("int-message"), message=7),
+        ]
+        self.append(record("a"), *bad)
+        self.append(record("b"))
+        self.assertEqual([r["id"] for r in notifications.collect()], ["a", "b"])
+        self.assertEqual(notifications.ack(all_=True), ["a", "b"])
+
     def test_an_expired_notification_is_not_reported(self):
         now = time.time()
         self.append(record("old", expires_at=int(now) - 1), record("live", expires_at=int(now) + 60))
@@ -193,6 +208,71 @@ class WatchTest(QueueCase):
         self.assertEqual(lines[-1], {"event": "end", "reason": "stdin-closed", "ok": True})
         self.assertTrue(all(l["ok"] is True for l in lines))
 
+    def run_watch_failure(self, *argv):
+        proc = subprocess.run(
+            [sys.executable, str(CLI), *argv],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=dict(os.environ),
+            timeout=30,
+        )
+        return proc.returncode, proc.stdout.decode().splitlines()
+
+    def test_a_failure_is_one_compact_json_line_before_and_after_parsing(self):
+        # An indented error document made the app read `{` as a protocol error, so
+        # the exit code that explains the failure (e.g. 3, a layout it may not
+        # migrate) was never looked at and the stream retried forever.
+        corrupt = self.tmp / "declaration.json"
+        corrupt.write_text("{not json", encoding="utf-8")
+        cases = {
+            "parse": ("--json", "notifications", "watch", "--interval", "0"),
+            "gate": ("--json", "--client-schemas", str(corrupt), "notifications", "watch"),
+        }
+        for name, argv in cases.items():
+            with self.subTest(name):
+                code, lines = self.run_watch_failure(*argv)
+                self.assertEqual(code, 2)
+                self.assertEqual(len(lines), 1, lines)
+                body = json.loads(lines[0])
+                self.assertEqual(body["event"], "error")
+                self.assertIs(body["ok"], False)
+                self.assertEqual(body["exit_code"], 2)
+
+    def test_another_commands_failure_keeps_its_indented_document(self):
+        code, lines = self.run_watch_failure("--json", "notifications", "ack")
+        self.assertEqual(code, 2)
+        self.assertGreater(len(lines), 1)
+        self.assertNotIn("event", json.loads("\n".join(lines)))
+
+    def test_forgetting_acknowledged_ids_neither_replays_nor_drops(self):
+        # `emitted` forgets ids a queue no longer reports as unseen, so it is bounded
+        # by the queues rather than by how long `watch` has run. Forgetting must not
+        # turn into a replay of the acknowledged record, nor hide the next one.
+        self.append(record("one"), record("two"))
+        events = []
+        stop = notifications._Stop()
+
+        def emit(event):
+            events.append(event)
+            if event["event"] == "ready":
+                notifications.ack(["one"])
+                time.sleep(0.05)
+                self.append(record("three"))
+
+        thread = threading.Thread(
+            target=notifications.watch, args=(emit,),
+            kwargs={"interval": 0.02, "stop": stop, "watch_stdin": False},
+        )
+        thread.start()
+        deadline = time.time() + 5
+        while not any(e.get("notification", {}).get("id") == "three" for e in events) and time.time() < deadline:
+            time.sleep(0.02)
+        stop.set("done")
+        thread.join(5)
+        streamed = [e["notification"]["id"] for e in events if e["event"] == "notification"]
+        self.assertEqual(streamed, ["one", "two", "three"])
+
     @unittest.skipIf(os.name != "posix", "SIGTERM is TerminateProcess on Windows")
     def test_the_cli_ends_cleanly_on_sigterm(self):
         proc = subprocess.Popen(
@@ -266,6 +346,39 @@ class NotifyShTest(StoreTestCase):
         )
         self.assertEqual([r["level"] for r in rows], ["warning"])
 
+    def test_control_characters_never_make_an_invalid_line(self):
+        # An ANSI escape or a \b made the line invalid JSON; the reader skips those,
+        # so the notification vanished without a trace.
+        state = self.tmp / "ctrl"
+        rows = self.notify(state, ("warning", "update.available", "a\x1b[31mb\x08c\x7fd", 0, ""))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["message"], "a[31mbcd")
+        self.assertTrue(notifications._valid(rows[0]))
+
+    def test_concurrent_writers_trimming_leave_whole_lines_and_no_lock(self):
+        state = self.tmp / "race"
+        state.mkdir()
+        root = self.tmp / "proj"
+        (root / ".dev-team-agents").mkdir(parents=True, exist_ok=True)
+        script = (
+            'source "$1"; source "$2"; devteam_notify_init "$3" "$4" false s; '
+            'for i in $(seq 1 25); do devteam_notify info c "w$5-$i" 0 ""; done'
+        )
+        env = dict(os.environ, DEVTEAM_NOTIFY_MAX_LINES="30")
+        procs = [
+            subprocess.Popen(
+                ["bash", "-c", script, "_", str(STATE_LIB), str(NOTIFY_LIB), str(root), str(state), str(n)],
+                env=env,
+            )
+            for n in range(3)
+        ]
+        for proc in procs:
+            self.assertEqual(proc.wait(timeout=60), 0)
+        lines = (state / notifications.QUEUE_FILE).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 30)
+        self.assertTrue(all(notifications._valid(json.loads(line)) for line in lines))
+        self.assertEqual(sorted(p.name for p in state.iterdir()), [notifications.QUEUE_FILE])
+
     def test_the_writer_keeps_only_the_newest_lines(self):
         state = self.tmp / "trim"
         calls = [("info", "c", "n{}".format(i), 0, "") for i in range(7)]
@@ -319,6 +432,14 @@ class NotifierHookTest(StoreTestCase):
         codes = [r["code"] for r in self.queued()]
         self.assertEqual(codes.count("context.critical"), 1)
         self.assertEqual(codes.count("tip.daily"), 1)
+
+    def test_without_a_session_id_once_per_session_becomes_once_per_day(self):
+        # A fixed `0` fallback made the notice fire once and then never again.
+        (self.state / "state.json").write_text(json.dumps({}), encoding="utf-8")
+        for _ in range(2):
+            self.run_hook()
+        keys = [r["dedupe_key"] for r in self.queued() if r["code"] == "context.critical"]
+        self.assertEqual(keys, ["context.critical:day-{}".format(time.strftime("%Y-%m-%d"))])
 
     def test_at_most_one_python_fork_per_stop(self):
         # Wall-clock budgets are noise on a shared CI runner; the fork count is the cost.

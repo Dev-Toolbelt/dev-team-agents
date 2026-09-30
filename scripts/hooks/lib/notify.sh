@@ -68,7 +68,35 @@ _devteam_json_escape() {
     s="${s//$'\n'/\\n}"
     s="${s//$'\r'/}"
     s="${s//$'\t'/ }"
+    # Any other control byte (an ANSI escape from a version string, a stray \b) makes
+    # the line invalid JSON, and the reader skips an invalid line — the notification
+    # would vanish without a trace. The fork only happens when one is present.
+    if [[ "$s" == *[[:cntrl:]]* ]]; then
+        s="$(printf '%s' "$s" | LC_ALL=C tr -d '\001-\037\177')"
+    fi
     printf '%s' "$s"
+}
+
+# A short mkdir lock around append + trim. Without it, a writer appending to the old
+# file while another renames the trimmed copy over it loses its line. mkdir is atomic
+# on every filesystem a hook runs on; a lock still held after ~1 s is taken to be
+# stale (its writer was killed) and broken, since a notification is not worth
+# stalling a hook for.
+_devteam_notify_lock() {
+    local tries=0
+    while ! mkdir "${DEVTEAM_NOTIFY_FILE}.lock" 2>/dev/null; do
+        tries=$(( tries + 1 ))
+        if [ "$tries" -ge 20 ]; then
+            rm -rf "${DEVTEAM_NOTIFY_FILE}.lock" 2>/dev/null
+            mkdir "${DEVTEAM_NOTIFY_FILE}.lock" 2>/dev/null
+            return 0
+        fi
+        sleep 0.05 2>/dev/null || sleep 1
+    done
+}
+
+_devteam_notify_unlock() {
+    rmdir "${DEVTEAM_NOTIFY_FILE}.lock" 2>/dev/null || true
 }
 
 devteam_notify() {
@@ -89,6 +117,7 @@ devteam_notify() {
     id="${now}-$$-${RANDOM}${RANDOM}"
 
     mkdir -p "$(dirname "$DEVTEAM_NOTIFY_FILE")" 2>/dev/null || return 0
+    _devteam_notify_lock
     printf '{"id":"%s","ts":%s,"project_id":"%s","session_id":"%s","level":"%s","code":"%s","message":"%s","dedupe_key":"%s","expires_at":%s}\n' \
         "$id" "$now" \
         "$(_devteam_json_escape "$DEVTEAM_NOTIFY_PROJECT_ID")" \
@@ -97,7 +126,7 @@ devteam_notify() {
         "$(_devteam_json_escape "$code")" \
         "$(_devteam_json_escape "$message")" \
         "$(_devteam_json_escape "$dedupe")" \
-        "$expires" >> "$DEVTEAM_NOTIFY_FILE" 2>/dev/null || return 0
+        "$expires" >> "$DEVTEAM_NOTIFY_FILE" 2>/dev/null || { _devteam_notify_unlock; return 0; }
 
     # Bounded by the writer, never by a reader: the CLI does not rewrite this file,
     # so only the side that appends may trim it. tail + rename keeps a concurrent
@@ -110,5 +139,6 @@ devteam_notify() {
             && mv -f "$tmp" "$DEVTEAM_NOTIFY_FILE" 2>/dev/null
         rm -f "$tmp" 2>/dev/null
     fi
+    _devteam_notify_unlock
     return 0
 }

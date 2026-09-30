@@ -584,6 +584,17 @@ def cmd_notifications_ack(args, emitter):
     return {"acknowledged": marked, "count": len(marked)}, "acknowledged {}".format(len(marked))
 
 
+def _watch_interval(text):
+    # Zero or a negative value would make `watch` a busy loop of `stat` calls.
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("not a number: {!r}".format(text))
+    if not value >= 0.01:
+        raise argparse.ArgumentTypeError("must be at least 0.01 seconds")
+    return value
+
+
 def cmd_notifications_watch(args, emitter):
     def emit(event):
         human = None
@@ -1046,7 +1057,9 @@ def build_parser():
         "watch",
         help="stream new notifications until stdin closes or SIGTERM (JSON Lines with --json)",
     )
-    notif_watch.add_argument("--interval", type=float, default=1.0, help="seconds between checks")
+    notif_watch.add_argument(
+        "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
+    )
     notif_watch.set_defaults(func=cmd_notifications_watch)
 
     prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
@@ -1197,6 +1210,17 @@ def build_parser():
     return parser
 
 
+#: Commands whose `--json` stdout is JSON Lines rather than one document. Every line,
+#: a failure included, is then one compact object (`Emitter.lines`).
+STREAMING_COMMANDS = frozenset({("notifications", "watch")})
+
+
+def _looks_streaming(raw):
+    """Whether argv names a streaming command, for failures raised before parsing ends."""
+    words = [word for word in raw if not word.startswith("-")]
+    return any(tuple(words[i : i + 2]) in STREAMING_COMMANDS for i in range(len(words)))
+
+
 def resolved_command_path(parser, args):
     """The leaf path the parse resolved to, e.g. ``("cred", "get")``.
 
@@ -1261,6 +1285,8 @@ def main(argv=None, stdout=None, stderr=None):
     argv_list = list(argv) if argv is not None else None
     raw = argv_list if argv_list is not None else sys.argv[1:]
     emitter = Emitter(as_json="--json" in raw, stdout=stdout, stderr=stderr)
+    # Before parsing, too: a bad `--interval` is a failure of the streaming command.
+    emitter.lines = _looks_streaming(raw)
 
     try:
         parser = build_parser()
@@ -1282,6 +1308,7 @@ def main(argv=None, stdout=None, stderr=None):
     # *write* removes the window where the gate silently is not there. The refusal
     # itself applies only to a command that writes.
     command_path = resolved_command_path(parser, args)
+    emitter.lines = command_path in STREAMING_COMMANDS
     try:
         declaration = compat.client_declaration(
             getattr(args, "client_schemas", None), os.environ

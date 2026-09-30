@@ -136,10 +136,13 @@ PY
 fi
 
 devteam_notify_init "$MAIN_REPO_ROOT" "$STATE_DIR" "$SUPPRESS" "$SESSION_ID"
-SESSION_ID="${SESSION_ID:-0}"
 _NOW="$(date '+%Y-%m-%d %d' 2>/dev/null || echo "")"
 TODAY="${_NOW% *}"
 DAY="${_NOW#* }"; DAY="${DAY#0}"
+# No session id (python or state.json unavailable): fall back to a per-day key. A fixed
+# `0` made every "once per session" notice fire once and then never again, since its
+# dedupe key stayed in the queue until 200 newer lines trimmed it out.
+SESSION_ID="${SESSION_ID:-day-${TODAY}}"
 
 # ── Session turn counter ──────────────────────────────────────────────────────
 STATE_SESSION="" STATE_TURNS=0

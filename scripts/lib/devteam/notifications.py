@@ -68,12 +68,31 @@ def seen_path(root, project_id):
     return Path(project.state_dir(root, project_id)) / SEEN_FILE
 
 
+def _number(value):
+    # `bool` is an `int` subclass; `true` is not a timestamp.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _valid(record):
+    """Whether ``record`` has every key, each of a type the readers can rely on.
+
+    Typed, not just present: one record with ``"ts": null`` made the sort in
+    :func:`collect` raise, and every command reading the queue — `list`, `ack`,
+    `watch` — failed until 200 newer lines pushed it out.
+    """
     if not isinstance(record, dict):
         return False
     if any(key not in record for key in RECORD_KEYS):
         return False
-    return record["level"] in LEVELS and isinstance(record["id"], str) and record["id"] != ""
+    if not (isinstance(record["id"], str) and record["id"] != ""):
+        return False
+    if record["level"] not in LEVELS or not _number(record["ts"]):
+        return False
+    if not (record["expires_at"] is None or _number(record["expires_at"])):
+        return False
+    return all(
+        isinstance(record[key], str) for key in ("project_id", "session_id", "code", "message", "dedupe_key")
+    )
 
 
 def read_queue(path):
@@ -238,6 +257,7 @@ def watch(emit, interval=1.0, heartbeat=30.0, rescan=10.0, stop=None, watch_stdi
         previous = signal.signal(signal.SIGTERM, lambda *_: stop.set("sigterm"))
 
     emitted = set()
+    owned = {}  # project id -> the ids of its records last seen unseen and live
     stamps = {}
     projects = []
     last_rescan = -rescan
@@ -255,11 +275,19 @@ def watch(emit, interval=1.0, heartbeat=30.0, rescan=10.0, stop=None, watch_stdi
         stamps[project_id] = stamp
         if stamp is None:
             return
-        for record in collect([project_id], unseen_only=True, now=clock()):
+        records = collect([project_id], unseen_only=True, now=clock())
+        for record in records:
             if record["id"] in emitted:
                 continue
             emitted.add(record["id"])
             emit({"event": "notification", "notification": record})
+        # Forget ids this project no longer reports — acknowledged, expired or trimmed —
+        # so the set is bounded by the queues rather than by how long `watch` has run.
+        # An id comes back only if a record reappears, which no writer does.
+        live = {record["id"] for record in records}
+        gone = owned.get(project_id, set()) - live
+        emitted.difference_update(gone)
+        owned[project_id] = live
 
     try:
         first = True
