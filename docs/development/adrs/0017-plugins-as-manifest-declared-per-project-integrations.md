@@ -198,3 +198,24 @@ has no plugin-specific code; a new plugin appears in it with zero app changes.
 - **Per-plugin hook files in `scripts/hooks/`.** Rejected: it is the hand-wiring this ADR removes, and
   the dispatchers would need editing for every new plugin.
 - **Letting the app run plugin scripts directly.** Rejected by ADR-0015.
+
+> **Amendment — what the first implementation settled.** Recorded here so the contract above is
+> read together with these, not against them:
+>
+> - **`plugins/` is an optional core tree** (`versions.OPTIONAL_TREES`), not a required one. Making
+>   it required would have marked every already-installed version incomplete and broken pinned
+>   projects and rollback. `bind` skips the runtime link when the resolved version has no
+>   `plugins/`.
+> - **`PluginView.actions[]` also carries `timeout_seconds`** (manifest value, default 300) and
+>   `writes` (`output != "config"`); `config_fields` passes the manifest entries through unchanged,
+>   so `min`, `max`, `options` and `placeholder` reach the client when declared.
+> - **`RunResult.ok` is the script's verdict.** `main()` sets a top-level `ok` on every payload; for
+>   `plugin run` it keeps the command's own `ok: false` instead of overwriting it.
+> - **`DEVTEAM_PLUGIN_CONFIG` is set for Stop hooks, actions and status, not for PreToolUse hooks.**
+>   Computing it needs python3, which the PreToolUse path cannot afford on every tool call; a
+>   PreToolUse hook reads `DEVTEAM_PLUGIN_SETTINGS` itself.
+> - **The legacy move writes the new file first, then unlinks the old one**, so the content is never
+>   held in one place only. It runs inside `bind` (and therefore `sync`); when the target already
+>   exists neither file is touched and the skip is reported.
+> - **Graphify's `rebuild` action forces a build**; the Stop hook and the deprecated
+>   `scripts/graphify-refresh.sh` wrapper run it with `--if-changed`.
