@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "name": "graphify",
+  "title": "Graphify",
+  "description": "Builds a knowledge graph of the codebase so agents read its structure before searching raw files.",
+  "requires": [
+    { "binary": "graphify", "install_hint": "/devteam:install graphify" },
+    { "binary": "jq", "install_hint": "/devteam:install jq" }
+  ],
+  "config": [
+    {
+      "key": "targetPaths",
+      "type": "string_list",
+      "label": "Source paths",
+      "help": "Directories, relative to the project root, that go into the graph.",
+      "required": true,
+      "default": [],
+      "placeholder": "src"
+    },
+    {
+      "key": "manifestPaths",
+      "type": "string_list",
+      "label": "Manifest files",
+      "help": "Dependency manifests and lock files copied alongside the sources, such as package.json.",
+      "default": [],
+      "placeholder": "package.json"
+    },
+    {
+      "key": "auto_refresh",
+      "type": "boolean",
+      "label": "Refresh at session end",
+      "help": "Rebuild the graph when a session ends and a source path changed structurally. Off by default because it adds time to every session end.",
+      "default": false
+    }
+  ],
+  "actions": [
+    {
+      "id": "detect",
+      "label": "Detect paths",
+      "help": "Propose source paths and manifests from the project's stack. Nothing is saved until you save the form.",
+      "runtime": "python3",
+      "script": "scripts/detect.py",
+      "output": "config",
+      "requires_enabled": false,
+      "timeout_seconds": 60
+    },
+    {
+      "id": "rebuild",
+      "label": "Rebuild graph",
+      "help": "Rebuild graphify-out/ now from the configured source paths.",
+      "runtime": "bash",
+      "script": "scripts/refresh.sh",
+      "output": "log",
+      "requires_enabled": true,
+      "timeout_seconds": 1800
+    }
+  ],
+  "status": { "runtime": "bash", "script": "scripts/status.sh", "timeout_seconds": 10 },
+  "hooks": { "pre_tool_use": "hooks/pre-tool-use.sh", "stop": "hooks/stop.sh" }
+}

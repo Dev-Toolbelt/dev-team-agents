@@ -145,6 +145,10 @@ def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "t
     (root / "commands" / "plan.md").write_text("# command\n", encoding="utf-8")
     (root / "templates").mkdir(parents=True, exist_ok=True)
     (root / "templates" / "plan-template.md").write_text("# template\n", encoding="utf-8")
+    # The plugins tree (ADR-0019): `bind.RUNTIME_TREES` links it, so a fixture without it
+    # would bind fewer artifacts than a real version does.
+    (root / "plugins" / "_schema").mkdir(parents=True, exist_ok=True)
+    (root / "plugins" / "_schema" / "plugin.schema.json").write_text("{}\n", encoding="utf-8")
     (root / "scripts").mkdir(parents=True, exist_ok=True)
     (root / "scripts" / "noop.sh").write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")
     (root / "scripts" / "new-adr.sh").write_text("#!/usr/bin/env bash\ntrue\n", encoding="utf-8")

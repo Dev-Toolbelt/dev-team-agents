@@ -80,6 +80,13 @@ export interface InvokeOptions {
    * ones — is what makes the gate real for this app the moment a write path lands.
    */
   readonly declarationFile?: string;
+  /**
+   * Opt in to being SIGTERMed by `terminateInFlight` when the app quits. Only for a
+   * cancellable, long-running action whose script the CLI itself tears down on SIGTERM
+   * (`plugin run`). Everything else — every write — is left to finish; see
+   * `settleInFlight`.
+   */
+  readonly cancelOnQuit?: boolean;
 }
 
 /** Variables a python CLI legitimately needs. Everything else is dropped. */
@@ -134,6 +141,51 @@ function isDocumentedExit(code: number): code is ExitCode {
   return Object.hasOwn(OUTCOME_BY_EXIT, code);
 }
 
+interface InFlight {
+  readonly cancelOnQuit: boolean;
+  /** Resolves when the child has ended, whichever way. */
+  readonly ended: Promise<void>;
+}
+
+/** Children alive right now, so a quitting app can end or await them instead of orphaning them. */
+const inFlight = new Map<ReturnType<typeof spawn>, InFlight>();
+
+/**
+ * SIGTERM the children that opted in with `cancelOnQuit`. Called on app quit: a plugin
+ * action can run for up to an hour, and the CLI forwards SIGTERM to the script's process
+ * group, so the script does not outlive the app that started it.
+ *
+ * Writes (`bind`, `upgrade`, `sync`, `prefs set`, ...) are deliberately not touched: killing
+ * one mid-write is how a store ends up half-updated. They are awaited by `settleInFlight`.
+ */
+export function terminateInFlight(): void {
+  for (const [child, entry] of inFlight) {
+    if (entry.cancelOnQuit && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  }
+}
+
+/** True while a child that `terminateInFlight` would not cancel is still running. */
+export function hasPendingWrites(): boolean {
+  for (const entry of inFlight.values()) if (!entry.cancelOnQuit) return true;
+  return false;
+}
+
+/**
+ * Resolve once every non-cancellable child has ended, or after `timeoutMs`, whichever is
+ * first. The bound keeps a wedged child (each has its own deadline anyway) from holding
+ * the app open on quit.
+ */
+export async function settleInFlight(timeoutMs: number): Promise<void> {
+  const pending = [...inFlight.values()].filter((entry) => !entry.cancelOnQuit).map((entry) => entry.ended);
+  if (pending.length === 0) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([Promise.all(pending).then(() => undefined), deadline]);
+  clearTimeout(timer);
+}
+
 /**
  * Run `devteam <args> --json` once and classify the outcome.
  *
@@ -174,6 +226,13 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     };
   }
 
+  inFlight.set(child, {
+    cancelOnQuit: options.cancelOnQuit === true,
+    ended: new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+      child.once('error', () => resolve());
+    }),
+  });
   const stdoutChunks: Buffer[] = [];
   const stderrChunks: Buffer[] = [];
   let stdoutBytes = 0;
@@ -257,6 +316,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     else exitCode = settled.code;
   } finally {
     clearTimeout(deadline);
+    inFlight.delete(child);
   }
 
   const durationMs = Date.now() - startedAt;

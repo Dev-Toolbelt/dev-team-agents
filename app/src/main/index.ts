@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
+import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
@@ -189,6 +190,10 @@ function takePendingProject(): ProjectId | null {
   pendingProject = null;
   return projectId;
 }
+
+/** How long quitting waits for in-flight CLI writes before giving up on them. */
+const WRITE_SETTLE_MS = 5_000;
+let writesSettled = false;
 
 function quitForReal(): void {
   quitting = true;
@@ -382,10 +387,20 @@ if (!primaryInstance) {
   app.on('second-instance', () => {
     if (app.isReady()) showWindow();
   });
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
     quitting = true;
     center?.dispose();
     board?.dispose();
+    // Only cancellable plugin runs are ended; a write (bind, upgrade, prefs, skills...) is
+    // never killed mid-write. Quit is held for up to WRITE_SETTLE_MS while writes finish,
+    // then resumed. `writesSettled` makes the second `before-quit` pass straight through.
+    terminateInFlight();
+    if (writesSettled || !hasPendingWrites()) return;
+    event.preventDefault();
+    void settleInFlight(WRITE_SETTLE_MS).finally(() => {
+      writesSettled = true;
+      app.quit();
+    });
   });
   void app.whenReady().then(onReady);
 }

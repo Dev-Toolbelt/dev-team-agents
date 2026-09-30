@@ -219,6 +219,14 @@ switch (scenario) {
     process.exit(0);
     break;
   }
+  case 'linger':
+    // Finishes on its own after a short while and does NOT handle SIGTERM, so a SIGTERM
+    // ends it with a signal death — the difference between "let it finish" and "kill it".
+    setTimeout(() => {
+      emit({ ok: true, argv, finished: true });
+      process.exit(0);
+    }, 600);
+    break;
 
   case 'echo-env':
     emit({ ok: true, env: process.env, argv });

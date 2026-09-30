@@ -539,7 +539,24 @@ describe('buildInfo reports write actions honestly', () => {
     // — `sync` covers both the per-row sync and Sync All, because the framework
     // classifies one `("sync",)` leaf in `compat.MUTATING`, not two.
     expect([...info.mutatingCommandsRun].sort()).toEqual(
-      ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'skills install', 'skills remove', 'sync', 'unbind', 'upgrade'].sort(),
+      [
+        'bind',
+        'doctor',
+        'notifications ack',
+        'pin',
+        'plugin config set',
+        'plugin config unset',
+        'plugin disable',
+        'plugin enable',
+        'plugin run',
+        'prefs set',
+        'prefs unset',
+        'skills install',
+        'skills remove',
+        'sync',
+        'unbind',
+        'upgrade',
+      ].sort(),
     );
   });
 });
@@ -566,7 +583,24 @@ describe('environment withholds every gated command when the declaration could n
         return;
       }
       expect([...report.withheld.map((w) => w.command)].sort()).toEqual(
-        ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'skills install', 'skills remove', 'sync', 'unbind', 'upgrade'].sort(),
+        [
+          'bind',
+          'doctor',
+          'notifications ack',
+          'pin',
+          'plugin config set',
+          'plugin config unset',
+          'plugin disable',
+          'plugin enable',
+          'plugin run',
+          'prefs set',
+          'prefs unset',
+          'skills install',
+          'skills remove',
+          'sync',
+          'unbind',
+          'upgrade',
+        ].sort(),
       );
       for (const entry of report.withheld) {
         expect(entry.reason).toContain('schema declaration');
@@ -580,6 +614,175 @@ describe('environment withholds every gated command when the declaration could n
       expect(unbind.ok).toBe(false);
       expect(unbind.kind).toBe('refused');
       expect(unbind.message).toContain('schema declaration');
+    } finally {
+      await chmod(dir, 0o700);
+    }
+  });
+});
+
+// ── plugins (ADR-0019) — names checked against this project's own `plugin list` ──
+
+describe('plugins are read, toggled, configured and run only as the project’s own list declares them', () => {
+  type Failure = { readonly ok: false; readonly kind: string; readonly message: string; readonly durationMs: number };
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('lists against the resolved path, never a renderer path', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const result = (await handlers.get(CHANNELS.projectPlugins)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.PluginList>;
+    expect(result.command).toContain('plugin list --path /repo/project-1 --json');
+    if (!result.ok) throw new Error(result.message);
+    expect(result.data.plugins.map((plugin) => plugin.name)).toEqual(['demo']);
+
+    const unknown = (await handlers.get(CHANNELS.projectPlugins)?.(TRUSTED, 'nope')) as Failure;
+    expect(unknown.ok).toBe(false);
+    expect(unknown.kind).toBe('refused');
+    const bad = (await handlers.get(CHANNELS.projectPlugins)?.(TRUSTED, 7)) as Failure;
+    expect(bad.durationMs).toBe(0);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('enables and disables by exact command, never with --force', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const on = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', 'demo', true)) as ApiModule.OperationResult<ApiModule.PluginToggleReport>;
+    expect(on.command).toContain('plugin enable demo --path /repo/project-1 --json');
+    expect(on.command).not.toContain('--force');
+    if (!on.ok) throw new Error(on.message);
+    expect(on.data.plugin.enabled).toBe(true);
+
+    const off = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', 'demo', false)) as ApiModule.OperationResult<ApiModule.PluginToggleReport>;
+    expect(off.command).toContain('plugin disable demo --path /repo/project-1 --json');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses a plugin the project’s list does not return, and a malformed name, before writing', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const stranger = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', 'ghost', true)) as Failure;
+    expect(stranger.kind).toBe('refused');
+    expect(stranger.message).toContain('ghost');
+    const flag = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', '--force', true)) as Failure;
+    expect(flag.durationMs).toBe(0);
+    const notBoolean = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', 'demo', 'yes')) as Failure;
+    expect(notBoolean.durationMs).toBe(0);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('applies config in order with each value serialized for the CLI', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const changes = [
+      { key: 'paths', action: 'set', value: ['src', 'lib'] },
+      { key: 'auto', action: 'set', value: true },
+      { key: 'depth', action: 'set', value: 5 },
+      { key: 'mode', action: 'set', value: 'b' },
+      { key: 'name', action: 'unset' },
+    ];
+    const result = (await handlers.get(CHANNELS.updatePluginConfig)?.(TRUSTED, 'proj-1', 'demo', changes)) as ApiModule.OperationResult<ApiModule.PluginConfigUpdateReport>;
+    if (!result.ok) throw new Error(result.message);
+    expect(result.data.failed).toBeNull();
+    expect(result.data.applied.map((change) => change.key)).toEqual(['paths', 'auto', 'depth', 'mode', 'name']);
+    expect(result.command).toBe('devteam plugin config set');
+
+    // The exact argv of one write shows in the failure report of a batch that stops there.
+    const partial = (await handlers.get(CHANNELS.updatePluginConfig)?.(TRUSTED, 'proj-1', 'demo', [
+      { key: 'paths', action: 'set', value: ['src'] },
+      { key: 'depth', action: 'set', value: 7 },
+      { key: 'auto', action: 'set', value: true },
+    ])) as ApiModule.OperationResult<ApiModule.PluginConfigUpdateReport>;
+    if (!partial.ok) throw new Error(partial.message);
+    expect(partial.data.applied.map((change) => change.key)).toEqual(['paths']);
+    expect(partial.data.failed?.change.key).toBe('depth');
+    expect(partial.data.failed?.problem.message).toContain('reserved');
+    expect(partial.data.failed?.problem.command).toContain('plugin config set demo depth 7 --path /repo/project-1');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('sends a list as a JSON array string and a boolean as true/false', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    // The fixture refuses exactly these two spellings, which puts the argv of the failing
+    // write — value included — in the report.
+    const write = (changes: unknown) =>
+      handlers.get(CHANNELS.updatePluginConfig)?.(TRUSTED, 'proj-1', 'demo', changes) as Promise<ApiModule.OperationResult<ApiModule.PluginConfigUpdateReport>>;
+
+    const list = await write([{ key: 'paths', action: 'set', value: ['fail'] }]);
+    if (!list.ok) throw new Error(list.message);
+    expect(list.data.failed?.problem.command).toContain('plugin config set demo paths "[\\"fail\\"]" --path /repo/project-1');
+
+    const flag = await write([{ key: 'auto', action: 'set', value: false }]);
+    if (!flag.ok) throw new Error(flag.message);
+    expect(flag.data.failed?.problem.command).toContain('plugin config set demo auto false --path /repo/project-1');
+
+    const number = await write([{ key: 'depth', action: 'set', value: 7 }]);
+    if (!number.ok) throw new Error(number.message);
+    expect(number.data.failed?.problem.command).toContain('plugin config set demo depth 7 --path /repo/project-1');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses an unknown key, a value that does not fit its field, and a malformed batch, before writing', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const send = (name: string, changes: unknown) =>
+      handlers.get(CHANNELS.updatePluginConfig)?.(TRUSTED, 'proj-1', name, changes) as Promise<Failure>;
+
+    const unknownKey = await send('demo', [{ key: 'ghost', action: 'set', value: 'x' }]);
+    expect(unknownKey.kind).toBe('refused');
+    expect(unknownKey.message).toContain('ghost');
+    for (const bad of [
+      { key: 'depth', action: 'set', value: 99 },
+      { key: 'depth', action: 'set', value: '5' },
+      { key: 'paths', action: 'set', value: 'src' },
+      { key: 'paths', action: 'set', value: ['a', 'a'] },
+      { key: 'mode', action: 'set', value: 'z' },
+      { key: 'auto', action: 'set', value: 'true' },
+      { key: 'name', action: 'set', value: '--flag' },
+    ]) {
+      const refused = await send('demo', [bad]);
+      expect(refused.kind, JSON.stringify(bad)).toBe('refused');
+    }
+    expect((await send('ghost', [{ key: 'paths', action: 'unset' }])).kind).toBe('refused');
+    for (const malformed of ['x', [], [{ key: 'paths' }], [{ key: 'paths', action: 'set' }, { key: 'paths', action: 'unset' }], [{ key: 'bad key', action: 'unset' }]]) {
+      expect((await send('demo', malformed)).durationMs, JSON.stringify(malformed)).toBe(0);
+    }
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('runs only a declared action, by name, and refuses everything else', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const detect = (await handlers.get(CHANNELS.runPluginAction)?.(TRUSTED, 'proj-1', 'demo', 'detect')) as ApiModule.OperationResult<ApiModule.PluginRunResult>;
+    expect(detect.command).toContain('plugin run demo detect --path /repo/project-1 --json');
+    if (!detect.ok) throw new Error(detect.message);
+    expect(detect.data.output).toEqual({ paths: ['src'] });
+
+    const undeclared = (await handlers.get(CHANNELS.runPluginAction)?.(TRUSTED, 'proj-1', 'demo', 'format-disk')) as Failure;
+    expect(undeclared.kind).toBe('refused');
+    expect(undeclared.message).toContain('format-disk');
+    const stranger = (await handlers.get(CHANNELS.runPluginAction)?.(TRUSTED, 'proj-1', 'ghost', 'detect')) as Failure;
+    expect(stranger.kind).toBe('refused');
+    for (const args of [['proj-1', 'demo', '--x'], ['proj-1', '../demo', 'detect'], ['proj-1', 'demo', 5], [3, 'demo', 'detect']]) {
+      const refused = (await handlers.get(CHANNELS.runPluginAction)?.(TRUSTED, ...args)) as Failure;
+      expect(refused.durationMs, JSON.stringify(args)).toBe(0);
+    }
+  });
+});
+
+describe('plugin writes are withheld with the rest when the declaration could not be written', () => {
+  it('refuses enable, config and run without spawning, rather than running them ungated', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE }), 'utf8');
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+
+    await chmod(dir, 0o500);
+    try {
+      const env = (await handlers.get(CHANNELS.environment)?.(TRUSTED)) as { readonly declaration: { readonly state: string } };
+      if (env.declaration.state !== 'failed') return;
+      const enable = (await handlers.get(CHANNELS.setPluginEnabled)?.(TRUSTED, 'proj-1', 'demo', true)) as { readonly ok: boolean; readonly kind: string; readonly message: string };
+      expect(enable.ok).toBe(false);
+      expect(enable.kind).toBe('refused');
+      expect(enable.message).toContain('plugin enable');
+      const run = (await handlers.get(CHANNELS.runPluginAction)?.(TRUSTED, 'proj-1', 'demo', 'detect')) as { readonly ok: boolean; readonly kind: string };
+      expect(run.kind).toBe('refused');
     } finally {
       await chmod(dir, 0o700);
     }

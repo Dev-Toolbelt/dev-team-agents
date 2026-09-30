@@ -20,7 +20,7 @@ from .lock import store_lock
 #: copied ``CLAUDE.md`` links to; without it every one of those links dangles.
 CORE_TREES = ("agents", "commands", "skills", "scripts", "templates")
 #: Required for a tree to be a valid source; ``OPTIONAL_TREES`` are copied when present.
-OPTIONAL_TREES = ("opencode", "CLAUDE-md")
+OPTIONAL_TREES = ("opencode", "CLAUDE-md", "plugins")
 
 _SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 _CHANGELOG_RE = re.compile(r"^##\s*\[(\d+\.\d+\.\d+)\]", re.MULTILINE)

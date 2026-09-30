@@ -250,6 +250,9 @@ dev-team-agents/
 ├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
 ├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data,
 │                      versioning, hooks, commands, cli)
+├── plugins/         ← optional per-project integrations; see plugins/README.md and ADR-0019
+│   ├── _schema/plugin.schema.json  ← manifest schema
+│   └── graphify/    ← reference plugin: code graph builder
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
 │   ├── agents.md · agents.pt-BR.md            ← canonical agent reference
 │   ├── installation.md · installation.pt-BR.md ← installation and advanced options guide
@@ -264,6 +267,7 @@ dev-team-agents/
 │   ├── size-limits.sh             ← agents 205 (200 content + 5 run-banner) · commands 200 · skills 500
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
+│   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
 │   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
 │                                    global fingerprint uniqueness across live + archives
 ├── opencode/        ← opencode provider plugin source (plugin/dev-team-agents.ts); stripped at install,
@@ -276,11 +280,11 @@ dev-team-agents/
 │   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
 │   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
 │   ├── fix-symlinks.sh · check-updates.sh (shim) · new-adr.sh
-│   ├── graphify-refresh.sh · validate-commit-msg.sh · reuse-lint.sh · design-token-lint.sh
+│   ├── graphify-refresh.sh (deprecated wrapper) · validate-commit-msg.sh · reuse-lint.sh · design-token-lint.sh
 │   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
 │   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
 │   │   │              versions · providers · gitignore · bind · migrate · doctor ·
-│   │   │              quarantine · update · output · errors · global_skills · cli
+│   │   │              quarantine · update · output · errors · global_skills · plugins · cli
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
 │   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0017)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
@@ -300,6 +304,7 @@ dev-team-agents/
 │       └── lib/           ← shared hook logic, sourced not dispatched
 │           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
+│           ├── plugins.sh                ← plugin hook dispatcher and helper functions
 │           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
 ├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
 │                      (incl. 04-packaging.sh, 05-app.sh ← the app/ JS gate) + scripts/release/bump-homebrew-formula.sh — stripped at install
@@ -377,6 +382,14 @@ The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `cr
 ## Versioning
 
 → See [`CLAUDE-md/versioning.md`](CLAUDE-md/versioning.md) for the semantic versioning policy.
+
+---
+
+## Plugins
+
+A plugin is an optional, per-project integration declared by a manifest in `plugins/<name>/plugin.json`. See `plugins/README.md` for the authoring guide and `docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md` for the design.
+
+The CLI surface is `devteam plugin {list,show,enable,disable,config,run}`, with `--path` and `--json` flags. Settings live per-project in `.dev-team-agents/plugin-settings/<name>.json` (committed). Hooks are dispatched by `scripts/hooks/pre-tool-use/02d-plugins.sh` and `scripts/hooks/stop/99a-plugins.sh`.
 
 ---
 

@@ -370,7 +370,7 @@ PREV_CHECK="$(state_get last_update_check "$USER_DATA_DIR/state.json")"
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # Allowlist: only these top-level entries are distributed to users
-KEEP_ROOT=(agents scripts skills templates commands)
+KEEP_ROOT=(agents scripts skills templates commands plugins)
 
 for item in "$EXTRACTED_ROOT"/*; do
     name=$(basename "$item")
@@ -1265,14 +1265,15 @@ echo "  opencode:   agents registered in .opencode/opencode.json"
 echo "  Codex CLI:  agents available at .codex/agents/ (run install-provider.sh codex)"
 echo "  Skills:     available in your provider's skill search path"
 echo ""
-if [ ! -f "$USER_DATA_DIR/graphify.json" ]; then
+if [ ! -f "$USER_DATA_DIR/graphify.json" ] && [ ! -f "$PROJECT_ROOT/.dev-team-agents/plugin-settings/graphify.json" ]; then
 echo "---"
 echo "Optional: Graphify (knowledge graph for this codebase)"
 echo ""
 echo "  Graphify indexes your codebase so agents can navigate code without"
 echo "  reading every file — fewer tokens per task, faster responses."
 echo ""
-echo "  To enable it, ask your AI CLI:"
-echo "    \"Set up Graphify for this project\""
+echo "  To enable it, ask your AI CLI \"Set up Graphify for this project\"."
+echo "  (After \`devteam bind\`, \`devteam plugin enable graphify\` or the desktop app's"
+echo "  Plugins tab do the same.)"
 echo "---"
 fi

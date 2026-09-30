@@ -179,7 +179,7 @@ Este repositório usa versionamento semântico via git tags (`v1.0.0`, `v1.1.0`,
 ├── dev-team-agents/        ← extraído do tarball (sem .git — seguro para commit)
 ├── user-data/              ← estado e configuração do usuário (preservado nas atualizações)
 │   ├── preferences.json        ← idioma, thresholds, configurações de notificação (gitignored; importado para o store pelo `devteam bind`)
-│   ├── graphify.json           ← config do Graphify — faça commit deste
+│   ├── graphify.json           ← config legada do Graphify — o `devteam sync` move para `.dev-team-agents/plugin-settings/graphify.json` (versionado)
 │   ├── session-summary.md      ← gitignored
 │   └── state.json              ← markers de estado consolidados (installed_version, last_update_check, etc.) — gitignored
 ├── agents/

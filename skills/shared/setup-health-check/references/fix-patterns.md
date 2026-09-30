@@ -152,8 +152,8 @@ chmod +x .dev-team-agents/scripts/hooks/session-start.sh
 chmod +x .dev-team-agents/scripts/hooks/stop/01-session-summary.sh
 chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh
 chmod +x .dev-team-agents/scripts/update.sh
-# v2 installs only — see the v3 table at the top of this file. 01-check-updates.sh and
-# 99-graphify-refresh.sh are disabled by design: do not chmod their _disabled- variants
+# v2 installs only — see the v3 table at the top of this file. 01-check-updates.sh is
+# disabled by design: do not chmod its _disabled- variant
 # back into the dispatch convention. See CLAUDE-md/hooks.md § Disabled Hooks.
 ```
 

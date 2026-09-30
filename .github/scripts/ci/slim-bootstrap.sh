@@ -227,7 +227,7 @@ assert_no_js_payload "$ALLOW_STAGING" "the synthetic root" || fail=1
 # it is checking — parsing KEEP_ROOT here would make the assertion agree with
 # whatever the allowlist says and therefore assert nothing. Do not "deduplicate"
 # it against the parser above.
-for keep_dir in agents scripts skills templates commands; do
+for keep_dir in agents scripts skills templates commands plugins; do
   if [ ! -d "$ALLOW_STAGING/$keep_dir" ]; then
     echo "allowlist: FAIL — ${keep_dir}/ did not survive the allowlist; an installed project needs it." >&2
     fail=1

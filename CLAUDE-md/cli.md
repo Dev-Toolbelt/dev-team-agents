@@ -164,6 +164,7 @@ mode.
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
 | `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply`. Reports, never runs, the `git rm -r --cached` the user owes: `git_tracked` (the vendored trees) and `git_tracked_artifacts` (committed links a bind replaced with machine-local ones) |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
+| `devteam plugin list \| show <name> \| enable <name> [--force] \| disable <name> \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| run <name> <action>` | Manage plugins; see § Plugins below |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
@@ -188,11 +189,11 @@ real parser rather than a hardcoded list, ensuring new or changed commands are c
 
 | Exit | Meaning |
 |------|---------|
-| 0 | success |
+| 0 | success (`plugin run` with `ok: false` in JSON still exits 0) |
 | 1 | findings — ran and reported a problem it did not fix |
-| 2 | usage error (bad arguments, unknown subcommand, **a malformed client declaration** — see § The client write gate) |
-| 3 | environment error (no store, no version, unreadable directory, **a store whose one-time layout migration a declared client may not perform**) |
-| 4 | conflict (lock timeout, identity collision, refusing to overwrite, a declared client refused a mutating command — see § The client write gate) |
+| 2 | usage error (bad arguments, unknown subcommand, bad plugin name/action/config key/value, **a malformed client declaration** — see § The client write gate) |
+| 3 | environment error (no store, no version, unreadable directory, missing plugin requirement, malformed settings file, **a store whose one-time layout migration a declared client may not perform**) |
+| 4 | conflict (lock timeout, identity collision, refusing to overwrite, plugin action requires enabled but plugin is disabled, a declared client refused a mutating command — see § The client write gate) |
 
 This table and the module docstring of `scripts/lib/devteam/errors.py` are two halves of one contract:
 the docstring names the same declared-client cases on 2, 3 and 4, and the reasoning for each sits with
@@ -329,6 +330,7 @@ it** (see the write gate below), so an example listing a subset would teach the 
     "store_schemas": {
       "bind_manifest": 1,
       "credentials": 1,
+      "plugin_settings": 1,
       "project": 1,
       "project_layout": 2,
       "registry": 1
@@ -450,6 +452,7 @@ with `sort_keys=True` (`output.py`), so this is the on-the-wire order, not a tid
     "store_schemas": {
       "bind_manifest": 1,
       "credentials": 1,
+      "plugin_settings": 1,
       "project": 1,
       "project_layout": 2,
       "registry": 1
@@ -613,6 +616,31 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 **Scope field:** `--scope` restricts which agents can read the value via `devteam cred get --agent <name>`. Agents not listed get a clear error; comma-separated, no spaces. The scope is **hygiene and auditability, not a sandbox** — an agent with Bash can read anything the user can read. Its value is auditing read paths and reporting scope violations in the audit log.
 
 **`credentials.local.json` migration:** The v2 plaintext file is opt-in, never scanned for. `devteam cred import /path/to/credentials.local.json` reads it, migrates values to the secret store, writes references to the reference layer, and moves the original file to quarantine — a one-way, confirmed operation. Non-secret fields (TTL thresholds, notification prefs) are kept as plain values in the reference layer.
+
+## Plugins
+
+See `plugins/README.md` and `docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md`.
+
+Per-project plugin settings live in `.dev-team-agents/plugin-settings/<name>.json` (committed). The CLI discovers plugins from the manifests in `plugins/` and supports enable/disable toggling, config editing, and running actions.
+
+| Command | What it does | Flags |
+|---------|------|-------|
+| `devteam plugin list` | Every plugin shipped in the core, its enable status, requirements, and config | `--path`, `--json` |
+| `devteam plugin show <name>` | One plugin's full details | `--path`, `--json` |
+| `devteam plugin enable <name> [--force]` | Enable and optionally seed config via detect action; `--force` enables despite missing requirements | `--path`, `--json` |
+| `devteam plugin disable <name>` | Disable and keep config and artifacts | `--path`, `--json` |
+| `devteam plugin config get <name> [<key>]` | Read effective config (defaults merged) or one value | `--path`, `--json` |
+| `devteam plugin config set <name> <key> <value>` | Write one config key (parsed by its declared type) | `--path`, `--json` |
+| `devteam plugin config unset <name> <key>` | Remove a key override; it reverts to manifest default | `--path`, `--json` |
+| `devteam plugin run <name> <action>` | Execute an action and return its output (or tail on failure) | `--path`, `--json` |
+
+Behaviour worth knowing before calling it:
+
+- `plugin list` also returns `invalid: [{name_or_dir, problem}]` — a manifest that fails validation is reported, never silently dropped (human mode prints a `warning:` line each).
+- Every settings write (`enable`, `disable`, `config set/unset`) holds the `plugin-settings` lock across the whole read-modify-write, and completes a pending legacy `graphify.json` move in the same write. `config set` refuses values over 64 KiB, oversized integers and over-deep JSON with exit 2.
+- `plugin run` starts the script in its own process group and stops that group on timeout (exit 124) and when the CLI itself receives SIGTERM/SIGINT — SIGTERM first so the script's own cleanup runs, SIGKILL after a 3 s grace — so an app timeout or quit never orphans it. The app cancels only `plugin run` on quit; in-flight writes get up to 5 s to finish.
+
+Settings are stored with `plugin_settings: 1` schema version. Hooks are dispatched by `scripts/hooks/pre-tool-use/02d-plugins.sh` and `scripts/hooks/stop/99a-plugins.sh`, receiving environment variables documented in `CLAUDE-md/hooks.md` § Plugin Hook Environment Contract.
 
 ## Layout, memory and preferences
 

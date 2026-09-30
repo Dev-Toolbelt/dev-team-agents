@@ -127,7 +127,7 @@ Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all va
 
 ### Step 5b — Context Navigation Section (Graphify only)
 
-If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigation (Graphify)` section with the 3-Layer Query Rule (graph.json → `docs/` → raw source) and the rebuild note (`scripts/graphify-refresh.sh` — never `graphify update .` directly; runs automatically via Stop hook).
+If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigation (Graphify)` section with the 3-Layer Query Rule (graph.json → `docs/` → raw source) and the rebuild note (`devteam plugin run graphify rebuild` — never `graphify update .` directly; at session end only when the plugin's `auto_refresh` setting is on).
 
 ---
 
@@ -150,7 +150,7 @@ Always create:
 
 ### Step 7 — Update .gitignore
 
-`install.sh` handles this automatically. Verify four entries exist and add any that are missing: `.dev-team-agents/user-data/` (whole directory), `!.dev-team-agents/user-data/graphify.json` (exception — keep the graphify config tracked), `.dev-team-agents/.worktree-session`, and `.dev-team-agents/.learn-last-run`.
+`install.sh` handles this automatically. Verify four entries exist and add any that are missing: `.dev-team-agents/user-data/` (whole directory), `!.dev-team-agents/user-data/graphify.json` (legacy exception, harmless once `devteam sync` has moved the file to the committed `plugin-settings/`), `.dev-team-agents/.worktree-session`, and `.dev-team-agents/.learn-last-run`.
 
 Remove legacy per-file entries under `.dev-team-agents/user-data/` if present (`session-summary.md`, `.auto-update`, or any of the eight pre-consolidation state dotfiles — `.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`) — the directory entry supersedes them, and `state_migrate_legacy` (`scripts/lib/state.sh`) already folds any leftover dotfile's value into `state.json` automatically.
 

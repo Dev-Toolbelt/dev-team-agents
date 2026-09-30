@@ -274,6 +274,23 @@ Nada nesse sistema apaga conhecimento automaticamente. A camada episódica é a 
 
 ---
 
+## Plugins
+
+Integrações opcionais, por projeto, construídas sobre um sistema de manifests. Ative-as com os comandos `devteam plugin` — o app desktop também tem uma aba **Plugins** na tela de cada projeto.
+
+**Graphify** (plugin de referência) — constrói um grafo de conhecimento do código para que os agentes leiam a estrutura antes de buscar nos arquivos brutos:
+
+```bash
+devteam plugin enable graphify          # ativa e preenche a config pela detecção automática
+devteam plugin config get graphify      # veja o que foi detectado
+devteam plugin run graphify rebuild     # constrói o grafo agora
+devteam plugin config set graphify auto_refresh true   # (opcional) reconstrói ao fim da sessão quando o código mudou
+```
+
+Todos os plugins vêm no core — sem instalação remota, sem integrações de terceiros. Para detalhes de design, autoria e comandos: [plugins/README.md](plugins/README.md) e [ADR-0019](docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md).
+
+---
+
 ## Coexistência & Customização
 
 Overrides no nível do projeto, regras de precedência e orientações de customização agora ficam em [Arquitetura do Harness](docs/harness.pt-BR.md).
@@ -288,7 +305,7 @@ Overrides no nível do projeto, regras de precedência e orientações de custom
 
 **Windows: o dev-team inteiro some (sem `/devteam:*`, sem agentes, sem skills)** — no Windows sem o Modo de Desenvolvedor, o git/MSYS grava os symlinks como arquivos-texto de ~62 bytes: os links de `.claude/` na instalação do Claude Code e o link de `skills/` dentro de `.opencode/` ou `.codex/` nos demais provedores. O `ls -la` do `git-bash` ainda os mostra como `lrwxrwxrwx`, mas o CLI enxerga arquivos comuns, então nada carrega. Confirme com `test -L .claude/commands/devteam && echo link || echo quebrado`. Repare a árvore do Claude rodando `bash .dev-team-agents/scripts/fix-symlinks.sh` — ele repara automaticamente quando possível e, caso contrário, imprime três opções: (1) ativar o **Modo de Desenvolvedor** (Configurações → Sistema → Para desenvolvedores — recomendado, sem admin), (2) rodar `git config core.symlinks true && git checkout -- .claude` uma vez em um **PowerShell elevado**, ou (3) executar o **seu CLI como administrador** (feche-o por completo antes, incluindo o ícone na bandeja). Para opencode e Codex, rode novamente o instalador daquele provedor assim que os symlinks nativos estiverem habilitados. Reinicie o seu CLI após reparar para ele reindexar o dev-team. Se o `fix-symlinks.sh` imprimir `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`, a correção funcionou localmente mas o blob commitado ainda é um arquivo comum — rode `git add`/`git commit` nos caminhos listados, ou os mesmos links quebram de novo no próximo checkout, pull, ou em um clone novo de um colega.
 
-**Verificação de atualização parece travada / não dispara** — a checagem roda uma vez por sessão a partir do `SessionStart` (`scripts/hooks/session-start.sh`), não a cada tool call. Verifique se `.dev-team-agents/user-data/state.json` é um arquivo gravável (não um diretório) e se `session-start.sh` é executável — a chave `last_update_check` agora vive lá. O hook de refresh automático do Graphify está desativado por padrão — veja `CLAUDE-md/hooks.md` § Disabled Hooks para status e como reativar.
+**Verificação de atualização parece travada / não dispara** — a checagem roda uma vez por sessão a partir do `SessionStart` (`scripts/hooks/session-start.sh`), não a cada tool call. Verifique se `.dev-team-agents/user-data/state.json` é um arquivo gravável (não um diretório) e se `session-start.sh` é executável — a chave `last_update_check` agora vive lá. O refresh do Graphify ao fim da sessão é a configuração opcional `auto_refresh` do plugin (`devteam plugin config set graphify auto_refresh true`).
 
 **As notificações e o quadro de tarefas chegam ao app desktop.** Nenhum provider mostra ao usuário a saída de um hook (a do `SessionStart` vira contexto do modelo, a do `Stop` não é exibida), então os hooks capturam atualizações de tarefas e enfileiram as notificações — janela de contexto, trabalho sem commit, docs desatualizados, atualizações, a dica do dia. O app desktop mostra:
 - **Notificações** como alertas do sistema, inclusive com a janela fechada

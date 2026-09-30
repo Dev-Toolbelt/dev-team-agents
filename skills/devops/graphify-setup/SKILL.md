@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: Graphify — autonomous setup: graphify.json, hint hook, CLAUDE.md.
+description: Graphify plugin — enable, detect paths, configure and rebuild via devteam plugin.
 ---
 
 ## Skip Conditions
@@ -8,191 +8,114 @@ description: Graphify — autonomous setup: graphify.json, hint hook, CLAUDE.md.
 Do not run this setup if any of the following are true:
 
 - The project contains **no JavaScript, TypeScript, or Python source files** (check: `find . -name "*.js" -o -name "*.ts" -o -name "*.py" | grep -v node_modules | head -1`)
-- A valid `graphify.json` already exists and the project structure hasn't changed
+- `devteam plugin show graphify --json` already reports `enabled: true` and `configured: true`, and the project structure hasn't changed
 - The user explicitly says graphify is not relevant to their stack (pure mobile, database-only, embedded, etc.)
 
-If the project type is ambiguous, ask once: `"Does your project use JavaScript, TypeScript, or Python as its primary language?"` before running Step 1.
+If the project type is ambiguous, ask once with `AskUserQuestion` whether JavaScript, TypeScript, or Python is the primary language before Step 1.
 
 ---
 
 ## Purpose
 
-Set up Graphify for the project autonomously. Claude handles everything — dependency installation, project structure inference, configuration — and only asks the user when it cannot proceed without their input (permission errors, genuinely ambiguous structure).
+Graphify is a plugin (`plugins/graphify/`, ADR-0019). Its settings live in the committed
+`.dev-team-agents/plugin-settings/graphify.json`, and every step below goes through the `devteam plugin`
+CLI — never write that file by hand. The desktop app's **Plugins** tab on the project screen does the
+same steps with a form. Ask the user only when the CLI cannot proceed on its own.
 
 ---
 
 ## Step 1 — OS Detection
 
-Run:
-```bash
-uname -s
-```
+Run `uname -s`: `Darwin` → macOS, `Linux` → Linux or WSL. On `MINGW*` / `MSYS*` / other (Windows),
+check `wsl --status 2>/dev/null || echo "WSL_NOT_FOUND"`:
 
-| Output | OS |
-|--------|-----|
-| `Darwin` | macOS — follow macOS instructions |
-| `Linux` | Linux or WSL — follow Linux instructions |
-| `MINGW*` / `MSYS*` / other | Windows — see below |
-
-**Windows handling:**
-
-First, check if WSL is available and active:
-```bash
-wsl --status 2>/dev/null || echo "WSL_NOT_FOUND"
-```
-
-- **WSL active** → run all subsequent steps inside the WSL shell (`wsl bash -c "<command>"`). Follow Linux instructions for all installs.
-- **WSL not found or not configured** → stop and inform the user:
-
-  > Windows without WSL is not supported. Please activate WSL first:
-  > 👉 https://learn.microsoft.com/en-us/windows/wsl/install
-  >
-  > Once WSL is set up, re-run this setup and everything will work via Linux instructions.
-
-Do not continue on Windows until WSL is confirmed active.
+- **WSL active** → run every later step inside WSL (`wsl bash -c "<command>"`)
+- **WSL not found** → stop and tell the user that Windows without WSL is not supported, linking
+  https://learn.microsoft.com/en-us/windows/wsl/install; resume once WSL is active
 
 ---
 
-## Step 2 — Check and Install graphify + jq
+## Step 2 — Requirements
 
 ```bash
-command -v graphify && graphify --version || echo "NOT_FOUND"
-command -v jq && jq --version || echo "NOT_FOUND"
+devteam plugin show graphify --json
 ```
 
-If either is missing, run `/devteam:install graphify jq` and wait for it to finish — that command owns the cross-OS install/verify logic for both (`skills/devops/tool-installers/SKILL.md`). Do not install them directly here; this avoids duplicating install commands in two places. Do not continue past this step until both are confirmed working.
+If `ready` is `false`, run `/devteam:install` for every binary whose `found` is `false` (each entry's
+`install_hint` names the command — `graphify` and `jq`) and wait for it to finish. That command owns
+the cross-OS install logic; do not install them here. Do not continue until `ready` is `true`.
+
+If `source` is `"legacy"`, run `devteam sync` first: it moves `.dev-team-agents/user-data/graphify.json`
+into the settings file, and the rest of this skill then edits the moved config.
 
 ---
 
-## Step 4 — Infer Project Structure
-
-Do not ask the user. Explore the project autonomously to determine `targetPaths` and `manifestPaths`.
-
-**4a — Detect stack via manifest files**
-
-Check which of these exist at the project root:
-
-| File | Stack |
-|------|-------|
-| `package.json` | Node.js / JavaScript / TypeScript |
-| `composer.json` | PHP |
-| `requirements.txt` / `pyproject.toml` / `setup.py` | Python |
-| `go.mod` | Go |
-| `Cargo.toml` | Rust |
-| `Gemfile` | Ruby |
-| `pom.xml` / `build.gradle` | Java / Kotlin |
-
-**4b — List top-level directories**
+## Step 3 — Detect and Enable
 
 ```bash
-find . -maxdepth 2 -type d ! -path './.git*' ! -path './node_modules*' \
-  ! -path './vendor*' ! -path './dist*' ! -path './build*' \
-  ! -path './.graphify*' ! -path './.claude*' ! -path './coverage*' \
-  ! -path './__pycache__*' ! -path './target*' | sort
+devteam plugin run graphify detect --json   # proposes {targetPaths, manifestPaths}; writes nothing
+devteam plugin enable graphify --json       # seeds the config from detect when none exists yet
 ```
 
-**4c — Select targetPaths using these heuristics**
+`detect` maps root manifests to a stack and keeps the conventional source directories that exist
+(`plugins/graphify/scripts/detect.py`). If `enable` reports `configured: false` — detect found no
+source directory — show the user the top-level directories and ask once which ones belong in the
+graph, then:
 
-| Stack | Likely targetPaths (keep only those that exist) |
-|-------|------------------------------------------------|
-| Node.js | `src`, `lib`, `app`, `routes`, `components`, `pages`, `services`, `api` |
-| PHP (Laravel) | `app`, `routes`, `config`, `database/migrations`, `tests` |
-| PHP (other) | `src`, `lib`, `app` |
-| Python | `src`, `app`, any directory containing `__init__.py` |
-| Go | `cmd`, `internal`, `pkg`, `api` |
-| Rust | `src` |
-| Ruby | `app`, `lib`, `config` |
-| Java/Kotlin | `src/main`, `src/test` |
-| Unknown | any directory with source-like names; skip build/output dirs |
+```bash
+devteam plugin config set graphify targetPaths '["src","lib"]'
+devteam plugin config set graphify manifestPaths '["package.json","package-lock.json"]'
+```
 
-Filter to only include paths that actually exist. If after applying heuristics you still cannot determine targetPaths with reasonable confidence (e.g., flat or unconventional layout), ask the user once listing your best guesses for confirmation.
-
-**4d — Select manifestPaths**
-
-Include all manifest files found in Step 4a that exist at the root. Also include lock files if present (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `composer.lock`, `Gemfile.lock`, `poetry.lock`).
+Values are JSON arrays. A wrong type exits 2 without writing.
 
 ---
 
-## Step 5 — Generate .dev-team-agents/user-data/graphify.json
+## Step 4 — .gitignore
 
-Create the config file at `.dev-team-agents/user-data/graphify.json` — this is where `graphify-refresh.sh` reads it from:
-
-```json
-{
-  "targetPaths": ["<inferred-dir1>", "<inferred-dir2>"],
-  "manifestPaths": ["<inferred-manifest1>"]
-}
+```bash
+grep -qxF "graphify-out/cache" .gitignore 2>/dev/null || echo "graphify-out/cache" >> .gitignore
 ```
 
-Omit `manifestPaths` if no manifest files were found. Do not ask the user to confirm — proceed directly to Step 6.
+`graphify-out/` itself is versioned; only its cache is ignored. The last-build marker lives in the
+machine-local `state.json`, which is already ignored. The settings file is committed.
 
 ---
 
-## Step 6 — Graphify Hook Sub-scripts
-
-The `02-graphify-hint.sh` (PreToolUse) sub-script is **built-in** to the dev-team-agents tarball. No manual creation is needed.
-
-Graph rebuilds are **on-demand, not automatic** — the Stop hook that used to rebuild on every session (`99-graphify-refresh.sh`) is disabled (see `CLAUDE-md/hooks.md` § Disabled Hooks). Refresh the graph manually when needed:
+## Step 5 — First Build
 
 ```bash
-bash .dev-team-agents/scripts/graphify-refresh.sh
+devteam plugin run graphify rebuild --json
 ```
 
-Remove any legacy file if present:
-
-```bash
-rm -f .dev-team-agents/scripts/hooks/stop/02-graphify-refresh.sh
-```
-
-The Stop dispatcher and PreToolUse dispatcher pick these up automatically — no changes to `settings.json` are needed.
-
----
-
-## Step 7 — Update .gitignore
-
-Add the following entries to the project's `.gitignore`. Group them under a `# Dev Team Agents` comment so they are easy to identify:
-
-```bash
-GITIGNORE_ENTRIES=(
-  "# Dev Team Agents"
-  "graphify-out/cache"
-  ".worktrees"
-)
-
-for ENTRY in "${GITIGNORE_ENTRIES[@]}"; do
-  grep -qxF "$ENTRY" .gitignore 2>/dev/null || echo "$ENTRY" >> .gitignore
-done
-```
-
-- `graphify-out/cache` — Graphify internal cache, rebuilt automatically
-- `.worktrees` — worktree isolation directories, local only
-
-The build marker — the commit the graph reflects — is `graphify-out/.build-commit`, written by the refresh script next to the graph it describes. It is per checkout (every linked worktree has its own `graphify-out/`) and versioned with the graph, so it needs no `.gitignore` entry.
-
----
-
-## Step 8 — Run First Build
-
-```bash
-bash .dev-team-agents/scripts/graphify-refresh.sh
-```
-
-If the build succeeds, `graphify-out/` will be created at the project root.
-
-If it fails, diagnose the error:
+`ok: true` means `graphify-out/` was rebuilt at the project root. On `ok: false`, show the user
+`log_tail`:
 
 | Symptom | Fix |
 |---------|-----|
-| `graphify not found` | Complete Step 2 |
-| `jq not found` | Complete Step 2 |
-| `graphify.json not found` | Complete Step 5 — file must be at `.dev-team-agents/user-data/graphify.json` |
-| Source dir not found | Verify path with user and update `.dev-team-agents/user-data/graphify.json` |
+| Exit 3, requirement missing | Complete Step 2 |
+| Exit 4, plugin disabled | `devteam plugin enable graphify` |
+| `Required source '<dir>' not found` | Correct `targetPaths` (Step 3) |
 
 ---
 
-## Step 9 — Inject CLAUDE.md Section
+## Step 6 — Refresh Policy
 
-Check if the project `CLAUDE.md` already contains a `## Context Navigation (Graphify)` section. If not, **append** (never replace) the following:
+Rebuilds are on demand by default: `devteam plugin run graphify rebuild`. To also rebuild at session end
+whenever a source path changed structurally — at a cost on every Stop — the user opts in with:
+
+```bash
+devteam plugin config set graphify auto_refresh true
+```
+
+Ask with `AskUserQuestion` (Keep on demand — recommended / Refresh at session end); never turn it on
+silently.
+
+---
+
+## Step 7 — Inject CLAUDE.md Section
+
+If the project `CLAUDE.md` has no `## Context Navigation (Graphify)` section, **append** (never replace):
 
 ```markdown
 ## Context Navigation (Graphify)
@@ -202,25 +125,22 @@ Check if the project `CLAUDE.md` already contains a `## Context Navigation (Grap
 2. Check `docs/` for decisions and context
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
-**Rebuild:** always use `.dev-team-agents/scripts/graphify-refresh.sh` — never `graphify update .` directly.
-Rebuilds are on demand — run the script above; nothing rebuilds automatically.
-Manual rebuild needed after: new modules/services, structural reorganization, or domain flow changes.
+**Rebuild:** `devteam plugin run graphify rebuild` — never `graphify update .` directly.
+Rebuild after new modules/services, structural reorganization, or domain flow changes.
 ```
 
 ---
 
-## Step 10 — Confirm Setup
+## Step 8 — Confirm Setup
 
-Report to the user:
+Report to the user, filling the values from `devteam plugin show graphify --json`:
 
 ```
 ✅ Graphify is set up for this project.
 
   Knowledge graph : graphify-out/  (versioned)
-  Build marker    : graphify-out/.build-commit  (versioned with the graph)
-  Config          : .dev-team-agents/user-data/graphify.json
-  Rebuild         : on demand → bash .dev-team-agents/scripts/graphify-refresh.sh
-
-Run the refresh script after adding, deleting, or moving files inside the
-tracked directories — it skips the build when nothing structural changed.
+  Settings        : .dev-team-agents/plugin-settings/graphify.json  (committed — applies to the whole team)
+  Source paths    : <config.targetPaths>
+  Refresh         : on demand | at session end (auto_refresh)
+  Status          : <status.summary>
 ```

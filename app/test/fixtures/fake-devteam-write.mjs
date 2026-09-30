@@ -16,7 +16,8 @@
  * This fixture reads the subcommand out of argv instead, and needs no environment
  * variable at all. It knows one project, `proj-1` at `/repo/project-1`, and answers
  * `version`, `compat`, `list`, `bind`, `unbind`, `sync`, `pin`, `upgrade` and `prefs
- * list/set/unset` and `skills list/show/install/remove` each with a
+ * list/set/unset`, `plugin list/enable/disable/config set/config unset/run` and
+ * `skills list/show/install/remove` each with a
  * shape real enough for their own validators in `cli/operations.ts` to accept — so
  * `test/ipc.test.ts` can assert on `result.data`, not only on `result.command`.
  */
@@ -43,6 +44,37 @@ function flagValue(name) {
 }
 
 const STORE_SCHEMAS = { project: 1, project_layout: 2, registry: 1, bind_manifest: 1, credentials: 1 };
+// One generic plugin, declared the way a manifest would be. Nothing in the app knows its name.
+function pluginView(enabled) {
+  return {
+    name: 'demo',
+    title: 'Demo',
+    description: 'A plugin the fixture declares.',
+    homepage: null,
+    enabled,
+    source: enabled ? 'settings' : 'none',
+    settings_file: '.dev-team-agents/plugin-settings/demo.json',
+    requirements: [{ binary: 'demo-bin', found: true, install_hint: '/devteam:install demo' }],
+    ready: true,
+    configured: false,
+    config_fields: [
+      { key: 'paths', type: 'string_list', label: 'Paths', required: true, default: [] },
+      { key: 'depth', type: 'integer', label: 'Depth', required: false, default: 3, min: 1, max: 9 },
+      { key: 'auto', type: 'boolean', label: 'Auto', required: false, default: false },
+      { key: 'mode', type: 'enum', label: 'Mode', required: false, default: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+      { key: 'name', type: 'string', label: 'Name', required: false, default: '' },
+    ],
+    config: { paths: [], depth: 3, auto: false, mode: 'a', name: '' },
+    unknown_config: [],
+    actions: [
+      { id: 'detect', label: 'Detect', help: null, output: 'config', requires_enabled: false, writes: false, timeout_seconds: 60 },
+      { id: 'rebuild', label: 'Rebuild', help: null, output: 'log', requires_enabled: true, writes: true, timeout_seconds: 100 },
+    ],
+    hooks: [],
+    status: null,
+  };
+}
+
 const PROJECT_ID = 'proj-1';
 const PROJECT_PATH = '/repo/project-1';
 
@@ -254,6 +286,40 @@ switch (command) {
         : { ok: true, key, value: args[3], scope: flagValue('--scope'), file: '/store/prefs.json' },
     );
     process.exit(0);
+    break;
+  }
+
+  case 'plugin': {
+    const verb = args[1];
+    if (verb === 'list') {
+      emit({ ok: true, project_id: PROJECT_ID, plugins: [pluginView(false)], invalid: [{ name_or_dir: 'broken-plugin', problem: 'manifest.json: missing name' }] });
+      process.exit(0);
+    }
+    if (verb === 'enable' || verb === 'disable') {
+      emit({ ok: true, plugin: pluginView(verb === 'enable'), changed: true, seeded: false });
+      process.exit(0);
+    }
+    if (verb === 'config') {
+      const sub = args[2];
+      const key = args[4];
+      // These are the fixture's refusals, so a batch can fail part-way and the failing
+      // write's argv (which carries the serialized value) comes back in the report.
+      const refused =
+        (key === 'depth' && args[5] === '7') ||
+        (key === 'paths' && args[5] === '["fail"]') ||
+        (key === 'auto' && args[5] === 'false');
+      if (sub === 'set' && refused) {
+        emit({ ok: false, error: `${key} ${args[5]} is reserved`, hint: 'Pick another value.', exit_code: 2 });
+        process.exit(2);
+      }
+      emit(sub === 'unset' ? { ok: true, plugin: pluginView(true), key, removed: true } : { ok: true, plugin: pluginView(true), key, value: args[5] });
+      process.exit(0);
+    }
+    if (verb === 'run') {
+      emit({ ok: true, plugin: args[2], action: args[3], exit_code: 0, duration_ms: 12, output: args[3] === 'detect' ? { paths: ['src'] } : null, log_tail: 'done' });
+      process.exit(0);
+    }
+    process.exit(64);
     break;
   }
 

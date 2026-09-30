@@ -165,7 +165,7 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 
 - **Dependency:** `jq` must also be installed (see above) — install it first if missing.
 - **Verify:** re-run detect, then confirm `jq` is present too.
-- **After the binary is confirmed working:** hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 4 (Infer Project Structure) — that skill owns `graphify.json` generation, hook wiring, `.gitignore` entries, the first build, and the `CLAUDE.md` injection. This skill's job stops at "the binary and its dependency are installed and on PATH."
+- **After the binary is confirmed working:** hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 3 (Detect and Enable) — that skill owns enabling the plugin and its config, `.gitignore` entries, the first build, and the `CLAUDE.md` injection. This skill's job stops at "the binary and its dependency are installed and on PATH."
 
 ---
 

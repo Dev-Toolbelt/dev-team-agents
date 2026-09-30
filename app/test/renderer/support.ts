@@ -23,6 +23,11 @@ import type {
   EnvironmentReport,
   HandshakeView,
   OperationResult,
+  PluginConfigChange,
+  PluginConfigField,
+  PluginList,
+  PluginRunResult,
+  PluginView,
   PreferenceChange,
   ProjectPreferencesView,
   ProblemKind,
@@ -279,6 +284,62 @@ export function projectPreferences(overrides: Partial<ProjectPreferencesView> = 
   return { ...base, inherited: { ...base.values, language: 'pt-BR' }, ...overrides };
 }
 
+export function pluginField(overrides: Partial<PluginConfigField> = {}): PluginConfigField {
+  return {
+    key: 'targetPaths',
+    type: 'string_list',
+    label: 'Source paths',
+    help: 'Directories, relative to the project root, that go into the graph.',
+    required: true,
+    default: [],
+    placeholder: 'src',
+    options: [],
+    min: null,
+    max: null,
+    ...overrides,
+  };
+}
+
+/** A `PluginView` shaped like ADR-0019 § 3, with the manifest of `plugins/graphify` as the default. */
+export function pluginView(overrides: Partial<PluginView> = {}): PluginView {
+  return {
+    name: 'graphify',
+    title: 'Graphify',
+    description: 'Builds a knowledge graph of the codebase.',
+    homepage: null,
+    enabled: false,
+    source: 'none',
+    settings_file: '.dev-team-agents/plugin-settings/graphify.json',
+    requirements: [{ binary: 'graphify', found: true, install_hint: '/devteam:install graphify' }],
+    ready: true,
+    configured: false,
+    config_fields: [
+      pluginField(),
+      pluginField({ key: 'auto_refresh', type: 'boolean', label: 'Refresh at session end', help: null, required: false, default: false, placeholder: null }),
+    ],
+    config: { targetPaths: [], auto_refresh: false },
+    unknown_config: [],
+    actions: [
+      { id: 'detect', label: 'Detect paths', help: 'Propose source paths.', output: 'config', requires_enabled: false, writes: false, timeout_seconds: 60 },
+      { id: 'rebuild', label: 'Rebuild graph', help: 'Rebuild now.', output: 'log', requires_enabled: true, writes: true, timeout_seconds: 1800 },
+    ],
+    hooks: ['stop'],
+    status: null,
+    ...overrides,
+  };
+}
+
+export function pluginList(
+  plugins: readonly PluginView[] = [pluginView()],
+  invalid: PluginList['invalid'] = [],
+): PluginList {
+  return { project_id: 'proj-1', plugins, invalid };
+}
+
+export function runResult(overrides: Partial<PluginRunResult> = {}): PluginRunResult {
+  return { plugin: 'graphify', action: 'detect', ok: true, exit_code: 0, duration_ms: 420, output: null, log_tail: '', ...overrides };
+}
+
 /** A fake bridge with every method stubbed to a benign default; tests override per case. */
 export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridge {
   return {
@@ -304,6 +365,14 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     updateProjectPreferences: vi.fn((_projectId: string, changes: readonly PreferenceChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
+    projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList()))),
+    setPluginEnabled: vi.fn((_projectId: string, name: string, enabled: boolean) =>
+      Promise.resolve(ok({ plugin: pluginView({ name, enabled }), changed: true, seeded: false })),
+    ),
+    updatePluginConfig: vi.fn((_projectId: string, _name: string, changes: readonly PluginConfigChange[]) =>
+      Promise.resolve(ok({ applied: [...changes], failed: null })),
+    ),
+    runPluginAction: vi.fn(() => Promise.resolve(ok(runResult()))),
     notificationFeed: vi.fn(() => Promise.resolve(notificationFeed())),
     markNotificationsRead: vi.fn(() => Promise.resolve(notificationFeed())),
     setNotificationsPaused: vi.fn((paused: boolean) => Promise.resolve(notificationFeed({ paused }))),

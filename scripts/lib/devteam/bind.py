@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from . import plugins as plugins_module
 from . import gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
 from .errors import ConflictError, EnvError, UsageError
 
@@ -488,12 +489,16 @@ def _same_git_repository(path_a, path_b):
     return common_a is not None and common_a == common_b
 
 
-#: The two version trees the framework's own text reaches by a project-relative path:
+#: The version trees the framework's own text reaches by a project-relative path:
 #: 121 references to `.dev-team-agents/scripts/…` (hooks, `new-adr.sh`,
-#: `graphify-refresh.sh`, the reuse and design-token lints) and 17 to
-#: `.dev-team-agents/templates/…`. Nothing shipped reads agents, commands or skills
-#: through `.dev-team-agents/` — Claude Code finds those under `.claude/`.
-RUNTIME_TREES = ("scripts", "templates")
+#: `graphify-refresh.sh`, the reuse and design-token lints), 17 to
+#: `.dev-team-agents/templates/…`, and the plugin manifests and hook scripts under
+#: `.dev-team-agents/plugins/…` (ADR-0019; the per-project *settings* live beside it in
+#: `plugin-settings/`, never inside this link). Nothing shipped reads agents, commands or
+#: skills through `.dev-team-agents/` — Claude Code finds those under `.claude/`.
+#: A core version without one of these trees (`plugins/` before ADR-0019) is skipped
+#: rather than refused, so an older pinned version still binds.
+RUNTIME_TREES = ("scripts", "templates", "plugins")
 
 
 def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copies, project_id, retired):
@@ -528,6 +533,10 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
                 "old tree into a dated quarantine rather than deleting it.",
                 details={"path": str(dest)},
             )
+        if not (Path(version_dir) / name).exists() and name == "plugins":
+            # A core version older than ADR-0019 has no plugins tree; refusing the whole
+            # bind for that would strand a project pinned to it.
+            continue
         kind = _materialize(
             Path(version_dir) / name,
             dest,
@@ -659,6 +668,12 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     # Before the projection, so it already carries what a v2 preferences file held.
     preferences_import = prefs.import_legacy(project_root, project_id, version, emitter=emitter)
     artifacts.append(prefs.materialize(project_root, project_id, version))
+    # Pre-plugin `user-data/graphify.json` -> `plugin-settings/graphify.json`. Idempotent,
+    # and a no-op when the new file already exists (the leftover is reported, not touched).
+    plugins_migration = plugins_module.migrate_legacy(project_root)
+    for leftover in plugins_migration["skipped"]:
+        if emitter:
+            emitter.warn("plugin {}: {}".format(leftover["plugin"], leftover["reason"]))
     artifacts.extend(project.write_pointers(project_root, project_id))
     _stamp_installed_version(project_root, project_id, version)
 
