@@ -106,6 +106,32 @@ Rules:
 
 ---
 
+## Task List Mirroring
+
+An approved plan's steps also live in your provider's **native task list**. That list is what the
+desktop app's task board reads (`docs/specs/task-board.md`): a plan kept only in chat or in a file
+never reaches it.
+
+| Provider | Tool | How it updates |
+|----------|------|----------------|
+| Claude Code | `TaskCreate` / `TaskUpdate` (`TodoWrite` where that is the one available) | One task per step; update each by id |
+| Codex | `update_plan` | Send the **whole** list, every step with its current status, on every change |
+| opencode | `todowrite` | Send the **whole** list, every step with its current status, on every change |
+
+- **On approval** — never before: a rejected plan must leave no task behind — create one task per
+  Steps row, in plan order, titled `Step N: <action>`, all pending.
+- **Starting a step** → mark it `in_progress`. **Finishing it** → mark it `completed` in the same
+  moment you send its Progress Reporting update. The two move together; neither replaces the other.
+- **Replanning** → mark dropped steps `cancelled` (or remove them from a whole-list tool) and add
+  the new ones before executing them.
+- **Owner** — the agent that orchestrates the plan keeps this list, as it owns Progress Reporting. A
+  subagent keeps its own list only when it executes a multi-step plan of its own; it never mirrors the
+  orchestrator's steps.
+- A step that runs a review or QA pass needs nothing extra: the board moves its tasks into In Review
+  on its own.
+
+---
+
 ## Execution Strategy Gate
 
 This optional gate applies between plan approval and execution. When an agent's configuration mandates it, the agent MUST present an interactive quiz after the user approves the plan and before executing any step.
