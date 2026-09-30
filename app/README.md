@@ -156,8 +156,10 @@ and writes only through `install` and `remove`, both in `compat.MUTATING`, so th
 withheld like every other write action when the schema declaration could not be written.
 
 Two rules keep the renderer out of the filesystem. **The file picker runs in the main
-process**, inside the `installSkill` IPC handler: the renderer asks for a *kind* of source
-(folder, archive, or the previous one for a retry after a conflict) and receives only the
+process**, inside the `installSkill` IPC handler: the renderer asks either to `pick` (one
+native picker for a folder, its `SKILL.md`, or a `.zip`/`.skill` archive — on Windows and Linux,
+where Electron cannot offer files and folders in one dialog, a folder is chosen through its
+`SKILL.md`) or to reuse the `previous` pick for a retry after a conflict, and receives only the
 result, so it never holds a path it could send back. **Removal is aimed by name and root id**
 and the main process checks the pair against a fresh `skills list` before it builds an argv;
 a `managed` skill is refused there and not offered in the UI. A removed folder is moved to
