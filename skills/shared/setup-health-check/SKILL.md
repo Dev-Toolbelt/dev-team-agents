@@ -24,7 +24,7 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
    - FIX items that touch `settings.json`: show diff, ask confirmation
    - FIX items that touch `.gitignore` (legacy migration): ask confirmation
    - All other FIX items: apply without asking
-5. Write today's date (`YYYY-MM-DD`) to the `last_health_check` key of `.dev-team-agents/user-data/state.json` — `source .dev-team-agents/scripts/lib/state.sh && state_set last_health_check "$(date +%Y-%m-%d)" .dev-team-agents/user-data/state.json`. Never write the legacy `.last-health-check` file: Category 3 classifies it as a marker to migrate into `state.json`. `session-start.sh` reads that key to warn when a project has gone `docs_stale_after_days` (default `30`) without a health check — see `CLAUDE-md/notifications.md`. This step runs even when all categories pass.
+5. Write today's date (`YYYY-MM-DD`) to the `last_health_check` key of `state.json` in the resolved state directory — the snippet is Step 4 of `commands/health-check.md`. In a bound project that directory is not `.dev-team-agents/user-data/` (see `references/checks-list.md` § Before Category 1), and writing there leaves `session-start.sh` warning forever. Never write the legacy `.last-health-check` file: Category 3 classifies it as a marker to migrate into `state.json`. `session-start.sh` reads that key to warn when a project has gone `docs_stale_after_days` (default `30`) without a health check — see `CLAUDE-md/notifications.md`. This step runs even when all categories pass.
 
 ## No-Destruction Rule
 
@@ -76,7 +76,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 |---|----------|-----------|
 | 1 | Symlinks | `.claude/agents/dev-team`, `.claude/commands/devteam` — test with `-L`, not `ls`; catch Windows materialized-file state |
 | 2 | Scripts & Executability | All hook dispatchers and sub-scripts are executable |
-| 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` |
+| 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` (directory checks skipped once `devteam upgrade` has moved state to the store) |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
 | 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity, and that a real refresh run actually rebuilds the output (not just that files exist) |
 | 6 | CLAUDE.md | `## dev-team-agents` section present |

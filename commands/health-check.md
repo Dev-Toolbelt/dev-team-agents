@@ -34,6 +34,8 @@ Running provider-agnostic checks only.
 
 ## Step 1 — Run health check categories
 
+Start with `checks-list.md` § **Before Category 1** — it resolves where this project keeps its state, preferences and memory, and in a v3-bound project (`.dev-team-agents/project.json` exists) it routes categories 1–3 and 7–11 to the `devteam` CLI instead of the v2 paths.
+
 Run the 13 health check categories from `setup-health-check/references/checks-list.md` **in order**, following the same flow:
 
 1. Symlinks
@@ -109,8 +111,27 @@ Health Check: all categories passed. dev-team-agents is healthy.
 Regardless of outcome, write today's date so `session-start.sh` stops warning that this project's health check is overdue:
 
 ```bash
-mkdir -p .dev-team-agents/user-data
-source .dev-team-agents/scripts/lib/state.sh
-state_set last_health_check "$(date +%Y-%m-%d)" .dev-team-agents/user-data/state.json
+bash -c '
+ROOT=""
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+[ -n "$GIT_COMMON_DIR" ] && ROOT="$(cd "$GIT_COMMON_DIR/.." 2>/dev/null && pwd)"
+[ -n "$ROOT" ] || ROOT="$PWD"
+# devteam_state_dir honours an inherited STATE_FILE/USER_DATA_DIR as an override; drop them so
+# the pointer, which session-start.sh reads, decides.
+unset STATE_FILE USER_DATA_DIR
+for LIB in "$ROOT/.dev-team-agents/scripts/hooks/lib/data-dirs.sh" "$ROOT/scripts/hooks/lib/data-dirs.sh"; do
+  [ -f "$LIB" ] && . "$LIB" && break
+done
+if command -v devteam_state_dir >/dev/null 2>&1; then
+  STATE_DIR="$(devteam_state_dir "$ROOT")"
+else
+  STATE_DIR="$ROOT/.dev-team-agents/user-data"
+  . "$ROOT/.dev-team-agents/scripts/lib/state.sh"
+fi
+mkdir -p "$STATE_DIR"
+state_set last_health_check "$(date +%Y-%m-%d)" "$STATE_DIR/state.json"
+'
 ```
+
+In a bound project `STATE_DIR` is the machine-local directory the `state-dir` pointer names — the one `session-start.sh` reads — not `.dev-team-agents/user-data/`.
 ```
