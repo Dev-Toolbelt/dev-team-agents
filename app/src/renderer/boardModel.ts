@@ -66,28 +66,30 @@ export function percent(part: number, total: number): number {
 }
 
 /**
- * The three percentages of a counts row, by the largest-remainder method, so they always
- * sum to 100 (independent rounding turns 1/1/1 into 33+33+33). All zero when nothing counts.
+ * The four percentages of a counts row (to do, in progress, in review, done), by the
+ * largest-remainder method, so they always sum to 100 (independent rounding turns 1/1/1 into
+ * 33+33+33). All zero when nothing counts.
  */
-export function percentLabels(counts: BoardCounts): readonly [number, number, number] {
-  const parts = [counts.todo, counts.in_progress, counts.done] as const;
-  const total = parts[0] + parts[1] + parts[2];
-  if (total <= 0) return [0, 0, 0];
+export function percentLabels(counts: BoardCounts): readonly [number, number, number, number] {
+  const parts = [counts.todo, counts.in_progress, counts.in_review, counts.done] as const;
+  const total = parts[0] + parts[1] + parts[2] + parts[3];
+  if (total <= 0) return [0, 0, 0, 0];
   const exact = parts.map((part) => (part * 100) / total);
   const floors = exact.map(Math.floor);
   let left = 100 - floors.reduce((a, b) => a + b, 0);
-  const order = [0, 1, 2].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
+  const order = [0, 1, 2, 3].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
   for (const index of order) {
     if (left <= 0) break;
     floors[index]! += 1;
     left -= 1;
   }
-  return [floors[0]!, floors[1]!, floors[2]!];
+  return [floors[0]!, floors[1]!, floors[2]!, floors[3]!];
 }
 
 export const STEP_LABELS: Readonly<Record<string, string>> = {
   pending: 'To do',
   in_progress: 'In progress',
+  in_review: 'In Review',
   completed: 'Done',
   cancelled: 'Cancelled',
 };
@@ -96,7 +98,7 @@ export function stepLabel(status: string): string {
   return STEP_LABELS[status] ?? status.replace(/_/g, ' ');
 }
 
-const STEP_ORDER = ['pending', 'in_progress', 'completed', 'cancelled'];
+const STEP_ORDER = ['pending', 'in_progress', 'in_review', 'completed', 'cancelled'];
 
 /**
  * How long a task has been in its current column. A running task keeps growing; anything
@@ -105,7 +107,7 @@ const STEP_ORDER = ['pending', 'in_progress', 'completed', 'cancelled'];
  */
 export function timeInColumn(session: BoardSession, task: BoardTask, nowSeconds: number, running: boolean): number {
   const until = running ? nowSeconds : (session.ended_at ?? session.last_activity_at);
-  return Math.max(0, until - task.status_since);
+  return Math.max(0, until - (task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since));
 }
 
 /**
@@ -121,16 +123,19 @@ export function stepDurations(
   currentSeconds?: number,
 ): readonly { readonly status: string; readonly label: string; readonly seconds: number; readonly current: boolean }[] {
   const merged: Record<string, number> = { ...task.durations };
-  const live = currentSeconds ?? (running ? nowSeconds - task.status_since : undefined);
-  if (live !== undefined) merged[task.status] = Math.max(merged[task.status] ?? 0, live);
+  // The provider's status stays `in_progress` while a task is in review; the step it is in is the review window.
+  const step = task.column === 'in_review' ? 'in_review' : task.status;
+  const since = task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since;
+  const live = currentSeconds ?? (running ? nowSeconds - since : undefined);
+  if (live !== undefined) merged[step] = Math.max(merged[step] ?? 0, live);
   const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
   return statuses
-    .filter((status) => (merged[status] ?? 0) > 0 || status === task.status)
+    .filter((status) => (merged[status] ?? 0) > 0 || status === step)
     .map((status) => ({
       status,
       label: stepLabel(status),
       seconds: merged[status] ?? 0,
-      current: status === task.status,
+      current: status === step,
     }));
 }
 
@@ -155,13 +160,15 @@ export interface ProjectView {
   readonly counts: BoardCounts;
   readonly stale: number;
   readonly abandoned: number;
+  readonly withFindings: number;
 }
 
 function sumCounts(sessions: readonly BoardSession[]): BoardCounts {
-  const counts = { todo: 0, in_progress: 0, done: 0, total: 0 };
+  const counts = { todo: 0, in_progress: 0, in_review: 0, done: 0, total: 0 };
   for (const session of sessions) {
     counts.todo += session.counts.todo;
     counts.in_progress += session.counts.in_progress;
+    counts.in_review += session.counts.in_review;
     counts.done += session.counts.done;
     counts.total += session.counts.total;
   }
@@ -195,7 +202,13 @@ export function viewProject(project: BoardProject, period: Period, nowSeconds: n
     counts,
     stale: whole ? project.stale : tasks.filter((task) => task.stale).length,
     abandoned: whole ? project.abandoned : tasks.filter((task) => task.abandoned).length,
+    withFindings: whole ? project.with_findings : tasks.filter(hasFindings).length,
   };
+}
+
+/** A task sitting in review with findings to fix. */
+export function hasFindings(task: BoardTask): boolean {
+  return task.column === 'in_review' && task.review?.state === 'findings';
 }
 
 // ── the kanban ────────────────────────────────────────────────────────────────
@@ -207,6 +220,8 @@ export interface KanbanFilters {
   /** Hide done tasks completed longer ago than `retentionDays`. */
   readonly hideOldDone: boolean;
   readonly retentionDays: number;
+  /** Only tasks in review with findings. Optional so a caller that predates the filter keeps working. */
+  readonly onlyFindings?: boolean;
 }
 
 export interface KanbanItem {
@@ -217,6 +232,7 @@ export interface KanbanItem {
 export interface KanbanView {
   readonly todo: readonly KanbanItem[];
   readonly in_progress: readonly KanbanItem[];
+  readonly in_review: readonly KanbanItem[];
   readonly done: readonly KanbanItem[];
   /** Done tasks the retention setting is hiding. */
   readonly hiddenDone: number;
@@ -230,6 +246,7 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   const doneCutoff = nowSeconds - filters.retentionDays * DAY;
   let hiddenDone = 0;
   const visible = items.filter(({ task }) => {
+    if (filters.onlyFindings === true && !hasFindings(task)) return false;
     if (task.column !== 'done' || !filters.hideOldDone) return true;
     const finished = task.completed_at ?? task.status_since;
     if (finished >= doneCutoff) return true;
@@ -240,6 +257,7 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   return {
     todo: visible.filter((i) => i.task.column === 'todo').sort(byCreated),
     in_progress: visible.filter((i) => i.task.column === 'in_progress').sort(byCreated),
+    in_review: visible.filter((i) => i.task.column === 'in_review').sort(byCreated),
     done: visible
       .filter((i) => i.task.column === 'done')
       .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),

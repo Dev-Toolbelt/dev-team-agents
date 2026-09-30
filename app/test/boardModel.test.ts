@@ -45,18 +45,32 @@ describe('percent', () => {
 });
 
 describe('percentLabels', () => {
-  const c = (todo: number, in_progress: number, done: number) => ({ todo, in_progress, done, total: todo + in_progress + done });
+  const c = (todo: number, in_progress: number, done: number, in_review = 0) => ({
+    todo,
+    in_progress,
+    in_review,
+    done,
+    total: todo + in_progress + in_review + done,
+  });
 
   it('always sums to 100 (largest remainder), where independent rounding gave 99', () => {
-    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 33]);
+    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 0, 33]);
     for (const counts of [c(1, 1, 1), c(1, 2, 4), c(3, 3, 1), c(7, 11, 13), c(1, 0, 6), c(5, 0, 0)]) {
       expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
     }
   });
 
   it('keeps exact shares exact, and is all zero for an empty board', () => {
-    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 50]);
-    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0]);
+    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 0, 50]);
+    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('splits four parts by largest remainder and still sums to 100', () => {
+    expect(percentLabels(c(1, 1, 1, 1))).toEqual([25, 25, 25, 25]);
+    for (const counts of [c(1, 1, 1, 2), c(1, 2, 4, 1), c(3, 3, 1, 7), c(7, 11, 13, 5), c(0, 0, 1, 2)]) {
+      expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
+    }
+    expect(percentLabels({ todo: 1, in_progress: 1, in_review: 1, done: 0, total: 3 })).toEqual([34, 33, 33, 0]);
   });
 });
 
@@ -79,6 +93,56 @@ describe('timeInColumn', () => {
     const ended = boardSession({ status: 'ended', ended_at: NOW - 400, tasks: [task] });
     const inColumn = timeInColumn(ended, task, NOW + 5000, false);
     expect(stepDurations(task, NOW + 5000, false, inColumn).find((s) => s.current)?.seconds).toBe(600);
+  });
+});
+
+describe('in review', () => {
+  const review = boardTask({
+    key: 'rv',
+    column: 'in_review',
+    status: 'in_progress',
+    status_since: NOW - 5000,
+    review: { state: 'findings', findings: 2, since: NOW - 300 },
+    durations: { pending: 60, in_progress: 900, in_review: 120 },
+  });
+
+  it('measures time in column from review.since, not from the provider status change', () => {
+    expect(timeInColumn(boardSession({ tasks: [review] }), review, NOW, true)).toBe(300);
+    const noReview = { ...review, review: null };
+    expect(timeInColumn(boardSession({ tasks: [noReview] }), noReview, NOW, true)).toBe(5000);
+  });
+
+  it('lists In Review between In progress and Done, when it has time', () => {
+    const steps = stepDurations({ ...review, durations: { ...review.durations, completed: 0 } }, NOW, true);
+    expect(steps.map((s) => [s.label, s.seconds])).toEqual([
+      ['To do', 60],
+      ['In progress', 900],
+      ['In Review', 300],
+    ]);
+    expect(steps.find((s) => s.current)?.label).toBe('In Review');
+  });
+
+  it('drops an empty In Review step for a task that is not in review', () => {
+    const task = boardTask({ status: 'completed', column: 'done', durations: { in_progress: 10, in_review: 0, completed: 0 } });
+    expect(stepDurations(task, NOW, false).map((s) => s.label)).toEqual(['In progress', 'Done']);
+  });
+
+  it('puts in-review tasks in their own column and filters to findings only', () => {
+    const clean = boardTask({ key: 'clean', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 10 } });
+    const project = boardProject({ sessions: [boardSession({ tasks: [review, clean, boardTask({ key: 'plain' })] })] });
+    const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionDays: 7 } as const;
+    expect(buildKanban(project, filters, NOW).in_review.map((i) => i.task.key)).toEqual(['rv', 'clean']);
+    const only = buildKanban(project, { ...filters, onlyFindings: true }, NOW);
+    expect(only.in_review.map((i) => i.task.key)).toEqual(['rv']);
+    expect(only.todo).toHaveLength(0);
+  });
+
+  it('recomputes with_findings and in_review counts for a narrower period', () => {
+    const old = boardSession({ session_id: 'old', last_activity_at: NOW - 20 * 86_400, tasks: [review] });
+    const recent = boardSession({ session_id: 'recent', tasks: [boardTask({ key: 'x' })] });
+    const project = boardProject({ sessions: [recent, old] });
+    expect(viewProject(project, 'all', NOW)).toMatchObject({ withFindings: 1, counts: { in_review: 1 } });
+    expect(viewProject(project, '7d', NOW)).toMatchObject({ withFindings: 0, counts: { in_review: 0 } });
   });
 });
 
@@ -133,7 +197,7 @@ describe('viewProject', () => {
 
   it('a narrower period recomputes from the sessions that remain', () => {
     const view = viewProject(project, '7d', NOW)!;
-    expect(view.counts).toEqual({ todo: 1, in_progress: 1, done: 1, total: 3 });
+    expect(view.counts).toEqual({ todo: 1, in_progress: 1, in_review: 0, done: 1, total: 3 });
     expect(view.sessionsTotal).toBe(1);
     expect(view.providers).toEqual(['claude']);
     expect(view.stale).toBe(0);

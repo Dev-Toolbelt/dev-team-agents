@@ -7,8 +7,8 @@ import type { BoardCounts, BoardProject, BoardSession, BoardTask } from '../../s
 
 export const NOW = 1_790_000_000;
 
-export function counts(todo: number, inProgress: number, done: number): BoardCounts {
-  return { todo, in_progress: inProgress, done, total: todo + inProgress + done };
+export function counts(todo: number, inProgress: number, done: number, inReview = 0): BoardCounts {
+  return { todo, in_progress: inProgress, in_review: inReview, done, total: todo + inProgress + inReview + done };
 }
 
 export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
@@ -25,6 +25,7 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     durations: { pending: 120, in_progress: 0, completed: 0 },
     stale: false,
     abandoned: false,
+    review: null,
     ...overrides,
   };
 }
@@ -36,6 +37,7 @@ export function boardSession(overrides: Partial<BoardSession> & { tasks?: readon
     tasks.filter((t) => t.column === 'todo').length,
     tasks.filter((t) => t.column === 'in_progress').length,
     tasks.filter((t) => t.column === 'done').length,
+    tasks.filter((t) => t.column === 'in_review').length,
   );
   return {
     session_id: 'session-aaaaaaaa',
@@ -60,6 +62,7 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
     sessions.reduce((n, s) => n + s.counts.todo, 0),
     sessions.reduce((n, s) => n + s.counts.in_progress, 0),
     sessions.reduce((n, s) => n + s.counts.done, 0),
+    sessions.reduce((n, s) => n + s.counts.in_review, 0),
   );
   const tasks = sessions.flatMap((s) => s.tasks);
   return {
@@ -71,6 +74,7 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
     counts: total,
     stale: tasks.filter((t) => t.stale).length,
     abandoned: tasks.filter((t) => t.abandoned).length,
+    with_findings: tasks.filter((t) => t.review?.state === 'findings').length,
     last_activity_at: Math.max(0, ...sessions.map((s) => s.last_activity_at)),
     ...overrides,
     sessions,
@@ -78,10 +82,10 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
 }
 
 /** `n` tasks split as evenly as possible across the columns, with unique keys. */
-export function tasksOf(prefix: string, todo: number, inProgress: number, done: number): BoardTask[] {
+export function tasksOf(prefix: string, todo: number, inProgress: number, done: number, inReview = 0): BoardTask[] {
   const out: BoardTask[] = [];
   let index = 0;
-  const make = (column: 'todo' | 'in_progress' | 'done', status: string) => {
+  const make = (column: 'todo' | 'in_progress' | 'in_review' | 'done', status: string) => {
     index += 1;
     out.push(
       boardTask({
@@ -92,11 +96,13 @@ export function tasksOf(prefix: string, todo: number, inProgress: number, done: 
         created_at: NOW - 1000 + index,
         completed_at: column === 'done' ? NOW - 30 : null,
         status_since: NOW - 30,
+        review: column === 'in_review' ? { state: 'pending', findings: null, since: NOW - 30 } : null,
       }),
     );
   };
   for (let i = 0; i < todo; i += 1) make('todo', 'pending');
   for (let i = 0; i < inProgress; i += 1) make('in_progress', 'in_progress');
+  for (let i = 0; i < inReview; i += 1) make('in_review', 'in_progress');
   for (let i = 0; i < done; i += 1) make('done', 'completed');
   return out;
 }

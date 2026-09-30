@@ -47,6 +47,7 @@ import {
   type BoardCounts,
   type BoardFeed,
   type BoardProject,
+  type BoardReview,
   type BoardSession,
   type BoardSessionStatus,
   type BoardSettings,
@@ -397,8 +398,9 @@ function ProjectCard({ view, name, onOpen }: { view: ProjectView; name: string; 
       </span>
       <ProgressBar counts={counts} />
       <CountsRow counts={counts} />
-      {view.stale > 0 || view.abandoned > 0 ? (
+      {view.stale > 0 || view.abandoned > 0 || view.withFindings > 0 ? (
         <span className="flex flex-wrap gap-2">
+          {view.withFindings > 0 ? <FindingsBadge label={`${view.withFindings} with findings`} /> : null}
           {view.stale > 0 ? <StaleBadge count={view.stale} /> : null}
           {view.abandoned > 0 ? <AbandonedBadge count={view.abandoned} /> : null}
         </span>
@@ -420,6 +422,33 @@ function StaleBadge({ count }: { count?: number }) {
   );
 }
 
+function FindingsBadge({ label }: { label: string }) {
+  return (
+    <Badge variant="outline" className="border-destructive text-foreground" title="Review found issues that are still to be fixed">
+      <TriangleAlert aria-hidden="true" />
+      {label}
+    </Badge>
+  );
+}
+
+/** The review badge of a card: the state is always in the words, never only in the colour. */
+function ReviewBadge({ review }: { review: BoardReview }) {
+  if (review.state === 'findings') {
+    const n = review.findings;
+    return <FindingsBadge label={n === null ? 'Findings' : `${n} ${n === 1 ? 'finding' : 'findings'}`} />;
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="border-warning text-foreground"
+      title={review.state === 'pending' ? 'Waiting for the review result' : 'The review finished but its result has not been read yet'}
+    >
+      <Clock aria-hidden="true" />
+      {review.state === 'pending' ? 'Awaiting review' : 'Result not read'}
+    </Badge>
+  );
+}
+
 function AbandonedBadge({ count }: { count?: number }) {
   return (
     <Badge
@@ -435,12 +464,13 @@ function AbandonedBadge({ count }: { count?: number }) {
 
 /** Stacked bar plus the figures beside it: the colours alone never carry the meaning. */
 function ProgressBar({ counts }: { counts: BoardCounts }) {
-  const label = `${counts.todo} to do, ${counts.in_progress} in progress, ${counts.done} done`;
+  const label = `${counts.todo} to do, ${counts.in_progress} in progress, ${counts.in_review} in review, ${counts.done} done`;
   const segment = (value: number) => ({ flex: `${value} 1 0%` });
   return (
     <span role="img" aria-label={label} className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
       <span className="bg-muted-foreground/40" style={segment(counts.todo)} />
       <span className="bg-warning" style={segment(counts.in_progress)} />
+      <span className="bg-info" style={segment(counts.in_review)} />
       <span className="bg-success" style={segment(counts.done)} />
     </span>
   );
@@ -451,10 +481,11 @@ function CountsRow({ counts }: { counts: BoardCounts }) {
   const cells: readonly { readonly label: string; readonly value: number; readonly dot: string; readonly share: number }[] = [
     { label: 'To do', value: counts.todo, dot: 'bg-muted-foreground/40', share: shares[0] },
     { label: 'In progress', value: counts.in_progress, dot: 'bg-warning', share: shares[1] },
-    { label: 'Done', value: counts.done, dot: 'bg-success', share: shares[2] },
+    { label: 'In Review', value: counts.in_review, dot: 'bg-info', share: shares[2] },
+    { label: 'Done', value: counts.done, dot: 'bg-success', share: shares[3] },
   ];
   return (
-    <dl className="grid grid-cols-3 gap-2 text-xs">
+    <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
       {cells.map((cell) => (
         <div key={cell.label}>
           <dt className="flex items-center gap-1 text-muted-foreground">
@@ -494,17 +525,23 @@ function Kanban({
   const coarseNow = useNow(clock, 60, active);
   const [sessionId, setSessionId] = useState<string>('all');
   const [hideOldDone, setHideOldDone] = useState(true);
+  const [onlyFindings, setOnlyFindings] = useState(false);
   const hideId = useId();
+  const findingsId = useId();
 
   const sessionsInRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
   // A session that vanished from the snapshot or fell out of the period must not leave the filter selecting nothing.
   const effectiveSession = sessionsInRange.some((each) => each.session_id === sessionId) ? sessionId : 'all';
   const view = useMemo(
     () =>
-      buildKanban(project, { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays }, coarseNow),
-    [project, effectiveSession, period, hideOldDone, settings.doneRetentionDays, coarseNow],
+      buildKanban(
+        project,
+        { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays, onlyFindings },
+        coarseNow,
+      ),
+    [project, effectiveSession, period, hideOldDone, onlyFindings, settings.doneRetentionDays, coarseNow],
   );
-  const anyRunning = [...view.todo, ...view.in_progress].some((item) => isRunning(item.session, item.task));
+  const anyRunning = [...view.todo, ...view.in_progress, ...view.in_review].some((item) => isRunning(item.session, item.task));
   const tick = useNow(clock, 1, active && anyRunning);
   const shownSessions = sessionsInRange.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession);
 
@@ -542,13 +579,20 @@ function Kanban({
             Hide done older than {settings.doneRetentionDays} {settings.doneRetentionDays === 1 ? 'day' : 'days'}
           </Label>
         </span>
+        <span className="flex items-center gap-2">
+          <Checkbox id={findingsId} checked={onlyFindings} onCheckedChange={(checked) => setOnlyFindings(checked === true)} />
+          <Label htmlFor={findingsId} className="text-sm">
+            With findings
+          </Label>
+        </span>
       </div>
 
       <SessionStrip projectId={project.project_id} sessions={shownSessions} />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Column title="To do" items={view.todo} now={tick} />
         <Column title="In progress" items={view.in_progress} now={tick} />
+        <Column title="In Review" items={view.in_review} now={tick} />
         <Column
           title="Done"
           items={view.done}
@@ -619,7 +663,8 @@ function SessionRow({ projectId, session }: { projectId: string; session: BoardS
         {STATUS_WORD[session.status]}
       </span>
       <span className="text-xs text-muted-foreground">
-        {session.counts.todo} to do · {session.counts.in_progress} in progress · {session.counts.done} done
+        {session.counts.todo} to do · {session.counts.in_progress} in progress
+        {session.counts.in_review > 0 ? ` · ${session.counts.in_review} in review` : ''} · {session.counts.done} done
       </span>
       <span className="ml-auto flex items-center gap-2">
         {message !== null ? (
@@ -723,6 +768,7 @@ const TaskCard = memo(function TaskCard({ item, now }: { item: KanbanItem; now: 
             <span className="sr-only">Time in this column: </span>
             {formatDuration(inColumn)}
           </span>
+          {task.review !== null && task.column === 'in_review' ? <ReviewBadge review={task.review} /> : null}
           {task.stale ? <StaleBadge /> : null}
           {task.abandoned ? <AbandonedBadge /> : null}
           <button

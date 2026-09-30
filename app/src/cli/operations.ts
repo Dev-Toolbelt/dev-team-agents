@@ -30,6 +30,8 @@ import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/plug
 import type {
   BoardColumn,
   BoardCounts,
+  BoardReview,
+  BoardReviewState,
   BoardProject,
   BoardSession,
   BoardSessionStatus,
@@ -1806,7 +1808,8 @@ export function watchNotifications(
 
 // ── the task board ────────────────────────────────────────────────────────────
 
-const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'done'];
+const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'in_review', 'done'];
+const REVIEW_STATES: readonly BoardReviewState[] = ['pending', 'findings', 'unread'];
 const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ended'];
 const MAX_TASK_TEXT = 2_000;
 const MAX_ID = 512;
@@ -1842,11 +1845,29 @@ function asBoardCounts(value: unknown): BoardCounts | string {
   const todo = nonNegative(value['todo']);
   const inProgress = nonNegative(value['in_progress']);
   const done = nonNegative(value['done']);
+  const rawReview = value['in_review'];
+  const inReview = rawReview === undefined || rawReview === null ? 0 : nonNegative(rawReview);
   const total = nonNegative(value['total']);
-  if (todo === null || inProgress === null || done === null || total === null) {
-    return '`counts` needs non-negative numeric todo, in_progress, done and total';
+  if (todo === null || inProgress === null || inReview === null || done === null || total === null) {
+    return '`counts` needs non-negative numeric todo, in_progress, done and total (in_review optional)';
   }
-  return { todo, in_progress: inProgress, done, total };
+  return { todo, in_progress: inProgress, in_review: inReview, done, total };
+}
+
+/** A review window, or null when absent or malformed: a bad one costs the badge, not the card. */
+function asBoardReview(value: unknown): BoardReview | null {
+  if (!isRecord(value)) return null;
+  const state = value['state'];
+  if (typeof state !== 'string' || !(REVIEW_STATES as readonly string[]).includes(state)) return null;
+  const since = nonNegative(value['since']);
+  if (since === null) return null;
+  const raw = value['findings'];
+  let findings: number | null = null;
+  if (raw !== undefined && raw !== null) {
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0) return null;
+    findings = raw;
+  }
+  return { state: state as BoardReviewState, findings, since };
 }
 
 /** `null` for a task this app cannot draw honestly; the caller drops it. */
@@ -1879,6 +1900,7 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     durations,
     stale: raw['stale'] === true,
     abandoned: raw['abandoned'] === true,
+    review: asBoardReview(raw['review']),
   };
 }
 
@@ -1939,6 +1961,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
     counts,
     stale: nonNegative(raw['stale']) ?? 0,
     abandoned: nonNegative(raw['abandoned']) ?? 0,
+    with_findings: nonNegative(raw['with_findings']) ?? 0,
     last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
     sessions,
   };

@@ -41,7 +41,7 @@ import {
 import type * as IpcModule from '../src/main/taskBoardIpc.js';
 import type * as ApiModule from '../src/shared/api.js';
 import type { BoardFeed, BoardProject } from '../src/shared/api.js';
-import { boardProject, boardSession, boardTask, counts } from './fixtures/board.js';
+import { NOW, boardProject, boardSession, boardTask, counts } from './fixtures/board.js';
 import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE_WATCH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-watch.mjs');
@@ -85,11 +85,56 @@ describe('asBoardProject', () => {
     ['a non-object', 'nope'],
     ['no project_id', { root: '/x', counts: counts(1, 0, 0), sessions_total: 1, sessions_active: 1, sessions: [] }],
     ['non-numeric counts', { ...boardProject(), counts: { todo: 'a', in_progress: 0, done: 0, total: 0 } }],
+    ['a non-numeric in_review count', { ...boardProject(), counts: { todo: 0, in_progress: 0, in_review: 'x', done: 0, total: 0 } }],
     ['negative counts', { ...boardProject(), counts: { todo: -1, in_progress: 0, done: 0, total: 0 } }],
     ['no sessions array', { ...boardProject(), sessions: 'x' }],
     ['no session totals', { ...boardProject(), sessions_total: 'x' }],
   ])('rejects %s', (_name, raw) => {
     expect(typeof asBoardProject(raw)).toBe('string');
+  });
+
+  it('accepts output without the review fields (an older CLI): in_review 0, with_findings 0, review null', () => {
+    const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask()] })] }))) as {
+      with_findings?: number;
+      counts: { in_review?: number };
+      sessions: { counts: { in_review?: number }; tasks: { review?: unknown }[] }[];
+    };
+    delete raw.with_findings;
+    delete raw.counts.in_review;
+    delete raw.sessions[0]!.counts.in_review;
+    delete raw.sessions[0]!.tasks[0]!.review;
+    const parsed = asBoardProject(raw) as BoardProject;
+    expect(parsed.counts.in_review).toBe(0);
+    expect(parsed.with_findings).toBe(0);
+    expect(parsed.sessions[0]?.counts.in_review).toBe(0);
+    expect(parsed.sessions[0]?.tasks[0]?.review).toBeNull();
+  });
+
+  it('reads the review window: column, state, findings, since, and the counts', () => {
+    const review = { state: 'findings', findings: 3, since: NOW - 50 } as const;
+    const task = boardTask({ key: 'r', column: 'in_review', status: 'in_progress', review });
+    const parsed = asBoardProject(boardProject({ sessions: [boardSession({ tasks: [task] })] })) as BoardProject;
+    expect(parsed.counts.in_review).toBe(1);
+    expect(parsed.with_findings).toBe(1);
+    expect(parsed.sessions[0]?.tasks[0]).toMatchObject({ column: 'in_review', review });
+  });
+
+  it.each([
+    ['an unknown state', { state: 'done', findings: null, since: 1 }],
+    ['negative findings', { state: 'findings', findings: -1, since: 1 }],
+    ['fractional findings', { state: 'findings', findings: 1.5, since: 1 }],
+    ['non-numeric findings', { state: 'findings', findings: '2', since: 1 }],
+    ['a missing since', { state: 'pending', findings: null }],
+    ['a non-object', 'pending'],
+  ])('drops the review of a task with %s, keeping the task', (_name, review) => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review', status: 'in_progress' }), review });
+    expect(task).not.toBeNull();
+    expect(task?.review).toBeNull();
+  });
+
+  it('keeps a pending review with null findings', () => {
+    const task = asBoardTask({ ...boardTask({ column: 'in_review' }), review: { state: 'pending', findings: null, since: 5 } });
+    expect(task?.review).toEqual({ state: 'pending', findings: null, since: 5 });
   });
 
   it('drops a task with an unknown column or a missing time, and keeps the rest', () => {
@@ -199,7 +244,8 @@ describe('watchTasks and listTasks', () => {
     if (!result.ok) return;
     // The project without the documented fields is dropped; the task without a column too.
     expect(result.data.projects.map((p) => p.project_id)).toEqual(['proj-a']);
-    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1']);
+    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1', 't3']);
+    expect(result.data.projects[0]?.sessions[0]?.tasks[1]?.review).toEqual({ state: 'findings', findings: 2, since: 4 });
   });
 });
 

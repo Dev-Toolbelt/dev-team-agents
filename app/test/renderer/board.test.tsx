@@ -81,7 +81,7 @@ describe('Board overview', () => {
     expect(aFigures.getByText('To do').closest('div')).toHaveTextContent('3 (30%)');
     expect(aFigures.getByText('In progress').closest('div')).toHaveTextContent('2 (20%)');
     expect(aFigures.getByText('Done').closest('div')).toHaveTextContent('5 (50%)');
-    expect(aFigures.getByRole('img', { name: '3 to do, 2 in progress, 5 done' })).toBeInTheDocument();
+    expect(aFigures.getByRole('img', { name: '3 to do, 2 in progress, 0 in review, 5 done' })).toBeInTheDocument();
     expect(aFigures.getByRole('img', { name: 'Claude Code' })).toBeInTheDocument();
     expect(aFigures.getByRole('img', { name: 'Codex' })).toBeInTheDocument();
     expect(aFigures.queryByRole('img', { name: 'opencode' })).not.toBeInTheDocument();
@@ -150,6 +150,38 @@ describe('Board overview', () => {
     expect(within(c).getByText('2 abandoned')).toBeInTheDocument();
   });
 
+  it('shows four counts, a four-segment bar and an N-with-findings badge', async () => {
+    const findings = { state: 'findings', findings: 2, since: NOW - 60 } as const;
+    const project = boardProject({
+      sessions: [
+        boardSession({
+          tasks: [
+            boardTask({ key: 'a' }),
+            boardTask({ key: 'b', column: 'in_review', status: 'in_progress', review: findings }),
+            boardTask({ key: 'c', column: 'in_review', status: 'in_progress', review: findings }),
+            boardTask({ key: 'd', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 5 } }),
+          ],
+        }),
+      ],
+    });
+    renderBoard(boardFeed({ projects: [project] }));
+    const c = await card('storefront');
+    expect(within(c).getByText('In Review').closest('div')?.textContent).toContain('3');
+    expect(within(c).getByText('In Review').closest('div')?.textContent).toContain('(75%)');
+    const bar = within(c).getByRole('img', { name: '1 to do, 0 in progress, 3 in review, 0 done' });
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '0', '3', '0']);
+    expect(within(c).getByText('2 with findings')).toBeInTheDocument();
+  });
+
+  it('shows no findings badge when nothing has findings, and tolerates a CLI without the fields', async () => {
+    const project = boardProject({ sessions: [boardSession()] });
+    const legacy = JSON.parse(JSON.stringify(project)) as Record<string, unknown>;
+    delete legacy['with_findings'];
+    renderBoard(boardFeed({ projects: [legacy as unknown as BoardProject] }));
+    const c = await card('storefront');
+    expect(within(c).queryByText(/with findings/)).not.toBeInTheDocument();
+  });
+
   it('applies a pushed update without a reload', async () => {
     const { push } = renderBoard(boardFeed({ projects: [projectA()] }));
     await card('storefront');
@@ -195,6 +227,79 @@ describe('Project kanban', () => {
     expect(within(todo).getByText('a1- task 1')).toBeInTheDocument();
     expect(within(doing).getByText('a1- task 2')).toBeInTheDocument();
     expect(within(done).getByText('a1- task 3')).toBeInTheDocument();
+  });
+
+  it('lays tasks out in four columns, In Review between In progress and Done', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: tasksOf('k-', 1, 1, 1, 2) })] }));
+    const columns = [/^To do/, /^In progress/, /^In Review/, /^Done/].map((name) => screen.getByRole('region', { name }));
+    columns.slice(1).forEach((column, i) => {
+      expect(columns[i]!.compareDocumentPosition(column) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+    expect(within(screen.getByRole('region', { name: /^In Review/ })).getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('badges review state in words, counts findings, and times the card from review.since', async () => {
+    await openKanban(
+      boardProject({
+        sessions: [
+          boardSession({
+            tasks: [
+              boardTask({ key: 'f', content: 'Has findings', column: 'in_review', status: 'in_progress', status_since: NOW - 9000, review: { state: 'findings', findings: 3, since: NOW - 120 } }),
+              boardTask({ key: 'f1', content: 'One finding', column: 'in_review', status: 'in_progress', review: { state: 'findings', findings: 1, since: NOW - 60 } }),
+              boardTask({ key: 'p', content: 'Waiting', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 60 } }),
+              boardTask({ key: 'u', content: 'Unread', column: 'in_review', status: 'in_progress', review: { state: 'unread', findings: null, since: NOW - 60 } }),
+            ],
+          }),
+        ],
+      }),
+    );
+    const article = (text: string) => screen.getByText(text).closest('article')!;
+    expect(within(article('Has findings')).getByText('3 findings')).toBeInTheDocument();
+    expect(within(article('Has findings')).getByText(/Time in this column/).parentElement).toHaveTextContent('2m');
+    expect(within(article('One finding')).getByText('1 finding')).toBeInTheDocument();
+    expect(within(article('Waiting')).getByText('Awaiting review')).toBeInTheDocument();
+    expect(within(article('Unread')).getByText('Result not read')).toBeInTheDocument();
+  });
+
+  it('lists In Review in the per-step durations', async () => {
+    const { user } = await openKanban(
+      boardProject({
+        sessions: [
+          boardSession({
+            tasks: [
+              boardTask({ key: 'r', content: 'Under review', column: 'in_review', status: 'in_progress', durations: { pending: 60, in_progress: 600, in_review: 30 }, review: { state: 'pending', findings: null, since: NOW - 120 } }),
+            ],
+          }),
+        ],
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: /time per step, under review/i }));
+    const steps = screen.getByText('In Review (now)').closest('ul')!;
+    expect(within(steps).getByText('In progress')).toBeInTheDocument();
+    expect(within(steps).getByText('2m').closest('li')).toHaveTextContent('In Review (now)');
+  });
+
+  it('filters to tasks with findings', async () => {
+    const { user } = await openKanban(
+      boardProject({
+        sessions: [
+          boardSession({
+            tasks: [
+              boardTask({ key: 'f', content: 'Has findings', column: 'in_review', status: 'in_progress', review: { state: 'findings', findings: 2, since: NOW - 60 } }),
+              boardTask({ key: 'p', content: 'Waiting', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 60 } }),
+              boardTask({ key: 't', content: 'Plain todo' }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
+    expect(screen.getByText('Has findings')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plain todo')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
+    expect(screen.getByText('Plain todo')).toBeInTheDocument();
   });
 
   it('shows the time in the current column, and the time spent per step on the card', async () => {
@@ -536,13 +641,13 @@ describe('Board — one period, honest percentages', () => {
   it('percentages of 1/1/1 sum to 100 and the bar is proportional to the counts', async () => {
     renderBoard(boardFeed({ projects: [boardProject({ sessions: [boardSession({ tasks: tasksOf('x-', 1, 1, 1) })] })] }));
     const c = await card('storefront');
-    const shares = ['To do', 'In progress', 'Done'].map((label) => {
+    const shares = ['To do', 'In progress', 'In Review', 'Done'].map((label) => {
       const text = within(c).getByText(label).closest('div')?.textContent ?? '';
       return Number(/\((\d+)%\)/.exec(text)![1]);
     });
     expect(shares.reduce((a, b) => a + b, 0)).toBe(100);
-    const bar = within(c).getByRole('img', { name: '1 to do, 1 in progress, 1 done' });
-    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '1']);
+    const bar = within(c).getByRole('img', { name: '1 to do, 1 in progress, 0 in review, 1 done' });
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '0', '1']);
   });
 });
 
