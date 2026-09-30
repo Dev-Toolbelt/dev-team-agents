@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, CircleAlert, Info, TriangleAlert } from 'lucide-react';
+import { Bell, BellOff, CircleAlert, CircleArrowUp, CircleCheck, Info, TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,34 @@ const LEVEL_WORD: Readonly<Record<NotificationLevel, string>> = {
   warning: 'Warning',
   critical: 'Critical',
 };
+
+interface Presentation {
+  readonly icon: typeof Info;
+  readonly tone: string;
+  readonly word: string;
+}
+
+const INFORMATIVE_TONE = 'text-sky-600 dark:text-sky-400';
+
+/**
+ * Codes whose look is not their level's. The hook raises an available update as a
+ * `warning` so a user can suppress it apart from applied ones, but nothing is wrong —
+ * it reads as news, not as a problem.
+ */
+const CODE_PRESENTATION: Readonly<Record<string, Presentation>> = {
+  'update.available': { icon: CircleArrowUp, tone: INFORMATIVE_TONE, word: 'Update available' },
+  'update.applied': { icon: CircleCheck, tone: INFORMATIVE_TONE, word: 'Updated' },
+};
+
+function presentation(item: AppNotification): Presentation {
+  return (
+    CODE_PRESENTATION[item.code] ?? {
+      icon: LEVEL_ICON[item.level],
+      tone: LEVEL_TONE[item.level],
+      word: LEVEL_WORD[item.level],
+    }
+  );
+}
 
 /**
  * The header's bell: what the hooks raised, newest first, and the controls for how the
@@ -144,7 +172,7 @@ export function NotificationBell({ onOpenProject }: { onOpenProject: (projectId:
 }
 
 function NotificationRow({ item, onOpen }: { item: AppNotification; onOpen: () => void }) {
-  const Icon = LEVEL_ICON[item.level];
+  const { icon: Icon, tone, word } = presentation(item);
   return (
     <li>
       <button
@@ -152,8 +180,8 @@ function NotificationRow({ item, onOpen }: { item: AppNotification; onOpen: () =
         onClick={onOpen}
         className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-hidden"
       >
-        {/* The icon is not the only signal: the level word is in the accessible name. */}
-        <Icon className={`mt-0.5 size-4 shrink-0 ${LEVEL_TONE[item.level]}`} aria-hidden="true" />
+        {/* The icon is not the only signal: its word is in the accessible name. */}
+        <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span className="truncate text-sm font-medium">{item.projectName}</span>
@@ -161,7 +189,7 @@ function NotificationRow({ item, onOpen }: { item: AppNotification; onOpen: () =
               {relativeTime(item.ts)}
             </time>
           </span>
-          <span className="sr-only">{LEVEL_WORD[item.level]}: </span>
+          <span className="sr-only">{word}: </span>
           <span className="block text-sm whitespace-pre-line text-muted-foreground">{item.message}</span>
         </span>
       </button>
