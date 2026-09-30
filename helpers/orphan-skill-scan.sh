@@ -163,7 +163,8 @@ done < <(find "$SKILLS_DIR" -name "SKILL.md" | sort)
 #                                       instruction blocks aimed at sub-agents)
 #             "… load `path` …"        (quoted prompts passed to another agent)
 #             prose connectors: "defined in `path`", "table in `path`",
-#                               "the `x` skill (`path`)", "format from `path`"
+#                               "the `x` skill (`path`)", "format from `path`",
+#                               "the Hard rule in `path`", "the guard in `path`"
 # Single-quoted on purpose: this is an awk program, not a shell string.
 # shellcheck disable=SC2016
 LOAD_DIRECTIVE_AWK='
@@ -175,7 +176,7 @@ LOAD_DIRECTIVE_AWK='
   while (match(line, /skills\/[a-zA-Z0-9\/_-]+\/SKILL\.md/)) {
     before = substr(line, 1, RSTART - 1)
     path   = substr(line, RSTART, RLENGTH)
-    if (before !~ /(defined in|described in|documented in|table in|format from|listed in|see|skill) *\(?`?$/)
+    if (before !~ /(^|[^a-zA-Z])(defined in|described in|documented in|table in|format from|listed in|rule in|guard in|see|skill) *\(?`?$/)
       print path
     line = substr(line, RSTART + RLENGTH)
   }
