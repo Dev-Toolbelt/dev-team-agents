@@ -87,9 +87,27 @@ describe('the project screen’s tabs', () => {
     expect(screen.queryByText(/was skipped/)).not.toBeInTheDocument();
   });
 
-  it('says so when a version ships no plugins', async () => {
+  it('names the version and says how to update when it ships no plugins', async () => {
     await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([])))) });
-    expect(await screen.findByText(/ships no plugins/)).toBeInTheDocument();
+    expect(await screen.findByText(/ships no plugins/)).toHaveTextContent('dev-team-agents 2.48.0, which ships no plugins');
+    expect(screen.getByText('devteam update')).toBeInTheDocument();
+    expect(screen.queryByText('devteam pin --release')).not.toBeInTheDocument();
+  });
+
+  it('points a pinned project at releasing its pin instead of updating', async () => {
+    installBridge(fakeBridge({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([])))) }));
+    render(<ProjectSettings project={project({ pin: '2.47.0', resolves_to: '2.47.0' })} name="p" environment={environment()} active onBack={vi.fn()} />);
+    await userEvent.setup().click(await screen.findByRole('tab', { name: /Plugins/ }));
+    expect(await screen.findByText(/It is pinned to 2\.47\.0/)).toBeInTheDocument();
+    expect(screen.getByText('devteam pin --release')).toBeInTheDocument();
+    expect(screen.queryByText('devteam update')).not.toBeInTheDocument();
+  });
+
+  it('says the version could not be resolved rather than naming none', async () => {
+    installBridge(fakeBridge({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([])))) }));
+    render(<ProjectSettings project={project({ resolves_to: null })} name="p" environment={environment()} active onBack={vi.fn()} />);
+    await userEvent.setup().click(await screen.findByRole('tab', { name: /Plugins/ }));
+    expect(await screen.findByText(/could not be resolved/)).toBeInTheDocument();
   });
 
   it('reports a failed list as a problem with a retry', async () => {

@@ -123,7 +123,7 @@ export function ProjectPlugins({
       {list.plugins.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center">
           <Puzzle className="size-6 text-muted-foreground" aria-hidden="true" />
-          <Empty>This version of dev-team-agents ships no plugins.</Empty>
+          <NoPlugins project={project} />
         </div>
       ) : (
         list.plugins.map((plugin) => (
@@ -142,5 +142,41 @@ export function ProjectPlugins({
         ))
       )}
     </div>
+  );
+}
+
+/**
+ * Why a project lists no plugins. Plugins ship in the core version a project resolves to, and
+ * `plugins/` is optional there (ADR-0019 amendment), so a version older than the plugin system
+ * answers with an empty list rather than an error. Saying which version, and how to move off
+ * it, is what lets the person act; "no plugins" alone reads as a broken screen.
+ */
+function NoPlugins({ project }: { project: ProjectRecord }) {
+  const version = project.resolves_to;
+  const code = 'rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground';
+  return (
+    <Empty>
+      {version === null ? (
+        <>No plugins are available: the dev-team-agents version this project uses could not be resolved.</>
+      ) : (
+        <>
+          This project uses dev-team-agents <span className="font-medium text-foreground">{version}</span>, which
+          ships no plugins.
+        </>
+      )}
+      <span className="mt-2 block">
+        {project.pin !== null ? (
+          <>
+            It is pinned to {project.pin}. Release the pin with <code className={code}>devteam pin --release</code>, then
+            run <code className={code}>devteam sync</code> in the project.
+          </>
+        ) : (
+          <>
+            Update with <code className={code}>devteam update</code>, which syncs every unpinned project, then reopen this
+            tab.
+          </>
+        )}
+      </span>
+    </Empty>
   );
 }
