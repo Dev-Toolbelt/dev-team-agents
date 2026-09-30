@@ -322,7 +322,7 @@ describe('Projects — bind sends no path the app was not given', () => {
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -362,7 +362,7 @@ describe('Projects — bind defaults to the recommended mode, but lets it be cha
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -392,7 +392,7 @@ describe('Projects — bind defaults to the recommended mode, but lets it be cha
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -540,7 +540,7 @@ describe('Projects — project names: stored, rendered, and falling back to the 
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -579,7 +579,7 @@ describe('Projects — project names: stored, rendered, and falling back to the 
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -626,7 +626,7 @@ describe('Projects — the Bind dialog resets fully every time it is reopened', 
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
 
     let dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
@@ -638,7 +638,7 @@ describe('Projects — the Bind dialog resets fully every time it is reopened', 
 
     // Reopen. This must be a blank form — not the previous success screen, not the
     // previous directory choice.
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).queryByText(/is bound/i)).not.toBeInTheDocument();
@@ -704,7 +704,7 @@ describe('Projects — the bind form waits for a directory', () => {
 
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).queryByLabelText(/project name/i)).not.toBeInTheDocument();
@@ -730,7 +730,7 @@ describe('Projects — a directory that is already bound cannot be bound again',
     installBridge(bridge);
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     return { dialog, bridge };
@@ -771,7 +771,7 @@ describe('Projects — a v2 install is migrated from the bind dialog', () => {
     installBridge(bridge);
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     return { user, dialog, bridge };
@@ -891,7 +891,7 @@ describe('Projects — a bind that adopted a v2 preferences file says so', () =>
     );
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     await within(dialog).findByText('/Users/dev/legacy');
@@ -1023,7 +1023,7 @@ describe('Projects — a successful write refreshes the list however the dialog 
 
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     await user.click(await within(dialog).findByRole('button', { name: /^bind$/i }));
@@ -1046,7 +1046,7 @@ describe('Projects — a successful write refreshes the list however the dialog 
 
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
     await user.click(await within(dialog).findByRole('button', { name: /^bind$/i }));
@@ -1115,7 +1115,7 @@ describe('Projects — bridge failures do not strand the screen', () => {
     );
     render(<Projects environment={environment()} />);
     await screen.findByText(/nothing is bound yet/i);
-    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    await user.click(screen.getByRole('button', { name: /^new project$/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
 

@@ -141,6 +141,7 @@ export function ProjectList({
   syncAllPending,
   onChanged,
   onOpenSettings,
+  toolbar,
 }: {
   projects: readonly ProjectRecord[];
   filteredProjects: readonly ProjectRecord[];
@@ -155,6 +156,8 @@ export function ProjectList({
   syncAllPending: boolean;
   onChanged: () => void;
   onOpenSettings: (projectId: string) => void;
+  /** Screen-wide actions shown beside New folder; `Projects` owns their state. */
+  toolbar?: ReactNode;
 }) {
   // Only ever mounted for a successful listing, so these are the bound projects: pruning
   // against them can never run on a failed or loading `list`.
@@ -414,17 +417,20 @@ export function ProjectList({
           Showing {filteredProjects.length} of {projectCount(projects.length)}.
           {status !== '' ? ` ${status}` : ''}
         </p>
-        <Hint content="Group projects on this screen — nothing in any project changes">
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={!ready}
-            onClick={() => setFolderDialog({ kind: 'create', parentId: null, moveIds: [] })}
-          >
-            <FolderPlus />
-            New folder
-          </Button>
-        </Hint>
+        <div className="flex flex-wrap items-center gap-2">
+          {toolbar}
+          <Hint content="Group projects on this screen — nothing in any project changes">
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={!ready}
+              onClick={() => setFolderDialog({ kind: 'create', parentId: null, moveIds: [] })}
+            >
+              <FolderPlus />
+              New folder
+            </Button>
+          </Hint>
+        </div>
       </div>
 
       {unavailable ? (

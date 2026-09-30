@@ -166,7 +166,7 @@ describe('ProjectSettings — navigation', () => {
     expect(window.devteam.projectPreferences).toHaveBeenCalledWith('proj-1');
 
     await user.click(screen.getByRole('button', { name: 'Projects' }));
-    expect(await screen.findByRole('heading', { name: 'Bound projects' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Projects' })).toBeInTheDocument();
   });
 
   it('moves focus to the settings heading on open, and back to the project name on return', async () => {
