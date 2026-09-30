@@ -129,24 +129,89 @@ case "$COMMAND" in
     DEVTEAM_CRED_READ_CONFIRMED=1\ *) exit 0 ;;
 esac
 
-# Two normalisations, both fork-free bash 3.2 substitutions:
+# Two normalisations:
 #   LC        — JSON-unescaped, for PATH matching. Backslashes survive, because a
-#               Windows store path ($APPDATA) is spelled with them.
+#               Windows store path ($APPDATA) is spelled with them. Newlines
+#               survive too: the shell separates commands on them, and so does
+#               the segment loop below.
 #   TOK       — metacharacters and backslashes blanked, space-padded, for VERB
 #               matching as whitespace-delimited tokens. `$(cat x)`, `;cat x`,
 #               `|cat x` and `sh -c \"cat x\"` all reduce to ` cat `.
-LC="${COMMAND//\\\"/\"}"
-LC="${LC//\\\\/\\}"
-LC="${LC//\\n/ }"
+NL='
+'
+TAB="$(printf '\t')"
+CR="$(printf '\r')"
+# An escaped backslash is parked first, so the two characters `\n` typed inside
+# a command (`printf '%s\n'`) are not decoded as a line break.
+ESC_BS="$(printf '\001')"
+LC="${COMMAND//\\\\/$ESC_BS}"
+LC="${LC//\\\"/\"}"
+LC="${LC//\\n/$NL}"
 LC="${LC//\\t/ }"
+LC="${LC//$ESC_BS/\\}"
+# Backslash-newline is a line continuation, not a separator.
+LC="${LC//\\$NL/ }"
 # A shell-escaped space: `Application\ Support` must match the same path as
 # `"Application Support"`. Only backslash-SPACE is collapsed, so a Windows
 # store path ($APPDATA, spelled with backslashes) still matches intact.
 LC="${LC//\\ / }"
-LC="${LC//[[:space:]]/ }"
+LC="${LC//$TAB/ }"
+LC="${LC//$CR/ }"
 LC="$(printf '%s' "$LC" | tr '[:upper:]' '[:lower:]')"
 
-TOK="${LC//[\"\'\\|\&\;\(\)\<\>\{\}\`\$]/ }"
+# HEREDOC BODIES ARE DATA. They are dropped here, before anything splits the
+# command, because a body is prose: a markdown table row or a `;` in a sentence
+# used to become a segment of its own, out of reach of the per-segment `<<` cut,
+# and `| did not open credentials.local.json |` was refused as a dump. The same
+# flattening hid every command AFTER a heredoc's terminator, so a real dump on
+# the line below one passed silently. The opener line is kept (it names the
+# target); body and terminator go. An unterminated heredoc — usually a `<<` that
+# was never one, such as `$((1<<2))` or a quoted `<<` — keeps the text as it was.
+# Tabs are already spaces here, so a `<<-` terminator is matched after leading
+# blanks of either kind.
+LC="$(printf '%s' "$LC" | awk -v q="'" '
+function open_heredocs(line,    rest, i, c, e, d, strip) {
+    rest = line
+    while ((i = index(rest, "<<")) > 0) {
+        rest = substr(rest, i + 2)
+        if (substr(rest, 1, 1) == "<") { sub(/^<+/, "", rest); continue }
+        strip = 0
+        if (substr(rest, 1, 1) == "-") { strip = 1; rest = substr(rest, 2) }
+        sub(/^[ \t]*/, "", rest)
+        if (substr(rest, 1, 1) == "\\") rest = substr(rest, 2)
+        c = substr(rest, 1, 1)
+        if (c == "\"" || c == q) {
+            rest = substr(rest, 2)
+            e = index(rest, c)
+            if (e == 0) continue
+            d = substr(rest, 1, e - 1)
+            rest = substr(rest, e + 1)
+        } else if (match(rest, /^[A-Za-z0-9_.-]+/)) {
+            d = substr(rest, 1, RLENGTH)
+            rest = substr(rest, RLENGTH + 1)
+        } else continue
+        pending++
+        delim[pending] = d
+        tabs[pending] = strip
+    }
+}
+{
+    orig = orig (NR > 1 ? "\n" : "") $0
+    if (cur <= pending) {
+        t = $0
+        if (tabs[cur]) sub(/^[ \t]+/, "", t)
+        if (t == delim[cur]) cur++
+        next
+    }
+    out = out (kept++ ? "\n" : "") $0
+    open_heredocs($0)
+}
+BEGIN { cur = 1 }
+END { printf "%s", (cur <= pending ? orig : out) }
+')"
+
+TOK="${LC//$NL/ }"
+TOK="${TOK//[\"\'\\|\&\;\(\)\<\>\{\}\`\$]/ }"
 TOK=" $TOK "
 
 # ── protected locations ──────────────────────────────────────────────────────
@@ -490,7 +555,7 @@ _git_add_force() {
 
 # ── decision, per pipeline segment ───────────────────────────────────────────
 # The command is judged one PIPELINE SEGMENT at a time, not as one string. `|`,
-# `;` and `&` separate; `<` and `>` deliberately do NOT, because a redirection
+# `;`, `&` and a newline separate; `<` and `>` deliberately do NOT, because a redirection
 # belongs to the command it feeds (`python3 - < <secrets>` stays one segment).
 #
 # Segmenting exists because of a real false positive: piping any command through
@@ -499,8 +564,6 @@ _git_add_force() {
 # ADR-0010 specifies, in the shape anyone would actually run it — was refused.
 # Per segment, the formatter stage carries a verb and no target, and the stage
 # that carries the target is the audited CLI itself.
-NL='
-'
 SEGMENTS="${LC//\|/$NL}"
 SEGMENTS="${SEGMENTS//;/$NL}"
 SEGMENTS="${SEGMENTS//&/$NL}"
