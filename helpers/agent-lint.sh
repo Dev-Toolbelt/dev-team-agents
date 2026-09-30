@@ -357,7 +357,7 @@ check_skill_name_uniqueness() {
 # approved plan reaches it only through plan-mode § Task List Mirroring. That
 # rule lives in one skill; what can silently break it is the section vanishing
 # or an agent that plans no longer loading plan-mode.
-PLAN_MODE_LOADERS="software-architect backend-developer frontend-developer mobile-developer database-specialist devops-specialist"
+PLAN_MODE_LOADERS="software-architect backend-developer frontend-developer mobile-developer database-specialist devops-specialist code-reviewer"
 
 check_plan_mode_mirroring() {
   local skill="$REPO_ROOT/skills/shared/plan-mode/SKILL.md" agent
@@ -365,8 +365,10 @@ check_plan_mode_mirroring() {
     ERRORS+=("  · skills/shared/plan-mode/SKILL.md: missing '## Task List Mirroring' — approved plans would never reach the task board")
   fi
   for agent in $PLAN_MODE_LOADERS; do
-    if [ -f "$REPO_ROOT/agents/${agent}.md" ] && ! grep -q 'plan-mode' "$REPO_ROOT/agents/${agent}.md"; then
-      ERRORS+=("  · agents/${agent}.md: no longer loads plan-mode — its approved plans would not become native tasks")
+    if [ ! -f "$REPO_ROOT/agents/${agent}.md" ]; then
+      ERRORS+=("  · PLAN_MODE_LOADERS lists '${agent}', but agents/${agent}.md does not exist — update the list")
+    elif ! grep -q 'skills/shared/plan-mode/SKILL.md' "$REPO_ROOT/agents/${agent}.md"; then
+      ERRORS+=("  · agents/${agent}.md: no longer loads skills/shared/plan-mode/SKILL.md — its approved plans would not become native tasks")
     fi
   done
 }
