@@ -673,7 +673,14 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     exclude_action = "skipped"
     exclude_file = _local_exclude_file(project_root)
     if exclude_file is not None and resolved_mode != "vendored":
-        entries = sorted({item["path"] for item in artifacts})
+        # Machine-local kinds only — the same allowlist `tracked_artifacts` reports
+        # on, so "what bind hides from git" and "what doctor says must not be in git"
+        # are one rule. Every path used to go in, `.claude/settings.json` included:
+        # on a project that had not committed it yet, `git add -A` skipped the file
+        # the hooks live in, and no teammate ever received them.
+        entries = sorted(
+            {item["path"] for item in artifacts if item.get("kind") in MACHINE_LOCAL_KINDS}
+        )
         _, exclude_action = gitignore.apply_managed_block(exclude_file, entries)
     elif exclude_file is None and emitter:
         emitter.warn(

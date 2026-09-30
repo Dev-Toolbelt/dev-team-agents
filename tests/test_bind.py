@@ -179,11 +179,42 @@ class BindTest(StoreTestCase):
         local = gitignore.read_managed_entries(root / ".git" / "info" / "exclude")
         self.assertNotIn(".claude/agents/dev-team", shared)
         self.assertIn(".claude/agents/dev-team", local)
-        # git therefore sees no provider artifact as untracked
+        # git therefore sees no provider artifact as untracked — only the project's own
+        # settings file, which bind merged its hooks into and the team must commit.
         status = subprocess.run(
-            ["git", "status", "--porcelain"], cwd=str(root), stdout=subprocess.PIPE, check=True
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            check=True,
         ).stdout.decode()
-        self.assertNotIn(".claude", status)
+        claude_lines = [line for line in status.splitlines() if ".claude" in line]
+        self.assertEqual(claude_lines, ["?? .claude/settings.json"])
+
+    def test_the_settings_file_is_never_excluded_so_add_all_stages_it(self):
+        # It used to be in the exclude block, so on a project that had not committed it
+        # yet `git add -A` skipped the one file that carries the hooks to a teammate.
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        local = gitignore.read_managed_entries(root / ".git" / "info" / "exclude")
+        self.assertNotIn(".claude/settings.json", local)
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True)
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            check=True,
+        ).stdout.decode()
+        self.assertIn(".claude/settings.json", staged.splitlines())
+
+    def test_sync_drops_the_settings_line_from_an_older_exclude_block(self):
+        root = self.new_project()
+        result = bind.bind(root, provider_names=["claude"])
+        exclude = root / ".git" / "info" / "exclude"
+        stale = gitignore.read_managed_entries(exclude) + [".claude/settings.json"]
+        gitignore.apply_managed_block(exclude, sorted(stale))
+        bind.sync_project(result["project_id"])
+        self.assertNotIn(".claude/settings.json", gitignore.read_managed_entries(exclude))
+        self.assertIn(".claude/agents/dev-team", gitignore.read_managed_entries(exclude))
 
     def test_copy_mode_materialises_real_directories(self):
         root = self.new_project()
