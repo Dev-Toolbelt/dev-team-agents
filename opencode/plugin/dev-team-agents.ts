@@ -48,11 +48,12 @@ const execAsync = promisify(exec)
 const HOOK_TIMEOUT_MS = 5000
 
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
-  // A v3 bind exposes the framework through `.dev-team-agents/core`; a v2
-  // install vendors it directly. Prefer the pointer, fall back to the old path.
-  const CORE_HOOKS = `${directory}/.dev-team-agents/core/scripts/hooks`
-  const LEGACY_HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
-  const HOOKS = existsSync(CORE_HOOKS) ? CORE_HOOKS : LEGACY_HOOKS
+  // One path for both layouts: a v2 install vendors `scripts/` here and a v3 bind
+  // links it here. A project bound before the link replaced the `core` pointer, and
+  // not synced since, still has only the pointer — kept as the fallback.
+  const SCRIPTS_HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
+  const CORE_POINTER_HOOKS = `${directory}/.dev-team-agents/core/scripts/hooks`
+  const HOOKS = existsSync(SCRIPTS_HOOKS) ? SCRIPTS_HOOKS : CORE_POINTER_HOOKS
 
   const runHook = async (script: string, stdin?: string): Promise<string> => {
     try {

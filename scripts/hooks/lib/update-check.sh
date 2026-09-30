@@ -190,16 +190,26 @@ uc_message() {
         esac
         return 0
     fi
+    # A v3-bound project is updated by the CLI; `update.sh` refuses to run there
+    # (scripts/lib/bound-project-guard.sh), so naming it would send the user to a
+    # command that only prints this same advice back.
+    local run="bash .dev-team-agents/scripts/update.sh" auto="update.sh --enable-auto"
+    local root
+    root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    if [ -f "$root/.dev-team-agents/project.json" ]; then
+        run="devteam update"
+        auto="devteam prefs set auto_update true"
+    fi
     case "$lang" in
         pt-BR|pt*) printf '%s' "Atualização disponível: $current → $latest
- Execute: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto" ;;
+ Execute: $run
+ Auto-update: $auto" ;;
         es*)       printf '%s' "Actualización disponible: $current → $latest
- Ejecuta: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto" ;;
+ Ejecuta: $run
+ Auto-update: $auto" ;;
         *)         printf '%s' "Update available: $current → $latest
- Run: .dev-team-agents/scripts/update.sh
- Auto-update: update.sh --enable-auto" ;;
+ Run: $run
+ Auto-update: $auto" ;;
     esac
 }
 

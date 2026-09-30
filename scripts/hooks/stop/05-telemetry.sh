@@ -22,10 +22,10 @@ TELEMETRY_SEND="$SCRIPT_DIR/../../helpers/telemetry-send.sh"
 # (ADR-0013): resolve through the `state-dir` pointer instead of the old
 # hardcoded in-project path. Resolved via git, like session-start.sh and the
 # other hooks — NOT via a fixed number of `..` hops from SCRIPT_DIR, which
-# breaks under the `link`/`copy` bind modes (default on macOS/Linux): those
-# insert an extra `core/` symlink segment
-# (.dev-team-agents/core/scripts/hooks/...) that a hardcoded hop count does
-# not account for.
+# breaks under the `link` bind mode (default on macOS/Linux):
+# `.dev-team-agents/scripts` is a symlink into the store, so hops from a
+# physically resolved SCRIPT_DIR land in the store version rather than in the
+# project.
 MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
 [ -n "$MAIN_REPO_ROOT" ] || MAIN_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$MAIN_REPO_ROOT" ] || MAIN_REPO_ROOT="$(pwd)"

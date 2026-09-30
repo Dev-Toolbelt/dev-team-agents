@@ -30,6 +30,12 @@ set -uo pipefail
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$PROJECT_ROOT" || exit 1
 
+# A v3 bind owns `.claude/` links and repairs them itself; the v2 targets this
+# script would write do not exist in a bound project.
+# shellcheck source=scripts/lib/bound-project-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/bound-project-guard.sh"
+refuse_if_bound "$PROJECT_ROOT/.dev-team-agents" "devteam sync   (rebuilds every link from the store)"
+
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 AGENTS_LINK="$CLAUDE_DIR/agents/dev-team"
 COMMANDS_LINK="$CLAUDE_DIR/commands/devteam"

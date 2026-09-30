@@ -24,6 +24,11 @@ if [[ "${1:-}" == "--check" ]]; then
     exec bash "$(dirname "${BASH_SOURCE[0]}")/hooks/pre-tool-use/01-check-updates.sh"
 fi
 
+# ── A v3-bound project is updated by the CLI, never by this script ────────────
+# shellcheck source=scripts/lib/bound-project-guard.sh
+source "$SCRIPTS_DIR/lib/bound-project-guard.sh"
+refuse_if_bound "$INSTALL_DIR" "devteam update   (auto-update: devteam prefs set auto_update true|false)"
+
 # ── Enable / Disable auto-update ──────────────────────────────────────────────
 
 if [[ "${1:-}" == "--enable-auto" ]]; then

@@ -17,6 +17,10 @@ USER_DATA_DIR="$INSTALL_DIR/user-data"
 source "$SCRIPTS_DIR/lib/state.sh"
 STATE_FILE="$USER_DATA_DIR/state.json"
 
+# shellcheck source=scripts/lib/bound-project-guard.sh
+source "$SCRIPTS_DIR/lib/bound-project-guard.sh"
+refuse_if_bound "$INSTALL_DIR" "devteam pin <version>   (hold this project on an earlier version)"
+
 # ── Shared installer-fetch logic ───────────────────────────────────────────────
 # HTTP tool detection, GitHub coordinates, ref pinning and payload verification
 # live in scripts/lib/installer-fetch.sh, shared with update.sh.
