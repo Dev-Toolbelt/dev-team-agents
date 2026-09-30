@@ -43,6 +43,11 @@ const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
   'notifications ack': ['notifications', 'ack', '1-2-3'],
   'skills install': ['skills', 'install', '--source', '/s'],
   'skills remove': ['skills', 'remove', 'a', '--root', 'claude'],
+  'plugin enable': ['plugin', 'enable', 'demo', '--path', '/p'],
+  'plugin disable': ['plugin', 'disable', 'demo', '--path', '/p'],
+  'plugin config set': ['plugin', 'config', 'set', 'demo', 'key', 'v', '--path', '/p'],
+  'plugin config unset': ['plugin', 'config', 'unset', 'demo', 'key', '--path', '/p'],
+  'plugin run': ['plugin', 'run', 'demo', 'detect', '--path', '/p'],
 };
 
 describe('run() deadlines', () => {

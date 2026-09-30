@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop sub-script: runs the stop hook of every ENABLED plugin (ADR-0018).
+# Stop sub-script: runs the stop hook of every ENABLED plugin (ADR-0019).
 # Names no plugin - the hook path comes from each plugin's manifest. A plugin hook that
 # fails is reported on stderr but does not fail the Stop: nothing here needs the user
 # to act before the session can end.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Dev-Toolbelt/dev-team-agents/plugins/_schema/plugin.schema.json",
   "title": "dev-team-agents plugin manifest",
-  "description": "plugins/<name>/plugin.json — see docs/development/adrs/0018-plugins-as-manifest-declared-per-project-integrations.md",
+  "description": "plugins/<name>/plugin.json — see docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "name", "title", "description"],

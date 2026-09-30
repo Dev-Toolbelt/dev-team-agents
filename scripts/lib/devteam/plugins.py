@@ -1,4 +1,4 @@
-"""Plugins: manifest-declared, per-project integrations (ADR-0018).
+"""Plugins: manifest-declared, per-project integrations (ADR-0019).
 
 A plugin is a directory in the versioned core (``plugins/<name>/plugin.json``). This
 module is everything the CLI knows about them: discovering and validating manifests,
@@ -824,7 +824,7 @@ def _read_status(ctx, plugin, config):
 
 
 def build_view(ctx, plugin, with_status=True):
-    """The ``PluginView`` of ADR-0018 § 3."""
+    """The ``PluginView`` of ADR-0019 § 3."""
     state = read_settings(ctx.root, plugin.name)
     config = effective_config(plugin, state["config"])
     reqs = requirements(plugin)

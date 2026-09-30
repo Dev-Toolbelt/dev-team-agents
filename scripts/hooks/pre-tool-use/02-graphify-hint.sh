@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DEPRECATED (ADR-0018): the graphify hint now lives in plugins/graphify/hooks/pre-tool-use.sh
+# DEPRECATED (ADR-0019): the graphify hint now lives in plugins/graphify/hooks/pre-tool-use.sh
 # and is run by 02d-plugins.sh. This file stays one minor version for projects that
 # have not migrated: it does nothing once a plugin-settings/graphify.json exists, so
 # the hint cannot fire twice (both paths also share the once-per-session marker below).

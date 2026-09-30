@@ -300,7 +300,7 @@ export function pluginField(overrides: Partial<PluginConfigField> = {}): PluginC
   };
 }
 
-/** A `PluginView` shaped like ADR-0018 § 3, with the manifest of `plugins/graphify` as the default. */
+/** A `PluginView` shaped like ADR-0019 § 3, with the manifest of `plugins/graphify` as the default. */
 export function pluginView(overrides: Partial<PluginView> = {}): PluginView {
   return {
     name: 'graphify',

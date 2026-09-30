@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse sub-script: runs the pre_tool_use hook of every ENABLED plugin (ADR-0018).
+# PreToolUse sub-script: runs the pre_tool_use hook of every ENABLED plugin (ADR-0019).
 # Names no plugin - the hook path comes from each plugin's manifest.
 #
 # Runs on every tool call: with no plugin-settings directory, no enabled file in it, or

@@ -898,7 +898,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     },
   );
 
-  // ── plugins (ADR-0018) ─────────────────────────────────────────────────────────────
+  // ── plugins (ADR-0019) ─────────────────────────────────────────────────────────────
   //
   // Every plugin write first re-reads **this project's own `plugin list`** and checks the
   // plugin, the action and each config key against it: the renderer names things, this

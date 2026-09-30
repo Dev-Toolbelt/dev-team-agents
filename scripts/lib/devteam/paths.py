@@ -483,7 +483,7 @@ MACHINE_LOCAL_RECORDS = (
 
 #: Records that belong to the **project**, not to the user's personal memory:
 #: committed, shared by every developer on the repository, and therefore not moved
-#: into a per-user store at all. `plugin-settings/` (ADR-0018) is the directory form of
+#: into a per-user store at all. `plugin-settings/` (ADR-0019) is the directory form of
 #: the same idea: which integrations a project uses, and over which paths, describes the
 #: project. `graphify.json` is the pre-plugin record for the graphify plugin; it stays
 #: listed until the next major, carries its own gitignore exception

@@ -1,4 +1,4 @@
-"""ADR-0018: manifest-declared plugins, their settings file and the `devteam plugin` CLI.
+"""ADR-0019: manifest-declared plugins, their settings file and the `devteam plugin` CLI.
 
 The fixture core carries tiny fake plugins, never the real graphify scripts: what is
 under test is the machinery (discovery, validation, settings, coercion, the script

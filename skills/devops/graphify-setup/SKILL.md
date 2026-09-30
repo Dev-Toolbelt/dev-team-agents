@@ -17,7 +17,7 @@ If the project type is ambiguous, ask once with `AskUserQuestion` whether JavaSc
 
 ## Purpose
 
-Graphify is a plugin (`plugins/graphify/`, ADR-0018). Its settings live in the committed
+Graphify is a plugin (`plugins/graphify/`, ADR-0019). Its settings live in the committed
 `.dev-team-agents/plugin-settings/graphify.json`, and every step below goes through the `devteam plugin`
 CLI — never write that file by hand. The desktop app's **Plugins** tab on the project screen does the
 same steps with a form. Ask the user only when the CLI cannot proceed on its own.

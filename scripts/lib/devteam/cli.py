@@ -1866,7 +1866,7 @@ def main(argv=None, stdout=None, stderr=None):
     if adopted and (adopted["moved"] or adopted["quarantined"]):
         payload["store_relocation"] = adopted
     # `plugin run` answers with a `RunResult`, whose own `ok` says whether the *script*
-    # succeeded (ADR-0018 § 3). The command itself did succeed (exit 0), so that field
+    # succeeded (ADR-0019 § 3). The command itself did succeed (exit 0), so that field
     # must survive instead of being overwritten with the command's own verdict.
     if not (args.command == "plugin" and "ok" in payload):
         payload["ok"] = ok

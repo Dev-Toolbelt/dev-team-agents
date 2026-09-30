@@ -16,7 +16,7 @@ to the portable subtree, ``state.json`` and the dot-markers to the machine subtr
 Names in ``paths.PROJECT_OWNED_RECORDS`` (``graphify.json``) go nowhere at all: they
 are committed, shared project config rather than personal memory, so they are
 excluded from the copy and the quarantine and left exactly where they are.
-``plugin-settings/`` (ADR-0018) is project-owned too and never appears in this
+``plugin-settings/`` (ADR-0019) is project-owned too and never appears in this
 inventory, because it lives beside ``user-data/`` rather than inside it.
 """
 

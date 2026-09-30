@@ -1,5 +1,5 @@
 /**
- * Plugins (ADR-0018), the parts that need no process and no DOM: the answers the app
+ * Plugins (ADR-0019), the parts that need no process and no DOM: the answers the app
  * accepts and refuses, the argv it may build, and the rules a config value must pass.
  */
 import { describe, expect, it } from 'vitest';
@@ -229,7 +229,7 @@ describe('config value rules', () => {
     expect(pluginValueProblem(pluginField({ type: 'matrix' }), 1)).toContain('cannot edit');
   });
 
-  it('serializes the way `plugin config set` parses (ADR-0018 § 3)', () => {
+  it('serializes the way `plugin config set` parses (ADR-0019 § 3)', () => {
     expect(serializePluginValue(list, ['src', 'lib'])).toBe('["src","lib"]');
     expect(serializePluginValue(list, [])).toBe('[]');
     expect(serializePluginValue(flag, true)).toBe('true');

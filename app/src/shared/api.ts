@@ -476,7 +476,7 @@ export interface PreferenceUpdateReport {
  */
 export type PluginConfigValue = string | number | boolean | readonly string[];
 
-/** The field types ADR-0018 § 1 defines. A type a newer CLI adds is carried as a plain string. */
+/** The field types ADR-0019 § 1 defines. A type a newer CLI adds is carried as a plain string. */
 export type PluginConfigType = 'boolean' | 'string' | 'integer' | 'string_list' | 'enum' | (string & {});
 
 /** One entry of a manifest's `config`, as `plugin list` returns it. */
@@ -510,7 +510,7 @@ export interface PluginAction {
   readonly output: PluginActionOutput;
   readonly requires_enabled: boolean;
   readonly writes: boolean;
-  /** Not in ADR-0018's `PluginView` shape; read when the CLI sends it, so a long action gets its full budget. */
+  /** Not in ADR-0019's `PluginView` shape; read when the CLI sends it, so a long action gets its full budget. */
   readonly timeout_seconds: number | null;
 }
 

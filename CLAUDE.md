@@ -250,7 +250,7 @@ dev-team-agents/
 ├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
 ├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data,
 │                      versioning, hooks, commands, cli)
-├── plugins/         ← optional per-project integrations; see plugins/README.md and ADR-0018
+├── plugins/         ← optional per-project integrations; see plugins/README.md and ADR-0019
 │   ├── _schema/plugin.schema.json  ← manifest schema
 │   └── graphify/    ← reference plugin: code graph builder
 ├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
@@ -387,7 +387,7 @@ The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `cr
 
 ## Plugins
 
-A plugin is an optional, per-project integration declared by a manifest in `plugins/<name>/plugin.json`. See `plugins/README.md` for the authoring guide and `docs/development/adrs/0018-plugins-as-manifest-declared-per-project-integrations.md` for the design.
+A plugin is an optional, per-project integration declared by a manifest in `plugins/<name>/plugin.json`. See `plugins/README.md` for the authoring guide and `docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md` for the design.
 
 The CLI surface is `devteam plugin {list,show,enable,disable,config,run}`, with `--path` and `--json` flags. Settings live per-project in `.dev-team-agents/plugin-settings/<name>.json` (committed). Hooks are dispatched by `scripts/hooks/pre-tool-use/02d-plugins.sh` and `scripts/hooks/stop/99a-plugins.sh`.
 

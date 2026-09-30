@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for the plugin hook dispatchers (ADR-0018 section 4).
+# Shared helpers for the plugin hook dispatchers (ADR-0019 section 4).
 #
 # Not a hook. Source this file, then call:
 #   devteam_plugins_dir                              core plugins/ tree, physical path

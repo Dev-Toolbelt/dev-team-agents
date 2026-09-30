@@ -85,7 +85,7 @@ const bridge: DevteamBridge = {
       ),
     ),
 
-  // Plugins (ADR-0018). Names and ids are coerced to strings and the change list is rebuilt
+  // Plugins (ADR-0019). Names and ids are coerced to strings and the change list is rebuilt
   // into plain objects, as above; `main/ipc.ts` validates each against the project's own
   // `plugin list` answer regardless.
   projectPlugins: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.projectPlugins, String(projectId)),

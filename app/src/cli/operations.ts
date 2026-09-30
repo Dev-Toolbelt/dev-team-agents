@@ -159,7 +159,7 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['upgrade'],
   ['prefs', 'set'],
   ['prefs', 'unset'],
-  // ADR-0018. `plugin run` is listed here although only some actions write: the framework
+  // ADR-0019. `plugin run` is listed here although only some actions write: the framework
   // cannot know which, and the app has no way to tell the gate a script is harmless.
   ['plugin', 'enable'],
   ['plugin', 'disable'],
@@ -260,7 +260,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'prefs list': { operands: 0, flags: { '--path': 'value' } },
   'prefs set': { operands: 2, flags: { '--scope': 'value', '--path': 'value' } },
   'prefs unset': { operands: 1, flags: { '--scope': 'value', '--path': 'value' } },
-  // ADR-0018 § 3. Every plugin command resolves its project from `--path` alone, so the path
+  // ADR-0019 § 3. Every plugin command resolves its project from `--path` alone, so the path
   // is one `main/ipc.ts` resolved from a `project_id`. `--force` (enable anyway) is
   // deliberately absent: the UI has no way to say "I know a requirement is missing".
   'plugin list': { operands: 0, flags: { '--path': 'value' } },
@@ -828,7 +828,7 @@ export function asPreferenceWrite(body: Record<string, unknown>): PreferenceWrit
   };
 }
 
-// ── plugins (ADR-0018) ───────────────────────────────────────────────────────────────
+// ── plugins (ADR-0019) ───────────────────────────────────────────────────────────────
 //
 // `path` is resolved by `main/ipc.ts` from a `project_id`, as for `prefsList`. `name`,
 // `key` and `actionId` are checked there against the project's own `plugin list` answer;

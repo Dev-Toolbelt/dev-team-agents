@@ -4,12 +4,12 @@
  * renderer is not trusted to have checked).
  *
  * Nothing here names a plugin. The rules read a `PluginConfigField` the CLI described, so a
- * plugin added to the core needs no change in this file (ADR-0018 § 5).
+ * plugin added to the core needs no change in this file (ADR-0019 § 5).
  */
 
 import type { PluginConfigField, PluginConfigValue } from './api.js';
 
-/** ADR-0018 § 1: `^[a-z][a-z0-9-]{1,31}$`. */
+/** ADR-0019 § 1: `^[a-z][a-z0-9-]{1,31}$`. */
 export const PLUGIN_NAME = /^[a-z][a-z0-9-]{1,31}$/;
 /** An action id; looser than a plugin name because the manifest schema does not pin it further. */
 export const PLUGIN_ACTION_ID = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -90,7 +90,7 @@ export function pluginValueProblem(field: PluginConfigField, value: unknown): st
 }
 
 /**
- * The string `plugin config set` parses back into `value` (ADR-0018 § 3): a JSON array for
+ * The string `plugin config set` parses back into `value` (ADR-0019 § 3): a JSON array for
  * `string_list`, `true`/`false` for a boolean, base 10 for an integer, the text itself
  * otherwise. Call `pluginValueProblem` first; this does not re-validate.
  */
