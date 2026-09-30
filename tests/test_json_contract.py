@@ -177,9 +177,12 @@ class ContractSweepTest(StoreTestCase):
 
     @staticmethod
     def run_cli_in(cwd, *args):
+        # stdin is DEVNULL, never inherited: the sweep runs every leaf bare, and one that
+        # reads a hook payload from stdin (`tasks record`) blocked forever on an open pipe.
         result = subprocess.run(
             [sys.executable, str(CLI), *args],
             cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=dict(os.environ),

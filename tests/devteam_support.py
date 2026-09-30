@@ -333,10 +333,17 @@ class StoreTestCase(unittest.TestCase):
         closed — this is how a caller exercises a command that reads a value
         from stdin (`devteam cred set`) without ever putting it on the argv
         this call builds, which is the whole point of that design.
+
+        Without ``input_text`` stdin is ``DEVNULL``, never inherited: a command that reads
+        a hook payload from stdin (`devteam tasks record`) would otherwise block on the
+        test runner's own stdin whenever that is an open pipe rather than a terminal.
         """
+        stdin_kwargs = (
+            {"input": input_text.encode("utf-8")} if input_text is not None else {"stdin": subprocess.DEVNULL}
+        )
         result = subprocess.run(
             [sys.executable, str(CLI), *args],
-            input=input_text.encode("utf-8") if input_text is not None else None,
+            **stdin_kwargs,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=dict(os.environ),
