@@ -10,8 +10,9 @@ pre-plugin ``graphify.json`` onto the plugin that replaced it.
 
 Settings live in ``<project>/.dev-team-agents/plugin-settings/<name>.json`` -- a
 project-owned, committed record (``paths.PROJECT_OWNED_RECORDS``). They are written
-with the exact ``indent=2, sort_keys=True`` layout the PreToolUse dispatcher matches
-with a pure-bash ``"enabled": true`` test, so the format is part of the contract.
+with the ``indent=2, sort_keys=True`` layout the PreToolUse dispatcher matches first with
+a pure-bash ``"enabled": true`` test (a whitespace-tolerant fallback covers other layouts),
+so the canonical format stays part of the contract.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -42,6 +44,11 @@ TAIL_BYTES = 8 * 1024
 DEFAULT_ACTION_TIMEOUT = 300
 DEFAULT_STATUS_TIMEOUT = 10
 TIMEOUT_EXIT_CODE = 124
+#: How long to wait for pipes to close after killing a script's process group.
+KILL_GRACE_SECONDS = 2.0
+#: Longest value `config set` accepts, and the largest config passed inline in the env.
+MAX_VALUE_BYTES = 64 * 1024
+MAX_ENV_CONFIG_BYTES = 64 * 1024
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 _KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
@@ -80,7 +87,7 @@ def _check_keys(obj, where, required, allowed, problems):
 
 
 def _check_script(value, where, problems):
-    if not isinstance(value, str) or not _SCRIPT_RE.match(value):
+    if not isinstance(value, str) or not _SCRIPT_RE.fullmatch(value):
         problems.append(
             "{} must be a relative path inside the plugin directory (no '..', no leading '/')".format(
                 where
@@ -115,7 +122,7 @@ def validate_manifest(data, dirname=None):
     if data.get("schema") != 1 or isinstance(data.get("schema"), bool):
         problems.append("schema must be 1")
     name = data.get("name")
-    if not isinstance(name, str) or not _NAME_RE.match(name):
+    if not isinstance(name, str) or not _NAME_RE.fullmatch(name):
         problems.append("name must match ^[a-z][a-z0-9-]{1,31}$")
     elif dirname is not None and name != dirname:
         problems.append("name '{}' must equal the directory name '{}'".format(name, dirname))
@@ -139,7 +146,7 @@ def validate_manifest(data, dirname=None):
                 if not _check_keys(item, where, ("binary", "install_hint"), ("binary", "install_hint"), problems):
                     continue
                 if "binary" in item and (
-                    not isinstance(item["binary"], str) or not _BINARY_RE.match(item["binary"])
+                    not isinstance(item["binary"], str) or not _BINARY_RE.fullmatch(item["binary"])
                 ):
                     problems.append("{}.binary must match ^[A-Za-z0-9._-]+$".format(where))
                 if "install_hint" in item and (
@@ -184,7 +191,7 @@ def _validate_config(config, problems):
         if not _check_keys(field, where, ("key", "type", "label", "help", "default"), allowed, problems):
             continue
         key = field.get("key")
-        if not isinstance(key, str) or not _KEY_RE.match(key):
+        if not isinstance(key, str) or not _KEY_RE.fullmatch(key):
             problems.append("{}.key must match ^[A-Za-z][A-Za-z0-9_]{{0,63}}$".format(where))
         elif key in seen:
             problems.append("{}: duplicate key '{}'".format(where, key))
@@ -238,7 +245,7 @@ def _validate_actions(actions, problems):
         if not _check_keys(action, where, ("id", "label", "help", "runtime", "script", "output"), allowed, problems):
             continue
         action_id = action.get("id")
-        if not isinstance(action_id, str) or not _ID_RE.match(action_id):
+        if not isinstance(action_id, str) or not _ID_RE.fullmatch(action_id):
             problems.append("{}.id must match ^[a-z][a-z0-9-]{{0,31}}$".format(where))
         elif action_id in seen:
             problems.append("{}: duplicate id '{}'".format(where, action_id))
@@ -408,13 +415,43 @@ def _trim(plugin, config):
     return out
 
 
-def write_settings(project_root, plugin, enabled, config):
+def _write_body(project_root, plugin, enabled, config):
+    """Write the settings file; the caller holds the ``plugin-settings`` lock."""
     body = {"schema": SCHEMA, "enabled": bool(enabled), "config": _trim(plugin, config)}
     path = settings_path(project_root, plugin.name)
-    with store_lock("plugin-settings"):
-        # mode 0644 (committed, shared), directories left to the umask.
-        jsonio.write_json_atomic(path, body, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
+    # mode 0644 (committed, shared), directories left to the umask.
+    jsonio.write_json_atomic(path, body, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
     return body
+
+
+def write_settings(project_root, plugin, enabled, config):
+    with store_lock("plugin-settings"):
+        return _write_body(project_root, plugin, enabled, config)
+
+
+def update_settings(project_root, plugin, change):
+    """Read-modify-write of one plugin's settings under a single lock.
+
+    ``change(state)`` receives the freshly read state and returns ``(enabled, config)``
+    to write, or ``None`` to leave the file alone. When the state came from the legacy
+    file, the write completes the move: the new file is written first and the legacy
+    one is unlinked afterwards, exactly like :func:`migrate_legacy`. Returns
+    ``(state_read, body_written_or_None)``.
+    """
+    with store_lock("plugin-settings"):
+        state = read_settings(project_root, plugin.name)
+        result = change(state)
+        if result is None:
+            return state, None
+        enabled, config = result
+        body = _write_body(project_root, plugin, enabled, config)
+        if state["source"] == "legacy":
+            legacy = legacy_path(project_root, plugin.name)
+            try:
+                os.unlink(str(legacy))
+            except OSError:
+                pass
+        return state, body
 
 
 def effective_config(plugin, stored):
@@ -443,15 +480,20 @@ def coerce(plugin, key, raw):
         )
     kind = field["type"]
     text = raw if isinstance(raw, str) else json.dumps(raw)
+    if len(text.encode("utf-8", "replace")) > MAX_VALUE_BYTES:
+        raise UsageError("value for '{}' is larger than {} KiB".format(key, MAX_VALUE_BYTES // 1024))
     if kind == "boolean":
         lowered = text.strip().lower()
         if lowered not in ("true", "false"):
             raise UsageError("'{}' expects true or false, got '{}'".format(key, text))
         return lowered == "true"
     if kind == "integer":
-        if not _INT_RE.match(text.strip()):
+        if not _INT_RE.fullmatch(text.strip()):
             raise UsageError("'{}' expects a base-10 integer, got '{}'".format(key, text))
-        value = int(text.strip(), 10)
+        try:
+            value = int(text.strip(), 10)
+        except ValueError:
+            raise UsageError("'{}' expects a base-10 integer, got a number that is too long".format(key)) from None
         _check_range(field, key, value)
         return value
     if kind == "string":
@@ -459,7 +501,7 @@ def coerce(plugin, key, raw):
     if kind == "string_list":
         try:
             value = json.loads(text)
-        except ValueError:
+        except (ValueError, RecursionError):
             raise UsageError(
                 "'{}' expects a JSON array of strings".format(key), hint="Example: '[\"src\",\"lib\"]'"
             ) from None
@@ -532,15 +574,23 @@ def _script_path(plugin, rel):
 
 def _env(ctx, plugin, config):
     env = dict(os.environ)
+    env.pop("DEVTEAM_PLUGIN_CONFIG", None)
+    env.pop("DEVTEAM_PLUGIN_CONFIG_TRUNCATED", None)
     env.update(
         {
             "DEVTEAM_PROJECT_ROOT": str(ctx.root),
             "DEVTEAM_PLUGIN_DIR": str(plugin.dir),
             "DEVTEAM_PLUGIN_SETTINGS": str(settings_path(ctx.root, plugin.name)),
-            "DEVTEAM_PLUGIN_CONFIG": json.dumps(config, sort_keys=True),
             "DEVTEAM_STATE_DIR": str(ctx.state_dir()),
         }
     )
+    serialized = json.dumps(config, sort_keys=True)
+    if len(serialized.encode("utf-8")) <= MAX_ENV_CONFIG_BYTES:
+        env["DEVTEAM_PLUGIN_CONFIG"] = serialized
+    else:
+        # An environment block has a hard size limit (E2BIG on exec); a script that sees
+        # this flag reads DEVTEAM_PLUGIN_SETTINGS instead.
+        env["DEVTEAM_PLUGIN_CONFIG_TRUNCATED"] = "1"
     return env
 
 
@@ -551,38 +601,106 @@ def _tail(text):
     return data[-TAIL_BYTES:].decode("utf-8", "replace")
 
 
+def _kill_group(proc):
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+            return
+        except OSError:
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _abandon(proc, exc):
+    """Partial output of a script whose pipes never closed; the pipes are closed here."""
+    out = getattr(exc, "stdout", None) or getattr(exc, "output", None)
+    err = getattr(exc, "stderr", None)
+    for pipe in (proc.stdout, proc.stderr):
+        try:
+            if pipe is not None:
+                pipe.close()
+        except (OSError, ValueError):
+            pass
+    try:
+        proc.wait(timeout=KILL_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    return out, err
+
+
 def _spawn(argv, cwd, env, timeout, merge_stderr):
-    """``(exit_code, stdout, stderr, timed_out)``; kills the whole process group on timeout."""
+    """``(exit_code, stdout, stderr, timed_out)``.
+
+    The script runs in its own session. On a timeout, or when this process is sent
+    SIGTERM/SIGINT, the whole process group is killed, so nothing outlives the CLI. A
+    descendant that ``setsid``-ed away can keep a pipe open; reading is bounded so that
+    never hangs the CLI.
+    """
     kwargs = {}
     if os.name == "posix":
         kwargs["start_new_session"] = True
-    try:
-        proc = subprocess.Popen(
-            argv,
-            cwd=str(cwd),
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
-            **kwargs
-        )
-    except OSError as exc:
-        return 127, "", "cannot start {}: {}".format(argv[0], exc), False
-    try:
-        out, err = proc.communicate(timeout=timeout)
-        timed_out = False
-    except subprocess.TimeoutExpired:
-        if os.name == "posix":
+    received = {"sig": None, "pid": None}
+    previous = {}
+
+    def on_signal(signum, _frame):
+        received["sig"] = signum
+        if received["pid"] is not None and os.name == "posix":
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
+                os.killpg(received["pid"], signal.SIGKILL)
             except OSError:
-                proc.kill()
-        else:
-            proc.kill()
-        out, err = proc.communicate()
-        timed_out = True
+                pass
+
+    if os.name == "posix" and threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, on_signal)
+    try:
+        try:
+            proc = subprocess.Popen(
+                argv,
+                cwd=str(cwd),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
+                **kwargs
+            )
+        except OSError as exc:
+            return 127, "", "cannot start {}: {}".format(argv[0], exc), False
+        received["pid"] = proc.pid
+        if received["sig"] is not None:
+            _kill_group(proc)
+
+        deadline = time.monotonic() + timeout
+        give_up = None
+        timed_out = False
+        while True:
+            try:
+                out, err = proc.communicate(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired as exc:
+                now = time.monotonic()
+                if received["sig"] is not None:
+                    _kill_group(proc)
+                    give_up = give_up or now + KILL_GRACE_SECONDS
+                elif now >= deadline and not timed_out:
+                    timed_out = True
+                    _kill_group(proc)
+                    give_up = now + KILL_GRACE_SECONDS
+                if give_up is not None and now >= give_up:
+                    out, err = _abandon(proc, exc)
+                    break
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+    if received["sig"] is not None:
+        # Hand the signal back to whatever was handling it before, now that the group is gone.
+        os.kill(os.getpid(), received["sig"])
     decode = lambda b: (b or b"").decode("utf-8", "replace")  # noqa: E731
-    return (TIMEOUT_EXIT_CODE if timed_out else proc.returncode), decode(out), decode(err), timed_out
+    code = TIMEOUT_EXIT_CODE if timed_out or proc.returncode is None else proc.returncode
+    return code, decode(out), decode(err), timed_out
 
 
 def _execute(ctx, plugin, action, config):
@@ -729,8 +847,10 @@ def enable(ctx, name, force=False):
     if state["enabled"]:
         return {"plugin": build_view(ctx, plugin), "changed": False, "seeded": False}
 
-    config = dict(state["config"])
-    seeded = False
+    # The seeder can run for a while, so it runs outside the lock; the write below
+    # re-reads the state under the lock and only applies the proposal to a plugin that
+    # still has no record.
+    proposed = {}
     if state["source"] == "none":
         seeder = next((a for a in plugin.manifest.get("actions", []) if a["output"] == "config"), None)
         if seeder is not None and all(r["found"] for r in reqs):
@@ -740,20 +860,28 @@ def enable(ctx, name, force=False):
                 result = None
             if result and result["ok"]:
                 proposed = sanitize_proposed(plugin, result["output"])
-                if proposed:
-                    config.update(proposed)
-                    seeded = True
-    write_settings(ctx.root, plugin, True, config)
-    return {"plugin": build_view(ctx, plugin), "changed": True, "seeded": seeded}
+
+    outcome = {"seeded": False}
+
+    def change(fresh):
+        if fresh["enabled"]:
+            return None
+        config = dict(fresh["config"])
+        if fresh["source"] == "none" and proposed:
+            config.update(proposed)
+            outcome["seeded"] = True
+        return True, config
+
+    _, body = update_settings(ctx.root, plugin, change)
+    return {"plugin": build_view(ctx, plugin), "changed": body is not None, "seeded": outcome["seeded"]}
 
 
 def disable(ctx, name):
     plugin = ctx.plugin(name)
-    state = read_settings(ctx.root, name)
-    if not state["enabled"]:
-        return {"plugin": build_view(ctx, plugin), "changed": False}
-    write_settings(ctx.root, plugin, False, state["config"])
-    return {"plugin": build_view(ctx, plugin), "changed": True}
+    _, body = update_settings(
+        ctx.root, plugin, lambda fresh: (False, fresh["config"]) if fresh["enabled"] else None
+    )
+    return {"plugin": build_view(ctx, plugin), "changed": body is not None}
 
 
 def config_get(ctx, name, key=None):
@@ -769,24 +897,26 @@ def config_get(ctx, name, key=None):
 def config_set(ctx, name, key, raw):
     plugin = ctx.plugin(name)
     value = coerce(plugin, key, raw)
-    state = read_settings(ctx.root, name)
-    config = dict(state["config"])
-    config[key] = value
-    write_settings(ctx.root, plugin, state["enabled"], config)
+    update_settings(
+        ctx.root, plugin, lambda fresh: (fresh["enabled"], dict(fresh["config"], **{key: value}))
+    )
     return {"plugin": build_view(ctx, plugin), "key": key, "value": value}
 
 
 def config_unset(ctx, name, key):
     plugin = ctx.plugin(name)
-    state = read_settings(ctx.root, name)
-    if plugin.field(key) is None and key not in state["config"]:
+    if plugin.field(key) is None and key not in read_settings(ctx.root, name)["config"]:
         raise UsageError("plugin '{}' has no config key '{}'".format(name, key))
-    removed = key in state["config"]
-    if removed:
-        config = dict(state["config"])
+
+    def change(fresh):
+        if key not in fresh["config"]:
+            return None
+        config = dict(fresh["config"])
         del config[key]
-        write_settings(ctx.root, plugin, state["enabled"], config)
-    return {"plugin": build_view(ctx, plugin), "key": key, "removed": removed}
+        return fresh["enabled"], config
+
+    _, body = update_settings(ctx.root, plugin, change)
+    return {"plugin": build_view(ctx, plugin), "key": key, "removed": body is not None}
 
 
 def run(ctx, name, action_id):
@@ -812,6 +942,28 @@ def run(ctx, name, action_id):
 # ── legacy migration ──────────────────────────────────────────────────────────
 
 
+def _already_migrated(legacy, target):
+    """True when the legacy file only repeats the settings file: a finished move.
+
+    The legacy path is unlinked here, silently -- its bytes live in the new file, so
+    nothing is lost, and warning about it would report a conflict that does not exist.
+    """
+    try:
+        old = jsonio.read_json(legacy)
+        new = jsonio.read_json(target)
+    except EnvError:
+        return False
+    if not (isinstance(old, dict) and isinstance(new, dict)):
+        return False
+    if new.get("enabled") is not True or new.get("config", {}) != old:
+        return False
+    try:
+        os.unlink(str(legacy))
+    except OSError:
+        return False
+    return True
+
+
 def migrate_legacy(project_root):
     """Move each pre-plugin settings file into ``plugin-settings/``.
 
@@ -831,6 +983,8 @@ def migrate_legacy(project_root):
             continue
         target = settings_path(root, name)
         if target.exists():
+            if _already_migrated(legacy, target):
+                continue
             skipped.append({"plugin": name, "reason": "plugin-settings/{}.json already exists".format(name)})
             continue
         try:
@@ -844,7 +998,10 @@ def migrate_legacy(project_root):
         body = {"schema": SCHEMA, "enabled": True, "config": content}
         with store_lock("plugin-settings"):
             if target.exists():
-                skipped.append({"plugin": name, "reason": "plugin-settings/{}.json already exists".format(name)})
+                if not _already_migrated(legacy, target):
+                    skipped.append(
+                        {"plugin": name, "reason": "plugin-settings/{}.json already exists".format(name)}
+                    )
                 continue
             jsonio.write_json_atomic(target, body, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
             os.unlink(str(legacy))

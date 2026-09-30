@@ -11,11 +11,16 @@ from __future__ import annotations
 import copy
 import json
 import os
+import signal
 import stat
+import subprocess
+import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 
-from devteam_support import REPO_ROOT, StoreTestCase, requires_posix_modes
+from devteam_support import CLI, REPO_ROOT, StoreTestCase, requires_posix_modes
 
 from devteam import bind, plugins, project
 from devteam.errors import ConflictError, EnvError, UsageError
@@ -56,6 +61,10 @@ DEMO = {
          "output": "log", "requires_enabled": False, "timeout_seconds": 1},
         {"id": "junk", "label": "Junk", "help": "h", "runtime": "bash", "script": "scripts/junk.sh",
          "output": "json", "requires_enabled": False, "timeout_seconds": 30},
+        {"id": "hang", "label": "Hang", "help": "h", "runtime": "bash", "script": "scripts/hang.sh",
+         "output": "log", "requires_enabled": False, "timeout_seconds": 60},
+        {"id": "leak", "label": "Leak", "help": "h", "runtime": "bash", "script": "scripts/leak.sh",
+         "output": "log", "requires_enabled": False, "timeout_seconds": 1},
     ],
     "status": {"runtime": "python3", "script": "scripts/status.py", "timeout_seconds": 5},
     "hooks": {"stop": "hooks/stop.sh"},
@@ -90,7 +99,7 @@ SCRIPTS = {
     "demo/scripts/probe.py": (
         "import json, os\n"
         'keys = ["DEVTEAM_PROJECT_ROOT", "DEVTEAM_PLUGIN_DIR", "DEVTEAM_PLUGIN_SETTINGS",\n'
-        '        "DEVTEAM_PLUGIN_CONFIG", "DEVTEAM_STATE_DIR"]\n'
+        '        "DEVTEAM_PLUGIN_CONFIG", "DEVTEAM_PLUGIN_CONFIG_TRUNCATED", "DEVTEAM_STATE_DIR"]\n'
         "out = {k: os.environ.get(k) for k in keys}\n"
         'out["cwd"] = os.getcwd()\n'
         "print(json.dumps(out))\n"
@@ -99,6 +108,8 @@ SCRIPTS = {
     "demo/scripts/boom.sh": "echo before-failure\necho bad >&2\nexit 7\n",
     "demo/scripts/slow.sh": "sleep 5\n",
     "demo/scripts/junk.sh": "echo not json\n",
+    "demo/scripts/hang.sh": 'echo $$ > "$DEVTEAM_PROJECT_ROOT/.hang.pid"\nsleep 60 &\nwait\n',
+    "demo/scripts/leak.sh": 'python3 -c "import os,time; os.setsid(); time.sleep(8)" &\nsleep 30\n',
     "demo/scripts/status.py": (
         "import json, os, sys\n"
         'if os.path.exists(os.path.join(os.environ["DEVTEAM_PROJECT_ROOT"], ".status-fail")):\n'
@@ -761,6 +772,223 @@ class UpgradeAndPathsTest(PluginTestCase):
         result = bind.bind(other, provider_names=["claude"], pin="3.1.0")
         self.assertFalse(os.path.lexists(str(other / project.PROJECT_DIR / "plugins")))
         self.assertEqual(result["version"], "3.1.0")
+
+
+class HardeningTest(PluginTestCase):
+    def write_legacy(self, content):
+        legacy = project.legacy_memory_dir(self.root) / "graphify.json"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps(content), encoding="utf-8")
+        return legacy
+
+    # -- validation ---------------------------------------------------------------
+
+    def test_a_trailing_newline_does_not_pass_a_pattern_check(self):
+        manifest = copy.deepcopy(DEMO)
+        manifest["actions"][0]["script"] = "scripts/detect.py\n"
+        self.assertTrue(plugins.validate_manifest(manifest, dirname="demo"))
+        self.assertTrue(plugins.validate_manifest(dict(DEMO, name="demo\n"), dirname="demo"))
+
+    def test_a_huge_integer_or_deeply_nested_json_is_a_usage_error(self):
+        code, body, _ = self.cli("config", "set", "demo", "count", "9" * 6000)
+        self.assertEqual(code, 2)
+        self.assertFalse(body["ok"])
+        code, body, _ = self.cli("config", "set", "demo", "names", "[" * 200000)
+        self.assertEqual(code, 2)
+        self.assertFalse(body["ok"])
+
+    def test_a_value_over_the_size_cap_is_a_usage_error(self):
+        code, body, _ = self.cli("config", "set", "demo", "label", "x" * (plugins.MAX_VALUE_BYTES + 1))
+        self.assertEqual(code, 2)
+        self.assertFalse(self.settings_file().exists())
+
+    def test_an_oversized_config_is_not_passed_inline(self):
+        plugins.enable(self.ctx, "demo")
+        plugins.config_set(self.ctx, "demo", "label", "x" * 40000)
+        plugins.config_set(self.ctx, "demo", "names", json.dumps(["y" * 1000] * 40))
+        env = plugins.run(self.ctx, "demo", "probe")["output"]
+        self.assertIsNone(env["DEVTEAM_PLUGIN_CONFIG"])
+        self.assertEqual(env["DEVTEAM_PLUGIN_CONFIG_TRUNCATED"], "1")
+        self.assertEqual(
+            json.loads(self.settings_file().read_text(encoding="utf-8"))["config"]["label"], "x" * 40000
+        )
+
+    def test_a_small_config_is_passed_inline_and_not_flagged(self):
+        plugins.enable(self.ctx, "demo")
+        env = plugins.run(self.ctx, "demo", "probe")["output"]
+        self.assertIsNotNone(env["DEVTEAM_PLUGIN_CONFIG"])
+        self.assertIsNone(env["DEVTEAM_PLUGIN_CONFIG_TRUNCATED"])
+
+    # -- list surfaces invalid manifests -------------------------------------------
+
+    def test_list_reports_an_invalid_manifest(self):
+        broken = self.ctx.version_dir / "plugins" / "broken"
+        broken.mkdir()
+        (broken / "plugin.json").write_text("{not json", encoding="utf-8")
+        code, body, _ = self.cli("list")
+        self.assertEqual(code, 0)
+        self.assertEqual([p["name"] for p in body["plugins"]], ["demo", "graphify", "needy"])
+        self.assertEqual([i["name_or_dir"] for i in body["invalid"]], ["broken"])
+        self.assertIn("cannot read manifest", body["invalid"][0]["problem"])
+        code, out, _ = self.run_cli("plugin", "list", "--path", str(self.root))
+        self.assertEqual(code, 0)
+        self.assertIn("warning: invalid plugin manifest 'broken'", out)
+
+    def test_list_has_an_empty_invalid_key_when_all_are_valid(self):
+        _, body, _ = self.cli("list")
+        self.assertEqual(body["invalid"], [])
+
+    # -- locking --------------------------------------------------------------------
+
+    def test_every_mutation_reads_and_writes_under_the_lock(self):
+        events = []
+        depth = {"n": 0}
+        real_lock, real_read, real_write = plugins.store_lock, plugins.read_settings, plugins._write_body
+
+        class Recording:
+            def __init__(self, inner):
+                self.inner = inner
+
+            def __enter__(self):
+                depth["n"] += 1
+                return self.inner.__enter__()
+
+            def __exit__(self, *exc):
+                depth["n"] -= 1
+                return self.inner.__exit__(*exc)
+
+        plugins.store_lock = lambda name, **kw: Recording(real_lock(name, **kw))
+        plugins.read_settings = lambda *a, **kw: (events.append(("read", depth["n"])), real_read(*a, **kw))[1]
+        plugins._write_body = lambda *a, **kw: (events.append(("write", depth["n"])), real_write(*a, **kw))[1]
+        self.addCleanup(setattr, plugins, "store_lock", real_lock)
+        self.addCleanup(setattr, plugins, "read_settings", real_read)
+        self.addCleanup(setattr, plugins, "_write_body", real_write)
+
+        plugins.enable(self.ctx, "demo")
+        plugins.config_set(self.ctx, "demo", "flag", "true")
+        plugins.config_unset(self.ctx, "demo", "flag")
+        plugins.disable(self.ctx, "demo")
+        writes = [e for e in events if e[0] == "write"]
+        self.assertGreaterEqual(len(writes), 4)
+        self.assertTrue(all(depth_ == 1 for _, depth_ in writes), events)
+        # The read that feeds each write happens inside the same lock: no write is
+        # preceded only by unlocked reads.
+        previous = None
+        for kind, level in events:
+            if kind == "write":
+                self.assertEqual(previous, ("read", 1), events)
+            previous = (kind, level)
+
+    def test_concurrent_writers_do_not_lose_updates(self):
+        plugins.enable(self.ctx, "demo")
+        errors = []
+
+        def work(key, values):
+            try:
+                for value in values:
+                    plugins.config_set(self.ctx, "demo", key, value)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=work, args=("label", ["a%d" % i for i in range(15)])),
+            threading.Thread(target=work, args=("count", [str(i % 9 + 1) for i in range(15)])),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        config = json.loads(self.settings_file().read_text(encoding="utf-8"))["config"]
+        self.assertEqual(config["label"], "a14")
+        self.assertEqual(config["count"], 6)
+
+    # -- legacy move on write --------------------------------------------------------
+
+    def test_config_set_on_a_legacy_plugin_completes_the_move(self):
+        legacy = self.write_legacy({"targetPaths": ["src"], "extra": 1})
+        plugins.config_set(self.ctx, "graphify", "auto_refresh", "true")
+        self.assertFalse(legacy.exists())
+        stored = json.loads(self.settings_file("graphify").read_text(encoding="utf-8"))
+        self.assertEqual(
+            stored,
+            {"schema": 1, "enabled": True,
+             "config": {"targetPaths": ["src"], "extra": 1, "auto_refresh": True}},
+        )
+
+    def test_config_unset_and_disable_on_a_legacy_plugin_complete_the_move(self):
+        legacy = self.write_legacy({"targetPaths": ["src"], "auto_refresh": True})
+        plugins.config_unset(self.ctx, "graphify", "auto_refresh")
+        self.assertFalse(legacy.exists())
+        self.assertEqual(
+            json.loads(self.settings_file("graphify").read_text(encoding="utf-8"))["config"],
+            {"targetPaths": ["src"]},
+        )
+        legacy = self.write_legacy({"targetPaths": ["lib"]})
+        self.settings_file("graphify").unlink()
+        plugins.disable(self.ctx, "graphify")
+        self.assertFalse(legacy.exists())
+        self.assertFalse(json.loads(self.settings_file("graphify").read_text(encoding="utf-8"))["enabled"])
+
+    def test_a_no_op_write_leaves_the_legacy_file_alone(self):
+        legacy = self.write_legacy({"targetPaths": ["src"]})
+        plugins.config_unset(self.ctx, "graphify", "auto_refresh")  # declared, not stored
+        self.assertTrue(legacy.exists())
+        self.assertFalse(self.settings_file("graphify").exists())
+
+    def test_identical_legacy_content_is_unlinked_silently(self):
+        content = {"targetPaths": ["src"], "auto_refresh": True}
+        legacy = self.write_legacy(content)
+        settings = self.settings_file("graphify")
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps({"schema": 1, "enabled": True, "config": content}), encoding="utf-8")
+        report = plugins.migrate_legacy(self.root)
+        self.assertEqual(report, {"moved": [], "skipped": []})
+        self.assertFalse(legacy.exists())
+
+    def test_different_legacy_content_is_still_a_conflict(self):
+        legacy = self.write_legacy({"targetPaths": ["old"]})
+        settings = self.settings_file("graphify")
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps({"schema": 1, "enabled": True, "config": {"targetPaths": ["new"]}}))
+        report = plugins.migrate_legacy(self.root)
+        self.assertEqual(len(report["skipped"]), 1)
+        self.assertTrue(legacy.exists())
+
+    # -- process group ---------------------------------------------------------------
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+    def test_sigterm_to_the_cli_kills_the_scripts_process_group(self):
+        pid_file = self.root / ".hang.pid"
+        proc = subprocess.Popen(
+            [sys.executable, str(CLI), "plugin", "run", "demo", "hang", "--path", str(self.root), "--json"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(os.environ),
+        )
+        self.addCleanup(proc.kill)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and not (pid_file.exists() and pid_file.read_text().strip()):
+            time.sleep(0.05)
+        script_pid = int(pid_file.read_text().strip())
+        proc.send_signal(signal.SIGTERM)
+        proc.communicate(timeout=15)
+        self.assertNotEqual(proc.returncode, 0)
+        gone = False
+        for _ in range(60):
+            try:
+                os.kill(script_pid, 0)
+            except ProcessLookupError:
+                gone = True
+                break
+            time.sleep(0.1)
+        self.assertTrue(gone, "the script outlived the CLI")
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+    def test_a_timeout_returns_even_when_a_descendant_holds_the_pipe(self):
+        started = time.monotonic()
+        result = plugins.run(self.ctx, "demo", "leak")
+        self.assertEqual(result["exit_code"], plugins.TIMEOUT_EXIT_CODE)
+        self.assertFalse(result["ok"])
+        self.assertLess(time.monotonic() - started, 6.5)
 
 
 if __name__ == "__main__":

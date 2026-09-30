@@ -874,8 +874,13 @@ def _plugin_human(view):
 def cmd_plugin_list(args, emitter):
     ctx = _plugin_context(args)
     views = plugins.list_views(ctx)
-    payload = {"project_id": ctx.project_id, "plugins": views}
+    invalid = [
+        {"name_or_dir": item["name"], "problem": "; ".join(item["problems"])} for item in ctx.invalid
+    ]
+    payload = {"project_id": ctx.project_id, "plugins": views, "invalid": invalid}
     human = _table([_plugin_line(v) for v in views], ["PLUGIN", "STATE", "NOTES"]) if views else "no plugins"
+    for item in invalid:
+        human += "\nwarning: invalid plugin manifest '{}': {}".format(item["name_or_dir"], item["problem"])
     return payload, human
 
 
