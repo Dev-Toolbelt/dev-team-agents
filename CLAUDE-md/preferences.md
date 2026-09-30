@@ -1,6 +1,6 @@
 ## User Preferences
 
-All user-level preferences are stored in `.dev-team-agents/user-data/preferences.json` (gitignored). The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
+On a v2 install that is not bound yet, all user-level preferences are stored in `.dev-team-agents/user-data/preferences.json` (gitignored). In a bound project the cascade (defaults → global → the store's project layer) replaces it and `devteam bind` imports the file into the project layer, moving it to quarantine — see `CLAUDE-md/cli.md` § Layout, memory and preferences. The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
 
 ### Schema
 

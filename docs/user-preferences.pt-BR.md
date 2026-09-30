@@ -32,6 +32,13 @@ Esse arquivo não deve ser commitado e é preservado nas atualizações.
 .dev-team-agents/user-data/preferences.json
 ```
 
+Esse caminho vale para uma instalação v2 ainda não vinculada. **Num projeto vinculado com `devteam bind`**,
+as preferências seguem a cascata defaults → global → projeto, a camada do projeto fica no store e os
+agentes leem o arquivo gerado `.dev-team-agents/resolved/preferences.json`. Altere um valor com
+`devteam prefs set <chave> <valor> --scope project` ou pelas configurações do projeto no app desktop. O
+`bind` importa um `user-data/preferences.json` existente para a camada do projeto e move o arquivo para
+a quarentena do store.
+
 Os defaults canônicos ficam em:
 
 ```text

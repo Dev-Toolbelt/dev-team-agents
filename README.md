@@ -302,7 +302,7 @@ dev-team-agents can collect **anonymous, aggregate usage data** to help us under
 
 **What is collected** (only when enabled): agent/command names, install and update events, session counts, OS family, and installed version. No code, file paths, project names, or personal data is ever collected.
 
-**Change it at any time** by editing `.dev-team-agents/user-data/preferences.json` — `false` to opt out, `true` to opt in:
+**Change it at any time** — in a project bound with `devteam bind`, from the desktop app's project settings or with `devteam prefs set telemetry false --scope project` (`true` to opt in). A v2 install that is not bound yet still reads `.dev-team-agents/user-data/preferences.json`; `devteam bind` imports that file into the project's preferences and moves it out of the project:
 
 ```json
 { "telemetry": false }

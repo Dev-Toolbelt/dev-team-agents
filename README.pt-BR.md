@@ -302,7 +302,7 @@ O dev-team-agents pode coletar **dados de uso anônimos e agregados** para nos a
 
 **O que é coletado** (somente quando ativado): nomes de agentes/comandos, eventos de instalação e atualização, contagem de sessões, família de SO e versão instalada. Nenhum código, caminho de arquivo, nome de projeto ou dado pessoal é coletado.
 
-**Mude a qualquer momento** editando `.dev-team-agents/user-data/preferences.json` — `false` para desativar, `true` para ativar:
+**Mude a qualquer momento** — num projeto vinculado com `devteam bind`, pelas configurações do projeto no app desktop ou com `devteam prefs set telemetry false --scope project` (`true` para ativar). Uma instalação v2 ainda não vinculada continua lendo `.dev-team-agents/user-data/preferences.json`; o `devteam bind` importa esse arquivo para as preferências do projeto e o move para fora do projeto:
 
 ```json
 { "telemetry": false }

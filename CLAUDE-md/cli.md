@@ -538,7 +538,13 @@ project on the current layout, so a new project is clean from the start. `devtea
 v2 directory between the two as it copies.
 
 **Nothing relocates memory except `devteam upgrade`.** `bind`, `sync`, `update` and `migrate` report
-a stale layout and stop. The upgrade is copy → verify by sha256 → retire the original to quarantine,
+a stale layout and stop. The one file `bind` and `sync` do take out of `user-data/` is
+`preferences.json`, because the cascade never read it there: its declared, well-typed keys are copied into
+the project layer, read back, and the file is moved to quarantine (`imported-preferences`). A value the
+project layer already holds wins; unknown or ill-typed keys are reported, not imported. The result is
+`preferences_import` in the `bind`/`sync` payload — `null` when there was no file — with `imported`,
+`unchanged`, `conflicts`, `ignored`, `quarantined` and `problem`. A file that is not a JSON object, or a
+write that does not read back, is left in place with `problem` set. The upgrade is copy → verify by sha256 → retire the original to quarantine,
 and it refuses a populated destination before copying anything. See
 [ADR-0012](../docs/development/adrs/0012-project-layout-version-and-a-consented-structure-upgrade.md).
 
