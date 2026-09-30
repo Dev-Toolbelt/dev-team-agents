@@ -492,3 +492,29 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > - **Not editable here:** `suppress_notifications` as a per-type list (`_coerce` cannot write a list
 >   for a key whose default is a boolean; the app offers on/off and shows an existing list), and
 >   `transcript_multiplier` (deprecated, shown read-only).
+
+> **Amendment — the app runs `notifications list`, `watch` and `ack`, and keeps running with its
+> window closed** ([ADR-0017](0017-notifications-are-delivered-by-the-desktop-app-through-a-machine-local-queue.md)).
+> Three rules this ADR set are extended, none relaxed:
+> - **A long-lived child.** `notifications watch` is the first command the app does not run to
+>   completion. It goes through `cli/stream.ts` under the same rules as `invoke.ts` — no shell, the
+>   minimal environment, `--json` appended there, the declaration on every call — and through the
+>   same allow-list (`COMMAND_SHAPES`), entered by `watchNotifications`. Stopping it is closing its
+>   stdin; the CLI ends on EOF, so an app that dies without cleaning up leaves no orphan polling.
+> - **One more gated write.** `notifications ack` joins `GATED_COMMANDS`: it writes one project's
+>   seen marks, and it runs only with the declaration written — without one the record stays unseen
+>   and reappears next launch, the lesser failure than an ungated write. The id is validated
+>   against the hook's shape before it reaches argv; the app never passes `--all`.
+> - **The main process outlives the window.** The stream is owned there, so closing the window
+>   hides it; a tray / menu-bar icon reopens or quits; a single-instance lock keeps two streams from
+>   showing every notification twice; start at login is opt-in and the UI reports what the OS
+>   recorded. The renderer receives the feed by a push channel whose listener is handed the payload
+>   only — never Electron's `event`.
+
+> **Correction to the About-window amendment above:** it lists `CFBundleName` among the places the
+> display name was set. That value made the packaged app abort at launch — Electron locates its
+> helper bundles by the bundle name, and electron-builder names them after `productName` — so it is
+> removed; `CFBundleDisplayName` alone carries "Dev Team Agents". The bold macOS menu-bar title of a
+> packaged build therefore reads `dev-team-agents` until `productName` itself changes, which is a
+> packaging decision (cask, dmg and winget names) and not part of this one.
+
