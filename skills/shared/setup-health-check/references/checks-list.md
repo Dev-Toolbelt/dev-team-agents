@@ -45,7 +45,7 @@ every layout.
 |----------|--------------------|
 | 1 Symlinks, 2 Scripts | Run `devteam doctor` and report its findings instead of the v2 fixes — each writes through a link into the store (`fix-patterns.md` § A v3-bound project) |
 | 3 User Data | `IN_STORE: yes` → skip the directory and `mkdir` checks. Either way, look for legacy markers in `STATE_DIR` and migrate them with `state_migrate_legacy "$STATE_DIR"`; a marker left in `user-data/` after an upgrade is reported, not migrated. Report `.claude/` leftovers with `devteam doctor` as the next step |
-| 5 Graphify | Unchanged, except that the last build is the `graphify_last_run` key of `STATE_DIR/state.json` (5d already reads it there) and 5f's two `user-data/` lines are checked only when `IN_STORE: no` |
+| 5 Graphify | Unchanged — `graphify.json` and the build marker (`graphify-out/.build-commit`) live in the project on every layout. 5f's `graphify.json` negation is checked only when `IN_STORE: no` |
 | 7 .gitignore | `bind`/`sync` write this block from the project's recorded layout. `IN_STORE: no` → the `user-data/` directory line and the `graphify.json` negation are **required** — `user-data/` holds `credentials.local.json` and the session summary; check them as written. `IN_STORE: yes` → do not add them back (`upgrade` retired them). A missing managed line is fixed by `devteam sync`, not by appending |
 | 8 User Preferences | Read `PREFS_FILE` only. A missing field is a stale projection → `devteam sync`, never inject it. Step 3's legacy `.auto-update` flag is looked for in `STATE_DIR`; if present, `devteam prefs set auto_update true --scope project` and rename the flag to `.auto-update.pre-migration.bak` |
 | 9 Notifier | Read `state.json` from `STATE_DIR` |
@@ -425,14 +425,21 @@ else
 fi
 [ -f graphify-out/GRAPH_REPORT.md ] && echo "OK: GRAPH_REPORT.md" || echo "MISSING: graphify-out/GRAPH_REPORT.md"
 
-# Is the last recorded build behind the current commit? graphify-refresh.sh records it as the
-# graphify_last_run key of state.json (substitute STATE_DIR in a bound project); the old
-# .graphify-last-run file is a legacy marker Category 3 migrates.
-source .dev-team-agents/scripts/lib/state.sh 2>/dev/null
-LAST="$(state_get graphify_last_run .dev-team-agents/user-data/state.json 2>/dev/null)"
-HEAD_COMMIT="$(git rev-parse HEAD 2>/dev/null)"
-[ -n "$LAST" ] && [ -n "$HEAD_COMMIT" ] && [ "$LAST" != "$HEAD_COMMIT" ] && echo "MARKER_BEHIND_HEAD: last=$LAST head=$HEAD_COMMIT"
+# Is the graph behind the code? graphify-refresh.sh records the commit a build reflects in
+# graphify-out/.build-commit — per checkout, next to the graph. Behind means a file was added,
+# deleted or renamed under targetPaths since then: the same test the script uses to decide a
+# rebuild, so an ordinary commit after the last build is not reported.
+LAST="$(tr -d '[:space:]' 2>/dev/null < graphify-out/.build-commit)"
+if [ -z "$LAST" ]; then
+  echo "NO_BUILD_MARKER"
+elif [ "$LAST" != "$(git rev-parse HEAD 2>/dev/null)" ]; then
+  jq -r '.targetPaths[]? // empty' .dev-team-agents/user-data/graphify.json 2>/dev/null \
+    | while IFS= read -r src; do git diff --diff-filter=ADR --name-only "$LAST"..HEAD -- "$src" 2>/dev/null; done \
+    | grep -q . && echo "MARKER_BEHIND_HEAD: last=$LAST"
+fi
 ```
+
+`NO_BUILD_MARKER` is informational: a graph built before the marker moved into `graphify-out/` has none, and the next refresh (5e) writes it.
 
 ### 5e — Generation actually works (not just "files exist")
 
@@ -452,7 +459,6 @@ echo "EXIT:$REFRESH_EXIT"
 ### 5f — .gitignore entries
 
 ```bash
-grep -qxF ".dev-team-agents/user-data/.graphify-last-run" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 grep -qxF "graphify-out/cache" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && echo "OK" || echo "MISSING"
 ```
@@ -472,7 +478,6 @@ grep -qF "!.dev-team-agents/user-data/graphify.json" .gitignore 2>/dev/null && e
 | `graphify-out/graph.json` present and valid JSON | FIX — re-run the refresh script; if still missing/invalid after that, report the failure instead of fabricating a graph |
 | `graphify-out/GRAPH_REPORT.md` present | WARN — re-run the refresh script |
 | Refresh script silently no-op'd or failed (5e) | FIX — re-run `bash .dev-team-agents/scripts/graphify-refresh.sh` and surface its stderr; this signals a bug in the script itself, not stale output |
-| `.dev-team-agents/user-data/.graphify-last-run` in `.gitignore` | `echo '.dev-team-agents/user-data/.graphify-last-run' >> .gitignore` |
 | `graphify-out/cache` in `.gitignore` | `echo 'graphify-out/cache' >> .gitignore` |
 | `!.dev-team-agents/user-data/graphify.json` in `.gitignore` | Append automatically (see Category 7) |
 
