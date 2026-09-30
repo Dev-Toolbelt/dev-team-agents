@@ -36,11 +36,27 @@ that writes into **directories owned by other programs**, which is why it needed
    listing would show one directory's skills several times. `install_target` names the root each
    provider installs into. Codex installs into `~/.agents/skills`: `~/.codex/skills` stays listed,
    because it holds existing skills and the provider's own `.system/` bundle, but nothing new is
-   written there.
+   written there, and `--root` only accepts roots that are an install target.
+   - **Fewest roots:** an install covers the chosen providers with as few roots as possible. A
+     provider already reached by a chosen root gets no copy of its own, so Claude plus opencode
+     writes to `~/.claude/skills` only, and all three write to the Claude and `.agents` roots.
+     When a same-named skill already sits in another root one of those providers reads, the
+     payload reports it in `also_present` instead of creating a second copy silently.
 3. **Nothing is deleted.** `remove`, and `install --replace`, move a real directory into the store's
    quarantine (`global-skills/<root>`). A symlink is unlinked, and what it points at is untouched.
-4. **Skills the framework manages are refused.** A symlink that resolves into the core store is a
-   bind artifact, and `devteam sync` would restore it.
+   `remove` reports the link's target, because an unlinked symlink is not quarantined.
+   - **The one removal allowed:** a copy this same call created (a staging directory, or a new
+     copy being rolled back) is removed, because the source still holds the same content.
+   - **Leftover staging:** a hidden `.devteam-staging-*` directory from an interrupted install is
+     quarantined on the next install. It is never deleted.
+4. **Skills the framework manages are refused.** Anything whose resolved path lies inside the core
+   store is `managed`, including the children of a root that is itself a symlink into the core.
+   Moving it would damage the versioned store, and `devteam sync` would restore it anyway.
+   - **Telling refusals apart:** the refusal carries `details.reason = "managed"`, and a name
+     conflict carries `"exists"`. Both are exit 4, so a client uses the reason to offer
+     `--replace` only when it can help.
+   - **`--link` sources:** a source inside the core, or inside a target root, is refused. Linking
+     such a source would produce a link to itself, or an unremovable skill.
 5. **Installing validates before it writes.**
    - The source must hold a `SKILL.md` with `name` and `description`, and `name` must follow the
      agentskills.io pattern. The skill is installed under that name, not under the source folder's
@@ -50,9 +66,18 @@ that writes into **directories owned by other programs**, which is why it needed
    - A directory that is copied may not contain symlinks. `--link` symlinks the source directory
      instead of copying it.
    - All target roots are checked for a name conflict (exit 4) before any root is written.
+   - **Staging and rollback:** the install then stages a copy in every root, and only then swaps
+     each one into place. An I/O failure in either phase removes the stages. It also rolls back
+     every root already swapped: what was replaced comes back from quarantine, or its symlink is
+     recreated.
+   - **Archive contents:** permission bits survive extraction (setuid, setgid and sticky never
+     do), encrypted members are refused, and `__MACOSX/` debris is skipped.
 6. **Frontmatter is read leniently.** Third-party skills use folded `description: >` blocks and
    nested keys. A strict reader would report working skills as malformed.
-7. **`$DEVTEAM_USER_HOME` overrides `~`** for these roots. `StoreTestCase` pins it, so the suite
+7. **A name is matched, never joined.** `show` and `remove` look the name up among a root's actual
+   children. `.`, `..`, separators, NUL, drive letters and dot-names are refused before any path
+   is built. The app applies the same guard on its side.
+8. **`$DEVTEAM_USER_HOME` overrides `~`** for these roots. `StoreTestCase` pins it, so the suite
    (including the contract sweep, which runs `skills list` bare) can never read or write a
    developer's real home.
 

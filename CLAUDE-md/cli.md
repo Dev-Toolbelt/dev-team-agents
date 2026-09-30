@@ -252,19 +252,30 @@ of those directories; its unit is the physical **root**, each listing the provid
 |------|-----------|---------|--------------------|
 | `claude` | `~/.claude/skills` | claude, opencode | claude |
 | `agents` | `~/.agents/skills` | codex, opencode | codex |
-| `codex` | `~/.codex/skills` | codex | — (listed, never written) |
-| `opencode` | `~/.config/opencode/skills` | opencode | opencode |
+| `codex` | `~/.codex/skills` | codex | — (listed, never written; `--root codex` is refused) |
+| `opencode` | `~/.config/opencode/skills` | opencode | opencode — used only when no other chosen root already covers opencode |
 
 - `list [--provider claude|codex|opencode|all]` and `show <name> [--root <id>]` are read-only and
   create nothing. Dot-entries (Codex's `.system/`) are not skills; a folder without a valid
   `SKILL.md` is reported `malformed`, never fatal.
-- `install --source <dir|.zip|.skill> [--provider …] [--root …] [--replace] [--link]` validates
-  the frontmatter, installs under the frontmatter `name`, and checks every target for a conflict
-  (exit 4) before writing any. Archives are validated before extraction (no absolute/`..`/symlink
-  members, 2000 entries, 50 MB).
-- `remove <name> [--root <id>]` **never deletes**: a directory goes to the store's quarantine
-  (`global-skills/<root>`), a symlink is unlinked. A symlink into the core store is `managed` and
-  refused.
+- `install --source <dir|.zip|.skill> [--provider …] [--root …] [--replace] [--link]`:
+  - **Validation:** checks the frontmatter and installs under the frontmatter `name`.
+  - **Fewest roots:** covers the chosen providers with as few roots as possible. Claude plus
+    opencode writes to `~/.claude/skills` only.
+  - **Conflicts:** checks every target before writing any. A conflict is exit 4 with
+    `details.reason` set to `exists` or `managed`.
+  - **Writing:** stages a copy in every root, then swaps each into place. A failure rolls back
+    the roots already swapped, and leftover `.devteam-staging-*` directories are quarantined on
+    the next install.
+  - **Archives:** validated before extraction. Absolute, `..`, backslash, drive-letter, symlink
+    and encrypted members are refused, with limits of 2000 entries and 50 MB. Permission bits
+    are kept, except setuid, setgid and sticky, and `__MACOSX/` is skipped.
+  - **`--link`:** refuses a source inside the core store or inside a target root.
+- `remove <name> [--root <id>]` **never deletes**. A directory goes to the store's quarantine
+  (`global-skills/<root>`), and a symlink is unlinked, with its target reported. Anything that
+  resolves into the core store is `managed` and refused.
+- `show` and `remove` match the name among a root's real children. `.`, `..`, separators, NUL
+  and dot-names are refused.
 - `install` and `remove` are in `compat.MUTATING`; `$DEVTEAM_USER_HOME` overrides `~` (the test
   seam `StoreTestCase` pins).
 
@@ -272,8 +283,8 @@ of those directories; its unit is the physical **root**, each listing the provid
 
 - `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error}], count}`
 - `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
-- `skills install`: `{name, description, source, linked, installed: [{root, path, providers, replaced, quarantined_to}]}`
-- `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to}`
+- `skills install`: `{name, description, source, linked, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
+- `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`
 
 ## Compatibility block in `version`
 
