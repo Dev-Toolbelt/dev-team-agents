@@ -22,6 +22,7 @@
  */
 
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
+import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import { textProblem } from '../shared/preferenceRules.js';
 import type {
@@ -35,9 +36,11 @@ import type {
   CatalogSummary,
   DoctorFinding,
   DoctorReport,
+  NotificationLevel,
   OperationResult,
   PinReport,
   PreferencesImport,
+  QueuedNotification,
   PreferenceValue,
   PreferenceWrite,
   ProjectList,
@@ -81,6 +84,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['catalog', 'commands'],
   ['catalog', 'show'],
   ['prefs', 'list'],
+  ['notifications', 'list'],
+  ['notifications', 'watch'],
 ]);
 
 /**
@@ -124,6 +129,10 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['upgrade'],
   ['prefs', 'set'],
   ['prefs', 'unset'],
+  // Writes `notifications-seen.json` in one project's machine-local state directory —
+  // the smallest write this app makes, and still a write, so it is declared and gated
+  // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
+  ['notifications', 'ack'],
 ]);
 
 /** Every subcommand this build is allowed to run. */
@@ -200,6 +209,13 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'prefs list': { operands: 0, flags: { '--path': 'value' } },
   'prefs set': { operands: 2, flags: { '--scope': 'value', '--path': 'value' } },
   'prefs unset': { operands: 1, flags: { '--scope': 'value', '--path': 'value' } },
+  // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
+  // — an ack the user did not see happen is a notification they never got.
+  'notifications list': { operands: 0, flags: { '--unseen': 'bare' } },
+  'notifications ack': { operands: 1, flags: {} },
+  // Streamed, not invoked: `stream.ts`, entered through `watchNotifications` below, which
+  // consults this table exactly as `run()` does.
+  'notifications watch': { operands: 0, flags: {} },
 });
 
 const MAX_COMMAND_WORDS = 2;
@@ -936,4 +952,136 @@ function asEntry(raw: Record<string, unknown>, name: string): CatalogEntry {
     ...(raw['malformed'] === true ? { malformed: true } : {}),
     ...('error' in raw ? { error: asNullableString(raw['error']) } : {}),
   };
+}
+
+// ── notifications ─────────────────────────────────────────────────────────────
+
+/**
+ * The shape `notify.sh` writes the id in: `<epoch>-<pid>-<random>`. Checked before an
+ * id reaches argv — it came off a stream a hook wrote, and a hook is not the app.
+ */
+export const NOTIFICATION_ID = /^[0-9]{1,12}-[0-9]{1,10}-[0-9]{1,20}$/;
+
+export const NOTIFICATION_LEVELS: readonly NotificationLevel[] = Object.freeze(['info', 'warning', 'critical']);
+
+export function asNotification(raw: unknown): QueuedNotification | string {
+  if (!isRecord(raw)) return 'a notification that is not an object';
+  const id = raw['id'];
+  if (typeof id !== 'string' || !NOTIFICATION_ID.test(id)) return 'a notification with no well-formed `id`';
+  const level = raw['level'];
+  if (typeof level !== 'string' || !(NOTIFICATION_LEVELS as readonly string[]).includes(level)) {
+    return `notification ${id} has an unknown \`level\``;
+  }
+  const message = raw['message'];
+  if (typeof message !== 'string' || message.trim() === '') return `notification ${id} has no \`message\``;
+  const ts = raw['ts'];
+  if (typeof ts !== 'number') return `notification ${id} has no numeric \`ts\``;
+  return {
+    id,
+    level: level as NotificationLevel,
+    code: typeof raw['code'] === 'string' ? raw['code'] : '',
+    message,
+    ts,
+    projectId: typeof raw['project_id'] === 'string' ? raw['project_id'] : '',
+    sessionId: typeof raw['session_id'] === 'string' ? raw['session_id'] : '',
+    expiresAt: typeof raw['expires_at'] === 'number' ? raw['expires_at'] : 0,
+    seen: raw['seen'] === true,
+  };
+}
+
+export function listNotifications(context: CliContext): Promise<OperationResult<readonly QueuedNotification[]>> {
+  return run(context, ['notifications', 'list'], (body) => {
+    if (!Array.isArray(body['notifications'])) return 'no `notifications` array';
+    const items: QueuedNotification[] = [];
+    for (const raw of body['notifications']) {
+      const parsed = asNotification(raw);
+      // One malformed record is dropped, not fatal: the CLI already skips malformed
+      // queue lines, so this is a second net rather than a reason to show nothing.
+      if (typeof parsed !== 'string') items.push(parsed);
+    }
+    return items;
+  });
+}
+
+export function ackNotification(context: CliContext, id: string): Promise<OperationResult<{ readonly acknowledged: readonly string[] }>> {
+  if (!NOTIFICATION_ID.test(id)) {
+    return Promise.resolve({
+      ok: false,
+      kind: 'refused',
+      message: `this app refused to acknowledge \`${id.slice(0, 40)}\`: not a notification id`,
+      hint: 'Notification ids come from `devteam notifications watch`; this one did not.',
+      exitCode: null,
+      command: 'devteam notifications ack',
+      durationMs: 0,
+    });
+  }
+  return run(context, ['notifications', 'ack', id], (body) => ({ acknowledged: asStringArray(body['acknowledged']) }));
+}
+
+export type WatchEvent =
+  | { readonly event: 'notification'; readonly notification: QueuedNotification }
+  | { readonly event: 'ready'; readonly projects: number }
+  | { readonly event: 'heartbeat' }
+  | { readonly event: 'end'; readonly reason: string }
+  /**
+   * The stream failed: the CLI's error document, as one line. The exit code follows as
+   * the process ends; this carries the words that explain it.
+   */
+  | { readonly event: 'error'; readonly message: string; readonly hint: string | null; readonly exitCode: number | null };
+
+/** A line the stream sent, as a typed event — or why it is not one. */
+export function asWatchEvent(raw: Record<string, unknown>): WatchEvent | string {
+  switch (raw['event']) {
+    case 'notification': {
+      const parsed = asNotification(raw['notification']);
+      return typeof parsed === 'string' ? parsed : { event: 'notification', notification: parsed };
+    }
+    case 'ready':
+      return { event: 'ready', projects: typeof raw['projects'] === 'number' ? raw['projects'] : 0 };
+    case 'heartbeat':
+      return { event: 'heartbeat' };
+    case 'end':
+      return { event: 'end', reason: typeof raw['reason'] === 'string' ? raw['reason'] : 'unknown' };
+    case 'error':
+      return {
+        event: 'error',
+        message: typeof raw['error'] === 'string' ? raw['error'] : 'the notification stream failed',
+        hint: typeof raw['hint'] === 'string' ? raw['hint'] : null,
+        exitCode: typeof raw['exit_code'] === 'number' ? raw['exit_code'] : null,
+      };
+    default:
+      return `an event the app does not know: ${JSON.stringify(raw['event'])}`;
+  }
+}
+
+/**
+ * Start `devteam notifications watch`, through the same allow-list `run()` enforces.
+ *
+ * Returns `null` when the argv is refused — which only a mis-edit of `COMMAND_SHAPES`
+ * could cause, and which the caller reports rather than retries.
+ */
+export function watchNotifications(
+  context: CliContext,
+  handlers: {
+    readonly onEvent: (event: WatchEvent) => void;
+    readonly onInvalid: (detail: string) => void;
+    readonly onEnd: (end: StreamEnd) => void;
+  },
+  spawnStream: typeof streamDevteam = streamDevteam,
+): StreamHandle | null {
+  const args = ['notifications', 'watch'];
+  if (argvProblem(args) !== null) return null;
+  return spawnStream({
+    binary: context.binary,
+    cwd: context.cwd,
+    ...(context.env !== undefined ? { env: context.env } : {}),
+    ...(context.declarationFile !== undefined ? { declarationFile: context.declarationFile } : {}),
+    args,
+    onEvent: (raw) => {
+      const event = asWatchEvent(raw);
+      if (typeof event === 'string') handlers.onInvalid(event);
+      else handlers.onEvent(event);
+    },
+    onEnd: handlers.onEnd,
+  });
 }

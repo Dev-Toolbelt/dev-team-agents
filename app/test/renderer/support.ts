@@ -13,7 +13,10 @@ import type {
   BindReport,
   BuildInfo,
   CliResolution,
+  AppNotification,
+  BackgroundSettings,
   DevteamBridge,
+  NotificationFeed,
   DoctorReport,
   EnvironmentReport,
   HandshakeView,
@@ -298,8 +301,40 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     updateProjectPreferences: vi.fn((_projectId: string, changes: readonly PreferenceChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
+    notificationFeed: vi.fn(() => Promise.resolve(notificationFeed())),
+    markNotificationsRead: vi.fn(() => Promise.resolve(notificationFeed())),
+    setNotificationsPaused: vi.fn((paused: boolean) => Promise.resolve(notificationFeed({ paused }))),
+    onNotificationFeed: vi.fn(() => () => undefined),
+    onOpenProject: vi.fn(() => () => undefined),
+    takePendingProject: vi.fn(() => Promise.resolve(null)),
+    backgroundSettings: vi.fn(() => Promise.resolve(backgroundSettings())),
+    setOpenAtLogin: vi.fn((enabled: boolean) => Promise.resolve(backgroundSettings({ openAtLogin: enabled }))),
     ...overrides,
   };
+}
+
+export function notificationFeed(overrides: Partial<NotificationFeed> = {}): NotificationFeed {
+  return { status: 'live', detail: null, items: [], unread: 0, paused: false, ...overrides };
+}
+
+export function appNotification(overrides: Partial<AppNotification> = {}): AppNotification {
+  return {
+    id: '1790000000-123-456',
+    level: 'warning',
+    code: 'context.warning',
+    message: 'Context window approaching its limit (≈57%).',
+    ts: Math.floor(Date.now() / 1000) - 30,
+    projectId: 'proj-1',
+    sessionId: 's1',
+    expiresAt: 0,
+    seen: false,
+    projectName: 'Storefront',
+    ...overrides,
+  };
+}
+
+export function backgroundSettings(overrides: Partial<BackgroundSettings> = {}): BackgroundSettings {
+  return { openAtLogin: false, loginItemStatus: 'disabled', detail: null, ...overrides };
 }
 
 /** Installs a fake bridge on `window.devteam`. `window.devteam` is `readonly` by its own

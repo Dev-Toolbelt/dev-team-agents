@@ -11,13 +11,18 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, app, nativeImage, session } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
-import { GATED_COMMANDS } from '../cli/operations.js';
+import { GATED_COMMANDS, ackNotification, watchNotifications } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { WINDOW_WEB_PREFERENCES, hardenContents, hardenSession } from './security.js';
 import { CODE_SIGNED } from './build-info.js';
+import { NotificationCenter, type NativeNotice } from './notifications.js';
+import { registerNotificationIpc } from './notificationIpc.js';
+import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
+import { readSettings, writeOpenAtLogin } from './settings.js';
+import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 /**
  * Set by `npm run dev:app` to the Vite dev server's origin. Absent in a packaged build,
@@ -76,6 +81,155 @@ function installMenu(): void {
   );
 }
 
+// ── background mode (phase 2) ─────────────────────────────────────────────────
+
+/** Set once a real quit starts; until then, closing the window only hides it. */
+let quitting = false;
+let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let center: NotificationCenter | null = null;
+/** The window is created hidden on a login launch: the user did not open the app. */
+let startHidden = false;
+/** A project a notification asked to show, delivered once the renderer can hear it. */
+let pendingProject: ProjectId | null = null;
+/**
+ * Whether the renderer has subscribed to `openProject`. `did-finish-load` can fire before
+ * React's effect subscribes, and a push sent then is lost — so until the renderer says it
+ * listens (by taking the pending project), the project waits here instead of being sent.
+ */
+let rendererListening = false;
+/**
+ * Live notifications. Electron drops a notification's click handler when the object is
+ * garbage-collected, so a click on a banner still on screen would do nothing; each is
+ * held until it is closed.
+ */
+const liveNotices = new Set<Notification>();
+
+/** The tray icon: shipped via `extraResources` when packaged, read from build/ in development. */
+function trayIconPath(): string | null {
+  const file = app.isPackaged
+    ? join(process.resourcesPath, 'tray', 'tray.png')
+    : join(__dirname, '..', '..', '..', 'build', 'tray', 'tray.png');
+  return existsSync(file) ? file : null;
+}
+
+function showWindow(projectId?: ProjectId): void {
+  if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = createWindow();
+  if (process.platform === 'darwin') void app.dock?.show();
+  startHidden = false;
+  mainWindow.show();
+  mainWindow.focus();
+  if (projectId !== undefined) {
+    pendingProject = projectId;
+    deliverPendingProject();
+  }
+}
+
+function deliverPendingProject(): void {
+  if (pendingProject === null || mainWindow === null || !rendererListening) return;
+  mainWindow.webContents.send(CHANNELS.openProject, pendingProject);
+  pendingProject = null;
+}
+
+/** The renderer's half of the handshake: it listens now, and takes what was waiting. */
+function takePendingProject(): ProjectId | null {
+  rendererListening = true;
+  const projectId = pendingProject;
+  pendingProject = null;
+  return projectId;
+}
+
+function quitForReal(): void {
+  quitting = true;
+  app.quit();
+}
+
+function refreshTray(feed: NotificationFeed): void {
+  if (tray === null) return;
+  tray.setToolTip(trayTooltip(DISPLAY_NAME, feed.unread, feed.paused));
+  if (process.platform === 'darwin') tray.setTitle(trayTitle(feed.unread));
+  const recent = feed.items.slice(0, 5);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: `Open ${DISPLAY_NAME}`, click: () => showWindow() },
+      { type: 'separator' },
+      {
+        label: 'Recent notifications',
+        enabled: recent.length > 0,
+        submenu:
+          recent.length > 0
+            ? recent.map((item) => ({
+                label: `${item.projectName}: ${item.message}`.slice(0, 80),
+                click: () => showWindow(item.projectId),
+              }))
+            : [{ label: 'None yet', enabled: false }],
+      },
+      {
+        label: 'Pause notifications',
+        type: 'checkbox',
+        checked: feed.paused,
+        click: (menuItem) => center?.setPaused(menuItem.checked),
+      },
+      { type: 'separator' },
+      { label: `Quit ${DISPLAY_NAME}`, click: quitForReal },
+    ]),
+  );
+}
+
+function createTray(): void {
+  const path = trayIconPath();
+  // No icon means no tray rather than an invisible one: an empty tray image is a click
+  // target the user cannot see. Then macOS still hides on close (the Dock brings it
+  // back), and elsewhere closing the window quits — see `shouldHideOnClose`.
+  if (path === null) return;
+  tray = new Tray(nativeImage.createFromPath(path));
+  tray.on('click', () => {
+    // macOS opens the menu on click by convention; Windows shows the app.
+    if (process.platform !== 'darwin') showWindow();
+  });
+  refreshTray(center?.snapshot() ?? { status: 'starting', detail: null, items: [], unread: 0, paused: false });
+}
+
+function showNative(notice: NativeNotice): void {
+  const notification = new Notification({
+    title: notice.title,
+    body: notice.body,
+    // Windows/Linux: a critical notice stays until dismissed. macOS decides persistence
+    // per app in System Settings (Banners vs Alerts); there is no per-notification switch.
+    ...(notice.persistent ? { timeoutType: 'never' as const } : {}),
+  });
+  liveNotices.add(notification);
+  notification.on('click', () => {
+    liveNotices.delete(notification);
+    notice.onClick();
+  });
+  notification.on('close', () => liveNotices.delete(notification));
+  notification.show();
+}
+
+async function currentBackgroundSettings(): Promise<BackgroundSettings> {
+  const chosen = (await readSettings(app.getPath('userData'))).openAtLogin;
+  const os = app.getLoginItemSettings(loginItemOptions(process.platform));
+  return loginItemState(chosen, os, process.platform, app.isPackaged);
+}
+
+async function setOpenAtLogin(enabled: boolean): Promise<BackgroundSettings> {
+  await writeOpenAtLogin(app.getPath('userData'), enabled);
+  if (app.isPackaged) {
+    // The same options `currentBackgroundSettings` reads with — see `loginItemOptions`.
+    app.setLoginItemSettings({ openAtLogin: enabled, ...loginItemOptions(process.platform) });
+  }
+  return currentBackgroundSettings();
+}
+
+function launchedAtLogin(): boolean {
+  if (process.argv.includes('--hidden')) return true;
+  if (process.platform === 'darwin' && app.isPackaged) {
+    return app.getLoginItemSettings().wasOpenedAtLogin === true;
+  }
+  return false;
+}
+
 function createWindow(): BrowserWindow {
   const icon = developmentIcon();
   const window = new BrowserWindow({
@@ -97,7 +251,32 @@ function createWindow(): BrowserWindow {
   });
 
   hardenContents(window.webContents, DEV_SERVER);
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    if (!startHidden) window.show();
+  });
+  // A (re)load drops the renderer's listeners; it says it listens again once React has
+  // subscribed, by taking the pending project.
+  window.webContents.on('did-start-loading', () => {
+    rendererListening = false;
+  });
+  window.webContents.on('did-finish-load', () => {
+    if (center !== null) window.webContents.send(CHANNELS.notificationFeedChanged, center.snapshot());
+  });
+  // Windows logoff and shutdown do not always emit `before-quit`; without this the
+  // `preventDefault` below would hold the session open for a hidden window.
+  window.on('session-end', () => {
+    quitting = true;
+  });
+  // Closing hides: the notification stream lives in this process and must outlive the
+  // window. Only a real quit (tray Quit, ⌘Q, logout) lets the window close — or having
+  // no tray to come back through (see `shouldHideOnClose`).
+  window.on('close', (event) => {
+    if (!shouldHideOnClose(quitting, tray !== null, process.platform)) return;
+    event.preventDefault();
+    window.hide();
+    // No window, no Dock icon: the menu bar is where the app lives while hidden.
+    if (process.platform === 'darwin' && tray !== null) app.dock?.hide();
+  });
 
   if (DEV_SERVER !== null) void window.loadURL(DEV_SERVER);
   else void window.loadURL(pathToFileURL(RENDERER_INDEX).toString());
@@ -134,7 +313,26 @@ app.setPath('userData', join(app.getPath('appData'), 'dev-team-agents-app'));
 // directory where it has always been; the name below is display only.
 app.setName(DISPLAY_NAME);
 
-void app.whenReady().then(() => {
+// One instance: a second would run a second `watch` and show every notification twice.
+// Launching again while it runs — from the Dock, the Start menu, a shortcut — shows the
+// running one instead.
+//
+// `app.quit()` is asynchronous: the losing instance would otherwise still reach
+// `whenReady` below, create a window and a tray, and start a second `watch` — so the
+// ready handler is only ever registered by the instance that holds the lock.
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) {
+  app.quit();
+} else {
+  app.on('second-instance', () => showWindow());
+  app.on('before-quit', () => {
+    quitting = true;
+    center?.stop();
+  });
+  void app.whenReady().then(onReady);
+}
+
+function onReady(): void {
   if (!CODE_SIGNED && app.isPackaged) {
     // Visible in the console of a packaged build as well as in the UI banner. A packaged
     // app that says nothing about being unsigned is the thing this repository must not
@@ -173,23 +371,71 @@ void app.whenReady().then(() => {
   };
   setAbout(null);
   installMenu();
-  registerIpc({
+  const ipc = registerIpc({
     userDataDir: app.getPath('userData'),
     appVersion: facts.appVersion,
     electronVersion: facts.electronVersion,
     packaged: facts.packaged,
-    onResolved: setAbout,
+    onResolved: (resolution) => {
+      setAbout(resolution);
+      // A different CLI may mean a different store: start the stream again against it.
+      void center?.restart();
+    },
   });
 
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  center = new NotificationCenter({
+    startStream: async (handlers) => {
+      const ctx = await ipc.context();
+      return ctx === null ? null : watchNotifications(ctx, handlers);
+    },
+    ack: async (id) => {
+      // `notifications ack` is a write: without a declaration it would run ungated, so it
+      // does not run. The record then stays unseen and is shown again next launch —
+      // the lesser failure than an ungated write.
+      const ctx = await ipc.gatedContext('notifications ack');
+      if (ctx === null) throw new Error('withheld: no schema declaration');
+      const result = await ackNotification(ctx, id);
+      if (!result.ok) throw new Error(result.message);
+    },
+    projectName: (projectId) => ipc.projectName(projectId),
+    nativeSupported: () => Notification.isSupported(),
+    showNative,
+    openProject: (projectId) => showWindow(projectId),
+    onFeedChange: (feed) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(CHANNELS.notificationFeedChanged, feed);
+      }
+      refreshTray(feed);
+    },
+    log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
   });
-});
 
+  registerNotificationIpc({
+    feed: () => center!.snapshot(),
+    markRead: () => center!.markRead(),
+    setPaused: (paused) => center!.setPaused(paused),
+    backgroundSettings: currentBackgroundSettings,
+    setOpenAtLogin,
+    takePendingProject,
+  });
+
+  // Tray first: whether a login launch may start hidden, and whether closing may hide,
+  // both depend on there being one to come back through.
+  createTray();
+  startHidden = launchedAtLogin() && (tray !== null || process.platform === 'darwin');
+  mainWindow = createWindow();
+  if (startHidden && process.platform === 'darwin' && tray !== null) app.dock?.hide();
+  void center.start();
+
+  app.on('activate', () => showWindow());
+}
+
+// Closing the last window normally hides it (see `createWindow`) and the process stays
+// alive for the notification stream, so Electron's default — quit on the last window
+// closing, outside macOS — must not apply. The exception is a window that really closed
+// because there is no tray to reopen it from: then nothing could reach the app any more.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (tray === null && process.platform !== 'darwin') quitForReal();
 });
 
 // Belt and braces for the "no remote content" rule: if any code path ever tries to

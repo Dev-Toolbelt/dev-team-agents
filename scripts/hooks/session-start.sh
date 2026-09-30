@@ -142,6 +142,17 @@ state_set session_id "$(date +%s)" "$STATE_FILE"
 _session_head_sha="$(git rev-parse HEAD 2>/dev/null || true)"
 [ -n "$_session_head_sha" ] && state_set session_head "$_session_head_sha" "$STATE_FILE"
 
+# ── Notification queue ────────────────────────────────────────────
+# Every user-facing notice below goes to the queue the desktop app shows
+# (scripts/hooks/lib/notify.sh). Initialised after session_id is written, so each
+# record names this session. The `[DEVTEAM:*]` markers further down are NOT
+# notifications — they are instructions to the agent and stay on stdout.
+# shellcheck source=scripts/hooks/lib/notify.sh
+. "${SCRIPT_DIR}/lib/notify.sh"
+devteam_notify_init "$MAIN_REPO_ROOT" "$STATE_DIR" "$SUPPRESS"
+TODAY_KEY="$(date +%Y-%m-%d)"
+DAY_TTL=86400
+
 # ── Update check (moved from pre-tool-use/01-check-updates.sh) ────
 # Runs once per session instead of on every tool call. TTL-gated internally —
 # most sessions land inside the interval window and this is a no-op fork-free
@@ -187,18 +198,6 @@ if [ -f "$UC_LIB_FILE" ]; then
         fi
     fi
 fi
-
-# ── Helper: check if a type is suppressed ─────────────────────────
-_is_suppressed() {
-    local type="$1"
-    case "$SUPPRESS" in
-        true)  return 0 ;;
-        false) return 1 ;;
-        *"$type"*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 
 # ── Check: preferences.json ───────────────────────────────────────
 if [ ! -f "$PREFS_FILE" ]; then
@@ -256,9 +255,6 @@ _days_since_date_str() {
     echo $(( ( $(date +%s) - ts ) / 86400 ))
 }
 
-WARN=0
-MESSAGES=()
-
 # ── Check: broken (materialized) dev-team-agents symlinks ─────────
 # On Windows without Developer Mode / core.symlinks=true, git/MSYS writes
 # the .claude/ links as plain text files. git-bash's `ls -la` still shows
@@ -292,15 +288,25 @@ if [ "$BROKEN_LINKS" -gt 0 ]; then
     echo "It auto-repairs when the OS allows, and otherwise prints the 3 remediation"
     echo "options to offer the user interactively. Restart Claude Code after a fix."
     echo ""
+    # The marker above tells the agent; this tells the user, who otherwise only
+    # notices that /devteam:* commands have vanished.
+    if [ -f "$PROJECT_ROOT/.dev-team-agents/project.json" ]; then _fix="devteam sync"; else _fix="bash .dev-team-agents/scripts/fix-symlinks.sh"; fi
+    devteam_notify "critical" "symlinks.broken" \
+        "${BROKEN_LINKS} dev-team-agents link(s) are plain files, so agents, commands and skills are not loaded. Run: ${_fix}" \
+        "$DAY_TTL" "symlinks.broken:${TODAY_KEY}"
 fi
+
+# Each check below raises its own notification, deduplicated per day: a stale
+# project.md is worth one notice a day, not one per session opened that day.
 
 # ── Check: project.md freshness ───────────────────────────────────
 PROJECT_MD="${DOCS_DIR}/project.md"
 if [ -f "$PROJECT_MD" ]; then
     DAYS_OLD=$(_days_since_modified "$PROJECT_MD")
     if [ "$DAYS_OLD" -gt "$STALE_DAYS" ]; then
-        WARN=1
-        MESSAGES+=("⚠️  docs/project.md is ${DAYS_OLD} days old — consider running /devteam:architect to refresh.")
+        devteam_notify "warning" "docs.project_stale" \
+            "docs/project.md is ${DAYS_OLD} days old — consider running /devteam:architect to refresh it." \
+            "$DAY_TTL" "docs.project_stale:${TODAY_KEY}"
     fi
 fi
 
@@ -313,8 +319,9 @@ if [ -f "$SESSION_SUMMARY" ]; then
     if [ -n "$LAST_DATE" ]; then
         DAYS_SINCE=$(_days_since_date_str "$LAST_DATE")
         if [ "$DAYS_SINCE" -gt "$STALE_DAYS" ]; then
-            WARN=1
-            MESSAGES+=("⚠️  session-summary.md last entry is ${DAYS_SINCE} days old — this project may be inactive or the summary needs updating.")
+            devteam_notify "warning" "docs.session_summary_stale" \
+                "The session summary's last entry is ${DAYS_SINCE} days old — this project may be inactive, or the summary needs updating." \
+                "$DAY_TTL" "docs.session_summary_stale:${TODAY_KEY}"
         fi
     fi
 fi
@@ -326,8 +333,9 @@ if [ -n "$LAST_HEALTH_CHECK" ]; then
     if [ -n "$HC_DATE" ]; then
         DAYS_SINCE_HC=$(_days_since_date_str "$HC_DATE")
         if [ "$DAYS_SINCE_HC" -gt "$STALE_DAYS" ]; then
-            WARN=1
-            MESSAGES+=("⚠️  Last /devteam:health-check was ${DAYS_SINCE_HC} days ago — run it to catch drift (broken symlinks, stale config, missing scripts).")
+            devteam_notify "warning" "health_check.stale" \
+                "The last /devteam:health-check was ${DAYS_SINCE_HC} days ago — run it to catch drift (broken links, stale config, missing scripts)." \
+                "$DAY_TTL" "health_check.stale:${TODAY_KEY}"
         fi
     fi
 else
@@ -336,8 +344,9 @@ else
     # session-summary.md already exists) — a brand-new install already gets
     # a setup flow and doesn't need a second, redundant prompt.
     if [ -f "$PROJECT_MD" ] || [ -f "$SESSION_SUMMARY" ]; then
-        WARN=1
-        MESSAGES+=("⚠️  No /devteam:health-check has been recorded for this project — run it once to verify the installation.")
+        devteam_notify "warning" "health_check.never" \
+            "No /devteam:health-check has been recorded for this project — run it once to verify the installation." \
+            "$DAY_TTL" "health_check.never:${TODAY_KEY}"
     fi
 fi
 
@@ -349,20 +358,9 @@ fi
 # Nothing is ever moved automatically — this only tells the user the command
 # exists.
 if devteam_memory_still_in_project "$MAIN_REPO_ROOT"; then
-    WARN=1
-    MESSAGES+=("⚠️  This project still keeps its memory in .dev-team-agents/user-data — run \`devteam upgrade\` to move it into the store and leave the project clean. Nothing moves until you do.")
-fi
-
-# ── Emit stale-docs notification ──────────────────────────────────
-if [ "$WARN" -eq 1 ] && ! _is_suppressed "warning"; then
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " ⚠️  DEV TEAM AGENTS  ⚠️"
-    for MSG in "${MESSAGES[@]}"; do
-        echo " $MSG"
-    done
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    devteam_notify "warning" "layout.upgrade_available" \
+        "This project still keeps its memory in .dev-team-agents/user-data — run \`devteam upgrade\` to move it into the store. Nothing moves until you do." \
+        "$DAY_TTL" "layout.upgrade_available:${TODAY_KEY}"
 fi
 
 exit 0

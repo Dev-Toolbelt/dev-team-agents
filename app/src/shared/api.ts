@@ -628,6 +628,94 @@ export interface DevteamBridge {
     projectId: ProjectId,
     changes: readonly PreferenceChange[],
   ) => Promise<OperationResult<PreferenceUpdateReport>>;
+
+  // Notifications. The main process owns the stream (`devteam notifications watch`) and
+  // shows each one natively, so they arrive with the window closed; the renderer only
+  // reads the feed for the bell. Spawns nothing from the renderer's side.
+  readonly notificationFeed: () => Promise<NotificationFeed>;
+  /** The bell was opened: the unread count returns to zero. App-local; spawns nothing. */
+  readonly markNotificationsRead: () => Promise<NotificationFeed>;
+  /** Stop showing native notifications for this app session; the bell still fills. */
+  readonly setNotificationsPaused: (paused: boolean) => Promise<NotificationFeed>;
+  /** Called with the feed whenever it changes. Returns the unsubscribe. */
+  readonly onNotificationFeed: (listener: (feed: NotificationFeed) => void) => () => void;
+  /** A notification (or the tray) asked to show a project. Returns the unsubscribe. */
+  readonly onOpenProject: (listener: (projectId: ProjectId) => void) => () => void;
+  /**
+   * Call once `onOpenProject` is subscribed: returns the project a click asked for before
+   * the renderer was listening (a fresh window loads after the click), and from then on
+   * the main process pushes instead of holding.
+   */
+  readonly takePendingProject: () => Promise<ProjectId | null>;
+
+  // Running in the background (phase 2). App-level, not a project preference.
+  readonly backgroundSettings: () => Promise<BackgroundSettings>;
+  /** Opt in or out of starting at login. Reports what the OS actually recorded. */
+  readonly setOpenAtLogin: (enabled: boolean) => Promise<BackgroundSettings>;
+}
+
+export type NotificationLevel = 'info' | 'warning' | 'critical';
+
+/** A record from `devteam notifications list|watch`, camel-cased at the boundary. */
+export interface QueuedNotification {
+  readonly id: string;
+  readonly level: NotificationLevel;
+  /** Stable identifier the hook chose, e.g. `context.critical`. */
+  readonly code: string;
+  /** Already in the user's language — the hook rendered it. */
+  readonly message: string;
+  /** Epoch seconds. */
+  readonly ts: number;
+  readonly projectId: ProjectId;
+  readonly sessionId: string;
+  /** Epoch seconds; 0 = never expires. */
+  readonly expiresAt: number;
+  readonly seen: boolean;
+}
+
+export interface AppNotification extends QueuedNotification {
+  /** The app's name for the project, or its directory's basename — never the UUID. */
+  readonly projectName: string;
+}
+
+export type NotificationStreamStatus =
+  /** No CLI resolved yet, or the stream is being started. */
+  | 'starting'
+  /** `ready` arrived; every new notification is shown as it lands. */
+  | 'live'
+  /** The stream ended unexpectedly; it restarts after a backoff. */
+  | 'retrying'
+  /** It cannot run at all — no CLI, or the store needs a migration first. */
+  | 'unavailable';
+
+export interface NotificationFeed {
+  readonly status: NotificationStreamStatus;
+  /** Why the status is not `live`, in plain language; null when it is. */
+  readonly detail: string | null;
+  /** Newest first, capped. Everything received this app session, shown or not. */
+  readonly items: readonly AppNotification[];
+  /** Received since the bell was last opened. */
+  readonly unread: number;
+  readonly paused: boolean;
+}
+
+/** What `app.getLoginItemSettings()` reports, reduced to what the UI must say. */
+export type LoginItemStatus =
+  | 'enabled'
+  | 'disabled'
+  /** macOS 13+: registered, but the user must approve it in System Settings. */
+  | 'requires-approval'
+  /** macOS 13+: the OS did not record it — typical of an unsigned build. */
+  | 'not-registered'
+  /** Development build: `electron .` has no bundle to register. */
+  | 'unsupported';
+
+export interface BackgroundSettings {
+  /** What the user chose. */
+  readonly openAtLogin: boolean;
+  /** What the OS says, which is what the UI shows — never the choice alone. */
+  readonly loginItemStatus: LoginItemStatus;
+  readonly detail: string | null;
 }
 
 /** The channel names, shared so main and preload cannot disagree about a string. */
@@ -652,4 +740,14 @@ export const CHANNELS = {
   applyUpgrade: 'devteam:apply-upgrade',
   projectPreferences: 'devteam:project-preferences',
   updateProjectPreferences: 'devteam:update-project-preferences',
+  notificationFeed: 'devteam:notification-feed',
+  markNotificationsRead: 'devteam:mark-notifications-read',
+  setNotificationsPaused: 'devteam:set-notifications-paused',
+  /** Main → renderer push. */
+  notificationFeedChanged: 'devteam:notification-feed-changed',
+  /** Main → renderer push. */
+  openProject: 'devteam:open-project',
+  takePendingProject: 'devteam:take-pending-project',
+  backgroundSettings: 'devteam:background-settings',
+  setOpenAtLogin: 'devteam:set-open-at-login',
 } as const;

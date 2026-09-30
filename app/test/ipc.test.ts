@@ -12,7 +12,7 @@
  * knows one project, `proj-1` at `/repo/project-1`.
  */
 
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -533,7 +533,7 @@ describe('buildInfo reports write actions honestly', () => {
     // — `sync` covers both the per-row sync and Sync All, because the framework
     // classifies one `("sync",)` leaf in `compat.MUTATING`, not two.
     expect([...info.mutatingCommandsRun].sort()).toEqual(
-      ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
+      ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
     );
   });
 });
@@ -560,7 +560,7 @@ describe('environment withholds every gated command when the declaration could n
         return;
       }
       expect([...report.withheld.map((w) => w.command)].sort()).toEqual(
-        ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
+        ['bind', 'doctor', 'notifications ack', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
       );
       for (const entry of report.withheld) {
         expect(entry.reason).toContain('schema declaration');
@@ -577,5 +577,26 @@ describe('environment withholds every gated command when the declaration could n
     } finally {
       await chmod(dir, 0o700);
     }
+  });
+});
+
+describe('projectName names a burst of notifications with one `devteam list`', () => {
+  it.skipIf(skipOnWindows)('shares one listing across concurrent calls', async () => {
+    const { registerIpc } = await loadIpc();
+    // A wrapper that records each `list` before handing over to the fixture.
+    const log = join(dir, 'calls.log');
+    const wrapper = join(dir, 'devteam');
+    await writeFile(
+      wrapper,
+      `#!/bin/sh\ncase " $* " in *" list "*) echo list >> '${log}' ;; esac\nexec '${FAKE_BINARY}' "$@"\n`,
+      'utf8',
+    );
+    await chmod(wrapper, 0o755);
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: wrapper }), 'utf8');
+    const ipc = registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
+
+    const names = await Promise.all(Array.from({ length: 5 }, () => ipc.projectName('proj-1')));
+    expect(names).toEqual(Array.from({ length: 5 }, () => 'project-1'));
+    expect((await readFile(log, 'utf8')).trim().split('\n')).toEqual(['list']);
   });
 });

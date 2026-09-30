@@ -40,6 +40,12 @@ export interface AppSettings {
    * it degrades to "no names" instead.
    */
   readonly projectNames: Readonly<Record<string, string>>;
+  /**
+   * The user's choice to start this app at login (phase 2). Only the choice: whether the
+   * OS actually registered it is read live from `app.getLoginItemSettings()`, because on an
+   * unsigned macOS build the two can differ and the UI must say so.
+   */
+  readonly openAtLogin: boolean;
 }
 
 /** `NO_NAMES` when `value` is not a plain object; otherwise every string-valued,
@@ -65,28 +71,31 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
       path,
       problem: code === 'ENOENT' ? undefined : `could not be read: ${String(error)}`,
       projectNames: NO_NAMES,
+      openAtLogin: false,
     };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES };
+    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false };
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES };
+    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false };
   }
   const record = parsed as Record<string, unknown>;
   // Read independently of the `cliPath` checks below, so a bad `cliPath` never costs the
   // caller its (possibly perfectly valid) project names.
   const projectNames = readProjectNames(record['projectNames']);
+  // Anything but a literal `true` is "not chosen": starting at login is opt-in.
+  const openAtLogin = record['openAtLogin'] === true;
 
   const value = record['cliPath'];
-  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames };
+  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin };
   if (typeof value !== 'string' || value.trim() === '') {
-    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames };
+    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin };
   }
-  return { cliPath: value.trim(), path, problem: undefined, projectNames };
+  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin };
 }
 
 /**
@@ -109,14 +118,34 @@ export async function writeProjectName(userDataDir: string, projectId: string, n
   const trimmed = name.trim();
   if (trimmed === '') return;
 
+  const current = await readSettings(userDataDir);
+  await writeSettings(userDataDir, { projectNames: { ...current.projectNames, [projectId]: trimmed } });
+}
+
+/** Record the user's start-at-login choice. The OS registration is `index.ts`'s job. */
+export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): Promise<void> {
+  await writeSettings(userDataDir, { openAtLogin: enabled });
+}
+
+/**
+ * The one writer, carrying every field forward.
+ *
+ * It used to be inlined in `writeProjectName`, rebuilding the file from `cliPath` and
+ * `projectNames` alone — so the first field added beside them would have been erased by
+ * the next bind. Re-reads rather than trusting an in-memory copy, which is what keeps a
+ * concurrently hand-edited `cliPath` from being clobbered.
+ */
+async function writeSettings(
+  userDataDir: string,
+  patch: Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
+): Promise<void> {
   const path = join(userDataDir, SETTINGS_FILE_NAME);
-  // Re-reads rather than trusting an in-memory copy the caller might hold: this is the one
-  // write this file gets, and reading fresh is what keeps a concurrently hand-edited
-  // `cliPath` from being clobbered by a bind that happened to race it.
   const current = await readSettings(userDataDir);
   const payload: Record<string, unknown> = {};
   if (current.cliPath !== undefined) payload['cliPath'] = current.cliPath;
-  payload['projectNames'] = { ...current.projectNames, [projectId]: trimmed };
+  payload['projectNames'] = patch.projectNames ?? current.projectNames;
+  const openAtLogin = patch.openAtLogin ?? current.openAtLogin;
+  if (openAtLogin) payload['openAtLogin'] = true;
 
   const tempPath = join(userDataDir, `.${SETTINGS_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
   await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {

@@ -61,8 +61,10 @@ data/machines/<machine-id>/projects/<id>/…         MACHINE-LOCAL — bind-mani
 built.** `paths.is_machine_local_record(name)` is the single answer to which side a per-project
 record belongs on — dot-prefixed names are machine-local as a class, and so are `state.json`,
 `bind-manifest.json`, `telemetry-queue.json`, `audit.log` (this machine's own reads, and a growing
-record that two machines appending to would need merge semantics for) and the v2
-`credentials.local.json` (values, not references). Never re-derive that rule at a call site.
+record that two machines appending to would need merge semantics for), the v2
+`credentials.local.json` (values, not references), and the notification queue
+`notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
+machine's app has shown). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -164,6 +166,9 @@ mode.
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
 | `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
+| `devteam notifications list [--project <id>] [--unseen]` | Live notifications across bound projects: what the hooks queued (`scripts/hooks/lib/notify.sh`), minus the expired, each with `seen` (ADR-0017) |
+| `devteam notifications ack <id>… \| --all [--project <id>]` | Mark notifications seen. Writes `notifications-seen.json` under a lock; **never rewrites the queue** a hook may be appending to |
+| `devteam notifications watch [--interval <s>]` | Stream the unseen backlog, then each new record, until stdin closes or SIGTERM. `--json` is JSON Lines — see § The `--json` contract |
 | `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add` |
 
 ## The `--json` contract
@@ -188,6 +193,17 @@ the docstring names the same declared-client cases on 2, 3 and 4, and the reason
 the function that raises it (`compat.refusal` for 4, `compat.migration_required` for 3). If you change
 one, change the other in the same commit — and see ADR-0014 § 2, which makes *changing which exit code
 an existing outcome uses* a `json_contract` obligation.
+
+**Exception: `devteam notifications watch --json` is JSON Lines.** It runs until its stdin closes
+(or SIGTERM) and writes one compact JSON document per line, each carrying `ok`: every unseen
+`notification` already queued, then `ready`, then each new `notification`, a `heartbeat` every
+30 s, and `end` (with `reason`: `stdin-closed`, `sigterm`, `interrupted`) last. No final document
+follows. **A failure is a line too:** `{"event": "error", "ok": false, "error", "exit_code", …}` —
+the usual error keys, compact, plus `event` — and the process exits with that code. That holds for a
+failure before parsing ends (a bad `--interval`) as much as after, because an indented document there
+reads as a protocol error and hides the exit code that explains it. `--interval` must be at least
+0.01 s. It is excluded from the bulk contract sweep and pinned by `tests/test_notifications.py`
+against a real stream instead.
 
 **Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.
 

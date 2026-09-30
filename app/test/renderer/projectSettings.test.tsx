@@ -48,6 +48,28 @@ function prefsWith(values: Record<string, unknown>, origin: Record<string, strin
   );
 }
 
+describe('ProjectSettings — a notification asking for another project', () => {
+  it('never replaces an open settings screen, says so, and opens the project on leaving', async () => {
+    const projects = [project(), project({ project_id: 'proj-2', path: '/repo/project-2' })];
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))) }));
+    const user = userEvent.setup();
+    const env = environment();
+    const view = render(<Projects environment={env} openRequest={null} />);
+
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await screen.findByRole('heading', { name: /project-1 · Settings/ });
+
+    view.rerender(<Projects environment={env} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    expect(await screen.findByText(/A notification asked to open project-2/)).toBeInTheDocument();
+    // Still on project-1: its unsaved-changes guard was not bypassed.
+    expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    expect(await screen.findByRole('heading', { name: /project-2 · Settings/ })).toBeInTheDocument();
+    expect(screen.queryByText(/A notification asked to open/)).not.toBeInTheDocument();
+  });
+});
+
 describe('ProjectSettings — navigation', () => {
   it('opens from the project name in the list, and returns with Projects', async () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));

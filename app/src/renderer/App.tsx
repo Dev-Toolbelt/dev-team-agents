@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
+import { NotificationBell } from './NotificationBell.js';
 import { Loading } from './Problem.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
@@ -41,6 +42,23 @@ export function App() {
   const [handshake, setHandshake] = useState<OperationResult<HandshakeView> | null>(null);
   const [busy, setBusy] = useState(true);
   const [tab, setTab] = useState('projects');
+  const [openRequest, setOpenRequest] = useState<{ projectId: string; nonce: number } | null>(null);
+
+  function openProject(projectId: string) {
+    setTab('projects');
+    setOpenRequest((previous) => ({ projectId, nonce: (previous?.nonce ?? 0) + 1 }));
+  }
+
+  // A native notification (or the tray) was clicked; the main process already showed the
+  // window. Subscribe first, then take what a click asked for before this window could
+  // hear it — the handshake that keeps a click on a fresh window from being lost.
+  useEffect(() => {
+    const unsubscribe = window.devteam.onOpenProject(openProject);
+    void window.devteam.takePendingProject().then((projectId) => {
+      if (projectId !== null) openProject(projectId);
+    });
+    return unsubscribe;
+  }, []);
 
   async function load() {
     setBusy(true);
@@ -93,6 +111,9 @@ export function App() {
           </h1>
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
           <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
+          <div className="ml-auto self-center">
+            <NotificationBell onOpenProject={openProject} />
+          </div>
         </div>
       </header>
 
@@ -129,7 +150,7 @@ export function App() {
               {/* Kept mounted while another tab is shown: the project settings screen lives
                   inside this tab, and unmounting it would silently drop unsaved edits. */}
               <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
-                <Projects environment={environment} active={tab === 'projects'} />
+                <Projects environment={environment} active={tab === 'projects'} openRequest={openRequest} />
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
                 <Catalog />

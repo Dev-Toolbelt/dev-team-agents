@@ -1013,7 +1013,10 @@ class PreSplitStoreTest(ClientGateTestCase):
     #: document to compare. `NoDeclarationIsUnchangedTest` already asserts end to end that
     #: a behind client still gets the value and still gets the documented `--json`
     #: refusal; nothing about the layout changes either.
-    READ_SWEEP_EXCLUDED = {("cred", "get")}
+    # `notifications watch` streams until its stdin closes, so it cannot be run for "one
+    # answer" twice and compared; its pre-split behaviour is the refusal
+    # `NEEDS_MACHINE_LAYOUT` gives it, which the migration-error tests already cover.
+    READ_SWEEP_EXCLUDED = {("cred", "get"), ("notifications", "watch")}
 
     def setUp(self):
         super().setUp()
@@ -1182,9 +1185,11 @@ class PreSplitStoreTest(ClientGateTestCase):
                     "beats a wrong answer.\nstderr: {}".format(label, err[:300]),
                 )
 
+        # A command the sweep cannot run cannot be measured; its entry stands on the
+        # reason written beside it in `compat.py`.
         self.assertEqual(
             refused,
-            set(compat.NEEDS_MACHINE_LAYOUT),
+            set(compat.NEEDS_MACHINE_LAYOUT) - self.READ_SWEEP_EXCLUDED,
             "the commands that actually cannot answer on a pre-split store are not the "
             "ones compat.NEEDS_MACHINE_LAYOUT names. Add or remove the entry, with the "
             "reason beside it.",
