@@ -1,12 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Empty, Loading, Problem } from '../Problem.js';
 import { useOperation, type Load } from '../useOperation.js';
+import { Listing } from './CatalogListing.js';
 import type { CatalogKind, CatalogSummary } from '../../shared/api.js';
 
 const KINDS: readonly CatalogKind[] = ['agents', 'skills', 'commands'];
@@ -15,7 +12,7 @@ const KINDS: readonly CatalogKind[] = ['agents', 'skills', 'commands'];
  * `devteam catalog` and its three listings, plus `catalog show` for one entry.
  *
  * The kind is chosen from a fixed set of three; the renderer never composes a command.
- * The filter is client-side over the listing already fetched — filtering by re-invoking
+ * Filtering, sorting and grouping are client-side (see `CatalogListing.tsx`) — re-invoking
  * the CLI per keystroke would be a process spawn per character.
  */
 export function Catalog() {
@@ -104,87 +101,6 @@ function CatalogSummaryLine({ state }: { state: Load<CatalogSummary> }) {
           marked <span className="font-semibold">malformed</span>, with the error from the CLI.
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function Listing({ kind }: { kind: CatalogKind }) {
-  const [filter, setFilter] = useState('');
-  const { state } = useOperation(() => window.devteam.catalogListing(kind), [kind]);
-
-  const entries = useMemo(() => {
-    if (state.phase !== 'done' || !state.result.ok) return [];
-    const needle = filter.trim().toLowerCase();
-    if (needle === '') return state.result.data.entries;
-    return state.result.data.entries.filter(
-      (entry) =>
-        entry.name.toLowerCase().includes(needle) || (entry.description ?? '').toLowerCase().includes(needle),
-    );
-  }, [state, filter]);
-
-  if (state.phase === 'loading') return <Loading what={`devteam catalog ${kind}`} />;
-  if (!state.result.ok) return <Problem problem={state.result} />;
-
-  const showsTier = kind === 'agents';
-
-  return (
-    <div className="space-y-3">
-      <Input
-        type="search"
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-        placeholder={`Filter ${kind}…`}
-        aria-label={`Filter ${kind}`}
-        className="max-w-sm"
-      />
-      {entries.length === 0 ? (
-        <Empty>
-          {state.result.data.entries.length === 0 ? `No ${kind} in the bound version.` : `No ${kind} match "${filter}".`}
-        </Empty>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col">Name</TableHead>
-              {showsTier ? <TableHead scope="col">Tier</TableHead> : null}
-              {showsTier ? <TableHead scope="col">Model</TableHead> : null}
-              {kind === 'skills' ? <TableHead scope="col">Category</TableHead> : null}
-              <TableHead scope="col">Description</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => (
-              <TableRow key={entry.name}>
-                <TableCell>
-                  {/* Plain text for now — the markdown view behind a click was removed until it
-                      renders the body properly. Kept in the brand colour it had as a link. */}
-                  <span className="font-mono text-xs text-primary">{entry.name}</span>
-                  {entry.malformed === true ? (
-                    <Badge variant="destructive" className="ml-2">
-                      malformed
-                    </Badge>
-                  ) : null}
-                </TableCell>
-                {showsTier ? (
-                  <TableCell>{entry.tier != null ? <Badge variant="outline">{entry.tier}</Badge> : '—'}</TableCell>
-                ) : null}
-                {showsTier ? <TableCell className="font-mono text-xs">{entry.model ?? '—'}</TableCell> : null}
-                {kind === 'skills' ? <TableCell>{entry.category ?? '—'}</TableCell> : null}
-                <TableCell className="text-muted-foreground">
-                  {/* A malformed entry has no description — its `error` is the only thing
-                      the payload can say about it, and the summary's count is unactionable
-                      without it. The name shown is a fallback from the path. */}
-                  {entry.malformed === true ? (
-                    <span className="text-destructive">{entry.error ?? 'could not be read; the CLI gave no reason'}</span>
-                  ) : (
-                    (entry.description ?? '—')
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
     </div>
   );
 }
