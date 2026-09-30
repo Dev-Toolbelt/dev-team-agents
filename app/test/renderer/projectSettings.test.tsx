@@ -26,10 +26,10 @@ function renderSettings(overrides: Parameters<typeof fakeBridge>[0] = {}, env = 
   installBridge(bridge);
   const onBack = vi.fn();
   const view = render(
-    <ProjectSettings project={project()} name="project-1" environment={env} active={active} onBack={onBack} />,
+    <ProjectSettings project={project()} name="project-1" environment={env} active={active} onBack={onBack} onChanged={vi.fn()} onUnbound={vi.fn()} />,
   );
   const setActive = (next: boolean) =>
-    view.rerender(<ProjectSettings project={project()} name="project-1" environment={env} active={next} onBack={onBack} />);
+    view.rerender(<ProjectSettings project={project()} name="project-1" environment={env} active={next} onBack={onBack} onChanged={vi.fn()} onUnbound={vi.fn()} />);
   return { bridge, onBack, setActive };
 }
 

@@ -76,6 +76,47 @@ class JsonContractTest(StoreTestCase):
         json.loads(out)  # still a single valid document
         self.assertEqual(code, errors.EXIT_FINDINGS)
 
+    def test_list_carries_each_projects_resolved_preferences(self):
+        self.run_cli("store", "install", "--from", str(self.source), "--version", "3.0.0")
+        project_root = self.new_project("prefs-list")
+        self.assert_json(["bind", str(project_root), "--json"])
+
+        record = self.assert_json(["list", "--json"])["projects"][0]
+        # `auto_update` is a consent key: absent an explicit opt-in it resolves to false.
+        self.assertEqual(record["preferences"]["auto_update"], False)
+        self.assertIsInstance(record["preferences"]["worktree_active"], bool)
+        self.assertIn(type(record["preferences"]["suppress_notifications"]), (bool, list))
+
+        self.assert_json(
+            ["prefs", "set", "auto_update", "true", "--scope", "project", "--path", str(project_root), "--json"]
+        )
+        # The CLI cannot write the list form of `suppress_notifications` (the v2 schema
+        # allowed it, `prefs set` coerces to the default's boolean), so a hand-edited layer is
+        # written directly.
+        from devteam import jsonio, prefs, registry
+
+        layer_path = prefs.project_file(next(iter(registry.entries())))
+        layer = jsonio.read_json(layer_path, default={})
+        layer["suppress_notifications"] = ["session-end"]
+        jsonio.write_json_atomic(layer_path, layer)
+        record = self.assert_json(["list", "--json"])["projects"][0]
+        self.assertEqual(record["preferences"]["auto_update"], True)
+        self.assertEqual(record["preferences"]["suppress_notifications"], ["session-end"])
+
+    def test_list_reports_null_preferences_when_the_version_is_gone(self):
+        self.run_cli("store", "install", "--from", str(self.source), "--version", "3.0.0")
+        project_root = self.new_project("prefs-null")
+        self.assert_json(["bind", str(project_root), "--json"])
+        # A pin to a version that is not installed cannot resolve any preference.
+        from devteam import registry
+
+        registry.set_pin(next(iter(registry.entries())), "9.9.9")
+        record = self.assert_json(["list", "--json"])["projects"][0]
+        self.assertEqual(
+            record["preferences"],
+            {"auto_update": None, "worktree_active": None, "suppress_notifications": None},
+        )
+
     def test_full_lifecycle_through_the_cli_only(self):
         self.run_cli("store", "install", "--from", str(self.source), "--version", "3.0.0")
         project_root = self.new_project("lifecycle")

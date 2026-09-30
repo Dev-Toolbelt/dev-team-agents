@@ -299,6 +299,31 @@ def cmd_unbind(args, emitter):
     return result, "\n".join(lines)
 
 
+def _list_preferences(project_id, version):
+    """The three preferences the app's Projects table shows, or all-null.
+
+    Best-effort by design: one project with no resolvable version or an unreadable
+    layer must not fail the whole listing, and a value of an unexpected type is
+    reported as `null` (silence) rather than coerced into a claim.
+    """
+    empty = {"auto_update": None, "worktree_active": None, "suppress_notifications": None}
+    if not version:
+        return empty
+    try:
+        values = prefs.resolve(project_id, version)["values"]
+    except DevteamError:
+        return empty
+    out = {}
+    for key in empty:
+        value = values.get(key)
+        if key == "suppress_notifications":
+            ok = isinstance(value, (bool, list))
+        else:
+            ok = isinstance(value, bool)
+        out[key] = value if ok else None
+    return out
+
+
 def cmd_list(args, emitter):
     entries = registry.entries()
     active = versions.current()
@@ -330,6 +355,7 @@ def cmd_list(args, emitter):
                 "pin": pin,
                 "resolves_to": resolved,
                 "path_exists": exists,
+                "preferences": _list_preferences(project_id, resolved),
             }
         )
     payload = {"current": active, "projects": payload_projects}

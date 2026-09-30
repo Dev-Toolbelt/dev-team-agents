@@ -516,6 +516,19 @@ function projectPathFlag(context: CliContext): readonly string[] {
 
 // ── list ──────────────────────────────────────────────────────────────────────
 
+/** Each key keeps only a value of the type the table can honestly render; anything else is `null`. */
+function parseListPreferences(raw: Record<string, unknown>): NonNullable<ProjectRecord['preferences']> {
+  const flag = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+  const muted = raw['suppress_notifications'];
+  return {
+    auto_update: flag(raw['auto_update']),
+    worktree_active: flag(raw['worktree_active']),
+    suppress_notifications: Array.isArray(muted)
+      ? muted.filter((item): item is string => typeof item === 'string')
+      : flag(muted),
+  };
+}
+
 export function listProjects(context: CliContext): Promise<OperationResult<ProjectList>> {
   return run(context, ['list'], (body) => {
     if (!Array.isArray(body['projects'])) return 'no `projects` array';
@@ -536,6 +549,7 @@ export function listProjects(context: CliContext): Promise<OperationResult<Proje
         // the UI rendered that as a red `missing` badge beside a path that exists. Silence
         // is reported as silence; see `ProjectRecord.path_exists`.
         path_exists: typeof raw['path_exists'] === 'boolean' ? raw['path_exists'] : null,
+        ...(isRecord(raw['preferences']) ? { preferences: parseListPreferences(raw['preferences']) } : {}),
       });
     }
     return { current: asNullableString(body['current']), projects };

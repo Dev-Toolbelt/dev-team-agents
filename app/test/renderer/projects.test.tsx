@@ -67,6 +67,89 @@ describe('Projects — path_exists is rendered faithfully', () => {
   });
 });
 
+/** Opens the project screen from the list; Pin and Unbind live there now. */
+async function openProjectScreen(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: /project-1 — open settings/i }));
+  await screen.findByRole('heading', { name: /project-1/ });
+}
+
+/** Ticks the acknowledgement Unbind requires before its button enables. */
+async function acknowledgeUnbind(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  await user.click(within(dialog).getByRole('checkbox', { name: /i understand/i }));
+}
+
+describe('Projects — preference badges and the path', () => {
+  function rowFor(name: string) {
+    return screen.getByRole('button', { name: new RegExp(`${name} — open settings`) }).closest('tr')!;
+  }
+
+  it('has no Path column, and the path is on the name\'s tooltip', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+
+    expect(screen.queryByRole('columnheader', { name: 'Path' })).not.toBeInTheDocument();
+    for (const header of ['Auto-update', 'Worktree', 'Notifications']) {
+      expect(screen.getByRole('columnheader', { name: header })).toBeInTheDocument();
+    }
+    await user.hover(screen.getByRole('button', { name: /project-1 — open settings/i }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('/repo/project-1');
+  });
+
+  it('renders On and Off from the resolved preferences, and a dash when the CLI said nothing', async () => {
+    const records = [
+      project({
+        project_id: 'p-on',
+        path: '/repo/on',
+        preferences: { auto_update: true, worktree_active: true, suppress_notifications: false },
+      }),
+      project({
+        project_id: 'p-off',
+        path: '/repo/off',
+        preferences: { auto_update: false, worktree_active: false, suppress_notifications: true },
+      }),
+      project({
+        project_id: 'p-list',
+        path: '/repo/listed',
+        preferences: { auto_update: true, worktree_active: true, suppress_notifications: ['session-end'] },
+      }),
+      project({ project_id: 'p-none', path: '/repo/none' }),
+      project({
+        project_id: 'p-null',
+        path: '/repo/null',
+        preferences: { auto_update: null, worktree_active: null, suppress_notifications: null },
+      }),
+    ];
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: records }))) }));
+    render(<Projects environment={environment()} />);
+    await screen.findByText('on');
+
+    const cells = (name: string) => within(rowFor(name)).getAllByRole('cell').slice(5, 8).map((cell) => cell.textContent);
+    expect(cells('on')).toEqual(['On', 'On', 'On']);
+    expect(cells('off')).toEqual(['Off', 'Off', 'Off']);
+    expect(cells('listed')).toEqual(['On', 'On', 'On']);
+    expect(cells('none')).toEqual(['—', '—', '—']);
+    expect(cells('null')).toEqual(['—', '—', '—']);
+  });
+
+  it('names the muted notification types in a tooltip', async () => {
+    const user = userEvent.setup();
+    const listed = project({
+      preferences: { auto_update: true, worktree_active: true, suppress_notifications: ['session-end', 'stale-docs'] },
+    });
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [listed] }))) }));
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+
+    const notifications = within(rowFor('project-1')).getAllByRole('cell')[7]!;
+    await user.hover(within(notifications).getByText('On'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Muted: session-end, stale-docs');
+  });
+});
+
 describe('Projects — write actions are withheld honestly', () => {
   it('disables the withheld action and states why on the wrapper and to assistive tech', async () => {
     const user = userEvent.setup();
@@ -94,8 +177,14 @@ describe('Projects — write actions are withheld honestly', () => {
 
     // Not anchored: `environment === null` gives every `WriteButton` an
     // `aria-label` of `"<label> — withheld: …"`, not the bare label.
-    for (const name of [/bind/i, /sync/i, /pin/i, /upgrade/i, /unbind/i]) {
+    for (const name of [/bind/i, /sync/i, /upgrade/i]) {
       const button = screen.getAllByRole('button', { name }).find((candidate) => candidate.hasAttribute('disabled'));
+      expect(button, `expected a disabled button matching ${String(name)}`).toBeDefined();
+    }
+    // Pin and Unbind are on the project screen, and fail closed there the same way.
+    await userEvent.setup().click(screen.getByRole('button', { name: /project-1 — open settings/i }));
+    for (const name of [/pin…/i, /unbind…/i]) {
+      const button = (await screen.findAllByRole('button', { name })).find((candidate) => candidate.hasAttribute('disabled'));
       expect(button, `expected a disabled button matching ${String(name)}`).toBeDefined();
     }
   });
@@ -153,12 +242,18 @@ describe('Projects — the destructive path needs the confirm step', () => {
 
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
+    // The table row has no Unbind at all any more.
+    expect(screen.queryByRole('button', { name: /unbind/i })).not.toBeInTheDocument();
+    await openProjectScreen(user);
 
     await user.click(screen.getByRole('button', { name: /unbind…/i }));
     // Opening the dialog must not itself have fired the write.
     expect(unbindProject).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole('dialog');
+    // The destructive button stays disabled until the acknowledgement is ticked.
+    expect(within(dialog).getByRole('button', { name: /^unbind$/i })).toBeDisabled();
+    await acknowledgeUnbind(user, dialog);
     await user.click(within(dialog).getByRole('button', { name: /^unbind$/i }));
 
     expect(unbindProject).toHaveBeenCalledTimes(1);
@@ -841,27 +936,34 @@ describe('Projects — a successful write refreshes the list however the dialog 
     return vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] })));
   }
 
-  it('reloads on Esc after an unbind, and reopens Unbind as a fresh confirm step', async () => {
+  it('returns to a refreshed list on Esc after an unbind, and reopens Unbind as a fresh confirm step', async () => {
     const user = userEvent.setup();
     const listProjects = listing();
     installBridge(fakeBridge({ listProjects }));
 
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
+    await openProjectScreen(user);
     await user.click(screen.getByRole('button', { name: /unbind…/i }));
     const dialog = await screen.findByRole('dialog');
+    await acknowledgeUnbind(user, dialog);
     await user.click(within(dialog).getByRole('button', { name: /^unbind$/i }));
     await within(dialog).findByText('159 links removed.');
-    // Held until the dialog closes: the reload removes the row, and the report with it.
+    // Held until the dialog closes: the report is the user's only account of what moved.
     expect(listProjects).toHaveBeenCalledTimes(1);
 
     await user.keyboard('{Escape}');
     await vi.waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    // Back on the list: the project screen is gone.
+    expect(await screen.findByRole('button', { name: /project-1 — open settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /unbind…/i })).not.toBeInTheDocument();
 
+    await openProjectScreen(user);
     await user.click(screen.getByRole('button', { name: /unbind…/i }));
     const reopened = await screen.findByRole('dialog');
     expect(within(reopened).queryByText('159 links removed.')).not.toBeInTheDocument();
-    expect(within(reopened).getByRole('button', { name: /^unbind$/i })).toBeEnabled();
+    // A fresh confirm step: the acknowledgement is not remembered.
+    expect(within(reopened).getByRole('button', { name: /^unbind$/i })).toBeDisabled();
   });
 
   it('does not close an Unbind dialog while the write is pending', async () => {
@@ -871,8 +973,10 @@ describe('Projects — a successful write refreshes the list however the dialog 
 
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
+    await openProjectScreen(user);
     await user.click(screen.getByRole('button', { name: /unbind…/i }));
     const dialog = await screen.findByRole('dialog');
+    await acknowledgeUnbind(user, dialog);
     await user.click(within(dialog).getByRole('button', { name: /^unbind/i }));
 
     await user.keyboard('{Escape}');

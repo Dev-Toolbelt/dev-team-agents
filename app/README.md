@@ -145,6 +145,11 @@ exactly as if it had been made in a terminal. The app keeps no copy of any prefe
 
 ## Project folders
 
+The Projects table shows each project's name (its path is the name's tooltip, and a `missing` badge
+sits beside the name when the directory is gone) and, from `list --json`'s `preferences`, an On/Off
+badge for Auto-update, Worktree and Notifications — a dash when the CLI did not report the value.
+Pin and Unbind are on the project's own screen; Unbind asks for an explicit acknowledgement first.
+
 The Projects screen groups bound projects into folders (ADR-0021). Like a project's display name
 (ADR-0016), folders are the app's own record — `projectFolders` in `settings.json` — and never
 reach the CLI, `project.json` or the store. They are per machine.
