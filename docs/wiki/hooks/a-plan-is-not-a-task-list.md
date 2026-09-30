@@ -16,14 +16,14 @@ every hook firing correctly — and still leave nothing on the board.
 
 ## How it works
 
-`skills/shared/plan-mode/SKILL.md` § Task List Mirroring closes the gap: on approval, one native task
-per Steps row; `in_progress` / `completed` in step with Progress Reporting. Skills are read raw by
-every provider, so the section names each provider's tool itself; agent and command bodies get theirs
-from `scripts/lib/tool-map.json` at render time.
+`skills/shared/plan-mode/SKILL.md` § Task List Mirroring closes the gap. Skills are read raw by every
+provider — nothing rewrites them at render time — so the section names each provider's tool itself.
 
 ## Gotchas
 
 - An empty board is not a capture bug until the session's transcript shows a `TaskCreate`,
   `TaskUpdate`, `TodoWrite`, `update_plan` or `todowrite` call. Check that first.
 - Tasks are created only on approval: a plan still waiting for the user's answer has no tasks yet.
+- A renamed or renumbered step shows twice on a whole-list tool (`TodoWrite`, `update_plan`,
+  `todowrite`): the board matches those by exact text, or by `id` on opencode.
 - Commands that never plan (`/devteam:status`, a quick question) correctly stay off the board.

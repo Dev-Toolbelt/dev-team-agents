@@ -91,16 +91,16 @@ Keyword triggers can produce false positives; they cost a badge, not a wrong Don
 framework write their plan to chat or to a file, and use the provider's native task list only when
 the provider itself decides to. Capture by hooks was working; there was nothing to capture.
 
-**Decision.** `skills/shared/plan-mode/SKILL.md` § Task List Mirroring makes every approved plan's
-Steps table a native task list — created on approval (never before, so a rejected plan leaves no
-task), moved to `in_progress` and `completed` in step with Progress Reporting. The skill names each
-provider's tool (Claude `TaskCreate`/`TaskUpdate`, Codex `update_plan`, opencode `todowrite`)
-because skills are read raw; agent and command bodies are rewritten from `tool-map.json`.
+**Decision.** Every approved plan's Steps table becomes the provider's native task list, per the
+rule in `skills/shared/plan-mode/SKILL.md` § Task List Mirroring — its single home. The skill names
+each provider's tool itself, because skills are read raw by every provider and nothing rewrites them.
 
 **Why this is not a reversal.** Capture stays automatic and unchanged. What depends on the agent is
 only *that a list exists*, and the instruction rides on a habit the agent already has (the per-step
-Progress Reporting message). If it is skipped, the board is empty — never wrong. `agent-lint.sh`
-fails when the section disappears or an agent that plans stops loading plan-mode.
+Progress Reporting message). If it is skipped, the board is empty. The rule also pins what the board
+needs to stay right — frozen step titles and ids, each provider's own way to drop a step — because a
+renamed step on a whole-list tool would otherwise show twice. `agent-lint.sh` fails when the section
+disappears or an agent that plans stops loading plan-mode.
 
 ## Alternatives Considered
 
