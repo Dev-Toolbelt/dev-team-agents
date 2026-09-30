@@ -85,7 +85,6 @@ describe('asBoardProject', () => {
     ['a non-object', 'nope'],
     ['no project_id', { root: '/x', counts: counts(1, 0, 0), sessions_total: 1, sessions_active: 1, sessions: [] }],
     ['non-numeric counts', { ...boardProject(), counts: { todo: 'a', in_progress: 0, done: 0, total: 0 } }],
-    ['a non-numeric in_review count', { ...boardProject(), counts: { todo: 0, in_progress: 0, in_review: 'x', done: 0, total: 0 } }],
     ['negative counts', { ...boardProject(), counts: { todo: -1, in_progress: 0, done: 0, total: 0 } }],
     ['no sessions array', { ...boardProject(), sessions: 'x' }],
     ['no session totals', { ...boardProject(), sessions_total: 'x' }],
@@ -108,6 +107,34 @@ describe('asBoardProject', () => {
     expect(parsed.with_findings).toBe(0);
     expect(parsed.sessions[0]?.counts.in_review).toBe(0);
     expect(parsed.sessions[0]?.tasks[0]?.review).toBeNull();
+  });
+
+  it.each([['a string', 'x'], ['a negative number', -3], ['null', null], ['an object', {}]])(
+    'degrades a malformed optional review field (%s) to 0 instead of rejecting the project',
+    (_name, bad) => {
+      const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession({ tasks: [boardTask()] })] }))) as {
+        with_findings: unknown;
+        counts: { in_review: unknown };
+        sessions: { counts: { in_review: unknown } }[];
+      };
+      raw.with_findings = bad;
+      raw.counts.in_review = bad;
+      raw.sessions[0]!.counts.in_review = bad;
+      const parsed = asBoardProject(raw);
+      expect(typeof parsed).toBe('object');
+      const project = parsed as BoardProject;
+      expect(project.with_findings).toBe(0);
+      expect(project.counts.in_review).toBe(0);
+      expect(project.sessions[0]?.counts.in_review).toBe(0);
+    },
+  );
+
+  it('drops a card with an unknown future column, without touching its neighbours or the session counts', () => {
+    for (const column of ['archived', 'in_qa', '', 7, null]) {
+      const session = boardSession({ tasks: [boardTask({ key: 'ok' }), { ...boardTask({ key: 'new' }), column: column as never }] });
+      const parsed = asBoardProject(boardProject({ sessions: [session] })) as BoardProject;
+      expect(parsed.sessions[0]?.tasks.map((t) => t.key)).toEqual(['ok']);
+    }
   });
 
   it('reads the review window: column, state, findings, since, and the counts', () => {

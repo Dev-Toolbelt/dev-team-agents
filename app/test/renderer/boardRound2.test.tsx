@@ -106,6 +106,69 @@ describe('Board kanban — the one-second tick', () => {
   });
 });
 
+describe('Board kanban — In Review and the findings filter', () => {
+  const findings = { state: 'findings', findings: 2, since: NOW - 120 } as const;
+  const reviewTask = (key: string, review: typeof findings | { state: 'pending'; findings: null; since: number }) =>
+    boardTask({ key, content: `Task ${key}`, column: 'in_review', status: 'in_progress', review });
+  const oneSecond = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.filter((call) => call[1] === 1_000);
+
+  it('runs no per-second timer for a board of in-review cards alone', async () => {
+    const spy = vi.spyOn(globalThis, 'setInterval');
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [reviewTask('a', findings)] })] }));
+    expect(oneSecond(spy)).toEqual([]);
+    spy.mockRestore();
+  });
+
+  it('runs the per-second timer for an in-progress card in a live session', async () => {
+    const spy = vi.spyOn(globalThis, 'setInterval');
+    await openKanban(
+      boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'r', column: 'in_progress', status: 'in_progress' })] })] }),
+    );
+    expect(oneSecond(spy)).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it('shows "No tasks with findings" when the filter leaves every column empty, and the columns again when it is off', async () => {
+    const plain = boardTask({ key: 'p', content: 'Plain todo' });
+    const done = boardTask({ key: 'd', content: 'Old done', column: 'done', status: 'completed', completed_at: NOW - 30 * 86_400, status_since: NOW - 30 * 86_400 });
+    const project = boardProject({
+      sessions: [boardSession({ tasks: [reviewTask('f', findings), plain, done] })],
+    });
+    const { user } = await openKanban(project);
+    expect(screen.getByText(/1 older done task is hidden/)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
+    expect(screen.getByText('Task f')).toBeInTheDocument();
+    expect(screen.queryByText('No tasks with findings')).not.toBeInTheDocument();
+    // The Done note is about retention; with the filter on, no done task is a candidate at all.
+    expect(screen.queryByText(/older done/)).not.toBeInTheDocument();
+  });
+
+  it('shows the empty state when the period narrows away every task with findings', async () => {
+    const old = boardSession({ session_id: 'old-one', last_activity_at: NOW - 20 * 86_400, tasks: [reviewTask('f', findings)] });
+    const recent = boardSession({ session_id: 'recent', tasks: [boardTask({ key: 'x', content: 'Recent todo' })] });
+    const { user } = await openKanban(boardProject({ sessions: [recent, old] }));
+    await user.selectOptions(screen.getByLabelText('Session'), 'recent');
+    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
+    expect(screen.getByText('No tasks with findings')).toBeInTheDocument();
+    expect(screen.queryByText('Recent todo')).not.toBeInTheDocument();
+  });
+
+  it('disables the findings checkbox, with an explanation, when the project has no findings', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [reviewTask('p', { state: 'pending', findings: null, since: NOW - 5 })] })] }));
+    const box = screen.getByRole('checkbox', { name: /with findings/i });
+    expect(box).toBeDisabled();
+    expect(box).toHaveAccessibleDescription('No task in this project has findings.');
+    expect(box.closest('span[title]')).toHaveAttribute('title', 'No task in this project has findings');
+  });
+
+  it('keeps the checkbox enabled when the project has findings', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [reviewTask('f', findings)] })] }));
+    const box = screen.getByRole('checkbox', { name: /with findings/i });
+    expect(box).toBeEnabled();
+    expect(box).not.toHaveAccessibleDescription();
+  });
+});
+
 describe('Board kanban — period narrows the session filters too', () => {
   it('lists only in-period sessions in the dropdown and the strip, and resets a selection that fell out', async () => {
     const project = boardProject({

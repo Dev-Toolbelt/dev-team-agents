@@ -1846,10 +1846,11 @@ function asBoardCounts(value: unknown): BoardCounts | string {
   const inProgress = nonNegative(value['in_progress']);
   const done = nonNegative(value['done']);
   const rawReview = value['in_review'];
-  const inReview = rawReview === undefined || rawReview === null ? 0 : nonNegative(rawReview);
+  // Optional review fields degrade to 0 when absent or malformed, never rejecting the project.
+  const inReview = nonNegative(rawReview) ?? 0;
   const total = nonNegative(value['total']);
-  if (todo === null || inProgress === null || inReview === null || done === null || total === null) {
-    return '`counts` needs non-negative numeric todo, in_progress, done and total (in_review optional)';
+  if (todo === null || inProgress === null || done === null || total === null) {
+    return '`counts` needs non-negative numeric todo, in_progress, done and total';
   }
   return { todo, in_progress: inProgress, in_review: inReview, done, total };
 }

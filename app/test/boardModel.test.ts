@@ -122,6 +122,40 @@ describe('in review', () => {
     expect(steps.find((s) => s.current)?.label).toBe('In Review');
   });
 
+  it('keeps provider-status rows frozen while in review: only In Review is live, and the rows sum to the lifetime', () => {
+    const task = boardTask({
+      key: 'sum',
+      column: 'in_review',
+      status: 'in_progress',
+      created_at: NOW - 1200,
+      status_since: NOW - 1000,
+      review: { state: 'pending', findings: null, since: NOW - 300 },
+      durations: { pending: 200, in_progress: 700, in_review: 0, completed: 0 },
+    });
+    const at = (later: number) => stepDurations(task, NOW + later, true, timeInColumn(boardSession({ tasks: [task] }), task, NOW + later, true));
+    const first = at(0);
+    const later = at(600);
+    const row = (steps: typeof first, label: string) => steps.find((s) => s.label === label)?.seconds;
+    expect(row(later, 'To do')).toBe(row(first, 'To do'));
+    expect(row(later, 'In progress')).toBe(row(first, 'In progress'));
+    expect(row(first, 'In Review')).toBe(300);
+    expect(row(later, 'In Review')).toBe(900);
+    expect(first.reduce((n, s) => n + s.seconds, 0)).toBe(1200);
+    expect(later.filter((s) => s.current).map((s) => s.label)).toEqual(['In Review']);
+  });
+
+  it('does not count a past review window as in-progress time when the task returns to in progress', () => {
+    const task = boardTask({
+      column: 'in_progress',
+      status: 'in_progress',
+      status_since: NOW - 1000,
+      durations: { pending: 0, in_progress: 100, in_review: 400 },
+    });
+    const steps = stepDurations(task, NOW, true, NOW - task.status_since);
+    expect(steps.find((s) => s.label === 'In progress')?.seconds).toBe(600);
+    expect(steps.find((s) => s.label === 'In Review')?.seconds).toBe(400);
+  });
+
   it('drops an empty In Review step for a task that is not in review', () => {
     const task = boardTask({ status: 'completed', column: 'done', durations: { in_progress: 10, in_review: 0, completed: 0 } });
     expect(stepDurations(task, NOW, false).map((s) => s.label)).toEqual(['In progress', 'Done']);

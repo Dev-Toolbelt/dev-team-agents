@@ -991,10 +991,15 @@ describe.skipIf(!available)('the In Review column against the real hooks and CLI
     expect(during.tasks.every((t) => t.review?.state === 'pending')).toBe(true);
     expect(during.counts.in_review).toBe(3);
 
+    await sleep(1_100); // a review window of at least one whole second
     reviewerReturns(root, 's-pass', textResponse(reviewMarker(0)));
     const after = await sessionTasks('s-pass');
     expect(Object.values(columnsOf(after.tasks))).toEqual(['done', 'done', 'done']);
-    expect(after.tasks.every((t) => t.review === null && 'in_review' in t.durations)).toBe(true);
+    for (const task of after.tasks) {
+      expect(task.review).toBeNull();
+      expect(Number.isInteger(task.durations['in_review'])).toBe(true);
+      expect(task.durations['in_review']).toBeGreaterThanOrEqual(1);
+    }
     expect(after.counts.in_review).toBe(0);
     expect(await reviewNotifications('s-pass')).toHaveLength(0);
   }, 90_000);

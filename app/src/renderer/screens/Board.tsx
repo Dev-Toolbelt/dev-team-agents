@@ -109,15 +109,15 @@ const STATUS_WORD: Readonly<Record<BoardSessionStatus, string>> = {
  * keeps moving without a new snapshot. While `enabled` is false (the Board tab is mounted
  * but hidden) no timer runs, and the value is re-sampled the moment it turns true again.
  */
-function useNow(clock: () => number, bucketSeconds: number, enabled: boolean): number {
+function useNow(clock: () => number, bucketSeconds: number, enabled: boolean, intervalSeconds = bucketSeconds): number {
   const sample = () => Math.floor(clock() / 1000 / bucketSeconds) * bucketSeconds;
   const [now, setNow] = useState(sample);
   useEffect(() => {
     if (!enabled) return;
     setNow(sample());
-    const timer = setInterval(() => setNow(sample()), bucketSeconds * 1000);
+    const timer = setInterval(() => setNow(sample()), intervalSeconds * 1000);
     return () => clearInterval(timer);
-  }, [clock, bucketSeconds, enabled]);
+  }, [clock, bucketSeconds, intervalSeconds, enabled]);
   return now;
 }
 
@@ -520,14 +520,18 @@ function Kanban({
   active: boolean;
   onBack: () => void;
 }) {
-  // Filtering (period cutoff, done retention) only needs whole minutes; the per-second
-  // tick below exists for running cards alone, and only while one is on screen.
-  const coarseNow = useNow(clock, 60, active);
+  // Filtering (period cutoff, done retention) and the In Review, To do and Done cards only
+  // need a fresh reading once a minute; the per-second tick below exists for in-progress
+  // cards alone, and only while one is on screen.
+  const coarseNow = useNow(clock, 1, active, 60);
   const [sessionId, setSessionId] = useState<string>('all');
   const [hideOldDone, setHideOldDone] = useState(true);
   const [onlyFindings, setOnlyFindings] = useState(false);
   const hideId = useId();
   const findingsId = useId();
+  const findingsAvailable = project.with_findings > 0;
+  const findingsOn = onlyFindings && findingsAvailable;
+  const findingsHintId = `${findingsId}-hint`;
 
   const sessionsInRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
   // A session that vanished from the snapshot or fell out of the period must not leave the filter selecting nothing.
@@ -536,12 +540,13 @@ function Kanban({
     () =>
       buildKanban(
         project,
-        { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays, onlyFindings },
+        { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays, onlyFindings: findingsOn },
         coarseNow,
       ),
-    [project, effectiveSession, period, hideOldDone, onlyFindings, settings.doneRetentionDays, coarseNow],
+    [project, effectiveSession, period, hideOldDone, findingsOn, settings.doneRetentionDays, coarseNow],
   );
-  const anyRunning = [...view.todo, ...view.in_progress, ...view.in_review].some((item) => isRunning(item.session, item.task));
+  // Only an in-progress card in a live session needs seconds; In Review and the rest read the minute clock.
+  const anyRunning = view.in_progress.some((item) => isRunning(item.session, item.task));
   const tick = useNow(clock, 1, active && anyRunning);
   const shownSessions = sessionsInRange.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession);
 
@@ -579,27 +584,44 @@ function Kanban({
             Hide done older than {settings.doneRetentionDays} {settings.doneRetentionDays === 1 ? 'day' : 'days'}
           </Label>
         </span>
-        <span className="flex items-center gap-2">
-          <Checkbox id={findingsId} checked={onlyFindings} onCheckedChange={(checked) => setOnlyFindings(checked === true)} />
+        <span className="flex items-center gap-2" title={findingsAvailable ? undefined : 'No task in this project has findings'}>
+          <Checkbox
+            id={findingsId}
+            checked={findingsOn}
+            disabled={!findingsAvailable}
+            aria-describedby={findingsAvailable ? undefined : findingsHintId}
+            onCheckedChange={(checked) => setOnlyFindings(checked === true)}
+          />
           <Label htmlFor={findingsId} className="text-sm">
             With findings
           </Label>
+          {findingsAvailable ? null : (
+            <span id={findingsHintId} className="sr-only">
+              No task in this project has findings.
+            </span>
+          )}
         </span>
       </div>
 
       <SessionStrip projectId={project.project_id} sessions={shownSessions} />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Column title="To do" items={view.todo} now={tick} />
-        <Column title="In progress" items={view.in_progress} now={tick} />
-        <Column title="In Review" items={view.in_review} now={tick} />
-        <Column
-          title="Done"
-          items={view.done}
-          now={tick}
-          note={view.hiddenDone > 0 ? `${view.hiddenDone} older done ${view.hiddenDone === 1 ? 'task is' : 'tasks are'} hidden` : null}
-        />
-      </div>
+      {findingsOn && view.todo.length + view.in_progress.length + view.in_review.length + view.done.length === 0 ? (
+        <p role="status" className="rounded-lg bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+          No tasks with findings
+        </p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Column title="To do" items={view.todo} now={coarseNow} />
+          <Column title="In progress" items={view.in_progress} now={tick} />
+          <Column title="In Review" items={view.in_review} now={coarseNow} />
+          <Column
+            title="Done"
+            items={view.done}
+            now={coarseNow}
+            note={view.hiddenDone > 0 ? `${view.hiddenDone} older done ${view.hiddenDone === 1 ? 'task is' : 'tasks are'} hidden` : null}
+          />
+        </div>
+      )}
     </div>
   );
 }

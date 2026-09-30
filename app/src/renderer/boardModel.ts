@@ -111,9 +111,12 @@ export function timeInColumn(session: BoardSession, task: BoardTask, nowSeconds:
 }
 
 /**
- * Time per step, in the order a task moves through them. The step a task is in right now
- * is read from `currentSeconds` (see `timeInColumn`) when that is longer than the CLI's
- * figure, because the CLI's number stopped growing when it last spoke. Passing the same
+ * Time per step, in the order a task moves through them. The CLI partitions a task's
+ * lifetime: seconds inside a review window count only to `in_review`, never to the provider
+ * status. So the rows sum to the task's lifetime, and only the row of the column the task
+ * is in is live; every other row stays frozen at the CLI's figure. That live row is read
+ * from `currentSeconds` (see `timeInColumn`) when it is longer than the CLI's figure,
+ * because the CLI's number stopped growing when it last spoke. Passing the same
  * `currentSeconds` the card shows keeps the two from disagreeing.
  */
 export function stepDurations(
@@ -126,7 +129,10 @@ export function stepDurations(
   // The provider's status stays `in_progress` while a task is in review; the step it is in is the review window.
   const step = task.column === 'in_review' ? 'in_review' : task.status;
   const since = task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since;
-  const live = currentSeconds ?? (running ? nowSeconds - since : undefined);
+  let live = currentSeconds ?? (running ? nowSeconds - since : undefined);
+  // `status_since` predates any review window a task passed through and came back from,
+  // and that time belongs to In Review alone, so it is not also in-progress time.
+  if (live !== undefined && step === 'in_progress') live = Math.max(0, live - (merged['in_review'] ?? 0));
   if (live !== undefined) merged[step] = Math.max(merged[step] ?? 0, live);
   const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
   return statuses
