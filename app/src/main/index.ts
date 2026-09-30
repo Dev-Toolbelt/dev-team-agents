@@ -11,18 +11,20 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
-import { GATED_COMMANDS, ackNotification, watchNotifications } from '../cli/operations.js';
+import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
 import { createFileLog, describeError, type FileLog } from './logFile.js';
 import { CODE_SIGNED } from './build-info.js';
 import { NotificationCenter, type NativeNotice } from './notifications.js';
 import { registerNotificationIpc } from './notificationIpc.js';
+import { TaskBoard } from './taskBoard.js';
+import { registerTaskBoardIpc } from './taskBoardIpc.js';
 import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
-import { readSettings, writeOpenAtLogin } from './settings.js';
+import { readSettings, writeBoardSettings, writeOpenAtLogin } from './settings.js';
 import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 /**
@@ -136,6 +138,7 @@ let quitting = false;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let center: NotificationCenter | null = null;
+let board: TaskBoard | null = null;
 /** The window is created hidden on a login launch: the user did not open the app. */
 let startHidden = false;
 /** A project a notification asked to show, delivered once the renderer can hear it. */
@@ -309,6 +312,7 @@ function createWindow(): BrowserWindow {
   });
   window.webContents.on('did-finish-load', () => {
     if (center !== null) window.webContents.send(CHANNELS.notificationFeedChanged, center.snapshot());
+    if (board !== null) window.webContents.send(CHANNELS.taskBoardChanged, board.snapshot());
   });
   // Windows logoff and shutdown do not always emit `before-quit`; without this the
   // `preventDefault` below would hold the session open for a hidden window.
@@ -381,6 +385,7 @@ if (!primaryInstance) {
   app.on('before-quit', () => {
     quitting = true;
     center?.stop();
+    board?.stop();
   });
   void app.whenReady().then(onReady);
 }
@@ -432,6 +437,7 @@ function onReady(): void {
       setAbout(resolution);
       // A different CLI may mean a different store: start the stream again against it.
       void center?.restart();
+      void board?.restart();
     },
   });
 
@@ -462,6 +468,52 @@ function onReady(): void {
     log,
   });
 
+  const userDataDir = app.getPath('userData');
+  const staleAfterSeconds = async (): Promise<number> =>
+    (await readSettings(userDataDir)).board.staleAfterMinutes * 60;
+
+  board = new TaskBoard({
+    startStream: async (handlers) => {
+      const ctx = await ipc.context();
+      return ctx === null ? null : watchTasks(ctx, { staleAfterSeconds: await staleAfterSeconds() }, handlers);
+    },
+    list: async () => {
+      const ctx = await ipc.context();
+      if (ctx === null) {
+        return {
+          ok: false,
+          kind: 'unavailable',
+          message: 'No devteam CLI was found.',
+          exitCode: null,
+          command: 'devteam tasks list',
+          durationMs: 0,
+        };
+      }
+      return listTasks(ctx, { staleAfterSeconds: await staleAfterSeconds() });
+    },
+    onChange: (feed) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(CHANNELS.taskBoardChanged, feed);
+      }
+    },
+    log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
+  });
+
+  registerTaskBoardIpc({
+    feed: () => board!.snapshot(),
+    refresh: () => board!.refresh(),
+    resumeCommand: (projectId, sessionId) => board!.resumeCommand(projectId, sessionId),
+    copyText: (text) => clipboard.writeText(text),
+    boardSettings: async () => (await readSettings(userDataDir)).board,
+    saveBoardSettings: async (next) => {
+      const previous = (await readSettings(userDataDir)).board;
+      await writeBoardSettings(userDataDir, next);
+      // `--stale-after` is an argument of the running child, so a new threshold needs a new one.
+      if (previous.staleAfterMinutes !== next.staleAfterMinutes) void board?.restart();
+      return (await readSettings(userDataDir)).board;
+    },
+  });
+
   registerNotificationIpc({
     trustedRenderer: RENDERER_TARGET,
     feed: () => center!.snapshot(),
@@ -479,6 +531,7 @@ function onReady(): void {
   mainWindow = createWindow();
   if (startHidden && process.platform === 'darwin' && tray !== null) app.dock?.hide();
   void center.start();
+  void board.start();
 
   app.on('activate', () => showWindow());
 }

@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Board } from './screens/Board.js';
 import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
@@ -175,6 +176,7 @@ export function App() {
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="projects">Projects</TabsTrigger>
+                <TabsTrigger value="board">Board</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
@@ -185,6 +187,10 @@ export function App() {
                 <ErrorBoundary label="The Projects screen" resetKey={tab}>
                   <Projects environment={environment} active={tab === 'projects'} openRequest={openRequest} />
                 </ErrorBoundary>
+              </TabsContent>
+              {/* Kept mounted: the kanban's filters and selected project are view state. */}
+              <TabsContent value="board" forceMount className="pt-4 data-[state=inactive]:hidden">
+                <Board active={tab === 'board'} />
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
                 <ErrorBoundary label="The Catalog screen">

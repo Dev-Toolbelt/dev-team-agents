@@ -27,6 +27,12 @@ import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import { textProblem } from '../shared/preferenceRules.js';
 import type {
+  BoardColumn,
+  BoardCounts,
+  BoardProject,
+  BoardSession,
+  BoardSessionStatus,
+  BoardTask,
   BindMode,
   BindProvider,
   BindReport,
@@ -96,6 +102,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['notifications', 'watch'],
   ['skills', 'list'],
   ['skills', 'show'],
+  ['tasks', 'list'],
+  ['tasks', 'watch'],
 ]);
 
 /**
@@ -252,6 +260,11 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
     flags: { '--source': 'value', '--provider': 'repeatable', '--replace': 'bare', '--link': 'bare' },
   },
   'skills remove': { operands: 1, flags: { '--root': 'value' } },
+  // The task board (ADR-0018). Both are reads of machine-local records. `--stale-after` is
+  // the app's own setting in seconds; the app filters periods itself, so `--since` is only
+  // allowed on the one-shot `list`.
+  'tasks list': { operands: 0, flags: { '--stale-after': 'value', '--since': 'value' } },
+  'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
 });
 
 const MAX_COMMAND_WORDS = 2;
@@ -1322,6 +1335,226 @@ export function watchNotifications(
     args,
     onEvent: (raw) => {
       const event = asWatchEvent(raw);
+      if (typeof event === 'string') handlers.onInvalid(event);
+      else handlers.onEvent(event);
+    },
+    onEnd: handlers.onEnd,
+  });
+}
+
+// ── the task board ────────────────────────────────────────────────────────────
+
+const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'done'];
+const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ended'];
+const MAX_TASK_TEXT = 2_000;
+const MAX_ID = 512;
+const MAX_TASKS_PER_SESSION = 2_000;
+/** A resume command is one line the user pastes into a terminal; anything else is not shown. */
+const RESUME_COMMAND = /^cd [^\r\n\0]+ && (claude --resume|codex resume|opencode --session) [^\r\n\0]+$/;
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function nonNegative(value: unknown): number | null {
+  const n = finiteNumber(value);
+  return n !== null && n >= 0 ? n : null;
+}
+
+function boundedString(value: unknown, max: number): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= max ? value : null;
+}
+
+function asBoardCounts(value: unknown): BoardCounts | string {
+  if (!isRecord(value)) return 'no `counts` object';
+  const todo = nonNegative(value['todo']);
+  const inProgress = nonNegative(value['in_progress']);
+  const done = nonNegative(value['done']);
+  const total = nonNegative(value['total']);
+  if (todo === null || inProgress === null || done === null || total === null) {
+    return '`counts` needs non-negative numeric todo, in_progress, done and total';
+  }
+  return { todo, in_progress: inProgress, done, total };
+}
+
+/** `null` for a task this app cannot draw honestly; the caller drops it. */
+export function asBoardTask(raw: unknown): BoardTask | null {
+  if (!isRecord(raw)) return null;
+  const key = boundedString(raw['key'], MAX_ID);
+  const column = raw['column'];
+  const createdAt = nonNegative(raw['created_at']);
+  const statusSince = nonNegative(raw['status_since']);
+  if (key === null || createdAt === null || statusSince === null) return null;
+  if (typeof column !== 'string' || !(BOARD_COLUMNS as readonly string[]).includes(column)) return null;
+  const content = typeof raw['content'] === 'string' ? raw['content'].slice(0, MAX_TASK_TEXT) : '';
+  const durations: Record<string, number> = {};
+  if (isRecord(raw['durations'])) {
+    for (const [status, seconds] of Object.entries(raw['durations'])) {
+      const n = nonNegative(seconds);
+      if (n !== null) durations[status] = n;
+    }
+  }
+  return {
+    key,
+    content,
+    owner: typeof raw['owner'] === 'string' ? raw['owner'].slice(0, MAX_ID) : 'main',
+    agent_type: asNullableString(raw['agent_type']),
+    status: typeof raw['status'] === 'string' ? raw['status'] : column,
+    column: column as BoardColumn,
+    created_at: createdAt,
+    status_since: statusSince,
+    completed_at: nonNegative(raw['completed_at']),
+    durations,
+    stale: raw['stale'] === true,
+    abandoned: raw['abandoned'] === true,
+  };
+}
+
+function asBoardSession(raw: unknown): BoardSession | null {
+  if (!isRecord(raw)) return null;
+  const sessionId = boundedString(raw['session_id'], MAX_ID);
+  const provider = boundedString(raw['provider'], 64);
+  const status = raw['status'];
+  const counts = asBoardCounts(raw['counts']);
+  if (sessionId === null || provider === null || typeof counts === 'string') return null;
+  if (typeof status !== 'string' || !(SESSION_STATUSES as readonly string[]).includes(status)) return null;
+  const resume = raw['resume_command'];
+  const tasks: BoardTask[] = [];
+  if (Array.isArray(raw['tasks'])) {
+    for (const entry of raw['tasks'].slice(0, MAX_TASKS_PER_SESSION)) {
+      const task = asBoardTask(entry);
+      if (task !== null) tasks.push(task);
+    }
+  }
+  return {
+    session_id: sessionId,
+    provider,
+    branch: asNullableString(raw['branch']),
+    cwd: typeof raw['cwd'] === 'string' ? raw['cwd'] : '',
+    status: status as BoardSessionStatus,
+    created_at: nonNegative(raw['created_at']) ?? 0,
+    last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
+    ended_at: nonNegative(raw['ended_at']),
+    resume_command: typeof resume === 'string' && resume.length <= 4_096 && RESUME_COMMAND.test(resume) ? resume : null,
+    counts,
+    tasks,
+  };
+}
+
+/** A project document from `tasks list` or a `snapshot` event, or why it is unusable. */
+export function asBoardProject(raw: unknown): BoardProject | string {
+  if (!isRecord(raw)) return 'a project that is not an object';
+  const projectId = boundedString(raw['project_id'], MAX_ID);
+  if (projectId === null) return 'a project with no `project_id`';
+  const root = typeof raw['root'] === 'string' ? raw['root'] : '';
+  const counts = asBoardCounts(raw['counts']);
+  if (typeof counts === 'string') return `project ${projectId}: ${counts}`;
+  const sessionsTotal = nonNegative(raw['sessions_total']);
+  const sessionsActive = nonNegative(raw['sessions_active']);
+  if (sessionsTotal === null || sessionsActive === null) return `project ${projectId} has no numeric sessions_total / sessions_active`;
+  if (!Array.isArray(raw['sessions'])) return `project ${projectId} has no sessions array`;
+  const sessions: BoardSession[] = [];
+  for (const entry of raw['sessions']) {
+    const session = asBoardSession(entry);
+    if (session !== null) sessions.push(session);
+  }
+  return {
+    project_id: projectId,
+    root,
+    providers: asStringArray(raw['providers']),
+    sessions_total: sessionsTotal,
+    sessions_active: sessionsActive,
+    counts,
+    stale: nonNegative(raw['stale']) ?? 0,
+    abandoned: nonNegative(raw['abandoned']) ?? 0,
+    last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
+    sessions,
+  };
+}
+
+/** `tasks list --json`: every project that has at least one task. A bad project is dropped. */
+export function asBoardList(body: Record<string, unknown>): { readonly projects: readonly BoardProject[] } | string {
+  if (!Array.isArray(body['projects'])) return 'no `projects` array';
+  const projects: BoardProject[] = [];
+  for (const raw of body['projects']) {
+    const parsed = asBoardProject(raw);
+    if (typeof parsed !== 'string') projects.push(parsed);
+  }
+  return { projects };
+}
+
+/** Seconds a stale threshold may take on the argv: a positive integer, bounded. */
+function secondsArgument(seconds: number): string | null {
+  return Number.isInteger(seconds) && seconds >= 1 && seconds <= 7 * 24 * 3600 ? String(seconds) : null;
+}
+
+export function listTasks(
+  context: CliContext,
+  options: { readonly staleAfterSeconds: number },
+): Promise<OperationResult<{ readonly projects: readonly BoardProject[] }>> {
+  const stale = secondsArgument(options.staleAfterSeconds);
+  return run(context, ['tasks', 'list', ...(stale === null ? [] : ['--stale-after', stale])], asBoardList);
+}
+
+export type TaskWatchEvent =
+  | { readonly event: 'snapshot'; readonly project: BoardProject }
+  | { readonly event: 'removed'; readonly projectId: string }
+  | { readonly event: 'ready' }
+  | { readonly event: 'heartbeat' }
+  | { readonly event: 'end'; readonly reason: string }
+  | { readonly event: 'error'; readonly message: string; readonly hint: string | null; readonly exitCode: number | null };
+
+export function asTaskWatchEvent(raw: Record<string, unknown>): TaskWatchEvent | string {
+  switch (raw['event']) {
+    case 'snapshot': {
+      const project = raw['project'];
+      if (isRecord(project) && project['removed'] === true) {
+        const id = boundedString(project['project_id'], MAX_ID);
+        return id === null ? 'a removal with no `project_id`' : { event: 'removed', projectId: id };
+      }
+      const parsed = asBoardProject(project);
+      return typeof parsed === 'string' ? parsed : { event: 'snapshot', project: parsed };
+    }
+    case 'ready':
+      return { event: 'ready' };
+    case 'heartbeat':
+      return { event: 'heartbeat' };
+    case 'end':
+      return { event: 'end', reason: typeof raw['reason'] === 'string' ? raw['reason'] : 'unknown' };
+    case 'error':
+      return {
+        event: 'error',
+        message: typeof raw['error'] === 'string' ? raw['error'] : 'the task stream failed',
+        hint: typeof raw['hint'] === 'string' ? raw['hint'] : null,
+        exitCode: typeof raw['exit_code'] === 'number' ? raw['exit_code'] : null,
+      };
+    default:
+      return `an event the app does not know: ${JSON.stringify(raw['event'])}`;
+  }
+}
+
+/** Start `devteam tasks watch`, through the same allow-list `run()` enforces. */
+export function watchTasks(
+  context: CliContext,
+  options: { readonly staleAfterSeconds: number },
+  handlers: {
+    readonly onEvent: (event: TaskWatchEvent) => void;
+    readonly onInvalid: (detail: string) => void;
+    readonly onEnd: (end: StreamEnd) => void;
+  },
+  spawnStream: typeof streamDevteam = streamDevteam,
+): StreamHandle | null {
+  const stale = secondsArgument(options.staleAfterSeconds);
+  const args = ['tasks', 'watch', ...(stale === null ? [] : ['--stale-after', stale])];
+  if (argvProblem(args) !== null) return null;
+  return spawnStream({
+    binary: context.binary,
+    cwd: context.cwd,
+    ...(context.env !== undefined ? { env: context.env } : {}),
+    ...(context.declarationFile !== undefined ? { declarationFile: context.declarationFile } : {}),
+    args,
+    onEvent: (raw) => {
+      const event = asTaskWatchEvent(raw);
       if (typeof event === 'string') handlers.onInvalid(event);
       else handlers.onEvent(event);
     },

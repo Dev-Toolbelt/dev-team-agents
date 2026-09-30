@@ -774,6 +774,20 @@ export interface DevteamBridge {
   readonly installSkill: (request: SkillInstallRequest) => Promise<SkillInstallAnswer>;
   /** `skills remove`. A directory is moved to quarantine, a symlink is unlinked; nothing is deleted. */
   readonly removeSkill: (request: SkillRemoveRequest) => Promise<OperationResult<SkillRemoveReport>>;
+  // The task board. The main process owns `devteam tasks watch` and keeps the latest
+  // snapshot per project; the renderer reads it and hears every change.
+  readonly taskBoard: () => Promise<BoardFeed>;
+  /** One `tasks list`, replacing the snapshots — for a manual refresh. */
+  readonly refreshTaskBoard: () => Promise<BoardFeed>;
+  /** Called with the feed whenever it changes. Returns the unsubscribe. */
+  readonly onTaskBoard: (listener: (feed: BoardFeed) => void) => () => void;
+  /**
+   * Copy a session's resume command to the clipboard. The renderer names the session; the
+   * text copied is the one the CLI sent for it, never a string the renderer supplies.
+   */
+  readonly copyResumeCommand: (request: CopyResumeRequest) => Promise<CopyResumeAnswer>;
+  readonly boardSettings: () => Promise<BoardSettings>;
+  readonly setBoardSettings: (settings: BoardSettings) => Promise<BoardSettingsAnswer>;
 }
 
 export type NotificationLevel = 'info' | 'warning' | 'critical';
@@ -840,6 +854,103 @@ export interface BackgroundSettings {
   readonly detail: string | null;
 }
 
+// ── the task board (ADR-0018) ─────────────────────────────────────────────────
+
+export type BoardColumn = 'todo' | 'in_progress' | 'done';
+export type BoardSessionStatus = 'active' | 'idle' | 'ended';
+
+export interface BoardCounts {
+  readonly todo: number;
+  readonly in_progress: number;
+  readonly done: number;
+  readonly total: number;
+}
+
+/** One task, as `devteam tasks list|watch --json` derives it. Epoch fields are seconds. */
+export interface BoardTask {
+  readonly key: string;
+  readonly content: string;
+  readonly owner: string;
+  readonly agent_type: string | null;
+  readonly status: string;
+  readonly column: BoardColumn;
+  readonly created_at: number;
+  /** When the task entered its current status; "time in column" is `now - status_since`. */
+  readonly status_since: number;
+  readonly completed_at: number | null;
+  /** Seconds spent per status (`pending`, `in_progress`, `completed`, ...). */
+  readonly durations: Readonly<Record<string, number>>;
+  readonly stale: boolean;
+  readonly abandoned: boolean;
+}
+
+export interface BoardSession {
+  readonly session_id: string;
+  /** `claude`, `codex` or `opencode` today; kept open so a new provider degrades to a generic icon. */
+  readonly provider: string;
+  readonly branch: string | null;
+  readonly cwd: string;
+  readonly status: BoardSessionStatus;
+  readonly created_at: number;
+  readonly last_activity_at: number;
+  readonly ended_at: number | null;
+  /** A single-line shell command the CLI composed; `null` when the shape did not validate. */
+  readonly resume_command: string | null;
+  readonly counts: BoardCounts;
+  readonly tasks: readonly BoardTask[];
+}
+
+export interface BoardProject {
+  readonly project_id: ProjectId;
+  readonly root: string;
+  readonly providers: readonly string[];
+  readonly sessions_total: number;
+  readonly sessions_active: number;
+  readonly counts: BoardCounts;
+  readonly stale: number;
+  readonly abandoned: number;
+  readonly last_activity_at: number;
+  readonly sessions: readonly BoardSession[];
+}
+
+export type BoardStreamStatus = 'starting' | 'live' | 'retrying' | 'unavailable';
+
+/** What the main process keeps and pushes: the latest snapshot of every project with tasks. */
+export interface BoardFeed {
+  readonly status: BoardStreamStatus;
+  /** Why the status is not `live`, in plain language; null when it is. */
+  readonly detail: string | null;
+  /** Newest activity first. Only projects with at least one task are ever here. */
+  readonly projects: readonly BoardProject[];
+}
+
+/** App-local (`settings.json`); never a `preferences.json` key. */
+export interface BoardSettings {
+  /** An in-progress task older than this, in a live session, is flagged stale. */
+  readonly staleAfterMinutes: number;
+  /** The kanban hides done tasks older than this by default. */
+  readonly doneRetentionDays: number;
+}
+
+export type BoardSettingsAnswer =
+  | { readonly ok: true; readonly settings: BoardSettings }
+  | { readonly ok: false; readonly message: string };
+
+export interface CopyResumeRequest {
+  readonly projectId: ProjectId;
+  readonly sessionId: string;
+}
+
+export type CopyResumeAnswer =
+  | { readonly copied: true; readonly command: string }
+  | { readonly copied: false; readonly message: string };
+
+/** The bounds `boardSettings` enforces; shared so the form and the main process agree. */
+export const BOARD_SETTING_BOUNDS = {
+  staleAfterMinutes: { min: 5, max: 1440, fallback: 60 },
+  doneRetentionDays: { min: 1, max: 365, fallback: 7 },
+} as const;
+
 /** The channel names, shared so main and preload cannot disagree about a string. */
 export const CHANNELS = {
   buildInfo: 'devteam:build-info',
@@ -876,4 +987,11 @@ export const CHANNELS = {
   showSkill: 'devteam:show-skill',
   installSkill: 'devteam:install-skill',
   removeSkill: 'devteam:remove-skill',
+  taskBoard: 'devteam:task-board',
+  refreshTaskBoard: 'devteam:refresh-task-board',
+  /** Main → renderer push. */
+  taskBoardChanged: 'devteam:task-board-changed',
+  copyResumeCommand: 'devteam:copy-resume-command',
+  boardSettings: 'devteam:board-settings',
+  setBoardSettings: 'devteam:set-board-settings',
 } as const;

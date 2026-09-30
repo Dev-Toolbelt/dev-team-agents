@@ -20,6 +20,8 @@ import { randomBytes } from 'node:crypto';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { BOARD_SETTING_BOUNDS, type BoardSettings } from '../shared/api.js';
+
 export const SETTINGS_FILE_NAME = 'settings.json';
 
 const NO_NAMES: Readonly<Record<string, string>> = Object.freeze({});
@@ -46,6 +48,45 @@ export interface AppSettings {
    * unsigned macOS build the two can differ and the UI must say so.
    */
   readonly openAtLogin: boolean;
+  /** The task board's thresholds (ADR-0018). App-local: never a `preferences.json` key. */
+  readonly board: BoardSettings;
+}
+
+export const DEFAULT_BOARD_SETTINGS: BoardSettings = Object.freeze({
+  staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
+  doneRetentionDays: BOARD_SETTING_BOUNDS.doneRetentionDays.fallback,
+});
+
+function clampSetting(value: unknown, bounds: { readonly min: number; readonly max: number; readonly fallback: number }): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return bounds.fallback;
+  return Math.min(bounds.max, Math.max(bounds.min, Math.round(value)));
+}
+
+/** Read-side normalisation: a missing, malformed or out-of-range value never blocks the app. */
+export function readBoardSettings(record: Record<string, unknown>): BoardSettings {
+  return {
+    staleAfterMinutes: clampSetting(record['boardStaleAfterMinutes'], BOARD_SETTING_BOUNDS.staleAfterMinutes),
+    doneRetentionDays: clampSetting(record['boardDoneRetentionDays'], BOARD_SETTING_BOUNDS.doneRetentionDays),
+  };
+}
+
+/**
+ * Write-side check: a value outside the bounds is refused with a sentence, not clamped —
+ * the user typed it, and silently storing a different number would be a lie.
+ */
+export function boardSettingsProblem(value: unknown): string | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return 'the board settings are not an object';
+  const record = value as Record<string, unknown>;
+  const checks = [
+    ['staleAfterMinutes', 'the stale threshold (minutes)', BOARD_SETTING_BOUNDS.staleAfterMinutes],
+    ['doneRetentionDays', 'the done retention (days)', BOARD_SETTING_BOUNDS.doneRetentionDays],
+  ] as const;
+  for (const [key, label, bounds] of checks) {
+    const n = record[key];
+    if (typeof n !== 'number' || !Number.isInteger(n)) return `${label} must be a whole number`;
+    if (n < bounds.min || n > bounds.max) return `${label} must be between ${bounds.min} and ${bounds.max}`;
+  }
+  return null;
 }
 
 /** `NO_NAMES` when `value` is not a plain object; otherwise every string-valued,
@@ -72,16 +113,17 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
       problem: code === 'ENOENT' ? undefined : `could not be read: ${String(error)}`,
       projectNames: NO_NAMES,
       openAtLogin: false,
+      board: DEFAULT_BOARD_SETTINGS,
     };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false };
+    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS };
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false };
+    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS };
   }
   const record = parsed as Record<string, unknown>;
   // Read independently of the `cliPath` checks below, so a bad `cliPath` never costs the
@@ -89,13 +131,14 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
   const projectNames = readProjectNames(record['projectNames']);
   // Anything but a literal `true` is "not chosen": starting at login is opt-in.
   const openAtLogin = record['openAtLogin'] === true;
+  const board = readBoardSettings(record);
 
   const value = record['cliPath'];
-  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin };
+  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin, board };
   if (typeof value !== 'string' || value.trim() === '') {
-    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin };
+    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin, board };
   }
-  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin };
+  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin, board };
 }
 
 /**
@@ -126,6 +169,11 @@ export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): P
   await writeSettings(userDataDir, () => ({ openAtLogin: enabled }));
 }
 
+/** Record the board's thresholds. The caller validates with `boardSettingsProblem` first. */
+export async function writeBoardSettings(userDataDir: string, board: BoardSettings): Promise<void> {
+  await writeSettings(userDataDir, () => ({ board }));
+}
+
 /**
  * Every write, one after another. The read-modify-write below is not atomic on its own:
  * two concurrent callers (a bind naming a project while the user flips start-at-login)
@@ -151,7 +199,7 @@ let writeChain: Promise<unknown> = Promise.resolve();
  */
 function writeSettings(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board'>>,
 ): Promise<void> {
   const run = writeChain.then(() => writeSettingsNow(userDataDir, patchFrom));
   // The chain continues past a failure; the failure itself still reaches this caller.
@@ -161,7 +209,7 @@ function writeSettings(
 
 async function writeSettingsNow(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board'>>,
 ): Promise<void> {
   const path = join(userDataDir, SETTINGS_FILE_NAME);
   const current = await readSettings(userDataDir);
@@ -174,6 +222,11 @@ async function writeSettingsNow(
   payload['projectNames'] = patch.projectNames ?? current.projectNames;
   const openAtLogin = patch.openAtLogin ?? current.openAtLogin;
   if (openAtLogin) payload['openAtLogin'] = true;
+  // Only a departure from the default is written, so a file that never customised the
+  // board stays exactly as it was.
+  const board = patch.board ?? current.board;
+  if (board.staleAfterMinutes !== DEFAULT_BOARD_SETTINGS.staleAfterMinutes) payload['boardStaleAfterMinutes'] = board.staleAfterMinutes;
+  if (board.doneRetentionDays !== DEFAULT_BOARD_SETTINGS.doneRetentionDays) payload['boardDoneRetentionDays'] = board.doneRetentionDays;
 
   const tempPath = join(userDataDir, `.${SETTINGS_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
   await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {

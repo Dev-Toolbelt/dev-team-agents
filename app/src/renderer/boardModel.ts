@@ -1,0 +1,227 @@
+/**
+ * The task board's pure derivations: durations in words, the period filter, and the
+ * per-project view that filter produces. No React and no clock of its own — `now` is always
+ * passed in — so every rule here is testable without rendering.
+ *
+ * The CLI derives the facts (`column`, `stale`, `abandoned`, `durations`); the board only
+ * narrows and formats them. Nothing here recomputes a stale or abandoned flag.
+ */
+
+import type { BoardCounts, BoardProject, BoardSession, BoardTask } from '../shared/api.js';
+
+export type Period = 'today' | '7d' | '30d' | 'all';
+
+export const PERIODS: readonly { readonly value: Period; readonly label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+  { value: 'all', label: 'All time' },
+];
+
+const DAY = 86_400;
+
+/** Epoch seconds a period starts at, or `null` for all time. `today` is local midnight. */
+export function periodCutoff(period: Period, nowSeconds: number): number | null {
+  switch (period) {
+    case 'all':
+      return null;
+    case 'today': {
+      const midnight = new Date(nowSeconds * 1000);
+      midnight.setHours(0, 0, 0, 0);
+      return Math.floor(midnight.getTime() / 1000);
+    }
+    case '7d':
+      return nowSeconds - 7 * DAY;
+    case '30d':
+      return nowSeconds - 30 * DAY;
+  }
+}
+
+/**
+ * `45s`, `12m 30s`, `2h 5m`, `1d 3h`: at most two units, the smaller one omitted when it
+ * is zero. Whole seconds; a negative or non-finite value reads as `0s`.
+ */
+export function formatDuration(seconds: number): string {
+  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const units: readonly [string, number][] = [
+    ['d', DAY],
+    ['h', 3600],
+    ['m', 60],
+    ['s', 1],
+  ];
+  for (let i = 0; i < units.length; i += 1) {
+    const [name, size] = units[i]!;
+    if (total < size && name !== 's') continue;
+    const head = Math.floor(total / size);
+    const next = units[i + 1];
+    if (next === undefined) return `${head}${name}`;
+    const rest = Math.floor((total % size) / next[1]);
+    return rest === 0 ? `${head}${name}` : `${head}${name} ${rest}${next[0]}`;
+  }
+  return '0s';
+}
+
+export function percent(part: number, total: number): number {
+  return total <= 0 ? 0 : Math.round((part / total) * 100);
+}
+
+export const STEP_LABELS: Readonly<Record<string, string>> = {
+  pending: 'To do',
+  in_progress: 'In progress',
+  completed: 'Done',
+  cancelled: 'Cancelled',
+};
+
+export function stepLabel(status: string): string {
+  return STEP_LABELS[status] ?? status.replace(/_/g, ' ');
+}
+
+const STEP_ORDER = ['pending', 'in_progress', 'completed', 'cancelled'];
+
+/**
+ * Time per step, in the order a task moves through them. The step a task is in right now
+ * is read live (`now - status_since`) when that is longer than the CLI's figure, because
+ * the CLI's number stopped growing when it last spoke.
+ */
+export function stepDurations(
+  task: BoardTask,
+  nowSeconds: number,
+  running: boolean,
+): readonly { readonly status: string; readonly label: string; readonly seconds: number; readonly current: boolean }[] {
+  const merged: Record<string, number> = { ...task.durations };
+  if (running) merged[task.status] = Math.max(merged[task.status] ?? 0, nowSeconds - task.status_since);
+  const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
+  return statuses
+    .filter((status) => (merged[status] ?? 0) > 0 || status === task.status)
+    .map((status) => ({
+      status,
+      label: stepLabel(status),
+      seconds: merged[status] ?? 0,
+      current: status === task.status,
+    }));
+}
+
+function rank(status: string): number {
+  const index = STEP_ORDER.indexOf(status);
+  return index === -1 ? STEP_ORDER.length : index;
+}
+
+/** A session is running while it is not ended; only then does a task's current step keep growing. */
+export function isRunning(session: BoardSession, task: BoardTask): boolean {
+  return session.status !== 'ended' && task.column !== 'done';
+}
+
+// ── the per-project view under a period filter ────────────────────────────────
+
+export interface ProjectView {
+  readonly project: BoardProject;
+  readonly sessions: readonly BoardSession[];
+  readonly providers: readonly string[];
+  readonly sessionsTotal: number;
+  readonly sessionsActive: number;
+  readonly counts: BoardCounts;
+  readonly stale: number;
+  readonly abandoned: number;
+}
+
+function sumCounts(sessions: readonly BoardSession[]): BoardCounts {
+  const counts = { todo: 0, in_progress: 0, done: 0, total: 0 };
+  for (const session of sessions) {
+    counts.todo += session.counts.todo;
+    counts.in_progress += session.counts.in_progress;
+    counts.done += session.counts.done;
+    counts.total += session.counts.total;
+  }
+  return counts;
+}
+
+/** Sessions whose last activity falls inside the period. */
+export function sessionsInPeriod(project: BoardProject, period: Period, nowSeconds: number): readonly BoardSession[] {
+  const cutoff = periodCutoff(period, nowSeconds);
+  return cutoff === null ? project.sessions : project.sessions.filter((session) => session.last_activity_at >= cutoff);
+}
+
+/**
+ * The project as the period sees it, or `null` when nothing in it has a task in that
+ * period. Over all time the CLI's own project figures are used as they are; a narrower
+ * period recomputes them from the sessions that remain.
+ */
+export function viewProject(project: BoardProject, period: Period, nowSeconds: number): ProjectView | null {
+  const sessions = sessionsInPeriod(project, period, nowSeconds);
+  const whole = sessions.length === project.sessions.length;
+  const counts = whole ? project.counts : sumCounts(sessions);
+  if (counts.total === 0) return null;
+  const tasks = sessions.flatMap((session) => session.tasks);
+  const providers = whole && project.providers.length > 0 ? project.providers : [...new Set(sessions.map((s) => s.provider))];
+  return {
+    project,
+    sessions,
+    providers,
+    sessionsTotal: whole ? project.sessions_total : sessions.length,
+    sessionsActive: whole ? project.sessions_active : sessions.filter((s) => s.status === 'active').length,
+    counts,
+    stale: whole ? project.stale : tasks.filter((task) => task.stale).length,
+    abandoned: whole ? project.abandoned : tasks.filter((task) => task.abandoned).length,
+  };
+}
+
+// ── the kanban ────────────────────────────────────────────────────────────────
+
+export interface KanbanFilters {
+  /** A session id, or `all`. */
+  readonly sessionId: string;
+  readonly period: Period;
+  /** Hide done tasks completed longer ago than `retentionDays`. */
+  readonly hideOldDone: boolean;
+  readonly retentionDays: number;
+}
+
+export interface KanbanItem {
+  readonly session: BoardSession;
+  readonly task: BoardTask;
+}
+
+export interface KanbanView {
+  readonly todo: readonly KanbanItem[];
+  readonly in_progress: readonly KanbanItem[];
+  readonly done: readonly KanbanItem[];
+  /** Done tasks the retention setting is hiding. */
+  readonly hiddenDone: number;
+}
+
+export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSeconds: number): KanbanView {
+  const sessions = sessionsInPeriod(project, filters.period, nowSeconds).filter(
+    (session) => filters.sessionId === 'all' || session.session_id === filters.sessionId,
+  );
+  const items: KanbanItem[] = sessions.flatMap((session) => session.tasks.map((task) => ({ session, task })));
+  const doneCutoff = nowSeconds - filters.retentionDays * DAY;
+  let hiddenDone = 0;
+  const visible = items.filter(({ task }) => {
+    if (task.column !== 'done' || !filters.hideOldDone) return true;
+    const finished = task.completed_at ?? task.status_since;
+    if (finished >= doneCutoff) return true;
+    hiddenDone += 1;
+    return false;
+  });
+  const byCreated = (a: KanbanItem, b: KanbanItem) => a.task.created_at - b.task.created_at;
+  return {
+    todo: visible.filter((i) => i.task.column === 'todo').sort(byCreated),
+    in_progress: visible.filter((i) => i.task.column === 'in_progress').sort(byCreated),
+    done: visible
+      .filter((i) => i.task.column === 'done')
+      .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),
+    hiddenDone,
+  };
+}
+
+/** The last path segment, POSIX or Windows. */
+export function basename(path: string): string {
+  const trimmed = path.replace(/[/\\]+$/, '');
+  const last = trimmed.split(/[/\\]/).pop();
+  return last !== undefined && last !== '' ? last : path;
+}
+
+/** The app-local name, else the directory's basename, else the id — never a bare UUID when a path exists. */
+export function boardProjectName(project: BoardProject, names: Readonly<Record<string, string>>): string {
+  return names[project.project_id] ?? (project.root !== '' ? basename(project.root) : project.project_id);
+}

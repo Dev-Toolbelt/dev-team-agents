@@ -11,6 +11,8 @@ import { vi } from 'vitest';
 
 import type {
   BindReport,
+  BoardFeed,
+  BoardSettings,
   BuildInfo,
   CliResolution,
   AppNotification,
@@ -314,8 +316,22 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     showSkill: vi.fn(),
     installSkill: vi.fn(() => Promise.resolve({ picked: false } as const)),
     removeSkill: vi.fn(),
+    taskBoard: vi.fn(() => Promise.resolve(boardFeed())),
+    refreshTaskBoard: vi.fn(() => Promise.resolve(boardFeed())),
+    onTaskBoard: vi.fn(() => () => undefined),
+    copyResumeCommand: vi.fn(() => Promise.resolve({ copied: true, command: 'cd x && claude --resume y' } as const)),
+    boardSettings: vi.fn(() => Promise.resolve(boardSettings())),
+    setBoardSettings: vi.fn((settings: BoardSettings) => Promise.resolve({ ok: true, settings } as const)),
     ...overrides,
   };
+}
+
+export function boardFeed(overrides: Partial<BoardFeed> = {}): BoardFeed {
+  return { status: 'live', detail: null, projects: [], ...overrides };
+}
+
+export function boardSettings(overrides: Partial<BoardSettings> = {}): BoardSettings {
+  return { staleAfterMinutes: 60, doneRetentionDays: 7, ...overrides };
 }
 
 export function notificationFeed(overrides: Partial<NotificationFeed> = {}): NotificationFeed {

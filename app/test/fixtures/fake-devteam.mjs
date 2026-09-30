@@ -76,6 +76,54 @@ switch (scenario) {
     process.exit(0);
     break;
 
+  case 'tasks-list': {
+    // `devteam tasks list --json`: one project with one session and one task, plus a
+    // project and a task the client must drop as unusable. The argv is echoed so a test
+    // can assert what the app passed.
+    const counts = { todo: 1, in_progress: 0, done: 0, total: 1 };
+    emit({
+      ok: true,
+      argv,
+      generated_at: 1790000000,
+      stale_after: 3600,
+      ended_after: 21600,
+      projects: [
+        {
+          project_id: 'proj-a',
+          root: '/repo/a',
+          providers: ['claude'],
+          sessions_total: 1,
+          sessions_active: 1,
+          counts,
+          stale: 0,
+          abandoned: 0,
+          last_activity_at: 1790000000,
+          sessions: [
+            {
+              session_id: 's1',
+              provider: 'claude',
+              branch: 'main',
+              cwd: '/repo/a',
+              status: 'active',
+              created_at: 1789990000,
+              last_activity_at: 1790000000,
+              ended_at: null,
+              resume_command: "cd '/repo/a' && claude --resume 's1'",
+              counts,
+              tasks: [
+                { key: 't1', content: 'ok', owner: 'main', agent_type: null, status: 'pending', column: 'todo', created_at: 1, status_since: 1, completed_at: null, durations: { pending: 5 }, stale: false, abandoned: false },
+                { key: 't2', content: 'no column', status: 'pending', created_at: 1, status_since: 1 },
+              ],
+            },
+          ],
+        },
+        { project_id: 'proj-bad', root: '/repo/bad' },
+      ],
+    });
+    process.exit(0);
+    break;
+  }
+
   case 'usage':
     emit({ ok: false, error: '--client-schemas was given an empty value', exit_code: 2, hint: 'Pass a path.' });
     process.exit(2);
