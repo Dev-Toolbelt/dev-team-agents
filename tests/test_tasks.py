@@ -650,6 +650,32 @@ class HookTest(BoardCase):
         self.assertEqual(self.load("o1")["provider"], "opencode")
         self.assertEqual(self.python_calls(), 2)
 
+    def test_the_exact_payload_codex_sends_for_update_plan_is_recorded_through_the_dispatcher(self):
+        # Field for field what codex-rs/hooks/src/events/pre_tool_use.rs `command_input_json`
+        # serializes (openai/codex @ 92bc601), compact as serde_json writes it: the registry's
+        # default `pre_tool_use_payload` hands `update_plan` over with its parsed arguments.
+        def payload(plan, **subagent):
+            body = dict(
+                session_id="0199a0b1-7c3e-7f00-9d1a-4b2c8e6f5a10", turn_id="turn-1", **subagent,
+                transcript_path=None, cwd=str(self.root), hook_event_name="PreToolUse",
+                model="gpt-5-codex", permission_mode="default", tool_name="update_plan",
+                tool_input={"explanation": None, "plan": [{"step": s, "status": st} for s, st in plan]},
+                tool_use_id="call_1",
+            )
+            return json.dumps(body, separators=(",", ":"))
+
+        dispatcher = HOOKS / "pre-tool-use.sh"
+        self.run_script(dispatcher, payload([("Read the spec", "completed"), ("Write it", "in_progress")]))
+        self.run_script(dispatcher, payload([("Explore", "pending")], agent_id="019a-sub", agent_type="explorer"))
+        record = self.load("0199a0b1-7c3e-7f00-9d1a-4b2c8e6f5a10")
+        self.assertEqual(record["provider"], "codex")
+        by_owner = {(t["owner"], t["content"]): t["status"] for t in record["tasks"]}
+        self.assertEqual(by_owner, {
+            ("main", "Read the spec"): "completed",
+            ("main", "Write it"): "in_progress",
+            ("019a-sub", "Explore"): "pending",
+        })
+
     def test_post_tool_use_records_claude_todos_and_raises_session_done_once(self):
         first = todo_write("s1", [todo("A"), todo("B")], cwd=str(self.root))
         done = todo_write("s1", [todo("A", "completed"), todo("B", "completed")], cwd=str(self.root))

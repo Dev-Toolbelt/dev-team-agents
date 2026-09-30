@@ -34,8 +34,9 @@ Claude Code hook input carries `agent_id` / `agent_type` when the call comes fro
 publicly documented, so the normalizers are defensive: unknown keys are ignored, a payload that
 cannot be read is a no-op, and both `tool_response` and `tool_output` are accepted.
 
-Codex coverage is best-effort: whether Codex fires `PreToolUse` for `update_plan` could not be
-verified empirically. When it does not, Codex sessions simply never appear; nothing fails.
+Codex fires `PreToolUse` for `update_plan`: confirmed in the Codex source (openai/codex @ `92bc601`)
+and pinned by a test that replays that exact payload, including a subagent's `agent_id`. It has not
+yet been observed in a live Codex session.
 
 #### The record — `<state-dir>/task-board/<session-key>.json`
 
@@ -198,3 +199,4 @@ the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 | 2026-09-30 | Resume command `cd`s into the record's `cwd` when it is still a directory, else the project root | Providers find a session by working directory; one started in a linked worktree or subdirectory did not resume from the root |
 | 2026-09-30 | A removed task whose last status was `completed` or `cancelled` is not a match candidate for a later replace; the equal item becomes a new task | Reviving it as pending erased the completion the board still showed |
 | 2026-09-30 | The state directory is `<state-dir>/task-board/` (was `tasks/`); tasks are ordered by creation time then numeric key; `record` clears `idle_at`; a non-empty todo list with no readable entry is a no-op rather than "clear all"; a structurally invalid record is skipped by readers | `tasks` is too generic a basename for the machine-local classifier (`wiki/tasks/` would match); the rest are correctness fixes from review |
+| 2026-09-30 | Codex capture confirmed: `PreToolUse` fires for `update_plan` with the parsed arguments, `session_id`, `cwd` and a subagent's `agent_id`/`agent_type` (openai/codex @ `92bc601`); a test replays that exact payload through the dispatcher | The spec had recorded Codex as unverified because the local Codex binary could not run |

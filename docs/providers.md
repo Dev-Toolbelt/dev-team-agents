@@ -127,7 +127,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 | **Codex** | Existing `PreToolUse` | `update_plan` | Replace | Matched by normalized content |
 | **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `args.todos[].id` |
 
-Codex coverage is best-effort: whether `PreToolUse` fires for `update_plan` could not be verified empirically. When it does not, Codex sessions simply do not appear on the board; nothing fails.
+Codex fires `PreToolUse` for `update_plan` — confirmed in the Codex source (openai/codex @ `92bc601`) and pinned by a test replaying that exact payload, not yet observed in a live session. If a Codex release stops firing it, Codex sessions simply do not appear on the board; nothing fails.
 
 ---
 
