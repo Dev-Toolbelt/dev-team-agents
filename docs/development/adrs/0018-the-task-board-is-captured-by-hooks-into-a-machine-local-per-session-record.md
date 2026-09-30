@@ -85,6 +85,23 @@ its absence is visible.
 Codex set (for `wait_agent`), and the opencode plugin binds `chat.message` and `tool.execute.after`.
 Keyword triggers can produce false positives; they cost a badge, not a wrong Done.
 
+## Amendment — 2026-09-30: approved plans become native tasks
+
+**Context.** A live test showed the board empty for a whole planning session: the agents of this
+framework write their plan to chat or to a file, and use the provider's native task list only when
+the provider itself decides to. Capture by hooks was working; there was nothing to capture.
+
+**Decision.** `skills/shared/plan-mode/SKILL.md` § Task List Mirroring makes every approved plan's
+Steps table a native task list — created on approval (never before, so a rejected plan leaves no
+task), moved to `in_progress` and `completed` in step with Progress Reporting. The skill names each
+provider's tool (Claude `TaskCreate`/`TaskUpdate`, Codex `update_plan`, opencode `todowrite`)
+because skills are read raw; agent and command bodies are rewritten from `tool-map.json`.
+
+**Why this is not a reversal.** Capture stays automatic and unchanged. What depends on the agent is
+only *that a list exists*, and the instruction rides on a habit the agent already has (the per-step
+Progress Reporting message). If it is skipped, the board is empty — never wrong. `agent-lint.sh`
+fails when the section disappears or an agent that plans stops loading plan-mode.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
