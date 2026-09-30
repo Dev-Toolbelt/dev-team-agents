@@ -217,6 +217,8 @@ def cmd_bind(args, emitter):
                 hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
                 "old tree into a dated quarantine rather than deleting it.",
             )
+    if args.pin is not None:
+        paths.validate_version(args.pin)
     result = bind_module.bind(
         args.path,
         provider_names=args.provider,
@@ -365,6 +367,7 @@ def cmd_pin(args, emitter):
     else:
         if not args.version:
             raise UsageError("pass a version to pin, or --release to clear the pin")
+        paths.validate_version(args.version)
         versions.require(args.version)
         entry = registry.set_pin(data["project_id"], args.version)
         human = "pinned {} to {}".format(root, args.version)
@@ -407,6 +410,8 @@ def cmd_update(args, emitter):
 
 
 def cmd_migrate(args, emitter):
+    if getattr(args, "pin", None) is not None:
+        paths.validate_version(args.pin)
     if args.apply:
         result = migrate.apply(
             args.path, provider_names=args.provider, mode=args.mode, pin=args.pin, emitter=emitter

@@ -28,7 +28,7 @@ import sys
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from .errors import EnvError
+from .errors import EnvError, UsageError
 
 APP_NAME = "dev-team-agents"
 
@@ -132,8 +132,60 @@ def current_file():
     return core_dir() / "current"
 
 
+#: A version name is a single semver-shaped path component. Same shape as
+#: ``update.REF_RE``; kept here because ``paths`` cannot import ``update``. ASCII-only so it
+#: agrees with the desktop app's check, which does not match non-ASCII digits.
+_VERSION_RE = re.compile(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?\Z", re.ASCII)
+
+
+def is_version_name(version):
+    """True when ``version`` is a plain version name that can safely become a path component."""
+    return isinstance(version, str) and _VERSION_RE.match(version) is not None
+
+
+def validate_version(version):
+    """Return a version typed on the command line, or UsageError.
+
+    For argv only. A bad name read back from the store (``current``, a registry pin) is
+    a broken store, not a usage mistake — ``version_dir`` reports that as EnvError.
+    """
+    if not is_version_name(version):
+        raise UsageError(
+            "invalid version {!r}: expected a version such as 2.48.0".format(version),
+            hint="Run `devteam store list` to see the installed versions.",
+        )
+    return version
+
+
 def version_dir(version):
-    return versions_dir() / version
+    """``versions_dir()/<version>``; refuses anything that is not a plain version name.
+
+    EnvError, not UsageError: by the time a name gets here it is either already validated
+    argv or state read from disk, and a hand-edited ``current`` or pin must surface as a
+    doctor finding rather than abort it.
+    """
+    if not is_version_name(version):
+        raise EnvError(
+            "invalid version {!r} in the store: expected a version such as 2.48.0".format(version),
+            hint="Re-pin the project with `devteam pin <version>` or `devteam pin --release`.",
+        )
+    root = versions_dir()
+    target = root / version
+    # Defence in depth: even a well-formed name must not resolve (e.g. through a
+    # symlinked entry) to somewhere outside the versions directory. `commonpath` raises
+    # on paths from different Windows drives, which is "outside" as well.
+    real_root = os.path.realpath(str(root))
+    real_target = os.path.realpath(str(target))
+    try:
+        inside = os.path.commonpath([real_root, real_target]) == real_root
+    except ValueError:
+        inside = False
+    if not inside or real_target == real_root:
+        raise EnvError(
+            "version {!r} resolves outside the versions directory".format(version),
+            hint="Remove the stray entry from {}.".format(root),
+        )
+    return target
 
 
 #: Windows' NT device-namespace prefix on an absolute path. ``os.readlink`` on a
