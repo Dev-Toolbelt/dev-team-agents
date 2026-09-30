@@ -309,7 +309,7 @@ Overrides no nível do projeto, regras de precedência e orientações de custom
 
 **As notificações e o quadro de tarefas chegam ao app desktop.** Nenhum provider mostra ao usuário a saída de um hook (a do `SessionStart` vira contexto do modelo, a do `Stop` não é exibida), então os hooks capturam atualizações de tarefas e enfileiram as notificações — janela de contexto, trabalho sem commit, docs desatualizados, atualizações, a dica do dia. O app desktop mostra:
 - **Notificações** como alertas do sistema, inclusive com a janela fechada
-- **Quadro** — visualização Kanban de todas as tarefas que os agentes criam, de todos os projetos vinculados, com tempo gasto em cada etapa. Sessões são capturadas automaticamente pelos hooks para Claude Code e opencode (melhor esforço para Codex); o quadro é somente leitura. Equivalente CLI: `devteam tasks list` e `watch`.
+- **Quadro** — visualização Kanban de todas as tarefas que os agentes criam, de todos os projetos vinculados, com tempo gasto em cada etapa. Sessões são capturadas automaticamente pelos hooks para Claude Code, Codex e opencode; o quadro é somente leitura. Equivalente CLI: `devteam tasks list` e `watch`.
 
 Sem o app, as notificações e registros de tarefas esperam na fila: `devteam notifications list` e `devteam tasks list` as mostram. Detalhes: `CLAUDE-md/notifications.md`.
 

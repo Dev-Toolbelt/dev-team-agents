@@ -23,7 +23,7 @@ Verified while writing this ADR:
 | Claude Code hook input carries `agent_id` / `agent_type` when the call comes from a subagent, and a `SessionEnd` event exists | code.claude.com/docs/en/hooks |
 | `TodoWrite` is disabled by default in favour of `TaskCreate`/`TaskUpdate`; neither tool's input shape is publicly documented | code.claude.com/docs/en/tools-reference |
 | Codex and opencode already receive our `PreToolUse` dispatcher (`.codex/hooks.json`, plugin `tool.execute.before`) | `scripts/install-codex.sh`, `opencode/plugin/dev-team-agents.ts` |
-| Whether Codex fires `PreToolUse` for `update_plan` | **not verified** — the installed Codex binary could not be run |
+| Codex fires `PreToolUse` for `update_plan`, with `tool_name: "update_plan"`, the parsed arguments as `tool_input`, `session_id`, `cwd`, and `agent_id`/`agent_type` from a subagent | Read in the Codex source (openai/codex @ `92bc601`): `PlanHandler` keeps the registry's default `pre_tool_use_payload`, and `command_input_json` in `codex-rs/hooks/src/events/pre_tool_use.rs` serializes those fields. Pinned by a test that replays that exact payload through the dispatcher. Not yet observed in a live Codex session |
 
 ## Decision
 
@@ -58,8 +58,8 @@ Verified while writing this ADR:
   is the normalized text. Accepted and documented; ids are used where the provider gives one.
 - Times have the granularity of the agent's own updates.
 - "Ended" is exact only on Claude Code (`SessionEnd`); elsewhere it is inferred from inactivity.
-- Codex coverage depends on an unverified hook behaviour. If Codex does not fire `PreToolUse` for
-  `update_plan`, Codex sessions are simply absent from the board; nothing fails.
+- Codex coverage rests on the Codex source, not on a live run. If a Codex release stops firing
+  `PreToolUse` for `update_plan`, Codex sessions are simply absent from the board; nothing fails.
 - Records accumulate. Retention hides old data in the app; deleting it is a future explicit
   command, never an automatic side effect (No-Destruction Rule).
 - `devteam tasks list|watch --json` are public API from their first release.
