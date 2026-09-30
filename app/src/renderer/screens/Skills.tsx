@@ -64,7 +64,7 @@ export function Skills({ environment }: { environment: EnvironmentReport | null 
       <header className="flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <h2 id="skills-heading" className="text-base font-semibold">
-            Global skills
+            Global Skills
           </h2>
           <p className="text-sm text-muted-foreground">
             The skills installed for your user account in each provider&apos;s own directory, not in a project.

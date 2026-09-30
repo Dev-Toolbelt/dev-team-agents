@@ -178,7 +178,7 @@ export function App() {
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="board">Board</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
-                <TabsTrigger value="skills">Skills</TabsTrigger>
+                <TabsTrigger value="skills">Global Skills</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
               </TabsList>
               {/* Kept mounted while another tab is shown: the project settings screen lives
@@ -198,7 +198,7 @@ export function App() {
                 </ErrorBoundary>
               </TabsContent>
               <TabsContent value="skills" className="pt-4">
-                <ErrorBoundary label="The Skills screen">
+                <ErrorBoundary label="The Global Skills screen">
                   <Skills environment={environment} />
                 </ErrorBoundary>
               </TabsContent>

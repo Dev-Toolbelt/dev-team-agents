@@ -148,9 +148,9 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.
 
-## The Skills screen
+## The Global Skills screen
 
-The **Skills** tab manages the *global* (user-level) skills of Claude Code, Codex and opencode:
+The **Global Skills** tab manages the *global* (user-level) skills of Claude Code, Codex and opencode:
 list, inspect, install and remove. It is a client of `devteam skills list|show|install|remove`
 and writes only through `install` and `remove`, both in `compat.MUTATING`, so they are
 withheld like every other write action when the schema declaration could not be written.

@@ -70,7 +70,7 @@ describe('App — a failing screen', () => {
     expect(await screen.findByText(/The Diagnosis screen hit an unexpected error/)).toBeInTheDocument();
     expect(screen.getByText('doctor exploded')).toBeInTheDocument();
     // The shell is still there: the other tabs work.
-    expect(screen.getByRole('tab', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Global Skills' })).toBeInTheDocument();
 
     state.doctorThrows = false;
     await user.click(screen.getByRole('button', { name: /try again/i }));
