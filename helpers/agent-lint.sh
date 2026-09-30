@@ -352,6 +352,25 @@ check_skill_name_uniqueness() {
   done < <(printf '%s\n' "${SKILL_NAMES[@]}" | cut -f1 | sort | uniq -d)
 }
 
+# ── Plan steps reach the task board through the native task list ─────────────
+# The desktop app's task board reads only a provider's native task list, so an
+# approved plan reaches it only through plan-mode § Task List Mirroring. That
+# rule lives in one skill; what can silently break it is the section vanishing
+# or an agent that plans no longer loading plan-mode.
+PLAN_MODE_LOADERS="software-architect backend-developer frontend-developer mobile-developer database-specialist devops-specialist"
+
+check_plan_mode_mirroring() {
+  local skill="$REPO_ROOT/skills/shared/plan-mode/SKILL.md" agent
+  if ! grep -q '^## Task List Mirroring$' "$skill"; then
+    ERRORS+=("  · skills/shared/plan-mode/SKILL.md: missing '## Task List Mirroring' — approved plans would never reach the task board")
+  fi
+  for agent in $PLAN_MODE_LOADERS; do
+    if [ -f "$REPO_ROOT/agents/${agent}.md" ] && ! grep -q 'plan-mode' "$REPO_ROOT/agents/${agent}.md"; then
+      ERRORS+=("  · agents/${agent}.md: no longer loads plan-mode — its approved plans would not become native tasks")
+    fi
+  done
+}
+
 # ── Orchestration roster must match agents/ ───────────────────────────────────
 # skills/architecture/orchestration/SKILL.md carries the roster an orchestrator
 # reads to choose a subagent_type. It was hand-maintained and unvalidated, and it
@@ -503,6 +522,7 @@ done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 check_skill_name_uniqueness
 check_orchestration_roster
 check_command_roster
+check_plan_mode_mirroring
 
 # Warnings are reported only in verbose mode — they are non-blocking and would
 # otherwise fire on every Stop-hook run.
