@@ -673,13 +673,19 @@ def cmd_skills_install(args, emitter):
         elif item["replaced"]:
             note = "  (previous link replaced)"
         lines.append("installed {} -> {}{}".format(payload["name"], item["path"], note))
+    for other in payload["also_present"]:
+        lines.append(
+            "note: {} also exists in the {} root ({}); a provider reading both sees two copies".format(
+                payload["name"], other["root"], other["path"]
+            )
+        )
     return payload, "\n".join(lines)
 
 
 def cmd_skills_remove(args, emitter):
     payload = global_skills.remove(args.name, args.root)
     if payload["action"] == "unlinked":
-        human = "unlinked {}".format(payload["path"])
+        human = "unlinked {} (it pointed at {})".format(payload["path"], payload["link_target"])
     else:
         human = "moved {} to quarantine: {}".format(payload["path"], payload["quarantined_to"])
     return payload, human
