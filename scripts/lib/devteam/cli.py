@@ -254,8 +254,22 @@ def cmd_bind(args, emitter):
             if result.get("merged_project_files")
             else []
         )
+        + _preferences_import_lines(result.get("preferences_import"))
     )
     return result, human
+
+
+def _preferences_import_lines(report):
+    """The human summary of `prefs.import_legacy`, or nothing when there was no file."""
+    if not report:
+        return []
+    if report.get("problem"):
+        return ["  prefs     {} not imported: {}".format(report["source"], report["problem"])]
+    return [
+        "  prefs     {} imported from {}, file moved to quarantine".format(
+            len(report["imported"]), report["source"]
+        )
+    ]
 
 
 def cmd_unbind(args, emitter):

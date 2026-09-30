@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import jsonio, paths, project, versions
+from . import jsonio, paths, project, quarantine, versions
 from .errors import EnvError, UsageError
 
 #: Where the projection lands, relative to the project root. Stable across the
@@ -190,3 +190,128 @@ def unset(key, scope="global", project_id=None):
     layer.pop(key)
     jsonio.write_json_atomic(target, layer)
     return {"key": key, "scope": scope, "removed": True, "file": str(target)}
+
+
+# ── the v2 in-project preferences file ─────────────────────────────────────────
+
+#: Where a v2 install, and a layout-1 project, kept its preferences. The cascade never
+#: reads it: `project_file()` is the project layer on every layout.
+LEGACY_FILE_NAME = "preferences.json"
+
+#: The one key the v2 schema documented as "bool or array" (suppress by notification type).
+#: Its default is a boolean, so the type check would otherwise throw the list away.
+BOOL_OR_LIST_KEYS = ("suppress_notifications",)
+
+#: The quarantine group an imported file is moved into — findable by name, never deleted.
+IMPORTED_GROUP = "imported-preferences"
+
+
+def legacy_file(project_root):
+    return project.legacy_memory_dir(project_root) / LEGACY_FILE_NAME
+
+
+def _fits_default(key, value, default):
+    """Whether ``value`` could have been stored for a key with this ``default``."""
+    if key in BOOL_OR_LIST_KEYS and isinstance(value, list):
+        return all(isinstance(item, str) for item in value)
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, int):
+        return isinstance(value, int) and not isinstance(value, bool)
+    if isinstance(default, float):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(default, str):
+        return isinstance(value, str)
+    if isinstance(default, list):
+        return isinstance(value, list)
+    if default is None:
+        return value is None or isinstance(value, (bool, int, float, str))
+    return False
+
+
+def import_legacy(project_root, project_id, version, emitter=None):
+    """Adopt a v2 ``user-data/preferences.json`` as this project's preference layer.
+
+    Before this, a project bound over a v2 install kept its preferences in a file the
+    cascade never reads, so they silently stopped applying, and a later ``devteam
+    upgrade`` refused because the same name already existed at its destination.
+
+    Copy → verify → retire, the order ``upgrade`` uses: declared keys whose value fits
+    the default's type are written into the project layer, read back and compared, and
+    only then is the file moved to quarantine — never deleted (No-Destruction Rule).
+
+    - **The project layer wins a conflict.** A value already there was set through the
+      CLI or the app after the v2 file was last written, so it is the newer decision.
+    - **Unknown and ill-typed keys do not hold the import back.** They are reported, and
+      the quarantined file keeps them recoverable.
+
+    Returns ``None`` when there is no legacy file, else a report. The file is left in
+    place, with ``problem`` set, when it cannot be read or the write did not verify.
+    """
+    source = legacy_file(project_root)
+    if not source.is_file():
+        return None
+    report = {
+        "source": "{}/{}/{}".format(project.PROJECT_DIR, project.LEGACY_MEMORY_DIR, LEGACY_FILE_NAME),
+        "imported": [],
+        "unchanged": [],
+        "conflicts": [],
+        "ignored": [],
+        "quarantined": None,
+        "problem": None,
+    }
+
+    try:
+        legacy = jsonio.read_json(source)
+    except EnvError as exc:
+        legacy = exc
+    if not isinstance(legacy, dict):
+        report["problem"] = "not a JSON object; left in place" if not isinstance(legacy, EnvError) else str(legacy)
+        if emitter is not None:
+            emitter.warn("{} was not imported: {}".format(report["source"], report["problem"]))
+        return report
+
+    base = defaults(version)
+    target = project_file(project_id)
+    layer = _layer(target)
+    for key in sorted(legacy):
+        value = legacy[key]
+        if key not in base:
+            report["ignored"].append({"key": key, "reason": "unknown"})
+        elif not _fits_default(key, value, base[key]):
+            report["ignored"].append({"key": key, "reason": "invalid"})
+        elif key in layer:
+            report["unchanged" if layer[key] == value else "conflicts"].append(key)
+        else:
+            layer[key] = value
+            report["imported"].append(key)
+
+    if report["imported"]:
+        jsonio.write_json_atomic(target, layer)
+        written = _layer(target)
+        unverified = [key for key in report["imported"] if written.get(key) != legacy[key]]
+        if unverified:
+            report["problem"] = "the project layer did not read back {}; left in place".format(
+                ", ".join(unverified)
+            )
+            if emitter is not None:
+                emitter.warn("{} was not retired: {}".format(report["source"], report["problem"]))
+            return report
+
+    report["quarantined"] = str(quarantine.move(source, project_id, group=IMPORTED_GROUP))
+    if emitter is not None:
+        if report["conflicts"]:
+            emitter.warn(
+                "kept this project's stored value over {} for: {}".format(
+                    report["source"], ", ".join(report["conflicts"])
+                )
+            )
+        if report["ignored"]:
+            emitter.warn(
+                "not imported from {} (see the quarantined copy): {}".format(
+                    report["source"],
+                    ", ".join("{} ({})".format(item["key"], item["reason"]) for item in report["ignored"]),
+                )
+            )
+    return report
+

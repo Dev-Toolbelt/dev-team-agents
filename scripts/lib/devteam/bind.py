@@ -656,6 +656,8 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     # Resolved preferences and the state pointer are written on every bind and
     # every sync: both are projections of state that lives elsewhere, so a stale
     # one is a bug rather than a user edit to preserve.
+    # Before the projection, so it already carries what a v2 preferences file held.
+    preferences_import = prefs.import_legacy(project_root, project_id, version, emitter=emitter)
     artifacts.append(prefs.materialize(project_root, project_id, version))
     artifacts.extend(project.write_pointers(project_root, project_id))
     _stamp_installed_version(project_root, project_id, version)
@@ -741,6 +743,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         "gitignore": ignore_action if ignore_changed else "unchanged",
         "git_exclude": exclude_action,
         "fallback_reason": fallback_reason,
+        "preferences_import": preferences_import,
     }
 
 
