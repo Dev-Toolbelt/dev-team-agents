@@ -77,6 +77,13 @@ export class NotificationCenter {
   private retryTimer: unknown = null;
   private watchdogTimer: unknown = null;
   private readonly seenIds = new Set<string>();
+  /**
+   * Bumped by every spawn, restart and stop. `startStream` is async, so a restart that
+   * lands while a spawn is still awaiting it found no handle to stop — and both children
+   * then ran. A spawn whose generation is stale by the time its child exists stops that
+   * child at once, and a stale child's events and exit are ignored.
+   */
+  private generation = 0;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
 
@@ -97,6 +104,7 @@ export class NotificationCenter {
   /** Stop for good (app quitting). Closes the child's stdin, which ends `watch`. */
   stop(): void {
     this.stopped = true;
+    this.generation += 1;
     this.clearRetry();
     this.clearWatchdog();
     this.handle?.stop();
@@ -105,6 +113,7 @@ export class NotificationCenter {
 
   /** Re-resolve happened, or the user asked: drop the current child and start again now. */
   async restart(): Promise<void> {
+    this.generation += 1;
     this.handle?.stop();
     this.handle = null;
     this.clearRetry();
@@ -126,16 +135,28 @@ export class NotificationCenter {
 
   private async spawn(): Promise<void> {
     if (this.stopped) return;
+    this.generation += 1;
+    const generation = this.generation;
+    const current = () => generation === this.generation && !this.stopped;
     this.update({ status: this.feed.status === 'retrying' ? 'retrying' : 'starting' });
     let handle: StreamHandle | null;
     try {
       handle = await this.deps.startStream({
-        onEvent: (event) => this.onEvent(event),
+        onEvent: (event) => {
+          if (current()) this.onEvent(event);
+        },
         onInvalid: (detail) => this.deps.log?.(`notifications: ignored an event: ${detail}`),
-        onEnd: (end) => this.onEnd(end),
+        onEnd: (end) => {
+          if (current()) this.onEnd(end);
+        },
       });
     } catch (error) {
-      this.scheduleRetry(`the notification stream could not start: ${String(error)}`);
+      if (current()) this.scheduleRetry(`the notification stream could not start: ${String(error)}`);
+      return;
+    }
+    if (!current()) {
+      // Superseded while it was starting: this child has no one left to report to.
+      handle?.stop();
       return;
     }
     if (handle === null) {

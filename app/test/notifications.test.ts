@@ -322,6 +322,33 @@ describe('NotificationCenter — the stream is supervised', () => {
     expect(h.center.snapshot().status).toBe('unavailable');
   });
 
+  it('a restart that lands while the first start is still pending leaves exactly one child', async () => {
+    // The packaged app ran two `watch` children: start() at launch, then the renderer's
+    // re-resolve called restart() before the first startStream had returned.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stops: ReturnType<typeof vi.fn>[] = [];
+    let calls = 0;
+    const h = harness({
+      startStream: async () => {
+        calls += 1;
+        if (calls === 1) await gate;
+        const stop = vi.fn();
+        stops.push(stop);
+        return { stop, pid: calls };
+      },
+    });
+    const first = h.center.start();
+    await h.center.restart();
+    release();
+    await first;
+    expect(stops).toHaveLength(2);
+    const running = stops.filter((stop) => stop.mock.calls.length === 0);
+    expect(running).toHaveLength(1);
+  });
+
   it('stop() closes the child and schedules nothing more', async () => {
     const h = harness();
     await h.center.start();
