@@ -42,16 +42,16 @@ contract, the distribution channels and the desktop app are M4, specified separa
 
 **Scenario: a bound project can reach the framework by a project-relative path**
 - Given a project bound in `link` or `copy` mode
-- When any shipped command or skill resolves `.dev-team-agents/core/scripts/…` or
-  `.dev-team-agents/core/templates/…`
+- When any shipped command, skill, agent or hook resolves `.dev-team-agents/scripts/…` or
+  `.dev-team-agents/templates/…`
 - Then the path exists and resolves into the version that project is bound to
-- And `bash .dev-team-agents/core/scripts/new-adr.sh "<title>"` creates an ADR
+- And `bash .dev-team-agents/scripts/new-adr.sh "<title>"` creates an ADR
 
 **Scenario: binding registers the hook dispatchers**
 - Given a project being bound for a provider that uses them
 - When the bind completes
 - Then `.claude/settings.json` carries one entry each for `SessionStart`, `Stop`, `PreCompact`
-  and `PreToolUse`, pointing through the core pointer
+  and `PreToolUse`, pointing through the `.dev-team-agents/scripts` link
 - And every other key in that file is unchanged
 - And a second bind neither duplicates an entry nor rewrites an unrelated one
 - And `unbind` removes those four entries and leaves the file and its other keys in place
@@ -363,3 +363,11 @@ contract, the distribution channels and the desktop app are M4, specified separa
 
 ---
 Review the criteria above — tell me if anything needs to change before this becomes a sprint task.
+- 2026-09-29 | implementation | The in-project runtime root is two links, `.dev-team-agents/scripts`
+  and `.dev-team-agents/templates`, not one `core` pointer; the two scenarios above now name the
+  paths the framework's text actually uses. | The `core` pointer was added so the shipped references
+  would resolve, but the references were never rewritten to `core/…` — they still say
+  `.dev-team-agents/scripts/…` — so none resolved, and the reuse and design-token Stop gates, which
+  `exit 0` when their lint is absent, were off in every bound project. Linking at the cited path fixes
+  every reference without rewriting one, keeps v2 installs working, and is now asserted against this
+  repository's real tree by `tests/test_runtime_links.py`.

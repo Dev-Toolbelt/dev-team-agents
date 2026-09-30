@@ -174,3 +174,20 @@ meaning "move ten projects mid-sprint", and it makes rollback per project rather
 > (`bind.MACHINE_LOCAL_KINDS`), and `settings` is left out on purpose — `.claude/settings.json` is the
 > project's own file, which a teammate needs committed to get the hooks.
 
+> **Amendment — the in-project runtime root is `scripts/` and `templates/`, not a `core` pointer.**
+> `bind` gave each project one `core` link to the whole resolved version, documented as what made the
+> framework's project-relative paths resolve. It did not: the text names
+> `.dev-team-agents/scripts/new-adr.sh` and the pointer produced `.dev-team-agents/core/scripts/…`, so
+> 138 references across 39 files resolved nowhere, and the reuse and design-token Stop gates — which
+> `exit 0` when their lint is missing — were silently off in every v3 project. Nothing shipped reads
+> agents, commands or skills through `.dev-team-agents/` (Claude Code reads them under `.claude/`), so
+> the pointer is replaced by two links at the cited paths. Rewriting the references to `core/…` was
+> rejected: it breaks every v2 install, which has no `core`, and the only way to keep them working was a
+> `core → .` self-link that loops any tool following links. Consequences: `settings.json` names
+> `.dev-team-agents/scripts/hooks` — the v2 path, so the file no longer differs between layouts — and
+> `sync` rewrites a `core/scripts/hooks` entry in place and retires the pointer; a real directory at
+> either path is a v2 tree and is refused with a pointer to `migrate`; and the v2 installers, which now
+> resolve at their documented path, refuse to run in a bound project and name the `devteam` command.
+> **Condition for release:** two CLI versions on one team would rewrite `settings.json` back and forth
+> between the two hook paths. That cannot happen before the CLI's first release; after it, a change
+> like this one needs a window in which both paths are written.
