@@ -459,6 +459,10 @@ def locks_dir():
 #: secret that travels with a portable export is a secret in one more place. ADR-0010
 #: replaces the file with non-secret references in `data/credentials/`, which are
 #: portable precisely because they hold no value.
+#:
+#: `integrations-status.json` is the last connection test of each integration: a token
+#: that worked from this machine says nothing about another one. The account config and
+#: the token reference beside it (`data/integrations/`, `data/credentials/`) stay portable.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -479,6 +483,10 @@ MACHINE_LOCAL_RECORDS = (
     # The name is matched at any depth, so it must be one no user directory would carry
     # (a generic `tasks` would capture a user's own `wiki/tasks/`).
     "task-board",
+    # The last connection test per integration (ADR-0014 schema `integrations`): whether a
+    # token worked against an API from THIS machine, at that moment. The token and the
+    # account config that produced the result are not portable proof of it elsewhere.
+    "integrations-status.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:
@@ -489,7 +497,9 @@ MACHINE_LOCAL_RECORDS = (
 #: listed until the next major, carries its own gitignore exception
 #: (`!.dev-team-agents/user-data/graphify.json`) so the team shares one, and is moved into
 #: `plugin-settings/graphify.json` by `plugins.migrate_legacy` on bind/sync.
-PROJECT_OWNED_RECORDS = ("graphify.json", "plugin-settings")
+#: `integration-settings/` is the same idea for integrations (GitHub, Jira): which
+#: repository or project key this project works against is committed, shared config.
+PROJECT_OWNED_RECORDS = ("graphify.json", "plugin-settings", "integration-settings")
 
 #: Top-level entries of ``data/`` that never leave this machine.
 MACHINE_LOCAL_STORE_ENTRIES = (MACHINE_ID_FILE, MACHINES_DIR, "locks")
