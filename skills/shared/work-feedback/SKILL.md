@@ -11,7 +11,12 @@ When an orchestrating agent spawns sub-agents that run **in the background** (e.
 
 ## Configuration Gate
 
-Read `.dev-team-agents/user-data/credentials.local.json` before doing anything in this skill:
+Before doing anything in this skill, read the two keys below from the first of these files that exists, in order. Use the **Read** tool, not a shell command — the first file holds secrets next to these keys, and the credential guard hook stops a shell read of it:
+
+1. `credentials.local.json` in the project's **state directory** — the directory named by the one-line pointer `.dev-team-agents/state-dir`, or `.dev-team-agents/user-data/` when that pointer is absent. After `devteam upgrade` the pointer names a machine-local directory in the store.
+2. `<credentials>/<project_id>.json`, then `<credentials>/global.json` — the credential reference files, where `devteam cred import` moves these two keys (and quarantines file 1). `<credentials>` is the `credentials` path in `devteam path --json`; `project_id` is in `.dev-team-agents/project.json`. These files hold no secret values.
+
+Only these keys are read:
 
 ```json
 {
@@ -22,7 +27,7 @@ Read `.dev-team-agents/user-data/credentials.local.json` before doing anything i
 
 - `work_feedback_active: false` → **do not** run any part of this skill. No table, no scheduling. Proceed with the task silently as if this skill did not exist.
 - `work_feedback_interval_minutes` → the polling interval in minutes. Convert to seconds and clamp to `[60, 3600]` (the `ScheduleWakeup` runtime limit) before use. A value outside that range after conversion is clamped, never rejected.
-- If the file or either key is missing, treat it as `active: true`, `interval_minutes: 5` — `scripts/install.sh` and `/devteam:health-check` Category 10 guarantee the keys exist, so an absence here means a stale read, not an opt-out.
+- If no file above carries a key, treat it as `active: true`, `interval_minutes: 5` — the default `scripts/install.sh` writes. Nothing recreates the keys once a bound project's file is gone, so their absence is the default, not an opt-out.
 
 These two keys are the **only** source of truth for whether and how often this skill runs. Do not infer a different cadence from context, and do not skip the gate check because "it's probably fine."
 
@@ -39,7 +44,7 @@ Applies only when sub-agents are running **in the background** and the task has 
 
 ## Loop Mechanics
 
-1. Before the first background spawn, resolve the step list (ordered, from the plan/roster), note the version string (`installed_version` from `.dev-team-agents/user-data/state.json`), and record the start timestamp — it is fixed for the whole run and never recomputed on later ticks.
+1. Before the first background spawn, resolve the step list (ordered, from the plan/roster), note the version string (`installed_version` from `state.json` in the same state directory), and record the start timestamp — it is fixed for the whole run and never recomputed on later ticks.
 2. After spawning, call `ScheduleWakeup` with `delaySeconds` = the clamped interval from the gate above, and a `reason` naming what is being polled.
 3. On each wake-up, check the real status of in-flight sub-agents (`TaskList`/`TaskOutput`, or the workflow's own progress state) and update each step's status:
    - ✅ done
