@@ -623,6 +623,46 @@ describe('Projects — the bind form waits for a directory', () => {
   });
 });
 
+describe('Projects — a directory that is already bound cannot be bound again', () => {
+  async function choose(chosen: string) {
+    const user = userEvent.setup();
+    const bridge = fakeBridge({
+      listProjects: vi.fn(() =>
+        Promise.resolve(ok({ current: '2.48.0', projects: [project({ path: '/repo/project-1' })] })),
+      ),
+      chooseProjectDirectory: vi.fn<() => Promise<DirectoryChoice>>(() => Promise.resolve({ chosen: true, path: chosen })),
+    });
+    installBridge(bridge);
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    return { dialog, bridge };
+  }
+
+  it('says so, hides the form, keeps Bind disabled and asks the CLI nothing', async () => {
+    const { dialog, bridge } = await choose('/repo/project-1/');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/already bound as project-1/i);
+    expect(within(dialog).queryByLabelText(/project name/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^bind$/i })).toBeDisabled();
+    expect(bridge.planMigration).not.toHaveBeenCalled();
+    expect(bridge.bindProject).not.toHaveBeenCalled();
+  });
+
+  it('refuses a directory inside a bound project, which the CLI would resolve to that project', async () => {
+    const { dialog } = await choose('/repo/project-1/src');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/inside project-1, which is already bound/i);
+    expect(within(dialog).getByRole('button', { name: /^bind$/i })).toBeDisabled();
+  });
+
+  it('does not mistake a sibling with the same prefix for the bound project', async () => {
+    const { dialog } = await choose('/repo/project-10');
+    expect(await within(dialog).findByLabelText(/project name/i)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('Projects — a v2 install is migrated from the bind dialog', () => {
   async function openAndChoose(overrides: Parameters<typeof fakeBridge>[0]) {
     const user = userEvent.setup();

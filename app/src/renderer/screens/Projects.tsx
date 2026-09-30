@@ -79,6 +79,29 @@ const MODE_DESCRIPTIONS: Record<BindMode, string> = {
   vendored: 'Copies the framework into your repo.',
 };
 
+/** A bound project as the bind dialog needs it: where it is, and what the list calls it. */
+interface BoundDirectory {
+  readonly path: string;
+  readonly name: string;
+}
+
+/** Without trailing separators, and with Windows separators normalised: paths compared as written. */
+function normalizeDirectory(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * The bound project `chosen` is, or sits inside — or `undefined`. Compared by whole path
+ * components, so `/repo/app-2` is not read as inside `/repo/app`.
+ */
+function boundDirectory(chosen: string, bound: readonly BoundDirectory[]): BoundDirectory | undefined {
+  const target = normalizeDirectory(chosen);
+  return bound.find((project) => {
+    const root = normalizeDirectory(project.path);
+    return target === root || target.startsWith(`${root}/`);
+  });
+}
+
 /**
  * The last path segment, POSIX or Windows — the picker can hand back either. Falls back
  * to the whole string on the degenerate input a directory picker never actually returns
@@ -431,6 +454,10 @@ export function Projects({
         onOpenChange={setBindOpen}
         environment={environment}
         onBound={reload}
+        bound={projects.map((project) => ({
+          path: project.path,
+          name: displayName(project.path, project.project_id, projectNames),
+        }))}
       />
     </section>
   );
@@ -1051,11 +1078,14 @@ function BindDialog({
   onOpenChange,
   environment,
   onBound,
+  bound: boundProjects,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   environment: EnvironmentReport | null;
   onBound: () => void;
+  /** The projects already bound, from the list on screen — a directory among them is refused. */
+  bound: readonly BoundDirectory[];
 }) {
   const [path, setPath] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -1119,7 +1149,8 @@ function BindDialog({
       review.reset();
       migrate.reset();
       bind.reset();
-      void detect(choice.path);
+      // Already bound: refused on the spot, so nothing is asked of the CLI.
+      if (boundDirectory(choice.path, boundProjects) === undefined) void detect(choice.path);
     });
   }
 
@@ -1175,8 +1206,11 @@ function BindDialog({
   const bound = bind.state.phase === 'done' && bind.state.result.ok ? bind.state.result.data : null;
   const boundName = name.trim() !== '' ? name.trim() : path !== null ? basename(path) : '';
 
+  // A directory that is, or sits inside, a bound project. The CLI resolves a sub-directory to
+  // its project root, so binding one would re-bind that project rather than add a new one.
+  const alreadyBound = path !== null ? boundDirectory(path, boundProjects) : undefined;
   const detected = detection !== null && detection.path === path ? detection.result : null;
-  const checking = path !== null && detected === null;
+  const checking = path !== null && alreadyBound === undefined && detected === null;
   // exit 2 is the CLI's "no v2 install to migrate" — anything else that failed is a real
   // problem with this directory, and binding would fail on it too.
   const notV2 = detected !== null && !detected.ok && detected.exitCode === 2;
@@ -1222,10 +1256,22 @@ function BindDialog({
               // same fact for a colour-blind user, and both are in the accessible name a
               // screen reader announces — the border alone would tell neither. The change
               // control sits inside the box it changes, instead of a line of its own above it.
-              <div className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 py-1.5 pr-1.5 pl-3 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200">
-                <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+              <div
+                className={cn(
+                  'flex items-center gap-2 rounded-md border py-1.5 pr-1.5 pl-3 text-sm',
+                  alreadyBound === undefined
+                    ? 'border-green-600 bg-green-50 text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200'
+                    : 'border-destructive bg-destructive/10 text-destructive',
+                )}
+              >
+                {alreadyBound === undefined ? (
+                  <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+                )}
                 <span className="min-w-0 flex-1 truncate" title={path}>
-                  Directory chosen: <span className="font-mono text-xs">{path}</span>
+                  {alreadyBound === undefined ? 'Directory chosen: ' : 'Already bound: '}
+                  <span className="font-mono text-xs">{path}</span>
                 </span>
                 <Button
                   type="button"
@@ -1240,6 +1286,14 @@ function BindDialog({
               </div>
             )}
 
+            {alreadyBound !== undefined ? (
+              <p role="alert" className="text-sm text-destructive">
+                {normalizeDirectory(alreadyBound.path) === normalizeDirectory(path ?? '')
+                  ? `This project is already bound as ${alreadyBound.name}.`
+                  : `This directory is inside ${alreadyBound.name}, which is already bound.`}{' '}
+                Choose a different directory.
+              </p>
+            ) : null}
             {checking ? (
               <p className="text-xs text-muted-foreground" aria-live="polite">
                 Checking whether this directory already has dev-team-agents…
@@ -1250,7 +1304,7 @@ function BindDialog({
 
             {/* Nothing but the picker until there is a directory to bind — providers and a
                 mode asked for decisions about nothing yet. */}
-            {path !== null ? (
+            {path !== null && alreadyBound === undefined ? (
               <>
                 <div className="grid gap-2">
                   <Label htmlFor="bind-project-name">Project name</Label>
@@ -1384,7 +1438,13 @@ function BindDialog({
             <WriteButton
               command="bind"
               environment={environment}
-              disabled={path === null || checking || detectionProblem !== null || bind.state.phase === 'pending'}
+              disabled={
+                path === null ||
+                alreadyBound !== undefined ||
+                checking ||
+                detectionProblem !== null ||
+                bind.state.phase === 'pending'
+              }
               onClick={() => {
                 void bind.run().then((result) => {
                   if (result.ok) onBound();
