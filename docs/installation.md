@@ -227,7 +227,7 @@ Everything above describes the **v2 per-project install**, which keeps working a
 
 | v2 (this guide) | v3 |
 |-----------------|----|
-| Framework copied into every project | One versioned store per machine, projects hold a `core` pointer |
+| Framework copied into every project | One versioned store per machine, projects hold two links into it (`scripts/`, `templates/`) |
 | `bash .dev-team-agents/scripts/update.sh` per project | `devteam update` once, then `devteam sync --all` |
 | Every project moves together | Per-project version pinning and rollback |
 | Framework files committed to the product repo | Only `.dev-team-agents/project.json` is committed |

@@ -69,7 +69,7 @@ Help me set up this project with dev-team-agents
 | Move a project's memory into the store | `devteam upgrade --apply` |
 | Manage credentials (set, get, audit, migrate v2) | `devteam cred set|get|list|unset|import|check|backends` |
 
-On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionless file's shebang does not execute there. A bound project keeps a committed `.dev-team-agents/project.json` (its identity and knowledge folders) and a `core` pointer to the store; no copy of the framework, and no framework diffs in your product repository.
+On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionless file's shebang does not execute there. A bound project keeps a committed `.dev-team-agents/project.json` (its identity and knowledge folders) and two links into the store (`scripts/`, `templates/`); no copy of the framework, and no framework diffs in your product repository.
 
 `devteam bind` defaults to `--mode=auto`, which resolves to **`link`** (symlinks into the store) on any filesystem that supports it — the recommended mode, since a later `devteam update` reaches every project bound this way with no further step. `copy` (the Windows fallback when symlinks aren't available) and the opt-in `vendored` mode both need an explicit `devteam sync` per project after each update to pick up the change.
 

@@ -227,7 +227,7 @@ Tudo acima descreve a **instalação v2 por projeto**, que continua funcionando 
 
 | v2 (este guia) | v3 |
 |----------------|----|
-| Framework copiado dentro de cada projeto | Um store versionado por máquina, projetos guardam um ponteiro `core` |
+| Framework copiado dentro de cada projeto | Um store versionado por máquina, projetos guardam dois links para ele (`scripts/`, `templates/`) |
 | `bash .dev-team-agents/scripts/update.sh` por projeto | `devteam update` uma vez, depois `devteam sync --all` |
 | Todos os projetos andam juntos | Pin e rollback de versão por projeto |
 | Arquivos do framework commitados no repo do produto | Só o `.dev-team-agents/project.json` é commitado |
