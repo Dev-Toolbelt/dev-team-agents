@@ -1,4 +1,4 @@
-"""`devteam skills` — the providers' user-level skill directories (ADR-0017).
+"""`devteam skills` — the providers' user-level skill directories (ADR-0020).
 
 Every test runs against ``$DEVTEAM_USER_HOME`` pinned by ``StoreTestCase`` to a temp
 directory, so none of them can read or write the developer's real ``~/.claude/skills``.

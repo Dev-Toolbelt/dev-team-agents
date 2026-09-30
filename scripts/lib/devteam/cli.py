@@ -1567,7 +1567,7 @@ def build_parser():
     catalog_show.add_argument("--path", help="project directory (default: the current one)")
     catalog_show.set_defaults(func=cmd_catalog_show)
 
-    # The user-level skill directories each provider reads (ADR-0017) — outside every
+    # The user-level skill directories each provider reads (ADR-0020) — outside every
     # project and outside the store. No `--path`: nothing here depends on a project.
     skills_parser = leaf(
         sub, "skills", help="list, show, install and remove the providers' global skills"

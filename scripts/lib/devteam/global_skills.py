@@ -1,4 +1,4 @@
-"""The user-level skills each provider reads — list, show, install, remove (ADR-0017).
+"""The user-level skills each provider reads — list, show, install, remove (ADR-0020).
 
 Claude Code, Codex and opencode each read skills from a directory in the user's home,
 outside any project and outside the store. This module is the one place that knows

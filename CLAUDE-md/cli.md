@@ -271,7 +271,7 @@ in the version the project is bound to.
 ## Global skills
 
 `devteam skills` manages the skills each provider reads from the user's home — outside every
-project and outside the store (ADR-0017). `scripts/lib/global-skill-roots.json` is the single map
+project and outside the store (ADR-0020). `scripts/lib/global-skill-roots.json` is the single map
 of those directories; its unit is the physical **root**, each listing the providers that read it:
 
 | Root | Directory | Read by | Install target for |

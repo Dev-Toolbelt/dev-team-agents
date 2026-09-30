@@ -1,5 +1,5 @@
 {
-  "_comment": "CANONICAL map of the user-level (global) skill directories each provider reads, consumed by scripts/lib/devteam/global_skills.py (ADR-0017). One entry per PHYSICAL directory: several providers can read the same one, so a skill is listed once with every provider that sees it. `~` is the user's home ($DEVTEAM_USER_HOME overrides it, for tests). `install_target` names the root a new skill is written to for each provider.",
+  "_comment": "CANONICAL map of the user-level (global) skill directories each provider reads, consumed by scripts/lib/devteam/global_skills.py (ADR-0020). One entry per PHYSICAL directory: several providers can read the same one, so a skill is listed once with every provider that sees it. `~` is the user's home ($DEVTEAM_USER_HOME overrides it, for tests). `install_target` names the root a new skill is written to for each provider.",
   "roots": [
     {
       "id": "claude",

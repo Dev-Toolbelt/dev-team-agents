@@ -702,7 +702,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # included); `main()`'s exit-1 check is truthiness-based, so `[]` still
         # means success. The shape change was the deliberate fix, not this pin.
         "cred check": {"project_id", "findings", "problems"},
-        # ADR-0017: the global skills screen binds its table to `skills list` records.
+        # ADR-0020: the global skills screen binds its table to `skills list` records.
         "skills list": {"provider", "roots", "skills", "count"},
         "skills list.root": {"id", "path", "exists", "providers", "install_target_for"},
         "skills list.record": {

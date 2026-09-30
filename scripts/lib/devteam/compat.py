@@ -429,9 +429,9 @@ MUTATING = {
     ("import",): "replaces the data store",
     ("uninstall",): "removes the core, and the data store with --purge",
     ("skills", "install"): "writes a skill into a provider's global skill directory, and "
-    "quarantines the one it replaces with --replace (ADR-0017)",
+    "quarantines the one it replaces with --replace (ADR-0020)",
     ("skills", "remove"): "moves a global skill into the store's quarantine, or unlinks a "
-    "symlinked one (ADR-0017)",
+    "symlinked one (ADR-0020)",
     ("doctor",): "repairs what it finds — it rewrites the directory pointers, relocates a "
     "moved registry entry, and reassigns identity with --reassign-identity. Read the "
     "actions it returns, not the word 'diagnose', before reclassifying this one",

@@ -1,4 +1,4 @@
-# ADR-0017: The CLI manages the providers' global skill directories
+# ADR-0020: The CLI manages the providers' global skill directories
 
 **Date:** 2026-09-30
 **Status:** Accepted

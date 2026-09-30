@@ -286,7 +286,7 @@ dev-team-agents/
 │   │   │              versions · providers · gitignore · bind · migrate · doctor ·
 │   │   │              quarantine · update · output · errors · global_skills · plugins · cli
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
-│   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0017)
+│   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0020)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
 │   │   ├── preferences-defaults.json ← defaults written into user-data/preferences.json
 │   │   ├── render_provider.py     ← render engine
