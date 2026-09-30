@@ -58,7 +58,7 @@ If `preferences.json` does not exist or is unreadable, default to English and em
 
 This rule applies to: explanations, questions, confirmations, summaries, notifications, and all user-facing text. It does NOT apply to document content, code comments, or commit messages.
 
-When emitting system notifications (context window warnings, missing config, tips), load `skills/shared/notifier/SKILL.md` to apply the correct DEV TEAM AGENTS format and suppression rules.
+Notifications (context window, stale config, tips) are raised by hooks and shown by the desktop app — never print a `DEV TEAM AGENTS` box. `skills/shared/notifier/SKILL.md` says what raises what, and how a hook adds a new one.
 
 ---
 

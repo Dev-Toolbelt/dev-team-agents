@@ -601,7 +601,12 @@ EOF
 
 ## Category 9 — Notifier
 
-**Disabled by design** — `stop/04-notifier.sh` was renamed to `stop/_disabled-04-notifier.sh` (see `CLAUDE-md/hooks.md` § Disabled Hooks, pending review). Do not report the original filename as missing or attempt to `chmod +x` it back into the dispatch convention.
+`stop/04-notifier.sh` is **enabled** again: it raises notifications into the queue the desktop app shows (ADR-0017, `CLAUDE-md/notifications.md`). A leftover `stop/_disabled-04-notifier.sh` from an older install is inert — the dispatcher skips the name — and is reported, never deleted (No-Destruction Rule).
+
+```bash
+[ -x .dev-team-agents/scripts/hooks/stop/04-notifier.sh ] && echo "04-notifier: OK" || echo "04-notifier: MISSING_OR_NOT_EXECUTABLE"
+[ -f .dev-team-agents/scripts/hooks/lib/notify.sh ] && echo "notify.sh: OK" || echo "notify.sh: MISSING"
+```
 
 ```bash
 source .dev-team-agents/scripts/lib/state.sh 2>/dev/null
@@ -613,7 +618,7 @@ STATE=.dev-team-agents/user-data/state.json
 
 | Check | Auto-fix |
 |-------|----------|
-| `stop/04-notifier.sh` | Disabled by design — do not restore |
+| `04-notifier: MISSING_OR_NOT_EXECUTABLE` / `notify.sh: MISSING` | v3-bound project: `devteam sync` (never `chmod` through the `scripts` link into the store). v2 install: re-run the installer |
 | `session_id` missing | OK — created automatically by `session-start.sh` on next session |
 | `session_head` missing | OK — created automatically by `session-start.sh` on next session; until then the uncommitted-progress warning stays silent (no baseline HEAD to compare against) |
 | `last_health_check` missing | OK — this very health check run writes it (Step 4 of `commands/health-check.md`); nothing to fix here |
