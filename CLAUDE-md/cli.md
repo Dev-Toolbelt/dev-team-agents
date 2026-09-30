@@ -65,7 +65,7 @@ record that two machines appending to would need merge semantics for), the v2
 `credentials.local.json` (values, not references), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), and the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -181,6 +181,7 @@ mode.
 | `devteam migrate [path] [--apply [--untrack]]` | v2 install → bind, in either shape: `root` (vendored at `.dev-team-agents/`) or `pre-root` (at `.claude/dev-team-agents/`, before v2.1.0 — its memory moves to `.dev-team-agents/user-data/`, its `.claude/docs/` stays and joins `context_paths`, its hook entries and links are replaced). Previews unless `--apply`. An unregistered `project.json` (left by a refused bind) is adopted. Reports the paths git still tracks — `git_tracked` (the vendored trees, and memory) and `git_tracked_artifacts` (committed links a bind replaced) — and with `--untrack` runs `git rm -r --cached` on exactly those: the index only, never the working tree, nothing committed (`untracked`, `untrack_problem`). The one command that runs git on the user's repository, and only when asked (ADR-0015 amendment) |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
 | `devteam plugin list \| show <name> \| enable <name> [--force] \| disable <name> \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| run <name> <action>` | Manage plugins; see § Plugins below |
+| `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind>` | Account-level GitHub and Jira connections; see § Integrations below |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
@@ -646,6 +647,40 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 **Scope field:** `--scope` restricts which agents can read the value via `devteam cred get --agent <name>`. Agents not listed get a clear error; comma-separated, no spaces. The scope is **hygiene and auditability, not a sandbox** — an agent with Bash can read anything the user can read. Its value is auditing read paths and reporting scope violations in the audit log.
 
 **`credentials.local.json` migration:** The v2 plaintext file is opt-in, never scanned for. `devteam cred import /path/to/credentials.local.json` reads it, migrates values to the secret store, writes references to the reference layer, and moves the original file to quarantine — a one-way, confirmed operation. Non-secret fields (TTL thresholds, notification prefs) are kept as plain values in the reference layer.
+
+## Integrations
+
+`devteam integration` connects the account to GitHub and Jira. An integration is **not** a plugin: the
+token is account-level, and all network I/O happens in the CLI (the desktop app never touches the
+network, ADR-0015). Each adapter (`scripts/lib/devteam/integrations/`) declares a descriptor — fields, scope, picker
+resource — and the `IntegrationView` in `--json` carries it, so a client renders generically.
+
+| What | Where |
+|---|---|
+| token | secret store, `creds` key `integration.<name>.token`, global layer; read through `creds.get_value` (audited), never in a payload, exception or log |
+| account config | `data/integrations/<name>.json` — `{"schema":1,"config":{…}}` (portable) |
+| project binding | `<project>/.dev-team-agents/integration-settings/<name>.json` (committed) |
+| last test result | `data/machines/<machine-id>/integrations-status.json` (machine-local) |
+
+`connect` reads the token from **stdin** (empty stdin keeps the stored one) and `--field key=value` sets
+account-scope fields. A failing test (bad token, unreachable, rate-limited) is a result — exit `0`,
+`test.ok=false` — not a CLI error. `resources` failures are an environment error (exit `3`).
+The store schema is `integrations` (`compat.store_schemas()`): a client must declare it to write.
+HTTP policy (`integrations/http.py`): https only, the token goes only to the configured origin and
+a redirect elsewhere is refused, 10 s socket timeout, 20 s total deadline, 2 MB response cap. The
+test suite alone can allow loopback http through `DEVTEAM_INTEGRATIONS_TEST_ALLOW_LOOPBACK_HTTP`; it
+is a test hook, not a user setting, and nothing outside `tests/` should set it.
+
+**The token is bound to its origin.** Every token write records `token_origin`
+(`scheme://host:port` of `api_url` / `site_url`) as a reserved, non-field key in the account config.
+A request is refused, and the token sent nowhere, when the configured origin differs or none was
+recorded. Changing the URL with `config set/unset` or `connect --field` and no new token makes the
+token **stale**: the keychain value stays (No-Destruction), `auth.stale` is `true`, `connected` is
+`false`, `status.state` is `not_connected` with a summary asking for a new token, and `test` /
+`resources` fail with a usage error until `connect` supplies one. `connect` adds a top-level
+`warning` string to its payload only when the token landed in the `insecure` backend.
+Read-modify-write of the account and binding files holds the `integrations` lock (outer; `creds`'
+lock nests inside it); no lock is held across a network call.
 
 ## Plugins
 

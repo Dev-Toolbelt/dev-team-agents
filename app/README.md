@@ -69,6 +69,24 @@ is missing — locally. Under `CI=true` a missing CLI fails the file instead, so
 cannot go untested behind a green run. The CI gate (`.github/scripts/ci/05-app.sh`) also runs
 `npm run build` and checks the three entry points it must emit.
 
+## The Integrations screens
+
+A top-level **Integrations** tab lists every integration the CLI knows about (GitHub, Jira) in
+account mode. You see the token status (stored in the OS keychain), the account fields (API URL,
+site, email, etc.), and buttons to test the connection and disconnect. Each card is rendered
+generically from the adapter's descriptor in the CLI, so adding a new integration means adding
+one Python adapter to `scripts/lib/devteam/integrations/`.
+
+Per-project bindings (which repository, which Jira project) appear in an **Integrations** tab
+alongside Preferences on each project's screen, showing the read-only account status and the
+project-specific fields. A `connect-here` hint appears when an integration is not yet connected
+at the account level.
+
+**Token input via stdin only.** When connecting an account, the app prompts for the token in a
+write-only password field that is never pre-filled and shows only "Stored in <backend>" once
+saved. The main process passes it to the CLI through stdin — never argv — so it does not land
+in a shell history or a process listing. See ADR-0023.
+
 ## The app's own data
 
 `~/Library/Application Support/dev-team-agents-app/` — `settings.json` (`cliPath`) and

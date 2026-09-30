@@ -296,7 +296,7 @@ dev-team-agents/
 │   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
 │   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
 │   │   │              versions · providers · gitignore · bind · migrate · doctor ·
-│   │   │              quarantine · update · output · errors · global_skills · plugins · cli
+│   │   │              quarantine · update · output · errors · global_skills · integrations · plugins · cli
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
 │   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0020)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
@@ -376,7 +376,7 @@ When a rule or script path references "helpers", state which of the two it means
 | `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
 | `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
 
-The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references), **`audit.log`**, **`notifications.jsonl`** and **`notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references), **`audit.log`**, **`notifications.jsonl`** and **`notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), **`integrations-status.json`** (the last GitHub/Jira connection test), plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
 
 ---
 

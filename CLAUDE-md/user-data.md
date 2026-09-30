@@ -38,6 +38,7 @@ Machine-local (migrated to `data/machines/<machine-id>/projects/<project_id>/` o
 - `audit.log` — append-only JSONL audit trail of credential reads (who, when, which key — never the value). Machine-local because two machines appending to one portable log would need merge semantics this design does not have (ADR-0010)
 - `notifications.jsonl` — the notification queue: one JSON line per notice a hook raised through `scripts/hooks/lib/notify.sh`, capped at 200 lines by that writer. Read by `devteam notifications list|watch`, shown by the desktop app (ADR-0017). Machine-local: a context warning from this machine's session means nothing on another
 - `notifications-seen.json` — which of those this machine's app has shown; written only by `devteam notifications ack`, under a lock. Separate from the queue so the CLI never rewrites a file a hook is appending to
+- `integrations-status.json` — the last connection test per integration (`{"schema":1,"status":{"<name>":{state,checked_at,summary,facts}}}`), written by `devteam integration connect|test|disconnect|config set|unset` under the `integrations` lock, atomically. Lives directly in `data/machines/<machine-id>/`. Machine-local: a token that worked from this machine says nothing about another
 - `task-board/<session-key>.json` — the task board's per-session record (ADR-0018): the todo list the session's provider tool produced, each task with its status history. One file per session so two sessions never share a lock. Written only by `devteam tasks record|mark`, under a per-session lock, atomically; never deleted by any command. Machine-local: a session id means nothing on another host
 
 Other directories under `.claude/` created by agents:
@@ -48,6 +49,10 @@ Other directories under `.claude/` created by agents:
 **Rule:** any file that must survive an update must live in `.dev-team-agents/user-data/`, not inside `.dev-team-agents/`. Never store user config or state inside the package directory. Plugin settings are the exception: they live in `.dev-team-agents/plugin-settings/` and are committed (see § Plugin settings below).
 
 **Under v3 layout 2 this directory's contents are split three ways** (ADR-0013). `devteam upgrade` copies `preferences.json` and `session-summary.md` into the portable subtree (`data/projects/<project_id>/`), and `state.json`, every dot-marker, `telemetry-queue.json` and `credentials.local.json` into the machine subtree (`data/machines/<machine-id>/projects/<project_id>/`). **No legacy graphify.json migration happens on upgrade** — instead, `bind` and `sync` detect the old location and move it to the new one (ADR-0019): they read `.dev-team-agents/user-data/graphify.json` if the new settings file does not exist, create `.dev-team-agents/plugin-settings/graphify.json` with the content, and unlink the old file. The new file is written first, then the old one is removed, so the content is never held in one place only.
+
+### Integration settings
+
+GitHub and Jira bindings live in `.dev-team-agents/integration-settings/<name>.json` — **committed**, like plugin settings (`paths.PROJECT_OWNED_RECORDS`). Shape: `{ "schema": 1, "config": { "repository": "owner/name" } }`. Only project-scope fields are stored here; the token and the account fields (API URL, site URL, email) are account-level and never enter the project.
 
 ### Plugin settings
 
