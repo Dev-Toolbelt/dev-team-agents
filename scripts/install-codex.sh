@@ -15,6 +15,14 @@
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh --source /abs/path
 #   bash <path-to-dev-team-agents>/scripts/install-codex.sh --dry-run
+#   bash <path-to-dev-team-agents>/scripts/install-codex.sh --list-targets
+#   bash <path-to-dev-team-agents>/scripts/install-codex.sh --adopt
+#
+# Ownership (scripts/lib/provider-ownership.sh): an existing target path that
+# dev-team-agents did not create is never overwritten or deleted. The installer
+# exits 4 naming it, unless --adopt moves it to .dev-team-agents/quarantine/
+# first. --owned <file> lists paths a caller (`devteam bind`) vouches for;
+# --list-targets prints the project-relative paths an install would write.
 #
 # What it does:
 #   1. Resolves source (same logic as install-opencode.sh).
@@ -22,8 +30,9 @@
 #   3. Copies staged .codex/agents/*.toml into <project>/.codex/agents/.
 #   4. Copies staged .codex/skills/devteam-*/SKILL.md into <project>/.codex/skills/
 #      so the workflows are available as explicit Codex skills (`$devteam-*`).
-#   5. Removes any legacy prompt aliases from <project>/.codex/prompts/ and
-#      ~/.codex/prompts/ so older installs converge to the skills-first layout.
+#   5. Reports legacy prompt aliases in <project>/.codex/prompts/ and
+#      ~/.codex/prompts/ so older installs can converge to the skills-first
+#      layout. It never deletes them.
 #   6. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
 #   7. Writes a hooks.json file at <project>/.codex/hooks.json that wires
 #      scripts/hooks/{pre-tool-use,session-start,pre-compact,stop}.sh to the
@@ -36,14 +45,23 @@ set -euo pipefail
 PROJECT_ROOT="$(pwd)"
 DRY_RUN=0
 SOURCE_ARG=""
+LIST_TARGETS=0
+ADOPT=0
+OWNED_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source) SOURCE_ARG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --list-targets) LIST_TARGETS=1; DRY_RUN=1; shift ;;
+    --adopt) ADOPT=1; shift ;;
+    --owned) OWNED_FILE="$2"; shift 2 ;;
     *) echo "install-codex: unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+
+# --list-targets owns stdout: everything else goes to stderr.
+if [[ $LIST_TARGETS -eq 1 ]]; then exec 3>&1 1>&2; fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 candidate_sources=()
@@ -99,6 +117,27 @@ trap 'rm -rf "$STAGING"' EXIT
 bash "$SOURCE_DIR/scripts/render-provider.sh" \
   --provider codex --source-dir "$SOURCE_DIR" --target-dir "$STAGING"
 
+# ── ownership guard — before the first write ──────────────────────────
+# shellcheck source=scripts/lib/provider-ownership.sh
+source "$SCRIPT_DIR/lib/provider-ownership.sh"
+TARGETS="$STAGING/.targets"
+{
+  for f in "$STAGING/.codex/agents/"*.toml; do
+    [[ -e "$f" ]] && echo ".codex/agents/$(basename "$f")"
+  done
+  if [[ -d "$STAGING/.codex/skills" ]]; then
+    find "$STAGING/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' \
+      -exec basename {} \; | sort | sed 's|^|.codex/skills/|'
+  fi
+  echo ".codex/skills/dev-team-agents"
+} > "$TARGETS"
+
+if [[ $LIST_TARGETS -eq 1 ]]; then
+  cat "$TARGETS" >&3
+  exit 0
+fi
+po_guard "$PROJECT_ROOT" "$SOURCE_DIR" codex "$OWNED_FILE" "$TARGETS" "$ADOPT" "$DRY_RUN"
+
 # Ensure project has a stable path to the framework's scripts/hooks/ (the
 # Claude installer normally creates this; we materialize it for codex-only
 # installs). Sourced helper copies the slim Claude runtime subset into
@@ -112,7 +151,6 @@ if [[ $DRY_RUN -eq 0 ]]; then
   echo "  + materialized .dev-team-agents/ runtime subset (hooks/scripts/skills)"
 fi
 
-FRAMEWORK_SKILLS_DIR="$PROJECT_ROOT/.dev-team-agents/skills"
 
 # ── write into project .codex/ ────────────────────────────────────────
 CODEX_DIR="$PROJECT_ROOT/.codex"
@@ -136,28 +174,21 @@ if [[ $DRY_RUN -eq 0 ]]; then
 
   # skills symlink
   SKILLS_LINK="$CODEX_DIR/skills/dev-team-agents"
-  if [[ -L "$SKILLS_LINK" || -e "$SKILLS_LINK" ]]; then rm -rf "$SKILLS_LINK"; fi
-  ln -s "$FRAMEWORK_SKILLS_DIR" "$SKILLS_LINK"
-  echo "  + symlinked skills/ -> $SKILLS_LINK"
+  po_link_skills "$PROJECT_ROOT" "$SOURCE_DIR" "$SKILLS_LINK"
 fi
 
-# ── remove legacy prompt aliases from old Codex layouts ──────────────────────
-if [[ $DRY_RUN -eq 0 ]]; then
-  LEGACY_PROMPTS_DIR="$CODEX_DIR/prompts"
-  if [[ -d "$LEGACY_PROMPTS_DIR" ]]; then
-    find "$LEGACY_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' -delete
-    if [[ -z "$(find "$LEGACY_PROMPTS_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
-      rmdir "$LEGACY_PROMPTS_DIR" 2>/dev/null || true
-    fi
-    echo "  + removed legacy project-local prompt aliases from .codex/prompts/"
+# ── report legacy prompt aliases from old Codex layouts ──────────────────────
+# Reported, never deleted: a file matching the old naming is indistinguishable
+# from one the user wrote, and ~/.codex/prompts is outside the project entirely.
+for LEGACY_PROMPTS_DIR in "$CODEX_DIR/prompts" "${HOME}/.codex/prompts"; do
+  [[ -d "$LEGACY_PROMPTS_DIR" ]] || continue
+  LEGACY_PROMPTS="$(find "$LEGACY_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' 2>/dev/null | sort)"
+  if [[ -n "$LEGACY_PROMPTS" ]]; then
+    echo "  ! legacy prompt aliases found in $LEGACY_PROMPTS_DIR (superseded by \$devteam-* skills):" >&2
+    sed 's/^/      /' <<< "$LEGACY_PROMPTS" >&2
+    echo "    Remove them yourself if they came from an older dev-team-agents install." >&2
   fi
-
-  USER_PROMPTS_DIR="${HOME}/.codex/prompts"
-  if [[ -d "$USER_PROMPTS_DIR" ]]; then
-    find "$USER_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' -delete
-    echo "  + removed legacy user-level prompt aliases from ~/.codex/prompts/"
-  fi
-fi
+done
 
 # ── hooks.json for Codex (idempotent merge of dev-team-agents-managed entries)
 if [[ $DRY_RUN -eq 0 ]]; then
@@ -272,6 +303,10 @@ AGENTSEOF
   else
     echo "  + Codex session-banner echo rule already present in AGENTS.md"
   fi
+fi
+
+if [[ $DRY_RUN -eq 0 && -z "$OWNED_FILE" ]]; then
+  po_record_ledger "$PROJECT_ROOT" codex "$TARGETS"
 fi
 
 echo ""

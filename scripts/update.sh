@@ -109,7 +109,10 @@ bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
     if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/opencode/plugin/dev-team-agents.ts" ]; then
         echo "→ opencode config detected, re-running install-opencode.sh..."
-        bash .dev-team-agents/scripts/install-opencode.sh
+        # --adopt: an install from before the ownership ledger has no record of the
+        # files its own earlier runs wrote. They are moved to .dev-team-agents/quarantine/
+        # once, never deleted, and the ledger claims the fresh copies from then on.
+        bash .dev-team-agents/scripts/install-opencode.sh --adopt
     else
         echo "⚠ opencode config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
         echo "  Skipping automatic opencode re-render. To refresh opencode support, run:" >&2
@@ -122,7 +125,10 @@ fi
 if [ -f ".codex/hooks.json" ] || [ -d ".codex" ]; then
     if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/agents/product-analyst.md" ]; then
         echo "→ Codex config detected, re-running install-codex.sh..."
-        bash .dev-team-agents/scripts/install-codex.sh
+        # --adopt: an install from before the ownership ledger has no record of the
+        # files its own earlier runs wrote. They are moved to .dev-team-agents/quarantine/
+        # once, never deleted, and the ledger claims the fresh copies from then on.
+        bash .dev-team-agents/scripts/install-codex.sh --adopt
     else
         echo "⚠ Codex config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
         echo "  Skipping automatic Codex re-render. To refresh Codex support, run:" >&2
