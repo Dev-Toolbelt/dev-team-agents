@@ -636,6 +636,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "pin",
             "resolves_to",
             "path_exists",
+            "preferences",
         },
         "doctor": {"status", "findings", "actions"},
         "bind": {
