@@ -102,3 +102,21 @@ pre-existing one, because that file's owner never saw a prompt for a key added l
 | Resolve the preference cascade at read time, inside each agent | Puts merge logic in 18 agent bodies, which is precisely the duplication the Canonical Rule Homes policy exists to prevent. |
 | Make `context_paths` a personal preference | Produces silent divergence between developers running the same command on the same branch. No error, no lint, different results. |
 | A fourth, committed "team preferences" layer | Rejected with D8: preferences stay personal. `context_paths` is topology, not preference, and rides with identity instead. |
+
+> **Amendment — `bind` adopts a v2 `user-data/preferences.json` as the project layer.** The
+> project layer is `data/projects/<project_id>/preferences.json` on every layout, so a project bound
+> over a v2 install kept its preferences in a file the cascade never reads: they silently stopped
+> applying, and a later `devteam upgrade` refused because the same name already existed at its
+> destination. `bind` (and therefore `sync`) now runs `prefs.import_legacy()` before materialising the
+> projection — copy → verify → retire, the order `upgrade` uses:
+>
+> - Declared keys whose value fits the default's type are written to the project layer and **read
+>   back**; only when every one matches is the file moved to the store's quarantine
+>   (`imported-preferences`), never deleted.
+> - **The project layer wins a conflict** — a value already there was set through the CLI or the app
+>   after the v2 file was last written. Unknown and ill-typed keys are reported and do not block; the
+>   quarantined copy keeps them.
+> - Consent keys the v2 installer recorded as `true` are honoured: it wrote them only after its prompt.
+> - `bind --json` and `sync --json` gain `preferences_import` (`null` when there was no file), an
+>   additive key under ADR-0014.
+
