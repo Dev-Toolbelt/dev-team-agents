@@ -171,11 +171,12 @@ open joins it and adds its token — see *Pending tokens* below):
 | Explicit request in the prompt: review, revisar, revisão, revise, QA, testar, test it | same as commands | same | same |
 
 Keyword matching is word-bounded and case-insensitive. It skips a match that a negation (`não`,
-`sem`, `no`, `don't`, `without`, `skip`) directly governs — one of the two words before it, with no
+`sem`, `no`, `don't`, `without`) directly governs — one of the two words before it, with no
 punctuation between them and no `only`/`just`/`apenas`/`somente` in between (`no problem, review the
 code` and `not only review but fix` are requests) — and a match inside a question that opens with
 `what`/`how`/`why`/`o que`/`como`/`por que` (`what does the QA agent do?`). One linear pass; it lives
-in one tested file.
+in one tested file. `qa` touching a path separator or identifier joiner (`docs/qa/x`, `qa_report`,
+`qa-specialist`) is not the word.
 
 **Pending tokens.** `pending` is derived from what the window still waits for, tracked by kind:
 foreground agent launches (`fg`, by tool-use id), background agent launches (`bg`) and one
@@ -200,12 +201,28 @@ Tasks created after the window opened do not enter it.
 each agent's `## Before You Finish`). The hook scans the agent's returned output for it:
 Claude `PostToolUse` on `Agent`/`Task` (`tool_response`), Codex `PostToolUse` on `wait_agent`
 (`tool_response`), opencode `tool.execute.after` on `task` (`output.output`). Only the agent's answer is
-read, never the echoed `prompt`/input. One report retires one slot and carries one marker (the last in
-the report); markers of distinct reports (parallel reviewers) are summed. The result is recorded when
+read, never the echoed `prompt`/input. A result from `Agent`/`Task`/opencode `task` counts only when
+the call names one of our review agents (`subagent_type`); a `general-purpose` agent that quotes the
+marker changes nothing (marker-only acceptance is Codex `wait_agent`'s alone, which does not name its
+agent). The marker counts only as the **last non-empty line** of a report or final message, standing
+alone, after fenced and inline code have been removed. One report retires one slot and carries one
+marker; markers of distinct reports (parallel reviewers) are summed. The result is recorded when
 no token is left. For a command/prompt-triggered window, the next `Stop` scans the transcript's
 last assistant message (Claude `transcript_path`) for the marker; with no marker anywhere, the window
 records `findings: null` — shown as **result not read**. A routing-only pass (`code-reviewer` in router
 mode, which only delegates) emits no marker; the specialists it spawns do.
+
+A **background** agent's hand-back is read from the transcript at `Stop`. It counts only when it is
+the harness-injected form (a `queue-operation` entry, or the `user` entry whose task id mirrors a
+queue entry already seen; a user entry that stands alone is never one), its id (`tool-use-id`, else
+`task-id`) is a background token the open window launched, and the marker is in its `<result>`
+section only; a notification with no `<result>` (a Bash job's `<summary>`) carries no report. A
+transcript line longer than the per-`Stop` read cap is skipped rather than waited for.
+
+A Codex `wait_agent` that returns after `Stop` already settled its launch as unread reattaches to
+the most recent window that is unresolved and closed unread (only that one, only within
+`PENDING_MAX_AGE` of its result) and recomputes it: `0` releases the tasks, `> 0` holds them with
+findings.
 
 **Leaving In Review.**
 
@@ -221,7 +238,7 @@ mode, which only delegates) emits no marker; the specialists it spawns do.
 
 **Derived fields** (added, nothing removed — additive to the JSON contract):
 
-- task `column` gains `in_review`; task gains `review: {"state": "pending|findings|unread|null", "findings": N|null, "since": epoch}` (null when not in review);
+- task `column` gains `in_review`; task gains `review: {"state": "pending|findings|unread|null", "findings": N|null, "since": epoch}` (null when not in review). `state` is never `passed`: a zero result resolves its window and holds nothing;
 - `counts` gain `in_review` (project and session); project gains `with_findings` (tasks in review with findings);
 - `durations` gain `in_review`: time between entering and leaving the window. Durations **partition** the task's life: while a task is inside a review window its seconds count to `in_review` only, not to its provider status (`pending`/`in_progress`/`completed`), so the values sum to the elapsed time;
 - the `status` field keeps the provider's own status; only `column` reflects review.
@@ -231,16 +248,21 @@ mode, which only delegates) emits no marker; the specialists it spawns do.
 | Code | When |
 |---|---|
 | `tasks.session_done` | A record call moves a session from "some open" to "all done" (≥ 1 task) |
-| `tasks.review_findings` | A review window records `findings > 0` (dedupe per window) |
+| `tasks.review_findings` | A review window records `findings > 0` (dedupe per window; a `Stop` that closes several windows raises one per window with findings) |
 | `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude Code and Codex; opencode has no session-end event) |
 
 #### Desktop app
 
 - **Board (overview):** only projects with ≥ 1 task. Card: display name, provider icons (the set used
   by its sessions), sessions `total (N active)`, counts and percentages for To do / In progress /
-  Done, a stacked progress bar, and badges for stale and abandoned tasks. Period filter
+  In Review / Done, a stacked progress bar, and badges for stale and abandoned tasks and for tasks
+  with findings. Period filter
   (today / 7 days / 30 days / all).
-- **Project kanban:** three columns. Card: task text, session chip (provider icon + branch), time in
+- **Project kanban:** four columns — To do, In progress, **In Review**, Done — with In Review empty
+  when no task is in review. Tasks in review carry a badge: **N findings**, **result not read**
+  (`unread`), **pending** (the review has not answered yet) or a neutral **In review** for a state
+  this app version does not know. A "with findings" filter
+  shows only tasks in review that have findings. Card: task text, session chip (provider icon + branch), time in
   current column; on hover/focus, time per step. Filters: session, period, show/hide done older than
   the retention setting. Per-session header with status and a **Copy resume command** button.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
@@ -272,6 +294,13 @@ mode, which only delegates) emits no marker; the specialists it spawns do.
 10. **Given** a malformed payload or an unwritable state dir, **Then** the hook exits 0 and the
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
+12. **Given** any project, **When** its kanban opens, **Then** it shows four columns in order — To do,
+    In progress, In Review, Done — with In Review empty when no task is in review.
+13. **Given** a task in review whose window recorded 2 findings, **Then** its card shows **2 findings**;
+    with no marker read it shows **result not read**; with no answer yet it shows **pending**.
+14. **Given** the findings filter is on, **Then** only tasks in review with findings are listed.
+15. **Given** a review that returns `findings=0`, **Then** the tasks leave In Review at once and no
+    card ever shows a "passed" state.
 
 ### Out of Scope
 - Editing, moving or deleting tasks from the board (read-only).
@@ -300,3 +329,4 @@ mode, which only delegates) emits no marker; the specialists it spawns do.
 | 2026-09-30 | Hooks wiring: Claude `PostToolUse` matcher widened to `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task` and `install.sh` upgrades an existing narrow entry in place; new `UserPromptSubmit` dispatcher; Codex managed events gain `PostToolUse` (matcher `*`, narrowed to `.*wait_agent` in the round-1 fixes below), `UserPromptSubmit` and `SessionEnd`; the opencode plugin's `runHook` now spawns the script and writes the payload to its stdin (`exec` ignores an `input` option, so every plugin hook previously waited on an empty stdin until its timeout) | Required for the triggers to reach the CLI |
 | 2026-09-30 | In Review round-1 review fixes: (1) pending accounting is by kind (`fg`, `bg`, `scan`) instead of a counter; `Stop` retires foreground launches as unread and the scan flag against the final message, background launches survive; `PostToolUseFailure` (Claude, `Agent\|Task`, same dispatcher, wired by `bind` and `install.sh`) retires a failed launch as unread; `PENDING_MAX_AGE` = 6 h settles a stalled window as unread on open/`Stop`/view; only a live background token receives a late result (a foreground token is retired at `Stop`, so its late result finds no slot and adds only its marker). A Codex `spawn_agent` is a foreground launch, so an unmarked or timed-out `wait_agent` now settles at `Stop` as unread (it no longer wedges the window). Records written with only `pending` migrate: each agent slot becomes a foreground token (this legacy migration matters only for unreleased branch-local records). (2) A prompt/command joining with the scan flag set adds nothing. (3) One report = one slot and its LAST marker; only reports add up; only the agent's answer is scanned (`prompt`/input echoes in `tool_response` are dropped). (4) The negation scan is one linear pass with a two-word window. (5) Background scan: only `queue-operation` (top-level `content`) and `user`-role entries; an entry without a timestamp is ignored; a transcript shorter than the stored offset (compaction) or a different path continues from its end instead of byte 0. (6) Codex has `SessionEnd` (openai/codex `92bc601`, `codex-rs/hooks/src/events/session_end.rs`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`); docs corrected. (7) opencode plugin: stderr ignored, process group killed on timeout, final text stops at the last user message, the fallback payload keeps `last_assistant_message`. (8) Codex `PostToolUse` matcher `*` -> `.*wait_agent`; dispatchers pipe the payload with `printf '%s\n'`. (9) `install.sh` widens only its own `PostToolUse` entry and only from a matcher it shipped before (`TodoWrite\|TaskCreate\|TaskUpdate`), else warns; detector: negation must directly govern the keyword (no `only`/`just`, no punctuation between) and a keyword in a question opened by `what/how/why/o que/como/por que` is ignored. (10) `durations` partition time (in-review seconds are no longer also counted under the provider status); this supersedes item (9) of the implementation-details row above. | Findings of the first review of the In Review column |
 | 2026-09-30 | In Review round-2 review fixes: (1) a keyword-only window (`strong` false: no agent, no review command ever joined) that closes without a marker resolves immediately as `unread-dismissed` — nothing is held; command/agent windows keep the hold. "Completed since the last review" with no earlier window starts at the later of the session's `created_at` and `resumed_at`. (2) A foreground `Agent` whose `PostToolUse` is an async-launch ack moves its token `fg` -> `bg`. (3) Codex `wait_agent` takes one slot and one marker per marker returned (summed); `Agent`/`Task`/opencode `task` keep last-marker-per-report, and a wait's own tool-use id retires no launch by id. (4) A real result id the window never launched retires no token; only a missing or synthetic (`anon:`, `off:`) id falls back to the oldest token of its kind. (5) Background-report fallback ids are `off:{offset}:{line}`. (6) Every project object in `tasks list` and each `tasks watch` snapshot gains `as_of`, the epoch its view was computed (additive; `watch` ignores it when deciding whether the view changed). (7) Any transition out of `in_progress`/`completed` inside a window records `left`. (8) The fix list is `created_at >= fix_after`, excluding tasks known at result time and the window's members. (9) `hooks.wire` rewrites an entry's matcher only from a value a previous release shipped (`TodoWrite\|TaskCreate\|TaskUpdate`), otherwise keeps it and warns (as `install.sh` does). (10) Spec accuracy: `launch_ids` became the `fg`/`bg` token model; only a live background token receives a late result; the legacy `pending` migration applies only to unreleased branch-local records | Findings of the second review of the In Review column |
+| 2026-09-30 | In Review round-3 review fixes: (1) a result from `Agent`/`Task`/opencode `task` needs a known review agent (`subagent_type`); marker-only acceptance stays for Codex `wait_agent` only. (2) Background hand-backs: only a known `bg` token of the open window, marker only from `<result>`; an entry without `tool-use-id` and `task-id` is dropped (the `off:` fallback ids are gone from the scan); a user-role notification counts only when it mirrors a queue entry (task ids kept per window in `queue_ids`, at most 64) and opens the entry's text. (3) A late Codex `wait_agent` result reattaches to the latest unresolved, unread window within `PENDING_MAX_AGE` of its result and recomputes it; `review.state` is `pending\|findings\|unread` only, and a window with a zero result left unresolved holds nothing. (4) The marker is the last non-empty line of a report/final message, alone on it, after fenced and inline code are removed. (5) `session_id` in the bash gates is the FIRST session key of the payload (the opencode plugin now puts `sessionID` first). (6) `skip` is no longer a negation; `qa` next to `/ \ _ @ # -` (or after `.`) is a path/identifier, not a request. (7) `tasks mark --state idle` gains `review_results: [{window, findings}]` (one per window closed by that Stop; `review_window`/`review_findings` mirror the last), `became_all_done` is computed after every outcome, and the hook raises one `tasks.review_findings` per window with findings. (8) opencode plugin: `callID` forwarded as `tool_use_id`, `subagent_type` remembered from `before` by `callID` (256 entries) for `after`; task-board hooks get a 12 s timeout (the record lock waits up to 10 s, so a shorter kill would lose the write; other hooks keep 5 s); a slash command is detected from the raw text, or rebuilt from `input.command`/`input.arguments` when opencode supplies them (whether it delivers `/devteam:review` raw or expanded is unverified: see `docs/providers.md`). (9) Desktop app section updated to the four-column board, badges and findings filter; acceptance criteria 12-15. | Findings of the third review of the In Review column |

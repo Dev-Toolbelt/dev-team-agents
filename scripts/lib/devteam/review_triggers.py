@@ -23,7 +23,7 @@ COMMANDS = ("/devteam:review", "/devteam:qa", "/review", "$devteam-review", "$de
 KEYWORDS = ("review", "revisar", "revisão", "revisao", "revise", "qa", "testar", "test it")
 
 #: A keyword directly governed by one of these is a refusal, not a request.
-NEGATIONS = ("não", "nao", "sem", "no", "not", "don't", "dont", "without", "skip")
+NEGATIONS = ("não", "nao", "sem", "no", "not", "don't", "dont", "without")
 #: "Directly governed": the negation is one of the two words before the keyword, with no
 #: punctuation between them and none of :data:`NEGATION_BREAKS` in between ("not only review
 #: but fix" and "no problem, review it" are requests).
@@ -45,6 +45,11 @@ _WORD_RE = re.compile(r"[\w'’]+", re.UNICODE)
 _BREAK_RE = re.compile(r"[,;:.!?()\n]")
 _SENTENCE_END_RE = re.compile(r"[.!?\n]")
 _MARKER_RE = re.compile(r"<!--\s*review-result:\s*findings\s*=\s*(\d{1,6})\s*-->", re.IGNORECASE)
+_FENCE_RE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+#: `qa` inside a path or an identifier (`docs/qa/x`, `qa-specialist`, `qa_report`, `a.qa`) is not the word.
+_PATHLIKE_BEFORE_RE = re.compile(r"[/\\_.@#-]")
+_PATHLIKE_AFTER_RE = re.compile(r"[/\\_@#-]")
 
 
 def agent_name(value):
@@ -90,10 +95,19 @@ def prompt_trigger(prompt):
     for match in _KEYWORD_RE.finditer(text):
         while cursor < len(words) and words[cursor][0] < match.start():
             cursor += 1
-        if _negated(text, words, cursor, match.start()) or _is_question(text, match.start()):
+        if _pathlike(text, match) or _negated(text, words, cursor, match.start()) or _is_question(text, match.start()):
             continue
         return ("prompt", match.group(1).lower())
     return None
+
+
+def _pathlike(text, match):
+    """True for ``qa`` touching a path separator or identifier joiner (``docs/qa/x``, ``qa_report``)."""
+    if match.group(1).lower() != "qa":
+        return False
+    before = text[match.start() - 1:match.start()]
+    after = text[match.end():match.end() + 1]
+    return bool(_PATHLIKE_BEFORE_RE.fullmatch(before) or _PATHLIKE_AFTER_RE.fullmatch(after))
 
 
 def _negated(text, words, index, start):
@@ -122,9 +136,31 @@ def _strings(value, depth=0):
             yield from _strings(item, depth + 1)
 
 
+def report_marker(text):
+    """The ``findings=N`` of a report, or ``None``.
+
+    Code (fenced or inline) is removed first, and only the LAST non-empty line counts, on its
+    own: a report that quotes the marker while explaining it, or a diff that contains one,
+    is not a result.
+    """
+    if not isinstance(text, str) or "review-result" not in text.lower():
+        return None
+    text = _INLINE_CODE_RE.sub("", _FENCE_RE.sub("", text))
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    match = _MARKER_RE.fullmatch(lines[-1])
+    return int(match.group(1)) if match else None
+
+
 def markers(value):
-    """Every ``findings=N`` marker in ``value`` (a string or any JSON structure), in order."""
+    """Every report's marker in ``value`` (a string or any JSON structure), in order.
+
+    One string is one report: see :func:`report_marker`.
+    """
     found = []
     for text in _strings(value):
-        found.extend(int(m.group(1)) for m in _MARKER_RE.finditer(text))
+        n = report_marker(text)
+        if n is not None:
+            found.append(n)
     return found

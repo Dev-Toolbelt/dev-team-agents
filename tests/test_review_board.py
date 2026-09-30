@@ -111,7 +111,7 @@ class DetectorTest(unittest.TestCase):
     def test_a_negation_directly_governing_the_keyword_skips_the_match(self):
         for text in (
             "não precisa revisar", "sem review por favor", "no review needed", "don't review it",
-            "please do not review", "without QA", "skip the review", "Don’t revise it",
+            "please do not review", "without QA", "Don’t revise it",
             "nao testar agora", "sem nem revisar",
         ):
             self.assertIsNone(review_triggers.prompt_trigger(text), text)
@@ -165,7 +165,7 @@ class DetectorTest(unittest.TestCase):
 
     def test_markers_are_summed_across_a_structure(self):
         self.assertEqual(review_triggers.markers(marker(2)), [2])
-        self.assertEqual(review_triggers.markers({"a": [marker(0), {"b": "x <!--review-result:findings = 3-->"}]}), [0, 3])
+        self.assertEqual(review_triggers.markers({"a": [marker(0), {"b": "x\n<!--review-result:findings = 3-->"}]}), [0, 3])
         self.assertEqual(review_triggers.markers("<!-- review-result: findings=x -->"), [])
         self.assertEqual(review_triggers.markers(None), [])
 
@@ -696,6 +696,22 @@ class StopScanTest(ReviewCase):
         out = self.stop({"session_id": "s1", "transcript_path": str(self.tmp / "missing.jsonl")})
         self.assertEqual((out["marked"], out["review_result"]), (True, False))
 
+    def test_a_fenced_marker_in_the_final_message_is_not_read(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"))
+        path = self.transcript([
+            {"type": "user", "message": {"role": "user", "content": "/devteam:review"}},
+            self.assistant("The marker looks like this:\n```\n" + MARK0 + "\n```\nNothing else."),
+        ])
+        out = self.stop({"session_id": "s1", "transcript_path": path})
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+
+    def test_a_marker_that_is_not_the_last_line_is_not_read(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"))
+        out = self.stop({"session_id": "s1", "last_assistant_message": MARK0 + "\nOne more thing."})
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+
 
 class LeavingTest(ReviewCase):
     def with_findings(self):
@@ -1167,6 +1183,38 @@ for _name in [n for n in dir(tt.HookTest) if n.startswith("test_")]:
     if _name not in ReviewHookTest.__dict__:
         setattr(ReviewHookTest, _name, None)
 
+    def lib(self, payload):
+        script = 'source "$1"; devteam_task_board_session_id "$2"'
+        result = subprocess.run(
+            ["bash", "-c", script, "x", str(HOOKS / "lib" / "task-board.sh"), payload],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        return result.stdout.decode()
+
+    def test_the_first_session_key_wins_over_one_a_tool_echoes(self):
+        self.assertEqual(self.lib('{"session_id": "real", "tool_input": {"session_id": "fake"}}'), "real")
+        self.assertEqual(self.lib('{"sessionID": "real", "args": {"sessionID": "fake"}, "output": "\\"session_id\\": \\"x\\""}'), "real")
+        self.assertEqual(self.lib('{"tool": "task", "session_id": "a1", "output": "session_id: \\"b2\\""}'), "a1")
+        self.assertEqual(self.lib('{"session_id": "../etc"}'), "")
+        self.assertEqual(self.lib('{"x": 1}'), "")
+
+    def test_a_stop_closing_several_windows_raises_one_notification_per_findings_window(self):
+        self.start()
+        self.run_script(PROMPT_SUB, prompt("s1", "/devteam:review"))
+        rec = self.load("s1")
+        second = json.loads(json.dumps(rec["reviews"][0]))
+        second["id"] = "r2"
+        rec["reviews"].append(second)
+        self.save("s1", rec)
+        payload = self.tmp / "stop.json"
+        payload.write_text(json.dumps({"session_id": "s1", "last_assistant_message": marker(2)}))
+        self.run_script(STOP_SUB, "", {"DEVTEAM_HOOK_PAYLOAD": str(payload)})
+        self.assertEqual(self.codes(), ["tasks.review_findings", "tasks.review_findings"])
+
+    def save(self, sid, rec):
+        path = tasks.record_path(self.root, self.project_id, sid)
+        path.write_text(json.dumps(rec), encoding="utf-8")
+
 
 class WiringTest(tt.BoardCase):
     def test_bind_wires_user_prompt_submit_and_the_wider_post_tool_use_matcher(self):
@@ -1318,7 +1366,7 @@ class BackgroundReviewTest(ReviewCase):
     def test_a_partial_trailing_line_waits_for_the_next_stop(self):
         self.start()
         self.launch()
-        whole = json.dumps(self.hand_back(marker(3))[1])
+        whole = json.dumps(self.hand_back(marker(3))[0])
         self.append(raw=whole[:40])
         self.assertFalse(self.stop_bg()["review_result"])
         self.append(raw=whole[40:] + "\n")
@@ -1448,16 +1496,6 @@ class BackgroundReviewTest(ReviewCase):
         self.assertFalse(self.result(other)["recorded"])
         self.assertEqual(self.window()["bg"], ["tu1"])
 
-    def test_two_notifications_without_ids_get_distinct_fallback_ids(self):
-        window = {"opened_at": T0, "tx_offset": 0, "tx_path": str(self.path)}
-        body = "<task-notification>\n<result>{}</result>\n</task-notification>".format(marker(1))
-        entry = {"type": "user", "message": {"role": "user", "content": body}, "timestamp": self.stamp()}
-        self.path.write_text(json.dumps(entry) + "\n" + json.dumps(entry) + "\n", encoding="utf-8")
-        ids = [r["id"] for r in tasks._background_reports(window, str(self.path))]
-        self.assertEqual(len(ids), 2)
-        self.assertEqual(len(set(ids)), 2)
-        self.assertTrue(all(i.startswith("off:") for i in ids))
-
     def test_the_bytes_read_per_stop_are_capped_and_resumed(self):
         self.start()
         self.launch()
@@ -1473,6 +1511,293 @@ class BackgroundReviewTest(ReviewCase):
         finally:
             tasks.BACKGROUND_SCAN_BYTES = original
         self.assertEqual(out["review_findings"], 4)
+
+    def test_a_bash_task_notification_echoing_the_marker_is_ignored(self):
+        self.start()
+        self.launch()
+        body = (
+            "<task-notification>\n<task-id>b7</task-id>\n<tool-use-id>bash1</tool-use-id>\n<status>completed</status>\n"
+            "<summary>{}</summary>\n</task-notification>"
+        ).format(marker(0))
+        self.append({"type": "queue-operation", "timestamp": self.stamp(), "operation": "enqueue", "content": body})
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual((self.window()["pending"], self.window()["bg"]), (1, ["tu1"]))
+
+    def test_the_marker_in_the_summary_of_a_known_agent_is_not_read(self):
+        self.start()
+        self.launch()
+        body = "<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>tu1</tool-use-id>\n<summary>{}</summary>\n</task-notification>".format(marker(0))
+        self.append({"type": "queue-operation", "timestamp": self.stamp(), "operation": "enqueue", "content": body})
+        out = self.stop_bg()
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+
+    def test_a_task_id_only_notification_with_a_marker_is_ignored_unless_known(self):
+        self.start()
+        self.launch()
+        body = "<task-notification>\n<task-id>a9</task-id>\n<result>{}</result>\n</task-notification>".format(marker(0))
+        entry = {"type": "queue-operation", "timestamp": self.stamp(), "operation": "enqueue", "content": body}
+        self.append(entry)
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.window()["bg"], ["tu1"])
+        rec = self.load("s1")
+        rec["reviews"][0]["bg"] = ["a9"]
+        self.save("s1", rec)
+        self.append(dict(entry, timestamp=self.stamp(16)))
+        self.assertEqual(self.stop_bg(now=T0 + 31)["review_findings"], 0)
+
+    def test_a_notification_naming_nothing_is_dropped(self):
+        window = {"opened_at": T0, "tx_offset": 0, "tx_path": str(self.path)}
+        body = "<task-notification>\n<result>{}</result>\n</task-notification>".format(marker(1))
+        entry = {"type": "queue-operation", "content": body, "timestamp": self.stamp()}
+        self.path.write_text(json.dumps(entry) + "\n", encoding="utf-8")
+        self.assertEqual(tasks._background_reports(window, str(self.path)), [])
+
+    def test_a_lone_user_notification_is_not_a_hand_back_but_a_mirroring_one_is(self):
+        self.start()
+        self.launch()
+        _, user_entry = self.hand_back(marker(4))
+        queue_entry, _ = self.hand_back(marker(4))
+        self.append(user_entry)
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.window()["pending"], 1)
+        window = {"opened_at": T0, "tx_offset": 0, "tx_path": str(self.path), "queue_ids": ["a1"]}
+        self.assertEqual([r["markers"] for r in tasks._background_reports(window, str(self.path))], [[4]])
+        # the queue entry itself is the harness form and needs no mirror
+        self.append(queue_entry)
+        self.assertEqual(self.stop_bg(now=T0 + 31)["review_findings"], 4)
+
+    def test_a_user_notification_that_does_not_open_the_text_is_ignored(self):
+        window = {"opened_at": T0, "tx_offset": 0, "tx_path": str(self.path), "queue_ids": ["a1"]}
+        body = "please look at this: " + self.notification(marker(4))
+        entry = {"type": "user", "message": {"role": "user", "content": body}, "timestamp": self.stamp()}
+        self.path.write_text(json.dumps(entry) + "\n", encoding="utf-8")
+        self.assertEqual(tasks._background_reports(window, str(self.path)), [])
+
+    def test_a_fenced_marker_in_a_hand_back_is_not_read(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back("The format is:\n```\n" + MARK0 + "\n```"))
+        out = self.stop_bg()
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+
+    def test_an_oversize_line_without_a_newline_does_not_wedge_the_scan(self):
+        self.start()
+        self.launch()
+        original = tasks.BACKGROUND_SCAN_BYTES
+        tasks.BACKGROUND_SCAN_BYTES = 4096
+        try:
+            with open(self.path, "a", encoding="utf-8") as handle:
+                handle.write('{"type":"assistant","message":{"content":"' + "z" * 10000 + '"}}\n')
+            self.append(*self.hand_back(marker(6)))
+            out = {"review_result": False}
+            for step in range(12):
+                out = self.stop_bg(now=T0 + 30 + step)
+                if out["review_result"]:
+                    break
+            self.assertEqual(out["review_findings"], 6)
+            self.assertEqual(self.window()["tx_offset"], self.path.stat().st_size)
+        finally:
+            tasks.BACKGROUND_SCAN_BYTES = original
+
+    def test_a_single_line_over_two_mib_is_skipped_at_the_real_cap(self):
+        self.start()
+        self.launch()
+        with open(self.path, "a", encoding="utf-8") as handle:
+            handle.write("x" * (tasks.BACKGROUND_SCAN_BYTES + 5000))  # no newline yet: still being written
+        self.stop_bg()
+        with open(self.path, "a", encoding="utf-8") as handle:
+            handle.write("\n")
+        self.append(*self.hand_back(marker(1)))
+        out = {"review_result": False}
+        for step in range(6):
+            out = self.stop_bg(now=T0 + 31 + step)
+            if out["review_result"]:
+                break
+        self.assertEqual(out["review_findings"], 1)
+
+
+class RoundThreeDetectorTest(unittest.TestCase):
+    def kind(self, text):
+        hit = review_triggers.prompt_trigger(text)
+        return hit and hit[0]
+
+    def test_skip_is_not_a_negation(self):
+        self.assertEqual(self.kind("skip the tests, review it"), "prompt")
+        self.assertEqual(self.kind("skip review"), "prompt")
+
+    def test_qa_inside_a_path_or_identifier_is_not_a_request(self):
+        for text in ("edit docs/qa/plan.md", "open the qa_report file", "see .qa/config", "run qa-specialist output", "path a/qa"):
+            self.assertIsNone(review_triggers.prompt_trigger(text), text)
+        for text in ("please do QA", "QA. now", "run the QA, then merge", "qa please"):
+            self.assertEqual(self.kind(text), "prompt", text)
+
+    def test_the_marker_counts_only_as_the_last_line_outside_code(self):
+        fence = "```\n" + MARK0 + "\n```"
+        self.assertEqual(review_triggers.markers(fence), [])
+        self.assertEqual(review_triggers.markers("Use `" + MARK0 + "` at the end.\nThanks"), [])
+        self.assertEqual(review_triggers.markers(MARK0 + "\nmore text after"), [])
+        self.assertEqual(review_triggers.markers("Explained: " + MARK0), [])
+        self.assertEqual(review_triggers.markers("```\ncode\n```\nDone\n\n" + MARK0 + "\n\n"), [0])
+        self.assertEqual(review_triggers.markers("text\n```\n" + MARK0), [])  # an unterminated fence swallows it
+
+
+class RoundThreeResultTest(ReviewCase):
+    def test_a_general_purpose_agent_quoting_the_marker_changes_nothing(self):
+        self.start()
+        self.open(dict(claude_spawn("s1"), tool_use_id="q1"))
+        before = self.window()
+        for payload in (
+            claude_return("s1", marker(0), agent="general-purpose"),
+            dict(claude_return("s1", marker(0)), tool_input={"description": "d", "prompt": "p"}),
+            opencode_return("s1", marker(0), agent="general-purpose"),
+        ):
+            self.assertFalse(self.result(dict(payload, tool_use_id="x"))["recorded"])
+        self.assertEqual(self.window(), before)
+        self.assertEqual(self.window()["result_at"], None)
+
+    def test_a_known_review_agent_still_records(self):
+        self.start()
+        self.open(dict(claude_spawn("s1"), tool_use_id="q1"))
+        self.assertEqual(self.result(dict(claude_return("s1", marker(2)), tool_use_id="q1"))["findings"], 2)
+
+
+class RoundThreeLateResultTest(ReviewCase):
+    def settle_unread(self):
+        self.start("c1")
+        self.open(codex_spawn("c1"))
+        out = self.stop({"session_id": "c1", "last_assistant_message": "done"}, now=T0 + 30)
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+        return self.window("c1")
+
+    def test_a_late_wait_with_zero_findings_releases_the_tasks(self):
+        self.settle_unread()
+        self.assertEqual(self.columns(sid="c1")["A"], "in_review")
+        out = self.result(codex_wait("c1", marker(0)), now=T0 + 60)
+        self.assertEqual((out["recorded"], out["result"], out["findings"], out["resolved"]), (True, True, 0, True))
+        self.assertEqual(self.window("c1")["resolution"], "passed")
+        self.assertEqual(self.columns(sid="c1")["A"], "in_progress")
+        self.assertEqual(self.columns(sid="c1")["B"], "done")
+
+    def test_a_late_wait_with_findings_holds_the_tasks_with_them(self):
+        self.settle_unread()
+        out = self.result(codex_wait("c1", marker(3)), now=T0 + 60)
+        self.assertEqual((out["result"], out["findings"], out["resolved"]), (True, 3, False))
+        task = [t for t in self.session(sid="c1")["tasks"] if t["content"] == "A"][0]
+        self.assertEqual((task["column"], task["review"]["state"], task["review"]["findings"]), ("in_review", "findings", 3))
+        self.assertIsNotNone(self.window("c1")["fix_after"])
+
+    def test_a_late_result_is_bounded_by_the_expiry_age_and_by_the_latest_window(self):
+        self.settle_unread()
+        old = self.result(codex_wait("c1", marker(0)), now=T0 + 30 + tasks.PENDING_MAX_AGE + 1)
+        self.assertFalse(old["recorded"])
+        self.assertIsNone(self.window("c1")["resolved_at"])
+        # A second unread window: only the latest one takes the late report.
+        rec = self.load("c1")
+        second = json.loads(json.dumps(rec["reviews"][0]))
+        second["id"] = "r2"
+        second["result_at"] = T0 + 50
+        rec["reviews"].append(second)
+        self.save("c1", rec)
+        out = self.result(codex_wait("c1", marker(0)), now=T0 + 60)
+        self.assertEqual(out["window"], "r2")
+        self.assertEqual(self.window("c1", 1)["resolution"], "passed")
+        self.assertEqual(self.window("c1", 0)["resolution"], "fixed")  # the re-review rule
+
+    def test_a_late_wait_never_reopens_a_resolved_window(self):
+        self.start("c1")
+        self.open(codex_spawn("c1"))
+        self.result(codex_wait("c1", marker(0)), now=T0 + 20)
+        self.assertEqual(self.window("c1")["resolution"], "passed")
+        self.assertFalse(self.result(dict(codex_wait("c1", marker(4)), tool_use_id="u2"), now=T0 + 25)["recorded"])
+
+
+class RoundThreeStateTest(ReviewCase):
+    def test_a_task_in_review_never_shows_passed(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"))
+        rec = self.load("s1")
+        rec["reviews"][0].update(result_at=T0 + 20, findings=0, resolved_at=None, resolution=None, pending=0, scan=False)
+        self.save("s1", rec)
+        for task in self.session()["tasks"]:
+            self.assertNotEqual(task["column"], "in_review")
+        self.assertNotEqual(tasks._window_state(rec["reviews"][0]), "passed")
+
+    def test_every_state_the_cli_emits_is_pending_findings_or_unread(self):
+        self.start()
+        seen = set()
+        self.open(dict(claude_spawn("s1"), tool_use_id="a"))
+        seen |= {t["review"]["state"] for t in self.session()["tasks"] if t["review"]}
+        self.result(dict(claude_return("s1", marker(2)), tool_use_id="a"))
+        seen |= {t["review"]["state"] for t in self.session()["tasks"] if t["review"]}
+        self.open(prompt("s1", "/review"), now=T0 + 50)
+        self.stop({"session_id": "s1", "last_assistant_message": "no marker"}, now=T0 + 60)
+        seen |= {t["review"]["state"] for t in self.session(now=T0 + 70)["tasks"] if t["review"]}
+        self.assertTrue(seen)
+        self.assertLessEqual(seen, {"pending", "findings", "unread"})
+
+
+
+class RoundThreeStopOutcomesTest(ReviewCase):
+    def two_windows(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"))
+        rec = self.load("s1")
+        second = json.loads(json.dumps(rec["reviews"][0]))
+        second["id"] = "r2"
+        rec["reviews"].append(second)
+        self.save("s1", rec)
+
+    def test_a_stop_that_closes_several_windows_reports_each(self):
+        self.two_windows()
+        out = self.stop({"session_id": "s1", "last_assistant_message": marker(2)})
+        self.assertEqual(
+            out["review_results"], [{"window": "r1", "findings": 2}, {"window": "r2", "findings": 2}]
+        )
+        self.assertEqual((out["review_window"], out["review_findings"]), ("r2", 2))
+
+    def test_became_all_done_is_computed_after_every_outcome(self):
+        self.two_windows()
+        self.todos("s1", todo("A", "completed"), todo("B", "completed"), now=T0 + 15)
+        out = self.stop({"session_id": "s1", "last_assistant_message": marker(0)})
+        self.assertEqual([r["findings"] for r in out["review_results"]], [0, 0])
+        self.assertTrue(out["became_all_done"])
+
+    def test_no_window_closed_leaves_review_results_empty(self):
+        self.start()
+        out = self.stop({"session_id": "s1"})
+        self.assertEqual((out["review_results"], out["review_result"]), ([], False))
+
+
+
+
+class RoundThreePluginTest(tt.BoardCase):
+    def text(self):
+        return (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
+
+    def test_call_ids_are_forwarded_and_the_subagent_type_is_remembered_by_call_id(self):
+        text = self.text()
+        self.assertEqual(text.count("tool_use_id"), 2)
+        self.assertIn("subagentByCall", text)
+        self.assertIn("SUBAGENT_CALLS_KEPT", text)
+        self.assertIn("args.subagent_type = subagentByCall.get(callID)", text)
+
+    def test_session_id_leads_the_payloads_the_bash_gates_scan(self):
+        text = self.text()
+        self.assertIn("sessionID: input.sessionID,\n        tool: input.tool,", text)
+
+    def test_task_board_hooks_outlast_the_record_lock(self):
+        text = self.text()
+        match = re.search(r"TASK_BOARD_HOOK_TIMEOUT_MS = (\d+)", text)
+        self.assertGreater(int(match.group(1)) / 1000.0, tasks.LOCK_TIMEOUT)
+        self.assertEqual(tasks.LOCK_TIMEOUT, 10.0)
+        for script in ("pre-tool-use.sh", "post-tool-use.sh", "user-prompt-submit.sh", "stop.sh"):
+            self.assertRegex(text, r"{}`[^)]*TASK_BOARD_HOOK_TIMEOUT_MS".format(re.escape(script)))
+
+    def test_a_command_named_by_opencode_is_rebuilt_as_a_slash_command(self):
+        text = self.text()
+        self.assertIn("named.command", text)
+        self.assertIn("docs/providers.md", text)
+        self.assertIn("opencode", (REPO_ROOT / "docs" / "providers.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -47,6 +47,13 @@ import { join } from "node:path"
 
 // Hook timeout: 5 seconds max. Prevents slow/broken hooks from freezing opencode.
 const HOOK_TIMEOUT_MS = 5000
+// The task-board hooks may wait on a session's record lock for up to 10 s (LOCK_TIMEOUT in
+// scripts/lib/devteam/tasks.py); killing the hook first would lose the write it was waiting to
+// make. Their budget therefore outlasts the lock. The lock stays at 10 s.
+const TASK_BOARD_HOOK_TIMEOUT_MS = 12000
+// `tool.execute.before` remembers a `task` call's `subagent_type` here, keyed by callID, for the
+// matching `after` when opencode does not repeat the args. Bounded: an unmatched call is evicted.
+const SUBAGENT_CALLS_KEPT = 256
 
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // One path for both layouts: a v2 install vendors `scripts/` here and a v3 bind
@@ -61,7 +68,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // stderr is ignored: nothing reads it, and an unread pipe fills and blocks the script. The
   // child leads its own process group, so a timeout kills the python children the dispatcher
   // forked too, not just bash.
-  const runScript = (script: string, stdin?: string): Promise<string> =>
+  const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<string> =>
     new Promise((resolve, reject) => {
       const posix = process.platform !== "win32"
       const child = spawn("bash", [script], { stdio: ["pipe", "pipe", "ignore"], detached: posix })
@@ -73,8 +80,8 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         } catch {
           child.kill("SIGKILL")
         }
-        reject(new Error(`timed out after ${HOOK_TIMEOUT_MS}ms`))
-      }, HOOK_TIMEOUT_MS)
+        reject(new Error(`timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
       child.stdout.on("data", (chunk) => {
         if (stdout.length < 1024 * 1024) stdout += String(chunk)
       })
@@ -90,9 +97,9 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       child.stdin.end(stdin ?? "")
     })
 
-  const runHook = async (script: string, stdin?: string): Promise<string> => {
+  const runHook = async (script: string, stdin?: string, timeoutMs?: number): Promise<string> => {
     try {
-      return await runScript(script, stdin)
+      return await runScript(script, stdin, timeoutMs)
     } catch (err) {
       // Timeout or error — log but don't block
       await client.app.log({
@@ -175,6 +182,17 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     return { stdin: JSON.stringify({ session_id: sessionID, last_assistant_message: lastText }) }
   }
 
+  const subagentByCall = new Map<string, string>()
+  const rememberSubagent = (callID: unknown, type: unknown) => {
+    if (typeof callID !== "string" || typeof type !== "string" || !callID || !type) return
+    subagentByCall.set(callID, type)
+    while (subagentByCall.size > SUBAGENT_CALLS_KEPT) {
+      const oldest = subagentByCall.keys().next().value
+      if (oldest === undefined) break
+      subagentByCall.delete(oldest)
+    }
+  }
+
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try {
       await fn()
@@ -198,7 +216,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         await safe("stop", async () => {
           const { stdin, cleanup } = await buildContextPayload(event.properties.sessionID)
           try {
-            await runHook(`${HOOKS}/stop.sh`, stdin)
+            await runHook(`${HOOKS}/stop.sh`, stdin, TASK_BOARD_HOOK_TIMEOUT_MS)
           } finally {
             if (cleanup) await cleanup()
           }
@@ -207,31 +225,58 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     },
 
     "tool.execute.before": async (input, output) => {
-      const payload = JSON.stringify({ tool: input.tool, args: output.args, sessionID: input.sessionID })
-      await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload))
+      if (input.tool === "task") rememberSubagent((input as any).callID, output.args?.subagent_type)
+      // `sessionID` first: the bash gates take the first session key in the payload, and
+      // `args` is whatever the model or the user put there.
+      const payload = JSON.stringify({
+        sessionID: input.sessionID,
+        tool: input.tool,
+        tool_use_id: (input as any).callID,
+        args: output.args,
+      })
+      await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
     },
 
     "tool.execute.after": async (input, output) => {
       // Only a subagent's report can carry a review result; every other tool stays free.
       if (input.tool !== "task") return
+      const callID = (input as any).callID
+      const args: any = { ...((input as any).args ?? {}) }
+      // The spawn's `subagent_type` names the agent whose report this is; opencode may not
+      // repeat the args in `after`, so it is taken from the matching `before`.
+      if (!args.subagent_type && typeof callID === "string" && subagentByCall.has(callID)) {
+        args.subagent_type = subagentByCall.get(callID)
+      }
+      if (typeof callID === "string") subagentByCall.delete(callID)
       const payload = JSON.stringify({
-        tool: input.tool,
-        args: input.args,
-        output: output.output,
         sessionID: input.sessionID,
+        tool: input.tool,
+        tool_use_id: callID,
+        args,
+        output: output.output,
       })
-      await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload))
+      await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
     },
 
     "chat.message": async (input, output) => {
-      const text = (output.parts ?? [])
+      let text = (output.parts ?? [])
         .filter((p: any) => p?.type === "text" && typeof p.text === "string")
         .map((p: any) => p.text)
         .join("\n")
+      // A slash command reaches this hook either raw (`/devteam:review`) or already expanded into
+      // its template; the detector matches the raw form only. When the raw text is not in the
+      // parts but opencode names the command, rebuild it. Uncertain: see docs/providers.md.
+      const named: any = input
+      if (typeof named.command === "string" && named.command && !text.trimStart().startsWith("/")) {
+        const args = typeof named.arguments === "string" ? named.arguments : ""
+        text = `/${named.command.replace(/^\//, "")}${args ? ` ${args}` : ""}\n${text}`
+      }
       if (!text.trim()) return
       // `prompt` last: the bash gate only looks at what follows that key.
       const payload = JSON.stringify({ session_id: input.sessionID, prompt: text })
-      await safe("user-prompt-submit", () => runHook(`${HOOKS}/user-prompt-submit.sh`, payload))
+      await safe("user-prompt-submit", () =>
+        runHook(`${HOOKS}/user-prompt-submit.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS),
+      )
     },
 
     "experimental.session.compacting": async (_input, output) => {

@@ -529,12 +529,17 @@ def _completed_at(task):
 
 
 def _window_state(window):
+    """``pending`` | ``findings`` | ``unread``: what a task held by an unresolved window shows.
+
+    A window with a zero result is resolved as ``passed`` the moment it arrives and holds nothing,
+    so ``passed`` is never a state a task in review can show.
+    """
     if window.get("result_at") is None:
         return "pending"
     findings = window.get("findings")
     if findings is None:
         return "unread"
-    return "findings" if findings > 0 else "passed"
+    return "findings" if findings > 0 else "unread"
 
 
 def _review_members(record):
@@ -551,6 +556,10 @@ def _review_members(record):
     members = {}
     for window in windows:
         if window.get("resolved_at") is not None:
+            continue
+        if window.get("result_at") is not None and window.get("findings") == 0:
+            # A zero result that a record left unresolved (hand-edited, or written mid-update)
+            # is a pass: it holds nothing.
             continue
         left = window.get("left") or {}
         for key in window["task_keys"]:
@@ -717,8 +726,8 @@ def _take_slot(window, ident, kind):
 
 
 def _expire(rec, now):
-    """Settle every window that has waited too long for an agent. Returns the last outcome."""
-    outcome = None
+    """Settle every window that has waited too long for an agent. Returns every outcome."""
+    outcomes = []
     for window in _windows(rec):
         if window.get("resolved_at") is not None or window.get("result_at") is not None:
             continue
@@ -729,8 +738,8 @@ def _expire(rec, now):
         window["unread"] = window.get("unread", 0) + len(fg) + len(bg)
         del fg[:], bg[:]
         window["scan"] = False
-        outcome = _finish(rec, window, now)
-    return outcome
+        outcomes.append(_finish(rec, window, now))
+    return outcomes
 
 
 def _open_window(record):
@@ -848,9 +857,12 @@ def review_call(payload):
             found = review_triggers.markers(
                 [_output(payload.get("tool_response")), _output(payload.get("tool_output")), payload.get("output")]
             )
-            if not name and not found:
+            # Only a known review agent's answer is a result: a `general-purpose` agent that
+            # quotes the marker (in a report about it, a diff, a doc) must change nothing. The
+            # marker-only shortcut is Codex's `wait_agent`, which does not name its agent.
+            if not name:
                 return None
-            call.update(kind="result", markers=found, agent=bool(name), source=name)
+            call.update(kind="result", markers=found, agent=True, source=name)
             return call
         if not name:
             return None
@@ -988,8 +1000,13 @@ def _apply_result(rec, call, now):
     reports at once: each marker is a report, so each takes a slot and adds up.
     """
     window = _open_window(rec)
+    late = False
     if window is None:
-        return None
+        # A Codex `wait_agent` can return after `Stop` already retired its launch as unread.
+        window = _late_window(rec, now) if call.get("per_marker") and call["markers"] else None
+        if window is None:
+            return None
+        late = True
     launch = call.get("tool_use_id")
     if launch:
         if launch in window.get("consumed", []):
@@ -997,6 +1014,8 @@ def _apply_result(rec, call, now):
         window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
     slot = False
+    if late:
+        return _reread(rec, window, markers, now)
     if call.get("per_marker"):
         for _ in markers:
             _take_slot(window, None, "fg")
@@ -1013,6 +1032,42 @@ def _apply_result(rec, call, now):
         window["unread"] = window.get("unread", 0) + 1
     window["last_at"] = now
     return _finish(rec, window, now)
+
+
+def _late_window(rec, now):
+    """The one window a late report may reattach to, else ``None``.
+
+    The most recent window that is unresolved and closed unread (``findings`` null), and only
+    while it is younger than :data:`PENDING_MAX_AGE`; an older window is never reopened.
+    """
+    for window in reversed(_windows(rec)):
+        if window.get("resolved_at") is None and window.get("result_at") is not None and window.get("findings") is None:
+            return window if now - window["result_at"] <= PENDING_MAX_AGE else None
+    return None
+
+
+def _reread(rec, window, markers, now):
+    """Recompute an unread window from markers that arrived after it closed."""
+    window["markers"] = window.get("markers", 0) + len(markers)
+    window["found"] = window.get("found", 0) + sum(markers)
+    window["unread"] = max(0, window.get("unread", 0) - len(markers))
+    window["last_at"] = now
+    before = (window.get("result_at"), window.get("fix_after"), window.get("known_keys"))
+    _finalize(rec, window, now)
+    if window.get("findings") is None:
+        window["result_at"], window["fix_after"] = before[0], before[1]
+        if before[2] is None:
+            window.pop("known_keys", None)
+        else:
+            window["known_keys"] = before[2]
+    return {
+        "recorded": True,
+        "window": window["id"],
+        "result": window.get("findings") is not None,
+        "findings": window.get("findings"),
+        "resolved": window.get("resolved_at") is not None,
+        "_all_done_now": _all_done(rec, _review_members(rec)),
+    }
 
 
 def _apply_backgrounded(rec, call, now):
@@ -1146,28 +1201,49 @@ BACKGROUND_SCAN_BYTES = 2 * 1024 * 1024
 
 _TAG_RE = {
     name: re.compile(r"<{0}>(.*?)</{0}>".format(name), re.DOTALL)
-    for name in ("tool-use-id", "task-id", "status", "result")
+    for name in ("tool-use-id", "task-id")
 }
+#: The agent's own answer: from the first ``<result>`` to the last ``</result>``. A notification
+#: with no such section (a Bash background task reports a ``<summary>``) carries no report.
+_RESULT_RE = re.compile(r"<result>(.*)</result>", re.DOTALL)
+
+#: Task ids of the queue entries seen, kept per window so a later user entry can mirror one.
+QUEUE_IDS_KEPT = 64
 
 
-def _entry_text(entry):
-    """Text of a transcript entry that could carry a task notification, else ``""``.
+def _notification_ids(text):
+    found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
+    return found["tool-use-id"], found["task-id"]
 
-    Only what the harness itself writes counts: a ``queue-operation`` entry (top-level
-    ``content``) and a ``user``-role entry. An assistant message that merely quotes the tag,
-    or a tool result echoing a file that contains it, is never a hand-back.
+
+def _entry_text(entry, queued=()):
+    """Text of a transcript entry that is a harness-injected task notification, else ``""``.
+
+    Two forms count: a ``queue-operation`` entry (top-level ``content``), and the ``user``-role
+    entry that mirrors a queue entry with the same task id. A user entry that stands alone (typed
+    or pasted by the user, a tool output, a file quoted back) is not a hand-back, and neither is a
+    notification that does not open the entry's text. An assistant message that merely quotes the
+    tag is never one.
     """
     kind = entry.get("type")
     message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
     if kind == "queue-operation":
         content = entry.get("content")
+        mirrored = True
     elif kind == "user" or message.get("role") == "user":
         content = message.get("content", entry.get("content"))
         if not isinstance(content, str):
             content = _content_text(content)
+        mirrored = False
     else:
         return ""
-    return content if isinstance(content, str) and "<task-notification>" in content else ""
+    if not isinstance(content, str) or not content.lstrip().startswith("<task-notification>"):
+        return ""
+    if not mirrored:
+        use_id, task_id = _notification_ids(content)
+        if not ((task_id and task_id in queued) or (use_id and use_id in queued)):
+            return ""
+    return content
 
 
 def _entry_epoch(entry):
@@ -1185,7 +1261,9 @@ def _background_reports(window, path):
 
     Yields ``{"id", "markers"}`` per notification, and advances ``window["tx_offset"]`` past the
     complete lines read. The same notification appears as a queue entry and as a user entry, and
-    a resumed agent may notify twice: the caller dedupes on ``id``.
+    a resumed agent may notify twice: the caller dedupes on ``id``. A notification with no
+    ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line longer than the read
+    cap is skipped, not waited for: the scan resumes at the next line.
     """
     try:
         size = os.path.getsize(path)
@@ -1208,24 +1286,35 @@ def _background_reports(window, path):
         window["tx_offset"] = offset
         return []
     window["tx_offset"] = offset + (end or len(chunk))
+    queued = window.setdefault("queue_ids", [])
     reports = []
-    for index, line in enumerate(chunk[:end].decode("utf-8", "replace").splitlines()):
+    for line in chunk[:end].decode("utf-8", "replace").splitlines():
         if "<task-notification>" not in line:
             continue
         try:
             entry = json.loads(line)
         except ValueError:
             continue
-        text = _entry_text(entry) if isinstance(entry, dict) else ""
+        if not isinstance(entry, dict):
+            continue
+        text = _entry_text(entry, queued)
         if not text:
             continue
         at = _entry_epoch(entry)
         if at is None or int(at) < window["opened_at"]:
             continue
-        found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
+        use_id, task_id = _notification_ids(text)
+        if entry.get("type") == "queue-operation":
+            for ident in (task_id, use_id):
+                if ident and ident not in queued:
+                    queued.append(ident)
+            del queued[:-QUEUE_IDS_KEPT]
+        if not (use_id or task_id):
+            continue
+        section = _RESULT_RE.search(text)
         reports.append({
-            "id": found["tool-use-id"] or found["task-id"] or "off:{}:{}".format(offset, index),
-            "markers": review_triggers.markers(found["result"] or text)[-1:],
+            "id": use_id or task_id,
+            "markers": review_triggers.markers(section.group(1)) [-1:] if section else [],
         })
     return reports
 
@@ -1233,33 +1322,34 @@ def _background_reports(window, path):
 def _scan_background(rec, payload, now):
     """Fold background review agents' hand-backs from the transcript into the open window.
 
-    Returns the last outcome that completed a window, else ``None``.
+    Only a hand-back whose id is a background token this window launched counts: a notification
+    from any other task (a Bash job, another agent) never touches it, whatever it quotes.
+    Returns every outcome that completed a window.
     """
     path = payload.get("transcript_path")
     if not isinstance(path, str) or not path or not os.path.isfile(path):
-        return None
-    outcome = None
+        return []
+    outcomes = []
     window = _open_window(rec)
     if window is None or window["pending"] <= 0:
-        return None
+        return []
     for report in _background_reports(window, path):
         window = _open_window(rec)
         if window is None:
             break
-        known = report["id"] in _tokens(window)[1]
-        if report["id"] in window.get("consumed", []) or not (report["markers"] or known):
+        if report["id"] in window.get("consumed", []) or report["id"] not in _tokens(window)[1]:
             continue
         window.setdefault("consumed", []).append(report["id"])
         applied = _apply_result(
             rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, now
         )
         if applied is not None and applied["result"]:
-            outcome = applied
-    return outcome
+            outcomes.append(applied)
+    return outcomes
 
 
 def _retire_at_stop(rec, payload, now):
-    """What a finished turn settles in every open window. Returns the last outcome.
+    """What a finished turn settles in every open window. Returns every outcome.
 
     * the prompt/command scan flag is read against the final message and cleared;
     * foreground agent launches still outstanding are retired as unread — a turn that ended
@@ -1267,7 +1357,7 @@ def _retire_at_stop(rec, payload, now):
       launch, an interrupted turn, a wait that never returned it);
     * background launches survive: their hand-back arrives in a later turn.
     """
-    outcome = None
+    outcomes = []
     text = None
     for window in _windows(rec):
         if window.get("resolved_at") is not None or window.get("result_at") is not None:
@@ -1285,8 +1375,8 @@ def _retire_at_stop(rec, payload, now):
         if fg:
             window["unread"] = window.get("unread", 0) + len(fg)
             del fg[:]
-        outcome = _finish(rec, window, now)
-    return outcome
+        outcomes.append(_finish(rec, window, now))
+    return outcomes
 
 
 def _git_branch(cwd):
@@ -1383,7 +1473,8 @@ def mark(root, payload, state, now=None):
     """Mark a session ``idle`` or ``ended``. No-op when it has no record. Never raises."""
     result = {
         "marked": False, "open": 0,
-        "review_result": False, "review_window": None, "review_findings": None, "became_all_done": False,
+        "review_result": False, "review_window": None, "review_findings": None,
+        "review_results": [], "became_all_done": False,
     }
     try:
         if state not in ("idle", "ended") or not isinstance(payload, dict):
@@ -1399,28 +1490,26 @@ def mark(root, payload, state, now=None):
             if rec is None:
                 return result
             rec["last_seen_at"] = now
-            scanned = None
+            done = []
             if state == "idle":
                 rec["idle_at"] = now
                 _alive(rec, now)
                 was_done = _all_done(rec, _review_members(rec))
-                outcomes = (
-                    _expire(rec, now),
-                    _scan_background(rec, payload, now),
-                    _retire_at_stop(rec, payload, now),
-                )
-                done = [o for o in outcomes if o is not None and o["result"]]
-                scanned = done[-1] if done else None
+                for outcomes in (_expire(rec, now), _scan_background(rec, payload, now), _retire_at_stop(rec, payload, now)):
+                    done.extend(o for o in outcomes if o["result"])
+                done_now = _all_done(rec, _review_members(rec))
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
         result.update(marked=True, open=_open_count(rec))
-        if scanned is not None and scanned["result"]:
+        if done:
+            # One entry per window that closed in this Stop; the flat keys mirror the last one.
             result.update(
                 review_result=True,
-                review_window=scanned["window"],
-                review_findings=scanned["findings"],
-                became_all_done=scanned["_all_done_now"] and not was_done,
+                review_window=done[-1]["window"],
+                review_findings=done[-1]["findings"],
+                review_results=[{"window": o["window"], "findings": o["findings"]} for o in done],
+                became_all_done=done_now and not was_done,
             )
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["marked"] = False

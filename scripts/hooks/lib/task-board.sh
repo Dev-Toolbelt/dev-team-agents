@@ -47,7 +47,9 @@ devteam_task_board_init() {
 # else is left to the CLI (record) or skipped (mark, which only checks a file exists).
 devteam_task_board_session_id() {
     local id
-    id="$(printf '%s' "$1" | sed -n 's/.*"session[_]\{0,1\}[iI][dD]"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+    # The FIRST session key wins: a payload's own id comes before anything a tool echoes back,
+    # and a greedy match would take the last one, from inside the tool's arguments or output.
+    id="$(printf '%s' "$1" | grep -oE '"session_?[iI][dD]"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | sed 's/^[^:]*:[[:space:]]*"//; s/"$//')"
     if [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
         printf '%s' "$id"
     fi
@@ -149,16 +151,31 @@ devteam_task_board_mark() {
 }
 
 # A review-window result, from `mark idle` (keys review_*) or `review-result` (keys result/window/findings).
+# `mark idle` can close several windows in one Stop and lists each in `review_results`: one
+# findings notification per window, its own dedupe suffix; `became_all_done` is computed by the
+# CLI after every outcome, so session_done is raised once.
 _tb_review_outcome() {  # _tb_review_outcome <json> <result-key> <window-key> <findings-key> <payload>
-    local out="$1" session window findings
+    local out="$1" session window findings pairs
     printf '%s' "$out" | grep -q "\"$2\": true" || return 0
     session="$(devteam_task_board_session_id "$5")"
     [ -n "$session" ] || session="$(_tb_str "$out" session)"
-    window="$(_tb_str "$out" "$3")"
-    findings="$(_tb_int "$out" "$4")"
-    if [ "${findings:-0}" -gt 0 ] 2>/dev/null; then
-        _tb_notify_findings "$session" "${window:-w}" "$findings"
+    pairs=""
+    if printf '%s' "$out" | grep -q '"review_results"'; then
+        pairs="$(printf '%s' "$out" | python3 -c '
+import json, sys
+for r in json.load(sys.stdin).get("review_results") or []:
+    print(r.get("window") or "w", r.get("findings") or 0)
+' 2>/dev/null)"
     fi
+    if [ -z "$pairs" ]; then
+        window="$(_tb_str "$out" "$3")"
+        pairs="${window:-w} $(_tb_int "$out" "$4")"
+    fi
+    while read -r window findings; do
+        if [ "${findings:-0}" -gt 0 ] 2>/dev/null; then
+            _tb_notify_findings "$session" "${window:-w}" "$findings"
+        fi
+    done <<< "$pairs"
     if printf '%s' "$out" | grep -q '"became_all_done": true'; then
         _tb_notify_done "$session"
     fi
