@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Dev-Toolbelt/dev-team-agents/plugins/_schema/plugin.schema.json",
+  "title": "dev-team-agents plugin manifest",
+  "description": "plugins/<name>/plugin.json — see docs/development/adrs/0017-plugins-as-manifest-declared-per-project-integrations.md",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "name", "title", "description"],
+  "properties": {
+    "schema": { "const": 1 },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "homepage": { "type": "string", "pattern": "^https://" },
+    "requires": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["binary", "install_hint"],
+        "properties": {
+          "binary": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+          "install_hint": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "config": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "type", "label", "help", "default"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
+          "type": { "enum": ["boolean", "string", "integer", "string_list", "enum"] },
+          "label": { "type": "string", "minLength": 1 },
+          "help": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" },
+          "default": {},
+          "placeholder": { "type": "string" },
+          "min": { "type": "integer" },
+          "max": { "type": "integer" },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "label"],
+              "properties": {
+                "value": { "type": "string" },
+                "label": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "help", "runtime", "script", "output"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+          "label": { "type": "string", "minLength": 1 },
+          "help": { "type": "string", "minLength": 1 },
+          "runtime": { "enum": ["bash", "python3"] },
+          "script": { "$ref": "#/$defs/relativeScript" },
+          "output": { "enum": ["config", "json", "log"] },
+          "requires_enabled": { "type": "boolean", "default": true },
+          "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 3600, "default": 300 }
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "script"],
+      "properties": {
+        "runtime": { "enum": ["bash", "python3"] },
+        "script": { "$ref": "#/$defs/relativeScript" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 30, "default": 10 }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pre_tool_use": { "$ref": "#/$defs/relativeScript" },
+        "stop": { "$ref": "#/$defs/relativeScript" }
+      }
+    }
+  },
+  "$defs": {
+    "relativeScript": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/-]+$"
+    }
+  }
+}
