@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from . import bind as bind_module
@@ -668,12 +669,41 @@ def cmd_notifications_watch(args, emitter):
     return {"reason": reason}, None
 
 
+#: How long a hook-only command waits for its payload. A hook pipes the JSON and closes
+#: stdin at once; anything slower is not a hook, and waiting on it is what hung every
+#: caller that inherited an open stdin it never wrote to (the contract sweep, a shell).
+HOOK_STDIN_TIMEOUT = 5.0
+
+
+def _read_hook_stdin(timeout=HOOK_STDIN_TIMEOUT):
+    """Everything on stdin up to EOF, or what arrived before ``timeout``; never blocks longer."""
+    if os.name == "nt":  # select() does not take pipes there; Windows hooks pipe and close
+        return sys.stdin.read()
+    import select
+
+    fd = sys.stdin.fileno()
+    deadline = time.monotonic() + timeout
+    chunks = []
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        ready, _, _ = select.select([fd], [], [], left)
+        if not ready:
+            break
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
 def _hook_payload():
     """The hook JSON on stdin, or ``{}`` — a hook must never fail on what it was fed."""
     try:
         if sys.stdin is None or sys.stdin.isatty():
             return {}
-        data = json.loads(sys.stdin.read() or "null")
+        data = json.loads(_read_hook_stdin() or "null")
     except (OSError, ValueError, RecursionError):
         return {}
     return data if isinstance(data, dict) else {}

@@ -1802,3 +1802,31 @@ class RoundThreePluginTest(tt.BoardCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HookStdinTimeoutTest(unittest.TestCase):
+    """A hook-only command must not wait forever on a stdin nobody closes."""
+
+    def test_a_hook_only_command_returns_when_stdin_stays_open_and_silent(self):
+        import subprocess
+        import sys
+        import time as _time
+        from pathlib import Path
+
+        cli = Path(__file__).resolve().parent.parent / "scripts" / "cli" / "devteam"
+        for command in (["tasks", "record"], ["tasks", "review-open"], ["tasks", "review-result"]):
+            started = _time.monotonic()
+            proc = subprocess.Popen(
+                [sys.executable, str(cli), *command, "--json"],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            try:
+                proc.wait(timeout=20)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                proc.stdin.close()
+                proc.stdout.close()
+                proc.stderr.close()
+            self.assertIsNotNone(proc.returncode, command)
+            self.assertLess(_time.monotonic() - started, 15, command)
