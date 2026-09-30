@@ -130,7 +130,7 @@ describe('Skills — remove', () => {
     const user = userEvent.setup();
     const removeSkill = vi.fn(() =>
       Promise.resolve(
-        ok({ name: 'alpha', root: 'claude', path: '/p', providers: ['claude'], action: 'quarantined' as const, quarantined_to: '/store/quarantine/alpha-1' }),
+        ok({ name: 'alpha', root: 'claude', path: '/p', providers: ['claude'], action: 'quarantined' as const, quarantined_to: '/store/quarantine/alpha-1', link_target: null }),
       ),
     );
     const listSkills = vi.fn(() => Promise.resolve(ok(list([skill()]))));
@@ -188,6 +188,7 @@ describe('Skills — install', () => {
             source: '/picked/beta',
             linked: true,
             installed: [{ root: 'claude', path: '/home/u/.claude/skills/beta', providers: ['claude'], replaced: false, quarantined_to: null }],
+            also_present: [],
           }),
         }),
     );
@@ -223,7 +224,7 @@ describe('Skills — install', () => {
       .mockResolvedValueOnce({
         picked: true,
         source: '/picked/clash',
-        result: fail('skill "clash" already exists', { kind: 'conflict', exitCode: 4 }),
+        result: fail('skill "clash" already exists', { kind: 'conflict', exitCode: 4, reason: 'exists' }),
       })
       .mockResolvedValueOnce({
         picked: true,
@@ -234,6 +235,7 @@ describe('Skills — install', () => {
           source: '/picked/clash',
           linked: false,
           installed: [{ root: 'claude', path: '/home/u/.claude/skills/clash', providers: ['claude'], replaced: true, quarantined_to: '/store/q/clash' }],
+          also_present: [],
         }),
       });
     mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
@@ -246,5 +248,47 @@ describe('Skills — install', () => {
     await user.click(within(dialog).getByRole('button', { name: /replace the existing skill and retry/i }));
     expect(installSkill).toHaveBeenLastCalledWith({ source: 'previous', providers: ['claude'], replace: true, link: false });
     expect(await within(dialog).findByText('/store/q/clash')).toBeInTheDocument();
+  });
+
+  it('offers no replace-and-retry when the conflict is a managed skill', async () => {
+    const user = userEvent.setup();
+    const installSkill = vi.fn(
+      (): Promise<SkillInstallAnswer> =>
+        Promise.resolve({
+          picked: true,
+          source: '/picked/unit',
+          result: fail('unit is managed by dev-team-agents', { kind: 'conflict', exitCode: 4, reason: 'managed' }),
+        }),
+    );
+    mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
+    await user.click(await screen.findByRole('button', { name: 'Install skill' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    expect(await within(dialog).findByText('unit is managed by dev-team-agents')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /replace the existing skill and retry/i })).not.toBeInTheDocument();
+  });
+
+  it('warns when the same name already exists in another root a provider reads', async () => {
+    const user = userEvent.setup();
+    const installSkill = vi.fn(
+      (): Promise<SkillInstallAnswer> =>
+        Promise.resolve({
+          picked: true,
+          source: '/picked/dup',
+          result: ok({
+            name: 'dup',
+            description: null,
+            source: '/picked/dup',
+            linked: false,
+            installed: [{ root: 'claude', path: '/home/u/.claude/skills/dup', providers: ['claude', 'opencode'], replaced: false, quarantined_to: null }],
+            also_present: [{ root: 'opencode', path: '/home/u/.config/opencode/skills/dup' }],
+          }),
+        }),
+    );
+    mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
+    await user.click(await screen.findByRole('button', { name: 'Install skill' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    expect(await within(dialog).findByText(/will see two copies/)).toBeInTheDocument();
   });
 });

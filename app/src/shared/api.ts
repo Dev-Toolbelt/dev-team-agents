@@ -60,6 +60,13 @@ export type OperationResult<T> =
       readonly kind: ProblemKind;
       readonly message: string;
       readonly hint?: string;
+      /**
+       * `details.reason` from the CLI's error document, when it gave one — a machine-readable
+       * cause that tells two refusals with the same exit code apart. `skills install` answers
+       * exit 4 both for "a skill of that name exists" (`exists`, which `--replace` resolves)
+       * and for "that skill is managed by dev-team-agents" (`managed`, which nothing does).
+       */
+      readonly reason?: string;
       readonly exitCode: number | null;
       readonly command: string;
       readonly durationMs: number;
@@ -653,6 +660,8 @@ export interface SkillInstallReport {
   readonly source: string | null;
   readonly linked: boolean;
   readonly installed: readonly SkillInstalledTo[];
+  /** Other roots a target's providers also read that already hold a skill of this name. */
+  readonly also_present: readonly { readonly root: string; readonly path: string }[];
 }
 
 /**
@@ -677,6 +686,8 @@ export interface SkillRemoveReport {
   readonly providers: readonly string[];
   readonly action: 'unlinked' | 'quarantined';
   readonly quarantined_to: string | null;
+  /** Where an unlinked symlink pointed — the only record of it, since a link is not quarantined. */
+  readonly link_target: string | null;
 }
 
 export interface DevteamBridge {

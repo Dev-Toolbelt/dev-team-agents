@@ -393,7 +393,11 @@ function RemoveDialog({
                 Moved to quarantine: <span className="break-all font-mono text-xs">{removed.quarantined_to ?? '(no path reported)'}</span>
               </>
             ) : (
-              'The symlink was removed. Nothing else was touched.'
+              <>
+                The symlink was removed. Nothing else was touched. It pointed at{' '}
+                <span className="break-all font-mono text-xs">{removed.link_target ?? '(no target reported)'}</span>
+                {' '}— recreate it there to undo.
+              </>
             )}
           </p>
         ) : null}
@@ -436,7 +440,9 @@ function InstallDialog({
   const pending = install.state.phase === 'pending';
   const answer = install.state.phase === 'done' && install.state.result.picked ? install.state.result : null;
   const installed: SkillInstallReport | null = answer !== null && answer.result.ok ? answer.result.data : null;
-  const conflict = answer !== null && !answer.result.ok && answer.result.kind === 'conflict';
+  // Only an "already exists" conflict can be resolved by replacing; a managed skill cannot.
+  const conflict =
+    answer !== null && !answer.result.ok && answer.result.kind === 'conflict' && answer.result.reason === 'exists';
 
   async function start(source: 'folder' | 'archive' | 'previous', replaceExisting: boolean) {
     const result = await install.run({ source, providers, replace: replaceExisting, link });
@@ -531,6 +537,17 @@ function InstallDialog({
                 </li>
               ))}
             </ul>
+            {installed.also_present.length > 0 ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                A skill with this name also exists in{' '}
+                {installed.also_present.map((other) => (
+                  <span key={other.path} className="break-all font-mono">
+                    {other.path}{' '}
+                  </span>
+                ))}
+                — a provider that reads both will see two copies.
+              </p>
+            ) : null}
           </div>
         ) : null}
         {answer !== null ? <Notice result={answer.result} /> : null}

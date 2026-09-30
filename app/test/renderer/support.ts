@@ -45,7 +45,7 @@ export function ok<T>(data: T, extra: { notice?: string; outcome?: 'success' | '
 /** A failed `OperationResult`, `hint` omitted unless given. */
 export function fail(
   message: string,
-  extra: { kind?: ProblemKind; hint?: string; exitCode?: number | null } = {},
+  extra: { kind?: ProblemKind; hint?: string; exitCode?: number | null; reason?: string } = {},
 ): Extract<OperationResult<never>, { ok: false }> {
   return {
     ok: false,
@@ -55,6 +55,7 @@ export function fail(
     command: 'devteam test',
     durationMs: 1,
     ...(extra.hint !== undefined ? { hint: extra.hint } : {}),
+    ...(extra.reason !== undefined ? { reason: extra.reason } : {}),
   };
 }
 

@@ -432,6 +432,13 @@ describe('the global skills operations build the argv the CLI documents', () => 
       await showSkill(unspawnable(), '--json', 'claude'),
       await removeSkill(unspawnable(), 'alpha', '../etc'),
       await removeSkill(unspawnable(), 'alpha', '--root'),
+      // Path-shaped names: the CLI refuses them too, but these must not rely on it.
+      ...(await Promise.all(
+        ['..', '.', '.hidden', 'a/b', 'a\\b', '/etc', 'C:evil', 'a\0b'].flatMap((name) => [
+          showSkill(unspawnable(), name, 'claude'),
+          removeSkill(unspawnable(), name, 'claude'),
+        ]),
+      )),
     ]) {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.kind).toBe('refused');

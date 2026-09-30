@@ -349,6 +349,7 @@ function toOperationResult<T>(result: CliResult, validate: (body: Record<string,
       kind: PROBLEM_KIND_BY_OUTCOME[result.outcome],
       message: result.document.error,
       ...(result.document.hint !== undefined ? { hint: result.document.hint } : {}),
+      ...(typeof result.document.details?.['reason'] === 'string' ? { reason: result.document.details['reason'] } : {}),
       exitCode: result.exitCode,
       command: result.command.display,
       durationMs: result.durationMs,
@@ -982,6 +983,12 @@ export function removeSkill(context: CliContext, name: string, root: string): Pr
 export function skillTargetProblem(name: unknown, root: unknown): string | null {
   const nameProblem = validateEntryName(name);
   if (nameProblem !== null) return nameProblem.replace('catalog entry', 'skill');
+  // A bare directory name, never something a path join could resolve outside the root.
+  // The CLI refuses these too; this keeps `showSkill`/`removeSkill` safe on their own.
+  const trimmed = (name as string).trim();
+  if (trimmed.startsWith('.') || /[/\\\0]/.test(trimmed) || /^[A-Za-z]:/.test(trimmed)) {
+    return 'a skill name must be a bare directory name: no ".", "..", path separators or drive letters';
+  }
   if (typeof root !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(root)) {
     return 'a skill root id must be letters, digits, dots, dashes and underscores';
   }
@@ -1076,6 +1083,13 @@ export function asSkillInstallReport(body: Record<string, unknown>): SkillInstal
     source: asNullableString(body['source']),
     linked: body['linked'] === true,
     installed,
+    also_present: Array.isArray(body['also_present'])
+      ? body['also_present'].flatMap((raw) =>
+          isRecord(raw) && typeof raw['root'] === 'string' && typeof raw['path'] === 'string'
+            ? [{ root: raw['root'], path: raw['path'] }]
+            : [],
+        )
+      : [],
   };
 }
 
@@ -1092,6 +1106,7 @@ export function asSkillRemoveReport(body: Record<string, unknown>): SkillRemoveR
     providers: asStringArray(body['providers']),
     action: body['action'],
     quarantined_to: asNullableString(body['quarantined_to']),
+    link_target: asNullableString(body['link_target']),
   };
 }
 
