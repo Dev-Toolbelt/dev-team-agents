@@ -148,8 +148,6 @@ def soften_plan_gate(body, provider, plan_gate_setting):
 
 _CODEX_BODY_REPLACEMENTS = [
     (r'\bTodoWrite\b', 'update_plan'),
-    (r'\bTaskCreate\b', 'update_plan'),
-    (r'\bTaskUpdate\b', 'update_plan'),
     (r'\bthe Task tool\b', 'spawn_agent'),
     (r'\bthe `Task` tool\b', 'spawn_agent'),
     (r'\bvia the Task tool\b', 'via spawn_agent'),

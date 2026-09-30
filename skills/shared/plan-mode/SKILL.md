@@ -112,21 +112,27 @@ An approved plan's steps also live in your provider's **native task list**. That
 desktop app's task board reads (`docs/specs/task-board.md`): a plan kept only in chat or in a file
 never reaches it.
 
-| Provider | Tool | How it updates |
-|----------|------|----------------|
-| Claude Code | `TaskCreate` / `TaskUpdate` (`TodoWrite` where that is the one available) | One task per step; update each by id |
-| Codex | `update_plan` | Send the **whole** list, every step with its current status, on every change |
-| opencode | `todowrite` | Send the **whole** list, every step with its current status, on every change |
+| Tool | Provider | Update model | Drop a step |
+|------|----------|--------------|-------------|
+| `TaskCreate` / `TaskUpdate` | Claude Code | One task per step; later changes by the id `TaskCreate` returned | `TaskUpdate` with status `deleted` |
+| `TodoWrite` (only where `TaskCreate` is unavailable) | Claude Code | Whole list on every call | Omit it from the list |
+| `update_plan` | Codex | Whole list on every call | Omit it from the list |
+| `todowrite` | opencode | Whole list on every call; give each step an `id` of `step-N` | Omit it from the list |
 
-- **On approval** — never before: a rejected plan must leave no task behind — create one task per
-  Steps row, in plan order, titled `Step N: <action>`, all pending.
-- **Starting a step** → mark it `in_progress`. **Finishing it** → mark it `completed` in the same
-  moment you send its Progress Reporting update. The two move together; neither replaces the other.
-- **Replanning** → mark dropped steps `cancelled` (or remove them from a whole-list tool) and add
-  the new ones before executing them.
-- **Owner** — the agent that orchestrates the plan keeps this list, as it owns Progress Reporting. A
-  subagent keeps its own list only when it executes a multi-step plan of its own; it never mirrors the
-  orchestrator's steps.
+- **When** — create the list once the plan is approved **and** the Execution Strategy Gate (if it
+  applies) has cleared, immediately before step 1; never before, so a rejected or cancelled plan
+  leaves no task behind. Where the rendered body has no plan gate, the start of execution is the
+  approval.
+- **One task per Steps row**, in plan order, titled `Step N: <action>`, all `pending`.
+- **Titles and ids are frozen.** The board recognises a step by its exact text (and by `id` on
+  opencode): never rename or renumber a step once created. On replan, new steps take the next unused
+  `N`; dropped steps are removed as the table says; finished steps are left exactly as they are.
+- **Moving** — when a step finishes, mark it `completed` and the next one `in_progress` in the same
+  update (one call on a whole-list tool), then send its Progress Reporting message. The first step
+  goes `in_progress` when execution starts.
+- **Owner** — the orchestrating agent keeps the list, as it owns Progress Reporting. A subagent
+  handed a slice of an approved plan creates **no** list; it keeps one only for a plan it presented
+  and had approved itself.
 - A step that runs a review or QA pass needs nothing extra: the board moves its tasks into In Review
   on its own.
 

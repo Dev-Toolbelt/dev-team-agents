@@ -14,8 +14,6 @@
         "AskUserQuestion": "question",
         "Task": "task",
         "TodoWrite": "todowrite",
-        "TaskCreate": "todowrite",
-        "TaskUpdate": "todowrite",
         "WebSearch": "websearch",
         "WebFetch": "webfetch"
       },
@@ -35,8 +33,6 @@
         "AskUserQuestion": "request_user_input",
         "Task": "spawn_agent",
         "TodoWrite": "update_plan",
-        "TaskCreate": "update_plan",
-        "TaskUpdate": "update_plan",
         "WebSearch": "WebSearch",
         "WebFetch": "WebSearch",
         "Glob": "Bash",

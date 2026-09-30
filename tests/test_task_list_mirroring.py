@@ -1,11 +1,10 @@
 """An approved plan's steps reach the task board only through each provider's native task list.
 
-`skills/shared/plan-mode/SKILL.md` § Task List Mirroring names the tool per provider, because
-skills are read raw by every provider; agent and command bodies are rewritten at render time
-from `scripts/lib/tool-map.json`. Both must cover every provider in `providers.ALL_PROVIDERS`.
+`skills/shared/plan-mode/SKILL.md` § Task List Mirroring names the tool per provider itself,
+because skills are read raw by every provider — nothing rewrites them at render time. Its rules
+must also match how the board (`scripts/lib/devteam/tasks.py`) recognises a task.
 """
 
-import json
 import re
 import sys
 import unittest
@@ -14,56 +13,61 @@ from devteam_support import REPO_ROOT
 
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
-import render_provider  # noqa: E402
 from devteam import providers  # noqa: E402
 
-#: The native task-list tool per provider — one entry per provider in ALL_PROVIDERS, so adding a
+#: Every task-list tool a provider exposes — one entry per provider in ALL_PROVIDERS, so adding a
 #: provider without deciding its tool fails here instead of shipping a board that stays empty.
-NATIVE_TASK_TOOL = {
-    "claude": "TaskCreate",
-    "codex": "update_plan",
-    "opencode": "todowrite",
+NATIVE_TASK_TOOLS = {
+    "claude": ("TaskCreate", "TaskUpdate", "TodoWrite"),
+    "codex": ("update_plan",),
+    "opencode": ("todowrite",),
 }
 
 PLAN_MODE = REPO_ROOT / "skills" / "shared" / "plan-mode" / "SKILL.md"
-TOOL_MAP = REPO_ROOT / "scripts" / "lib" / "tool-map.json"
 
 
-def _mirroring_section():
+def _section():
     text = PLAN_MODE.read_text(encoding="utf-8")
     match = re.search(r"^## Task List Mirroring\n(.*?)(?=^## )", text, re.S | re.M)
     return match.group(1) if match else ""
 
 
+def _row(tool):
+    for line in _section().splitlines():
+        if line.startswith("| `{}`".format(tool)):
+            return line
+    return ""
+
+
 class TaskListMirroringTest(unittest.TestCase):
-    def test_every_supported_provider_has_a_native_task_tool_decided(self):
-        self.assertEqual(set(NATIVE_TASK_TOOL), set(providers.ALL_PROVIDERS))
+    def test_every_supported_provider_has_its_task_tools_decided(self):
+        self.assertEqual(set(NATIVE_TASK_TOOLS), set(providers.ALL_PROVIDERS))
 
-    def test_plan_mode_names_the_task_tool_of_every_provider(self):
-        section = _mirroring_section()
-        self.assertTrue(section, "plan-mode has no '## Task List Mirroring' section")
-        for provider, tool in NATIVE_TASK_TOOL.items():
-            self.assertIn("`{}`".format(tool), section, provider)
+    def test_the_skill_names_every_task_tool_of_every_provider(self):
+        self.assertTrue(_section(), "plan-mode has no '## Task List Mirroring' section")
+        for provider, tools in NATIVE_TASK_TOOLS.items():
+            for tool in tools:
+                self.assertIn("`{}`".format(tool), _section(), provider)
 
-    def test_tasks_are_created_on_approval_only(self):
-        section = _mirroring_section()
-        self.assertIn("On approval", section)
+    def test_no_provider_is_told_to_send_a_status_its_tool_rejects(self):
+        # Codex update_plan and Claude TaskUpdate have no `cancelled`; Claude drops with `deleted`.
+        for tool in ("update_plan", "TaskCreate", "TodoWrite"):
+            self.assertNotIn("cancelled", _row(tool), tool)
+        self.assertIn("deleted", _row("TaskCreate"))
+
+    def test_whole_list_tools_are_described_as_whole_list(self):
+        for tool in ("TodoWrite", "update_plan", "todowrite"):
+            self.assertIn("Whole list", _row(tool), tool)
+
+    def test_titles_and_ids_are_frozen_because_the_board_matches_on_them(self):
+        section = _section()
+        self.assertIn("never rename or renumber", section)
+        self.assertIn("step-N", _row("todowrite"))
+
+    def test_tasks_are_created_only_once_the_plan_is_approved(self):
+        section = _section()
+        self.assertIn("approved", section)
         self.assertIn("never before", section)
-
-    def test_the_tool_map_sends_every_claude_task_tool_to_the_providers_native_one(self):
-        tool_map = json.loads(TOOL_MAP.read_text(encoding="utf-8"))["providers"]
-        for provider, tool in NATIVE_TASK_TOOL.items():
-            if provider == "claude":  # the identity case: bodies already use Claude's names
-                continue
-            rewrites = tool_map[provider].get("tool_rewrites", {})
-            for claude_name in ("TaskCreate", "TaskUpdate", "TodoWrite"):
-                self.assertEqual(rewrites.get(claude_name), tool, "{}: {}".format(provider, claude_name))
-
-    def test_codex_bodies_get_update_plan_for_every_claude_task_tool(self):
-        body = "Create them with TaskCreate, move them with TaskUpdate, or TodoWrite."
-        rendered = render_provider.apply_codex_body_rewrites(body)
-        self.assertNotRegex(rendered, r"\b(TaskCreate|TaskUpdate|TodoWrite)\b")
-        self.assertEqual(rendered.count("update_plan"), 3)
 
 
 if __name__ == "__main__":
