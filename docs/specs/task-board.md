@@ -1,0 +1,193 @@
+## Spec — Cross-project task board
+
+### User Story
+As a developer running several agent sessions across several bound projects, I want every todo
+list an agent creates to appear on a board in the desktop app, so that I can see what is pending,
+in progress and done in every project — and how long each task spent in each step — without
+opening each session.
+
+### Context
+Agents already keep a todo list through their provider's native tool (Claude Code `TodoWrite` /
+`TaskCreate` / `TaskUpdate`, Codex `update_plan`, opencode `todowrite`). Until now that list lived
+only in the provider's UI. Decision record: [ADR-0018](../development/adrs/0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md).
+
+Data flow, mirroring the notification channel (ADR-0017):
+
+```
+provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/tasks/<session>.json
+                                                        │
+                                  devteam tasks watch ◀─┘ ──▶ app main ──IPC──▶ Board / Kanban
+```
+
+#### Capture per provider
+
+| Provider | Hook point | Tool | Replace or incremental | Task id |
+|---|---|---|---|---|
+| Claude Code | `PostToolUse`, matcher `TodoWrite\|TaskCreate\|TaskUpdate` → `post-tool-use.sh` | `TodoWrite` | Replace (full list every call) | none — matched by content |
+| Claude Code | same | `TaskCreate` / `TaskUpdate` (the **default** since TodoWrite was disabled in favour of them; `CLAUDE_CODE_ENABLE_TASKS=0` restores TodoWrite) | Incremental | `TaskUpdate.tool_input.taskId`; for `TaskCreate`, parsed from the tool output (`tool_response` or `tool_output`, object or string, e.g. `Task #3 created`), falling back to the next sequential id the session would assign |
+| Claude Code | `SessionEnd` → `session-end.sh` | — | marks the session ended | — |
+| Codex | existing `PreToolUse` (`*`) → `pre-tool-use.sh` | `update_plan` | Replace | none — matched by content |
+| opencode | plugin `tool.execute.before` → `pre-tool-use.sh` (payload gains `sessionID`) | `todowrite` | Replace | `todos[].id` |
+
+Claude Code hook input carries `agent_id` / `agent_type` when the call comes from a subagent
+(https://code.claude.com/docs/en/hooks.md). The input shapes of `TodoWrite` and `Task*` are not
+publicly documented, so the normalizers are defensive: unknown keys are ignored, a payload that
+cannot be read is a no-op, and both `tool_response` and `tool_output` are accepted.
+
+Codex coverage is best-effort: whether Codex fires `PreToolUse` for `update_plan` could not be
+verified empirically. When it does not, Codex sessions simply never appear; nothing fails.
+
+#### The record — `<state-dir>/tasks/<session-key>.json`
+
+Machine-local (ADR-0013), one file per session so two sessions never contend for one lock.
+Written only by `devteam tasks record|mark`, under a per-session lock, atomically. Never deleted by
+any command (No-Destruction Rule); the app hides old data, it does not remove it.
+
+```json
+{
+  "schema": 1,
+  "session_id": "…", "project_id": "…", "provider": "claude|codex|opencode",
+  "cwd": "…", "branch": "feat/login",
+  "created_at": 0, "updated_at": 0, "last_seen_at": 0, "idle_at": null, "ended_at": null,
+  "tasks": [
+    {
+      "key": "t1", "id": null, "owner": "main", "content": "…",
+      "status": "pending|in_progress|completed|cancelled",
+      "created_at": 0, "removed_at": null,
+      "history": [{"status": "pending", "at": 0}, {"status": "in_progress", "at": 0}]
+    }
+  ]
+}
+```
+
+- `owner` is the subagent id when the hook payload carries one, else `main`. A replace-style call
+  diffs only the tasks of its own owner, so a subagent's list never overwrites the main list.
+- Matching for replace-style calls: provider id when present, else normalized content (trimmed,
+  whitespace-collapsed, case-folded), duplicates paired in order. A task absent from the new list
+  gets `removed_at`; it is kept, not deleted. A rewritten task text is a new task — accepted limit.
+- `history` appends one entry per status change, capped at 50 entries.
+
+#### Derived state — computed by the CLI on read, never stored
+
+| Field | Rule |
+|---|---|
+| Session `status` | `ended` if `ended_at` is set or `last_seen_at` older than `--ended-after` (default 6 h); `idle` if `idle_at` ≥ last task event; else `active` |
+| Task `column` | `todo` (pending), `in_progress`, `done` (completed or cancelled); removed-and-not-completed tasks are excluded from counts and columns |
+| Task `stale` | `in_progress`, session not ended, and in that status for longer than `--stale-after` (default 60 min) |
+| Task `abandoned` | not done and its session is `ended` |
+| Task `durations` | seconds spent per status, from `history`; the current status runs until now (or until the session ended) |
+
+#### CLI surface (`--json` is public API, ADR-0011)
+
+| Command | Purpose |
+|---|---|
+| `devteam tasks record --project-root <dir> [--provider auto]` | Hook-only. Reads the hook payload on stdin, updates the record, prints `{"recorded": bool, "session": …, "all_done": bool, "became_all_done": bool}` |
+| `devteam tasks mark --project-root <dir> --state idle\|ended` | Hook-only. Reads the payload for the session id; no-op when the session has no record. Prints `{"marked": bool, "open": N}` |
+| `devteam tasks list [--project <id>…] [--since <epoch>] [--stale-after S] [--ended-after S]` | Every bound project that has at least one task, with sessions, tasks and derived state |
+| `devteam tasks watch [same filters]` | `snapshot` events per changed project, `ready`, `heartbeat`, `end` — same lifecycle as `notifications watch` |
+
+#### `tasks list --json` shape (the app codes against this)
+
+Wrapped in the CLI's usual `--json` envelope. `data`:
+
+```json
+{
+  "generated_at": 1759200000,
+  "stale_after": 3600, "ended_after": 21600,
+  "projects": [
+    {
+      "project_id": "…", "root": "/abs/path",
+      "providers": ["claude", "codex"],
+      "sessions_total": 3, "sessions_active": 1,
+      "counts": {"todo": 3, "in_progress": 2, "done": 5, "total": 10},
+      "stale": 1, "abandoned": 0,
+      "last_activity_at": 1759199000,
+      "sessions": [
+        {
+          "session_id": "…", "provider": "claude", "branch": "feat/login", "cwd": "…",
+          "status": "active|idle|ended",
+          "created_at": 0, "last_activity_at": 0, "ended_at": null,
+          "resume_command": "cd '/abs/path' && claude --resume '…'",
+          "counts": {"todo": 1, "in_progress": 1, "done": 1, "total": 3},
+          "tasks": [
+            {
+              "key": "t1", "content": "…", "owner": "main", "agent_type": null,
+              "status": "in_progress", "column": "in_progress",
+              "created_at": 0, "status_since": 0, "completed_at": null,
+              "durations": {"pending": 120, "in_progress": 300, "completed": 0},
+              "stale": false, "abandoned": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Projects are sorted by `last_activity_at` descending; sessions likewise; tasks by `created_at`.
+Removed-and-not-completed tasks are omitted. `--since` drops sessions whose last activity is older.
+The display name is not here — it is app-local (ADR-0016); the app joins on `project_id`.
+
+`tasks watch --json` emits JSON Lines: `{"event":"snapshot","project": <one project object as above,
+or {"project_id": "…", "removed": true} when it no longer has tasks>}`, then `{"event":"ready"}`
+after the backlog, `{"event":"heartbeat","ts":…}` every 30 s, and `{"event":"end","reason":…}` —
+the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
+
+#### Notifications (emitted by the hook through `notify.sh`, the only emitter)
+
+| Code | When |
+|---|---|
+| `tasks.session_done` | A record call moves a session from "some open" to "all done" (≥ 1 task) |
+| `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude only; other providers have no end event) |
+
+#### Desktop app
+
+- **Board (overview):** only projects with ≥ 1 task. Card: display name, provider icons (the set used
+  by its sessions), sessions `total (N active)`, counts and percentages for To do / In progress /
+  Done, a stacked progress bar, and badges for stale and abandoned tasks. Period filter
+  (today / 7 days / 30 days / all).
+- **Project kanban:** three columns. Card: task text, session chip (provider icon + branch), time in
+  current column; on hover/focus, time per step. Filters: session, period, show/hide done older than
+  the retention setting. Per-session header with status and a **Copy resume command** button.
+- **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
+  (days, default 7). Not preferences.json keys.
+- Resume commands: `cd <root> && claude --resume <id>`, `cd <root> && codex resume <id>`,
+  `cd <root> && opencode --session <id>`.
+
+### Acceptance Criteria
+
+1. **Given** project A with three sessions of 3, 5 and 2 tasks and project B with two sessions of 3
+   and 2 tasks, **When** the Board opens, **Then** it shows exactly A and B, with 10 and 5 tasks, the
+   right per-column counts and percentages, and the provider icons their sessions used.
+2. **Given** a bound project whose sessions never created a task, **When** the Board opens, **Then**
+   that project is not shown.
+3. **Given** a task that went pending → in_progress → completed, **When** its kanban card is
+   inspected, **Then** it shows the time spent pending and in progress.
+4. **Given** `TodoWrite` is called by a subagent, **When** the main agent later calls `TodoWrite`
+   with its own list, **Then** neither list removes the other's tasks.
+5. **Given** a replace-style call omits a task, **Then** the task is marked removed and kept in the file.
+6. **Given** a task in progress longer than the stale threshold in a non-ended session, **Then** it
+   is flagged stale on the card and counted on the project card.
+7. **Given** a session ends with open tasks, **Then** those tasks are flagged abandoned, and on
+   Claude Code a `tasks.session_abandoned` notification is raised.
+8. **Given** a session's last open task is completed, **Then** a `tasks.session_done` notification
+   is raised once.
+9. **Given** the hook runs for any tool other than a todo tool, **Then** no python process is forked.
+10. **Given** a malformed payload or an unwritable state dir, **Then** the hook exits 0 and the
+    provider is not disturbed.
+11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
+
+### Out of Scope
+- Editing, moving or deleting tasks from the board (read-only).
+- A "Blocked" column and plan titles as activity names (need agent cooperation).
+- Cross-machine sync; deleting old records (`devteam tasks prune` is future work).
+- A notification for stale tasks (badge only).
+
+### Dependencies
+- ADR-0013 (machine-local records), ADR-0015/0011 (app as CLI client, JSON contract),
+  ADR-0017 (notification channel).
+
+### Amendment Log
+| Date | Change | Reason |
+|---|---|---|
