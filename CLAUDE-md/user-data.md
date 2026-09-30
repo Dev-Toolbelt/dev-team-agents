@@ -16,6 +16,10 @@
 
 On layout 1, both pointers resolve to `.dev-team-agents/user-data/` for backward compatibility.
 
+A **pre-v2.1.0** project kept this directory at `.claude/user-data/`. `devteam migrate` moves it to
+`.dev-team-agents/user-data/` — moved, never quarantined — so the project lands on layout 1 and
+`devteam upgrade` takes it into the store from there.
+
 **Files in `user-data/` (layout 1 only; on layout 2 they live in the store under the pointers above):**
 
 Portable (migrated to `data/projects/<project_id>/` on upgrade):

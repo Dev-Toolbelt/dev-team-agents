@@ -204,7 +204,7 @@ If legacy `.claude/` directories still exist (user-data, docs, context, tasks, d
 | `.claude/docs/` | `docs/` | `mv .claude/docs docs` (merge if `docs/` exists) |
 | `.claude/context/` | `docs/context/` | `mkdir -p docs/context && mv .claude/context/* docs/context/` |
 | `.claude/tasks/` | `docs/tasks/` | `mkdir -p docs/tasks && mv .claude/tasks/* docs/tasks/` |
-| `.claude/dev-team-agents/` | `.dev-team-agents/` | Run `bash .dev-team-agents/scripts/migrate-to-root.sh` |
+| `.claude/dev-team-agents/` | `.dev-team-agents/` | With the v3 CLI: `devteam migrate` (the app's bind dialog offers it), which also moves `.claude/user-data/` and keeps `.claude/docs/`. v2 only: `bash .dev-team-agents/scripts/migrate-to-root.sh` |
 | `.claude/.worktree-session` | `.dev-team-agents/.worktree-session` | `mv .claude/.worktree-session .dev-team-agents/` |
 
 After moving, clean up under the **No-Destruction Rule** (`../SKILL.md`):

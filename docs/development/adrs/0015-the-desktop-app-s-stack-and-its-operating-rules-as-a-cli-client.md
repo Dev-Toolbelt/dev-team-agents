@@ -518,3 +518,23 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > packaged build therefore reads `dev-team-agents` until `productName` itself changes, which is a
 > packaging decision (cask, dmg and winget names) and not part of this one.
 
+> **Amendment — `migrate` is wired, from the bind dialog, and `--untrack` is the one repository
+> operation the app can cause.** The second-slice amendment kept `migrate` unwired as "superseded for a
+> project by `upgrade`". That was wrong: `upgrade` moves a bound project's memory into the store;
+> `migrate` converts a v2 install into a bind, and without it a user with a v2 project could not use
+> the app at all — the bind was refused and the only way on was a terminal. Found binding a real v2
+> project.
+>
+> - **Where:** choosing a directory in the bind dialog asks `migrate <path>` for a plan. Exit 2 means
+>   no v2 install and the ordinary bind proceeds; a plan replaces Bind with *Review migration* (the
+>   plan with the options on screen) and *Migrate* (`--apply --untrack` with those same options).
+> - **Provenance:** `migrate` takes `bind`'s rule and validator — the path must be one the main process
+>   handed back through the picker; `pin` is refused.
+> - **`--untrack`:** the CLI's rule was "report the `git rm -r --cached`, never run it". With `--untrack`
+>   it runs it on exactly the paths the plan listed and nothing else: index entries only, never a file
+>   on disk, nothing committed — the commit stays the user's. A named exception, not a precedent: no
+>   other command touches the user's repository, and a failure is reported in `untrack_problem` rather
+>   than failing a migration that already succeeded.
+> - **Both v2 shapes:** `migrate` converts a pre-v2.1.0 install (`.claude/dev-team-agents/`) itself, so
+>   the app never needs `migrate-to-root.sh`, a bash tool this client could not run.
+
