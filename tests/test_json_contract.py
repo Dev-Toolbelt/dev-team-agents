@@ -732,9 +732,9 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "files",
             "files_truncated",
         },
-        "skills install": {"name", "description", "source", "linked", "installed"},
+        "skills install": {"name", "description", "source", "linked", "installed", "also_present"},
         "skills install.record": {"root", "path", "providers", "replaced", "quarantined_to"},
-        "skills remove": {"name", "root", "path", "providers", "action", "quarantined_to"},
+        "skills remove": {"name", "root", "path", "providers", "action", "quarantined_to", "link_target"},
     }
 
     # A key whose name alone suggests it might carry an actual secret value,

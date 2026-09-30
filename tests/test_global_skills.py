@@ -113,15 +113,41 @@ class ListAndShowTest(GlobalSkillsTestCase):
 
 
 class InstallTest(GlobalSkillsTestCase):
-    def test_install_directory_into_each_providers_target_root(self):
+    def test_install_for_every_provider_uses_the_fewest_roots(self):
+        # opencode reads the claude and agents roots, so it needs no copy of its own.
         source = write_skill(self.tmp / "src" / "alpha", "alpha")
         payload = self.cli_json("install", "--source", str(source))
         roots = sorted(item["root"] for item in payload["installed"])
-        self.assertEqual(roots, ["agents", "claude", "opencode"])
-        for root in (self.claude_root, self.agents_root, self.opencode_root):
+        self.assertEqual(roots, ["agents", "claude"])
+        for root in (self.claude_root, self.agents_root):
             self.assertTrue((root / "alpha" / "SKILL.md").is_file())
+        self.assertFalse((self.opencode_root / "alpha").exists())
         self.assertFalse((self.codex_root / "alpha").exists(), "nothing new goes to ~/.codex/skills")
         self.assertTrue(source.is_dir(), "the source is copied, never moved")
+        self.assertEqual(payload["also_present"], [])
+
+    def test_opencode_alone_installs_into_its_own_root(self):
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        payload = self.cli_json("install", "--source", str(source), "--provider", "opencode")
+        self.assertEqual([item["root"] for item in payload["installed"]], ["opencode"])
+
+    def test_claude_and_opencode_share_one_root(self):
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        payload = self.cli_json(
+            "install", "--source", str(source), "--provider", "claude", "--provider", "opencode"
+        )
+        self.assertEqual([item["root"] for item in payload["installed"]], ["claude"])
+
+    def test_a_copy_in_another_root_the_provider_reads_is_reported(self):
+        write_skill(self.opencode_root / "alpha", "alpha")
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        payload = self.cli_json("install", "--source", str(source), "--provider", "claude")
+        self.assertEqual([o["root"] for o in payload["also_present"]], ["opencode"])
+
+    def test_a_listed_only_root_is_never_written(self):
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        self.cli_json("install", "--source", str(source), "--root", "codex", expect=errors.EXIT_USAGE)
+        self.assertFalse((self.codex_root / "alpha").exists())
 
     def test_install_one_provider(self):
         source = write_skill(self.tmp / "src" / "alpha", "alpha")
@@ -134,7 +160,7 @@ class InstallTest(GlobalSkillsTestCase):
         self.assertTrue((self.claude_root / "real-name").is_dir())
 
     def test_conflict_refused_before_any_root_is_written(self):
-        write_skill(self.opencode_root / "alpha", "alpha", description="old")
+        write_skill(self.agents_root / "alpha", "alpha", description="old")
         source = write_skill(self.tmp / "src" / "alpha", "alpha")
         self.cli_json("install", "--source", str(source), expect=errors.EXIT_CONFLICT)
         self.assertFalse((self.claude_root / "alpha").exists())
@@ -251,6 +277,220 @@ class RemoveTest(GlobalSkillsTestCase):
 
     def test_unknown_root_is_a_usage_error(self):
         self.cli_json("remove", "x", "--root", "nope", expect=errors.EXIT_USAGE)
+
+
+class HostileNameTest(GlobalSkillsTestCase):
+    """A name is matched among a root's children, never joined onto its path."""
+
+    def setUp(self):
+        super().setUp()
+        write_skill(self.claude_root / "alpha", "alpha")
+        (self.user_home / ".claude" / "other.txt").write_text("keep me", encoding="utf-8")
+
+    def test_traversal_names_are_refused_by_show_and_remove(self):
+        for name in ("..", ".", "../skills", "alpha/..", "a/b", "a\\b", str(self.user_home), "C:evil", ".hidden"):
+            for command in ("show", "remove"):
+                with self.subTest(command=command, name=name):
+                    self.cli_json(command, name, "--root", "claude", expect=errors.EXIT_USAGE)
+        self.assertTrue((self.user_home / ".claude" / "other.txt").is_file())
+        self.assertTrue((self.claude_root / "alpha").is_dir())
+        self.assertFalse(self.home.exists() and any(self.home.rglob("other.txt")))
+
+    def test_nul_is_refused_in_process(self):
+        from devteam import global_skills
+        from devteam.errors import UsageError
+
+        with self.assertRaises(UsageError):
+            global_skills.remove("alpha\\0", "claude")
+
+
+class RollbackTest(GlobalSkillsTestCase):
+    """An I/O failure part-way leaves every root as it was, with no staging left over."""
+
+    def _stages(self):
+        return [
+            p for root in (self.claude_root, self.agents_root) if root.is_dir()
+            for p in root.iterdir() if p.name.startswith(".devteam-staging-")
+        ]
+
+    def test_a_failed_copy_installs_nothing_and_leaves_no_stage(self):
+        from unittest import mock
+        from devteam import global_skills
+
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        real_copytree = global_skills.shutil.copytree
+        calls = []
+
+        def failing(src, dst, **kwargs):
+            calls.append(dst)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real_copytree(src, dst, **kwargs)
+
+        with mock.patch.object(global_skills.shutil, "copytree", side_effect=failing):
+            with self.assertRaises(OSError):
+                global_skills.install(str(source), providers=["claude", "codex"])
+        self.assertFalse((self.claude_root / "alpha").exists())
+        self.assertFalse((self.agents_root / "alpha").exists())
+        self.assertEqual(self._stages(), [])
+
+    def test_a_failed_swap_restores_what_was_replaced(self):
+        from unittest import mock
+        from devteam import global_skills
+
+        write_skill(self.claude_root / "alpha", "alpha", description="old claude")
+        write_skill(self.agents_root / "alpha", "alpha", description="old agents")
+        source = write_skill(self.tmp / "src" / "alpha", "alpha", description="new")
+        real_replace = global_skills.os.replace
+        calls = []
+
+        def failing(src, dst):
+            calls.append(dst)
+            if len(calls) == 2:
+                raise OSError("device busy")
+            return real_replace(src, dst)
+
+        with mock.patch.object(global_skills.os, "replace", side_effect=failing):
+            with self.assertRaises(OSError):
+                global_skills.install(str(source), providers=["claude", "codex"], replace=True)
+        self.assertIn("old claude", (self.claude_root / "alpha" / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertIn("old agents", (self.agents_root / "alpha" / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual(self._stages(), [])
+
+    def test_a_stale_stage_is_swept_into_quarantine(self):
+        stale = self.claude_root / ".devteam-staging-alpha-abc123"
+        write_skill(stale, "alpha")
+        source = write_skill(self.tmp / "src" / "beta", "beta")
+        self.cli_json("install", "--source", str(source), "--provider", "claude")
+        self.assertFalse(stale.exists())
+        self.assertTrue(any(p.name == stale.name for p in self.home.rglob(".devteam-staging-*")))
+
+
+@unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+class LinkAndManagedTest(GlobalSkillsTestCase):
+    def test_link_onto_itself_is_refused(self):
+        write_skill(self.claude_root / "alpha", "alpha")
+        self.cli_json(
+            "install", "--source", str(self.claude_root / "alpha"), "--provider", "claude",
+            "--link", "--replace", expect=errors.EXIT_USAGE,
+        )
+        self.assertTrue((self.claude_root / "alpha" / "SKILL.md").is_file())
+        self.assertFalse((self.claude_root / "alpha").is_symlink())
+
+    def test_link_from_the_core_store_is_refused(self):
+        self.install_version("3.0.0", activate=True)
+        from devteam import paths
+
+        core_skill = paths.core_dir() / "versions" / "3.0.0" / "skills" / "testing" / "unit"
+        self.cli_json(
+            "install", "--source", str(core_skill), "--provider", "claude", "--link",
+            expect=errors.EXIT_USAGE,
+        )
+
+    def test_a_root_symlinked_into_the_core_makes_its_children_managed(self):
+        self.install_version("3.0.0", activate=True)
+        from devteam import paths
+
+        core_skills = paths.core_dir() / "versions" / "3.0.0" / "skills" / "testing"
+        (self.user_home / ".claude").mkdir(parents=True)
+        os.symlink(str(core_skills), str(self.claude_root))
+        entry = self.cli_json("list", "--provider", "claude")["skills"][0]
+        self.assertFalse(entry["is_symlink"])
+        self.assertTrue(entry["managed"])
+        body = self.cli_json("remove", "unit", "--root", "claude", expect=errors.EXIT_CONFLICT)
+        self.assertEqual(body["details"]["reason"], "managed")
+        self.assertTrue((core_skills / "unit" / "SKILL.md").is_file())
+
+    def test_conflict_reasons_are_distinct(self):
+        write_skill(self.claude_root / "alpha", "alpha")
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        body = self.cli_json("install", "--source", str(source), "--provider", "claude", expect=errors.EXIT_CONFLICT)
+        self.assertEqual(body["details"]["reason"], "exists")
+
+    def test_remove_reports_where_a_symlink_pointed(self):
+        target = write_skill(self.tmp / "elsewhere" / "alpha", "alpha")
+        self.claude_root.mkdir(parents=True)
+        os.symlink(str(target), str(self.claude_root / "alpha"))
+        payload = self.cli_json("remove", "alpha")
+        self.assertEqual(payload["link_target"], str(target))
+
+
+class ArchiveEdgeTest(GlobalSkillsTestCase):
+    def _zip(self, name, members):
+        archive = self.tmp / name
+        with zipfile.ZipFile(str(archive), "w") as bundle:
+            for member in members:
+                if isinstance(member, tuple):
+                    bundle.writestr(*member)
+                else:
+                    bundle.writestr(member, "x")
+        return archive
+
+    SKILL = ("SKILL.md", "---\nname: zipped\ndescription: x\n---\n")
+
+    def test_backslash_and_drive_letter_members_are_refused(self):
+        for bad in ("..\\escape.txt", "C:/evil.txt", "C:\\evil.txt"):
+            with self.subTest(member=bad):
+                archive = self._zip("bad.zip", [self.SKILL, bad])
+                self.cli_json("install", "--source", str(archive), expect=errors.EXIT_USAGE)
+
+    def test_limits_are_enforced(self):
+        from unittest import mock
+        from devteam import global_skills
+        from devteam.errors import UsageError
+
+        archive = self._zip("big.zip", [self.SKILL, ("blob.bin", "y" * 4096), "a", "b"])
+        with mock.patch.object(global_skills, "MAX_ARCHIVE_BYTES", 1024):
+            with self.assertRaisesRegex(UsageError, "expands"):
+                global_skills.install(str(archive), providers=["claude"])
+        with mock.patch.object(global_skills, "MAX_ARCHIVE_MEMBERS", 2):
+            with self.assertRaisesRegex(UsageError, "entries"):
+                global_skills.install(str(archive), providers=["claude"])
+
+    def test_encrypted_member_is_refused(self):
+        archive = self._zip("enc.zip", [self.SKILL])
+        data = bytearray(archive.read_bytes())
+        # Set the "encrypted" general-purpose flag bit in the central directory entry.
+        index = data.rfind(b"PK\x01\x02")
+        self.assertGreaterEqual(index, 0)
+        data[index + 8] |= 0x1
+        archive.write_bytes(bytes(data))
+        self.cli_json("install", "--source", str(archive), expect=errors.EXIT_USAGE)
+
+    def test_macosx_debris_is_not_installed(self):
+        archive = self._zip("mac.zip", [("zipped/SKILL.md", self.SKILL[1]), "__MACOSX/zipped/._SKILL.md"])
+        self.cli_json("install", "--source", str(archive), "--provider", "claude")
+        self.assertFalse((self.claude_root / "zipped" / "__MACOSX").exists())
+        self.assertFalse((self.user_home / ".claude" / "__MACOSX").exists())
+
+    @unittest.skipUnless(os.name == "posix", "no POSIX permission bits on this filesystem")
+    def test_executable_bit_survives_extraction(self):
+        archive = self.tmp / "exec.zip"
+        with zipfile.ZipFile(str(archive), "w") as bundle:
+            bundle.writestr(*self.SKILL)
+            info = zipfile.ZipInfo("scripts/run.sh")
+            info.external_attr = (stat.S_IFREG | 0o4755) << 16
+            bundle.writestr(info, "#!/bin/sh\n")
+        self.cli_json("install", "--source", str(archive), "--provider", "claude")
+        mode = stat.S_IMODE((self.claude_root / "zipped" / "scripts" / "run.sh").stat().st_mode)
+        self.assertTrue(mode & 0o100, oct(mode))
+        self.assertFalse(mode & 0o4000, "setuid must never survive")
+
+
+class FrontmatterTest(unittest.TestCase):
+    def test_inline_comment_is_not_part_of_the_value(self):
+        from devteam.global_skills import read_frontmatter
+
+        fields, _ = read_frontmatter("---\nname: foo # the name\ndescription: 'a # b'\n---\n")
+        self.assertEqual(fields["name"], "foo")
+        self.assertEqual(fields["description"], "a # b")
+
+    def test_indented_dashes_inside_a_block_do_not_close_the_frontmatter(self):
+        from devteam.global_skills import read_frontmatter
+
+        fields, body = read_frontmatter("---\nname: foo\ndescription: |\n  line\n  ---\n  more\n---\nBody\n")
+        self.assertEqual(fields["description"], "line\n---\nmore")
+        self.assertEqual(body, "Body")
 
 
 class ClassificationTest(unittest.TestCase):
