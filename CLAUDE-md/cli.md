@@ -198,7 +198,11 @@ an existing outcome uses* a `json_contract` obligation.
 (or SIGTERM) and writes one compact JSON document per line, each carrying `ok`: every unseen
 `notification` already queued, then `ready`, then each new `notification`, a `heartbeat` every
 30 s, and `end` (with `reason`: `stdin-closed`, `sigterm`, `interrupted`) last. No final document
-follows. It is excluded from the bulk contract sweep and pinned by `tests/test_notifications.py`
+follows. **A failure is a line too:** `{"event": "error", "ok": false, "error", "exit_code", …}` —
+the usual error keys, compact, plus `event` — and the process exits with that code. That holds for a
+failure before parsing ends (a bad `--interval`) as much as after, because an indented document there
+reads as a protocol error and hides the exit code that explains it. `--interval` must be at least
+0.01 s. It is excluded from the bulk contract sweep and pinned by `tests/test_notifications.py`
 against a real stream instead.
 
 **Exception: `devteam cred get` refuses `--json`.** The value is written to stdout and nothing else, so wrapping it in a document would put a secret somewhere a client is likely to log. Use `devteam cred list --json` for the references instead.

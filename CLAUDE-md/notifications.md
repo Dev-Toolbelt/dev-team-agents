@@ -33,7 +33,10 @@ One JSON line, written by `scripts/hooks/lib/notify.sh` — the only emitter:
 | `expires_at` | Epoch seconds; `0` = never. Expired records are not reported |
 
 `notifications.jsonl` lives in the project's machine-local state directory (`state-dir`), is
-appended to by hooks only, and is capped at 200 lines **by that writer**. Which records the app has
+appended to by hooks only, and is capped at 200 lines **by that writer** — append and trim run under a
+short `mkdir` lock (`notifications.jsonl.lock`), so two hooks trimming at once cannot lose a line. A
+record with a key of the wrong type (`"ts": null`) is skipped like a malformed line, and `notify.sh`
+strips control characters that would make a line invalid JSON. Which records the app has
 shown is `notifications-seen.json`, written only by `devteam notifications ack` under a lock — the
 CLI never rewrites the queue a hook may be appending to. Both are machine-local records.
 
@@ -46,8 +49,12 @@ CLI never rewrites the queue a hook may be appending to. Both are machine-local 
 | `devteam notifications watch` | Backlog, then each new record, until stdin closes or SIGTERM. `--json` is JSON Lines |
 
 The app runs one `watch` in its **main process** — so it keeps working with the window closed —
-restarts it with a doubling backoff (1 s → 60 s) and a 90 s heartbeat watchdog, shows each record
-titled with the project's name, and acknowledges it on display.
+restarts it with a doubling backoff (1 s → 60 s, reset only after a child has stayed up 30 s) and a
+90 s heartbeat watchdog, shows each record titled with the project's name, and acknowledges it on
+display, one `ack` at a time. A backlog of more than three records — what piled up while the app was
+closed — gets one summary banner instead of one each; every record still lands in the bell. A `watch`
+that exits 3 (a store this app may not migrate) is reported as unavailable with the CLI's own words,
+not retried.
 
 ### Channels
 

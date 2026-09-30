@@ -81,7 +81,10 @@ Hooks queue notifications; this app shows them (ADR-0017). The main process runs
 project's name, acknowledging it as it is shown. Because the stream lives in the main process:
 
 - **closing the window hides it** — the tray (Windows) / menu-bar icon (macOS) reopens the app,
-  shows recent notifications, pauses banners, or quits;
+  shows recent notifications, pauses banners, or quits. Without a tray icon, closing quits on
+  Windows (nothing could bring a hidden window back); macOS keeps the Dock;
+- **a backlog** of more than three notifications, piled up while the app was closed, arrives as
+  one summary banner; every one of them is in the bell;
 - **one instance only** — launching it again shows the running one;
 - **start at login** is opt-in, from the bell's panel, and shows what the OS actually recorded.
 

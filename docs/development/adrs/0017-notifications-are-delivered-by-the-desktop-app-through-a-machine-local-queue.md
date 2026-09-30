@@ -47,7 +47,8 @@ Three existing rules shape how it can be one:
    the client write gate like every other write), and `notifications watch` — a long-running
    command that stats each registered project's queue once a second and emits one JSON event per
    new record. **`watch --json` is JSON Lines**, the one exception to "exactly one document":
-   one compact document per event, each with `ok`, ending with `{"event": "end"}`. It stops on
+   one compact document per event, each with `ok`, ending with `{"event": "end"}` — or, when it
+   fails, with `{"event": "error", "ok": false, …}` and the matching exit code. It stops on
    stdin EOF — so a reader that dies without cleaning up does not leave it polling forever — or
    on SIGTERM. `list` and `watch` walk the registry and are in `NEEDS_MACHINE_LAYOUT` with `list`.
 4. **The app owns the stream in its main process**, not the renderer: one `watch` child,
