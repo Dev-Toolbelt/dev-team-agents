@@ -92,6 +92,16 @@ sips -p 2700 2700 src/renderer/logo/logo-simbolo-transparente.png --out "$WORK/s
 sips -z 128 128 "$WORK/symbol.png" --out src/renderer/logo/derived/symbol-128.png >/dev/null
 echo "src/renderer/logo/derived/symbol-128.png written ($(wc -c < src/renderer/logo/derived/symbol-128.png) bytes)"
 
+# The tray / menu-bar icon: 16pt, plus the @2x Electron picks up by name on a Retina
+# display. The coloured symbol rather than a monochrome template — the brand pack has no
+# template glyph, and inventing one is a brand decision, not a build step. Shipped via
+# electron-builder's `extraResources` (build/ itself is not packaged), read from
+# `process.resourcesPath/tray/` in a packaged app and from here in development.
+mkdir -p build/tray
+sips -z 16 16 "$WORK/padded.png" --out build/tray/tray.png >/dev/null
+sips -z 32 32 "$WORK/padded.png" --out build/tray/tray@2x.png >/dev/null
+echo "build/tray/tray.png and tray@2x.png written"
+
 # The horizontal lockup, for the one surface with room for the slogan: the no-CLI empty
 # state. 720px wide covers a 240px box at 3x. Two files because the brand guide gives a
 # negative for dark backgrounds — letters to white, orange kept — rather than a mono

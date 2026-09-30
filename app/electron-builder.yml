@@ -27,6 +27,14 @@ files:
   - dist/**/*
   - package.json
 
+# The tray / menu-bar icon, read by `src/main/background.ts` from
+# `process.resourcesPath/tray/`. `build/` is buildResources and is not packaged, so the
+# icon has to be carried explicitly — without this the tray would have no image in
+# exactly the build it matters in.
+extraResources:
+  - from: build/tray
+    to: tray
+
 asar: true
 
 # Stated rather than left to the default lookup. electron-builder would find
