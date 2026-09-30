@@ -109,9 +109,13 @@ DEVTEAM_PLUGIN_CONFIG      # Effective config as JSON (Stop and actions only, no
 DEVTEAM_STATE_DIR          # Machine-local state directory for per-plugin observations
 ```
 
-**PreToolUse hooks** must exit 0 by default and never block tool calls. Stays off the hot path. `DEVTEAM_PLUGIN_CONFIG` is **not set** on the PreToolUse path — read `DEVTEAM_PLUGIN_SETTINGS` yourself to check config.
+`DEVTEAM_PLUGIN_CONFIG` is omitted, and `DEVTEAM_PLUGIN_CONFIG_TRUNCATED=1` set instead, when the serialized config exceeds 64 KiB; a script then reads `DEVTEAM_PLUGIN_SETTINGS`.
 
-**Stop hooks** receive `--quiet` from the dispatcher and must honour `DEVTEAM_NO_CHANGES=1`. They may do expensive work (Graphify's rebuilds only when its `auto_refresh` setting is on). A non-zero exit is reported as `[devteam:plugin:<name>] stop hook exited N`; `99a-plugins.sh` itself always exits 0, so one plugin never fails the Stop.
+**Enabled detection** is pure bash (`scripts/hooks/lib/plugins.sh`): the canonical two-space `"enabled": true` line the CLI writes decides when present, so a nested config key named `enabled` cannot flip it; otherwise a whitespace-tolerant `"enabled" : true` match applies.
+
+**PreToolUse hooks** must exit 0 by default and never block tool calls. `02d-plugins.sh` resolves which enabled plugins declare a `pre_tool_use` hook before any git or state work, and **emits only the first non-empty hook output** — a provider honours one `hookSpecificOutput` per call, and stopping there keeps a later hook's once-per-session marker from being spent on output that would be dropped (`DEVTEAM_HOOK_DEBUG=1` names the skipped hooks). `DEVTEAM_PLUGIN_CONFIG` is **not set** on this path — read `DEVTEAM_PLUGIN_SETTINGS` yourself to check config.
+
+**Stop hooks** receive `--quiet` from `99a-plugins.sh` (unless `DEVTEAM_HOOK_DEBUG` is set — `stop.sh` itself passes no arguments to sub-scripts) and must honour `DEVTEAM_NO_CHANGES=1`. They may do expensive work (Graphify's rebuilds only when its `auto_refresh` setting is on). A non-zero exit is reported as `[devteam:plugin:<name>] stop hook exited N`; `99a-plugins.sh` itself always exits 0, so one plugin never fails the Stop.
 
 ### PreCompact Block — Ask, Don't Just Comply
 

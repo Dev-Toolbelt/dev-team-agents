@@ -634,6 +634,12 @@ Per-project plugin settings live in `.dev-team-agents/plugin-settings/<name>.jso
 | `devteam plugin config unset <name> <key>` | Remove a key override; it reverts to manifest default | `--path`, `--json` |
 | `devteam plugin run <name> <action>` | Execute an action and return its output (or tail on failure) | `--path`, `--json` |
 
+Behaviour worth knowing before calling it:
+
+- `plugin list` also returns `invalid: [{name_or_dir, problem}]` — a manifest that fails validation is reported, never silently dropped (human mode prints a `warning:` line each).
+- Every settings write (`enable`, `disable`, `config set/unset`) holds the `plugin-settings` lock across the whole read-modify-write, and completes a pending legacy `graphify.json` move in the same write. `config set` refuses values over 64 KiB, oversized integers and over-deep JSON with exit 2.
+- `plugin run` starts the script in its own process group and kills that group on timeout (exit 124) and when the CLI itself receives SIGTERM/SIGINT, so an app timeout or quit never orphans it.
+
 Settings are stored with `plugin_settings: 1` schema version. Hooks are dispatched by `scripts/hooks/pre-tool-use/02d-plugins.sh` and `scripts/hooks/stop/99a-plugins.sh`, receiving environment variables documented in `CLAUDE-md/hooks.md` § Plugin Hook Environment Contract.
 
 ## Layout, memory and preferences

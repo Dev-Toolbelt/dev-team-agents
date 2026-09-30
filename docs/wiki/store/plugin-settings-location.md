@@ -25,17 +25,21 @@ The CLI writes every settings file as `json.dumps(obj, indent=2, sort_keys=True)
 
 ## Gotchas
 
-- **The serialization is a contract, not style.** `pre-tool-use/02d-plugins.sh` runs on every tool
-  call and decides whether any plugin is enabled with a pure-bash match on `"enabled": true` at
-  two-space indent — no JSON parser, nothing forked. A hand-edited file with different spacing reads
-  as *disabled* to the hooks while `devteam plugin show` reports it enabled. Edit through
-  `devteam plugin enable/config set`, never by hand.
+- **The serialization is a fast-path contract, not style.** `pre-tool-use/02d-plugins.sh` runs on every
+  tool call and decides whether a plugin is enabled with pure-bash matching — no JSON parser, nothing
+  forked. The canonical line (`"enabled": true|false` at two-space indent, as `json.dumps(indent=2,
+  sort_keys=True)` writes it) decides when present, so a nested config key called `enabled` cannot flip
+  the result. A minified or re-indented file has no such line and falls back to a whitespace-tolerant
+  `"enabled" : true` match anywhere in the file — which a nested `enabled: true` could satisfy, so
+  hand-edit only through `devteam plugin enable/config set`.
 - **`plugins` is an optional core tree** (`versions.OPTIONAL_TREES`). Required would have marked every
   already-installed version incomplete and broken pinned projects; `bind` skips the link when the
   resolved version has none, so hooks in a project pinned to an older core simply find no plugins.
 - **The legacy Graphify file moves, it is never re-created.** `bind`/`sync` write
   `plugin-settings/graphify.json` first and then unlink `user-data/graphify.json`. When both exist,
-  neither is touched and a warning is emitted — resolve it by hand, keeping the newer one.
+  neither is touched and a warning is emitted — resolve it by hand, keeping the newer one. A legacy file
+  whose content equals the settings file is a finished move and is unlinked silently. `config set/unset`,
+  `enable` and `disable` on a still-legacy plugin complete the move in the same locked write.
 - **`DEVTEAM_PLUGIN_CONFIG` is absent in PreToolUse hooks** (computing it needs python3); those hooks
   read `DEVTEAM_PLUGIN_SETTINGS` themselves.
 

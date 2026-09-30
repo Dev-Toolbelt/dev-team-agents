@@ -219,3 +219,21 @@ has no plugin-specific code; a new plugin appears in it with zero app changes.
 >   exists neither file is touched and the skip is reported.
 > - **Graphify's `rebuild` action forces a build**; the Stop hook and the deprecated
 >   `scripts/graphify-refresh.sh` wrapper run it with `--if-changed`.
+
+> **Amendment — review hardening.** Recorded after the first review:
+>
+> - **Plugin paths from config are untrusted input.** Settings are committed, so a cloned repository
+>   picks them. Graphify refuses absolute, `..`, leading-`-` and out-of-project (symlink-resolved)
+>   entries in `plugins/graphify/lib/config.sh`, passes `--` to `rsync`/`cp`, and strips copied
+>   symlinks that leave `graphify-src/`. The CLI stays generic; confinement is each plugin's job, and
+>   `plugins/README.md` says so.
+> - **Graphify's build marker is `graphify-out/.build-commit`**, per checkout and versioned with the
+>   graph (main's b3cb24c), replacing the `graphify_last_run` state key; the legacy key is read only in
+>   the main checkout when no marker exists. A refresh takes an mkdir lock in the checkout's git dir,
+>   so two sessions or an app Rebuild cannot race on `graphify-src/`.
+> - **Every settings write locks the whole read-modify-write** and completes a pending legacy move; an
+>   identical legacy file is removed silently as an already-completed move.
+> - **`plugin run` kills the script's process group on SIGTERM/SIGINT**, not only on timeout; the app
+>   also terminates in-flight CLI children on quit.
+> - **PreToolUse emits only the first non-empty plugin hook output**, and `plugin list` reports invalid
+>   manifests in an additive `invalid` key.
