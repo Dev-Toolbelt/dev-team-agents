@@ -159,3 +159,18 @@ meaning "move ten projects mid-sprint", and it makes rollback per project rather
 | Keep vendoring as the default and offer the store as an option | Preserves clone-and-run, but leaves the duplication that motivated the change. Retained as the `vendored` **mode**, not as the default. |
 | One version in the store, shared by all projects | Simpler (no pin, no GC), but a regression reaches all ten projects at once and rollback is global. Rejected on blast radius. |
 | `core/current` as a symlink | Reintroduces the Windows materialisation failure at the most load-bearing path in the design. A text file has no such failure mode. |
+
+> **Amendment — `bind` refuses a v2 vendored install; `migrate` is the only way in.** `bind` treated
+> the relative links a v2 `install.sh` committed as its own and replaced them, but left the vendored
+> tree under `.dev-team-agents/` in place and tracked — and once `project.json` existed, `doctor`'s v2
+> check no longer ran, so the project reported `status: ok` with 324 framework files and ~150 links
+> into one machine's store still in git. Found on a real project, not in review. Three changes: the
+> `bind` **command** exits 4 on a v2 install and names `devteam migrate` (the check is in `cmd_bind`,
+> not `bind()`, because `sync` and `migrate` call `bind()` and must keep working on a project already
+> in that state; `--mode vendored` is exempt, since that path quarantines the tree itself); `doctor`
+> reports a leftover v2 tree whether or not the project is bound; and both `doctor` and `migrate`
+> report machine-local bind artifacts that git still tracks, with the exact `git rm -r --cached`.
+> Neither runs it: the index belongs to the user. Machine-local is an allowlist of manifest kinds
+> (`bind.MACHINE_LOCAL_KINDS`), and `settings` is left out on purpose — `.claude/settings.json` is the
+> project's own file, which a teammate needs committed to get the hooks.
+
