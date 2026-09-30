@@ -398,6 +398,50 @@ describe('the write actions build the argv the CLI documents', () => {
  * checked three ways: the real shape is accepted, an added key is tolerated (ADR-0014
  * § 2), and a missing required key is reported rather than silently dropped.
  */
+describe('bind reports carry preferences_import when the CLI sends it', () => {
+  const base = {
+    path: '/p',
+    project_id: 'p',
+    version: '2.48.0',
+    mode: 'link',
+    providers: ['claude'],
+    artifacts: 1,
+    identity_created: false,
+    gitignore: 'unchanged',
+    git_exclude: 'unchanged',
+    retired: [],
+    merged_project_files: [],
+  };
+
+  it('is absent from an older CLI, and null when there was no file', () => {
+    const older = asBindReport(base);
+    if (typeof older === 'string') throw new Error(older);
+    expect('preferences_import' in older).toBe(false);
+    const none = asBindReport({ ...base, preferences_import: null });
+    if (typeof none === 'string') throw new Error(none);
+    expect(none.preferences_import).toBeNull();
+  });
+
+  it('reads a real import report, and rejects a malformed one', () => {
+    const report = asBindReport({
+      ...base,
+      preferences_import: {
+        source: '.dev-team-agents/user-data/preferences.json',
+        imported: ['language'],
+        unchanged: [],
+        conflicts: [],
+        ignored: [{ key: 'x', reason: 'unknown' }, 'junk'],
+        quarantined: '/q/preferences.json',
+        problem: null,
+      },
+    });
+    if (typeof report === 'string') throw new Error(report);
+    expect(report.preferences_import?.imported).toEqual(['language']);
+    expect(report.preferences_import?.ignored).toEqual([{ key: 'x', reason: 'unknown' }]);
+    expect(asBindReport({ ...base, preferences_import: { source: 'x' } })).toContain('preferences_import');
+  });
+});
+
 describe('preference payload validation', () => {
   it('reads prefs list and keeps only string origins', () => {
     const parsed = asProjectPreferences({

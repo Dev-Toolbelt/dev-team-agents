@@ -660,3 +660,57 @@ describe('Projects — the Version column says whether a project is current', ()
     expect(within(row).queryByRole('img')).not.toBeInTheDocument();
   });
 });
+
+describe('Projects — a bind that adopted a v2 preferences file says so', () => {
+  async function bindWith(report: ReturnType<typeof bindReport>) {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+        chooseProjectDirectory: vi.fn<() => Promise<DirectoryChoice>>(() =>
+          Promise.resolve({ chosen: true, path: '/Users/dev/legacy' }),
+        ),
+        bindProject: vi.fn(() => Promise.resolve(ok(report))),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await within(dialog).findByText('/Users/dev/legacy');
+    await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
+    await within(dialog).findByText(/is bound/i);
+    return dialog;
+  }
+
+  const imported = {
+    source: '.dev-team-agents/user-data/preferences.json',
+    imported: ['language', 'worktree_active'],
+    unchanged: [],
+    conflicts: ['qa_browser'],
+    ignored: [{ key: 'old_key', reason: 'unknown' }],
+    quarantined: '/store/data/quarantine/2026-09-29/proj-1/imported-preferences/preferences.json',
+    problem: null,
+  };
+
+  it('counts what was imported, and names conflicts and ignored keys', async () => {
+    const dialog = await bindWith(bindReport({ preferences_import: imported }));
+    expect(within(dialog).getByText(/2 preferences were imported from the old preferences file/)).toBeInTheDocument();
+    expect(within(dialog).getByText('qa_browser')).toBeInTheDocument();
+    expect(within(dialog).getByText('old_key (unknown)')).toBeInTheDocument();
+  });
+
+  it('says the file was left in place, and why, when the import did not happen', async () => {
+    const dialog = await bindWith(
+      bindReport({ preferences_import: { ...imported, imported: [], quarantined: null, problem: 'not a JSON object; left in place' } }),
+    );
+    expect(within(dialog).getByText(/were not imported: not a JSON object; left in place/)).toBeInTheDocument();
+  });
+
+  it('says nothing when there was no old file', async () => {
+    const dialog = await bindWith(bindReport({ preferences_import: null }));
+    expect(within(dialog).queryByText(/old preferences file/)).not.toBeInTheDocument();
+  });
+});
+

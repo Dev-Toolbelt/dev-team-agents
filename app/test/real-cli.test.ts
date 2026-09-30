@@ -17,7 +17,7 @@
 
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -468,6 +468,24 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     if (!after.ok) throw new Error('unreachable');
     expect(after.data.values['session_no_commit_turns']).toBe(inherited);
     expect(after.data.values['worktree_base_branch']).toBeNull();
+  });
+
+  it('binds over a v2 preferences.json, imports it into the project layer and moves the file out', async () => {
+    installStoreVersion();
+    const legacyDir = join(work, '.dev-team-agents', 'user-data');
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(join(legacyDir, 'preferences.json'), JSON.stringify({ session_no_commit_turns: 13 }));
+
+    const bound = await bindProject(context(), work, {});
+    if (!bound.ok) throw new Error(`expected a successful bind: ${bound.message}`);
+    expect(bound.data.preferences_import?.imported).toEqual(['session_no_commit_turns']);
+    expect(bound.data.preferences_import?.problem).toBeNull();
+    expect(existsSync(join(legacyDir, 'preferences.json'))).toBe(false);
+
+    const listed = await prefsList(context(), work);
+    if (!listed.ok) throw new Error(listed.message);
+    expect(listed.data.values['session_no_commit_turns']).toBe(13);
+    expect(listed.data.origin['session_no_commit_turns']).toBe('project');
   });
 
   it('surfaces the exit-4 write gate as OperationResult.kind "conflict", a problem the UI can render', async () => {
