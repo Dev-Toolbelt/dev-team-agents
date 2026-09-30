@@ -500,6 +500,7 @@ function onReady(): void {
   });
 
   registerTaskBoardIpc({
+    trustedRenderer: RENDERER_TARGET,
     feed: () => board!.snapshot(),
     refresh: () => board!.refresh(),
     resumeCommand: (projectId, sessionId) => board!.resumeCommand(projectId, sessionId),

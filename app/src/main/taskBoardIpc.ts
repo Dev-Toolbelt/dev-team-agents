@@ -19,8 +19,11 @@ import {
   type CopyResumeRequest,
 } from '../shared/api.js';
 import { boardSettingsProblem } from './settings.js';
+import { trustedHandler, type RendererTarget } from './security.js';
 
 export interface TaskBoardIpcDeps {
+  /** Who may call these channels; see `trustedHandler` in `security.ts`. */
+  readonly trustedRenderer: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>;
   readonly feed: () => BoardFeed;
   readonly refresh: () => Promise<BoardFeed>;
   /** The resume command the CLI sent for a session, or `null` when there is none. */
@@ -48,10 +51,12 @@ export function parseCopyRequest(raw: unknown): CopyResumeRequest | string {
 }
 
 export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
-  ipcMain.handle(CHANNELS.taskBoard, () => deps.feed());
-  ipcMain.handle(CHANNELS.refreshTaskBoard, () => deps.refresh());
+  const handle = (channel: string, listener: Parameters<typeof trustedHandler>[1]): void =>
+    ipcMain.handle(channel, trustedHandler(deps.trustedRenderer, listener));
+  handle(CHANNELS.taskBoard, () => deps.feed());
+  handle(CHANNELS.refreshTaskBoard, () => deps.refresh());
 
-  ipcMain.handle(CHANNELS.copyResumeCommand, (_event, raw: unknown): CopyResumeAnswer => {
+  handle(CHANNELS.copyResumeCommand, (_event, raw: unknown): CopyResumeAnswer => {
     const request = parseCopyRequest(raw);
     if (typeof request === 'string') return { copied: false, message: `Nothing was copied: ${request}.` };
     const command = deps.resumeCommand(request.projectId, request.sessionId);
@@ -62,8 +67,8 @@ export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
     return { copied: true, command };
   });
 
-  ipcMain.handle(CHANNELS.boardSettings, () => deps.boardSettings());
-  ipcMain.handle(CHANNELS.setBoardSettings, async (_event, raw: unknown): Promise<BoardSettingsAnswer> => {
+  handle(CHANNELS.boardSettings, () => deps.boardSettings());
+  handle(CHANNELS.setBoardSettings, async (_event, raw: unknown): Promise<BoardSettingsAnswer> => {
     const problem = boardSettingsProblem(raw);
     if (problem !== null) return { ok: false, message: problem };
     const { staleAfterMinutes, doneRetentionDays } = raw as BoardSettings;
