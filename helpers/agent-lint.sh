@@ -352,6 +352,40 @@ check_skill_name_uniqueness() {
   done < <(printf '%s\n' "${SKILL_NAMES[@]}" | cut -f1 | sort | uniq -d)
 }
 
+# ── Plan steps reach the task board through the native task list ─────────────
+# The desktop app's task board reads only a provider's native task list, so an
+# approved plan reaches it only through plan-mode § Task List Mirroring. That
+# rule lives in one skill; what can silently break it is the section vanishing
+# or an agent that plans no longer loading plan-mode.
+# Commands with a plan gate that deliberately do not point at plan-mode: they delegate the plan to an
+# agent that loads it (architect, review), or run no approved multi-step plan (commit, learn, explain,
+# rule, pr).
+PLAN_MODE_COMMAND_EXEMPT="architect review commit learn explain rule pr"
+PLAN_MODE_LOADERS="software-architect backend-developer frontend-developer mobile-developer database-specialist devops-specialist code-reviewer"
+
+check_plan_mode_mirroring() {
+  local skill="$REPO_ROOT/skills/shared/plan-mode/SKILL.md" agent
+  if ! grep -q '^## Task List Mirroring$' "$skill"; then
+    ERRORS+=("  · skills/shared/plan-mode/SKILL.md: missing '## Task List Mirroring' — approved plans would never reach the task board")
+  fi
+  # Every command that runs a plan gate reaches the rule through plan-mode, except those that
+  # only delegate or never run an approved multi-step plan themselves.
+  local cmd
+  for cmd in $(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("commands", d); print(" ".join(sorted(k for k, v in c.items() if isinstance(v, dict) and v.get("plan_gate") in ("required", "conditional"))))' "$REPO_ROOT/scripts/lib/commands.json" 2>/dev/null); do
+    case " $PLAN_MODE_COMMAND_EXEMPT " in *" $cmd "*) continue ;; esac
+    if ! grep -q 'skills/shared/plan-mode/SKILL.md' "$REPO_ROOT/commands/${cmd}.md" 2>/dev/null; then
+      ERRORS+=("  · commands/${cmd}.md: runs a plan gate but no longer points at skills/shared/plan-mode/SKILL.md — its approved plans would not become native tasks (or add it to PLAN_MODE_COMMAND_EXEMPT)")
+    fi
+  done
+  for agent in $PLAN_MODE_LOADERS; do
+    if [ ! -f "$REPO_ROOT/agents/${agent}.md" ]; then
+      ERRORS+=("  · PLAN_MODE_LOADERS lists '${agent}', but agents/${agent}.md does not exist — update the list")
+    elif ! grep -q 'skills/shared/plan-mode/SKILL.md' "$REPO_ROOT/agents/${agent}.md"; then
+      ERRORS+=("  · agents/${agent}.md: no longer loads skills/shared/plan-mode/SKILL.md — its approved plans would not become native tasks")
+    fi
+  done
+}
+
 # ── Orchestration roster must match agents/ ───────────────────────────────────
 # skills/architecture/orchestration/SKILL.md carries the roster an orchestrator
 # reads to choose a subagent_type. It was hand-maintained and unvalidated, and it
@@ -503,6 +537,7 @@ done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 check_skill_name_uniqueness
 check_orchestration_roster
 check_command_roster
+check_plan_mode_mirroring
 
 # Warnings are reported only in verbose mode — they are non-blocking and would
 # otherwise fire on every Stop-hook run.

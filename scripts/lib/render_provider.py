@@ -135,7 +135,9 @@ def soften_plan_gate(body, provider, plan_gate_setting):
         "\n\n**Plan mode.** For complex or architecturally significant tasks, "
         "present a brief plan before executing and wait for user approval. "
         "For simple tasks (one-liner fixes, straightforward changes), "
-        "execute directly.\n"
+        "execute directly. Once a plan is approved, mirror its steps into your "
+        "native task list per `skills/shared/plan-mode/SKILL.md` "
+        "§ Task List Mirroring.\n"
     )
     result = plan_gate_pattern.sub(soft_note, body)
     # Keep Task: $ARGUMENTS reference

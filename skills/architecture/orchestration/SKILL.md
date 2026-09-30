@@ -109,6 +109,9 @@ that — do not narrate invented progress to fill the gap. This includes the spe
 subagent that has not yet returned at all: see *Spawn Integrity* check 4 (Liveness) for what to say
 instead of "still running."
 
+Each step also moves in the native task list per `skills/shared/plan-mode/SKILL.md` § Task List
+Mirroring — that list, not this log line, is what the desktop app's task board shows.
+
 This adds negligible token cost (one short line per completed step) against the cost of a user
 losing trust in the run and needing to manually re-verify the repository state, which is what
 prompted this rule.

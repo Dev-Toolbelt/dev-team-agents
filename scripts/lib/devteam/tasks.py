@@ -104,6 +104,15 @@ def _text(value):
     return value.strip() if isinstance(value, str) else ""
 
 
+#: Longest task text a record keeps — the bound the app already cuts to (`MAX_TASK_TEXT` in
+#: `app/src/cli/operations.ts`), so nothing shown is lost, and every record on disk stays bounded.
+MAX_TASK_TEXT = 2000
+
+
+def _task_text(text):
+    return text[:MAX_TASK_TEXT].rstrip() if text else text
+
+
 def norm_content(text):
     """Identity of a task with no provider id: trimmed, whitespace-collapsed, case-folded."""
     return " ".join(str(text).split()).casefold()
@@ -152,7 +161,7 @@ def _items(raw, id_name=None, content_names=("content",)):
     for entry in raw:
         if not isinstance(entry, dict):
             continue
-        content = _first_text(entry, *content_names)
+        content = _task_text(_first_text(entry, *content_names))
         if not content:
             continue
         items.append(
@@ -244,7 +253,7 @@ def normalize(payload, provider="auto"):
             items = _items(tool_input.get("todos"))
             call["op"] = ("replace", items) if items is not None else None
         elif tool_name == "TaskCreate":
-            content = _first_text(tool_input, "subject", "content", "description", "activeForm")
+            content = _task_text(_first_text(tool_input, "subject", "content", "description", "activeForm"))
             if content:
                 call["op"] = (
                     "create",
@@ -258,7 +267,7 @@ def normalize(payload, provider="auto"):
                     "update",
                     {
                         "id": task_id,
-                        "content": _first_text(tool_input, "subject", "content") or None,
+                        "content": _task_text(_first_text(tool_input, "subject", "content")) or None,
                         "status": "deleted" if raw_status == "deleted" else (
                             norm_status(raw_status) if raw_status else None
                         ),
