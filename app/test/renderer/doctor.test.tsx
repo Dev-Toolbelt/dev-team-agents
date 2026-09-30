@@ -95,4 +95,14 @@ describe('Doctor', () => {
     // A failing app precondition does not prevent the store section from rendering.
     expect(screen.getByRole('heading', { name: 'The store' })).toBeInTheDocument();
   });
+
+  it('says so, instead of loading forever, when the app cannot read its own state', async () => {
+    installBridge(fakeBridge({ environment: vi.fn(() => Promise.reject(new Error('ipc gone'))) }));
+
+    render(<Doctor />);
+
+    expect(await screen.findByText(/could not read its own state/i)).toBeInTheDocument();
+    expect(screen.getByText(/ipc gone/)).toBeInTheDocument();
+    expect(screen.queryByText(/running this app's own preconditions/i)).not.toBeInTheDocument();
+  });
 });

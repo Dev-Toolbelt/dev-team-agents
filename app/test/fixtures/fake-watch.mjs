@@ -7,12 +7,19 @@
 //   exit3   — writes an environment error to stderr and exits 3.
 //   error3  — writes the error as one `{"event":"error",…}` line and exits 3.
 //   indented3 — writes an indented, multi-line error document and exits 3.
+//   orphan  — exits 0 at once but leaves a grandchild holding the inherited pipes open.
 //   argv    — prints its own argv as one event, then ends.
 const mode = process.argv[2];
 const out = (event) => process.stdout.write(JSON.stringify({ ok: true, ...event }) + '\n');
 
 if (mode === 'argv') {
   out({ event: 'argv', argv: process.argv.slice(3) });
+  process.exit(0);
+}
+if (mode === 'orphan') {
+  const { spawn } = await import('node:child_process');
+  spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 6000)'], { stdio: 'inherit' }).unref();
+  out({ event: 'ready', projects: 0 });
   process.exit(0);
 }
 if (mode === 'exit3') {

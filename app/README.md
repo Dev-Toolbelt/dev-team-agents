@@ -64,6 +64,11 @@ at test time into a real PE — see its header, and `launcher-build.ts` for the 
 probe. No compiler means those tests skip; it never fails the suite for a toolchain
 reason.
 
+`test/real-cli.test.ts` runs against `scripts/cli/devteam` and skips when the CLI or python3
+is missing — locally. Under `CI=true` a missing CLI fails the file instead, so the contract
+cannot go untested behind a green run. The CI gate (`.github/scripts/ci/05-app.sh`) also runs
+`npm run build` and checks the three entry points it must emit.
+
 ## The app's own data
 
 `~/Library/Application Support/dev-team-agents-app/` — `settings.json` (`cliPath`) and
@@ -72,7 +77,13 @@ Electron's default `userData` collided with `dev-team-agents/` exactly, so `main
 calls `app.setPath('userData', …)` to move it aside.
 
 `settings.json` also records `openAtLogin`, the user's start-at-login choice — only the choice;
-whether the OS registered it is read live and is what the UI shows.
+whether the OS registered it is read live and is what the UI shows. A write never replaces a
+`settings.json` that fails to read: fix or remove the file, and the next write recreates it.
+
+Diagnostics go to `main.log` in the OS log directory (`~/Library/Logs/Dev Team Agents/` on
+macOS, `%APPDATA%\Dev Team Agents\logs\` on Windows): CLI resolution and stream restarts,
+uncaught errors, and a renderer or helper process that died. It rotates to `main.old.log` at
+1 MB, so it never holds more than two files.
 
 ## Notifications and running in the background
 
@@ -92,7 +103,7 @@ project's name, acknowledging it as it is shown. Because the stream lives in the
 
 Automated tests cover the supervisor, the stream, the bell and the login-item logic against a
 simulated OS. What only a packaged build on a real desktop can show is checked by hand —
-`npm run dist:mac` (or the Windows installer), install, then:
+`npm run dist:mac` (or `npm run dist:win`), install, then:
 
 | # | Do | Expect |
 |---|----|--------|

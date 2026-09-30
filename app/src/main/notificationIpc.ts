@@ -9,9 +9,13 @@
 
 import { ipcMain } from 'electron';
 
+import { trustedHandler, type RendererTarget } from './security.js';
+
 import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 export interface NotificationIpcDeps {
+  /** Who may call these channels; see `trustedHandler` in `security.ts`. */
+  readonly trustedRenderer: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>;
   readonly feed: () => NotificationFeed;
   readonly markRead: () => NotificationFeed;
   readonly setPaused: (paused: boolean) => NotificationFeed;
@@ -21,16 +25,18 @@ export interface NotificationIpcDeps {
 }
 
 export function registerNotificationIpc(deps: NotificationIpcDeps): void {
-  ipcMain.handle(CHANNELS.notificationFeed, () => deps.feed());
-  ipcMain.handle(CHANNELS.markNotificationsRead, () => deps.markRead());
-  ipcMain.handle(CHANNELS.setNotificationsPaused, (_event, paused: unknown) => {
+  const handle = (channel: string, listener: Parameters<typeof trustedHandler>[1]): void =>
+    ipcMain.handle(channel, trustedHandler(deps.trustedRenderer, listener));
+  handle(CHANNELS.notificationFeed, () => deps.feed());
+  handle(CHANNELS.markNotificationsRead, () => deps.markRead());
+  handle(CHANNELS.setNotificationsPaused, (_event, paused: unknown) => {
     // Anything but a real boolean changes nothing and returns the current feed.
     if (typeof paused !== 'boolean') return deps.feed();
     return deps.setPaused(paused);
   });
-  ipcMain.handle(CHANNELS.takePendingProject, () => deps.takePendingProject());
-  ipcMain.handle(CHANNELS.backgroundSettings, () => deps.backgroundSettings());
-  ipcMain.handle(CHANNELS.setOpenAtLogin, async (_event, enabled: unknown) => {
+  handle(CHANNELS.takePendingProject, () => deps.takePendingProject());
+  handle(CHANNELS.backgroundSettings, () => deps.backgroundSettings());
+  handle(CHANNELS.setOpenAtLogin, async (_event, enabled: unknown) => {
     if (typeof enabled !== 'boolean') return deps.backgroundSettings();
     return deps.setOpenAtLogin(enabled);
   });

@@ -118,14 +118,22 @@ export async function writeProjectName(userDataDir: string, projectId: string, n
   const trimmed = name.trim();
   if (trimmed === '') return;
 
-  const current = await readSettings(userDataDir);
-  await writeSettings(userDataDir, { projectNames: { ...current.projectNames, [projectId]: trimmed } });
+  await writeSettings(userDataDir, (current) => ({ projectNames: { ...current.projectNames, [projectId]: trimmed } }));
 }
 
 /** Record the user's start-at-login choice. The OS registration is `index.ts`'s job. */
 export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): Promise<void> {
-  await writeSettings(userDataDir, { openAtLogin: enabled });
+  await writeSettings(userDataDir, () => ({ openAtLogin: enabled }));
 }
+
+/**
+ * Every write, one after another. The read-modify-write below is not atomic on its own:
+ * two concurrent callers (a bind naming a project while the user flips start-at-login)
+ * would both read the same file and the second rename would erase the first's field.
+ * A module-level chain rather than a lock file because this process is the file's only
+ * writer; the single-instance lock in `index.ts` is what makes that true.
+ */
+let writeChain: Promise<unknown> = Promise.resolve();
 
 /**
  * The one writer, carrying every field forward.
@@ -134,13 +142,33 @@ export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): P
  * `projectNames` alone — so the first field added beside them would have been erased by
  * the next bind. Re-reads rather than trusting an in-memory copy, which is what keeps a
  * concurrently hand-edited `cliPath` from being clobbered.
+ *
+ * **Refuses to write over a file it could not read.** A `settings.json` that is unreadable,
+ * not JSON, or not an object was read as "no settings", and rebuilding from that would
+ * replace whatever the user had — a hand-edited `cliPath` among it — with a file holding
+ * one project name. The caller gets the reason instead; both callers already treat a failed
+ * write as non-fatal.
  */
-async function writeSettings(
+function writeSettings(
   userDataDir: string,
-  patch: Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
+): Promise<void> {
+  const run = writeChain.then(() => writeSettingsNow(userDataDir, patchFrom));
+  // The chain continues past a failure; the failure itself still reaches this caller.
+  writeChain = run.catch(() => undefined);
+  return run;
+}
+
+async function writeSettingsNow(
+  userDataDir: string,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin'>>,
 ): Promise<void> {
   const path = join(userDataDir, SETTINGS_FILE_NAME);
   const current = await readSettings(userDataDir);
+  if (current.problem !== undefined) {
+    throw new Error(`${path} ${current.problem}; not overwriting it`);
+  }
+  const patch = patchFrom(current);
   const payload: Record<string, unknown> = {};
   if (current.cliPath !== undefined) payload['cliPath'] = current.cliPath;
   payload['projectNames'] = patch.projectNames ?? current.projectNames;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, Lock, ShieldAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -10,6 +10,7 @@ import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
 import { NotificationBell } from './NotificationBell.js';
 import { Skills } from './screens/Skills.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 import { Loading } from './Problem.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
@@ -42,6 +43,10 @@ export function App() {
   const [environment, setEnvironment] = useState<EnvironmentReport | null>(null);
   const [handshake, setHandshake] = useState<OperationResult<HandshakeView> | null>(null);
   const [busy, setBusy] = useState(true);
+  // A startup call that rejects (IPC down, main process gone) is shown with a retry rather
+  // than left as an endless "Looking for a devteam CLI…".
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadErrorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState('projects');
   const [openRequest, setOpenRequest] = useState<{ projectId: string; nonce: number } | null>(null);
 
@@ -55,22 +60,36 @@ export function App() {
   // hear it — the handshake that keeps a click on a fresh window from being lost.
   useEffect(() => {
     const unsubscribe = window.devteam.onOpenProject(openProject);
-    void window.devteam.takePendingProject().then((projectId) => {
-      if (projectId !== null) openProject(projectId);
-    });
+    window.devteam
+      .takePendingProject()
+      .then((projectId) => {
+        if (projectId !== null) openProject(projectId);
+      })
+      .catch(() => undefined);
     return unsubscribe;
   }, []);
 
+  // The start-up checks screen is replaced by the failure: move focus to it.
+  useEffect(() => {
+    if (!busy && loadError !== null) loadErrorRef.current?.focus();
+  }, [busy, loadError]);
+
   async function load() {
     setBusy(true);
-    const [info, resolved] = await Promise.all([window.devteam.buildInfo(), window.devteam.resolveCli()]);
-    setBuild(info);
-    setResolution(resolved);
-    // After `resolveCli`, which re-reads the settings file and re-attempts the declaration.
-    setEnvironment(await window.devteam.environment());
-    // The handshake is only meaningful once a CLI exists to ask.
-    setHandshake(resolved.found ? await window.devteam.handshake() : null);
-    setBusy(false);
+    setLoadError(null);
+    try {
+      const [info, resolved] = await Promise.all([window.devteam.buildInfo(), window.devteam.resolveCli()]);
+      setBuild(info);
+      setResolution(resolved);
+      // After `resolveCli`, which re-reads the settings file and re-attempts the declaration.
+      setEnvironment(await window.devteam.environment());
+      // The handshake is only meaningful once a CLI exists to ask.
+      setHandshake(resolved.found ? await window.devteam.handshake() : null);
+    } catch (error) {
+      setLoadError(String(error));
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -137,6 +156,17 @@ export function App() {
 
         {busy ? (
           <Loading what="the first-run checks" />
+        ) : loadError !== null ? (
+          <Alert ref={loadErrorRef} tabIndex={-1} variant="destructive" className="outline-hidden">
+            <CircleAlert />
+            <AlertTitle>The app could not finish its start-up checks</AlertTitle>
+            <AlertDescription>
+              <p>the app could not reach its own main process: {loadError}</p>
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
         ) : resolution === null || !resolution.found ? (
           <NoCli resolution={resolution} onRetry={() => void load()} />
         ) : (
@@ -152,16 +182,24 @@ export function App() {
               {/* Kept mounted while another tab is shown: the project settings screen lives
                   inside this tab, and unmounting it would silently drop unsaved edits. */}
               <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
-                <Projects environment={environment} active={tab === 'projects'} openRequest={openRequest} />
+                <ErrorBoundary label="The Projects screen" resetKey={tab}>
+                  <Projects environment={environment} active={tab === 'projects'} openRequest={openRequest} />
+                </ErrorBoundary>
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
-                <Catalog />
+                <ErrorBoundary label="The Catalog screen">
+                  <Catalog />
+                </ErrorBoundary>
               </TabsContent>
               <TabsContent value="skills" className="pt-4">
-                <Skills environment={environment} />
+                <ErrorBoundary label="The Skills screen">
+                  <Skills environment={environment} />
+                </ErrorBoundary>
               </TabsContent>
               <TabsContent value="doctor" className="pt-4">
-                <Doctor />
+                <ErrorBoundary label="The Diagnosis screen">
+                  <Doctor />
+                </ErrorBoundary>
               </TabsContent>
             </Tabs>
           </>

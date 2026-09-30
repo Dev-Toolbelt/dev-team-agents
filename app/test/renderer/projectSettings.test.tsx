@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Projects } from '../../src/renderer/screens/Projects.js';
 import { ProjectSettings } from '../../src/renderer/screens/ProjectSettings.js';
 import type { OperationResult, PreferenceChange, PreferenceUpdateReport } from '../../src/shared/api.js';
-import { environment, fakeBridge, installBridge, ok, project, projectPreferences } from './support.js';
+import { deferred, environment, fakeBridge, installBridge, ok, project, projectPreferences } from './support.js';
 
 afterEach(() => {
   cleanup();
@@ -67,6 +67,40 @@ describe('ProjectSettings — a notification asking for another project', () => 
     await user.click(screen.getByRole('button', { name: 'Projects' }));
     expect(await screen.findByRole('heading', { name: /project-2 · Settings/ })).toBeInTheDocument();
     expect(screen.queryByText(/A notification asked to open/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectSettings — opening another project does not carry the previous one over', () => {
+  it('shows nothing of project 1 while project 2 loads, then project 2’s own values, nothing unsaved', async () => {
+    const projects = [project(), project({ project_id: 'proj-2', path: '/repo/project-2' })];
+    const second = deferred<OperationResult<ReturnType<typeof projectPreferences>>>();
+    const projectPreferencesFn = vi.fn((projectId: string) =>
+      projectId === 'proj-2' ? second.promise : Promise.resolve(ok(projectPreferences())),
+    );
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))),
+        projectPreferences: projectPreferencesFn,
+      }),
+    );
+    const user = userEvent.setup();
+    const env = environment();
+    const view = render(<Projects environment={env} openRequest={null} />);
+
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    expect(await screen.findByLabelText('Conversation language')).toHaveValue('en');
+
+    view.rerender(<Projects environment={env} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    await user.click(await screen.findByRole('button', { name: 'Projects' }));
+    await screen.findByRole('heading', { name: /project-2 · Settings/ });
+
+    // Project 1's form is gone the moment project 2 is asked for.
+    expect(screen.queryByLabelText('Conversation language')).not.toBeInTheDocument();
+
+    second.resolve(ok(projectPreferences({ project_id: 'proj-2', values: { ...projectPreferences().values, language: 'es' } })));
+    expect(await screen.findByLabelText('Conversation language')).toHaveValue('es');
+    // Nothing is dirty, so there is nothing to save.
+    expect(screen.queryByRole('region', { name: 'Unsaved changes' })).not.toBeInTheDocument();
   });
 });
 

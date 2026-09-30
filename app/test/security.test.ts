@@ -26,7 +26,13 @@ import {
   developmentCsp,
   hardenContents,
   hardenSession,
+  isRendererUrl,
   isRequestAllowed,
+  isTrustedSender,
+  resolveDevServer,
+  trustedHandler,
+  windowWebPreferences,
+  type RendererTarget,
 } from '../src/main/security.js';
 
 const SECURITY_SOURCE = readFileSync(
@@ -38,38 +44,56 @@ const INDEX_SOURCE = readFileSync(
   'utf8',
 );
 
+const BUNDLE = '/app/dist/renderer';
+const INDEX = 'file:///app/dist/renderer/index.html';
+const PROD: RendererTarget = { indexUrl: INDEX, bundleDir: BUNDLE, devServerOrigin: null };
+const devTarget = (origin: string): RendererTarget => ({ ...PROD, devServerOrigin: origin });
+
 describe('isRequestAllowed — scheme allowlist', () => {
-  it('allows file: and devtools:, and nothing else, with no dev server configured', () => {
-    expect(isRequestAllowed('file:///app/index.html', null)).toBe(true);
-    expect(isRequestAllowed('devtools://devtools/bundled/inspector.html', null)).toBe(true);
+  it('allows the bundle and devtools:, and nothing else, with no dev server configured', () => {
+    expect(isRequestAllowed('file:///app/dist/renderer/assets/index.js', PROD)).toBe(true);
+    expect(isRequestAllowed('devtools://devtools/bundled/inspector.html', PROD)).toBe(true);
     // Mutation: putting `data:`, `blob:` or `chrome-extension:` back into
     // ALWAYS_ALLOWED_SCHEMES flips these to `true` — that is exactly the regression the
     // header comment in security.ts describes (`loadURL('data:text/html,…')` succeeding).
-    expect(isRequestAllowed('data:text/html,<h1>hi</h1>', null)).toBe(false);
-    expect(isRequestAllowed('blob:https://example.com/uuid', null)).toBe(false);
-    expect(isRequestAllowed('chrome-extension://abc/page.html', null)).toBe(false);
-    expect(isRequestAllowed('https://example.com', null)).toBe(false);
-    expect(isRequestAllowed('http://example.com', null)).toBe(false);
-    expect(isRequestAllowed('ws://example.com', null)).toBe(false);
-    expect(isRequestAllowed('about:blank', null)).toBe(false);
+    expect(isRequestAllowed('data:text/html,<h1>hi</h1>', PROD)).toBe(false);
+    expect(isRequestAllowed('blob:https://example.com/uuid', PROD)).toBe(false);
+    expect(isRequestAllowed('chrome-extension://abc/page.html', PROD)).toBe(false);
+    expect(isRequestAllowed('https://example.com', PROD)).toBe(false);
+    expect(isRequestAllowed('http://example.com', PROD)).toBe(false);
+    expect(isRequestAllowed('ws://example.com', PROD)).toBe(false);
+    expect(isRequestAllowed('about:blank', PROD)).toBe(false);
+  });
+
+  it('refuses a file: URL outside the renderer bundle', () => {
+    // Mutation: a bare `file:` scheme test (the previous filter) lets all of these through,
+    // which is what made a dropped `.html` file a first-class page of this app.
+    expect(isRequestAllowed('file:///tmp/evil.html', PROD)).toBe(false);
+    expect(isRequestAllowed('file:///app/dist/renderer/../secret.html', PROD)).toBe(false);
+    expect(isRequestAllowed('file:///app/dist/renderer-evil/index.html', PROD)).toBe(false);
+    expect(isRequestAllowed('file:///app/dist/renderer', PROD)).toBe(false);
   });
 
   it('rejects a malformed URL instead of throwing', () => {
-    expect(isRequestAllowed('not a url at all', null)).toBe(false);
+    expect(isRequestAllowed('not a url at all', PROD)).toBe(false);
   });
 
-  it('allows a configured dev server origin only when the URL starts with it', () => {
+  it('allows a configured dev server origin only on an exact parsed-origin match', () => {
     const origin = 'http://localhost:5173';
-    expect(isRequestAllowed(`${origin}/main.js`, origin)).toBe(true);
+    expect(isRequestAllowed(`${origin}/main.js`, devTarget(origin))).toBe(true);
     // The regression this guards: `includes` instead of `startsWith` would let an
     // attacker-controlled URL that merely *contains* the dev origin later in the string
     // sail through — e.g. a redirect or query string smuggling the trusted origin in.
-    expect(isRequestAllowed(`https://evil.example/?next=${origin}`, origin)).toBe(false);
-    expect(isRequestAllowed('https://evilhttp://localhost:5173.example', origin)).toBe(false);
+    expect(isRequestAllowed(`https://evil.example/?next=${origin}`, devTarget(origin))).toBe(false);
+    expect(isRequestAllowed('https://evilhttp://localhost:5173.example', devTarget(origin))).toBe(false);
+    // Mutation: the previous `url.startsWith(origin)` passes both of these.
+    expect(isRequestAllowed('http://localhost:5173.evil.tld/main.js', devTarget(origin))).toBe(false);
+    expect(isRequestAllowed('http://localhost:51730/main.js', devTarget(origin))).toBe(false);
+    expect(isRequestAllowed('http://localhost:5173@evil.tld/main.js', devTarget(origin))).toBe(false);
   });
 
   it('never allows the dev server origin when none was supplied', () => {
-    expect(isRequestAllowed('http://localhost:5173/main.js', null)).toBe(false);
+    expect(isRequestAllowed('http://localhost:5173/main.js', PROD)).toBe(false);
   });
 });
 
@@ -103,7 +127,7 @@ describe('PRODUCTION_CSP / developmentCsp', () => {
     // it is resolved inside the renderer. A test asserting the CSP and the request
     // filter "agree" would be asserting the wrong invariant.
     expect(PRODUCTION_CSP).toContain("img-src 'self' data:");
-    expect(isRequestAllowed('data:image/png;base64,abc', null)).toBe(false);
+    expect(isRequestAllowed('data:image/png;base64,abc', PROD)).toBe(false);
   });
 });
 
@@ -148,7 +172,7 @@ function fakeSession() {
 describe('hardenSession — the response header and the request filter', () => {
   it('sends the production CSP as a real response header when no dev server is configured', () => {
     const { session, handlers } = fakeSession();
-    hardenSession(session as unknown as Session, null);
+    hardenSession(session as unknown as Session, PROD);
     let sent: Record<string, string[]> | undefined;
     handlers.headers?.({ responseHeaders: {} }, (result) => {
       sent = (result as { responseHeaders: Record<string, string[]> }).responseHeaders;
@@ -159,7 +183,7 @@ describe('hardenSession — the response header and the request filter', () => {
 
   it('cancels every request that isRequestAllowed would reject, and only those', () => {
     const { session, handlers } = fakeSession();
-    hardenSession(session as unknown as Session, null);
+    hardenSession(session as unknown as Session, PROD);
     let outcome: { cancel: boolean } | undefined;
     handlers.beforeRequest?.({ url: 'https://example.com' }, (result) => {
       outcome = result as { cancel: boolean };
@@ -168,7 +192,7 @@ describe('hardenSession — the response header and the request filter', () => {
     // or not registering the handler at all, is exactly the "remote content blocked"
     // guarantee the review verified by hand and found nothing pinning.
     expect(outcome?.cancel).toBe(true);
-    handlers.beforeRequest?.({ url: 'file:///app/index.html' }, (result) => {
+    handlers.beforeRequest?.({ url: 'file:///app/dist/renderer/index.html' }, (result) => {
       outcome = result as { cancel: boolean };
     });
     expect(outcome?.cancel).toBe(false);
@@ -176,7 +200,7 @@ describe('hardenSession — the response header and the request filter', () => {
 
   it('denies every permission request and every permission check unconditionally', () => {
     const { session, getPermissionRequestResult, getPermissionCheckResult } = fakeSession();
-    hardenSession(session as unknown as Session, null);
+    hardenSession(session as unknown as Session, PROD);
     // Mutation: `callback(true)` here is the exact sabotage the review performed —
     // flipping the permission handler to grant everything, silently.
     expect(getPermissionRequestResult()).toBe(false);
@@ -203,6 +227,11 @@ function fakeWebContents() {
       listeners.get('will-navigate')?.(event, url);
       return event;
     },
+    fireWillFrameNavigate: (url: string) => {
+      const event = { preventDefault: vi.fn(), url };
+      listeners.get('will-frame-navigate')?.(event);
+      return event;
+    },
     fireWillAttachWebview: () => {
       const event = { preventDefault: vi.fn() };
       listeners.get('will-attach-webview')?.(event);
@@ -214,7 +243,7 @@ function fakeWebContents() {
 describe('hardenContents — window-open, navigation, webview', () => {
   it('denies every window-open request and never touches an openExternal-style escape', () => {
     const { contents, invokeWindowOpen } = fakeWebContents();
-    hardenContents(contents as unknown as WebContents, null);
+    hardenContents(contents as unknown as WebContents, PROD);
     const result = invokeWindowOpen('https://example.com');
     // Mutation: this is the review's exact sabotage — a handler that calls
     // `shell.openExternal(url)` for an https: URL and returns `{ action: 'deny' }` (or
@@ -233,17 +262,102 @@ describe('hardenContents — window-open, navigation, webview', () => {
     expect(SECURITY_SOURCE).not.toMatch(/import\s*\{[^}]*\bshell\b[^}]*\}\s*from\s*['"]electron['"]/);
   });
 
-  it('prevents default on will-navigate to a disallowed URL, and lets an allowed one through', () => {
+  it('prevents default on will-navigate to anything but the renderer index', () => {
     const { contents, fireWillNavigate } = fakeWebContents();
-    hardenContents(contents as unknown as WebContents, null);
+    hardenContents(contents as unknown as WebContents, PROD);
     expect(fireWillNavigate('https://example.com').preventDefault).toHaveBeenCalled();
-    expect(fireWillNavigate('file:///app/index.html').preventDefault).not.toHaveBeenCalled();
+    // Mutation: the previous filter allowed every `file:` URL, so a dropped `.html` file
+    // navigated the window to a page that inherits the preload's `window.devteam`.
+    expect(fireWillNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate('file:///app/dist/renderer/other.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate(INDEX).preventDefault).not.toHaveBeenCalled();
+    // The router's hash and query are not a different page.
+    expect(fireWillNavigate(`${INDEX}#/projects?tab=1`).preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('applies the same allow-list to frame navigations', () => {
+    const { contents, fireWillFrameNavigate } = fakeWebContents();
+    hardenContents(contents as unknown as WebContents, PROD);
+    expect(fireWillFrameNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillFrameNavigate('https://example.com/frame').preventDefault).toHaveBeenCalled();
+    expect(fireWillFrameNavigate(INDEX).preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('allows only the dev server origin in development, not the file index', () => {
+    const { contents, fireWillNavigate } = fakeWebContents();
+    hardenContents(contents as unknown as WebContents, devTarget('http://localhost:5173'));
+    expect(fireWillNavigate('http://localhost:5173/#/x').preventDefault).not.toHaveBeenCalled();
+    expect(fireWillNavigate('http://localhost:5173.evil.tld/').preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
   });
 
   it('prevents default on every webview attachment attempt', () => {
     const { contents, fireWillAttachWebview } = fakeWebContents();
-    hardenContents(contents as unknown as WebContents, null);
+    hardenContents(contents as unknown as WebContents, PROD);
     expect(fireWillAttachWebview().preventDefault).toHaveBeenCalled();
+  });
+});
+
+describe('resolveDevServer', () => {
+  it('ignores the variable in a packaged build', () => {
+    expect(resolveDevServer('http://localhost:5173', true)).toBeNull();
+  });
+
+  it('reduces a valid http(s) URL to its origin when unpackaged', () => {
+    expect(resolveDevServer('http://localhost:5173/some/path?x=1', false)).toBe('http://localhost:5173');
+  });
+
+  it('refuses an unset, empty, unparseable or non-http value', () => {
+    expect(resolveDevServer(undefined, false)).toBeNull();
+    expect(resolveDevServer('', false)).toBeNull();
+    expect(resolveDevServer('not a url', false)).toBeNull();
+    expect(resolveDevServer('file:///tmp/x', false)).toBeNull();
+    expect(resolveDevServer('javascript:alert(1)', false)).toBeNull();
+  });
+});
+
+describe('isRendererUrl', () => {
+  it('matches the index exactly, ignoring hash and query', () => {
+    expect(isRendererUrl(INDEX, PROD)).toBe(true);
+    expect(isRendererUrl(`${INDEX}?a=1#b`, PROD)).toBe(true);
+    expect(isRendererUrl('file:///app/dist/renderer/index.html/../x.html', PROD)).toBe(false);
+    expect(isRendererUrl('not a url', PROD)).toBe(false);
+  });
+});
+
+describe('IPC sender check', () => {
+  const mainFrame = (url: string) => ({ senderFrame: { url, parent: null } });
+
+  it('trusts only the renderer\'s own main frame', () => {
+    expect(isTrustedSender(mainFrame(INDEX), PROD)).toBe(true);
+    expect(isTrustedSender(mainFrame(`${INDEX}#/x`), PROD)).toBe(true);
+    expect(isTrustedSender(mainFrame('file:///tmp/evil.html'), PROD)).toBe(false);
+    expect(isTrustedSender(mainFrame('https://example.com/'), PROD)).toBe(false);
+  });
+
+  it('refuses a subframe even at the renderer URL, and a missing frame or event', () => {
+    expect(isTrustedSender({ senderFrame: { url: INDEX, parent: {} } }, PROD)).toBe(false);
+    expect(isTrustedSender({ senderFrame: null }, PROD)).toBe(false);
+    expect(isTrustedSender({}, PROD)).toBe(false);
+    expect(isTrustedSender(undefined, PROD)).toBe(false);
+  });
+
+  it('trusts the dev origin in development and not a lookalike', () => {
+    const dev = devTarget('http://localhost:5173');
+    expect(isTrustedSender(mainFrame('http://localhost:5173/'), dev)).toBe(true);
+    expect(isTrustedSender(mainFrame('http://localhost:5173.evil.tld/'), dev)).toBe(false);
+  });
+
+  it('runs the handler for a trusted sender and rejects before it for any other', () => {
+    let calls = 0;
+    const wrapped = trustedHandler(PROD, (_event: never, value: number): number => {
+      calls += 1;
+      return value + 1;
+    });
+    expect(wrapped(mainFrame(INDEX), 1)).toBe(2);
+    expect(() => wrapped(mainFrame('file:///tmp/evil.html'), 1)).toThrow(/refused/);
+    expect(() => wrapped({}, 1)).toThrow(/refused/);
+    expect(calls).toBe(1);
   });
 });
 
@@ -268,13 +382,20 @@ describe('createWindow webPreferences and app.enableSandbox() — source-text fa
 
   it('is frozen, so nothing can relax a flag at runtime', () => {
     expect(Object.isFrozen(WINDOW_WEB_PREFERENCES)).toBe(true);
+    expect(Object.isFrozen(windowWebPreferences(true))).toBe(true);
+  });
+
+  it('turns DevTools off in a packaged build and keeps every base flag', () => {
+    expect(windowWebPreferences(true).devTools).toBe(false);
+    expect(windowWebPreferences(false).devTools).toBe(true);
+    expect(windowWebPreferences(true)).toMatchObject(WINDOW_WEB_PREFERENCES);
   });
 
   it('is the object the window is actually created with', () => {
     // The remaining source-text assertion in this file, and the narrowest one possible:
     // it proves index.ts spreads the exported object rather than re-declaring the flags
     // inline, which is what would make the assertions above decorative.
-    expect(INDEX_SOURCE).toMatch(/webPreferences:\s*\{[^}]*\.\.\.WINDOW_WEB_PREFERENCES/);
+    expect(INDEX_SOURCE).toMatch(/webPreferences:\s*\{[^}]*\.\.\.windowWebPreferences\(app\.isPackaged\)/);
     expect(INDEX_SOURCE).not.toMatch(/contextIsolation:/);
   });
 

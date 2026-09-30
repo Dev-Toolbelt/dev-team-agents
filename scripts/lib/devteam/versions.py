@@ -46,7 +46,13 @@ def installed():
     # Only semver directories are versions. A `<v>.incoming` staging directory
     # left by a killed install would otherwise be listed as installed, and
     # `set_current` would happily activate it.
-    found = [p.name for p in root.iterdir() if p.is_dir() and parse_semver(p.name)]
+    # `is_version_name` as well: a stray `1.2.3-` passes the looser semver test but would
+    # be refused by `paths.version_dir`, and doctor iterates this list.
+    found = [
+        p.name
+        for p in root.iterdir()
+        if p.is_dir() and parse_semver(p.name) and paths.is_version_name(p.name)
+    ]
     return sorted(found, key=sort_key)
 
 
@@ -151,7 +157,7 @@ def install_from_tree(src, version=None, force=False, make_current=None):
             "cannot determine the version to install",
             hint="Pass --version X.Y.Z, or point --from at a tree with a CHANGELOG.md.",
         )
-    if parse_semver(resolved_version) is None:
+    if parse_semver(resolved_version) is None or not paths.is_version_name(resolved_version):
         raise UsageError("version must be X.Y.Z, got: {}".format(resolved_version))
 
     with store_lock("core"):

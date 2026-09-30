@@ -33,8 +33,10 @@
 #
 #   typecheck · lint · test
 #
+# plus `build`, run after lint and asserted to emit the main, preload and renderer entries.
+#
 # CI calls exactly those three and nothing else. The scripts that open a window
-# (`start`, `dev:app`, `dev:renderer`) or produce an installer (`dist:mac`) are
+# (`start`, `dev:app`, `dev:renderer`) or produce an installer (`dist:mac`, `dist:win`) are
 # never invoked here: a gate that needs a display cannot run on a headless
 # runner, and one that builds an unsigned artifact is shipping, not checking.
 #
@@ -277,6 +279,21 @@ npm_ci() {
   app_npm npm ci --no-audit --no-fund --ignore-scripts
 }
 
+# Compiles with tsc + vite, neither of which needs the Electron binary that
+# --ignore-scripts skips (esbuild resolves its binary from an optional dependency).
+# Typecheck alone emits nothing, so this proves the shipped entry points exist.
+run_build() {
+  local f
+  app_npm npm run build || return 1
+  for f in dist/node/main/index.js dist/preload/index.js dist/renderer/index.html; do
+    if [ ! -f "$APP_DIR/$f" ]; then
+      echo "  FAIL — build succeeded but $APP_DIR/$f was not produced."
+      return 1
+    fi
+  done
+  echo "  build outputs present"
+}
+
 # Non-vacuity is the point of this check, not a bonus. A runner whose glob
 # matches nothing is the failure mode worth catching: `vitest run` and `jest`
 # both turn into an unconditional green the moment `--passWithNoTests` appears,
@@ -353,6 +370,7 @@ blocking "app: npm script contract" check_script_contract
 blocking "app: npm ci (from ${LOCK##*/})" npm_ci
 blocking "app: typecheck" app_npm npm run typecheck
 blocking "app: lint" app_npm npm run lint
+blocking "app: build (entry points emitted)" run_build
 blocking "app: unit tests (non-vacuous)" run_tests
 
 echo ""

@@ -101,4 +101,46 @@ describe('NotificationBell', () => {
     await user.click(await screen.findByRole('switch', { name: /pause system notifications/i }));
     expect(bridge.setNotificationsPaused).toHaveBeenCalledWith(true);
   });
+
+  it('shows a refused login-item change, keeps the previous state, and leaves no unhandled rejection', async () => {
+    const user = userEvent.setup();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const { bridge } = renderBell(notificationFeed(), {
+      backgroundSettings: vi.fn(() => Promise.resolve(backgroundSettings({ openAtLogin: false }))),
+      setOpenAtLogin: vi.fn(() => Promise.reject(new Error('settings.json is corrupt'))),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    await user.click(await screen.findByRole('switch', { name: /start at login/i }));
+    expect(await screen.findByText(/settings\.json is corrupt/)).toBeInTheDocument();
+    expect(bridge.setOpenAtLogin).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('switch', { name: /start at login/i })).not.toBeChecked();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it('says so when the login setting cannot be read, and survives failing reads', async () => {
+    const user = userEvent.setup();
+    const { bridge } = renderBell(notificationFeed(), {
+      notificationFeed: vi.fn(() => Promise.reject(new Error('untrusted sender'))),
+      markNotificationsRead: vi.fn(() => Promise.reject(new Error('untrusted sender'))),
+      backgroundSettings: vi.fn(() => Promise.reject(new Error('untrusted sender'))),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    expect(await screen.findByText(/could not read the start-at-login setting/i)).toBeInTheDocument();
+    expect(bridge.markNotificationsRead).toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: /pause system notifications/i })).not.toBeChecked();
+  });
+
+  it('keeps the pause switch where it was when the change is refused', async () => {
+    const user = userEvent.setup();
+    renderBell(notificationFeed(), {
+      setNotificationsPaused: vi.fn(() => Promise.reject(new Error('refused'))),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    const toggle = await screen.findByRole('switch', { name: /pause system notifications/i });
+    await user.click(toggle);
+    expect(toggle).not.toBeChecked();
+  });
 });

@@ -156,6 +156,22 @@ switch (scenario) {
     setInterval(() => {}, 1000);
     break;
 
+  case 'orphan-grandchild': {
+    // Answers and exits, but leaves a grandchild holding the inherited stdout/stderr pipes
+    // open, so the `close` event never comes while it lives. It ends itself after 6 s so a
+    // failing test does not leave it behind.
+    const { spawn } = await import('node:child_process');
+    const grandchild = spawn(
+      process.execPath,
+      ['-e', 'setTimeout(() => process.exit(0), 6000)'],
+      { stdio: 'inherit', detached: false },
+    );
+    grandchild.unref();
+    emit({ ok: true, argv, current: '3.0.0' });
+    process.exit(0);
+    break;
+  }
+
   case 'echo-env':
     emit({ ok: true, env: process.env, argv });
     process.exit(0);

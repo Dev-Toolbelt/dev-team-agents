@@ -46,12 +46,17 @@ export function NotificationBell({ onOpenProject }: { onOpenProject: (projectId:
   const [feed, setFeed] = useState<NotificationFeed>(EMPTY);
   const [background, setBackground] = useState<BackgroundSettings | null>(null);
   const [open, setOpen] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    void window.devteam.notificationFeed().then((initial) => {
-      if (live) setFeed(initial);
-    });
+    // A refused or failed read leaves the empty feed; the subscription below still fills it.
+    window.devteam
+      .notificationFeed()
+      .then((initial) => {
+        if (live) setFeed(initial);
+      })
+      .catch(() => undefined);
     const unsubscribe = window.devteam.onNotificationFeed((next) => setFeed(next));
     return () => {
       live = false;
@@ -62,8 +67,15 @@ export function NotificationBell({ onOpenProject }: { onOpenProject: (projectId:
   useEffect(() => {
     if (!open) return;
     // Opening the list is reading it.
-    void window.devteam.markNotificationsRead().then(setFeed);
-    void window.devteam.backgroundSettings().then(setBackground);
+    // Marking read is best effort: on a failure the list stays as it was.
+    window.devteam.markNotificationsRead().then(setFeed).catch(() => undefined);
+    window.devteam
+      .backgroundSettings()
+      .then((next) => {
+        setBackground(next);
+        setBackgroundError(null);
+      })
+      .catch((error: unknown) => setBackgroundError(errorText(error)));
   }, [open]);
 
   const label =
@@ -118,10 +130,13 @@ export function NotificationBell({ onOpenProject }: { onOpenProject: (projectId:
             <Switch
               id="notifications-paused"
               checked={feed.paused}
-              onCheckedChange={(checked) => void window.devteam.setNotificationsPaused(checked).then(setFeed)}
+              // A failure keeps the previous state: the switch is controlled by `feed.paused`.
+              onCheckedChange={(checked) => {
+                window.devteam.setNotificationsPaused(checked).then(setFeed).catch(() => undefined);
+              }}
             />
           </div>
-          <LoginItemControl settings={background} onChange={setBackground} />
+          <LoginItemControl settings={background} loadError={backgroundError} onChange={setBackground} />
         </div>
       </PopoverContent>
     </Popover>
@@ -177,12 +192,20 @@ function StreamStatus({ feed }: { feed: NotificationFeed }) {
  */
 function LoginItemControl({
   settings,
+  loadError,
   onChange,
 }: {
   settings: BackgroundSettings | null;
+  loadError: string | null;
   onChange: (settings: BackgroundSettings) => void;
 }) {
-  if (settings === null) return null;
+  // A refused change keeps the previous settings and puts the reason where `detail` goes.
+  const [changeError, setChangeError] = useState<string | null>(null);
+  if (settings === null) {
+    return loadError === null ? null : (
+      <p className="text-xs text-destructive">Could not read the start-at-login setting: {loadError}</p>
+    );
+  }
   const disabled = settings.loginItemStatus === 'unsupported';
   return (
     <div className="space-y-1">
@@ -194,12 +217,26 @@ function LoginItemControl({
           id="open-at-login"
           checked={settings.openAtLogin}
           disabled={disabled}
-          onCheckedChange={(checked) => void window.devteam.setOpenAtLogin(checked).then(onChange)}
+          onCheckedChange={(checked) => {
+            setChangeError(null);
+            window.devteam
+              .setOpenAtLogin(checked)
+              .then(onChange)
+              .catch((error: unknown) => setChangeError(errorText(error)));
+          }}
         />
       </div>
-      {settings.detail !== null ? <p className="text-xs text-muted-foreground">{settings.detail}</p> : null}
+      {changeError !== null ? (
+        <p className="text-xs text-destructive">{changeError}</p>
+      ) : settings.detail !== null ? (
+        <p className="text-xs text-muted-foreground">{settings.detail}</p>
+      ) : null}
     </div>
   );
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function relativeTime(epochSeconds: number): string {

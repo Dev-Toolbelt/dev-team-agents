@@ -10,7 +10,7 @@
  * final test asserts the directory is still empty afterwards, so "read-only commands
  * create nothing" is verified rather than assumed.
  *
- * Skipped, with a reason, when `scripts/cli/devteam` or a working python3 is not present —
+ * Skipped, with a reason, when (outside CI; under `CI` a missing CLI or python3 FAILS) `scripts/cli/devteam` or a working python3 is not present —
  * this file must not turn a checkout without python into a red suite. Both halves of that
  * condition are now implemented; see `python3Works` below.
  */
@@ -599,6 +599,17 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     expect(result.exitCode).toBe(4);
     expect(result.message.length).toBeGreaterThan(0);
     expect(result.hint).toBeDefined();
+  });
+});
+
+const inCI = Boolean(process.env.CI) && process.env.CI !== 'false' && process.env.CI !== '0';
+
+describe.runIf(inCI && (!cliPresent || !pythonPresent))('real CLI required in CI', () => {
+  it('fails instead of skipping: the CLI contract gate must not pass vacuously', () => {
+    expect(
+      { cliPresent, pythonPresent },
+      'CI is set, so scripts/cli/devteam and a working python3 are mandatory',
+    ).toEqual({ cliPresent: true, pythonPresent: true });
   });
 });
 

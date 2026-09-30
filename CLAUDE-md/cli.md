@@ -159,7 +159,7 @@ mode.
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
 | `devteam list` | Bound projects, mode, resolved version, pin drift |
 | `devteam sync [path] [--all]` | Rebuild artifacts from the store |
-| `devteam pin <v> \| --release` | Hold a project on a version, or return it to `current` |
+| `devteam pin <v> \| --release` | Hold a project on a version, or return it to `current`. `<v>` (like `bind --pin`) must be a plain version name (`2.48.0`, optional `v` and `-`/`+` suffix) — anything else exits 2; a bad pin already in the registry is an environment error (exit 3) that `doctor` reports |
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
 | `devteam migrate [path] [--apply]` | v2 vendored install → bind. Previews unless `--apply`. Reports, never runs, the `git rm -r --cached` the user owes: `git_tracked` (the vendored trees) and `git_tracked_artifacts` (committed links a bind replaced with machine-local ones) |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
