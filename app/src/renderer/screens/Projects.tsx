@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { Empty, Loading, Problem } from '../Problem.js';
 import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
@@ -916,6 +918,7 @@ function UpgradeDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-4">
         {plan.state.phase !== 'done' ? <Loading what="devteam upgrade (plan)" /> : null}
         {plan.state.phase === 'done' && !plan.state.result.ok ? <Problem problem={plan.state.result} /> : null}
         {planData !== null ? <UpgradePlanSummary plan={planData} /> : null}
@@ -925,6 +928,7 @@ function UpgradeDialog({
           <UpgradeReportSummary report={apply.state.result.data} />
         ) : null}
         {apply.state.phase === 'done' ? <Notice result={apply.state.result} /> : null}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" disabled={applying} onClick={() => onOpenChange(false)}>
@@ -1102,6 +1106,21 @@ function BindDialog({
   const review = useAction(() => window.devteam.planMigration(migrateRequest()));
   const migrate = useAction(() => window.devteam.applyMigration(migrateRequest()));
 
+  function chooseDirectory() {
+    void choose.run().then((choice) => {
+      // `{ chosen: false }` is a dismissed picker, not an error — say nothing, change
+      // nothing, leave any previously chosen path (and name) as it was.
+      if (!choice.chosen) return;
+      setPath(choice.path);
+      setName(basename(choice.path));
+      setReviewing(false);
+      review.reset();
+      migrate.reset();
+      bind.reset();
+      void detect(choice.path);
+    });
+  }
+
   async function detect(chosen: string) {
     detectionFor.current = chosen;
     setDetection({ path: chosen, result: null });
@@ -1166,12 +1185,15 @@ function BindDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Bind a project</DialogTitle>
           <DialogDescription>Choose a directory, then confirm which providers and mode to bind it with.</DialogDescription>
         </DialogHeader>
 
+        {/* The body scrolls and the header and footer stay: the dialog never runs past the
+            window, and Bind / Migrate is always on screen. */}
+        <DialogBody>
         {bound !== null ? (
           <BindResultSummary report={bound} name={boundName} />
         ) : migrated !== null ? (
@@ -1186,45 +1208,35 @@ function BindDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Button
-                type="button"
-                variant={path === null ? 'outline' : 'link'}
-                size="sm"
-                className={path === null ? undefined : 'h-auto px-0'}
-                onClick={() => {
-                  void choose.run().then((choice) => {
-                    // `{ chosen: false }` is a dismissed picker, not an error — say nothing,
-                    // change nothing, leave any previously chosen path (and name) as it was.
-                    if (choice.chosen) {
-                      setPath(choice.path);
-                      setName(basename(choice.path));
-                      setReviewing(false);
-                      review.reset();
-                      migrate.reset();
-                      bind.reset();
-                      void detect(choice.path);
-                    }
-                  });
-                }}
-              >
-                {path === null ? 'Choose directory…' : 'Choose a different directory…'}
-              </Button>
-
-              {path === null ? (
+            {path === null ? (
+              <div className="space-y-2">
+                <Button type="button" variant="outline" size="sm" onClick={chooseDirectory}>
+                  Choose directory…
+                </Button>
                 <p className="font-mono text-xs text-muted-foreground">No directory chosen yet.</p>
-              ) : (
-                // Colour is never the only signal: the icon and the word "chosen" carry the
-                // same fact for a colour-blind user, and both are in the accessible name a
-                // screen reader announces — the border alone would tell neither.
-                <div className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200">
-                  <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-                  <span>
-                    Directory chosen: <span className="font-mono text-xs">{path}</span>
-                  </span>
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              // Colour is never the only signal: the icon and the word "chosen" carry the
+              // same fact for a colour-blind user, and both are in the accessible name a
+              // screen reader announces — the border alone would tell neither. The change
+              // control sits inside the box it changes, instead of a line of its own above it.
+              <div className="flex items-center gap-2 rounded-md border border-green-600 bg-green-50 py-1.5 pr-1.5 pl-3 text-sm text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200">
+                <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate" title={path}>
+                  Directory chosen: <span className="font-mono text-xs">{path}</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0"
+                  aria-label="Choose a different directory"
+                  onClick={chooseDirectory}
+                >
+                  Change…
+                </Button>
+              </div>
+            )}
 
             {checking ? (
               <p className="text-xs text-muted-foreground" aria-live="polite">
@@ -1254,6 +1266,7 @@ function BindDialog({
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Providers</legend>
                   <p className="text-xs text-muted-foreground">Leave all unchecked to use the CLI&apos;s own default.</p>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {PROVIDERS.map((provider) => (
                     <div key={provider} className="flex items-center gap-2">
                       <Checkbox
@@ -1271,29 +1284,46 @@ function BindDialog({
                       <Label htmlFor={`provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
                     </div>
                   ))}
+                  </div>
                 </fieldset>
 
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Mode</legend>
-                  <RadioGroup value={mode} onValueChange={(value) => setMode(value as BindMode)}>
+                  {/* Two columns of option cards: the same four choices and their consequences
+                      in half the height, and the whole card is the click target. */}
+                  <RadioGroup
+                    value={mode}
+                    onValueChange={(value) => setMode(value as BindMode)}
+                    className="grid gap-2 sm:grid-cols-2"
+                  >
                     {MODES.map((candidate) => (
-                      <div key={candidate} className="flex items-start gap-2">
+                      <label
+                        key={candidate}
+                        htmlFor={`mode-${candidate}`}
+                        className={cn(
+                          'flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 transition-colors hover:bg-accent/50',
+                          mode === candidate ? 'border-primary bg-accent/40' : 'border-border',
+                        )}
+                      >
                         <RadioGroupItem
                           value={candidate}
                           id={`mode-${candidate}`}
+                          // Named by the title alone and described by the consequence — the
+                          // wrapping <label> would otherwise read both as the name.
+                          aria-labelledby={`mode-${candidate}-label`}
                           aria-describedby={`mode-${candidate}-description`}
-                          className="mt-1"
+                          className="mt-0.5"
                         />
-                        <div>
-                          <Label htmlFor={`mode-${candidate}`}>
+                        <span className="space-y-0.5">
+                          <span id={`mode-${candidate}-label`} className="block text-sm font-medium leading-none">
                             {MODE_LABELS[candidate]}
                             {candidate === RECOMMENDED_MODE ? ' (recommended)' : ''}
-                          </Label>
-                          <p id={`mode-${candidate}-description`} className="text-xs text-muted-foreground">
+                          </span>
+                          <span id={`mode-${candidate}-description`} className="block text-xs text-muted-foreground">
                             {MODE_DESCRIPTIONS[candidate]}
-                          </p>
-                        </div>
-                      </div>
+                          </span>
+                        </span>
+                      </label>
                     ))}
                   </RadioGroup>
                 </fieldset>
@@ -1304,6 +1334,7 @@ function BindDialog({
             {bind.state.phase === 'done' ? <Notice result={bind.state.result} /> : null}
           </div>
         )}
+        </DialogBody>
 
         <DialogFooter>
           {reviewing && migrated === null ? (
@@ -1381,12 +1412,12 @@ function V2Detected({ plan }: { plan: MigrationPlan }) {
   return (
     <Alert>
       <AlertTriangle aria-hidden="true" />
-      <AlertTitle>This directory already has dev-team-agents v2 ({v2Label(plan)})</AlertTitle>
+      <AlertTitle>dev-team-agents v2 found</AlertTitle>
       <AlertDescription>
         <p>
-          It will be migrated instead of bound: the old framework moves to a dated quarantine (nothing is deleted),
-          its memory is kept, and the old paths leave git&apos;s index for you to commit. Review the plan before
-          anything changes.
+          Installed {v2Label(plan)}. It will be migrated instead of bound: the old framework moves to a dated
+          quarantine (nothing is deleted), its memory is kept, and the old paths leave git&apos;s index for you to
+          commit. Review the plan before anything changes.
         </p>
       </AlertDescription>
     </Alert>

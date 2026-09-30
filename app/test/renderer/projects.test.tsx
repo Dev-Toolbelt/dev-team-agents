@@ -646,7 +646,7 @@ describe('Projects — a v2 install is migrated from the bind dialog', () => {
     const { user, dialog, bridge } = await openAndChoose({
       planMigration: vi.fn(() => Promise.resolve(ok(migrationPlan()))),
     });
-    expect(await within(dialog).findByText(/already has dev-team-agents v2/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/dev-team-agents v2 found/i)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /^bind$/i })).not.toBeInTheDocument();
     // Detection asked with the path alone; nothing was applied.
     expect(bridge.planMigration).toHaveBeenCalledWith({ path: '/chosen/dir' });
@@ -673,7 +673,7 @@ describe('Projects — a v2 install is migrated from the bind dialog', () => {
     await user.click(bindButton);
     await vi.waitFor(() => expect(bridge.bindProject).toHaveBeenCalled());
     expect(bridge.applyMigration).not.toHaveBeenCalled();
-    expect(within(dialog).queryByText(/already has dev-team-agents v2/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/dev-team-agents v2 found/i)).not.toBeInTheDocument();
   });
 
   it('shows a detection problem other than "not v2", and keeps Bind disabled', async () => {
