@@ -43,3 +43,9 @@ self.assertTrue((root / commands[0].split()[-1]).exists())
 ## References
 
 - `tests/test_review_regressions.py` — `LegacyV2MigrationTest`, which builds the v2 layout by hand
+- **A fixture built with `bind()` also leaves a manifest behind.** The v2 fixture unbinds with
+  `keep_artifacts=True`, which keeps the bind manifest; a later `bind()` prunes everything that manifest
+  names — including the vendored trees a real v2 install keeps. The "bind over v2" tests passed against a
+  state no user has until the fixture deleted the manifest (`_install_sh_project`), which is what an
+  `install.sh` install looks like: no manifest at all.
+
