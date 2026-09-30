@@ -2,7 +2,7 @@
 # Effective graphify config, shared by scripts/refresh.sh and hooks/stop.sh.
 # Sourced, never executed.
 #
-# Source order (ADR-0017): DEVTEAM_PLUGIN_CONFIG (JSON, set by `devteam plugin run`
+# Source order (ADR-0018): DEVTEAM_PLUGIN_CONFIG (JSON, set by `devteam plugin run`
 # and by the Stop dispatcher) -> .config of plugin-settings/graphify.json ->
 # the legacy .dev-team-agents/user-data/graphify.json.
 #

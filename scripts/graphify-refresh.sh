@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DEPRECATED: the logic lives in plugins/graphify/scripts/refresh.sh (ADR-0017).
+# DEPRECATED: the logic lives in plugins/graphify/scripts/refresh.sh (ADR-0018).
 # This wrapper is removed in the next minor release after the plugin system lands.
 set -euo pipefail
 

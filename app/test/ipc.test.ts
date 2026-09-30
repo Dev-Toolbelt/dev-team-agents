@@ -620,7 +620,7 @@ describe('environment withholds every gated command when the declaration could n
   });
 });
 
-// ── plugins (ADR-0017) — names checked against this project's own `plugin list` ──
+// ── plugins (ADR-0018) — names checked against this project's own `plugin list` ──
 
 describe('plugins are read, toggled, configured and run only as the project’s own list declares them', () => {
   type Failure = { readonly ok: false; readonly kind: string; readonly message: string; readonly durationMs: number };

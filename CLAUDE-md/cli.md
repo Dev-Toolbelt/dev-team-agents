@@ -619,7 +619,7 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 
 ## Plugins
 
-See `plugins/README.md` and `docs/development/adrs/0017-plugins-as-manifest-declared-per-project-integrations.md`.
+See `plugins/README.md` and `docs/development/adrs/0018-plugins-as-manifest-declared-per-project-integrations.md`.
 
 Per-project plugin settings live in `.dev-team-agents/plugin-settings/<name>.json` (committed). The CLI discovers plugins from the manifests in `plugins/` and supports enable/disable toggling, config editing, and running actions.
 

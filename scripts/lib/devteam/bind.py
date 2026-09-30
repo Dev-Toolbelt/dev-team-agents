@@ -493,10 +493,10 @@ def _same_git_repository(path_a, path_b):
 #: 121 references to `.dev-team-agents/scripts/…` (hooks, `new-adr.sh`,
 #: `graphify-refresh.sh`, the reuse and design-token lints), 17 to
 #: `.dev-team-agents/templates/…`, and the plugin manifests and hook scripts under
-#: `.dev-team-agents/plugins/…` (ADR-0017; the per-project *settings* live beside it in
+#: `.dev-team-agents/plugins/…` (ADR-0018; the per-project *settings* live beside it in
 #: `plugin-settings/`, never inside this link). Nothing shipped reads agents, commands or
 #: skills through `.dev-team-agents/` — Claude Code finds those under `.claude/`.
-#: A core version without one of these trees (`plugins/` before ADR-0017) is skipped
+#: A core version without one of these trees (`plugins/` before ADR-0018) is skipped
 #: rather than refused, so an older pinned version still binds.
 RUNTIME_TREES = ("scripts", "templates", "plugins")
 
@@ -534,7 +534,7 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
                 details={"path": str(dest)},
             )
         if not (Path(version_dir) / name).exists() and name == "plugins":
-            # A core version older than ADR-0017 has no plugins tree; refusing the whole
+            # A core version older than ADR-0018 has no plugins tree; refusing the whole
             # bind for that would strand a project pinned to it.
             continue
         kind = _materialize(

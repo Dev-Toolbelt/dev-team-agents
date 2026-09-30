@@ -165,7 +165,7 @@ class BindOverV2Test(StoreTestCase):
         parked = {}
         for name in bind.RUNTIME_TREES:
             if not (install_dir / name).exists():
-                # A tree v2's installer never shipped (`plugins/`, ADR-0017).
+                # A tree v2's installer never shipped (`plugins/`, ADR-0018).
                 continue
             parked[name] = install_dir.parent / ("parked-" + name)
             (install_dir / name).rename(parked[name])

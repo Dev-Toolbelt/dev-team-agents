@@ -287,7 +287,7 @@ devteam plugin run graphify rebuild     # constrói o grafo agora
 devteam plugin config set graphify auto_refresh true   # (opcional) reconstrói ao fim da sessão quando o código mudou
 ```
 
-Todos os plugins vêm no core — sem instalação remota, sem integrações de terceiros. Para detalhes de design, autoria e comandos: [plugins/README.md](plugins/README.md) e [ADR-0017](docs/development/adrs/0017-plugins-as-manifest-declared-per-project-integrations.md).
+Todos os plugins vêm no core — sem instalação remota, sem integrações de terceiros. Para detalhes de design, autoria e comandos: [plugins/README.md](plugins/README.md) e [ADR-0018](docs/development/adrs/0018-plugins-as-manifest-declared-per-project-integrations.md).
 
 ---
 

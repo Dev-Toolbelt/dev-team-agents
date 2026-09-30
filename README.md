@@ -287,7 +287,7 @@ devteam plugin run graphify rebuild     # build the graph now
 devteam plugin config set graphify auto_refresh true   # (optional) rebuild at session end when sources changed
 ```
 
-All plugins ship in the core — no remote install, no third-party integrations. For details on plugin system design, authoring, and commands: [plugins/README.md](plugins/README.md) and [ADR-0017](docs/development/adrs/0017-plugins-as-manifest-declared-per-project-integrations.md).
+All plugins ship in the core — no remote install, no third-party integrations. For details on plugin system design, authoring, and commands: [plugins/README.md](plugins/README.md) and [ADR-0018](docs/development/adrs/0018-plugins-as-manifest-declared-per-project-integrations.md).
 
 ---
 

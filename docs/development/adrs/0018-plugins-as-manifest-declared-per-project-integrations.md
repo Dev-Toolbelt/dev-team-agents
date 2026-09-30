@@ -1,4 +1,4 @@
-# ADR-0017: Plugins as manifest-declared, per-project integrations
+# ADR-0018: Plugins as manifest-declared, per-project integrations
 
 **Date:** 2026-09-30
 **Status:** Accepted

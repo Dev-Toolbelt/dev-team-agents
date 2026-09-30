@@ -371,7 +371,7 @@ PY
 
 ## Category 5 — Graphify plugin (skip if not enabled)
 
-Graphify is a plugin (ADR-0017). Every check goes through the CLI, which reads the settings file,
+Graphify is a plugin (ADR-0018). Every check goes through the CLI, which reads the settings file,
 the legacy location and the requirements in one place:
 
 ```bash

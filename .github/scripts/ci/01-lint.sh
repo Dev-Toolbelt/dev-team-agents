@@ -66,7 +66,7 @@ advisory() {
 # (`SKILL_DESC_STRICT=true` in helpers/agent-lint.sh).
 blocking "agent-lint" bash helpers/agent-lint.sh
 
-# Plugin manifests (plugins/*/plugin.json) against the ADR-0017 schema rules.
+# Plugin manifests (plugins/*/plugin.json) against the ADR-0018 schema rules.
 blocking "plugin-lint" bash helpers/plugin-lint.sh
 
 # A skill with no agent referencing it is dead weight, not a broken build, and

@@ -9,7 +9,7 @@ import { useOperation } from '../useOperation.js';
 
 /**
  * The Plugins tab of one project's screen: one card per plugin the CLI lists, drawn only from
- * what `plugin list` says (ADR-0017 § 5). A plugin added to the core appears here with no
+ * what `plugin list` says (ADR-0018 § 5). A plugin added to the core appears here with no
  * change to the app.
  *
  * `onDirtyChange` reports the number of unsaved config edits across all cards, so the screen
