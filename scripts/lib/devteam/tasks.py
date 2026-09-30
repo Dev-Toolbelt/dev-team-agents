@@ -22,6 +22,7 @@ no-op, never an error.
 from __future__ import annotations
 
 import copy
+import datetime
 import hashlib
 import json
 import os
@@ -667,6 +668,15 @@ def _entering_keys(record):
     return keys
 
 
+def _async_launch(payload):
+    """True when the tool response is a background launch ack, not a report."""
+    for key in ("tool_response", "tool_output"):
+        response = payload.get(key)
+        if isinstance(response, dict) and (response.get("isAsync") is True or response.get("status") == "async_launched"):
+            return True
+    return False
+
+
 def review_call(payload):
     """Normalize a hook payload into a review event, or ``None``.
 
@@ -694,6 +704,8 @@ def review_call(payload):
         "source": None,
         "markers": [],
         "agent": False,
+        "tool_use_id": _first_text(payload, "tool_use_id", "toolUseId"),
+        "transcript_path": _first_text(payload, "transcript_path"),
     }
 
     if bare in ("Agent", "Task", "spawn_agent") or tool.lower() == "task":
@@ -704,7 +716,7 @@ def review_call(payload):
         if after:
             # `spawn_agent` answers with an agent id, not a report; a background agent's
             # launch answers before it has run. Neither can carry a result.
-            if bare == "spawn_agent" or tool_input.get("run_in_background") is True:
+            if bare == "spawn_agent" or tool_input.get("run_in_background") is True or _async_launch(payload):
                 return None
             found = review_triggers.markers(
                 [payload.get("tool_response"), payload.get("tool_output"), payload.get("output")]
@@ -801,6 +813,10 @@ def review_open(root, payload, now=None):
         window["pending"] += 1
         if call["trigger"] != "agent":
             window["scan"] = True
+        else:
+            if call.get("tool_use_id"):
+                window.setdefault("launch_ids", []).append(call["tool_use_id"])
+        _remember_transcript(window, call)
         return {"recorded": True, "window": window["id"], "joined": joined}
 
     result = {"recorded": False, "session": None, "window": None, "joined": False}
@@ -808,10 +824,27 @@ def review_open(root, payload, now=None):
     return result
 
 
+def _remember_transcript(window, call):
+    """Start the window's background scan where the transcript ends when the window opens."""
+    path = call.get("transcript_path")
+    if window.get("tx_offset") is not None or not path or not os.path.isfile(path):
+        return
+    try:
+        window["tx_offset"] = os.path.getsize(path)
+        window["tx_path"] = path
+    except OSError:
+        pass
+
+
 def _apply_result(rec, call, now):
     window = _open_window(rec)
     if window is None:
         return None
+    launch = call.get("tool_use_id")
+    if launch:
+        if launch in window.get("consumed", []):
+            return None
+        window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
     # A marker never consumes the transcript-scan token: that one is retired at `Stop`.
     room = max(0, window["pending"] - (1 if window.get("scan") else 0))
@@ -925,6 +958,104 @@ def last_assistant_text(payload):
             ):
                 return ""
     return ""
+
+
+#: Bytes of transcript read per `Stop` for background hand-backs; the rest waits for the next one.
+BACKGROUND_SCAN_BYTES = 2 * 1024 * 1024
+
+_TAG_RE = {
+    name: re.compile(r"<{0}>(.*?)</{0}>".format(name), re.DOTALL)
+    for name in ("tool-use-id", "task-id", "status", "result")
+}
+
+
+def _entry_text(entry):
+    """Text of a transcript entry that could carry a task notification, else ``""``."""
+    content = entry.get("content")
+    if not isinstance(content, str):
+        message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
+        content = _content_text(message.get("content"))
+    return content if isinstance(content, str) and "<task-notification>" in content else ""
+
+
+def _entry_epoch(entry):
+    stamp = entry.get("timestamp")
+    if isinstance(stamp, str):
+        try:
+            return datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    return None
+
+
+def _background_reports(window, path):
+    """New background hand-backs in the transcript since the window's offset.
+
+    Yields ``{"id", "markers"}`` per notification, and advances ``window["tx_offset"]`` past the
+    complete lines read. The same notification appears as a queue entry and as a user entry, and
+    a resumed agent may notify twice: the caller dedupes on ``id``.
+    """
+    try:
+        size = os.path.getsize(path)
+        offset = window.get("tx_offset")
+        if window.get("tx_path") != path or not isinstance(offset, int) or offset > size:
+            offset = max(0, size - BACKGROUND_SCAN_BYTES) if window.get("tx_path") is None else 0
+            window["tx_path"] = path
+        with open(path, "rb") as handle:
+            handle.seek(offset)
+            chunk = handle.read(BACKGROUND_SCAN_BYTES)
+    except OSError:
+        return []
+    end = chunk.rfind(b"\n") + 1
+    if end == 0 and len(chunk) < BACKGROUND_SCAN_BYTES:
+        return []
+    window["tx_offset"] = offset + (end or len(chunk))
+    reports = []
+    for line in chunk[:end].decode("utf-8", "replace").splitlines():
+        if "<task-notification>" not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        text = _entry_text(entry) if isinstance(entry, dict) else ""
+        if not text:
+            continue
+        at = _entry_epoch(entry)
+        if at is not None and int(at) < window["opened_at"]:
+            continue
+        found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
+        reports.append({
+            "id": found["tool-use-id"] or found["task-id"] or "off:{}".format(offset),
+            "markers": review_triggers.markers(found["result"] or text),
+        })
+    return reports
+
+
+def _scan_background(rec, payload, now):
+    """Fold background review agents' hand-backs from the transcript into the open window.
+
+    Returns the last outcome that completed a window, else ``None``.
+    """
+    path = payload.get("transcript_path")
+    if not isinstance(path, str) or not path or not os.path.isfile(path):
+        return None
+    outcome = None
+    window = _open_window(rec)
+    if window is None or window["pending"] <= 0:
+        return None
+    for report in _background_reports(window, path):
+        window = _open_window(rec)
+        if window is None:
+            break
+        known = report["id"] in window.get("launch_ids", [])
+        if report["id"] in window.get("consumed", []) or not (report["markers"] or known):
+            continue
+        window.setdefault("consumed", []).append(report["id"])
+        applied = _apply_result(rec, {"markers": report["markers"], "agent": True}, now)
+        if applied is not None and applied["result"]:
+            outcome = applied
+    return outcome
 
 
 def _scan_at_stop(rec, payload, now):
@@ -1060,7 +1191,9 @@ def mark(root, payload, state, now=None):
                 rec["idle_at"] = now
                 rec["ended_at"] = None
                 was_done = _all_done(rec, _review_members(rec))
-                scanned = _scan_at_stop(rec, payload, now)
+                scanned = _scan_background(rec, payload, now)
+                after = _scan_at_stop(rec, payload, now)
+                scanned = after if after is not None and after["result"] else scanned or after
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)

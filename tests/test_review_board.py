@@ -843,5 +843,148 @@ class WiringTest(tt.BoardCase):
         self.assertNotIn("execAsync", text)
 
 
+class BackgroundReviewTest(ReviewCase):
+    """A reviewer launched with `run_in_background` reports through a transcript notification."""
+
+    def setUp(self):
+        super().setUp()
+        self.path = self.tmp / "bg.jsonl"
+        self.path.write_text('{"type":"user","message":{"role":"user","content":"go"}}\n', encoding="utf-8")
+
+    def append(self, *entries, raw=""):
+        with open(self.path, "a", encoding="utf-8") as handle:
+            for entry in entries:
+                handle.write(json.dumps(entry) + "\n")
+            handle.write(raw)
+
+    def notification(self, text, launch="tu1", status="completed"):
+        return (
+            "<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>{}</tool-use-id>\n"
+            "<status>{}</status>\n<summary>done</summary>\n<result>{}</result>\n</task-notification>"
+        ).format(launch, status, text)
+
+    def hand_back(self, text, launch="tu1", at=None, status="completed"):
+        body = self.notification(text, launch, status)
+        stamp = {} if at is None else {"timestamp": at}
+        return [
+            dict({"type": "queue-operation", "operation": "enqueue", "content": body}, **stamp),
+            dict({"type": "user", "message": {"role": "user", "content": body}}, **stamp),
+        ]
+
+    def launch(self, launch="tu1"):
+        spawn = claude_spawn("s1")
+        spawn.update(tool_use_id=launch, transcript_path=str(self.path))
+        spawn["tool_input"]["run_in_background"] = True
+        self.open(spawn)
+        ack = claude_return("s1", "Async agent launched", run_in_background=True)
+        ack.update(tool_use_id=launch, tool_response={"isAsync": True, "status": "async_launched"})
+        self.assertFalse(self.result(ack)["recorded"])
+
+    def stop_bg(self, now=T0 + 30):
+        return self.stop({"session_id": "s1", "transcript_path": str(self.path), "last_assistant_message": "ok"}, now=now)
+
+    def test_a_launch_ack_keeps_the_window_pending_and_is_not_unread(self):
+        self.start()
+        self.launch()
+        self.assertEqual((self.window()["pending"], self.window()["result_at"]), (1, None))
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.session()["tasks"][0]["review"]["state"], "pending")
+
+    def test_a_task_notification_after_the_launch_records_the_result_at_stop(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back(marker(2)))
+        out = self.stop_bg()
+        self.assertEqual((out["review_result"], out["review_window"], out["review_findings"]), (True, "r1", 2))
+        self.assertEqual(self.window()["markers"], 1)
+        self.assertEqual(self.columns()["A"], "in_review")
+
+    def test_the_queue_entry_and_the_user_entry_are_one_result(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back(marker(0)))
+        out = self.stop_bg()
+        self.assertEqual((out["review_findings"], self.window()["markers"]), (0, 1))
+        self.assertEqual(self.window()["resolution"], "passed")
+
+    def test_a_later_stop_does_not_consume_the_same_notification_again(self):
+        self.start()
+        self.open(prompt("s1", "/devteam:review"), now=T0 + 5)
+        self.launch()
+        self.stop_bg(now=T0 + 25)
+        self.append(*self.hand_back(marker(1)))
+        self.stop_bg(now=T0 + 30)
+        window = self.window()
+        self.assertEqual((window["pending"], window["found"], window["markers"]), (0, 1, 1))
+        self.assertEqual(self.stop_bg(now=T0 + 31)["review_result"], False)
+        self.assertEqual(self.window()["found"], 1)
+
+    def test_offset_advances_so_only_new_bytes_are_read(self):
+        self.start()
+        self.launch()
+        self.append({"type": "assistant", "message": {"role": "assistant", "content": "x" * 50}})
+        self.stop_bg()
+        size = self.path.stat().st_size
+        self.assertEqual(self.window()["tx_offset"], size)
+
+    def test_a_partial_trailing_line_waits_for_the_next_stop(self):
+        self.start()
+        self.launch()
+        whole = json.dumps(self.hand_back(marker(3))[1])
+        self.append(raw=whole[:40])
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.append(raw=whole[40:] + "\n")
+        self.assertEqual(self.stop_bg(now=T0 + 31)["review_findings"], 3)
+
+    def test_a_notification_older_than_the_window_is_ignored(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back(marker(5), at="1970-01-01T00:00:00Z"))
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.window()["pending"], 1)
+
+    def test_a_finished_reviewer_without_a_marker_is_unread(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back("I reviewed it, all fine."))
+        out = self.stop_bg()
+        self.assertEqual((out["review_result"], out["review_findings"]), (True, None))
+        self.assertEqual(self.session()["tasks"][0]["review"]["state"], "unread")
+
+    def test_a_marker_less_notification_of_an_unknown_agent_is_ignored(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back("some other agent", launch="other"))
+        self.assertFalse(self.stop_bg()["review_result"])
+        self.assertEqual(self.window()["pending"], 1)
+
+    def test_a_foreground_result_is_not_counted_again_from_the_transcript(self):
+        self.start()
+        spawn = claude_spawn("s1")
+        spawn.update(tool_use_id="fg1", transcript_path=str(self.path))
+        self.open(spawn)
+        done = claude_return("s1", marker(0))
+        done["tool_use_id"] = "fg1"
+        self.assertTrue(self.result(done)["result"])
+        self.assertFalse(self.result(done)["recorded"])
+        self.assertEqual(self.window()["markers"], 1)
+
+    def test_the_bytes_read_per_stop_are_capped_and_resumed(self):
+        self.start()
+        self.launch()
+        filler = {"type": "assistant", "message": {"role": "assistant", "content": "y" * 1000}}
+        self.append(*[filler] * 30, *self.hand_back(marker(4)))
+        original = tasks.BACKGROUND_SCAN_BYTES
+        tasks.BACKGROUND_SCAN_BYTES = 8192
+        try:
+            for step in range(20):
+                out = self.stop_bg(now=T0 + 30 + step)
+                if out["review_result"]:
+                    break
+        finally:
+            tasks.BACKGROUND_SCAN_BYTES = original
+        self.assertEqual(out["review_findings"], 4)
+
+
 if __name__ == "__main__":
     unittest.main()
