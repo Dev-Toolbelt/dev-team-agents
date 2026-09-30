@@ -73,10 +73,15 @@ mac:
     # The app never loads remote content, so ATS exceptions are not needed and are not
     # added. Declared here so the absence is visibly deliberate.
     NSHighResolutionCapable: true
-    # The name a user reads — menu bar, Dock, About panel — without renaming the bundle.
-    # `productName` stays `dev-team-agents` because the cask, the dmg name and winget all
-    # expect it; CFBundleName/CFBundleDisplayName are display only.
-    CFBundleName: Dev Team Agents
+    # The name Finder and the Dock show, without renaming the bundle. `productName` stays
+    # `dev-team-agents` because the cask, the dmg name and winget all expect it.
+    #
+    # **Never CFBundleName.** Electron finds its `<name> Helper.app`s from the bundle name,
+    # and electron-builder names them after `productName` — so a CFBundleName of "Dev Team
+    # Agents" made the packaged app look for "Dev Team Agents Helper.app", find none, and
+    # abort at launch ("Unable to find helper app"). Every test passed: none of them runs a
+    # packaged build. The bold menu-bar title therefore reads `dev-team-agents` in a
+    # packaged build until `productName` itself changes.
     CFBundleDisplayName: Dev Team Agents
 
 dmg:
