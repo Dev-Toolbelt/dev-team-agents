@@ -280,8 +280,9 @@ dev-team-agents/
 │   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
 │   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
 │   │   │              versions · providers · gitignore · bind · migrate · doctor ·
-│   │   │              quarantine · update · output · errors · cli
+│   │   │              quarantine · update · output · errors · global_skills · cli
 │   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
+│   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0017)
 │   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
 │   │   ├── preferences-defaults.json ← defaults written into user-data/preferences.json
 │   │   ├── render_provider.py     ← render engine

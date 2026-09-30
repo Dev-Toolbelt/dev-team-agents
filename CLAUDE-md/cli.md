@@ -153,6 +153,7 @@ mode.
 | `devteam path` | Resolved store locations |
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
+| `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
 | `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()` |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
@@ -240,6 +241,39 @@ in the version the project is bound to.
 - `devteam catalog`: `{version, project_id, counts: {agents, skills, commands}, malformed: {agents, skills, commands}}`
 - `devteam catalog agents|skills|commands`: `{version, project_id, <kind>: [{name, tier, model, description, path, version}, …], count}`
 - `devteam catalog show`: adds `kind` and `body` to the entry
+
+## Global skills
+
+`devteam skills` manages the skills each provider reads from the user's home — outside every
+project and outside the store (ADR-0017). `scripts/lib/global-skill-roots.json` is the single map
+of those directories; its unit is the physical **root**, each listing the providers that read it:
+
+| Root | Directory | Read by | Install target for |
+|------|-----------|---------|--------------------|
+| `claude` | `~/.claude/skills` | claude, opencode | claude |
+| `agents` | `~/.agents/skills` | codex, opencode | codex |
+| `codex` | `~/.codex/skills` | codex | — (listed, never written) |
+| `opencode` | `~/.config/opencode/skills` | opencode | opencode |
+
+- `list [--provider claude|codex|opencode|all]` and `show <name> [--root <id>]` are read-only and
+  create nothing. Dot-entries (Codex's `.system/`) are not skills; a folder without a valid
+  `SKILL.md` is reported `malformed`, never fatal.
+- `install --source <dir|.zip|.skill> [--provider …] [--root …] [--replace] [--link]` validates
+  the frontmatter, installs under the frontmatter `name`, and checks every target for a conflict
+  (exit 4) before writing any. Archives are validated before extraction (no absolute/`..`/symlink
+  members, 2000 entries, 50 MB).
+- `remove <name> [--root <id>]` **never deletes**: a directory goes to the store's quarantine
+  (`global-skills/<root>`), a symlink is unlinked. A symlink into the core store is `managed` and
+  refused.
+- `install` and `remove` are in `compat.MUTATING`; `$DEVTEAM_USER_HOME` overrides `~` (the test
+  seam `StoreTestCase` pins).
+
+**Payload shapes (JSON output):**
+
+- `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error}], count}`
+- `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
+- `skills install`: `{name, description, source, linked, installed: [{root, path, providers, replaced, quarantined_to}]}`
+- `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to}`
 
 ## Compatibility block in `version`
 
