@@ -1,6 +1,6 @@
 ---
 name: graphify-setup
-description: Graphify — autonomous setup: graphify.json, Stop hook, CLAUDE.md.
+description: Graphify — autonomous setup: graphify.json, hint hook, CLAUDE.md.
 ---
 
 ## Skip Conditions
@@ -167,7 +167,7 @@ done
 - `graphify-out/cache` — Graphify internal cache, rebuilt automatically
 - `.worktrees` — worktree isolation directories, local only
 
-The build-run marker (`graphify_last_run`) lives in the consolidated `.dev-team-agents/user-data/state.json` (read/written via `scripts/lib/state.sh`'s `state_get graphify_last_run` / `state_set graphify_last_run <value>`), which the installer already gitignores entirely — no separate entry is needed.
+The build marker — the commit the graph reflects — is `graphify-out/.build-commit`, written by the refresh script next to the graph it describes. It is per checkout (every linked worktree has its own `graphify-out/`) and versioned with the graph, so it needs no `.gitignore` entry.
 
 ---
 
@@ -203,7 +203,7 @@ Check if the project `CLAUDE.md` already contains a `## Context Navigation (Grap
 3. Read raw source files only when editing or when layers 1–2 lack the answer
 
 **Rebuild:** always use `.dev-team-agents/scripts/graphify-refresh.sh` — never `graphify update .` directly.
-Rebuild runs automatically after each Claude session via the Stop hook.
+Rebuilds are on demand — run the script above; nothing rebuilds automatically.
 Manual rebuild needed after: new modules/services, structural reorganization, or domain flow changes.
 ```
 
@@ -217,10 +217,10 @@ Report to the user:
 ✅ Graphify is set up for this project.
 
   Knowledge graph : graphify-out/  (versioned)
-  Last-run marker : graphify_last_run key in .dev-team-agents/user-data/state.json  (gitignored)
+  Build marker    : graphify-out/.build-commit  (versioned with the graph)
   Config          : .dev-team-agents/user-data/graphify.json
-  Auto-rebuild    : Stop hook → .dev-team-agents/scripts/graphify-refresh.sh
+  Rebuild         : on demand → bash .dev-team-agents/scripts/graphify-refresh.sh
 
-Rebuilds happen automatically after each Claude session when new files are
-added, deleted, or moved inside the tracked directories.
+Run the refresh script after adding, deleting, or moving files inside the
+tracked directories — it skips the build when nothing structural changed.
 ```

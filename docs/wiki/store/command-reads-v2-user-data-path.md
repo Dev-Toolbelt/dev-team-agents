@@ -38,7 +38,7 @@ PREFS_FILE="$(devteam_prefs_file "$ROOT")"
 
 The helper falls back to `user-data/` itself when no pointer or projection exists, so the same code works on a never-bound (layout 1) project. The second `LIB` path covers this repository, which runs its own tree unbound.
 
-`commands/health-check.md`, `scripts/graphify-refresh.sh` and `setup-health-check/references/checks-list.md` (§ Before Category 1) use the same pattern. The checks-list section also prints `IN_STORE` — whether the state directory is outside the project — because "bound" alone does not say where the files are: a bound project keeps them in `user-data/` until `devteam upgrade` runs.
+`commands/health-check.md` and `setup-health-check/references/checks-list.md` (§ Before Category 1) use the same pattern. The checks-list section also prints `IN_STORE` — whether the state directory is outside the project — because "bound" alone does not say where the files are: a bound project keeps them in `user-data/` until `devteam upgrade` runs.
 
 `skills/shared/work-feedback/SKILL.md` reads its gate keys from the same state directory, then from the credential reference files (`devteam cred import` moves them there), with the Read tool — the credential guard hook blocks a shell read of the local credentials file.
 
@@ -47,6 +47,8 @@ Still reading `user-data/` directly as of 2026-09-30:
 - the category bodies of `setup-health-check/references/checks-list.md` — deliberately, since a v2 project runs them as written; a bound project applies § Before Category 1's routing table, which overrides them
 
 ## Gotchas
+
+- **Machine-local is not the same as shared across checkouts.** The state *directory* belongs to the main checkout, but a value that describes one checkout must not live there. `graphify-refresh.sh` was moved to the main checkout's `state.json` and started letting a linked worktree's build stand in for the main checkout's graph; its marker now lives in `graphify-out/.build-commit`, next to the graph. Ask what the value describes before choosing the directory.
 
 - **`--git-common-dir` outside a git repository.** Written inline as `cd "$(git rev-parse --git-common-dir)/.."`, the empty output makes it `cd "/.."`, which **succeeds** — `ROOT` becomes `/`, and a `[ -n "$ROOT" ] || ROOT="$PWD"` fallback never fires. Capture the output first and `cd` only when it is non-empty.
 - **Use `--git-common-dir`, not `--show-toplevel`.** From a linked worktree, `--show-toplevel` gives the worktree's root; the pointer files live only in the main checkout, which `data-dirs.sh` requires as its argument.
