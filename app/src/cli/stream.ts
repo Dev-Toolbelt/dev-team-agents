@@ -17,7 +17,7 @@
 
 import { spawn } from 'node:child_process';
 
-import { childEnvironment, KILL_GRACE_MS, type InvokeOptions } from './invoke.js';
+import { childEnvironment, KILL_GRACE_MS, PIPE_GRACE_MS, type InvokeOptions } from './invoke.js';
 
 /** A single event line longer than this is a runaway; the child is killed. */
 export const MAX_LINE_BYTES = 1024 * 1024;
@@ -38,6 +38,8 @@ export interface StreamOptions extends Pick<InvokeOptions, 'binary' | 'cwd' | 'e
   readonly killGraceMs?: number;
   /** How long a child that sent an unparseable line has to exit on its own. */
   readonly protocolGraceMs?: number;
+  /** See `PIPE_GRACE_MS` in `invoke.ts`. */
+  readonly pipeGraceMs?: number;
 }
 
 export interface StreamHandle {
@@ -51,6 +53,7 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
   if (options.declarationFile !== undefined) args.unshift('--client-schemas', options.declarationFile);
   const killGraceMs = options.killGraceMs ?? KILL_GRACE_MS;
   const protocolGraceMs = options.protocolGraceMs ?? PROTOCOL_GRACE_MS;
+  const pipeGraceMs = options.pipeGraceMs ?? PIPE_GRACE_MS;
 
   let ended = false;
   const finish = (end: StreamEnd): void => {
@@ -138,7 +141,7 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
   child.on('error', (error: NodeJS.ErrnoException) => {
     finish({ kind: 'spawn-failed', detail: `${error.code ?? 'spawn error'}: ${error.message}` });
   });
-  child.on('close', (code, signal) => {
+  const conclude = (code: number | null, signal: NodeJS.Signals | null): void => {
     for (const timer of timers) clearTimeout(timer);
     // A child that exited non-zero on its own is reported by its exit code, even after
     // an unparseable line: the code is the CLI's stated reason (3 = an environment it
@@ -147,6 +150,19 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
     const exitedWithReason = code !== null && code !== 0 && signal === null;
     if (protocolError !== null && !exitedWithReason) finish({ kind: 'protocol', detail: protocolError });
     else finish({ kind: 'exited', code, signal, stderr });
+  };
+  child.on('close', conclude);
+  // A descendant that inherited the pipes keeps `close` from ever firing after the CLI is
+  // gone, and the supervisor would then wait on a stream that has already ended. See
+  // `PIPE_GRACE_MS` in `invoke.ts`.
+  child.on('exit', (code, signal) => {
+    const cut = setTimeout(() => {
+      conclude(code, signal);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    }, pipeGraceMs);
+    cut.unref?.();
+    child.once('close', () => clearTimeout(cut));
   });
 
   return {

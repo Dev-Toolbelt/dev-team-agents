@@ -13,12 +13,20 @@
  *   - a **restrictive CSP** applied as a response header, not only as a `<meta>` tag: a
  *     header cannot be removed by injected markup, and it covers responses a `<meta>`
  *     tag in `index.html` never sees.
- *   - window-open, navigation and webview attachment are all denied. Window-open is denied
+ *   - navigation is an allow-list of one: the renderer's own index (or, unpackaged, the dev
+ *     server's origin). A `file:` URL is not "local, therefore safe" — dropping an `.html`
+ *     file on the window would otherwise navigate to it, and the preload would hand that
+ *     page the whole `window.devteam` API. The IPC handlers close the same door from the
+ *     other side by refusing any sender that is not the renderer's own main frame.
+ *   - window-open and webview attachment are denied. Window-open is denied
  *     **without** an `openExternal` escape: the app renders no links, so a handler that
  *     opened one would be an outbound capability with no caller.
  *   - every permission request (notifications, media, geolocation…) is denied. This app
  *     needs none, so the handler is a flat `false` rather than a list to maintain.
  */
+
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { Session, WebContents } from 'electron';
 
@@ -46,6 +54,18 @@ export const WINDOW_WEB_PREFERENCES = Object.freeze({
   webviewTag: false,
   spellcheck: false,
 });
+
+/**
+ * `WINDOW_WEB_PREFERENCES` plus the one flag that depends on how the app was built.
+ *
+ * DevTools are a console into a renderer that holds the whole IPC surface, so a packaged
+ * build ships without them; unpackaged, contributors need them. A function of `packaged`
+ * rather than a read of `app.isPackaged` here, because this file must stay importable
+ * without the `electron` runtime (see the header of `test/security.test.ts`).
+ */
+export function windowWebPreferences(packaged: boolean): Readonly<typeof WINDOW_WEB_PREFERENCES & { devTools: boolean }> {
+  return Object.freeze({ ...WINDOW_WEB_PREFERENCES, devTools: !packaged });
+}
 
 /**
  * Production CSP. `default-src 'none'` and then only what the bundle needs.
@@ -106,9 +126,59 @@ export function developmentCsp(devServerOrigin: string): string {
  * filter, so the CSP is the only layer that governs it. This set governs what may be
  * *navigated to or fetched*, and there `file:` is the whole of it.
  */
-const ALWAYS_ALLOWED_SCHEMES = new Set(['file:', 'devtools:']);
+const ALWAYS_ALLOWED_SCHEMES = new Set(['devtools:']);
 
-export function isRequestAllowed(url: string, devServerOrigin: string | null): boolean {
+/**
+ * Where the renderer lives, for the three checks that must agree on it: what a window may
+ * navigate to, what a request may fetch, and which IPC sender is trusted.
+ */
+export interface RendererTarget {
+  /** `file:` URL of the bundle's `index.html`. */
+  readonly indexUrl: string;
+  /** Directory of the bundle; `file:` subresources are honoured only beneath it. */
+  readonly bundleDir: string;
+  /** Vite's origin, set only for an unpackaged `dev:app` run. */
+  readonly devServerOrigin: string | null;
+}
+
+/**
+ * The dev server origin to honour, or `null`.
+ *
+ * `DEVTEAM_APP_DEV_SERVER` loosens the CSP and lets a remote origin into the request
+ * filter, so it must be unable to do that in a shipped build — an environment variable is
+ * something a launcher, a login item or another process can set. Only an `http(s)` URL is
+ * accepted, and it is reduced to its origin so every later comparison is exact.
+ */
+export function resolveDevServer(value: string | undefined, packaged: boolean): string | null {
+  if (packaged || value === undefined || value === '') return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function withoutFragmentAndQuery(url: URL): string {
+  const copy = new URL(url.href);
+  copy.hash = '';
+  copy.search = '';
+  return copy.href;
+}
+
+function isUnderDirectory(fileUrl: URL, directory: string): boolean {
+  let path: string;
+  try {
+    path = fileURLToPath(fileUrl);
+  } catch {
+    return false;
+  }
+  const rel = relative(resolve(directory), resolve(path));
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+export function isRequestAllowed(url: string, target: Pick<RendererTarget, 'bundleDir' | 'devServerOrigin'>): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -116,11 +186,70 @@ export function isRequestAllowed(url: string, devServerOrigin: string | null): b
     return false;
   }
   if (ALWAYS_ALLOWED_SCHEMES.has(parsed.protocol)) return true;
-  if (devServerOrigin !== null && url.startsWith(devServerOrigin)) return true;
+  // Under the bundle only: the `file:` scheme as a whole would let a navigation that got
+  // through some other way read any local file the user can.
+  if (parsed.protocol === 'file:') return isUnderDirectory(parsed, target.bundleDir);
+  // Parsed origin, not `startsWith`: `http://localhost:5173.evil.tld/` starts with the dev
+  // origin's text and is a different host.
+  if (target.devServerOrigin !== null && parsed.origin === target.devServerOrigin) return true;
   return false;
 }
 
-export function hardenSession(session: Session, devServerOrigin: string | null): void {
+/**
+ * Whether a top-level or frame navigation to `url` is the renderer itself: the exact index
+ * URL with any hash or query ignored (the router uses them), or — dev only — any path on
+ * the dev server's origin. Every other page, `file:` included, is refused.
+ */
+export function isRendererUrl(url: string, target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (target.devServerOrigin !== null) return parsed.origin === target.devServerOrigin;
+  if (parsed.protocol !== 'file:') return false;
+  return withoutFragmentAndQuery(parsed) === withoutFragmentAndQuery(new URL(target.indexUrl));
+}
+
+/** The slice of an IPC event the sender check reads; `IpcMainInvokeEvent` satisfies it. */
+export interface IpcSenderEvent {
+  readonly senderFrame?: { readonly url: string; readonly parent: unknown } | null;
+}
+
+/**
+ * Whether an IPC call came from the renderer's own main frame.
+ *
+ * Navigation is locked down above, but that is one layer; this is the one that holds when
+ * it is not — a subframe, a page that slipped in some other way, a frame whose `senderFrame`
+ * is already gone (`null`). The handlers run `devteam`, so "who is asking" is checked on
+ * every call rather than assumed from "the preload only exposes it to our page".
+ */
+export function isTrustedSender(event: IpcSenderEvent | undefined, target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>): boolean {
+  const frame = event?.senderFrame;
+  if (frame === undefined || frame === null) return false;
+  if (frame.parent !== null) return false;
+  return isRendererUrl(frame.url, target);
+}
+
+/**
+ * Wrap an `ipcMain.handle` listener so it runs only for a trusted sender. A refused call
+ * rejects the renderer's `invoke` and never reaches the handler body.
+ */
+export function trustedHandler<Args extends unknown[], R>(
+  target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>,
+  listener: (event: never, ...args: Args) => R,
+): (event: IpcSenderEvent, ...args: Args) => R {
+  return (event, ...args) => {
+    if (!isTrustedSender(event, target)) {
+      throw new Error('IPC call refused: the sender is not this app\'s renderer.');
+    }
+    return listener(event as never, ...args);
+  };
+}
+
+export function hardenSession(session: Session, target: Pick<RendererTarget, 'bundleDir' | 'devServerOrigin'>): void {
+  const { devServerOrigin } = target;
   const csp = devServerOrigin === null ? PRODUCTION_CSP : developmentCsp(devServerOrigin);
 
   session.webRequest.onHeadersReceived((details, callback) => {
@@ -136,7 +265,7 @@ export function hardenSession(session: Session, devServerOrigin: string | null):
   // The hard stop. Anything that is not the local bundle (or, in development, the dev
   // server) never leaves the process.
   session.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !isRequestAllowed(details.url, devServerOrigin) });
+    callback({ cancel: !isRequestAllowed(details.url, target) });
   });
 
   session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -149,7 +278,7 @@ export function hardenSession(session: Session, devServerOrigin: string | null):
  * attached from `app.on('web-contents-created')`, which is the hook that catches one
  * this file did not create.
  */
-export function hardenContents(contents: WebContents, devServerOrigin: string | null): void {
+export function hardenContents(contents: WebContents, target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>): void {
   // Denied outright. Nothing in this app opens a window or a link, so the handler has
   // nothing to allow — and the version that called `shell.openExternal` for any `https://`
   // URL was a standing outbound primitive inside a renderer whose CSP sets
@@ -162,7 +291,12 @@ export function hardenContents(contents: WebContents, devServerOrigin: string | 
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   contents.on('will-navigate', (event, url) => {
-    if (!isRequestAllowed(url, devServerOrigin)) event.preventDefault();
+    if (!isRendererUrl(url, target)) event.preventDefault();
+  });
+  // `will-navigate` covers the main frame only; this one fires for subframes too, so an
+  // iframe cannot be pointed at a page that would then be a sender of its own.
+  contents.on('will-frame-navigate', (event) => {
+    if (!isRendererUrl(event.url, target)) event.preventDefault();
   });
 
   contents.on('will-attach-webview', (event) => event.preventDefault());

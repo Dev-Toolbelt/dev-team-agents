@@ -37,6 +37,17 @@ export const DEFAULT_TIMEOUT_MS = 20_000;
 export const KILL_GRACE_MS = 2_000;
 
 /**
+ * How long the pipes get to drain after the child has exited, before they are cut.
+ *
+ * `close` waits for every holder of the child's stdout and stderr, not only the child. A
+ * grandchild that inherited the pipes (a hook, a daemonised helper) keeps them open long
+ * after the CLI is gone, and a deadline kill does not reach it — so waiting for `close`
+ * alone turned a timeout into a hang with no deadline at all. `exit` is the child's own
+ * end; this is the time allowed for what it had already written to arrive.
+ */
+export const PIPE_GRACE_MS = 500;
+
+/**
  * How much of each stream is kept. A `catalog` document on a very large store is the
  * biggest thing this app reads and is far below this; anything above it is a runaway, and
  * buffering a runaway in the main process's heap is a worse failure than reporting one.
@@ -52,6 +63,8 @@ export interface InvokeOptions {
   readonly timeoutMs?: number;
   /** See `KILL_GRACE_MS`. Present for tests; production callers omit it. */
   readonly killGraceMs?: number;
+  /** See `PIPE_GRACE_MS`. Present for tests; production callers omit it. */
+  readonly pipeGraceMs?: number;
   readonly cwd?: string;
   /**
    * Extra environment for the child. Merged over a **minimal** inherited set rather
@@ -130,6 +143,7 @@ function isDocumentedExit(code: number): code is ExitCode {
 export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const killGraceMs = options.killGraceMs ?? KILL_GRACE_MS;
+  const pipeGraceMs = options.pipeGraceMs ?? PIPE_GRACE_MS;
   const args = [...options.args, '--json'];
   if (options.declarationFile !== undefined) {
     args.unshift('--client-schemas', options.declarationFile);
@@ -226,6 +240,18 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
       // one that carries the reason.
       child.once('error', (error: NodeJS.ErrnoException) => settle({ error }));
       child.once('close', (code) => settle({ code }));
+      // `close` normally follows `exit` at once. When it does not, a descendant is holding
+      // the pipes: report the child's own exit code and cut the pipes so their handles
+      // are released instead of leaked for as long as the descendant lives.
+      child.once('exit', (code) => {
+        const cut = setTimeout(() => {
+          settle({ code });
+          child.stdout?.destroy();
+          child.stderr?.destroy();
+        }, pipeGraceMs);
+        cut.unref?.();
+        child.once('close', () => clearTimeout(cut));
+      });
     });
     if ('error' in settled) spawnError = settled.error;
     else exitCode = settled.code;

@@ -246,6 +246,7 @@ export class NotificationCenter {
       // Retrying cannot fix it; saying so can. Under `--json` the reason arrives as the
       // stream's `error` event; stderr is the fallback.
       const reason = this.streamError ?? lastLine(end.stderr) ?? 'environment error (exit 3)';
+      this.deps.log?.(`notifications: stream unavailable, not retrying: ${reason}`);
       this.update({ status: 'unavailable', detail: `devteam could not watch notifications: ${reason}` });
       return;
     }
@@ -263,6 +264,9 @@ export class NotificationCenter {
     if (this.stopped) return;
     const delay = this.backoff;
     this.backoff = Math.min(this.backoff * 2, BACKOFF_MAX_MS);
+    // The banner is transient; a crash loop that leaves no line anywhere is undiagnosable
+    // in a packaged build.
+    this.deps.log?.(`notifications: ${detail}; retrying in ${Math.round(delay / 1000)} s`);
     this.update({ status: 'retrying', detail: `${detail}. Retrying in ${Math.round(delay / 1000)} s.` });
     this.clearRetry();
     this.retryTimer = this.setTimer(() => {

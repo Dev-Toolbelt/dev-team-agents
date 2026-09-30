@@ -31,6 +31,7 @@ import {
   installSkill,
   listProjects,
   listSkills,
+  pinProblem,
   planUpgrade,
   preferenceArgumentProblem,
   prefsList,
@@ -48,6 +49,7 @@ import {
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
 import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
+import { trustedHandler, type RendererTarget } from './security.js';
 import { readSettings, writeProjectName, type AppSettings } from './settings.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
@@ -174,6 +176,10 @@ export function validateBindRequest(
   const rawPin = raw['pin'];
   if (rawPin !== undefined) {
     if (rawPin !== null && typeof rawPin !== 'string') return '`pin` must be a string or null';
+    if (rawPin !== null) {
+      const problem = pinProblem(rawPin);
+      if (problem !== null) return problem;
+    }
     pin = rawPin;
   }
 
@@ -202,6 +208,8 @@ export interface IpcDependencies {
   readonly appVersion: string;
   readonly electronVersion: string;
   readonly packaged: boolean;
+  /** Who may call any channel below; see `trustedHandler` in `security.ts`. */
+  readonly trustedRenderer: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>;
   /** Told every time the renderer re-resolves the CLI — the About panel shows the answer. */
   readonly onResolved?: (resolution: CliResolution) => void;
 }
@@ -252,9 +260,26 @@ export interface IpcHandle {
 }
 
 export function registerIpc(deps: IpcDependencies): IpcHandle {
+  // The one door to `ipcMain.handle`: every channel in this file goes through it, so a new
+  // handler cannot forget the sender check by being written the plain way.
+  const handle = (channel: string, listener: Parameters<typeof trustedHandler>[1]): void =>
+    ipcMain.handle(channel, trustedHandler(deps.trustedRenderer, listener));
+
   let resolution: Resolution | null = null;
   let declaration: DeclarationState | null = null;
   let settings: AppSettings | null = null;
+  /**
+   * The resolution in flight, shared by every caller that arrives while it runs. Caching
+   * only the finished result let the renderer's first burst of channels (environment,
+   * handshake, list…) each start their own probe of every candidate CLI.
+   */
+  let resolving: Promise<Resolution> | null = null;
+  /**
+   * Bumped by every reset. A read or probe that started before a reset finishes against
+   * the old settings and the old CLI, so it may answer its own callers but must not fill
+   * the cache the reset just emptied.
+   */
+  let generation = 0;
   let handshake: OperationResult<HandshakeView> | null = null;
 
   /**
@@ -270,15 +295,28 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
 
   async function ensureSettings(): Promise<AppSettings> {
     if (settings !== null) return settings;
-    settings = await readSettings(deps.userDataDir);
-    return settings;
+    const started = generation;
+    const read = await readSettings(deps.userDataDir);
+    if (started === generation) settings = read;
+    return read;
   }
 
   async function ensureResolution(): Promise<Resolution> {
     if (resolution !== null) return resolution;
-    const current = await ensureSettings();
-    resolution = await resolveDevteam({ configuredPath: current.cliPath });
-    return resolution;
+    if (resolving !== null) return resolving;
+    const started = generation;
+    const attempt = (async (): Promise<Resolution> => {
+      try {
+        const current = await ensureSettings();
+        const resolved = await resolveDevteam({ configuredPath: current.cliPath });
+        if (started === generation) resolution = resolved;
+        return resolved;
+      } finally {
+        if (started === generation) resolving = null;
+      }
+    })();
+    resolving = attempt;
+    return attempt;
   }
 
   /** Write the declaration once, and remember whether it worked either way. */
@@ -406,7 +444,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     };
   }
 
-  ipcMain.handle(CHANNELS.buildInfo, (): BuildInfo => ({
+  handle(CHANNELS.buildInfo, (): BuildInfo => ({
     appVersion: deps.appVersion,
     electronVersion: deps.electronVersion,
     packaged: deps.packaged,
@@ -419,7 +457,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     mutatingCommandsRun: GATED_COMMANDS.map((command) => command.join(' ')),
   }));
 
-  ipcMain.handle(CHANNELS.environment, async (): Promise<EnvironmentReport> => {
+  handle(CHANNELS.environment, async (): Promise<EnvironmentReport> => {
     const declared = await ensureDeclaration();
     const current = await ensureSettings();
     return {
@@ -440,12 +478,14 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     };
   });
 
-  ipcMain.handle(CHANNELS.resolveCli, async (): Promise<CliResolution> => {
+  handle(CHANNELS.resolveCli, async (): Promise<CliResolution> => {
     // A call to this channel is the user asking again, so it re-resolves. Everything
     // downstream is invalidated with it — a different CLI is a different verdict. The
     // settings file and the declaration are re-read too: a user who is retrying has
     // usually just edited one of them, and reusing a cached failure would hide the fix.
+    generation += 1;
     resolution = null;
+    resolving = null;
     handshake = null;
     settings = null;
     declaration = null;
@@ -454,41 +494,45 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return resolved;
   });
 
-  ipcMain.handle(CHANNELS.handshake, async (): Promise<OperationResult<HandshakeView>> => {
+  handle(CHANNELS.handshake, async (): Promise<OperationResult<HandshakeView>> => {
     if (handshake !== null) return handshake;
     const ctx = await context();
     if (ctx === null) return NO_CLI;
     // The real argument vector and the real duration. They were fabricated as
     // `'devteam compat --json'` and `0`, which the UI then rendered as fact.
+    const started = generation;
     const call = await performHandshakeCall({ binary: ctx.binary, cwd: ctx.cwd });
-    handshake = {
+    const verdict: OperationResult<HandshakeView> = {
       ok: true,
       outcome: 'success',
       data: call.view,
       command: call.command,
       durationMs: call.durationMs,
     };
-    return handshake;
+    // A `resolveCli` reset while this call ran means it answered for the previous CLI:
+    // return it to its caller, but do not let it stand as the new CLI's verdict.
+    if (started === generation) handshake = verdict;
+    return verdict;
   });
 
-  ipcMain.handle(CHANNELS.listProjects, async () => {
+  handle(CHANNELS.listProjects, async () => {
     const ctx = await context();
     return ctx === null ? NO_CLI : listProjects(ctx);
   });
 
   // Spawns nothing — reads this app's own settings file. See `BindRequest.name`'s
   // comment above for why this channel is not in `CHANNELS`.
-  ipcMain.handle(CHANNELS.projectNames, async (): Promise<Readonly<Record<string, string>>> => {
+  handle(CHANNELS.projectNames, async (): Promise<Readonly<Record<string, string>>> => {
     const current = await ensureSettings();
     return current.projectNames;
   });
 
-  ipcMain.handle(CHANNELS.catalogSummary, async () => {
+  handle(CHANNELS.catalogSummary, async () => {
     const ctx = await context();
     return ctx === null ? NO_CLI : catalogSummary(ctx);
   });
 
-  ipcMain.handle(CHANNELS.catalogListing, async (_event, kind: unknown) => {
+  handle(CHANNELS.catalogListing, async (_event, kind: unknown) => {
     const ctx = await context();
     if (ctx === null) return NO_CLI;
     // The renderer names a kind, not a command. An unrecognised one is refused here
@@ -507,13 +551,13 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return catalogListing(ctx, kind satisfies CatalogKind);
   });
 
-  ipcMain.handle(CHANNELS.catalogEntry, async (_event, name: unknown) => {
+  handle(CHANNELS.catalogEntry, async (_event, name: unknown) => {
     const ctx = await context();
     if (ctx === null) return NO_CLI;
     return catalogEntry(ctx, typeof name === 'string' ? name : '');
   });
 
-  ipcMain.handle(CHANNELS.doctor, async () => {
+  handle(CHANNELS.doctor, async () => {
     // With no declaration the framework's write gate has nothing to bind, so this would
     // run ungated; the app refuses and says why rather than running it anyway.
     const gated = await gatedContext('doctor');
@@ -523,7 +567,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
 
   // ── write actions ────────────────────────────────────────────────────────────
 
-  ipcMain.handle(CHANNELS.chooseProjectDirectory, async (): Promise<DirectoryChoice> => {
+  handle(CHANNELS.chooseProjectDirectory, async (): Promise<DirectoryChoice> => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     const path = result.filePaths[0];
     if (result.canceled || path === undefined) return { chosen: false };
@@ -531,7 +575,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return { chosen: true, path };
   });
 
-  ipcMain.handle(CHANNELS.bindProject, async (_event, request: unknown): Promise<OperationResult<BindReport>> => {
+  handle(CHANNELS.bindProject, async (_event, request: unknown): Promise<OperationResult<BindReport>> => {
     const validated = validateBindRequest(request, offeredDirectories);
     if (typeof validated === 'string') {
       return {
@@ -566,7 +610,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return result;
   });
 
-  ipcMain.handle(CHANNELS.unbindProject, async (_event, projectId: unknown): Promise<OperationResult<UnbindReport>> => {
+  handle(CHANNELS.unbindProject, async (_event, projectId: unknown): Promise<OperationResult<UnbindReport>> => {
     if (typeof projectId !== 'string') return refusedBadArgument('unbind');
     const resolved = await resolveProject(projectId);
     if (!('path' in resolved)) return resolved;
@@ -575,7 +619,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return unbindProject(gated.ctx, projectId);
   });
 
-  ipcMain.handle(CHANNELS.syncProject, async (_event, projectId: unknown): Promise<OperationResult<BindReport>> => {
+  handle(CHANNELS.syncProject, async (_event, projectId: unknown): Promise<OperationResult<BindReport>> => {
     if (typeof projectId !== 'string') return refusedBadArgument('sync');
     const resolved = await resolveProject(projectId);
     if (!('path' in resolved)) return resolved;
@@ -584,19 +628,20 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return syncProject(gated.ctx, projectId);
   });
 
-  ipcMain.handle(CHANNELS.syncAllProjects, async (): Promise<OperationResult<SyncAllReport>> => {
+  handle(CHANNELS.syncAllProjects, async (): Promise<OperationResult<SyncAllReport>> => {
     const gated = await gatedContext('sync');
     if (!gated.ready) return gated.problem;
     return syncAllProjects(gated.ctx);
   });
 
-  ipcMain.handle(
+  handle(
     CHANNELS.setPin,
     async (_event, projectId: unknown, version: unknown): Promise<OperationResult<PinReport>> => {
       if (typeof projectId !== 'string') return refusedBadArgument('pin');
       // `null` is a release; anything else must be a non-empty string — never the empty
       // string `setPin(id, null)` must not become. See `setPin`'s own doc comment.
       if (version !== null && typeof version !== 'string') return refusedBadArgument('pin');
+      if (version !== null && pinProblem(version) !== null) return refusedBadArgument('pin');
       const resolved = await resolveProject(projectId);
       if (!('path' in resolved)) return resolved;
       const gated = await gatedContext('pin');
@@ -605,7 +650,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     },
   );
 
-  ipcMain.handle(CHANNELS.planUpgrade, async (_event, projectId: unknown): Promise<OperationResult<UpgradePlan>> => {
+  handle(CHANNELS.planUpgrade, async (_event, projectId: unknown): Promise<OperationResult<UpgradePlan>> => {
     if (typeof projectId !== 'string') return refusedBadArgument('upgrade');
     const resolved = await resolveProject(projectId);
     if (!('path' in resolved)) return resolved;
@@ -614,7 +659,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return planUpgrade(gated.ctx, resolved.path);
   });
 
-  ipcMain.handle(CHANNELS.applyUpgrade, async (_event, projectId: unknown): Promise<OperationResult<UpgradeReport>> => {
+  handle(CHANNELS.applyUpgrade, async (_event, projectId: unknown): Promise<OperationResult<UpgradeReport>> => {
     if (typeof projectId !== 'string') return refusedBadArgument('upgrade');
     const resolved = await resolveProject(projectId);
     if (!('path' in resolved)) return resolved;
@@ -623,7 +668,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return applyUpgrade(gated.ctx, resolved.path);
   });
 
-  ipcMain.handle(
+  handle(
     CHANNELS.projectPreferences,
     async (_event, projectId: unknown): Promise<OperationResult<ProjectPreferencesView>> => {
       if (typeof projectId !== 'string') return refusedBadArgument('prefs list');
@@ -644,14 +689,14 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
 
   // ── global skills ──────────────────────────────────────────────────────────
 
-  ipcMain.handle(CHANNELS.listSkills, async (_event, provider: unknown): Promise<OperationResult<SkillList>> => {
+  handle(CHANNELS.listSkills, async (_event, provider: unknown): Promise<OperationResult<SkillList>> => {
     const ctx = await context();
     if (ctx === null) return NO_CLI;
     if (!SKILL_FILTERS.includes(provider as SkillProviderFilter)) return refusedBadArgument('skills list');
     return listSkills(ctx, provider as SkillProviderFilter);
   });
 
-  ipcMain.handle(
+  handle(
     CHANNELS.showSkill,
     async (_event, name: unknown, root: unknown): Promise<OperationResult<SkillDetail>> => {
       const ctx = await context();
@@ -669,7 +714,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
    */
   let lastSkillSource: { readonly path: string; readonly kind: 'folder' | 'archive' } | null = null;
 
-  ipcMain.handle(CHANNELS.installSkill, async (_event, request: unknown): Promise<SkillInstallAnswer> => {
+  handle(CHANNELS.installSkill, async (_event, request: unknown): Promise<SkillInstallAnswer> => {
     const refused = (message: string): SkillInstallAnswer => ({
       picked: true,
       source: '',
@@ -721,7 +766,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     return { picked: true, source: chosen.path, result };
   });
 
-  ipcMain.handle(
+  handle(
     CHANNELS.removeSkill,
     async (_event, request: unknown): Promise<OperationResult<SkillRemoveReport>> => {
       if (request === null || typeof request !== 'object') return refusedBadArgument('skills remove');
@@ -773,7 +818,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
    * The scope is fixed to `project` in `cli/operations.ts`; there is no way to reach the
    * global layer through this channel.
    */
-  ipcMain.handle(
+  handle(
     CHANNELS.updateProjectPreferences,
     async (_event, projectId: unknown, changes: unknown): Promise<OperationResult<PreferenceUpdateReport>> => {
       if (typeof projectId !== 'string') return refusedBadArgument('prefs set');

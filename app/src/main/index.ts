@@ -8,7 +8,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } from 'electron';
@@ -16,7 +16,8 @@ import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } fr
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { GATED_COMMANDS, ackNotification, watchNotifications } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
-import { WINDOW_WEB_PREFERENCES, hardenContents, hardenSession } from './security.js';
+import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
+import { createFileLog, describeError, type FileLog } from './logFile.js';
 import { CODE_SIGNED } from './build-info.js';
 import { NotificationCenter, type NativeNotice } from './notifications.js';
 import { registerNotificationIpc } from './notificationIpc.js';
@@ -25,13 +26,60 @@ import { readSettings, writeOpenAtLogin } from './settings.js';
 import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 /**
- * Set by `npm run dev:app` to the Vite dev server's origin. Absent in a packaged build,
- * which is what puts the app on the production CSP and the `file://`-only request filter.
+ * Set by `npm run dev:app` to the Vite dev server's origin. Absent — and ignored even when
+ * set — in a packaged build, which is what puts the app on the production CSP and the
+ * bundle-only request filter. See `resolveDevServer`.
  */
-const DEV_SERVER = process.env['DEVTEAM_APP_DEV_SERVER'] ?? null;
+const DEV_SERVER = resolveDevServer(process.env['DEVTEAM_APP_DEV_SERVER'], app.isPackaged);
 
 /** `dist/node/main/index.js` → `dist/renderer`. */
 const RENDERER_INDEX = join(__dirname, '..', '..', 'renderer', 'index.html');
+
+/** The one place the renderer may be, for navigation, requests and IPC senders alike. */
+const RENDERER_TARGET: RendererTarget = {
+  indexUrl: pathToFileURL(RENDERER_INDEX).toString(),
+  bundleDir: dirname(RENDERER_INDEX),
+  devServerOrigin: DEV_SERVER,
+};
+
+// ── diagnostics ───────────────────────────────────────────────────────────────
+
+let fileLog: FileLog | null = null;
+/** Set once `app.setName` has run; `getPath('logs')` read before that names the wrong directory. */
+let logDirectoryFinal = false;
+
+/**
+ * stderr, and the log file under `app.getPath('logs')`. The file is created on first use
+ * rather than at module load because the `logs` directory is derived from the app name,
+ * which is set further down. Never throws: it is called from crash handlers.
+ */
+function log(message: string): void {
+  try {
+    process.stderr.write(`dev-team-agents: ${message}\n`);
+  } catch {
+    // A closed stderr (a packaged GUI launch) is the normal case, not a failure.
+  }
+  try {
+    if (!logDirectoryFinal) return;
+    fileLog ??= createFileLog(app.getPath('logs'));
+    fileLog.write(message);
+  } catch {
+    // `getPath` can throw before the app is ready on some platforms; the line is lost, not the app.
+  }
+}
+
+// Registered at module scope so it also covers the window before `whenReady`. Not
+// swallowed: each is written down. Electron's own default for an uncaught main-process
+// exception is a dialog and a process that keeps running; a tray app that must outlive its
+// window keeps that behaviour, so these handlers record and do not exit.
+process.on('uncaughtException', (error) => log(`uncaught exception: ${describeError(error)}`));
+process.on('unhandledRejection', (reason) => log(`unhandled rejection: ${describeError(reason)}`));
+app.on('render-process-gone', (_event, _contents, details) => {
+  log(`renderer process gone: ${details.reason} (exit ${details.exitCode})`);
+});
+app.on('child-process-gone', (_event, details) => {
+  log(`${details.type} process gone: ${details.reason} (exit ${details.exitCode})`);
+});
 // `dist/node/main` -> `dist/preload/index.js`. Bundled, not tsc-compiled: see
 // `vite.preload.config.mts` for why a sandboxed preload has to be one self-contained file.
 const PRELOAD = join(__dirname, '..', '..', 'preload', 'index.js');
@@ -245,12 +293,12 @@ function createWindow(): BrowserWindow {
     // the dock's, which is set once in the ready handler instead.
     ...(icon !== null && process.platform !== 'darwin' ? { icon } : {}),
     show: false,
-    // The flags themselves live in `main/security.ts` as `WINDOW_WEB_PREFERENCES`, so a
+    // The flags themselves live in `main/security.ts` as `WINDOW_WEB_PREFERENCES` (via `windowWebPreferences`), so a
     // test can assert the real object instead of this file's source text.
-    webPreferences: { preload: PRELOAD, ...WINDOW_WEB_PREFERENCES },
+    webPreferences: { preload: PRELOAD, ...windowWebPreferences(app.isPackaged) },
   });
 
-  hardenContents(window.webContents, DEV_SERVER);
+  hardenContents(window.webContents, RENDERER_TARGET);
   window.once('ready-to-show', () => {
     if (!startHidden) window.show();
   });
@@ -279,7 +327,7 @@ function createWindow(): BrowserWindow {
   });
 
   if (DEV_SERVER !== null) void window.loadURL(DEV_SERVER);
-  else void window.loadURL(pathToFileURL(RENDERER_INDEX).toString());
+  else void window.loadURL(RENDERER_TARGET.indexUrl);
 
   return window;
 }
@@ -312,6 +360,7 @@ app.setPath('userData', join(app.getPath('appData'), 'dev-team-agents-app'));
 // the project names among them — to a directory nothing reads. The literal keeps the
 // directory where it has always been; the name below is display only.
 app.setName(DISPLAY_NAME);
+logDirectoryFinal = true;
 
 // One instance: a second would run a second `watch` and show every notification twice.
 // Launching again while it runs — from the Dock, the Start menu, a shortcut — shows the
@@ -324,7 +373,11 @@ const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) {
   app.quit();
 } else {
-  app.on('second-instance', () => showWindow());
+  // Before `ready` there is nothing to show yet, and constructing a `BrowserWindow` then
+  // throws; `onReady` creates the window itself and shows it.
+  app.on('second-instance', () => {
+    if (app.isReady()) showWindow();
+  });
   app.on('before-quit', () => {
     quitting = true;
     center?.stop();
@@ -337,9 +390,7 @@ function onReady(): void {
     // Visible in the console of a packaged build as well as in the UI banner. A packaged
     // app that says nothing about being unsigned is the thing this repository must not
     // produce.
-    process.stderr.write(
-      'dev-team-agents: this is an UNSIGNED, UNNOTARISED build. Do not distribute it.\n',
-    );
+    log('this is an UNSIGNED, UNNOTARISED build. Do not distribute it.');
   }
 
   // macOS only, and only unpackaged: the dock icon belongs to the running binary, not to
@@ -349,7 +400,7 @@ function onReady(): void {
     if (icon !== null) app.dock?.setIcon(icon);
   }
 
-  hardenSession(session.defaultSession, DEV_SERVER);
+  hardenSession(session.defaultSession, RENDERER_TARGET);
   const facts: AboutFacts = {
     appVersion: app.getVersion(),
     electronVersion: process.versions.electron,
@@ -376,6 +427,7 @@ function onReady(): void {
     appVersion: facts.appVersion,
     electronVersion: facts.electronVersion,
     packaged: facts.packaged,
+    trustedRenderer: RENDERER_TARGET,
     onResolved: (resolution) => {
       setAbout(resolution);
       // A different CLI may mean a different store: start the stream again against it.
@@ -407,10 +459,11 @@ function onReady(): void {
       }
       refreshTray(feed);
     },
-    log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
+    log,
   });
 
   registerNotificationIpc({
+    trustedRenderer: RENDERER_TARGET,
     feed: () => center!.snapshot(),
     markRead: () => center!.markRead(),
     setPaused: (paused) => center!.setPaused(paused),
@@ -441,5 +494,5 @@ app.on('window-all-closed', () => {
 // Belt and braces for the "no remote content" rule: if any code path ever tries to
 // create a window this file did not, it still cannot get node integration.
 app.on('web-contents-created', (_event, contents) => {
-  hardenContents(contents, DEV_SERVER);
+  hardenContents(contents, RENDERER_TARGET);
 });

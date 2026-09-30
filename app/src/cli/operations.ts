@@ -147,6 +147,18 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['skills', 'remove'],
 ]);
 
+/**
+ * Deadline for a gated command. `DEFAULT_TIMEOUT_MS` is sized for a read; a write killed at
+ * 20 s is killed mid-mutation (a `sync` rebuilding artifacts, an `upgrade` relocating a
+ * project's memory), which leaves the store's lock held until the CLI's own stale-lock
+ * window passes and the store half-written. Still finite, so a wedged lock wait ends.
+ */
+export const GATED_TIMEOUT_MS = 5 * 60_000;
+
+function isGatedArgv(args: readonly string[]): boolean {
+  return GATED_COMMANDS.some((command) => command.every((word, index) => args[index] === word));
+}
+
 /** Every subcommand this build is allowed to run. */
 export const ALLOWED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ...READ_ONLY_COMMANDS,
@@ -421,7 +433,27 @@ export async function run<T>(
       durationMs: 0,
     };
   }
-  return toOperationResult(await invokeDevteam({ ...context, args }), validate);
+  // The caller's own `timeoutMs` wins; otherwise a write gets the long deadline and a read
+  // keeps `invokeDevteam`'s default.
+  const timeoutMs = context.timeoutMs ?? (isGatedArgv(args) ? GATED_TIMEOUT_MS : undefined);
+  return toOperationResult(
+    await invokeDevteam({ ...context, args, ...(timeoutMs !== undefined ? { timeoutMs } : {}) }),
+    validate,
+  );
+}
+
+/**
+ * The shape of a version a project may be pinned to: the same one the CLI's `update.REF_RE`
+ * accepts. The CLI joins a pin onto its versions directory, so an unchecked string such as
+ * `../x` or `/abs` would point a project's hooks at arbitrary content. A version is
+ * `vX.Y.Z` with an optional pre-release or build suffix and nothing else — no separators,
+ * no leading dash, no whitespace.
+ */
+const PIN_RE = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+
+/** Why `version` is not a pinnable version, or `null` when it is. */
+export function pinProblem(version: string): string | null {
+  return PIN_RE.test(version) ? null : `\`${version}\` is not a version (expected vX.Y.Z)`;
 }
 
 /** `--path <the app's own working directory>`, for the commands that accept it. */
@@ -638,6 +670,19 @@ export function syncAllProjects(context: CliContext): Promise<OperationResult<Sy
  * which `cmd_pin` would read as "no version and no --release" and refuse.
  */
 export function setPin(context: CliContext, path: string, version: string | null): Promise<OperationResult<PinReport>> {
+  if (version !== null) {
+    const problem = pinProblem(version);
+    if (problem !== null) {
+      return Promise.resolve({
+        ok: false,
+        kind: 'refused',
+        message: `this app refused to run it: ${problem}`,
+        exitCode: null,
+        command: 'devteam pin',
+        durationMs: 0,
+      });
+    }
+  }
   const args = version === null ? ['pin', '--path', path, '--release'] : ['pin', version, '--path', path];
   return run(context, args, asPinReport);
 }
