@@ -32,7 +32,9 @@ Verified while writing this ADR:
 1. **Capture is automatic, not cooperative.** Claude Code gets a new `PostToolUse` entry whose
    matcher is limited to the todo tools, plus a `SessionEnd` entry. Codex and opencode reuse the
    `PreToolUse` dispatcher they already have; a sub-script there filters on the tool name in bash
-   before forking anything. Agents are not asked to report progress.
+   before forking anything. Agents are not asked to report progress. *(Qualified by the amendment
+   "approved plans become native tasks": agents are asked to keep an approved plan in the native list;
+   capture itself stays automatic.)*
 2. **One record per session**, `<state-dir>/task-board/<session>.json`, machine-local (ADR-0013). Only the
    CLI writes it (`devteam tasks record|mark`, invoked by the hook through the project's own
    `scripts/cli/devteam`), under a per-session lock, atomically. Per-session files mean two sessions
@@ -53,7 +55,8 @@ Verified while writing this ADR:
 
 ## Consequences
 
-- Every provider's todo list reaches the board with no change to any agent body.
+- Every provider's todo list reaches the board with no change to any agent body. *(Qualified by the
+  same amendment: planning now asks agents, through `plan-mode`, to open that list.)*
 - A rewritten task text appears as a new task: replace-style tools carry no stable id, so identity
   is the normalized text. Accepted and documented; ids are used where the provider gives one.
 - Times have the granularity of the agent's own updates.
@@ -95,12 +98,22 @@ the provider itself decides to. Capture by hooks was working; there was nothing 
 rule in `skills/shared/plan-mode/SKILL.md` § Task List Mirroring — its single home. The skill names
 each provider's tool itself, because skills are read raw by every provider and nothing rewrites them.
 
-**Why this is not a reversal.** Capture stays automatic and unchanged. What depends on the agent is
-only *that a list exists*, and the instruction rides on a habit the agent already has (the per-step
-Progress Reporting message). If it is skipped, the board is empty. The rule also pins what the board
-needs to stay right — frozen step titles and ids, each provider's own way to drop a step — because a
-renamed step on a whole-list tool would otherwise show twice. `agent-lint.sh` fails when the section
-disappears or an agent that plans stops loading plan-mode.
+**What it qualifies.** Decision 1 ("Agents are not asked to report progress") and the first
+consequence ("no change to any agent body") — both marked inline above. Capture stays exactly as
+decided: the hooks, the record and the read-only app are unchanged.
+
+**Why this is not a reversal.** What depends on the agent is only *that a list exists*, and the
+instruction rides on a habit the agent already has (the per-step Progress Reporting message). If it is
+skipped, the board is empty. The rule also pins what the board needs to stay right — frozen step
+titles and ids, each provider's own way to drop a step, one list per plan on whole-list tools —
+because a renamed or replaced step would otherwise show twice. `agent-lint.sh` fails when the section
+disappears, an agent that plans stops loading plan-mode, or a plan-gated command stops pointing at it.
+
+| Alternative | Why rejected |
+|---|---|
+| A Stop/UserPromptSubmit hook parsing the Steps table from the transcript | Finds the plan but not its progress: nothing in the transcript says which step started or finished, so every task would sit in To do |
+| Agents calling `devteam tasks` directly | A second channel beside the provider's own list, and the one this ADR already rejected for depending on agent compliance — with none of the provider UI benefit |
+| Accept an empty board for planned sessions | The board's purpose is following planned work; empty in exactly those sessions defeats it |
 
 ## Alternatives Considered
 

@@ -23,8 +23,8 @@ provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/task-bo
 
 The board reads only the provider's native task list. A plan written to chat or to a file never
 reaches it: every approved plan's Steps table becomes native tasks per
-`skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Sessions that never plan and whose provider never opens a list — a quick question, a
-`/devteam:status` — correctly stay off the board.
+`skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Sessions that never plan and whose
+provider never opens a list — a quick question, a `/devteam:status` — correctly stay off the board.
 
 #### Capture per provider
 
