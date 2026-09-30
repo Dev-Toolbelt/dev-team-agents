@@ -61,7 +61,7 @@ if [ "$CURRENT" = "unknown" ]; then
     exit 0
 fi
 [ "$LATEST" != "unknown" ] || exit 0
-[ "$CURRENT" != "$LATEST" ] || exit 0
+uc_is_newer "$CURRENT" "$LATEST" || exit 0
 
 # ── Notify / auto-update ──────────────────────────────────────────────────────
 LANG_PREF="en"
