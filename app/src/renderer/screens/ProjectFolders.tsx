@@ -282,7 +282,7 @@ export function DeleteFolderDialog({
           <DialogDescription>
             {memberCount === 0
               ? 'The folder is empty.'
-              : `Its ${projectCount(memberCount)} will move to “No folder”.`}{' '}
+              : `Its ${projectCount(memberCount)} will move out of it, to the top level.`}{' '}
             No project is unbound, and nothing in any project changes.
           </DialogDescription>
         </DialogHeader>
@@ -467,38 +467,6 @@ export function FolderHeaderRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </TableCell>
-    </TableRow>
-  );
-}
-
-export function NoFolderHeaderRow({
-  count,
-  selection,
-  onToggleSelection,
-  columns,
-}: {
-  count: number;
-  selection: boolean | 'indeterminate';
-  onToggleSelection: (checked: boolean) => void;
-  columns: number;
-}) {
-  return (
-    <TableRow className="bg-muted/50 hover:bg-muted/60" data-folder-header={NO_FOLDER_KEY}>
-      <TableCell className="w-14">
-        <Checkbox
-          checked={selection}
-          disabled={count === 0}
-          onCheckedChange={(checked) => onToggleSelection(checked === true)}
-          aria-label="Select every project in no folder"
-        />
-      </TableCell>
-      <TableCell colSpan={columns - 1}>
-        <span className="inline-flex items-center gap-2 font-semibold text-muted-foreground">
-          <FolderMinus className="size-4" aria-hidden="true" />
-          No folder
-          <span className="rounded-full bg-background px-2 py-0.5 text-xs font-normal">{count}</span>
-        </span>
       </TableCell>
     </TableRow>
   );

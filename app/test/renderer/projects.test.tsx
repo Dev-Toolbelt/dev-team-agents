@@ -1044,6 +1044,11 @@ describe('Projects — folders (ADR-0021)', () => {
     return header!.closest('tbody')!;
   }
 
+  /** The top-level group: projects in no folder, with no header of their own. */
+  function root(): HTMLElement {
+    return document.querySelector<HTMLElement>('[data-drop-target="__none__"]')!;
+  }
+
   function lastSaved(bridge: DevteamBridge): ProjectFolders {
     const calls = vi.mocked(bridge.saveProjectFolders).mock.calls;
     return calls[calls.length - 1]![0];
@@ -1061,7 +1066,7 @@ describe('Projects — folders (ADR-0021)', () => {
     await user.click(screen.getByRole('button', { name: 'Create folder' }));
 
     expect(await screen.findByRole('button', { name: /^Sites/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(within(group('No folder')).getByText('acme-site')).toBeInTheDocument();
+    expect(within(root()).getByText('acme-site')).toBeInTheDocument();
     expect(lastSaved(bridge).folders).toMatchObject([{ name: 'Sites', parentId: null }]);
   });
 
@@ -1083,7 +1088,7 @@ describe('Projects — folders (ADR-0021)', () => {
     render(<Projects environment={environment()} />);
     await screen.findByText('acme-site');
     expect(within(group('Sites')).getByText('acme-site')).toBeInTheDocument();
-    expect(within(group('No folder')).getByText('mobile-app')).toBeInTheDocument();
+    expect(within(root()).getByText('mobile-app')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Move mobile-app to a folder' }));
     await user.click(await screen.findByRole('menuitem', { name: /Apps/ }));
@@ -1134,7 +1139,7 @@ describe('Projects — folders (ADR-0021)', () => {
   it('ignores a drop with no drag in progress', async () => {
     const bridge = withFolders({ folders: [SITES], membership: {} });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await screen.findByRole('button', { name: /^Sites/ });
     fireEvent.drop(group('Sites'));
     await Promise.resolve();
     expect(bridge.saveProjectFolders).not.toHaveBeenCalled();
@@ -1149,7 +1154,7 @@ describe('Projects — folders (ADR-0021)', () => {
     await user.click(screen.getByRole('button', { name: 'Folder actions for Sites' }));
     await user.click(await screen.findByRole('menuitem', { name: /delete folder/i }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('Its 2 projects will move to “No folder”');
+    expect(dialog).toHaveTextContent('Its 2 projects will move out of it, to the top level.');
     await user.click(within(dialog).getByRole('button', { name: 'Delete folder' }));
 
     expect(lastSaved(bridge)).toEqual({ folders: [], membership: {} });
@@ -1170,7 +1175,7 @@ describe('Projects — folders (ADR-0021)', () => {
 
     expect(await screen.findByText('The folder change was undone')).toBeInTheDocument();
     expect(screen.getByText(/disk full/)).toBeInTheDocument();
-    expect(within(group('No folder')).getByText('acme-site')).toBeInTheDocument();
+    expect(within(root()).getByText('acme-site')).toBeInTheDocument();
   });
 
   it('collapses a folder and saves the choice, and a text filter opens it again', async () => {
@@ -1296,7 +1301,7 @@ describe('Projects — folders (ADR-0021)', () => {
 
     expect(await screen.findByText(/disk full\. 1 later change was undone with it\./)).toBeInTheDocument();
     expect(saveProjectFolders).toHaveBeenCalledTimes(1);
-    expect(within(group('No folder')).getByText('mobile-app')).toBeInTheDocument();
+    expect(within(root()).getByText('mobile-app')).toBeInTheDocument();
   });
 
   it('keeps a shown error when housekeeping prunes an unbound project in the background', async () => {
@@ -1339,5 +1344,34 @@ describe('Projects — folders (ADR-0021)', () => {
     expect(within(row()).getByRole('button', { name: /syncing/i })).toBeDisabled();
     pending.resolve(fail('the store is locked'));
     expect(await within(row()).findByText(/the store is locked/)).toBeInTheDocument();
+  });
+
+  it('lists projects in no folder at the top level, indented less than those inside a folder', async () => {
+    withFolders({ folders: [SITES], membership: { p1: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    expect(screen.queryByText('No folder')).not.toBeInTheDocument();
+    expect(within(root()).queryAllByRole('row', { name: /folder/i }).filter((row) => row.hasAttribute('data-folder-header'))).toHaveLength(0);
+    expect(within(root()).getByText('mobile-app')).toBeInTheDocument();
+    const cell = (name: string) => screen.getByText(name).closest('td')!;
+    expect(cell('acme-site').style.paddingLeft).not.toBe('');
+    expect(cell('mobile-app').style.paddingLeft).toBe('');
+  });
+
+  it('offers a drop strip only while a filed project is dragged and nothing sits at the top level', async () => {
+    const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', p2: 'sites', p3: 'sites' } });
+    const { container } = render(<Projects environment={environment()} />);
+    await screen.findByRole('button', { name: /^Sites/ });
+    expect(root()).toBeNull();
+
+    fireEvent.dragStart(container.querySelector('[data-drag-handle="p1"]')!);
+    expect(within(root()).getByText('Drop here to take it out of its folder')).toBeInTheDocument();
+    fireEvent.dragOver(root());
+    fireEvent.drop(root());
+
+    await vi.waitFor(() => expect(bridge.saveProjectFolders).toHaveBeenCalled());
+    expect(lastSaved(bridge).membership).toEqual({ p2: 'sites', p3: 'sites' });
+    expect(within(root()).getByText('acme-site')).toBeInTheDocument();
+    expect(screen.queryByText('Drop here to take it out of its folder')).not.toBeInTheDocument();
   });
 });

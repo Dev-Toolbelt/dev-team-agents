@@ -30,7 +30,7 @@ Two questions needed deciding:
 2. **Shape.** `{ folders: [{ id, name, parentId, collapsed }], membership: { project_id → folder id } }`.
    Membership is separate from the folders, so a project is in at most one folder and deleting a
    folder can never delete a project: its projects and subfolders move up to its parent — the top
-   level today, which reads as "No folder".
+   level today, where projects in no folder are listed, file-manager style, below the folders.
 3. **Depth.** `MAX_FOLDER_DEPTH` in `app/src/shared/projectFolders.ts` is `1`. Every function in that
    module walks the tree without assuming a depth. The write validator `projectFoldersProblem`
    refuses anything deeper, and the read-side `normalizeProjectFolders` lifts a too-deep folder to
@@ -55,7 +55,7 @@ Two questions needed deciding:
 - No change to the CLI's public surface or the store; nothing in `tests/test_json_contract.py` moves.
 - Subfolders are a constant change plus a UI entry point (`canNestIn` already gates "New subfolder").
 - Losing or corrupting the folder record costs a grouping, never a binding: the screen falls back to
-  every project in "No folder".
+  every project at the top level, in no folder.
 
 ### Negative
 - Folders are per machine and per client, with the same limits ADR-0016 records for names: they do
