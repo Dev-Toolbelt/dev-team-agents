@@ -237,3 +237,13 @@ has no plugin-specific code; a new plugin appears in it with zero app changes.
 >   also terminates in-flight CLI children on quit.
 > - **PreToolUse emits only the first non-empty plugin hook output**, and `plugin list` reports invalid
 >   manifests in an additive `invalid` key.
+> - **Second review round.** `plugin run` sends SIGTERM to the process group first and SIGKILLs
+>   survivors after a 3 s grace (timeout still exits 124); handler restore is per signal and falls
+>   back to `SIG_DFL`. `refresh.sh` traps TERM/INT so its EXIT cleanup runs, swaps the output by
+>   renaming the previous `graphify-out` aside (restored by cleanup if killed between the moves),
+>   validates the committed `.build-commit` marker (and the legacy state value) as `^[0-9a-f]{7,64}$`,
+>   strips escaping symlinks in one interpreter call, and takes over a stale lock by renaming it
+>   (pid plus process start time, so a recycled pid is not mistaken for a live holder). Source paths
+>   may not be `.`, start with `.git`, `.dev-team-agents`, `.worktrees`, `graphify-out` or
+>   `graphify-src` (case-insensitive), or resolve into them or the git dir; the shell `realpath`
+>   fallback resolves the deepest existing ancestor physically.
