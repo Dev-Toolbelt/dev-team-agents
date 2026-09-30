@@ -87,14 +87,8 @@ function CatalogSummaryLine({ state }: { state: Load<CatalogSummary> }) {
         Version <span className="font-mono">{version ?? 'unknown'}</span> ·{' '}
         {SUMMARY_KINDS.map((kind) => `${counts[kind]} ${kind}`).join(' · ')}
       </p>
-      <p className="text-xs text-muted-foreground">
-        {/* A project is named, never shown by its UUID — the id means nothing on screen. */}
-        {project_id !== null ? (
-          'Resolved against a bound project.'
-        ) : (
-          'No project resolved — this build has no project picker, so the catalog is the bound version’s own.'
-        )}
-      </p>
+      {/* A project is named, never shown by its UUID — the id means nothing on screen. */}
+      {project_id !== null ? <p className="text-xs text-muted-foreground">Resolved against a bound project.</p> : null}
       {broken.length > 0 ? (
         <p className="text-sm text-destructive">
           {broken.map((kind) => `${malformed[kind]} ${kind}`).join(' · ')} could not be read. They are listed below,

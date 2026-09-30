@@ -70,6 +70,20 @@ describe('ProjectSettings — a notification asking for another project', () => 
   });
 });
 
+describe('ProjectSettings — the section being read is highlighted', () => {
+  it('marks exactly one section current: the one the user jumps to', async () => {
+    // jsdom has no layout, so which section scrolling selects is checked by hand in the
+    // app; the click and the single-current rule are checked here.
+    renderSettings();
+    const nav = await screen.findByRole('navigation', { name: 'Settings sections' });
+    await userEvent.setup().click(within(nav).getByRole('link', { name: /Context & session/ }));
+    const current = within(nav)
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('aria-current') === 'location');
+    expect(current.map((link) => link.textContent)).toEqual(['Context & session']);
+  });
+});
+
 describe('ProjectSettings — navigation', () => {
   it('opens from the project name in the list, and returns with Projects', async () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));

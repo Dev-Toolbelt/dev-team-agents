@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleAlert, Info, Lock, ShieldAlert } from 'lucide-react';
+import { CircleAlert, Lock, ShieldAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -374,19 +374,6 @@ function HandshakeBanner({ handshake }: { handshake: OperationResult<HandshakeVi
     );
   }
 
-  return (
-    <Alert className="mb-4">
-      <Info />
-      <AlertTitle>Compatible with this store</AlertTitle>
-      <AlertDescription>
-        <p>{view.summary}</p>
-        <p className="font-mono text-xs text-muted-foreground">
-          {Object.entries(view.storeSchemas)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([name, version]) => `${name}=${version}`)
-            .join(' · ')}
-        </p>
-      </AlertDescription>
-    </Alert>
-  );
+  // Compatible: nothing to say. Only a problem earns a banner.
+  return null;
 }

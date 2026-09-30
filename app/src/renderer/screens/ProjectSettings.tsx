@@ -120,6 +120,33 @@ export function ProjectSettings({
     headingRef.current?.focus();
   }, []);
 
+  // The section the user is reading, highlighted in the side nav: the last one whose top
+  // has scrolled past a line near the top of the viewport, or the last one at the bottom
+  // of the page (a short final section never reaches that line). Listened for in the
+  // capture phase because the scrolling element is an ancestor, not the window.
+  const [activeSection, setActiveSection] = useState<string>(GROUPS[0]?.id ?? '');
+  useEffect(() => {
+    const update = () => {
+      const sections = GROUPS.map((group) => document.getElementById(`settings-${group.id}`)).filter(
+        (element): element is HTMLElement => element !== null,
+      );
+      if (sections.length === 0) return;
+      const scroller = sections[0]!.closest('main') ?? document.scrollingElement ?? null;
+      // "At the bottom" only means something when there is anything to scroll.
+      const atBottom =
+        scroller != null &&
+        scroller.scrollHeight > scroller.clientHeight &&
+        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      const current = atBottom
+        ? sections[sections.length - 1]!
+        : (sections.filter((section) => section.getBoundingClientRect().top <= 140).pop() ?? sections[0]!);
+      setActiveSection(current.id.replace(/^settings-/, ''));
+    };
+    update();
+    document.addEventListener('scroll', update, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', update, { capture: true });
+  }, [loaded !== null]);
+
   // A saved draft is dropped only once the reload has brought the value back from the CLI,
   // so the form never flashes the old value between the save and the reload.
   useEffect(() => {
@@ -393,11 +420,18 @@ export function ProjectSettings({
                 <li key={group.id}>
                   <a
                     href={`#settings-${group.id}`}
+                    aria-current={activeSection === group.id ? 'location' : undefined}
                     onClick={(event) => {
                       event.preventDefault();
+                      setActiveSection(group.id);
                       document.getElementById(`settings-${group.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
-                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className={cn(
+                      'flex items-center justify-between rounded-md border-l-2 px-2 py-1.5 hover:bg-accent hover:text-accent-foreground',
+                      activeSection === group.id
+                        ? 'border-primary bg-accent font-medium text-foreground'
+                        : 'border-transparent text-muted-foreground',
+                    )}
                   >
                     {group.title}
                     {count > 0 ? (
