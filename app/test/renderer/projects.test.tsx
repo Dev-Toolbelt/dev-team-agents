@@ -23,6 +23,8 @@ import {
   fail,
   fakeBridge,
   installBridge,
+  migrationPlan,
+  migrationReport,
   ok,
   project,
   unbindReport,
@@ -618,6 +620,83 @@ describe('Projects — the bind form waits for a directory', () => {
     expect(await within(dialog).findByLabelText(/project name/i)).toBeInTheDocument();
     expect(within(dialog).getAllByRole('radio').length).toBeGreaterThan(0);
     expect(within(dialog).getAllByRole('checkbox').length).toBeGreaterThan(0);
+  });
+});
+
+describe('Projects — a v2 install is migrated from the bind dialog', () => {
+  async function openAndChoose(overrides: Parameters<typeof fakeBridge>[0]) {
+    const user = userEvent.setup();
+    const bridge = fakeBridge({
+      listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
+      chooseProjectDirectory: vi.fn<() => Promise<DirectoryChoice>>(() =>
+        Promise.resolve({ chosen: true, path: '/chosen/dir' }),
+      ),
+      ...overrides,
+    });
+    installBridge(bridge);
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    return { user, dialog, bridge };
+  }
+
+  it('offers a reviewed migration instead of Bind, and applies exactly what was reviewed', async () => {
+    const { user, dialog, bridge } = await openAndChoose({
+      planMigration: vi.fn(() => Promise.resolve(ok(migrationPlan()))),
+    });
+    expect(await within(dialog).findByText(/already has dev-team-agents v2/i)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /^bind$/i })).not.toBeInTheDocument();
+    // Detection asked with the path alone; nothing was applied.
+    expect(bridge.planMigration).toHaveBeenCalledWith({ path: '/chosen/dir' });
+    expect(bridge.applyMigration).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByLabelText(/Claude Code/));
+    await user.click(within(dialog).getByRole('button', { name: /review migration/i }));
+    expect(await within(dialog).findByText(/what the migration does/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/leaves git's index/i)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: /^migrate$/i }));
+    expect(await within(dialog).findByText(/is migrated and bound/i)).toBeInTheDocument();
+    const reviewedWith = vi.mocked(bridge.planMigration).mock.calls[1]?.[0];
+    const appliedWith = vi.mocked(bridge.applyMigration).mock.calls[0]?.[0];
+    expect(appliedWith).toEqual(reviewedWith);
+    expect(appliedWith).toMatchObject({ path: '/chosen/dir', providers: ['claude'], mode: 'link', name: 'dir' });
+    expect(within(dialog).getByText(/left git's index/i)).toBeInTheDocument();
+  });
+
+  it('binds as before when the directory has no v2 install (exit 2)', async () => {
+    const { user, dialog, bridge } = await openAndChoose({});
+    const bindButton = await within(dialog).findByRole('button', { name: /^bind$/i });
+    await vi.waitFor(() => expect(bindButton).toBeEnabled());
+    await user.click(bindButton);
+    await vi.waitFor(() => expect(bridge.bindProject).toHaveBeenCalled());
+    expect(bridge.applyMigration).not.toHaveBeenCalled();
+    expect(within(dialog).queryByText(/already has dev-team-agents v2/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a detection problem other than "not v2", and keeps Bind disabled', async () => {
+    const { dialog } = await openAndChoose({
+      planMigration: vi.fn(() =>
+        Promise.resolve(fail('two memory directories', { kind: 'conflict', exitCode: 4, hint: 'Merge them by hand.' })),
+      ),
+    });
+    expect(await within(dialog).findByText(/two memory directories/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^bind$/i })).toBeDisabled();
+  });
+
+  it('reports an untrack problem without calling the migration a failure', async () => {
+    const { user, dialog } = await openAndChoose({
+      planMigration: vi.fn(() => Promise.resolve(ok(migrationPlan()))),
+      applyMigration: vi.fn(() =>
+        Promise.resolve(ok(migrationReport({ untracked: [], untrack_problem: '/chosen/dir is not inside a git work tree' }))),
+      ),
+    });
+    await user.click(await within(dialog).findByRole('button', { name: /review migration/i }));
+    await user.click(await within(dialog).findByRole('button', { name: /^migrate$/i }));
+    expect(await within(dialog).findByText(/is migrated and bound/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/nothing was untracked/i)).toBeInTheDocument();
   });
 });
 

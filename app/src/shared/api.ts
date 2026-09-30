@@ -411,6 +411,69 @@ export interface UpgradeReport {
   readonly git_tracked: readonly string[];
 }
 
+/**
+ * A v2 install converted to a bind, from the bind dialog (`devteam migrate`).
+ *
+ * The same provenance as `BindRequest` — the path must be one the main process handed
+ * back through the directory picker — and the same options, minus `pin`. `name` is the
+ * app's own record, stored after a successful apply exactly as for a bind.
+ */
+export type MigrateRequest = Omit<BindRequest, 'pin'>;
+
+/** A move the migration makes inside the project: memory, kept rather than quarantined. */
+export interface MigrationMove {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * `migrate --json` without `--apply`: what converting the v2 install would do.
+ *
+ * `layout` names the v2 shape — `root` (vendored at `.dev-team-agents/`) or `pre-root`
+ * (at `.claude/dev-team-agents/`, before v2.1.0). The bind dialog fetches this as soon as
+ * a directory is chosen: a plan means "this is a v2 install"; exit 2 means it is not, and
+ * the ordinary bind applies.
+ */
+export interface MigrationPlan {
+  readonly path: string;
+  readonly layout: string;
+  readonly install_dir: string;
+  readonly providers: readonly string[];
+  readonly mode: string;
+  readonly actions: readonly string[];
+  readonly adopts_identity: boolean;
+  readonly memory_moves: readonly MigrationMove[];
+  readonly context_paths_added: readonly string[];
+  readonly git_tracked: readonly string[];
+  readonly git_tracked_artifacts: readonly string[];
+  readonly preserved: readonly string[];
+}
+
+/**
+ * `migrate --apply --untrack --json`. `untracked` is what left git's index (the files stay
+ * on disk, nothing is committed); `untrack_problem` says why nothing did, when that is
+ * the case — the migration itself still succeeded.
+ */
+export interface MigrationReport {
+  readonly path: string;
+  readonly layout: string;
+  readonly project_id: string;
+  readonly version: string;
+  readonly mode: string;
+  readonly providers: readonly string[];
+  readonly adopted_identity: boolean;
+  readonly memory_moved: readonly MigrationMove[];
+  readonly context_paths_added: readonly string[];
+  readonly quarantined: readonly MigrationMove[];
+  readonly quarantine_dir: string | null;
+  readonly retired_links: readonly string[];
+  readonly git_tracked: readonly string[];
+  readonly git_tracked_artifacts: readonly string[];
+  readonly untracked: readonly string[];
+  readonly untrack_problem: string | null;
+  readonly unrecognised: readonly string[];
+}
+
 // ── preferences ─────────────────────────────────────────────────────────────
 
 /** A value `prefs set` can store. Lists exist in the schema but cannot be written by the CLI. */
@@ -852,6 +915,10 @@ export interface DevteamBridge {
   ) => Promise<OperationResult<PinReport>>;
   readonly planUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradePlan>>;
   readonly applyUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradeReport>>;
+  /** `migrate <path>` — the plan for a v2 install in a directory the picker offered. Writes nothing. */
+  readonly planMigration: (request: MigrateRequest) => Promise<OperationResult<MigrationPlan>>;
+  /** `migrate <path> --apply --untrack`. Quarantines the v2 tree, binds, and untracks what the plan listed. */
+  readonly applyMigration: (request: MigrateRequest) => Promise<OperationResult<MigrationReport>>;
   /** `prefs list` for one project. Read-only. */
   readonly projectPreferences: (projectId: ProjectId) => Promise<OperationResult<ProjectPreferencesView>>;
   /**
@@ -1128,6 +1195,8 @@ export const CHANNELS = {
   setPin: 'devteam:set-pin',
   planUpgrade: 'devteam:plan-upgrade',
   applyUpgrade: 'devteam:apply-upgrade',
+  planMigration: 'devteam:plan-migration',
+  applyMigration: 'devteam:apply-migration',
   projectPreferences: 'devteam:project-preferences',
   updateProjectPreferences: 'devteam:update-project-preferences',
   projectPlugins: 'devteam:project-plugins',

@@ -27,6 +27,10 @@ import type {
   BindProvider,
   BindReport,
   EnvironmentReport,
+  MigrateRequest,
+  MigrationPlan,
+  MigrationReport,
+  OperationResult,
   PreferencesImport,
   ProjectRecord,
   SyncAllReport,
@@ -1070,17 +1074,67 @@ function BindDialog({
     });
   });
 
+  // ── a v2 install in the chosen directory ─────────────────────────────────────
+  //
+  // Asked as soon as a directory is chosen: `migrate`'s plan writes nothing, and it is the
+  // one question that tells a v2 install (in either shape) from a fresh directory. Exit 2
+  // is "no v2 install here" — the ordinary bind applies. A plan means the Bind button
+  // would only be refused, so the dialog offers the migration instead.
+  const [detection, setDetection] = useState<{
+    readonly path: string;
+    readonly result: OperationResult<MigrationPlan> | null;
+  } | null>(null);
+  const detectionFor = useRef<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+
+  function migrateRequest(): MigrateRequest {
+    if (path === null) throw new Error('migration requested with no directory chosen');
+    const trimmedName = name.trim();
+    return {
+      path,
+      ...(providers.size > 0 ? { providers: Array.from(providers) } : {}),
+      mode,
+      ...(trimmedName !== '' ? { name: trimmedName } : {}),
+    };
+  }
+  // The reviewed plan is fetched with the options on screen, so what Migrate runs is what
+  // the user just read.
+  const review = useAction(() => window.devteam.planMigration(migrateRequest()));
+  const migrate = useAction(() => window.devteam.applyMigration(migrateRequest()));
+
+  async function detect(chosen: string) {
+    detectionFor.current = chosen;
+    setDetection({ path: chosen, result: null });
+    const result = await window.devteam
+      .planMigration({ path: chosen })
+      .catch((): OperationResult<MigrationPlan> => ({
+        ok: false,
+        kind: 'unavailable',
+        message: 'the app could not ask whether this directory has a v2 install',
+        exitCode: null,
+        command: 'devteam migrate',
+        durationMs: 0,
+      }));
+    // A slower answer for a directory the user has since replaced is dropped.
+    if (detectionFor.current === chosen) setDetection({ path: chosen, result });
+  }
+
   function resetForm() {
     setPath(null);
     setName('');
     setProviders(new Set());
     setMode(RECOMMENDED_MODE);
+    setDetection(null);
+    detectionFor.current = null;
+    setReviewing(false);
     choose.reset();
     bind.reset();
+    review.reset();
+    migrate.reset();
   }
 
   function close() {
-    if (bind.state.phase === 'pending') return;
+    if (bind.state.phase === 'pending' || migrate.state.phase === 'pending') return;
     resetForm();
     onOpenChange(false);
   }
@@ -1100,6 +1154,16 @@ function BindDialog({
   const bound = bind.state.phase === 'done' && bind.state.result.ok ? bind.state.result.data : null;
   const boundName = name.trim() !== '' ? name.trim() : path !== null ? basename(path) : '';
 
+  const detected = detection !== null && detection.path === path ? detection.result : null;
+  const checking = path !== null && detected === null;
+  // exit 2 is the CLI's "no v2 install to migrate" — anything else that failed is a real
+  // problem with this directory, and binding would fail on it too.
+  const notV2 = detected !== null && !detected.ok && detected.exitCode === 2;
+  const v2 = detected !== null && detected.ok ? detected.data : null;
+  const detectionProblem = detected !== null && !detected.ok && !notV2 ? detected : null;
+  const reviewed = review.state.phase === 'done' && review.state.result.ok ? review.state.result.data : null;
+  const migrated = migrate.state.phase === 'done' && migrate.state.result.ok ? migrate.state.result.data : null;
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent className="sm:max-w-lg">
@@ -1110,6 +1174,16 @@ function BindDialog({
 
         {bound !== null ? (
           <BindResultSummary report={bound} name={boundName} />
+        ) : migrated !== null ? (
+          <MigrationReportSummary report={migrated} name={boundName} />
+        ) : reviewing ? (
+          <div className="space-y-3">
+            {review.state.phase !== 'done' ? <Loading what="devteam migrate (plan)" /> : null}
+            {review.state.phase === 'done' && !review.state.result.ok ? <Problem problem={review.state.result} /> : null}
+            {reviewed !== null ? <MigrationPlanSummary plan={reviewed} /> : null}
+            {migrate.state.phase === 'done' && !migrate.state.result.ok ? <Problem problem={migrate.state.result} /> : null}
+            {migrate.state.phase === 'done' ? <Notice result={migrate.state.result} /> : null}
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1125,6 +1199,11 @@ function BindDialog({
                     if (choice.chosen) {
                       setPath(choice.path);
                       setName(basename(choice.path));
+                      setReviewing(false);
+                      review.reset();
+                      migrate.reset();
+                      bind.reset();
+                      void detect(choice.path);
                     }
                   });
                 }}
@@ -1146,6 +1225,14 @@ function BindDialog({
                 </div>
               )}
             </div>
+
+            {checking ? (
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                Checking whether this directory already has dev-team-agents…
+              </p>
+            ) : null}
+            {v2 !== null ? <V2Detected plan={v2} /> : null}
+            {detectionProblem !== null ? <Problem problem={detectionProblem} /> : null}
 
             {/* Nothing but the picker until there is a directory to bind — providers and a
                 mode asked for decisions about nothing yet. */}
@@ -1219,16 +1306,52 @@ function BindDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" disabled={bind.state.phase === 'pending'} onClick={close}>
-            {bound ? 'Close' : 'Cancel'}
-          </Button>
-          {bound ? (
+          {reviewing && migrated === null ? (
+            <Button variant="outline" disabled={migrate.state.phase === 'pending'} onClick={() => setReviewing(false)}>
+              Back
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              disabled={bind.state.phase === 'pending' || migrate.state.phase === 'pending'}
+              onClick={close}
+            >
+              {bound || migrated ? 'Close' : 'Cancel'}
+            </Button>
+          )}
+          {bound || migrated ? (
             <Button onClick={close}>Done</Button>
+          ) : v2 !== null && reviewing ? (
+            <WriteButton
+              command="migrate"
+              environment={environment}
+              tooltip="Quarantine the v2 framework, keep its memory, bind, and take the old paths out of git's index"
+              disabled={reviewed === null || migrate.state.phase === 'pending'}
+              onClick={() => {
+                void migrate.run().then((result) => {
+                  if (result.ok) onBound();
+                });
+              }}
+            >
+              {migrate.state.phase === 'pending' ? 'Migrating…' : 'Migrate'}
+            </WriteButton>
+          ) : v2 !== null ? (
+            <WriteButton
+              command="migrate"
+              environment={environment}
+              tooltip="Show exactly what the migration will do before anything changes"
+              onClick={() => {
+                setReviewing(true);
+                void review.run();
+              }}
+            >
+              Review migration
+            </WriteButton>
           ) : (
             <WriteButton
               command="bind"
               environment={environment}
-              disabled={path === null || bind.state.phase === 'pending'}
+              disabled={path === null || checking || detectionProblem !== null || bind.state.phase === 'pending'}
               onClick={() => {
                 void bind.run().then((result) => {
                   if (result.ok) onBound();
@@ -1241,6 +1364,114 @@ function BindDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const V2_LAYOUT_LABELS: Record<string, string> = {
+  root: 'vendored in .dev-team-agents/',
+  'pre-root': 'from before v2.1.0, in .claude/dev-team-agents/',
+};
+
+function v2Label(plan: { readonly layout: string; readonly install_dir: string }): string {
+  return V2_LAYOUT_LABELS[plan.layout] ?? `in ${plan.install_dir}/`;
+}
+
+/** Shown as soon as the chosen directory turns out to hold a v2 install. */
+function V2Detected({ plan }: { plan: MigrationPlan }) {
+  return (
+    <Alert>
+      <AlertTriangle aria-hidden="true" />
+      <AlertTitle>This directory already has dev-team-agents v2 ({v2Label(plan)})</AlertTitle>
+      <AlertDescription>
+        <p>
+          It will be migrated instead of bound: the old framework moves to a dated quarantine (nothing is deleted),
+          its memory is kept, and the old paths leave git&apos;s index for you to commit. Review the plan before
+          anything changes.
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+/** A long path list, collapsed: a v2 install commits one link per skill. */
+function PathList({ title, paths }: { title: string; paths: readonly string[] }) {
+  if (paths.length === 0) return null;
+  return (
+    <details>
+      <summary className="cursor-pointer font-medium">
+        {title} ({paths.length})
+      </summary>
+      <ul className="mt-1 max-h-40 list-inside list-disc overflow-y-auto font-mono text-xs text-muted-foreground">
+        {paths.map((path) => (
+          <li key={path}>{path}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function MigrationPlanSummary({ plan }: { plan: MigrationPlan }) {
+  const untrack = [...plan.git_tracked, ...plan.git_tracked_artifacts];
+  return (
+    <div className="space-y-2 text-sm">
+      <p>
+        v2 install {v2Label(plan)} · providers {plan.providers.join(', ') || '(detected)'} · mode {plan.mode}
+      </p>
+      <div>
+        <p className="font-medium">What the migration does:</p>
+        <ul className="list-inside list-disc text-xs text-muted-foreground">
+          {plan.actions.map((action, index) => (
+            <li key={index}>{action}</li>
+          ))}
+        </ul>
+      </div>
+      <PathList title="Leaves git's index (the files stay on disk, nothing is committed)" paths={untrack} />
+    </div>
+  );
+}
+
+/**
+ * What the migration did, and what is left for the user: one commit. The untracked paths
+ * are the whole reason this is its own summary — they are staged deletions in `git status`,
+ * and a user who did not expect them would think something went wrong.
+ */
+function MigrationReportSummary({ report, name }: { report: MigrationReport; name: string }) {
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+        <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+        <p className="font-medium">
+          {name} is migrated and bound (version {report.version}).
+        </p>
+      </div>
+      {report.quarantine_dir !== null ? (
+        <p>
+          The old framework is in <span className="font-mono text-xs">{report.quarantine_dir}</span>.
+        </p>
+      ) : null}
+      {report.memory_moved.map((move) => (
+        <p key={move.from}>
+          Memory kept: <span className="font-mono text-xs">{move.from}</span> →{' '}
+          <span className="font-mono text-xs">{move.to}</span>. Upgrade the project from its row to move it into the
+          store.
+        </p>
+      ))}
+      {report.context_paths_added.length > 0 ? (
+        <p>
+          Agents now also read <span className="font-mono text-xs">{report.context_paths_added.join(', ')}</span>.
+        </p>
+      ) : null}
+      {report.untracked.length > 0 ? (
+        <p>
+          {report.untracked.length} old path{report.untracked.length === 1 ? '' : 's'} left git&apos;s index. Review
+          them with <span className="font-mono text-xs">git status</span> and commit.
+        </p>
+      ) : null}
+      {report.untrack_problem !== null ? (
+        <p className="text-amber-700 dark:text-amber-400">Nothing was untracked: {report.untrack_problem}.</p>
+      ) : null}
+      <PathList title="Removed from git's index" paths={report.untracked} />
+    </div>
   );
 }
 

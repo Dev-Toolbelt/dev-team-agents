@@ -22,6 +22,7 @@ import {
   type BoardSettings,
   type CopyResumeRequest,
   type CatalogKind,
+  type MigrateRequest,
   type DevteamBridge,
   type PluginConfigChange,
   type NotificationFeed,
@@ -31,6 +32,15 @@ import {
   type SkillProviderFilter,
   type SkillRemoveRequest,
 } from '../shared/api.js';
+
+function migrateRequest(request: MigrateRequest): Record<string, unknown> {
+  return {
+    path: String(request.path),
+    ...(request.providers !== undefined ? { providers: [...request.providers] } : {}),
+    ...(request.mode !== undefined ? { mode: request.mode } : {}),
+    ...(request.name !== undefined ? { name: String(request.name) } : {}),
+  };
+}
 
 const bridge: DevteamBridge = {
   buildInfo: () => ipcRenderer.invoke(CHANNELS.buildInfo),
@@ -71,6 +81,9 @@ const bridge: DevteamBridge = {
     ipcRenderer.invoke(CHANNELS.setPin, String(projectId), version === null ? null : String(version)),
   planUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.planUpgrade, String(projectId)),
   applyUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.applyUpgrade, String(projectId)),
+  // Rebuilt like `bindProject`'s request, and validated by the same `validateBindRequest`.
+  planMigration: (request: MigrateRequest) => ipcRenderer.invoke(CHANNELS.planMigration, migrateRequest(request)),
+  applyMigration: (request: MigrateRequest) => ipcRenderer.invoke(CHANNELS.applyMigration, migrateRequest(request)),
   projectPreferences: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.projectPreferences, String(projectId)),
   // Rebuilt into plain objects, like `bindProject`'s request; `main/ipc.ts` validates each
   // change again against the project's own `prefs list` answer.
