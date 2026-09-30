@@ -49,8 +49,16 @@ export function App() {
     setOpenRequest((previous) => ({ projectId, nonce: (previous?.nonce ?? 0) + 1 }));
   }
 
-  // A native notification (or the tray) was clicked; the main process already showed the window.
-  useEffect(() => window.devteam.onOpenProject(openProject), []);
+  // A native notification (or the tray) was clicked; the main process already showed the
+  // window. Subscribe first, then take what a click asked for before this window could
+  // hear it — the handshake that keeps a click on a fresh window from being lost.
+  useEffect(() => {
+    const unsubscribe = window.devteam.onOpenProject(openProject);
+    void window.devteam.takePendingProject().then((projectId) => {
+      if (projectId !== null) openProject(projectId);
+    });
+    return unsubscribe;
+  }, []);
 
   async function load() {
     setBusy(true);

@@ -1022,7 +1022,12 @@ export type WatchEvent =
   | { readonly event: 'notification'; readonly notification: QueuedNotification }
   | { readonly event: 'ready'; readonly projects: number }
   | { readonly event: 'heartbeat' }
-  | { readonly event: 'end'; readonly reason: string };
+  | { readonly event: 'end'; readonly reason: string }
+  /**
+   * The stream failed: the CLI's error document, as one line. The exit code follows as
+   * the process ends; this carries the words that explain it.
+   */
+  | { readonly event: 'error'; readonly message: string; readonly hint: string | null; readonly exitCode: number | null };
 
 /** A line the stream sent, as a typed event — or why it is not one. */
 export function asWatchEvent(raw: Record<string, unknown>): WatchEvent | string {
@@ -1037,6 +1042,13 @@ export function asWatchEvent(raw: Record<string, unknown>): WatchEvent | string 
       return { event: 'heartbeat' };
     case 'end':
       return { event: 'end', reason: typeof raw['reason'] === 'string' ? raw['reason'] : 'unknown' };
+    case 'error':
+      return {
+        event: 'error',
+        message: typeof raw['error'] === 'string' ? raw['error'] : 'the notification stream failed',
+        hint: typeof raw['hint'] === 'string' ? raw['hint'] : null,
+        exitCode: typeof raw['exit_code'] === 'number' ? raw['exit_code'] : null,
+      };
     default:
       return `an event the app does not know: ${JSON.stringify(raw['event'])}`;
   }

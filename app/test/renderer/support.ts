@@ -306,6 +306,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     setNotificationsPaused: vi.fn((paused: boolean) => Promise.resolve(notificationFeed({ paused }))),
     onNotificationFeed: vi.fn(() => () => undefined),
     onOpenProject: vi.fn(() => () => undefined),
+    takePendingProject: vi.fn(() => Promise.resolve(null)),
     backgroundSettings: vi.fn(() => Promise.resolve(backgroundSettings())),
     setOpenAtLogin: vi.fn((enabled: boolean) => Promise.resolve(backgroundSettings({ openAtLogin: enabled }))),
     ...overrides,

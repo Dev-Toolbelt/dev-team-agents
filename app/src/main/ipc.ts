@@ -668,17 +668,32 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
 
   // Paths from `list`, kept for a minute: a burst of notifications must not start one
   // `devteam list` each just to name the project in a banner title.
-  let pathsCache: { at: number; paths: Map<string, string> } | null = null;
-  async function projectPaths(): Promise<Map<string, string>> {
-    if (pathsCache !== null && Date.now() - pathsCache.at < 60_000) return pathsCache.paths;
-    const ctx = await context();
-    const paths = new Map<string, string>();
-    if (ctx !== null) {
-      const listed = await listProjects(ctx);
-      if (listed.ok) for (const project of listed.data.projects) paths.set(project.project_id, project.path);
+  //
+  // The **promise** is cached, set before the first await: caching the result after it
+  // arrived let every call in a burst miss together and each start its own `list`. Only
+  // a successful listing is kept — a failed one would have named every project "a bound
+  // project" for the whole minute.
+  let pathsCache: { at: number; paths: Promise<Map<string, string>> } | null = null;
+  async function listPaths(): Promise<Map<string, string> | null> {
+    try {
+      const ctx = await context();
+      const listed = ctx === null ? null : await listProjects(ctx);
+      if (listed === null || !listed.ok) return null;
+      return new Map(listed.data.projects.map((project) => [project.project_id, project.path] as const));
+    } catch {
+      return null; // Same as a failed listing: the caller falls back.
     }
-    pathsCache = { at: Date.now(), paths };
-    return paths;
+  }
+  function projectPaths(): Promise<Map<string, string>> {
+    if (pathsCache !== null && Date.now() - pathsCache.at < 60_000) return pathsCache.paths;
+    const entry: { at: number; paths: Promise<Map<string, string>> } = { at: Date.now(), paths: Promise.resolve(new Map<string, string>()) };
+    entry.paths = listPaths().then((paths) => {
+      if (paths !== null) return paths;
+      if (pathsCache === entry) pathsCache = null;
+      return new Map<string, string>();
+    });
+    pathsCache = entry;
+    return entry.paths;
   }
 
   return {

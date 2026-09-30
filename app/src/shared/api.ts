@@ -641,6 +641,12 @@ export interface DevteamBridge {
   readonly onNotificationFeed: (listener: (feed: NotificationFeed) => void) => () => void;
   /** A notification (or the tray) asked to show a project. Returns the unsubscribe. */
   readonly onOpenProject: (listener: (projectId: ProjectId) => void) => () => void;
+  /**
+   * Call once `onOpenProject` is subscribed: returns the project a click asked for before
+   * the renderer was listening (a fresh window loads after the click), and from then on
+   * the main process pushes instead of holding.
+   */
+  readonly takePendingProject: () => Promise<ProjectId | null>;
 
   // Running in the background (phase 2). App-level, not a project preference.
   readonly backgroundSettings: () => Promise<BackgroundSettings>;
@@ -741,6 +747,7 @@ export const CHANNELS = {
   notificationFeedChanged: 'devteam:notification-feed-changed',
   /** Main → renderer push. */
   openProject: 'devteam:open-project',
+  takePendingProject: 'devteam:take-pending-project',
   backgroundSettings: 'devteam:background-settings',
   setOpenAtLogin: 'devteam:set-open-at-login',
 } as const;

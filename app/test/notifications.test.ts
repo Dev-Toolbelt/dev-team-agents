@@ -24,12 +24,13 @@ import {
 import {
   BACKOFF_MAX_MS,
   BACKOFF_MIN_MS,
+  HEALTHY_MS,
   NotificationCenter,
   WATCHDOG_MS,
   type NativeNotice,
   type NotificationCenterDeps,
 } from '../src/main/notifications.js';
-import { loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from '../src/main/background.js';
+import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from '../src/main/background.js';
 import type { NotificationFeed, QueuedNotification } from '../src/shared/api.js';
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-watch.mjs');
@@ -86,6 +87,20 @@ describe('streamDevteam — JSON Lines over a real pipe', () => {
     const end = await ended;
     expect(end).toMatchObject({ kind: 'exited', code: 3 });
     expect(end.kind === 'exited' ? end.stderr : '').toMatch(/layout migration/);
+  });
+
+  it('passes the CLI’s error line through as an event, and reports its exit code', async () => {
+    const { events, ended } = collect('error3');
+    const end = await ended;
+    expect(end).toMatchObject({ kind: 'exited', code: 3 });
+    expect(asWatchEvent(events[0]!)).toMatchObject({ event: 'error', exitCode: 3, message: expect.stringMatching(/layout/) });
+  });
+
+  it('lets a non-zero exit code win over an unparseable line', async () => {
+    // An indented error document reads as `{` — a protocol error that used to bury the
+    // exit 3 explaining it under an endless retry.
+    const { ended } = collect('indented3');
+    expect(await ended).toMatchObject({ kind: 'exited', code: 3 });
   });
 
   it('reports a binary that does not exist as spawn-failed, not as an exit', async () => {
@@ -230,6 +245,7 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
   it('does not show a replayed notification a second time', async () => {
     const h = harness();
     await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
     h.emit({ event: 'notification', notification: notification('1-1-1') });
     h.emit({ event: 'notification', notification: notification('1-1-1') });
     await h.flush();
@@ -240,6 +256,7 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
   it('paused: no banner, but still in the bell and still acknowledged', async () => {
     const h = harness();
     await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
     h.center.setPaused(true);
     h.emit({ event: 'notification', notification: notification('2-2-2') });
     await h.flush();
@@ -251,15 +268,84 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
   it('a click opens the project it came from', async () => {
     const h = harness();
     await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
     h.emit({ event: 'notification', notification: notification('3-3-3', { projectId: 'proj-9' }) });
     await h.flush();
     h.shown[0]?.onClick();
     expect(h.opened).toEqual(['proj-9']);
   });
 
+  it('shows a backlog longer than the limit as one summary banner, with every record in the bell', async () => {
+    const h = harness({ projectName: (id) => Promise.resolve(id === 'proj-2' ? 'Billing' : 'Storefront') });
+    await h.center.start();
+    const backlog = [1, 2, 3, 4, 5].map((n) =>
+      notification(`${n}-0-0`, { ts: 1790000000 + n, projectId: n === 5 ? 'proj-2' : 'proj-1' }),
+    );
+    for (const record of backlog) h.emit({ event: 'notification', notification: record });
+    expect(h.shown).toHaveLength(0); // nothing before ready
+    h.emit({ event: 'ready', projects: 2 });
+    await h.flush();
+    await h.center.acksSettled();
+    expect(h.shown).toHaveLength(1);
+    expect(h.shown[0]?.title).toBe('5 notifications');
+    expect(h.shown[0]?.body).toContain('Storefront');
+    expect(h.shown[0]?.body).toContain('Billing');
+    h.shown[0]?.onClick();
+    expect(h.opened).toEqual(['proj-2']); // the newest
+    expect(h.center.snapshot().items.map((i) => i.id)).toEqual(['5-0-0', '4-0-0', '3-0-0', '2-0-0', '1-0-0']);
+    expect(h.acked).toEqual(['1-0-0', '2-0-0', '3-0-0', '4-0-0', '5-0-0']);
+  });
+
+  it('a short backlog still gets one banner per record', async () => {
+    const h = harness();
+    await h.center.start();
+    h.emit({ event: 'notification', notification: notification('1-0-0') });
+    h.emit({ event: 'notification', notification: notification('2-0-0') });
+    h.emit({ event: 'ready', projects: 1 });
+    await h.flush();
+    expect(h.shown).toHaveLength(2);
+  });
+
+  it('runs acknowledgements one at a time, in order', async () => {
+    let running = 0;
+    let peak = 0;
+    const order: string[] = [];
+    const h = harness({
+      ack: async (id) => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        order.push(id);
+        running -= 1;
+      },
+    });
+    await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
+    for (const id of ['1-0-0', '2-0-0', '3-0-0']) h.emit({ event: 'notification', notification: notification(id) });
+    await h.flush();
+    await h.center.acksSettled();
+    expect(peak).toBe(1);
+    expect(order).toEqual(['1-0-0', '2-0-0', '3-0-0']);
+  });
+
+  it('orders the bell by the record’s time, not by when its name resolved', async () => {
+    const h = harness({
+      // The older record's name resolves last.
+      projectName: (id) =>
+        new Promise((resolve) => setTimeout(() => resolve(id), id === 'old' ? 5 : 0)),
+    });
+    await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
+    h.emit({ event: 'notification', notification: notification('1-0-0', { ts: 100, projectId: 'old' }) });
+    h.emit({ event: 'notification', notification: notification('2-0-0', { ts: 200, projectId: 'new' }) });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(h.center.snapshot().items.map((i) => i.id)).toEqual(['2-0-0', '1-0-0']);
+  });
+
   it('markRead resets the unread count without dropping items', async () => {
     const h = harness();
     await h.center.start();
+    h.emit({ event: 'ready', projects: 1 });
     h.emit({ event: 'notification', notification: notification('4-4-4') });
     await h.flush();
     expect(h.center.markRead()).toMatchObject({ unread: 0, items: [expect.objectContaining({ id: '4-4-4' })] });
@@ -267,7 +353,7 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
 });
 
 describe('NotificationCenter — the stream is supervised', () => {
-  it('restarts after an unexpected exit with a doubling backoff, reset by the next ready', async () => {
+  it('restarts after an unexpected exit with a doubling backoff, reset once a child stays healthy', async () => {
     const h = harness();
     await h.center.start();
     h.end({ kind: 'exited', code: 1, signal: null, stderr: '' });
@@ -279,9 +365,39 @@ describe('NotificationCenter — the stream is supervised', () => {
     h.fire(BACKOFF_MIN_MS * 2);
     await h.flush();
     h.emit({ event: 'ready', projects: 0 });
+    h.fire(HEALTHY_MS);
     h.end({ kind: 'exited', code: 1, signal: null, stderr: '' });
-    // Back to the shortest delay after a healthy ready.
+    // Back to the shortest delay once the child stayed up.
     expect(() => h.fire(BACKOFF_MIN_MS)).not.toThrow();
+  });
+
+  it('does not reset the backoff for a child that dies right after ready', async () => {
+    // Reset on `ready` itself, a child crashing just after it restarted every second.
+    const h = harness();
+    await h.center.start();
+    h.end({ kind: 'exited', code: 1, signal: null, stderr: '' });
+    h.fire(BACKOFF_MIN_MS);
+    await h.flush();
+    h.emit({ event: 'ready', projects: 0 });
+    h.end({ kind: 'exited', code: 1, signal: null, stderr: '' });
+    expect(() => h.fire(BACKOFF_MIN_MS * 2)).not.toThrow();
+  });
+
+  it('reports the stream’s own error event as the reason for an exit 3', async () => {
+    // Under --json the CLI's explanation is a stdout line, not stderr.
+    const h = harness();
+    await h.center.start();
+    h.emit({ event: 'error', message: 'this store needs a layout migration', hint: 'Run devteam migrate.', exitCode: 3 });
+    h.end({ kind: 'exited', code: 3, signal: null, stderr: '' });
+    expect(h.center.snapshot()).toMatchObject({ status: 'unavailable' });
+    expect(h.center.snapshot().detail).toMatch(/layout migration Run devteam migrate\./);
+  });
+
+  it('start() while a stream runs or is starting does not begin a second one', async () => {
+    const h = harness();
+    await Promise.all([h.center.start(), h.center.start()]);
+    await h.center.start();
+    expect(h.streams).toHaveLength(1);
   });
 
   it('never waits longer than the cap', async () => {
@@ -380,8 +496,23 @@ describe('background mode — the pure decisions', () => {
   });
 
   it('hides on close unless the app is really quitting', () => {
-    expect(shouldHideOnClose(false)).toBe(true);
-    expect(shouldHideOnClose(true)).toBe(false);
+    expect(shouldHideOnClose(false, true, 'win32')).toBe(true);
+    expect(shouldHideOnClose(true, true, 'win32')).toBe(false);
+    expect(shouldHideOnClose(true, true, 'darwin')).toBe(false);
+  });
+
+  it('closes instead of hiding when nothing could bring the window back', () => {
+    // No tray on Windows: hidden would be an invisible process. macOS keeps the Dock.
+    expect(shouldHideOnClose(false, false, 'win32')).toBe(false);
+    expect(shouldHideOnClose(false, false, 'linux')).toBe(false);
+    expect(shouldHideOnClose(false, false, 'darwin')).toBe(true);
+  });
+
+  it('registers and reads back the Windows login item with the same args', () => {
+    // Read back without `--hidden`, Windows reported `openAtLogin: false` right after
+    // a successful registration.
+    expect(loginItemOptions('win32')).toEqual({ args: ['--hidden'] });
+    expect(loginItemOptions('darwin')).toEqual({});
   });
 
   it('renders the tray count and tooltip', () => {

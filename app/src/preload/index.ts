@@ -99,6 +99,7 @@ const bridge: DevteamBridge = {
       ipcRenderer.removeListener(CHANNELS.openProject, handler);
     };
   },
+  takePendingProject: () => ipcRenderer.invoke(CHANNELS.takePendingProject),
   backgroundSettings: () => ipcRenderer.invoke(CHANNELS.backgroundSettings),
   setOpenAtLogin: (enabled: boolean) => ipcRenderer.invoke(CHANNELS.setOpenAtLogin, enabled === true),
 };

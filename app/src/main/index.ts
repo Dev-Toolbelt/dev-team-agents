@@ -20,7 +20,7 @@ import { WINDOW_WEB_PREFERENCES, hardenContents, hardenSession } from './securit
 import { CODE_SIGNED } from './build-info.js';
 import { NotificationCenter, type NativeNotice } from './notifications.js';
 import { registerNotificationIpc } from './notificationIpc.js';
-import { loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
+import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
 import { readSettings, writeOpenAtLogin } from './settings.js';
 import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
@@ -93,6 +93,12 @@ let startHidden = false;
 /** A project a notification asked to show, delivered once the renderer can hear it. */
 let pendingProject: ProjectId | null = null;
 /**
+ * Whether the renderer has subscribed to `openProject`. `did-finish-load` can fire before
+ * React's effect subscribes, and a push sent then is lost — so until the renderer says it
+ * listens (by taking the pending project), the project waits here instead of being sent.
+ */
+let rendererListening = false;
+/**
  * Live notifications. Electron drops a notification's click handler when the object is
  * garbage-collected, so a click on a banner still on screen would do nothing; each is
  * held until it is closed.
@@ -120,9 +126,17 @@ function showWindow(projectId?: ProjectId): void {
 }
 
 function deliverPendingProject(): void {
-  if (pendingProject === null || mainWindow === null || mainWindow.webContents.isLoading()) return;
+  if (pendingProject === null || mainWindow === null || !rendererListening) return;
   mainWindow.webContents.send(CHANNELS.openProject, pendingProject);
   pendingProject = null;
+}
+
+/** The renderer's half of the handshake: it listens now, and takes what was waiting. */
+function takePendingProject(): ProjectId | null {
+  rendererListening = true;
+  const projectId = pendingProject;
+  pendingProject = null;
+  return projectId;
 }
 
 function quitForReal(): void {
@@ -165,8 +179,8 @@ function refreshTray(feed: NotificationFeed): void {
 function createTray(): void {
   const path = trayIconPath();
   // No icon means no tray rather than an invisible one: an empty tray image is a click
-  // target the user cannot see. The window still hides on close; the dock (macOS) or a
-  // relaunch (which the single-instance lock turns into "show") brings it back.
+  // target the user cannot see. Then macOS still hides on close (the Dock brings it
+  // back), and elsewhere closing the window quits — see `shouldHideOnClose`.
   if (path === null) return;
   tray = new Tray(nativeImage.createFromPath(path));
   tray.on('click', () => {
@@ -195,18 +209,15 @@ function showNative(notice: NativeNotice): void {
 
 async function currentBackgroundSettings(): Promise<BackgroundSettings> {
   const chosen = (await readSettings(app.getPath('userData'))).openAtLogin;
-  return loginItemState(chosen, app.getLoginItemSettings(), process.platform, app.isPackaged);
+  const os = app.getLoginItemSettings(loginItemOptions(process.platform));
+  return loginItemState(chosen, os, process.platform, app.isPackaged);
 }
 
 async function setOpenAtLogin(enabled: boolean): Promise<BackgroundSettings> {
   await writeOpenAtLogin(app.getPath('userData'), enabled);
   if (app.isPackaged) {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      // Windows reads the flag back from argv; macOS 13+ has no "open hidden" option any
-      // more, and `wasOpenedAtLogin` answers the same question there.
-      ...(process.platform === 'win32' ? { args: ['--hidden'] } : {}),
-    });
+    // The same options `currentBackgroundSettings` reads with — see `loginItemOptions`.
+    app.setLoginItemSettings({ openAtLogin: enabled, ...loginItemOptions(process.platform) });
   }
   return currentBackgroundSettings();
 }
@@ -243,14 +254,24 @@ function createWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     if (!startHidden) window.show();
   });
+  // A (re)load drops the renderer's listeners; it says it listens again once React has
+  // subscribed, by taking the pending project.
+  window.webContents.on('did-start-loading', () => {
+    rendererListening = false;
+  });
   window.webContents.on('did-finish-load', () => {
-    deliverPendingProject();
     if (center !== null) window.webContents.send(CHANNELS.notificationFeedChanged, center.snapshot());
   });
+  // Windows logoff and shutdown do not always emit `before-quit`; without this the
+  // `preventDefault` below would hold the session open for a hidden window.
+  window.on('session-end', () => {
+    quitting = true;
+  });
   // Closing hides: the notification stream lives in this process and must outlive the
-  // window. Only a real quit (tray Quit, ⌘Q, logout) lets the window close.
+  // window. Only a real quit (tray Quit, ⌘Q, logout) lets the window close — or having
+  // no tray to come back through (see `shouldHideOnClose`).
   window.on('close', (event) => {
-    if (!shouldHideOnClose(quitting)) return;
+    if (!shouldHideOnClose(quitting, tray !== null, process.platform)) return;
     event.preventDefault();
     window.hide();
     // No window, no Dock icon: the menu bar is where the app lives while hidden.
@@ -295,18 +316,23 @@ app.setName(DISPLAY_NAME);
 // One instance: a second would run a second `watch` and show every notification twice.
 // Launching again while it runs — from the Dock, the Start menu, a shortcut — shows the
 // running one instead.
-if (!app.requestSingleInstanceLock()) {
+//
+// `app.quit()` is asynchronous: the losing instance would otherwise still reach
+// `whenReady` below, create a window and a tray, and start a second `watch` — so the
+// ready handler is only ever registered by the instance that holds the lock.
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) {
   app.quit();
 } else {
   app.on('second-instance', () => showWindow());
+  app.on('before-quit', () => {
+    quitting = true;
+    center?.stop();
+  });
+  void app.whenReady().then(onReady);
 }
 
-app.on('before-quit', () => {
-  quitting = true;
-  center?.stop();
-});
-
-void app.whenReady().then(() => {
+function onReady(): void {
   if (!CODE_SIGNED && app.isPackaged) {
     // Visible in the console of a packaged build as well as in the UI banner. A packaged
     // app that says nothing about being unsigned is the thing this repository must not
@@ -390,21 +416,27 @@ void app.whenReady().then(() => {
     setPaused: (paused) => center!.setPaused(paused),
     backgroundSettings: currentBackgroundSettings,
     setOpenAtLogin,
+    takePendingProject,
   });
 
-  startHidden = launchedAtLogin();
-  mainWindow = createWindow();
+  // Tray first: whether a login launch may start hidden, and whether closing may hide,
+  // both depend on there being one to come back through.
   createTray();
+  startHidden = launchedAtLogin() && (tray !== null || process.platform === 'darwin');
+  mainWindow = createWindow();
   if (startHidden && process.platform === 'darwin' && tray !== null) app.dock?.hide();
   void center.start();
 
   app.on('activate', () => showWindow());
-});
+}
 
-// Nothing to do: closing the last window hides it (see `createWindow`), and the process
-// stays alive for the notification stream. Declared so Electron's default — quit on the
-// last window closing, outside macOS — does not apply.
-app.on('window-all-closed', () => undefined);
+// Closing the last window normally hides it (see `createWindow`) and the process stays
+// alive for the notification stream, so Electron's default — quit on the last window
+// closing, outside macOS — must not apply. The exception is a window that really closed
+// because there is no tray to reopen it from: then nothing could reach the app any more.
+app.on('window-all-closed', () => {
+  if (tray === null && process.platform !== 'darwin') quitForReal();
+});
 
 // Belt and braces for the "no remote content" rule: if any code path ever tries to
 // create a window this file did not, it still cannot get node integration.

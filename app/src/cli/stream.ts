@@ -21,6 +21,8 @@ import { childEnvironment, KILL_GRACE_MS, type InvokeOptions } from './invoke.js
 
 /** A single event line longer than this is a runaway; the child is killed. */
 export const MAX_LINE_BYTES = 1024 * 1024;
+/** See `fail` below: time for a failing CLI to exit with its own code before it is killed. */
+export const PROTOCOL_GRACE_MS = 1_000;
 
 export type StreamEnd =
   | { readonly kind: 'exited'; readonly code: number | null; readonly signal: NodeJS.Signals | null; readonly stderr: string }
@@ -34,6 +36,8 @@ export interface StreamOptions extends Pick<InvokeOptions, 'binary' | 'cwd' | 'e
   /** Called exactly once, however the stream ended. */
   readonly onEnd: (end: StreamEnd) => void;
   readonly killGraceMs?: number;
+  /** How long a child that sent an unparseable line has to exit on its own. */
+  readonly protocolGraceMs?: number;
 }
 
 export interface StreamHandle {
@@ -46,6 +50,7 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
   const args = [...options.args, '--json'];
   if (options.declarationFile !== undefined) args.unshift('--client-schemas', options.declarationFile);
   const killGraceMs = options.killGraceMs ?? KILL_GRACE_MS;
+  const protocolGraceMs = options.protocolGraceMs ?? PROTOCOL_GRACE_MS;
 
   let ended = false;
   const finish = (end: StreamEnd): void => {
@@ -87,7 +92,10 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
   const fail = (detail: string): void => {
     if (protocolError !== null) return;
     protocolError = detail;
-    kill();
+    // Not at once: a CLI that is failing prints its error and exits with the code that
+    // explains it, and killing it first would replace that code with our signal. A
+    // child still running after the grace period is killed.
+    timers.push(setTimeout(kill, protocolGraceMs));
   };
 
   child.stdout?.setEncoding('utf8');
@@ -112,7 +120,12 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
       }
       options.onEvent(parsed as Record<string, unknown>);
     }
-    if (Buffer.byteLength(buffered) > MAX_LINE_BYTES) fail(`an event line exceeded ${MAX_LINE_BYTES} bytes`);
+    if (Buffer.byteLength(buffered) > MAX_LINE_BYTES) {
+      // A runaway gets no grace period: the buffer would keep growing through it.
+      fail(`an event line exceeded ${MAX_LINE_BYTES} bytes`);
+      buffered = '';
+      kill();
+    }
   });
   child.stderr?.setEncoding('utf8');
   child.stderr?.on('data', (chunk: string) => {
@@ -127,7 +140,12 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
   });
   child.on('close', (code, signal) => {
     for (const timer of timers) clearTimeout(timer);
-    if (protocolError !== null) finish({ kind: 'protocol', detail: protocolError });
+    // A child that exited non-zero on its own is reported by its exit code, even after
+    // an unparseable line: the code is the CLI's stated reason (3 = an environment it
+    // cannot fix), and a protocol error would bury it under a generic retry. A SIGTERM
+    // we sent ends `watch` with 0, so this cannot mask a protocol error we reacted to.
+    const exitedWithReason = code !== null && code !== 0 && signal === null;
+    if (protocolError !== null && !exitedWithReason) finish({ kind: 'protocol', detail: protocolError });
     else finish({ kind: 'exited', code, signal, stderr });
   });
 

@@ -103,9 +103,26 @@ export function trayTitle(unread: number): string {
 }
 
 /**
+ * The options the login item is registered **and read back** with — one value for both.
+ *
+ * Windows compares the registry entry against `path` and `args` when reading, and `args`
+ * defaults to `[]`: an item registered with `--hidden` and read without it reports
+ * `openAtLogin: false`, so the UI said "the system did not record it" right after it did.
+ * macOS 13+ has no "open hidden" option; `wasOpenedAtLogin` answers that there.
+ */
+export function loginItemOptions(platform: NodeJS.Platform): { readonly args?: string[] } {
+  return platform === 'win32' ? { args: ['--hidden'] } : {};
+}
+
+/**
  * Whether a window `close` should hide instead of closing. Only a real quit — the tray's
  * Quit, ⌘Q, the OS logging out — lets it close; everything else is "hide".
+ *
+ * **Only when there is a way back.** Hidden with no tray icon on Windows, the app is an
+ * invisible process the user can reach only by launching it again. macOS always has the
+ * Dock; elsewhere the tray is the only door, and without it closing quits.
  */
-export function shouldHideOnClose(quitting: boolean): boolean {
-  return !quitting;
+export function shouldHideOnClose(quitting: boolean, hasTray: boolean, platform: NodeJS.Platform): boolean {
+  if (quitting) return false;
+  return hasTray || platform === 'darwin';
 }

@@ -9,7 +9,7 @@
 
 import { ipcMain } from 'electron';
 
-import { CHANNELS, type BackgroundSettings, type NotificationFeed } from '../shared/api.js';
+import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 export interface NotificationIpcDeps {
   readonly feed: () => NotificationFeed;
@@ -17,6 +17,7 @@ export interface NotificationIpcDeps {
   readonly setPaused: (paused: boolean) => NotificationFeed;
   readonly backgroundSettings: () => Promise<BackgroundSettings>;
   readonly setOpenAtLogin: (enabled: boolean) => Promise<BackgroundSettings>;
+  readonly takePendingProject: () => ProjectId | null;
 }
 
 export function registerNotificationIpc(deps: NotificationIpcDeps): void {
@@ -27,6 +28,7 @@ export function registerNotificationIpc(deps: NotificationIpcDeps): void {
     if (typeof paused !== 'boolean') return deps.feed();
     return deps.setPaused(paused);
   });
+  ipcMain.handle(CHANNELS.takePendingProject, () => deps.takePendingProject());
   ipcMain.handle(CHANNELS.backgroundSettings, () => deps.backgroundSettings());
   ipcMain.handle(CHANNELS.setOpenAtLogin, async (_event, enabled: unknown) => {
     if (typeof enabled !== 'boolean') return deps.backgroundSettings();

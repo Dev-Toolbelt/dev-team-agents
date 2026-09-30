@@ -264,11 +264,15 @@ export function Projects({
     setReturnFocusTo(null);
   });
 
-  // Opened only when no settings screen is: one that is open may hold unsaved edits, and
-  // its own "leave with unsaved changes?" guard must not be bypassed by a notification.
+  // A project a notification asked for while another one's settings were open.
+  const [deferredOpen, setDeferredOpen] = useState<string | null>(null);
+  // Never over an open settings screen: it may hold unsaved edits, and its own "leave with
+  // unsaved changes?" guard must not be bypassed by a notification. The request waits,
+  // is said out loud above that screen, and is honoured when the user leaves it.
   useEffect(() => {
     if (openRequest === null) return;
-    setOpenSettings((current) => current ?? openRequest.projectId);
+    if (openSettings === null) setOpenSettings(openRequest.projectId);
+    else if (openSettings !== openRequest.projectId) setDeferredOpen(openRequest.projectId);
   }, [openRequest?.nonce]);
 
   // Keeping the tab mounted preserves unsaved settings, but it also stopped the refetch a
@@ -286,18 +290,34 @@ export function Projects({
 
   const settingsFor = openSettings === null ? undefined : projects.find((project) => project.project_id === openSettings);
   if (settingsFor !== undefined) {
+    const waiting = deferredOpen === null ? undefined : projects.find((project) => project.project_id === deferredOpen);
     return (
-      <ProjectSettings
-        project={settingsFor}
-        name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
-        environment={environment}
-        active={active}
-        onBack={() => {
-          setReturnFocusTo(settingsFor.project_id);
-          setOpenSettings(null);
-          reload();
-        }}
-      />
+      <>
+        {waiting !== undefined ? (
+          <Alert className="mb-4" role="status">
+            <AlertTitle>
+              A notification asked to open {displayName(waiting.path, waiting.project_id, projectNames)}
+            </AlertTitle>
+            <AlertDescription>It opens when you leave these settings.</AlertDescription>
+          </Alert>
+        ) : null}
+        <ProjectSettings
+          project={settingsFor}
+          name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
+          environment={environment}
+          active={active}
+          onBack={() => {
+            if (waiting !== undefined) {
+              setOpenSettings(waiting.project_id);
+            } else {
+              setReturnFocusTo(settingsFor.project_id);
+              setOpenSettings(null);
+            }
+            setDeferredOpen(null);
+            reload();
+          }}
+        />
+      </>
     );
   }
 

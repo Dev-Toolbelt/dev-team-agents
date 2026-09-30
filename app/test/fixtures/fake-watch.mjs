@@ -5,6 +5,8 @@
 //             {"event":"end","reason":"stdin-closed"}, exactly like the real CLI.
 //   garbage — prints a non-JSON line, then waits; the reader must kill it.
 //   exit3   — writes an environment error to stderr and exits 3.
+//   error3  — writes the error as one `{"event":"error",…}` line and exits 3.
+//   indented3 — writes an indented, multi-line error document and exits 3.
 //   argv    — prints its own argv as one event, then ends.
 const mode = process.argv[2];
 const out = (event) => process.stdout.write(JSON.stringify({ ok: true, ...event }) + '\n');
@@ -15,6 +17,16 @@ if (mode === 'argv') {
 }
 if (mode === 'exit3') {
   process.stderr.write('devteam: error: the store needs a layout migration first\n');
+  process.exit(3);
+}
+// The CLI's failure under --json, as the stream's own last line.
+if (mode === 'error3') {
+  out({ ok: false, event: 'error', error: 'the store needs a layout migration first', exit_code: 3 });
+  process.exit(3);
+}
+// A pre-fix CLI: an indented error document (not JSON line by line), then exit 3.
+if (mode === 'indented3') {
+  process.stdout.write('{\n  "error": "the store needs a layout migration first",\n  "ok": false\n}\n');
   process.exit(3);
 }
 if (mode === 'garbage') {
