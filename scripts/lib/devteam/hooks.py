@@ -28,11 +28,15 @@ SETTINGS_FILE = Path(".claude") / "settings.json"
 #: /etc/bash.bashrc noise into hook output — carried over from install.sh:676.
 ENV_PREFIX = "env -u BASH_ENV -u ENV"
 
-#: Paths resolve through the in-project core pointer, so they keep working after
+#: Paths resolve through the in-project `scripts` link, so they keep working after
 #: an update re-points it and they stay relative, which a committed
-#: settings.json requires.
-HOOK_DIR = "{}/core/scripts/hooks".format(project.PROJECT_DIR)
-LEGACY_HOOK_DIR = "{}/scripts/hooks".format(project.PROJECT_DIR)
+#: settings.json requires. The same path a v2 install wrote, so the file does not
+#: differ between the two layouts.
+HOOK_DIR = "{}/scripts/hooks".format(project.PROJECT_DIR)
+#: What binds wrote while the project carried one `core` pointer to the whole
+#: version. Still recognised as ours, so a sync rewrites such an entry in place
+#: instead of appending a second one beside it.
+CORE_POINTER_HOOK_DIR = "{}/core/scripts/hooks".format(project.PROJECT_DIR)
 
 EVENTS = (
     ("PreToolUse", "pre-tool-use.sh"),
@@ -54,7 +58,7 @@ def _is_devteam_entry(entry, script):
         if not isinstance(hook, dict):
             continue
         command = hook.get("command") or ""
-        if script in command and (HOOK_DIR in command or LEGACY_HOOK_DIR in command):
+        if script in command and (HOOK_DIR in command or CORE_POINTER_HOOK_DIR in command):
             return True
     return False
 

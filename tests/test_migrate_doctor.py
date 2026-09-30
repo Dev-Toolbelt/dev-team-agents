@@ -9,7 +9,7 @@ from pathlib import Path
 from devteam_support import StoreTestCase
 
 from devteam import bind, doctor, migrate, project, registry, versions
-from devteam.errors import UsageError
+from devteam.errors import ConflictError, UsageError
 
 
 class MigrationTest(StoreTestCase):
@@ -98,7 +98,7 @@ class MigrationTest(StoreTestCase):
         # and the bind this migration performs writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "memory-dir", "project.json", "resolved", "state-dir", "user-data"],
+            ["memory-dir", "project.json", "resolved", "scripts", "state-dir", "templates", "user-data"],
         )
         moved = {item["from"] for item in result["quarantined"]}
         self.assertIn(".dev-team-agents/agents", moved)
@@ -155,8 +155,21 @@ class BindOverV2Test(StoreTestCase):
     _install_sh_project = MigrationTest._install_sh_project
 
     def _bound_over_v2(self):
+        """What a bind over v2 left before it was refused: real v2 trees plus a bind.
+
+        Built by binding with the two runtime trees moved aside and putting them back
+        afterwards — a bind today refuses to link over them, which is the point.
+        """
         root = self._install_sh_project("bound-over-v2")
+        install_dir = root / project.PROJECT_DIR
+        parked = {}
+        for name in bind.RUNTIME_TREES:
+            parked[name] = install_dir.parent / ("parked-" + name)
+            (install_dir / name).rename(parked[name])
         bind.bind(root, provider_names=["claude"], mode="link")
+        for name, path in parked.items():
+            (install_dir / name).unlink()
+            path.rename(install_dir / name)
         return root
 
     def test_the_bind_command_refuses_a_v2_install_and_points_at_migrate(self):
@@ -173,13 +186,17 @@ class BindOverV2Test(StoreTestCase):
         code, _, err = self.run_cli("bind", str(root), "--provider", "claude", "--mode", "vendored")
         self.assertEqual(code, 0, err)
 
-    def test_sync_keeps_working_on_a_project_already_bound_over_v2(self):
-        # The refusal lives in the command, not in `bind()`: sync calls `bind()`, and
-        # a project bound before the refusal existed must not become unsyncable.
+    def test_sync_refuses_a_project_bound_over_v2_and_points_at_migrate(self):
+        # The runtime links live where the v2 trees still are. Linking beside them is
+        # impossible, and leaving them would run the hooks from the old v2 scripts —
+        # so sync refuses with the one command that clears the way.
         root = self._bound_over_v2()
         project_id = project.load(root)["project_id"]
-        result = bind.sync_project(project_id)
-        self.assertEqual(result["version"], "3.0.0")
+        with self.assertRaises(ConflictError) as caught:
+            bind.sync_project(project_id)
+        self.assertIn("devteam migrate", caught.exception.hint)
+        # Nothing of the user's was touched.
+        self.assertFalse((root / project.PROJECT_DIR / "scripts").is_symlink())
 
     def test_doctor_reports_the_leftover_tree_after_a_bind(self):
         root = self._bound_over_v2()

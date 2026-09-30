@@ -488,34 +488,58 @@ def _same_git_repository(path_a, path_b):
     return common_a is not None and common_a == common_b
 
 
-def _runtime_root(version_dir, project_root, mode, previous_paths, project_id, retired):
-    """Give the project an in-tree path to the resolved core version.
+#: The two version trees the framework's own text reaches by a project-relative path:
+#: 121 references to `.dev-team-agents/scripts/…` (hooks, `new-adr.sh`,
+#: `graphify-refresh.sh`, the reuse and design-token lints) and 17 to
+#: `.dev-team-agents/templates/…`. Nothing shipped reads agents, commands or skills
+#: through `.dev-team-agents/` — Claude Code finds those under `.claude/`.
+RUNTIME_TREES = ("scripts", "templates")
 
-    116 shipped references — `.dev-team-agents/scripts/...` in 6 commands and 14
-    skills, `.dev-team-agents/templates/...` in 13 places, and `CLAUDE.md`'s own
-    `bash .dev-team-agents/scripts/new-adr.sh` — assume the framework is reachable
-    from inside the project. A link-mode bind left `.dev-team-agents/` holding
-    `project.json` alone, so every one of them broke.
 
-    One pointer fixes all of them without a copy, and it is the same path the bash
-    installers' `ensure_claude_framework` was faking by vendoring 2.3 MB back in.
+def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copies, project_id, retired):
+    """Link the two trees the framework's text names, exactly where it names them.
+
+    This used to be one `core` pointer to the whole version, on the claim that it
+    resolved every project-relative reference. It resolved none of them: the text says
+    `.dev-team-agents/scripts/new-adr.sh`, the pointer made
+    `.dev-team-agents/core/scripts/new-adr.sh`, and the reuse and design-token Stop
+    gates — which look for `.dev-team-agents/scripts/<lint>.sh` and exit 0 when it is
+    absent — were silently off in every v3 project. Linking each tree at the path
+    the text already uses fixes all of them without rewriting a reference, and makes
+    `settings.json`'s hook path the same one a v2 install used.
+
+    A real directory at one of these paths is a v2 vendored tree unless the previous
+    manifest records a `copy` there — the path alone is not enough: a link-mode bind
+    lists the same path for its link, and trusting that would quarantine a real tree
+    the bind never made. Replacing it would run the hooks from nothing and linking
+    beside it is impossible, so it is refused with the one command that handles it.
     """
-    rel_path = Path(project.PROJECT_DIR) / "core"
-    # `.as_posix()`: see the comment on the same pattern in `_vendored_tree` —
-    # this string ends up in the manifest, the exclude block and `.gitignore`.
-    rel = rel_path.as_posix()
-    dest = Path(project_root) / rel_path
-    kind = _materialize(
-        Path(version_dir),
-        dest,
-        "link" if mode != "copy" else "copy",
-        previous_paths,
-        rel,
-        project_root,
-        project_id,
-        retired,
-    )
-    return [{"path": rel, "kind": kind}]
+    created = []
+    for name in RUNTIME_TREES:
+        rel_path = Path(project.PROJECT_DIR) / name
+        # `.as_posix()`: see the comment on the same pattern in `_vendored_tree` —
+        # this string ends up in the manifest, the exclude block and `.gitignore`.
+        rel = rel_path.as_posix()
+        dest = Path(project_root) / rel_path
+        if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
+            raise ConflictError(
+                "{} is a v2 vendored tree, where this bind links {}".format(dest, rel),
+                hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+                "old tree into a dated quarantine rather than deleting it.",
+                details={"path": str(dest)},
+            )
+        kind = _materialize(
+            Path(version_dir) / name,
+            dest,
+            "link" if mode != "copy" else "copy",
+            previous_paths,
+            rel,
+            project_root,
+            project_id,
+            retired,
+        )
+        created.append({"path": rel, "kind": kind})
+    return created
 
 
 def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
@@ -584,6 +608,9 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
 
     previous = read_manifest(project_id)
     previous_paths = {item.get("path") for item in previous.get("artifacts", [])}
+    previous_copies = {
+        item.get("path") for item in previous.get("artifacts", []) if item.get("kind") == "copy"
+    }
 
     artifacts = []
     retired = []
@@ -608,10 +635,22 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             )
             artifacts.append({"path": rel, "kind": kind})
 
-    if "claude" in selected or resolved_mode == "vendored":
+    # Every provider, not only Claude: the Codex hooks.json and the opencode plugin
+    # call `.dev-team-agents/scripts/hooks/…` too. Not in vendored mode, where the
+    # real trees are already at these paths.
+    if resolved_mode != "vendored":
         artifacts.extend(
-            _runtime_root(version_dir, project_root, resolved_mode, previous_paths, project_id, retired)
+            _runtime_root(
+                version_dir,
+                project_root,
+                resolved_mode,
+                previous_paths,
+                previous_copies,
+                project_id,
+                retired,
+            )
         )
+    if "claude" in selected or resolved_mode == "vendored":
         artifacts.extend(hooks.wire(project_root, emitter=emitter))
 
     # Resolved preferences and the state pointer are written on every bind and

@@ -240,7 +240,10 @@ class HooksTest(StoreTestCase):
                 for hook in entry["hooks"]
             ]
             self.assertTrue(any(script in command for command in commands), event)
-            self.assertTrue(any("core/scripts/hooks" in command for command in commands))
+            self.assertTrue(
+                any(".dev-team-agents/scripts/hooks/" in command for command in commands)
+            )
+            self.assertFalse(any("/core/" in command for command in commands))
         self.assertIs(settings["includeCoAuthoredBy"], False)
 
     def test_wiring_preserves_unrelated_settings_and_does_not_duplicate(self):
@@ -263,9 +266,11 @@ class HooksTest(StoreTestCase):
         self.assertIn("mine.sh", stop_commands)
         self.assertEqual(sum("stop.sh" in c for c in stop_commands), 1)
 
-    def test_a_v2_hook_path_is_rewritten_in_place(self):
+    def test_a_core_pointer_hook_path_is_rewritten_in_place(self):
+        # What binds wrote while the project had one `core` pointer: still ours, so a
+        # sync replaces it rather than adding a second Stop hook beside it.
         root = self.new_project()
-        legacy = "env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/stop.sh"
+        legacy = "env -u BASH_ENV -u ENV .dev-team-agents/core/scripts/hooks/stop.sh"
         jsonio.write_json_atomic(
             root / hooks.SETTINGS_FILE,
             {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": legacy}]}]}},
@@ -278,7 +283,8 @@ class HooksTest(StoreTestCase):
             hook["command"] for entry in settings["hooks"]["Stop"] for hook in entry["hooks"]
         ]
         self.assertEqual(len(commands), 1)
-        self.assertIn("core/scripts/hooks/stop.sh", commands[0])
+        self.assertIn(".dev-team-agents/scripts/hooks/stop.sh", commands[0])
+        self.assertNotIn("/core/", commands[0])
 
     def test_unbind_removes_only_our_hook_entries(self):
         root = self.new_project()
@@ -300,11 +306,11 @@ class RuntimeRootTest(StoreTestCase):
         self.install_version("3.0.0", activate=True)
         root = self.new_project()
         bind.bind(root, provider_names=["claude"])
-        pointer = root / project.PROJECT_DIR / "core"
-        # The paths 116 shipped references use.
-        self.assertTrue((pointer / "scripts").is_dir())
-        self.assertTrue((pointer / "templates" / "plan-template.md").is_file())
-        self.assertTrue((pointer / "agents").is_dir())
+        install_dir = root / project.PROJECT_DIR
+        # The paths the shipped references use, at exactly the depth they name.
+        self.assertTrue((install_dir / "scripts" / "hooks").is_dir())
+        self.assertTrue((install_dir / "templates" / "plan-template.md").is_file())
+        self.assertFalse((install_dir / "core").exists())
 
 
 # Every assertion in this class is a POSIX permission bit, so there is nothing
@@ -489,7 +495,7 @@ class LegacyV2MigrationTest(StoreTestCase):
                 for hook in entry["hooks"]
             ]
             self.assertEqual(len(commands), 1, event)
-            self.assertIn("core/scripts/hooks/" + script, commands[0])
+            self.assertIn(".dev-team-agents/scripts/hooks/" + script, commands[0])
             # The path the rewritten hook names must actually exist.
             self.assertTrue((root / commands[0].split()[-1]).exists(), commands[0])
         self.assertEqual(settings["model"], "opus")

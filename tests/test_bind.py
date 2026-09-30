@@ -23,17 +23,17 @@ class BindTest(StoreTestCase):
         self.assertTrue(result["identity_created"])
         self.assertTrue((root / ".claude" / "agents" / "dev-team").exists())
         self.assertTrue((root / ".claude" / "commands" / "devteam").exists())
-        # The project holds identity plus the runtime-root pointer — no vendored tree.
+        # The project holds identity plus the two runtime links — no vendored tree.
         # Two pointers, not one: layout 2 splits a project's own state into a
         # machine-local directory (`state-dir`) and a portable one (`memory-dir`),
         # and a bind writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["core", "memory-dir", "project.json", "resolved", "state-dir"],
+            ["memory-dir", "project.json", "resolved", "scripts", "state-dir", "templates"],
         )
-        pointer = root / project.PROJECT_DIR / "core"
-        self.assertTrue((pointer / "scripts").is_dir())
-        self.assertTrue((pointer / "templates").is_dir())
+        for name in ("scripts", "templates"):
+            link = root / project.PROJECT_DIR / name
+            self.assertTrue(link.is_symlink() and link.is_dir(), name)
         entry = registry.get(result["project_id"])
         self.assertEqual(entry["mode"], result["mode"])
         self.assertIsNone(entry["pin"])
