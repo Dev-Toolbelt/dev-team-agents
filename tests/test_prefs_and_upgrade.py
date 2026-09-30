@@ -110,6 +110,166 @@ class BirthLayoutTest(StoreTestCase):
         self.assertTrue((memory / "session-summary.md").is_file())
 
 
+class LegacyPreferencesImportTest(StoreTestCase):
+    """`bind` adopts a v2 `user-data/preferences.json` as the project layer, then retires it."""
+
+    V2_PREFS = {
+        "language": "en",
+        "session_summary_max_days": 45,
+        "worktree_active": False,
+        "worktree_base_branch": "develop",
+        "telemetry": True,
+        "suppress_notifications": ["info"],
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.install_version("3.0.0", activate=True)
+
+    def _legacy_project(self, prefs_payload, name="legacy"):
+        root = self.new_project(name)
+        memory = project.legacy_memory_dir(root)
+        memory.mkdir(parents=True)
+        jsonio.write_json_atomic(memory / "preferences.json", prefs_payload)
+        return root
+
+    def _quarantined(self, report):
+        self.assertIsNotNone(report["quarantined"])
+        return Path(report["quarantined"])
+
+    def test_a_bind_imports_every_valid_key_and_quarantines_the_file(self):
+        root = self._legacy_project(self.V2_PREFS)
+        result = bind.bind(root, provider_names=["claude"])
+        report = result["preferences_import"]
+
+        self.assertEqual(sorted(report["imported"]), sorted(self.V2_PREFS))
+        self.assertIsNone(report["problem"])
+        resolved = prefs.resolve(result["project_id"], "3.0.0")
+        for key, value in self.V2_PREFS.items():
+            self.assertEqual(resolved["values"][key], value, key)
+            self.assertEqual(resolved["origin"][key], "project", key)
+
+        # Moved, never deleted: the file is gone from the project and intact in quarantine.
+        self.assertFalse(prefs.legacy_file(root).exists())
+        kept = self._quarantined(report)
+        self.assertEqual(json.loads(kept.read_text(encoding="utf-8")), self.V2_PREFS)
+        self.assertEqual(kept.parent.name, prefs.IMPORTED_GROUP)
+
+    def test_the_projection_agents_read_carries_the_imported_values(self):
+        root = self._legacy_project({"language": "en"})
+        bind.bind(root, provider_names=["claude"])
+        payload = json.loads((root / prefs.RESOLVED_FILE).read_text(encoding="utf-8"))
+        self.assertEqual(payload["language"], "en")
+
+    def test_a_consent_key_the_v2_installer_recorded_is_honoured(self):
+        root = self._legacy_project({"telemetry": True, "auto_update": False})
+        result = bind.bind(root, provider_names=["claude"])
+        resolved = prefs.resolve(result["project_id"], "3.0.0")
+        self.assertTrue(resolved["values"]["telemetry"])
+        self.assertEqual(resolved["origin"]["telemetry"], "project")
+
+    def test_the_project_layer_wins_a_conflict_and_the_file_is_still_retired(self):
+        root = self.new_project("conflict")
+        pid = bind.bind(root, provider_names=["claude"])["project_id"]
+        prefs.set_value("language", "es", "3.0.0", scope="project", project_id=pid)
+        prefs.set_value("worktree_active", "false", "3.0.0", scope="project", project_id=pid)
+        memory = project.legacy_memory_dir(root)
+        memory.mkdir(parents=True, exist_ok=True)
+        jsonio.write_json_atomic(
+            memory / "preferences.json", {"language": "en", "worktree_active": False, "docs_stale_after_days": 7}
+        )
+
+        report = bind.sync_project(pid)["preferences_import"]
+        self.assertEqual(report["conflicts"], ["language"])
+        self.assertEqual(report["unchanged"], ["worktree_active"])
+        self.assertEqual(report["imported"], ["docs_stale_after_days"])
+        values = prefs.resolve(pid, "3.0.0")["values"]
+        self.assertEqual(values["language"], "es")
+        self.assertEqual(values["docs_stale_after_days"], 7)
+        self.assertFalse(prefs.legacy_file(root).exists())
+
+    def test_unknown_and_ill_typed_keys_are_reported_and_do_not_block(self):
+        root = self._legacy_project(
+            {"language": "en", "retired_v1_key": 1, "session_summary_max_days": "forty", "worktree_active": 1}
+        )
+        report = bind.bind(root, provider_names=["claude"])["preferences_import"]
+        self.assertEqual(report["imported"], ["language"])
+        self.assertEqual(
+            report["ignored"],
+            [
+                {"key": "retired_v1_key", "reason": "unknown"},
+                {"key": "session_summary_max_days", "reason": "invalid"},
+                {"key": "worktree_active", "reason": "invalid"},
+            ],
+        )
+        # Retired all the same; the quarantined copy keeps what was not imported.
+        kept = json.loads(self._quarantined(report).read_text(encoding="utf-8"))
+        self.assertEqual(kept["retired_v1_key"], 1)
+
+    def test_a_malformed_file_is_left_in_place_and_nothing_is_imported(self):
+        root = self.new_project("broken")
+        memory = project.legacy_memory_dir(root)
+        memory.mkdir(parents=True)
+        (memory / "preferences.json").write_text("{ not json", encoding="utf-8")
+
+        result = bind.bind(root, provider_names=["claude"])
+        report = result["preferences_import"]
+        self.assertIsNotNone(report["problem"])
+        self.assertIsNone(report["quarantined"])
+        self.assertTrue(prefs.legacy_file(root).is_file())
+        self.assertEqual(prefs.resolve(result["project_id"], "3.0.0")["origin"]["language"], "defaults")
+
+    def test_a_json_value_that_is_not_an_object_is_left_in_place(self):
+        root = self._legacy_project(["language", "en"])
+        report = bind.bind(root, provider_names=["claude"])["preferences_import"]
+        self.assertIn("not a JSON object", report["problem"])
+        self.assertTrue(prefs.legacy_file(root).is_file())
+
+    def test_a_write_that_does_not_read_back_leaves_the_file_in_place(self):
+        root = self.new_project("unverified")
+        pid = bind.bind(root, provider_names=["claude"])["project_id"]
+        memory = project.legacy_memory_dir(root)
+        memory.mkdir(parents=True, exist_ok=True)
+        jsonio.write_json_atomic(memory / "preferences.json", {"language": "en"})
+
+        # A write that reports success and persists nothing: the verify step must catch it.
+        with mock.patch.object(prefs.jsonio, "write_json_atomic"):
+            report = prefs.import_legacy(root, pid, "3.0.0")
+        self.assertIn("did not read back language", report["problem"])
+        self.assertIsNone(report["quarantined"])
+        self.assertTrue(prefs.legacy_file(root).is_file())
+
+    def test_no_legacy_file_reports_null(self):
+        root = self.new_project("fresh")
+        self.assertIsNone(bind.bind(root, provider_names=["claude"])["preferences_import"])
+
+    def test_a_second_bind_finds_nothing_to_import(self):
+        root = self._legacy_project(self.V2_PREFS)
+        bind.bind(root, provider_names=["claude"])
+        self.assertIsNone(bind.bind(root, provider_names=["claude"])["preferences_import"])
+
+    def test_upgrade_after_the_import_meets_no_collision(self):
+        root = self._legacy_project(self.V2_PREFS)
+        (project.legacy_memory_dir(root) / "session-summary.md").write_text("## v2\n", encoding="utf-8")
+        pid = bind.bind(root, provider_names=["claude"])["project_id"]
+
+        preview = upgrade.plan(root)
+        self.assertEqual(preview["collisions"], [])
+        upgrade.apply(root)
+        self.assertEqual(prefs.resolve(pid, "3.0.0")["values"]["language"], "en")
+
+    def test_the_cli_reports_the_import_in_json_and_in_text(self):
+        root = self._legacy_project({"language": "en"})
+        code, out, _err = self.run_cli("bind", str(root), "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["preferences_import"]["imported"], ["language"])
+
+        other = self._legacy_project({"language": "en"}, name="text")
+        code, out, _err = self.run_cli("bind", str(other))
+        self.assertEqual(code, 0)
+        self.assertIn("1 imported from .dev-team-agents/user-data/preferences.json", out)
+
+
 class UpgradeTest(StoreTestCase):
     def setUp(self):
         super().setUp()

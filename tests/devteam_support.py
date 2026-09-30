@@ -161,6 +161,8 @@ def make_source_tree(root, version="3.0.0", skills=("shared/project-context", "t
                 "worktree_active": True,
                 "worktree_base_branch": None,
                 "session_summary_max_days": 30,
+                "docs_stale_after_days": 30,
+                "suppress_notifications": False,
                 "qa_browser": None,
             },
             indent=2,

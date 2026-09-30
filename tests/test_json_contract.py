@@ -643,6 +643,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "gitignore",
             "git_exclude",
             "fallback_reason",
+            "preferences_import",
         },
         "store list": {"installed", "current", "pinned"},
         "catalog": {"version", "project_id", "counts", "malformed"},
