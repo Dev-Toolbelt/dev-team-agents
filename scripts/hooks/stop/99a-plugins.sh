@@ -5,10 +5,10 @@
 # to act before the session can end.
 set -euo pipefail
 
-QUIET=""
-for arg in "$@"; do
-    [ "$arg" = "--quiet" ] && QUIET="--quiet"
-done
+# The Stop dispatcher passes no arguments to its sub-scripts, so quiet is this script's
+# own default; DEVTEAM_HOOK_DEBUG turns the plugins' progress output back on.
+QUIET="--quiet"
+[ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && QUIET=""
 
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
 

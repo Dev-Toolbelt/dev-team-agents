@@ -23,19 +23,23 @@ emit() {
   exit 0
 }
 
-SELF_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || emit "Status unavailable"
-CORE_DIR="$(cd -P "$SELF_DIR/../../.." 2>/dev/null && pwd)" || emit "Status unavailable"
-# shellcheck source=scripts/lib/state.sh
-. "$CORE_DIR/scripts/lib/state.sh" 2>/dev/null || emit "Status unavailable"
-
 ROOT="${DEVTEAM_PROJECT_ROOT:-$(pwd)}"
-STATE_DIR="${DEVTEAM_STATE_DIR:-$ROOT/.dev-team-agents/user-data}"
-STATE_FILE="$STATE_DIR/state.json"
 
 GRAPH="$ROOT/graphify-out/graph.json"
-LAST_COMMIT="$(state_get graphify_last_run "$STATE_FILE" 2>/dev/null || true)"
-LAST_AT="$(state_get graphify_last_run_at "$STATE_FILE" 2>/dev/null || true)"
+MARKER="$ROOT/graphify-out/.build-commit"
+LAST_COMMIT=""
+[ -f "$MARKER" ] && LAST_COMMIT="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
 HEAD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+
+# Build time: the marker file's mtime (GNU stat, then BSD stat; GNU date, then BSD date).
+build_time() {
+  local epoch
+  epoch="$(stat -c %Y "$MARKER" 2>/dev/null || stat -f %m "$MARKER" 2>/dev/null || true)"
+  case "$epoch" in ''|*[!0-9]*) return 0 ;; esac
+  date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true
+}
+LAST_AT=""
+[ -n "$LAST_COMMIT" ] && LAST_AT="$(build_time)"
 
 if [ ! -f "$GRAPH" ]; then
   add_fact "Graph" "not built"

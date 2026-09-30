@@ -85,7 +85,11 @@ sub-script conventions in `CLAUDE-md/hooks.md`:
   dispatcher when the session changed nothing) by exiting early. A non-zero exit is reported; it never
   fails the Stop.
 - Machine-local markers go through `scripts/lib/state.sh` (`state_get` / `state_set`) against
-  `$DEVTEAM_STATE_DIR/state.json`.
+  `$DEVTEAM_STATE_DIR/state.json` — for what this machine observed. A marker describing a build output
+  belongs next to that output instead (Graphify writes `graphify-out/.build-commit`, per checkout).
+- Paths read from config are **untrusted**: the settings file is committed, so a cloned repository
+  chooses them. Refuse absolute paths, `..` components, a leading `-` and anything resolving outside
+  the project root before using one (Graphify: `plugins/graphify/lib/config.sh`).
 
 ## Settings File
 

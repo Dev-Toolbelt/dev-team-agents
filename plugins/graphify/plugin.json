@@ -47,7 +47,7 @@
     {
       "id": "rebuild",
       "label": "Rebuild graph",
-      "help": "Rebuild graphify-out/ now when a source path changed since the last build.",
+      "help": "Rebuild graphify-out/ now from the configured source paths.",
       "runtime": "bash",
       "script": "scripts/refresh.sh",
       "output": "log",

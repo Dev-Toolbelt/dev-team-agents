@@ -46,8 +46,10 @@ class PluginHookTest(unittest.TestCase):
         self.bin.mkdir()
         self.calls = self.tmp / "graphify-calls"
         fake = self.bin / "graphify"
+        self.links = self.tmp / "graphify-links"
         fake.write_text('#!/usr/bin/env bash\necho "$@" >> "%s"\nmkdir -p "$2/graphify-out"\n'
-                        'echo {} > "$2/graphify-out/graph.json"\n' % self.calls)
+                        'echo {} > "$2/graphify-out/graph.json"\n'
+                        'find "$2" -type l >> "%s"\n' % (self.calls, self.links))
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
         self.state = self.tmp / "state"
 
@@ -134,11 +136,10 @@ class PluginHookTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(self.calls.exists())
         self.assertTrue((self.root / "graphify-out" / "graph.json").exists())
-        state = json.loads((self.state / "state.json").read_text())
-        self.assertEqual(state["graphify_last_run"],
-                         subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root,
-                                        capture_output=True, text=True).stdout.strip())
-        self.assertIn("graphify_last_run_at", state)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root,
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual((self.root / "graphify-out" / ".build-commit").read_text().strip(), head)
+        self.assertFalse((self.state / "state.json").exists(), "state.json is no longer written")
 
     def test_stop_skips_disabled_and_no_changes(self):
         self.settings(False, {"targetPaths": ["src"], "auto_refresh": True})
@@ -181,6 +182,205 @@ class PluginHookTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("deprecated", r.stderr)
         self.assertTrue(self.calls.exists(), "first run has no graphify-out, so --if-changed builds")
+
+    # -- path confinement (H2) ------------------------------------------------------
+
+    def refresh(self, config, *args):
+        self.settings(True, config)
+        return self.run_script(PLUGIN / "scripts" / "refresh.sh", *args, DEVTEAM_PROJECT_ROOT=str(self.root))
+
+    def test_refresh_refuses_every_target_path_that_is_unsafe(self):
+        for bad in ("/etc", "../outside", "src/../../outside", "-rf", "src/.."):
+            with self.subTest(bad=bad):
+                r = self.refresh({"targetPaths": [bad]})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("ignoring targetPaths entry", r.stderr)
+                self.assertFalse(self.calls.exists())
+
+    def test_refresh_skips_unsafe_entries_and_builds_the_valid_ones(self):
+        r = self.refresh({"targetPaths": ["src", "/etc", "../x"], "manifestPaths": ["-x", "/etc/passwd"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.calls.exists())
+        self.assertIn("ignoring targetPaths entry '/etc'", r.stderr)
+        self.assertIn("ignoring manifestPaths entry '-x'", r.stderr)
+
+    def test_refresh_refuses_a_symlink_that_leaves_the_project(self):
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        (outside / "secret.txt").write_text("s")
+        (self.root / "escape").symlink_to(outside)
+        r = self.refresh({"targetPaths": ["escape"]})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("resolves outside the project root", r.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_refresh_refuses_a_manifest_symlink_that_leaves_the_project(self):
+        secret = self.tmp / "secret.json"
+        secret.write_text("{}")
+        (self.root / "package.json").symlink_to(secret)
+        r = self.refresh({"targetPaths": ["src"], "manifestPaths": ["package.json"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("ignoring manifestPaths entry 'package.json'", r.stderr)
+
+    def test_refresh_drops_symlinks_inside_a_source_that_point_outside_the_copy(self):
+        outside = self.tmp / "outside.txt"
+        outside.write_text("s")
+        (self.root / "src" / "leak").symlink_to(outside)
+        (self.root / "src" / "fine").symlink_to("a.py")
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        seen = self.links.read_text() if self.links.exists() else ""
+        self.assertNotIn("leak", seen)
+        self.assertIn("fine", seen)
+
+    def test_refresh_accepts_a_path_that_starts_with_a_dot(self):
+        (self.root / ".hidden").mkdir()
+        (self.root / ".hidden" / "f.txt").write_text("x")
+        r = self.refresh({"targetPaths": [".hidden"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # -- lock (M4) --------------------------------------------------------------------
+
+    def lock_dir(self):
+        return self.root / ".git" / "graphify-refresh.lock"
+
+    def test_a_held_lock_skips_an_if_changed_run_and_fails_a_forced_one(self):
+        self.lock_dir().mkdir()
+        (self.lock_dir() / "pid").write_text(str(os.getpid()))
+        r = self.refresh({"targetPaths": ["src"]}, "--if-changed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("already running", r.stderr)
+        self.assertFalse(self.calls.exists())
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("already running", r.stderr)
+        self.assertFalse(self.calls.exists())
+        self.assertTrue(self.lock_dir().exists(), "another run's lock is never removed")
+
+    def test_a_stale_lock_is_taken_over_and_released(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        self.lock_dir().mkdir()
+        (self.lock_dir() / "pid").write_text(str(dead.pid))
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.calls.exists())
+        self.assertFalse(self.lock_dir().exists())
+
+    def test_the_lock_is_released_after_a_normal_run_and_after_a_failure(self):
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(self.lock_dir().exists())
+        (self.bin / "graphify").write_text("#!/usr/bin/env bash\nexit 3\n")
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(self.lock_dir().exists())
+
+    # -- build marker (H3) --------------------------------------------------------------
+
+    def test_status_reads_the_marker_and_its_time(self):
+        self.refresh({"targetPaths": ["src"]})
+        data = json.loads(self.run_script(PLUGIN / "scripts" / "status.sh",
+                                          DEVTEAM_PROJECT_ROOT=str(self.root)).stdout)
+        facts = {f["label"]: f["value"] for f in data["facts"]}
+        self.assertRegex(facts["Last build"], r"^[0-9a-f]{7} at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+        self.assertEqual(facts["Since build"], "up to date")
+
+    def test_status_without_a_marker_reports_an_unknown_build(self):
+        self.graph()
+        data = json.loads(self.run_script(PLUGIN / "scripts" / "status.sh",
+                                          DEVTEAM_PROJECT_ROOT=str(self.root)).stdout)
+        self.assertIn("last build not recorded", data["summary"])
+
+    # -- dispatchers against a throwaway core (M4, lows) ----------------------------------
+
+    def fake_core(self, plugins):
+        """A core with a copy of the hook scripts and the given ``{name: {hook: body}}``."""
+        core = self.tmp / "core"
+        shutil.copytree(REPO_ROOT / "scripts" / "hooks", core / "scripts" / "hooks")
+        for name, hooks in plugins.items():
+            pdir = core / "plugins" / name
+            (pdir / "hooks").mkdir(parents=True)
+            manifest = {"schema": 1, "name": name, "title": name, "description": "d",
+                        "hooks": {event: "hooks/%s.sh" % event for event in hooks}}
+            (pdir / "plugin.json").write_text(json.dumps(manifest, indent=2))
+            for event, body in hooks.items():
+                (pdir / "hooks" / ("%s.sh" % event)).write_text("#!/usr/bin/env bash\n" + body)
+        return core
+
+    def enable_plain(self, name, text=None):
+        d = self.root / ".dev-team-agents" / "plugin-settings"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / ("%s.json" % name)).write_text(text if text is not None else settings_text(True))
+
+    def test_stop_passes_quiet_unless_debugging(self):
+        core = self.fake_core({"alpha": {"stop": 'echo "args:$*" > "%s"\n' % (self.tmp / "args")}})
+        self.enable_plain("alpha")
+        stop = core / "scripts" / "hooks" / "stop" / "99a-plugins.sh"
+        r = self.run_script(stop)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.tmp / "args").read_text().strip(), "args:--quiet")
+        r = self.run_script(stop, DEVTEAM_HOOK_DEBUG="1")
+        self.assertEqual((self.tmp / "args").read_text().strip(), "args:")
+
+    def test_pre_dispatcher_emits_only_the_first_output_and_skips_the_rest(self):
+        ran = self.tmp / "ran"
+        core = self.fake_core({
+            "alpha": {"pre_tool_use": 'echo alpha >> "%s"\necho A-OUT\n' % ran},
+            "beta": {"pre_tool_use": 'echo beta >> "%s"\necho B-OUT\n' % ran},
+        })
+        self.enable_plain("alpha")
+        self.enable_plain("beta")
+        pre = core / "scripts" / "hooks" / "pre-tool-use" / "02d-plugins.sh"
+        r = self.run_script(pre, stdin=GLOB_INPUT, DEVTEAM_HOOK_DEBUG="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, "A-OUT\n")
+        self.assertEqual(ran.read_text().split(), ["alpha"], "a later hook must not spend its once-marker")
+        self.assertIn("[devteam:plugin:beta]", r.stderr)
+
+    def test_pre_dispatcher_falls_through_to_the_next_hook_when_one_is_silent(self):
+        core = self.fake_core({"alpha": {"pre_tool_use": "exit 0\n"}, "beta": {"pre_tool_use": "echo B-OUT\n"}})
+        self.enable_plain("alpha")
+        self.enable_plain("beta")
+        r = self.run_script(core / "scripts" / "hooks" / "pre-tool-use" / "02d-plugins.sh", stdin=GLOB_INPUT)
+        self.assertEqual(r.stdout, "B-OUT\n")
+
+    def test_pre_dispatcher_does_no_git_work_when_no_enabled_plugin_has_a_hook(self):
+        marker = self.tmp / "git-called"
+        gitbin = self.tmp / "gitbin"
+        gitbin.mkdir()
+        wrapper = gitbin / "git"
+        wrapper.write_text('#!/usr/bin/env bash\ntouch "%s"\nexec %s "$@"\n' % (marker, shutil.which("git")))
+        wrapper.chmod(0o755)
+        core = self.fake_core({"alpha": {"stop": "exit 0\n"}})
+        self.enable_plain("alpha")
+        env = dict(PATH="%s:%s" % (gitbin, os.environ["PATH"]))
+        env.pop("DEVTEAM_STATE_DIR", None)
+        r = subprocess.run(["bash", str(core / "scripts" / "hooks" / "pre-tool-use" / "02d-plugins.sh")],
+                           cwd=self.root, input=GLOB_INPUT, capture_output=True, text=True,
+                           env=dict(os.environ, CLAUDE_PROJECT_DIR=str(self.root), **env))
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+        self.assertFalse(marker.exists())
+
+    def test_enabled_detection_survives_minified_and_reformatted_files(self):
+        self.graph()
+        for text in ('{"config":{},"enabled":true,"schema":1}',
+                     '{"schema": 1, "enabled":   true, "config": {}}',
+                     '{\n\t"enabled" :\ttrue\n}'):
+            with self.subTest(text=text):
+                (self.state / ".graphify-hint-shown").unlink(missing_ok=True)
+                self.enable_plain("graphify", text)
+                r = self.run_script(PRE, stdin=GLOB_INPUT)
+                self.assertIn("Knowledge graph exists", r.stdout)
+
+    def test_a_disabled_file_with_a_nested_enabled_key_stays_disabled(self):
+        self.graph()
+        self.enable_plain("graphify", settings_text(False, {"enabled": True}))
+        r = self.run_script(PRE, stdin=GLOB_INPUT)
+        self.assertEqual(r.stdout, "")
+        self.enable_plain("graphify", '{"enabled": false}')
+        self.assertEqual(self.run_script(PRE, stdin=GLOB_INPUT).stdout, "")
+
 
     # -- detect.py and status.sh --------------------------------------------------
 
