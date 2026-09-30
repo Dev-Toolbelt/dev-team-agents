@@ -10,12 +10,12 @@
 import './setup.js';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Projects } from '../../src/renderer/screens/Projects.js';
-import type { DirectoryChoice, OperationResult, UpgradePlan } from '../../src/shared/api.js';
+import type { DevteamBridge, DirectoryChoice, OperationResult, ProjectFolders, ProjectFoldersAnswer, UpgradePlan } from '../../src/shared/api.js';
 import {
   bindReport,
   deferred,
@@ -1016,5 +1016,328 @@ describe('Projects — bridge failures do not strand the screen', () => {
     await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
 
     expect(await within(dialog).findByRole('button', { name: /choose directory/i })).toBeEnabled();
+  });
+});
+
+describe('Projects — folders (ADR-0021)', () => {
+  const PROJECTS = [
+    project({ project_id: 'p1', path: '/repo/acme-site' }),
+    project({ project_id: 'p2', path: '/repo/shop-front' }),
+    project({ project_id: 'p3', path: '/repo/mobile-app' }),
+  ];
+  const SITES = { id: 'sites', name: 'Sites', parentId: null, collapsed: false };
+  const APPS = { id: 'apps', name: 'Apps', parentId: null, collapsed: false };
+
+  function withFolders(folders: ProjectFolders, overrides: Partial<DevteamBridge> = {}) {
+    const bridge = fakeBridge({
+      listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: PROJECTS }))),
+      projectFolders: vi.fn(() => Promise.resolve(folders)),
+      ...overrides,
+    });
+    installBridge(bridge);
+    return bridge;
+  }
+
+  /** The `<tbody>` a folder's header row sits in: the group, and the drop target. */
+  function group(name: RegExp | string): HTMLElement {
+    const header = screen.getAllByRole('row').find((row) => row.hasAttribute('data-folder-header') && within(row).queryByText(name) !== null);
+    return header!.closest('tbody')!;
+  }
+
+  function lastSaved(bridge: DevteamBridge): ProjectFolders {
+    const calls = vi.mocked(bridge.saveProjectFolders).mock.calls;
+    return calls[calls.length - 1]![0];
+  }
+
+  it('shows no group headers until a folder exists, then creates one from the header button', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [], membership: {} });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    expect(screen.queryByText('No folder')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /new folder/i }));
+    await user.type(screen.getByLabelText('Name'), 'Sites');
+    await user.click(screen.getByRole('button', { name: 'Create folder' }));
+
+    expect(await screen.findByRole('button', { name: /^Sites/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(group('No folder')).getByText('acme-site')).toBeInTheDocument();
+    expect(lastSaved(bridge).folders).toMatchObject([{ name: 'Sites', parentId: null }]);
+  });
+
+  it('refuses a duplicate name in the dialog, case-insensitively, without saving', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES], membership: {} });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.click(screen.getByRole('button', { name: /new folder/i }));
+    await user.type(screen.getByLabelText('Name'), 'sites');
+    expect(screen.getByText(/already exists/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create folder' })).toBeDisabled();
+    expect(bridge.saveProjectFolders).not.toHaveBeenCalled();
+  });
+
+  it('groups rows by folder and moves one through the row menu — the keyboard path', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES, APPS], membership: { p1: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    expect(within(group('Sites')).getByText('acme-site')).toBeInTheDocument();
+    expect(within(group('No folder')).getByText('mobile-app')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Move mobile-app to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Apps/ }));
+
+    expect(within(group('Apps')).getByText('mobile-app')).toBeInTheDocument();
+    expect(lastSaved(bridge).membership).toEqual({ p1: 'sites', p3: 'apps' });
+    expect(screen.getByText(/Moved mobile-app to “Apps”/)).toBeInTheDocument();
+  });
+
+  it('moves the selection in bulk, then clears it', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES], membership: {} });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select shop-front' }));
+    const toolbar = screen.getByRole('region', { name: /selected projects/i });
+    expect(toolbar).toHaveTextContent('2 selected');
+
+    await user.click(within(toolbar).getByRole('button', { name: /move to/i }));
+    await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
+
+    expect(lastSaved(bridge).membership).toEqual({ p1: 'sites', p2: 'sites' });
+    expect(screen.queryByRole('region', { name: /selected projects/i })).not.toBeInTheDocument();
+  });
+
+  it('drags a selected row and carries the whole selection onto the drop target', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES], membership: {} });
+    const { container } = render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
+
+    const handle = container.querySelector('[data-drag-handle="p1"]')!;
+    fireEvent.dragStart(handle);
+    expect(container.querySelectorAll('tr.opacity-50')).toHaveLength(2);
+    fireEvent.dragOver(group('Sites'));
+    fireEvent.drop(group('Sites'));
+
+    // The save is queued behind any earlier one, so it lands a microtask later.
+    await vi.waitFor(() => expect(bridge.saveProjectFolders).toHaveBeenCalled());
+    expect(lastSaved(bridge).membership).toEqual({ p1: 'sites', p3: 'sites' });
+    expect(within(group('Sites')).getByText('mobile-app')).toBeInTheDocument();
+  });
+
+  it('ignores a drop with no drag in progress', async () => {
+    const bridge = withFolders({ folders: [SITES], membership: {} });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    fireEvent.drop(group('Sites'));
+    await Promise.resolve();
+    expect(bridge.saveProjectFolders).not.toHaveBeenCalled();
+  });
+
+  it('deletes a folder after a confirm step, filing its projects under no folder and unbinding nothing', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', p2: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    await user.click(screen.getByRole('button', { name: 'Folder actions for Sites' }));
+    await user.click(await screen.findByRole('menuitem', { name: /delete folder/i }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Its 2 projects will move to “No folder”');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete folder' }));
+
+    expect(lastSaved(bridge)).toEqual({ folders: [], membership: {} });
+    expect(bridge.unbindProject).not.toHaveBeenCalled();
+    expect(screen.getByText('acme-site')).toBeInTheDocument();
+  });
+
+  it('undoes the change and says why when the main process refuses to save', async () => {
+    const user = userEvent.setup();
+    withFolders(
+      { folders: [SITES], membership: {} },
+      { saveProjectFolders: vi.fn(() => Promise.resolve({ ok: false as const, message: 'The folders could not be saved: disk full' })) },
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
+
+    expect(await screen.findByText('The folder change was undone')).toBeInTheDocument();
+    expect(screen.getByText(/disk full/)).toBeInTheDocument();
+    expect(within(group('No folder')).getByText('acme-site')).toBeInTheDocument();
+  });
+
+  it('collapses a folder and saves the choice, and a text filter opens it again', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    await user.click(screen.getByRole('button', { name: /^Sites/, expanded: true }));
+    expect(screen.queryByText('acme-site')).not.toBeInTheDocument();
+    expect(lastSaved(bridge).folders[0]?.collapsed).toBe(true);
+
+    await user.type(screen.getByLabelText(/filter by name or path/i), 'acme');
+    expect(screen.getByText('acme-site')).toBeInTheDocument();
+  });
+
+  it('hides a folder with no match while filtering', async () => {
+    const user = userEvent.setup();
+    withFolders({ folders: [SITES, APPS], membership: { p1: 'sites', p3: 'apps' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.type(screen.getByLabelText(/filter by name or path/i), 'mobile');
+    expect(screen.queryByRole('button', { name: /^Sites/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Apps/ })).toBeInTheDocument();
+  });
+
+  it('syncs the selection one project at a time and names each failure', async () => {
+    const user = userEvent.setup();
+    const syncProject = vi
+      .fn()
+      .mockResolvedValueOnce(ok(bindReport()))
+      .mockResolvedValueOnce(fail('the store is locked'));
+    withFolders({ folders: [], membership: {} }, { syncProject });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
+    await user.click(screen.getByRole('button', { name: 'Sync selected' }));
+
+    expect(await screen.findByText('Synced 1 of 2 projects.')).toBeInTheDocument();
+    expect(syncProject.mock.calls).toEqual([['p1'], ['p3']]);
+    expect(screen.getByText(/the store is locked/)).toBeInTheDocument();
+  });
+
+  it('drops membership of a project that is no longer bound', async () => {
+    const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', gone: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await vi.waitFor(() => expect(bridge.saveProjectFolders).toHaveBeenCalled());
+    expect(lastSaved(bridge).membership).toEqual({ p1: 'sites' });
+  });
+
+  it('blocks every folder change while the stored folders could not be read, and retries', async () => {
+    const user = userEvent.setup();
+    const projectFolders = vi
+      .fn<DevteamBridge['projectFolders']>()
+      .mockRejectedValueOnce(new Error('EACCES'))
+      .mockResolvedValueOnce({ folders: [SITES], membership: {} });
+    const bridge = withFolders({ folders: [], membership: {} }, { projectFolders });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('The folders could not be read');
+
+    // The first action after a failed read must not be able to save an empty grouping.
+    expect(screen.getByRole('button', { name: /new folder/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move acme-site to a folder' })).toBeDisabled();
+    expect(bridge.saveProjectFolders).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: /^Sites/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /new folder/i })).toBeEnabled();
+  });
+
+  it('never selects rows a collapsed folder hides, and checking a collapsed folder opens it', async () => {
+    const user = userEvent.setup();
+    const bridge = withFolders({ folders: [{ ...SITES, collapsed: true }], membership: { p1: 'sites', p2: 'sites' } });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('mobile-app');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select every project shown' }));
+    expect(screen.getByRole('region', { name: /selected projects/i })).toHaveTextContent('1 selected');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select every project in Sites' }));
+    expect(screen.getByText('acme-site')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /selected projects/i })).toHaveTextContent('3 selected');
+    expect(lastSaved(bridge).folders[0]?.collapsed).toBe(false);
+  });
+
+  it('holds every other sync while a bulk sync runs, and stops between projects when asked', async () => {
+    const user = userEvent.setup();
+    const first = deferred<OperationResult<ReturnType<typeof bindReport>>>();
+    const syncProject = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(ok(bindReport()));
+    withFolders({ folders: [], membership: {} }, { syncProject });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+    await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
+    await user.click(screen.getByRole('button', { name: 'Sync selected' }));
+
+    expect(screen.getByRole('button', { name: /^sync all/i })).toBeDisabled();
+    const shopRow = screen.getByText('shop-front').closest('tr')!;
+    expect(within(shopRow).getByRole('button', { name: /^sync/i })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Stop after this one' }));
+    first.resolve(ok(bindReport()));
+    expect(await screen.findByText(/Synced 1 of 2 projects\. Stopped before the other 1\./)).toBeInTheDocument();
+    expect(syncProject).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /^sync all/i })).toBeEnabled();
+  });
+
+  it('says how many queued changes a failed save took with it', async () => {
+    const user = userEvent.setup();
+    const firstSave = deferred<ProjectFoldersAnswer>();
+    const saveProjectFolders = vi.fn<DevteamBridge['saveProjectFolders']>().mockReturnValueOnce(firstSave.promise);
+    withFolders({ folders: [SITES, APPS], membership: {} }, { saveProjectFolders });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
+    await user.click(screen.getByRole('button', { name: 'Move mobile-app to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Apps/ }));
+    firstSave.resolve({ ok: false, message: 'The folders could not be saved: disk full.' });
+
+    expect(await screen.findByText(/disk full\. 1 later change was undone with it\./)).toBeInTheDocument();
+    expect(saveProjectFolders).toHaveBeenCalledTimes(1);
+    expect(within(group('No folder')).getByText('mobile-app')).toBeInTheDocument();
+  });
+
+  it('keeps a shown error when housekeeping prunes an unbound project in the background', async () => {
+    const user = userEvent.setup();
+    const listProjects = vi
+      .fn()
+      .mockResolvedValueOnce(ok({ current: '2.48.0', projects: PROJECTS }))
+      .mockResolvedValue(ok({ current: '2.48.0', projects: PROJECTS.slice(0, 2) }));
+    const saveProjectFolders = vi
+      .fn<DevteamBridge['saveProjectFolders']>()
+      .mockResolvedValueOnce({ ok: false, message: 'The folders could not be saved: disk full' })
+      .mockImplementation((folders) => Promise.resolve({ ok: true, folders }));
+    withFolders({ folders: [SITES], membership: { p3: 'sites' } }, { listProjects, saveProjectFolders });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
+    expect(await screen.findByText('The folder change was undone')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    await vi.waitFor(() => expect(saveProjectFolders).toHaveBeenCalledTimes(2));
+    expect(saveProjectFolders.mock.calls[1]![0].membership).toEqual({});
+    expect(screen.getByText('The folder change was undone')).toBeInTheDocument();
+  });
+
+  it('keeps a row sync in flight, and its result, when the row moves to another folder', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<OperationResult<ReturnType<typeof bindReport>>>();
+    withFolders({ folders: [SITES], membership: {} }, { syncProject: vi.fn(() => pending.promise) });
+    render(<Projects environment={environment()} />);
+    await screen.findByText('acme-site');
+
+    const row = () => screen.getByText('acme-site').closest('tr')!;
+    await user.click(within(row()).getByRole('button', { name: /^sync/i }));
+    await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
+
+    expect(within(group('Sites')).getByText('acme-site')).toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: /syncing/i })).toBeDisabled();
+    pending.resolve(fail('the store is locked'));
+    expect(await within(row()).findByText(/the store is locked/)).toBeInTheDocument();
   });
 });
