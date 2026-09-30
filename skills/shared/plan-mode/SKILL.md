@@ -117,24 +117,34 @@ never reaches it.
 | `TaskCreate` / `TaskUpdate` | Claude Code | One task per step; later changes by the id `TaskCreate` returned | `TaskUpdate` with status `deleted` |
 | `TodoWrite` (only where `TaskCreate` is unavailable) | Claude Code | Whole list on every call | Omit it from the list |
 | `update_plan` | Codex | Whole list on every call | Omit it from the list |
-| `todowrite` | opencode | Whole list on every call; give each step an `id` of `step-N` | Omit it from the list |
+| `todowrite` | opencode | Whole list on every call; each step with `id: "step-N"` and `priority: "medium"` | Omit it from the list |
 
 - **When** — create the list once the plan is approved **and** the Execution Strategy Gate (if it
   applies) has cleared, immediately before step 1; never before, so a rejected or cancelled plan
   leaves no task behind. Where the rendered body has no plan gate, the start of execution is the
   approval.
-- **One task per Steps row**, in plan order, titled `Step N: <action>`, all `pending`.
+- **One task per Steps row**, in plan order, titled `Step N: <action>`, all `pending`. Name a secret
+  by its variable, never by its value: step titles are stored on this machine for good.
 - **Titles and ids are frozen.** The board recognises a step by its exact text (and by `id` on
-  opencode): never rename or renumber a step once created. On replan, new steps take the next unused
-  `N`; dropped steps are removed as the table says; finished steps are left exactly as they are.
-- **Moving** — when a step finishes, mark it `completed` and the next one `in_progress` in the same
-  update (one call on a whole-list tool), then send its Progress Reporting message. The first step
-  goes `in_progress` when execution starts.
+  opencode): never rename or renumber a step once created. A replan keeps the original numbers (see
+  § Replanning During Execution); new steps take the next unused `N`; dropped steps are removed as
+  the table says; finished steps are left exactly as they are.
+- **Moving** — the first step, or every step of the first **Par.** group, goes `in_progress` when
+  execution starts. When a step finishes, mark it `completed` and whatever starts next `in_progress`
+  in the same update (one call on a whole-list tool), then send its Progress Reporting message. A
+  **Par.** group moves together: all its steps `in_progress` at once, each `completed` as it returns.
+- **One list per plan** — on a whole-list tool (`TodoWrite`, `update_plan`, `todowrite`) the mirrored
+  list is the only list until the plan ends: every call sends it whole. Scratch sub-steps go into a
+  step's own work or a subagent, never into a call that would replace this list.
 - **Owner** — the orchestrating agent keeps the list, as it owns Progress Reporting. A subagent
   handed a slice of an approved plan creates **no** list; it keeps one only for a plan it presented
   and had approved itself.
-- A step that runs a review or QA pass needs nothing extra: the board moves its tasks into In Review
-  on its own.
+- **Reviews** — a step that runs a review or QA pass needs nothing extra to enter In Review. Its
+  findings leave In Review only through a fix list: add them as new steps through a replan, so the
+  board sees tasks created after the result. A review or QA pass's **own** plan is not mirrored — it
+  would count as finished work in the next review.
+- **Aborted run** — if the user cancels mid-execution or the run is abandoned, drop every step not
+  yet `completed`, as the table says, so no pending task outlives the plan.
 
 ---
 
@@ -200,8 +210,9 @@ If you discover mid-execution that a step cannot be done as planned:
 
 1. Stop immediately.
 2. Describe what was found and why the original plan needs to change.
-3. Present an updated plan covering only the remaining steps.
-4. Wait for approval again before continuing.
+3. Present an updated plan covering only the remaining steps, keeping their original step numbers;
+   new steps continue from the next unused number (§ Task List Mirroring depends on it).
+4. Wait for approval again before continuing — the new steps' tasks are created only then.
 
 **Do not silently improvise.** If the plan changes, the user must know.
 
