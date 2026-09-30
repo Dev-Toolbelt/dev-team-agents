@@ -163,20 +163,17 @@ uc_is_suppressed() {
     return 1
 }
 
+# Routes to the notification queue (scripts/hooks/lib/notify.sh) — the boxed
+# stdout banner this used to print reached the model, never the user. `info` is
+# an applied update, `warning` an available one; the message carries both
+# versions, so it is its own dedupe key: the same "2.48 → 2.49" is raised once,
+# not on every session until the user acts.
 uc_notify() {
-    local type="$1" msg="$2" icon
+    local type="$1" msg="$2" code="update.available"
     uc_is_suppressed "$type" && return 0
-    case "$type" in
-        warning)  icon="⚠️" ;;
-        critical) icon="🚨" ;;
-        *)        icon="ℹ️" ;;
-    esac
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " $icon  DEV TEAM AGENTS  $icon"
-    echo " $msg"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
+    [ "$type" = "info" ] && code="update.applied"
+    command -v devteam_notify >/dev/null 2>&1 || return 0
+    devteam_notify "$type" "$code" "$msg" 0 "${code}:${msg}"
 }
 
 # uc_message <updated|available> <lang> <current> <latest>
