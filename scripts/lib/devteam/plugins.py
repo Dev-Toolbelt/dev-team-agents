@@ -46,6 +46,7 @@ DEFAULT_STATUS_TIMEOUT = 10
 TIMEOUT_EXIT_CODE = 124
 #: How long to wait for pipes to close after killing a script's process group.
 KILL_GRACE_SECONDS = 2.0
+TERM_GRACE_SECONDS = 3.0
 #: Longest value `config set` accepts, and the largest config passed inline in the env.
 MAX_VALUE_BYTES = 64 * 1024
 MAX_ENV_CONFIG_BYTES = 64 * 1024
@@ -601,17 +602,34 @@ def _tail(text):
     return data[-TAIL_BYTES:].decode("utf-8", "replace")
 
 
-def _kill_group(proc):
+def _signal_group(proc, signum):
+    """Send ``signum`` to the script's process group; falls back to the script itself."""
     if os.name == "posix":
         try:
-            os.killpg(proc.pid, signal.SIGKILL)
+            os.killpg(proc.pid, signum)
             return
         except OSError:
             pass
     try:
-        proc.kill()
-    except OSError:
+        proc.send_signal(signum)
+    except (OSError, ValueError):
         pass
+
+
+def _kill_group(proc):
+    _signal_group(proc, signal.SIGKILL if os.name == "posix" else signal.SIGTERM)
+
+
+def _group_alive(pid):
+    if os.name != "posix":
+        return False
+    try:
+        os.killpg(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
 
 
 def _abandon(proc, exc):
@@ -642,16 +660,21 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
     kwargs = {}
     if os.name == "posix":
         kwargs["start_new_session"] = True
-    received = {"sig": None, "pid": None}
+    received = {"sig": None, "pid": None, "term_at": None}
     previous = {}
+
+    def send_term():
+        if received["pid"] is not None and received["term_at"] is None:
+            received["term_at"] = time.monotonic()
+            if os.name == "posix":
+                try:
+                    os.killpg(received["pid"], signal.SIGTERM)
+                except OSError:
+                    pass
 
     def on_signal(signum, _frame):
         received["sig"] = signum
-        if received["pid"] is not None and os.name == "posix":
-            try:
-                os.killpg(received["pid"], signal.SIGKILL)
-            except OSError:
-                pass
+        send_term()
 
     if os.name == "posix" and threading.current_thread() is threading.main_thread():
         for signum in (signal.SIGTERM, signal.SIGINT):
@@ -671,9 +694,10 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
             return 127, "", "cannot start {}: {}".format(argv[0], exc), False
         received["pid"] = proc.pid
         if received["sig"] is not None:
-            _kill_group(proc)
+            send_term()
 
         deadline = time.monotonic() + timeout
+        killed_at = None
         give_up = None
         timed_out = False
         while True:
@@ -683,18 +707,36 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
             except subprocess.TimeoutExpired as exc:
                 now = time.monotonic()
                 if received["sig"] is not None:
-                    _kill_group(proc)
-                    give_up = give_up or now + KILL_GRACE_SECONDS
+                    send_term()
                 elif now >= deadline and not timed_out:
                     timed_out = True
-                    _kill_group(proc)
-                    give_up = now + KILL_GRACE_SECONDS
+                    send_term()
+                term_at = received["term_at"]
+                # TERM first so the script's own cleanup runs; KILL what outlives the grace.
+                if term_at is not None and killed_at is None:
+                    group_gone = proc.poll() is not None and not _group_alive(proc.pid)
+                    if group_gone or now >= term_at + TERM_GRACE_SECONDS:
+                        # Nothing left to wait for in the group (only a setsid-ed straggler
+                        # can still hold the pipe), or the grace ran out.
+                        _kill_group(proc)
+                        killed_at = now
+                        give_up = now + KILL_GRACE_SECONDS
                 if give_up is not None and now >= give_up:
                     out, err = _abandon(proc, exc)
                     break
+        # The script may have exited on TERM while a descendant is still cleaning up.
+        term_at = received["term_at"]
+        if term_at is not None and killed_at is None:
+            while _group_alive(proc.pid) and time.monotonic() < term_at + TERM_GRACE_SECONDS:
+                time.sleep(0.05)
+            if _group_alive(proc.pid):
+                _kill_group(proc)
     finally:
         for signum, handler in previous.items():
-            signal.signal(signum, handler)
+            try:
+                signal.signal(signum, handler if handler is not None else signal.SIG_DFL)
+            except (OSError, ValueError, TypeError):
+                pass
     if received["sig"] is not None:
         # Hand the signal back to whatever was handling it before, now that the group is gone.
         os.kill(os.getpid(), received["sig"])

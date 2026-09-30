@@ -991,5 +991,61 @@ class HardeningTest(PluginTestCase):
         self.assertLess(time.monotonic() - started, 6.5)
 
 
+@unittest.skipUnless(os.name == "posix", "process groups are POSIX")
+class SpawnSignalTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, self.dir, True)
+
+    def spawn(self, body, timeout=1):
+        return plugins._spawn(["bash", "-c", body], self.dir, dict(os.environ), timeout, False)
+
+    def test_a_timeout_sends_term_first_so_the_script_can_clean_up(self):
+        flag = self.dir / "cleaned"
+        started = time.monotonic()
+        code, _out, _err, timed_out = self.spawn("trap 'echo x > %s; exit 0' TERM; sleep 60 & wait" % flag)
+        self.assertTrue(timed_out)
+        self.assertEqual(code, plugins.TIMEOUT_EXIT_CODE)
+        self.assertTrue(flag.exists(), "the TERM trap never ran")
+        self.assertLess(time.monotonic() - started, plugins.TERM_GRACE_SECONDS)
+
+    def test_a_script_that_ignores_term_is_killed_after_the_grace(self):
+        started = time.monotonic()
+        code, _out, _err, timed_out = self.spawn("trap '' TERM; while :; do sleep 0.1; done")
+        elapsed = time.monotonic() - started
+        self.assertTrue(timed_out)
+        self.assertEqual(code, plugins.TIMEOUT_EXIT_CODE)
+        self.assertGreaterEqual(elapsed, 1 + plugins.TERM_GRACE_SECONDS - 0.5)
+        self.assertLess(elapsed, 1 + plugins.TERM_GRACE_SECONDS + plugins.KILL_GRACE_SECONDS + 2)
+
+    def test_handlers_are_restored_even_when_one_restore_fails_or_had_no_previous(self):
+        real = signal.signal
+        restored = []
+        installs = []
+
+        def fake(signum, handler):
+            if getattr(handler, "__name__", "") == "on_signal":
+                installs.append(signum)
+                old = real(signum, handler)
+                return None if signum == signal.SIGTERM else old
+            restored.append((signum, handler))
+            if signum == signal.SIGTERM and handler is signal.SIG_DFL:
+                raise OSError("cannot restore")
+            return real(signum, handler)
+
+        before = signal.getsignal(signal.SIGINT)
+        original_term = signal.getsignal(signal.SIGTERM)
+        plugins.signal.signal = fake
+        try:
+            self.spawn("true")
+        finally:
+            plugins.signal.signal = real
+            real(signal.SIGTERM, original_term)
+        self.assertEqual({s for s, _ in restored}, {signal.SIGTERM, signal.SIGINT})
+        self.assertIn((signal.SIGTERM, signal.SIG_DFL), restored)
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)
+
+
 if __name__ == "__main__":
     unittest.main()
