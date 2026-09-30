@@ -116,6 +116,8 @@ export function ProjectSettings({
   const [pluginsVisited, setPluginsVisited] = useState(false);
   const [pluginDirty, setPluginDirty] = useState(0);
   const onPluginDirty = useCallback((count: number) => setPluginDirty(count), []);
+  const [pluginRunning, setPluginRunning] = useState(0);
+  const onPluginRunning = useCallback((count: number) => setPluginRunning(count), []);
   const [saved, setSaved] = useState<PreferenceUpdateReport | null>(null);
   const [awaiting, setAwaiting] = useState<AwaitingReload | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -305,7 +307,7 @@ export function ProjectSettings({
   const unsavedTotal = dirtyCount + pluginDirty;
 
   function requestBack() {
-    if (unsavedTotal > 0) setConfirmLeave(true);
+    if (unsavedTotal > 0 || pluginRunning > 0) setConfirmLeave(true);
     else onBack();
   }
 
@@ -382,7 +384,7 @@ export function ProjectSettings({
         </TabsList>
 
         {/* Both panels stay mounted (`forceMount`) so switching tabs keeps every draft. */}
-        <TabsContent value="preferences" forceMount className="mt-3 space-y-5">
+        <TabsContent value="preferences" forceMount className="mt-3 space-y-5 data-[state=inactive]:hidden">
           {/* Mounted for the screen's whole life, so a change of text is announced; a region
               created together with its text is often missed by screen readers. */}
           <p aria-live="polite" className="sr-only">
@@ -557,9 +559,14 @@ export function ProjectSettings({
           ) : null}
         </TabsContent>
 
-        <TabsContent value="plugins" forceMount className="mt-3">
+        <TabsContent value="plugins" forceMount className="mt-3 data-[state=inactive]:hidden">
           {pluginsVisited ? (
-            <ProjectPlugins project={project} environment={environment} onDirtyChange={onPluginDirty} />
+            <ProjectPlugins
+              project={project}
+              environment={environment}
+              onDirtyChange={onPluginDirty}
+              onRunningChange={onPluginRunning}
+            />
           ) : null}
         </TabsContent>
       </Tabs>
@@ -567,14 +574,26 @@ export function ProjectSettings({
       <Dialog open={confirmLeave} onOpenChange={setConfirmLeave}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogTitle>{unsavedTotal > 0 ? 'Discard unsaved changes?' : 'Leave while an action runs?'}</DialogTitle>
             <DialogDescription>
-              {unsavedTotal} change{unsavedTotal === 1 ? '' : 's'} to {name} will be lost.
+              {unsavedTotal > 0 ? (
+                <>
+                  {unsavedTotal} change{unsavedTotal === 1 ? '' : 's'} to {name} will be lost.
+                </>
+              ) : null}
+              {unsavedTotal > 0 && pluginRunning > 0 ? ' ' : null}
+              {pluginRunning > 0 ? (
+                <>
+                  {pluginRunning === 1 ? 'A plugin action is' : `${pluginRunning} plugin actions are`} still running. Leaving does not
+                  stop {pluginRunning === 1 ? 'it' : 'them'}: {pluginRunning === 1 ? 'it keeps' : 'they keep'} running in the
+                  background and its result will not be shown here.
+                </>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmLeave(false)}>
-              Keep editing
+              {unsavedTotal > 0 ? 'Keep editing' : 'Stay'}
             </Button>
             <Button
               variant="destructive"
@@ -583,7 +602,7 @@ export function ProjectSettings({
                 onBack();
               }}
             >
-              Discard and leave
+              {unsavedTotal > 0 ? 'Discard and leave' : 'Leave'}
             </Button>
           </DialogFooter>
         </DialogContent>

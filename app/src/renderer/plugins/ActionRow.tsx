@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, Info, Loader2, XCircle } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ export function ActionRow({
   disabledReason,
   onProposal,
   onRan,
+  onRunningChange,
 }: {
   projectId: ProjectRecord['project_id'];
   pluginName: string;
@@ -37,6 +38,8 @@ export function ActionRow({
   onProposal: (output: Readonly<Record<string, unknown>>) => string;
   /** The action may have changed what the card shows (status, built files); reload it. */
   onRan: () => void;
+  /** Reports whether this action is running, so leaving the screen can warn. */
+  onRunningChange: (actionId: string, running: boolean) => void;
 }) {
   const runner = useAction(() => window.devteam.runPluginAction(projectId, pluginName, action.id));
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,12 +47,17 @@ export function ActionRow({
   const result = runner.state.phase === 'done' ? runner.state.result : null;
   const idle = disabledReason === null && !pending;
 
+  useEffect(() => {
+    onRunningChange(action.id, pending);
+    return () => onRunningChange(action.id, false);
+  }, [action.id, pending, onRunningChange]);
+
   async function click() {
     setNotice(null);
     const answer = await runner.run();
     if (!answer.ok) return;
     if (action.output === 'config' && answer.data.ok) {
-      setNotice(answer.data.output === null ? 'The action proposed nothing.' : onProposal(answer.data.output));
+      setNotice(answer.data.output === null || isEmptyProposal(answer.data.output) ? 'The action found nothing to propose.' : onProposal(answer.data.output));
     }
     if (action.output !== 'config' || action.writes) onRan();
   }
@@ -96,6 +104,13 @@ export function ActionRow({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** No keys, or only empty lists/strings/nulls: the script ran and found nothing, which is not "matches current settings". */
+function isEmptyProposal(output: Readonly<Record<string, unknown>>): boolean {
+  return Object.values(output).every(
+    (value) => value === null || value === '' || (Array.isArray(value) && value.length === 0),
   );
 }
 

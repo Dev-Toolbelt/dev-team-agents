@@ -49,6 +49,19 @@ describe('the project screen’s tabs', () => {
     expect(bridge.projectPlugins).toHaveBeenCalledWith('proj-1');
   });
 
+  it('shows only the active panel: the other is hidden by its inactive state', async () => {
+    const { user } = await openPlugins();
+    await screen.findByRole('heading', { name: 'Graphify' });
+    const panels = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+    const inactive = () => panels().filter((panel) => panel.getAttribute('data-state') === 'inactive');
+    expect(panels()).toHaveLength(2);
+    expect(inactive()).toHaveLength(1);
+    expect(inactive()[0]).toHaveClass('data-[state=inactive]:hidden');
+    expect(panels().find((panel) => panel.getAttribute('data-state') === 'active')).toContainElement(screen.getByRole('heading', { name: 'Graphify' }));
+    await user.click(screen.getByRole('tab', { name: /Preferences/ }));
+    expect(inactive()[0]).toContainElement(screen.getByRole('heading', { name: 'Graphify', hidden: true }));
+  });
+
   it('keeps a preferences problem inside its tab, so plugins stay reachable', async () => {
     const { bridge } = await openPlugins({ projectPreferences: vi.fn(() => Promise.resolve(fail('prefs unavailable'))) });
     expect(await screen.findByRole('heading', { name: 'Graphify' })).toBeInTheDocument();
@@ -194,6 +207,22 @@ describe('the config form', () => {
     expect(await scope.findByText(/Saved 4 changes/)).toBeInTheDocument();
   });
 
+  it('keeps the saved values on screen when the reload after a save fails', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce(ok(pluginList([rich])))
+      .mockResolvedValueOnce(fail('reload exploded'));
+    const { user } = await openPlugins({ projectPlugins: list });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    const scope = within(card());
+    await user.click(scope.getByRole('switch', { name: /Refresh at session end/ }));
+    await user.click(scope.getByRole('button', { name: /Save changes/ }));
+    expect(await screen.findByText('reload exploded')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(scope.getByRole('switch', { name: /Refresh at session end/ })).toBeChecked();
+    expect(await scope.findByText(/could not be read back/)).toBeInTheDocument();
+  });
+
   it('blocks Save while a value is invalid, and says which', async () => {
     const { bridge, user } = await openPlugins({ projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList([rich])))) });
     await screen.findByRole('heading', { name: 'Graphify' });
@@ -328,6 +357,30 @@ describe('actions', () => {
     await user.click(scope.getByRole('button', { name: 'Detect paths' }));
     expect(await scope.findByText('Failed (exit 3)')).toBeInTheDocument();
     expect(scope.getByText('no manifest found')).toBeInTheDocument();
+  });
+
+  it('says a detect that found nothing found nothing, not that it matches', async () => {
+    const runPluginAction = vi.fn(() => Promise.resolve(ok(runResult({ output: { targetPaths: [] } }))));
+    const { user } = await openPlugins({ runPluginAction });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
+    expect(await within(card()).findByText(/found nothing to propose/)).toBeInTheDocument();
+    expect(within(card()).queryByText(/matches the current settings/)).not.toBeInTheDocument();
+  });
+
+  it('warns before leaving while an action is still running', async () => {
+    let finish: (value: unknown) => void = () => {};
+    const runPluginAction = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    const { user, onBack } = await openPlugins({ runPluginAction: runPluginAction as never });
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
+    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/still running/)).toBeInTheDocument();
+    expect(onBack).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
+    expect(onBack).toHaveBeenCalled();
+    finish(ok(runResult()));
   });
 
   it('shows a log action’s outcome with its duration and a collapsible tail, then re-reads the card', async () => {

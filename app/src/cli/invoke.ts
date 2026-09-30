@@ -134,6 +134,20 @@ function isDocumentedExit(code: number): code is ExitCode {
   return Object.hasOwn(OUTCOME_BY_EXIT, code);
 }
 
+/** Children alive right now, so a quitting app can end them instead of orphaning a long `plugin run`. */
+const inFlight = new Set<ReturnType<typeof spawn>>();
+
+/**
+ * SIGTERM every CLI child still running. Called on app quit: a plugin action can run for up
+ * to an hour, and the CLI forwards SIGTERM to the script's process group, so the script does
+ * not outlive the app that started it.
+ */
+export function terminateInFlight(): void {
+  for (const child of inFlight) {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  }
+}
+
 /**
  * Run `devteam <args> --json` once and classify the outcome.
  *
@@ -174,6 +188,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     };
   }
 
+  inFlight.add(child);
   const stdoutChunks: Buffer[] = [];
   const stderrChunks: Buffer[] = [];
   let stdoutBytes = 0;
@@ -257,6 +272,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     else exitCode = settled.code;
   } finally {
     clearTimeout(deadline);
+    inFlight.delete(child);
   }
 
   const durationMs = Date.now() - startedAt;

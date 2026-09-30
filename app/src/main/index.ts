@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
+import { terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
@@ -386,6 +387,7 @@ if (!primaryInstance) {
     quitting = true;
     center?.dispose();
     board?.dispose();
+    terminateInFlight();
   });
   void app.whenReady().then(onReady);
 }

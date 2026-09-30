@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, GitBranch, Info } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -51,25 +51,45 @@ export function PluginCard({
   plugin,
   environment,
   refreshing,
+  reloadFailed,
+  listVersion,
   onChanged,
   onDirtyChange,
+  onRunningChange,
 }: {
   projectId: ProjectRecord['project_id'];
   plugin: PluginView;
   environment: EnvironmentReport | null;
   /** The list is being re-read; see the reload effect below. */
   refreshing: boolean;
+  /** The last re-read of the list failed; the card is still drawn from the previous list. */
+  reloadFailed: boolean;
+  /** Bumped each time a re-read of the list finishes, whether it succeeded or not. */
+  listVersion: number;
   /** A write landed (or an action ran) — re-read the list. */
   onChanged: () => void;
   onDirtyChange: (name: string, count: number) => void;
+  onRunningChange: (name: string, count: number) => void;
 }) {
   const uid = useId();
   const titleId = `${uid}-title`;
   const [drafts, setDrafts] = useState<Drafts>({});
-  const [awaiting, setAwaiting] = useState<{ written: ReadonlySet<string>; before: PluginView } | null>(null);
+  const [awaiting, setAwaiting] = useState<{ written: ReadonlySet<string>; snapshot: Drafts; before: PluginView; version: number } | null>(null);
   const [saved, setSaved] = useState<PluginConfigUpdateReport | null>(null);
   const [toggleNote, setToggleNote] = useState<string | null>(null);
-  const sawRefresh = useRef(false);
+  // The write landed but the list that would confirm it did not arrive: the drafts stay, as
+  // the values that were written, until a list that actually arrives replaces them.
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const runningActions = useRef(new Set<string>());
+  const actionRunning = useCallback(
+    (actionId: string, running: boolean) => {
+      if (running) runningActions.current.add(actionId);
+      else runningActions.current.delete(actionId);
+      onRunningChange(plugin.name, runningActions.current.size);
+    },
+    [plugin.name, onRunningChange],
+  );
+  useEffect(() => () => onRunningChange(plugin.name, 0), [plugin.name, onRunningChange]);
 
   const toggler = useAction((enabled: boolean) => window.devteam.setPluginEnabled(projectId, plugin.name, enabled));
   const saver = useAction((changes: Parameters<typeof window.devteam.updatePluginConfig>[2]) =>
@@ -77,37 +97,52 @@ export function PluginCard({
   );
 
   const batch = useMemo(() => draftBatch(plugin.config_fields, plugin.config, drafts), [plugin.config_fields, plugin.config, drafts]);
-  const dirtyCount = batch.dirtyKeys.length;
+  // Values already written are not "unsaved", even while the form still shows them as drafts;
+  // an edit made since (a different draft) still is.
+  const unsavedKeys =
+    awaiting === null
+      ? batch.dirtyKeys
+      : batch.dirtyKeys.filter((key) => !(awaiting.written.has(key) && drafts[key] === awaiting.snapshot[key]));
+  const unsavedCount = unsavedKeys.length;
 
   useEffect(() => {
-    onDirtyChange(plugin.name, dirtyCount);
+    onDirtyChange(plugin.name, unsavedCount);
     return () => onDirtyChange(plugin.name, 0);
-  }, [plugin.name, dirtyCount, onDirtyChange]);
+  }, [plugin.name, unsavedCount, onDirtyChange]);
 
   // A saved draft is dropped only once the reload has brought the value back from the CLI, so
   // the form never flashes the old value between the save and the reload. A reload that
   // finished without changing anything (it failed) also ends the wait: the form must not
-  // stay disabled behind a list that will not update.
+  // stay disabled behind a list that will not update — but the drafts are then kept, not
+  // dropped, so the form shows what was written instead of silently reverting to the old
+  // values; the screen's Problem offers Try again, and a list that arrives ends the wait.
   useEffect(() => {
     if (awaiting === null) return;
     if (refreshing) {
-      sawRefresh.current = true;
+      setUnconfirmed(false);
       return;
     }
-    if (plugin !== awaiting.before || sawRefresh.current) {
-      setDrafts((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => !awaiting.written.has(key))));
-      sawRefresh.current = false;
+    const answered = listVersion > awaiting.version;
+    const arrived = plugin !== awaiting.before || (answered && !reloadFailed);
+    if (arrived) {
+      setDrafts((previous) =>
+        Object.fromEntries(Object.entries(previous).filter(([key, value]) => !(awaiting.written.has(key) && value === awaiting.snapshot[key]))),
+      );
+      setUnconfirmed(false);
       setAwaiting(null);
+    } else if (answered && reloadFailed) {
+      setUnconfirmed(true);
     }
-  }, [awaiting, plugin, refreshing]);
+  }, [awaiting, plugin, refreshing, reloadFailed, listVersion]);
 
   const toggleGate = gateFor(environment, [plugin.enabled ? PLUGIN_COMMANDS.disable : PLUGIN_COMMANDS.enable]);
   const saveGate = gateFor(environment, [PLUGIN_COMMANDS.configSet, PLUGIN_COMMANDS.configUnset]);
   const runGate = gateFor(environment, [PLUGIN_COMMANDS.run]);
 
-  const busy = saver.state.phase === 'pending' || awaiting !== null;
+  const saving = saver.state.phase === 'pending' || (awaiting !== null && !unconfirmed);
+  const busy = saving;
   const toggling = toggler.state.phase === 'pending';
-  const canSave = dirtyCount > 0 && batch.invalid.length === 0 && !saveGate.withheld && !busy;
+  const canSave = unsavedCount > 0 && batch.invalid.length === 0 && !saveGate.withheld && !busy;
 
   // Turning a plugin on needs its requirements; turning it off never does.
   const enableBlocked = !plugin.enabled && !plugin.ready;
@@ -143,7 +178,7 @@ export function PluginCard({
     const result = await saver.run(batch.changes);
     if (!result.ok) return;
     setSaved(result.data.failed === null ? result.data : null);
-    setAwaiting({ written: new Set(result.data.applied.map((change) => change.key)), before });
+    setAwaiting({ written: new Set(result.data.applied.map((change) => change.key)), snapshot: drafts, before, version: listVersion });
     onChanged();
   }
 
@@ -161,8 +196,8 @@ export function PluginCard({
   const status =
     batch.invalid.length > 0
       ? `${batch.invalid.length} value${batch.invalid.length === 1 ? ' needs' : 's need'} fixing before you can save`
-      : dirtyCount > 0
-        ? `${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}`
+      : unsavedCount > 0
+        ? `${unsavedCount} unsaved change${unsavedCount === 1 ? '' : 's'}`
         : '';
 
   function actionReason(action: PluginView['actions'][number]): string | null {
@@ -236,7 +271,7 @@ export function PluginCard({
 
       <div className="space-y-4 px-5 py-4">
         <p aria-live="polite" className="sr-only">
-          {toggling ? 'Updating…' : busy ? 'Saving…' : (toggleNote ?? status)}
+          {toggling ? 'Updating…' : saving ? 'Saving…' : unconfirmed ? 'Saved; the list could not be reloaded.' : (toggleNote ?? status)}
         </p>
 
         {missing.length > 0 ? (
@@ -301,7 +336,7 @@ export function PluginCard({
               <p className="text-xs text-muted-foreground">Fill in the required settings to finish setting this plugin up.</p>
             ) : null}
           </div>
-          <fieldset disabled={busy} aria-busy={busy} className="min-w-0 divide-y px-5">
+          <fieldset disabled={busy} aria-busy={saving} className="min-w-0 divide-y px-5">
             <legend className="sr-only">{plugin.title} settings</legend>
             {plugin.config_fields.map((field) => (
               <ConfigField
@@ -334,6 +369,11 @@ export function PluginCard({
                 project, so commit the file to share it.
               </div>
             ) : null}
+            {unconfirmed ? (
+              <p role="status" className="text-sm">
+                Saved. The updated settings could not be read back, so the form shows what you saved; use Try again above to reload.
+              </p>
+            ) : null}
             {lastSave !== null && !lastSave.ok ? <Problem problem={lastSave} /> : null}
             {lastSave !== null && lastSave.ok && lastSave.data.failed !== null ? (
               <div className="space-y-2">
@@ -351,10 +391,10 @@ export function PluginCard({
             inline
             shortcut={false}
             label={`${plugin.title} unsaved changes`}
-            dirtyCount={dirtyCount}
+            dirtyCount={unsavedCount}
             invalid={batch.invalid.length}
             status={status}
-            saving={busy}
+            saving={saving}
             canSave={canSave}
             withheld={saveGate.withheld ? saveGate.reason : null}
             onDiscard={() => {
@@ -379,6 +419,7 @@ export function PluginCard({
                 disabledReason={actionReason(action)}
                 onProposal={fillFromProposal}
                 onRan={onChanged}
+                onRunningChange={actionRunning}
               />
             ))}
           </div>

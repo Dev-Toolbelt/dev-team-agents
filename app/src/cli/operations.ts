@@ -834,12 +834,17 @@ export function asPreferenceWrite(body: Record<string, unknown>): PreferenceWrit
 // the shape checks here are the second line, so an operand that would read as a flag or
 // that no manifest could declare never reaches an argv.
 
-/** `plugin list` runs the status script of every enabled plugin, so it gets more than the default. */
-export const PLUGIN_LIST_TIMEOUT_MS = 60_000;
+/**
+ * `plugin list` runs the status script of every enabled plugin in turn, each allowed up to
+ * 30 s by the CLI. A fixed 60 s gave up under three slow plugins; the plugin count is
+ * not known before the list answers, so this is a flat ceiling: 15 s of overhead plus six
+ * slow status scripts, past any realistic install.
+ */
+export const PLUGIN_LIST_TIMEOUT_MS = 180_000;
 /** `plugin enable` may run a `config` action to seed the settings (`seeded: true`). */
 export const PLUGIN_ENABLE_TIMEOUT_MS = 120_000;
-/** The longest a manifest may declare, and what an action with no declared timeout gets. */
-export const PLUGIN_RUN_MAX_SECONDS = 1800;
+/** The longest a manifest may declare (the CLI's own cap), and what an action with no declared timeout gets. */
+export const PLUGIN_RUN_MAX_SECONDS = 3600;
 /** Added to the action's own timeout so the CLI's deadline trips, and reports, before ours. */
 export const PLUGIN_RUN_MARGIN_SECONDS = 30;
 

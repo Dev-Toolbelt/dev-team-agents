@@ -176,10 +176,12 @@ describe('the plugin operations refuse before spawning', () => {
   it('gives a run its action’s own timeout plus a margin, capped at the manifest maximum', () => {
     expect(pluginRunTimeoutMs(60)).toBe(90_000);
     expect(pluginRunTimeoutMs(1800)).toBe(1_830_000);
-    expect(pluginRunTimeoutMs(999_999)).toBe(1_830_000);
-    expect(pluginRunTimeoutMs(null)).toBe(1_830_000);
-    expect(pluginRunTimeoutMs(-5)).toBe(1_830_000);
-    expect(pluginRunTimeoutMs(Number.NaN)).toBe(1_830_000);
+    expect(pluginRunTimeoutMs(3600)).toBe(3_630_000);
+    expect(pluginRunTimeoutMs(99_999)).toBe(3_630_000);
+    expect(pluginRunTimeoutMs(999_999)).toBe(3_630_000);
+    expect(pluginRunTimeoutMs(null)).toBe(3_630_000);
+    expect(pluginRunTimeoutMs(-5)).toBe(3_630_000);
+    expect(pluginRunTimeoutMs(Number.NaN)).toBe(3_630_000);
   });
 });
 

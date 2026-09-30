@@ -19,10 +19,13 @@ export function ProjectPlugins({
   project,
   environment,
   onDirtyChange,
+  onRunningChange,
 }: {
   project: ProjectRecord;
   environment: EnvironmentReport | null;
   onDirtyChange: (count: number) => void;
+  /** How many actions are running across all cards, so leaving can warn about them. */
+  onRunningChange: (count: number) => void;
 }) {
   const projectId = project.project_id;
   const { state, refreshing, reload } = useOperation(() => window.devteam.projectPlugins(projectId), [projectId]);
@@ -43,10 +46,32 @@ export function ProjectPlugins({
     });
   }, []);
 
+  const [running, setRunning] = useState<Readonly<Record<string, number>>>({});
+  const cardRunning = useCallback((name: string, count: number) => {
+    setRunning((previous) => {
+      if ((previous[name] ?? 0) === count) return previous;
+      const next = { ...previous };
+      if (count === 0) delete next[name];
+      else next[name] = count;
+      return next;
+    });
+  }, []);
+  const runningTotal = Object.values(running).reduce((sum, count) => sum + count, 0);
+  useEffect(() => {
+    onRunningChange(runningTotal);
+  }, [runningTotal, onRunningChange]);
+
   const total = Object.values(dirty).reduce((sum, count) => sum + count, 0);
   useEffect(() => {
     onDirtyChange(total);
   }, [total, onDirtyChange]);
+
+  const seenState = useRef(state);
+  const listVersion = useRef(0);
+  if (seenState.current !== state) {
+    seenState.current = state;
+    if (state.phase === 'done') listVersion.current += 1;
+  }
 
   const list = lastGood.current;
   if (list === null) {
@@ -89,8 +114,11 @@ export function ProjectPlugins({
             plugin={plugin}
             environment={environment}
             refreshing={refreshing}
+            reloadFailed={reloadProblem !== null}
+            listVersion={listVersion.current}
             onChanged={reload}
             onDirtyChange={cardDirty}
+            onRunningChange={cardRunning}
           />
         ))
       )}
