@@ -51,7 +51,7 @@ function prefsWith(values: Record<string, unknown>, origin: Record<string, strin
 describe('ProjectSettings — header', () => {
   it('no longer carries the inheritance notice', async () => {
     installBridge(fakeBridge());
-    render(<ProjectSettings project={project()} name="project-1" environment={environment()} active onBack={vi.fn()} />);
+    render(<ProjectSettings project={project()} name="project-1" environment={environment()} active onBack={vi.fn()} onChanged={vi.fn()} onUnbound={vi.fn()} />);
     await screen.findByRole('heading', { name: /project-1 · Settings/ });
     expect(screen.queryByText(/Changes are saved to this project only/)).not.toBeInTheDocument();
   });
