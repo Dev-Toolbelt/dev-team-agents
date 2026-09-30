@@ -30,7 +30,7 @@ from devteam_support import CLI, StoreTestCase, make_git_project
 
 from devteam import bind as bind_module
 from devteam import cli as devteam_cli
-from devteam import compat, creds, errors, paths, plugins, project, registry
+from devteam import compat, creds, errors, integrations, paths, plugins, project, registry
 
 
 VALID_EXIT_CODES = {
@@ -501,6 +501,7 @@ class CompatContractTest(StoreTestCase):
             "bind_manifest": bind_module.MANIFEST_SCHEMA,
             "credentials": creds.SCHEMA,
             "plugin_settings": plugins.SCHEMA,
+            "integrations": integrations.SCHEMA,
         }
         self.assertEqual(compat.store_schemas(), expected)
         for value in expected.values():
@@ -778,6 +779,18 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "preserved",
             "unrecognised",
         },
+        # The integrations screens bind to these (app/src/cli/operations.ts).
+        "integration list": {"project_id", "integrations"},
+        "integration.view": {
+            "name", "title", "description", "homepage", "auth", "fields", "account",
+            "project", "detected", "connected", "project_configured", "status",
+        },
+        "integration.auth": {"kind", "label", "help", "has_token", "stale", "backend"},
+        "integration.field": {
+            "key", "scope", "type", "label", "help", "required", "default", "placeholder",
+            "options", "resource", "visible_when",
+        },
+        "integration.status": {"state", "checked_at", "summary", "facts"},
     }
 
     # A key whose name alone suggests it might carry an actual secret value,
@@ -1109,6 +1122,18 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # Belt and suspenders: the value itself must not appear anywhere in the
         # serialized payload, not just be absent from the key names.
         self.assertNotIn("s3cr3t-value", json.dumps(payload))
+
+    def test_integration_list(self):
+        payload = self._run_ok("integration", "list", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("integration list", payload, self.EXPECTED["integration list"])
+        self._assert_no_secret_like_keys("integration list", payload)
+        self.assertEqual({v["name"] for v in payload["integrations"]}, {"github", "jira"})
+        for view in payload["integrations"]:
+            self._assert_record_keys("integration.view", view, self.EXPECTED["integration.view"])
+            self._assert_record_keys("integration.auth", view["auth"], self.EXPECTED["integration.auth"])
+            self._assert_record_keys("integration.status", view["status"], self.EXPECTED["integration.status"])
+            for declared in view["fields"]:
+                self._assert_record_keys("integration.field", declared, self.EXPECTED["integration.field"])
 
     def test_cred_backends(self):
         # Unlike every other `cred` subcommand, `backends` takes no `--path` --
