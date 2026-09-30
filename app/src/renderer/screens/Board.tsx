@@ -37,6 +37,7 @@ import {
   sessionsInPeriod,
   stepDurations,
   timeInColumn,
+  countFindings,
   viewProject,
   type KanbanItem,
   type Period,
@@ -529,13 +530,21 @@ function Kanban({
   const [onlyFindings, setOnlyFindings] = useState(false);
   const hideId = useId();
   const findingsId = useId();
-  const findingsAvailable = project.with_findings > 0;
-  const findingsOn = onlyFindings && findingsAvailable;
   const findingsHintId = `${findingsId}-hint`;
 
   const sessionsInRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
   // A session that vanished from the snapshot or fell out of the period must not leave the filter selecting nothing.
   const effectiveSession = sessionsInRange.some((each) => each.session_id === sessionId) ? sessionId : 'all';
+  // Availability follows what the period and session filters leave, not the whole project.
+  const findingsAvailable = useMemo(
+    () => countFindings(sessionsInRange.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession)) > 0,
+    [sessionsInRange, effectiveSession],
+  );
+  const findingsOn = onlyFindings && findingsAvailable;
+  // Once there is nothing to filter to, forget the choice so it does not spring back later.
+  useEffect(() => {
+    if (!findingsAvailable) setOnlyFindings(false);
+  }, [findingsAvailable]);
   const view = useMemo(
     () =>
       buildKanban(
@@ -584,7 +593,7 @@ function Kanban({
             Hide done older than {settings.doneRetentionDays} {settings.doneRetentionDays === 1 ? 'day' : 'days'}
           </Label>
         </span>
-        <span className="flex items-center gap-2" title={findingsAvailable ? undefined : 'No task in this project has findings'}>
+        <span className="flex items-center gap-2" title={findingsAvailable ? undefined : 'No task in this view has findings'}>
           <Checkbox
             id={findingsId}
             checked={findingsOn}
@@ -597,7 +606,7 @@ function Kanban({
           </Label>
           {findingsAvailable ? null : (
             <span id={findingsHintId} className="sr-only">
-              No task in this project has findings.
+              No task in this view has findings.
             </span>
           )}
         </span>
@@ -611,13 +620,14 @@ function Kanban({
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Column title="To do" items={view.todo} now={coarseNow} />
-          <Column title="In progress" items={view.in_progress} now={tick} />
-          <Column title="In Review" items={view.in_review} now={coarseNow} />
+          <Column title="To do" items={view.todo} now={coarseNow} asOf={project.as_of} />
+          <Column title="In progress" items={view.in_progress} now={tick} asOf={project.as_of} />
+          <Column title="In Review" items={view.in_review} now={coarseNow} asOf={project.as_of} />
           <Column
             title="Done"
             items={view.done}
             now={coarseNow}
+            asOf={project.as_of}
             note={view.hiddenDone > 0 ? `${view.hiddenDone} older done ${view.hiddenDone === 1 ? 'task is' : 'tasks are'} hidden` : null}
           />
         </div>
@@ -714,11 +724,13 @@ function Column({
   title,
   items,
   now,
+  asOf,
   note = null,
 }: {
   title: string;
   items: readonly KanbanItem[];
   now: number;
+  asOf?: number | undefined;
   note?: string | null;
 }) {
   const headingId = useId();
@@ -740,6 +752,7 @@ function Column({
               key={`${item.session.session_id}:${item.task.key}`}
               item={item}
               now={isRunning(item.session, item.task) ? now : 0}
+              asOf={asOf}
             />
           ))}
         </ul>
@@ -753,7 +766,7 @@ function Column({
  * One task. The per-step times sit behind a disclosure button, not a hover tooltip: one tab
  * stop per card instead of two, nothing that overlaps its neighbours, and Escape closes it.
  */
-const TaskCard = memo(function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
+const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem; now: number; asOf?: number | undefined }) {
   const { session, task } = item;
   const ids = useId();
   const contentId = `${ids}-content`;
@@ -761,8 +774,8 @@ const TaskCard = memo(function TaskCard({ item, now }: { item: KanbanItem; now: 
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const running = isRunning(session, task);
-  const inColumn = timeInColumn(session, task, now, running);
-  const steps = stepDurations(task, now, running, inColumn);
+  const inColumn = timeInColumn(session, task, now, running, asOf);
+  const steps = stepDurations(task, now, running, inColumn, asOf);
   const where = session.branch ?? 'no branch';
   return (
     <li className="min-w-0">

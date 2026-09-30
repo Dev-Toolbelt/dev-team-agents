@@ -1888,6 +1888,10 @@ export function asBoardTask(raw: unknown): BoardTask | null {
       if (n !== null) durations[status] = n;
     }
   }
+  let review = asBoardReview(raw['review']);
+  // A task the CLI puts in review always has a window; when the window is missing or malformed the
+  // card still says its result was not read, rather than sitting in the column unexplained.
+  if (review === null && column === 'in_review') review = { state: 'unread', findings: null, since: statusSince };
   return {
     key,
     content,
@@ -1901,7 +1905,7 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     durations,
     stale: raw['stale'] === true,
     abandoned: raw['abandoned'] === true,
-    review: asBoardReview(raw['review']),
+    review,
   };
 }
 
@@ -1914,6 +1918,8 @@ function asBoardSession(raw: unknown): BoardSession | null {
   if (sessionId === null || provider === null || typeof counts === 'string') return null;
   if (typeof status !== 'string' || !(SESSION_STATUSES as readonly string[]).includes(status)) return null;
   const resume = raw['resume_command'];
+  // A card that cannot be drawn is dropped, but the CLI's `counts` are kept as sent: the column
+  // counts may then exceed the cards shown. That mismatch is tolerated over rewriting the CLI's totals.
   const tasks: BoardTask[] = [];
   if (Array.isArray(raw['tasks'])) {
     for (const entry of raw['tasks'].slice(0, MAX_TASKS_PER_SESSION)) {
@@ -1948,6 +1954,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
   const sessionsActive = nonNegative(raw['sessions_active']);
   if (sessionsTotal === null || sessionsActive === null) return `project ${projectId} has no numeric sessions_total / sessions_active`;
   if (!Array.isArray(raw['sessions'])) return `project ${projectId} has no sessions array`;
+  const asOf = nonNegative(raw['as_of']);
   const sessions: BoardSession[] = [];
   for (const entry of raw['sessions']) {
     const session = asBoardSession(entry);
@@ -1963,6 +1970,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
     stale: nonNegative(raw['stale']) ?? 0,
     abandoned: nonNegative(raw['abandoned']) ?? 0,
     with_findings: nonNegative(raw['with_findings']) ?? 0,
+    ...(asOf === null ? {} : { as_of: asOf }),
     last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
     sessions,
   };

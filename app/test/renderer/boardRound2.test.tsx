@@ -143,22 +143,42 @@ describe('Board kanban — In Review and the findings filter', () => {
     expect(screen.queryByText(/older done/)).not.toBeInTheDocument();
   });
 
-  it('shows the empty state when the period narrows away every task with findings', async () => {
+  it('offers the findings filter from the session and period in view, and resets it when they leave none', async () => {
+    const withFindings = boardSession({ session_id: 'has-one', branch: 'b-findings', tasks: [reviewTask('f', findings)] });
+    const recent = boardSession({ session_id: 'recent', tasks: [boardTask({ key: 'x', content: 'Recent todo' })] });
+    const { user } = await openKanban(boardProject({ sessions: [recent, withFindings] }));
+    const box = () => screen.getByRole('checkbox', { name: /with findings/i });
+    expect(box()).toBeEnabled();
+    await user.click(box());
+    expect(box()).toBeChecked();
+
+    await user.selectOptions(screen.getByLabelText('Session'), 'recent');
+    expect(box()).toBeDisabled();
+    expect(box()).not.toBeChecked();
+    expect(screen.getByText('Recent todo')).toBeInTheDocument();
+
+    // The choice was forgotten, not parked: findings coming back into view do not re-apply it.
+    await user.selectOptions(screen.getByLabelText('Session'), 'all');
+    expect(box()).toBeEnabled();
+    expect(box()).not.toBeChecked();
+    expect(screen.getByText('Recent todo')).toBeInTheDocument();
+  });
+
+  it('disables the findings checkbox when the period leaves no findings, though the project has some', async () => {
     const old = boardSession({ session_id: 'old-one', last_activity_at: NOW - 20 * 86_400, tasks: [reviewTask('f', findings)] });
     const recent = boardSession({ session_id: 'recent', tasks: [boardTask({ key: 'x', content: 'Recent todo' })] });
     const { user } = await openKanban(boardProject({ sessions: [recent, old] }));
-    await user.selectOptions(screen.getByLabelText('Session'), 'recent');
-    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
-    expect(screen.getByText('No tasks with findings')).toBeInTheDocument();
-    expect(screen.queryByText('Recent todo')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /with findings/i })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText('Period'), '30d');
+    expect(screen.getByRole('checkbox', { name: /with findings/i })).toBeEnabled();
   });
 
   it('disables the findings checkbox, with an explanation, when the project has no findings', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [reviewTask('p', { state: 'pending', findings: null, since: NOW - 5 })] })] }));
     const box = screen.getByRole('checkbox', { name: /with findings/i });
     expect(box).toBeDisabled();
-    expect(box).toHaveAccessibleDescription('No task in this project has findings.');
-    expect(box.closest('span[title]')).toHaveAttribute('title', 'No task in this project has findings');
+    expect(box).toHaveAccessibleDescription('No task in this view has findings.');
+    expect(box.closest('span[title]')).toHaveAttribute('title', 'No task in this view has findings');
   });
 
   it('keeps the checkbox enabled when the project has findings', async () => {
@@ -256,5 +276,44 @@ describe('Board — accessibility and overflow', () => {
       return Promise.resolve();
     });
     expect(screen.queryByRole('dialog', { name: 'Board settings' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Board kanban — live figures from the CLI snapshot', () => {
+  const row = (article: HTMLElement, label: RegExp) => within(article).getByText(label).parentElement!;
+
+  it('grows the current step from as_of and shows the same figure on the headline and the hover row', async () => {
+    const task = boardTask({
+      key: 'live',
+      content: 'Live one',
+      column: 'in_progress',
+      status: 'in_progress',
+      status_since: NOW - 9999,
+      durations: { pending: 60, in_progress: 100 },
+    });
+    const { user } = await openKanban({ ...boardProject({ sessions: [boardSession({ tasks: [task] })] }), as_of: NOW - 30 });
+    const article = screen.getByText('Live one').closest('article')!;
+    expect(within(article).getByText(/Time in this column/).parentElement).toHaveTextContent('2m 10s');
+    await user.click(within(article).getByRole('button', { name: /time per step/i }));
+    expect(row(article, /In progress \(now\)/)).toHaveTextContent('2m 10s');
+    expect(row(article, /To do/)).toHaveTextContent('1m');
+  });
+
+  it('shows an in-review task inside an ended session as abandoned and reviewed, frozen at the CLI figure', async () => {
+    const task = boardTask({
+      key: 'gone',
+      content: 'Left in review',
+      column: 'in_review',
+      status: 'in_progress',
+      abandoned: true,
+      durations: { pending: 10, in_progress: 50, in_review: 300 },
+      review: { state: 'pending', findings: null, since: NOW - 300 },
+    });
+    const session = boardSession({ status: 'ended', ended_at: NOW - 100, tasks: [task] });
+    await openKanban({ ...boardProject({ sessions: [session] }), as_of: NOW - 200 });
+    const article = screen.getByText('Left in review').closest('article')!;
+    expect(within(article).getByText('Awaiting review')).toBeInTheDocument();
+    expect(within(article).getByText(/abandoned/i)).toBeInTheDocument();
+    expect(within(article).getByText(/Time in this column/).parentElement).toHaveTextContent('5m');
   });
 });

@@ -100,40 +100,63 @@ export function stepLabel(status: string): string {
 
 const STEP_ORDER = ['pending', 'in_progress', 'in_review', 'completed', 'cancelled'];
 
+/** The step a task is in: the review window while in review, else the provider's own status. */
+function currentStep(task: BoardTask): string {
+  return task.column === 'in_review' ? 'in_review' : task.status;
+}
+
 /**
- * How long a task has been in its current column. A running task keeps growing; anything
- * else stopped growing when its session ended (or, without an end time, at the session's
- * last activity), so it is measured to that instant and no further.
+ * The current step's figure when the CLI stamped its snapshot (`as_of`): its own number for
+ * that step plus the time since it spoke, while the task runs; frozen at its number otherwise.
+ * The CLI partitions a task's lifetime, so this is the whole story and no other clock enters.
  */
-export function timeInColumn(session: BoardSession, task: BoardTask, nowSeconds: number, running: boolean): number {
+function liveFromSnapshot(task: BoardTask, nowSeconds: number, running: boolean, asOf: number): number {
+  const base = task.durations[currentStep(task)] ?? 0;
+  return running ? base + Math.max(0, nowSeconds - asOf) : base;
+}
+
+/**
+ * How long a task has been in its current column. With `asOf` (the CLI's snapshot time) it is
+ * the same figure `stepDurations` shows on the current row, so headline and hover agree. Without
+ * it (an older CLI) a running task grows from its column's start; anything else stopped growing
+ * when its session ended (or, without an end time, at the session's last activity).
+ */
+export function timeInColumn(
+  session: BoardSession,
+  task: BoardTask,
+  nowSeconds: number,
+  running: boolean,
+  asOf?: number,
+): number {
+  if (asOf !== undefined) return liveFromSnapshot(task, nowSeconds, running, asOf);
   const until = running ? nowSeconds : (session.ended_at ?? session.last_activity_at);
   return Math.max(0, until - (task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since));
 }
 
 /**
- * Time per step, in the order a task moves through them. The CLI partitions a task's
- * lifetime: seconds inside a review window count only to `in_review`, never to the provider
- * status. So the rows sum to the task's lifetime, and only the row of the column the task
- * is in is live; every other row stays frozen at the CLI's figure. That live row is read
- * from `currentSeconds` (see `timeInColumn`) when it is longer than the CLI's figure,
- * because the CLI's number stopped growing when it last spoke. Passing the same
- * `currentSeconds` the card shows keeps the two from disagreeing.
+ * Time per step, in the order a task moves through them. With `asOf`, only the current step
+ * is live (CLI figure plus time since `as_of`) and every other row stays at the CLI's figure.
+ * Without it (an older CLI), the current row is read from `currentSeconds` (see `timeInColumn`)
+ * when longer than the CLI's figure, minus review time when the step is `in_progress`, since
+ * `status_since` predates any review window the task came back from.
  */
 export function stepDurations(
   task: BoardTask,
   nowSeconds: number,
   running: boolean,
   currentSeconds?: number,
+  asOf?: number,
 ): readonly { readonly status: string; readonly label: string; readonly seconds: number; readonly current: boolean }[] {
   const merged: Record<string, number> = { ...task.durations };
-  // The provider's status stays `in_progress` while a task is in review; the step it is in is the review window.
-  const step = task.column === 'in_review' ? 'in_review' : task.status;
-  const since = task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since;
-  let live = currentSeconds ?? (running ? nowSeconds - since : undefined);
-  // `status_since` predates any review window a task passed through and came back from,
-  // and that time belongs to In Review alone, so it is not also in-progress time.
-  if (live !== undefined && step === 'in_progress') live = Math.max(0, live - (merged['in_review'] ?? 0));
-  if (live !== undefined) merged[step] = Math.max(merged[step] ?? 0, live);
+  const step = currentStep(task);
+  if (asOf !== undefined) {
+    merged[step] = liveFromSnapshot(task, nowSeconds, running, asOf);
+  } else {
+    const since = task.column === 'in_review' && task.review !== null ? task.review.since : task.status_since;
+    let live = currentSeconds ?? (running ? nowSeconds - since : undefined);
+    if (live !== undefined && step === 'in_progress') live = Math.max(0, live - (merged['in_review'] ?? 0));
+    if (live !== undefined) merged[step] = Math.max(merged[step] ?? 0, live);
+  }
   const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
   return statuses
     .filter((status) => (merged[status] ?? 0) > 0 || status === step)
@@ -210,6 +233,11 @@ export function viewProject(project: BoardProject, period: Period, nowSeconds: n
     abandoned: whole ? project.abandoned : tasks.filter((task) => task.abandoned).length,
     withFindings: whole ? project.with_findings : tasks.filter(hasFindings).length,
   };
+}
+
+/** Tasks in review with findings among the sessions given. */
+export function countFindings(sessions: readonly BoardSession[]): number {
+  return sessions.reduce((n, session) => n + session.tasks.filter(hasFindings).length, 0);
 }
 
 /** A task sitting in review with findings to fix. */

@@ -1178,6 +1178,8 @@ export interface BoardProject {
   readonly abandoned: number;
   /** Tasks in review with findings; 0 from an older CLI. */
   readonly with_findings: number;
+  /** Epoch seconds the CLI computed this view at; absent from an older CLI. Live figures grow from it. */
+  readonly as_of?: number;
   readonly last_activity_at: number;
   readonly sessions: readonly BoardSession[];
 }

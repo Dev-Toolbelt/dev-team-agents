@@ -293,3 +293,57 @@ describe('boardProjectName', () => {
     expect(boardProjectName(boardProject({ project_id: 'uuid-1', root: '' }), {})).toBe('uuid-1');
   });
 });
+
+describe('live figures from the CLI snapshot (as_of)', () => {
+  const session = boardSession();
+  const headlineAndRow = (task: ReturnType<typeof boardTask>, later: number, running = true, asOf = NOW) => {
+    const headline = timeInColumn(session, task, NOW + later, running, asOf);
+    const steps = stepDurations(task, NOW + later, running, headline, asOf);
+    return { headline, steps, current: steps.find((s) => s.current)! };
+  };
+
+  it('a task reviewed in two windows: In Review carries both, In progress is frozen, headline equals the row', () => {
+    const task = boardTask({
+      column: 'in_review',
+      status: 'in_progress',
+      status_since: NOW - 9000,
+      review: { state: 'pending', findings: null, since: NOW - 50 },
+      durations: { pending: 60, in_progress: 400, in_review: 350 },
+    });
+    const at = headlineAndRow(task, 40);
+    expect(at.current).toMatchObject({ status: 'in_review', seconds: 390 });
+    expect(at.headline).toBe(390);
+    expect(at.steps.find((s) => s.status === 'in_progress')?.seconds).toBe(400);
+    expect(headlineAndRow(task, 100).steps.find((s) => s.status === 'pending')?.seconds).toBe(60);
+  });
+
+  it('reopening after a review: In progress grows from its own figure and In Review stays frozen', () => {
+    const task = boardTask({
+      column: 'in_progress',
+      status: 'in_progress',
+      status_since: NOW - 9000,
+      durations: { pending: 60, in_progress: 400, in_review: 350 },
+    });
+    const at = headlineAndRow(task, 25);
+    expect(at.current).toMatchObject({ status: 'in_progress', seconds: 425 });
+    expect(at.headline).toBe(425);
+    expect(at.steps.find((s) => s.status === 'in_review')?.seconds).toBe(350);
+  });
+
+  it('a task that is not running is frozen at the CLI figure however late the clock reads', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', durations: { in_progress: 400 } });
+    const at = headlineAndRow(task, 99_999, false);
+    expect(at.current.seconds).toBe(400);
+    expect(at.headline).toBe(400);
+  });
+
+  it('never runs backwards when the clock reads earlier than as_of', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', durations: { in_progress: 400 } });
+    expect(headlineAndRow(task, -500).headline).toBe(400);
+  });
+
+  it('falls back to the status_since arithmetic without as_of', () => {
+    const task = boardTask({ column: 'in_progress', status: 'in_progress', status_since: NOW - 1000, durations: { in_progress: 100 } });
+    expect(timeInColumn(session, task, NOW, true)).toBe(1000);
+  });
+});

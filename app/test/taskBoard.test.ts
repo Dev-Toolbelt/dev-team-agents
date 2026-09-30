@@ -153,10 +153,34 @@ describe('asBoardProject', () => {
     ['non-numeric findings', { state: 'findings', findings: '2', since: 1 }],
     ['a missing since', { state: 'pending', findings: null }],
     ['a non-object', 'pending'],
-  ])('drops the review of a task with %s, keeping the task', (_name, review) => {
+  ])('replaces the malformed review of a task with %s by an unread window, keeping the task', (_name, review) => {
     const task = asBoardTask({ ...boardTask({ column: 'in_review', status: 'in_progress' }), review });
     expect(task).not.toBeNull();
-    expect(task?.review).toBeNull();
+    expect(task?.review).toMatchObject({ state: 'unread', findings: null });
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['malformed', { state: 'bogus', since: 'x' }],
+  ])('gives a task in review whose review is %s an unread window from status_since', (_name, review) => {
+    const raw = { ...boardTask({ column: 'in_review', status: 'in_progress', status_since: 777 }), review };
+    if (review === undefined) delete (raw as { review?: unknown }).review;
+    expect(asBoardTask(raw)?.review).toEqual({ state: 'unread', findings: null, since: 777 });
+  });
+
+  it('leaves a task outside review with no window', () => {
+    expect(asBoardTask({ ...boardTask({ column: 'in_progress' }), review: null })?.review).toBeNull();
+  });
+
+  it('reads as_of when it is a non-negative number and ignores it otherwise', () => {
+    const base = JSON.parse(JSON.stringify(boardProject())) as Record<string, unknown>;
+    expect((asBoardProject({ ...base, as_of: 1_790_000_123 }) as BoardProject).as_of).toBe(1_790_000_123);
+    for (const bad of ['x', -1, null, {}, Number.NaN]) {
+      const parsed = asBoardProject({ ...base, as_of: bad }) as BoardProject;
+      expect(parsed.as_of, JSON.stringify(bad)).toBeUndefined();
+    }
+    expect((asBoardProject(base) as BoardProject).as_of).toBeUndefined();
   });
 
   it('keeps a pending review with null findings', () => {
