@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,7 +42,11 @@ function levelVariant(level: string): 'default' | 'secondary' | 'destructive' | 
   }
 }
 
-type Loaded<T> = { readonly phase: 'loading' } | { readonly phase: 'done'; readonly value: T };
+type Loaded<T> =
+  | { readonly phase: 'loading' }
+  | { readonly phase: 'done'; readonly value: T }
+  /** The bridge call itself rejected (IPC failed); there is no CLI result to show. */
+  | { readonly phase: 'failed'; readonly error: string };
 
 /**
  * `buildInfo`, `environment` and `resolveCli` are bare-value bridge calls — there is no
@@ -56,9 +62,14 @@ function useLoaded<T>(loader: () => Promise<T>, deps: readonly unknown[] = []): 
 
   useEffect(() => {
     let live = true;
-    void run().then((value) => {
-      if (live) setState({ phase: 'done', value });
-    });
+    void run().then(
+      (value) => {
+        if (live) setState({ phase: 'done', value });
+      },
+      (error: unknown) => {
+        if (live) setState({ phase: 'failed', error: String(error) });
+      },
+    );
     return () => {
       live = false;
     };
@@ -111,6 +122,8 @@ export function Doctor() {
 
   const { state, reload } = useOperation(() => window.devteam.doctor());
 
+  const failure = [buildInfoLoad, environmentLoad, resolutionLoad].find((load) => load.phase === 'failed');
+
   return (
     <div className="space-y-8">
       <section aria-labelledby="app-health-heading" className="space-y-4">
@@ -124,12 +137,20 @@ export function Doctor() {
           </p>
         </header>
 
-        {buildInfoLoad.phase === 'loading' ||
+        {failure !== undefined ? (
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>This app could not read its own state</AlertTitle>
+            <AlertDescription>
+              <p>the app could not reach its own main process: {failure.error}</p>
+            </AlertDescription>
+          </Alert>
+        ) : buildInfoLoad.phase === 'loading' ||
         environmentLoad.phase === 'loading' ||
         resolutionLoad.phase === 'loading' ||
         handshakeOp.state.phase === 'loading' ? (
           <Loading what="this app's own preconditions" />
-        ) : (
+        ) : buildInfoLoad.phase !== 'done' || environmentLoad.phase !== 'done' || resolutionLoad.phase !== 'done' ? null : (
           <AppHealthTable
             {...selfCheck({
               build: buildInfoLoad.value,

@@ -176,9 +176,16 @@ export function Projects({
   const [namesNonce, setNamesNonce] = useState(0);
   useEffect(() => {
     let live = true;
-    void window.devteam.projectNames().then((names) => {
-      if (live) setProjectNames(names);
-    });
+    // A failed read leaves the map as it was: every name falls back to the directory's
+    // basename, which is what the map being empty already means.
+    void window.devteam
+      .projectNames()
+      .then((names) => {
+        if (live) setProjectNames(names);
+      })
+      .catch(() => {
+        if (live) setProjectNames({});
+      });
     return () => {
       live = false;
     };
@@ -222,7 +229,16 @@ export function Projects({
   });
 
   if (state.phase === 'loading') return <Loading what="devteam list" />;
-  if (!state.result.ok) return <Problem problem={state.result} />;
+  if (!state.result.ok) {
+    return (
+      <div className="space-y-3">
+        <Problem problem={state.result} />
+        <Button variant="outline" size="sm" onClick={reload}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
   const { current, projects } = state.result.data;
 
@@ -240,6 +256,9 @@ export function Projects({
           </Alert>
         ) : null}
         <ProjectSettings
+          // Keyed by project: drafts, tabs and pending flags belong to one project, and
+          // must not carry over when a notification opens another.
+          key={settingsFor.project_id}
           project={settingsFor}
           name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
           environment={environment}
@@ -403,10 +422,7 @@ export function Projects({
         open={bindOpen}
         onOpenChange={setBindOpen}
         environment={environment}
-        onBound={() => {
-          setBindOpen(false);
-          reload();
-        }}
+        onBound={reload}
       />
     </section>
   );
@@ -646,10 +662,7 @@ function ProjectRow({
         onOpenChange={(open) => setDialog(open ? 'unbind' : null)}
         project={project}
         name={name}
-        onUnbound={() => {
-          setDialog(null);
-          onChanged();
-        }}
+        onUnbound={onChanged}
       />
       <UpgradeDialog
         open={dialog === 'upgrade'}
@@ -688,7 +701,13 @@ function PinDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) onOpenChange(true);
+        else if (pin.state.phase !== 'pending') close();
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Pin {name}</DialogTitle>
@@ -765,9 +784,22 @@ function UnbindDialog({
   onUnbound: () => void;
 }) {
   const unbind = useAction(() => window.devteam.unbindProject(project.project_id));
+  const pending = unbind.state.phase === 'pending';
+  const unbound = unbind.state.phase === 'done' && unbind.state.result.ok;
+
+  // The list reloads when the dialog closes, not when the write lands: a successful unbind
+  // removes this very row, and with it this dialog and the quarantine report the user has
+  // to read. Every way out — Done, Cancel, Esc, a click outside — comes through here, so a
+  // dismissal after success cannot leave the list stale.
+  function close() {
+    if (pending) return;
+    unbind.reset();
+    onOpenChange(false);
+    if (unbound) onUnbound();
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Unbind {name}?</DialogTitle>
@@ -784,11 +816,11 @@ function UnbindDialog({
         {unbind.state.phase === 'done' ? <Notice result={unbind.state.result} /> : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={pending} onClick={close}>
             Cancel
           </Button>
-          {unbind.state.phase === 'done' && unbind.state.result.ok ? (
-            <Button onClick={onUnbound}>Done</Button>
+          {unbound ? (
+            <Button onClick={close}>Done</Button>
           ) : (
             <Button
               variant="destructive"
@@ -866,9 +898,11 @@ function UpgradeDialog({
 
   const planData = plan.state.phase === 'done' && plan.state.result.ok ? plan.state.result.data : null;
   const nothingToDo = planData !== null && planData.actions.length === 0;
+  const applying = apply.state.phase === 'pending';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // Closing mid-apply would drop the report of a write that is still running.
+    <Dialog open={open} onOpenChange={(next) => (next || !applying ? onOpenChange(next) : undefined)}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Upgrade {name}</DialogTitle>
@@ -889,22 +923,19 @@ function UpgradeDialog({
         {apply.state.phase === 'done' ? <Notice result={apply.state.result} /> : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={applying} onClick={() => onOpenChange(false)}>
             {apply.state.phase === 'done' && apply.state.result.ok ? 'Close' : 'Cancel'}
           </Button>
           {apply.state.phase === 'done' && apply.state.result.ok ? (
-            <Button
-              onClick={() => {
-                onApplied();
-                onOpenChange(false);
-              }}
-            >
-              Done
-            </Button>
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
           ) : (
             <Button
               disabled={planData === null || nothingToDo || apply.state.phase === 'pending'}
-              onClick={() => void apply.run()}
+              onClick={() => {
+                void apply.run().then((result) => {
+                  if (result.ok) onApplied();
+                });
+              }}
               title={nothingToDo ? 'The plan has no actions — there is nothing to apply.' : undefined}
             >
               {apply.state.phase === 'pending' ? 'Applying…' : 'Apply'}
@@ -1020,7 +1051,11 @@ function BindDialog({
   const [name, setName] = useState('');
   const [providers, setProviders] = useState<ReadonlySet<BindProvider>>(new Set());
   const [mode, setMode] = useState<BindMode>(RECOMMENDED_MODE);
-  const choose = useAction(() => window.devteam.chooseProjectDirectory());
+  const choose = useAction(
+    () => window.devteam.chooseProjectDirectory(),
+    // A picker that could not open is the same as one the user dismissed.
+    () => ({ chosen: false }) as const,
+  );
   const bind = useAction(() => {
     if (path === null) throw new Error('bind requested with no directory chosen');
     const trimmedName = name.trim();
@@ -1045,17 +1080,16 @@ function BindDialog({
   }
 
   function close() {
+    if (bind.state.phase === 'pending') return;
     resetForm();
     onOpenChange(false);
   }
 
-  // Reset on every **open**, not only on close. `onBound` (in `Projects`) closes this
-  // dialog by calling the parent's `onOpenChange` directly — the "Done" button's own path
-  // — which bypasses `close()` above entirely. Without this effect, `BindDialog` stayed
-  // mounted with `bind.state.phase === 'done'` from the previous bind, so pressing
-  // "Bind…" again reopened the dialog still showing the last "Bound …" result instead of
-  // a fresh form. Keyed on `open` alone: a reset is idempotent, so running it again on an
-  // already-blank form (the ordinary first-open case) costs nothing.
+  // Reset on every **open**, not only on close: the parent can flip `open` without going
+  // through `close()` above, and a dialog that stayed mounted with `bind.state.phase ===
+  // 'done'` reopened still showing the last "Bound …" result instead of a fresh form. Keyed
+  // on `open` alone: a reset is idempotent, so running it on an already-blank form (the
+  // ordinary first-open case) costs nothing.
   useEffect(() => {
     if (open) resetForm();
     // Keyed on `open` alone, deliberately: `resetForm` is a fresh closure every render
@@ -1185,17 +1219,21 @@ function BindDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={close}>
+          <Button variant="outline" disabled={bind.state.phase === 'pending'} onClick={close}>
             {bound ? 'Close' : 'Cancel'}
           </Button>
           {bound ? (
-            <Button onClick={onBound}>Done</Button>
+            <Button onClick={close}>Done</Button>
           ) : (
             <WriteButton
               command="bind"
               environment={environment}
               disabled={path === null || bind.state.phase === 'pending'}
-              onClick={() => void bind.run()}
+              onClick={() => {
+                void bind.run().then((result) => {
+                  if (result.ok) onBound();
+                });
+              }}
             >
               {bind.state.phase === 'pending' ? 'Binding…' : 'Bind'}
             </WriteButton>
