@@ -30,6 +30,10 @@ import {
   doctor,
   listProjects,
   planUpgrade,
+  preferenceArgumentProblem,
+  prefsList,
+  prefsSet,
+  prefsUnset,
   setPin,
   syncAllProjects,
   syncProject,
@@ -38,6 +42,7 @@ import {
   type CliContext,
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
+import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
 import { readSettings, writeProjectName, type AppSettings } from './settings.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
@@ -54,6 +59,10 @@ import {
   type HandshakeView,
   type OperationResult,
   type PinReport,
+  type PreferenceChange,
+  type PreferenceUpdateReport,
+  type PreferenceValue,
+  type ProjectPreferencesView,
   type SyncAllReport,
   type UnbindReport,
   type UpgradePlan,
@@ -556,4 +565,146 @@ export function registerIpc(deps: IpcDependencies): void {
     if (!gated.ready) return gated.problem;
     return applyUpgrade(gated.ctx, resolved.path);
   });
+
+  ipcMain.handle(
+    CHANNELS.projectPreferences,
+    async (_event, projectId: unknown): Promise<OperationResult<ProjectPreferencesView>> => {
+      if (typeof projectId !== 'string') return refusedBadArgument('prefs list');
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const ctx = await context();
+      if (ctx === null) return NO_CLI;
+      const current = await prefsList(ctx, resolved.path);
+      if (!current.ok) return current;
+      // The app's own working directory is its `userData`, never a project, so `prefs list`
+      // there is the cascade minus any project layer — what a reset falls back to. Trusted
+      // only when the CLI confirms it resolved no project; otherwise it is reported unknown.
+      const base = await prefsList(ctx, workingDirectory);
+      const inherited = base.ok && base.data.project_id === null ? base.data.values : null;
+      return { ...current, data: { ...current.data, inherited } };
+    },
+  );
+
+  /**
+   * A batch of project-layer writes, applied in order and stopped at the first failure.
+   *
+   * Each key is checked against **this project's own `prefs list` answer** before anything
+   * is written, so the renderer cannot aim `prefs set` at a key the framework does not
+   * declare — an unknown key would otherwise be written and carried forever as `unknown`.
+   * The scope is fixed to `project` in `cli/operations.ts`; there is no way to reach the
+   * global layer through this channel.
+   */
+  ipcMain.handle(
+    CHANNELS.updateProjectPreferences,
+    async (_event, projectId: unknown, changes: unknown): Promise<OperationResult<PreferenceUpdateReport>> => {
+      if (typeof projectId !== 'string') return refusedBadArgument('prefs set');
+      const parsed = parsePreferenceChanges(changes);
+      if (typeof parsed === 'string') {
+        return refusedPreferences(`\`devteam prefs set\` was refused: ${parsed}`);
+      }
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('prefs set');
+      if (!gated.ready) return gated.problem;
+
+      const listing = await prefsList(gated.ctx, resolved.path);
+      if (!listing.ok) return listing;
+      const known = new Set(Object.keys(listing.data.values).filter((key) => !listing.data.unknown.includes(key)));
+      const stranger = parsed.find((change) => !known.has(change.key));
+      if (stranger !== undefined) {
+        return refusedPreferences(
+          `\`${stranger.key}\` is not a preference store version ${listing.data.version} declares.`,
+        );
+      }
+
+      const consenting = parsed.filter(
+        (change) => change.action === 'set' && CONSENT_KEYS.has(change.key) && change.value === true,
+      );
+      if (consenting.length > 0 && !(await confirmConsent(consenting.map((change) => change.key)))) {
+        return refusedPreferences('Turning on a consent setting was not confirmed, so nothing was saved.');
+      }
+
+      const started = Date.now();
+      const applied: PreferenceChange[] = [];
+      for (const change of parsed) {
+        const result =
+          change.action === 'unset'
+            ? await prefsUnset(gated.ctx, resolved.path, change.key)
+            : await prefsSet(gated.ctx, resolved.path, change.key, change.value);
+        if (!result.ok) {
+          return {
+            ok: true,
+            outcome: 'success',
+            data: { applied, failed: { change, problem: result } },
+            command: result.command,
+            durationMs: Date.now() - started,
+          };
+        }
+        applied.push(change);
+      }
+      return {
+        ok: true,
+        outcome: 'success',
+        data: { applied, failed: null },
+        command: 'devteam prefs set --scope project',
+        durationMs: Date.now() - started,
+      };
+    },
+  );
+}
+
+const CONSENT_LABELS: Readonly<Record<string, string>> = {
+  telemetry: 'anonymous usage telemetry',
+  auto_update: 'automatic updates',
+};
+
+/**
+ * The user's own yes, asked in a native dialog the renderer cannot draw or answer. Consent
+ * keys default to off until someone opts in; without this, anything able to call the bridge
+ * could opt in silently — `auto_update` decides whether new framework code is applied.
+ */
+async function confirmConsent(keys: readonly string[]): Promise<boolean> {
+  const names = keys.map((key) => CONSENT_LABELS[key] ?? key).join(' and ');
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Turn on', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    message: `Turn on ${names} for this project?`,
+    detail: 'This is an opt-in setting. You can turn it off again from the project settings at any time.',
+  });
+  return response === 0;
+}
+
+function refusedPreferences(message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: 'devteam prefs set', durationMs: 0 };
+}
+
+/** The renderer's batch, rebuilt from `unknown`. At most one change per key, 64 in total. */
+export function parsePreferenceChanges(raw: unknown): PreferenceChange[] | string {
+  if (!Array.isArray(raw)) return 'the changes are not a list';
+  if (raw.length === 0) return 'there is nothing to change';
+  if (raw.length > 64) return 'too many changes in one batch';
+  const seen = new Set<string>();
+  const changes: PreferenceChange[] = [];
+  for (const entry of raw) {
+    if (entry === null || typeof entry !== 'object') return 'a change is not an object';
+    const { key, action, value } = entry as { key?: unknown; action?: unknown; value?: unknown };
+    if (action !== 'set' && action !== 'unset') return 'a change has no `set` or `unset` action';
+    const problem = preferenceArgumentProblem(key, action === 'set' ? value : null);
+    if (problem !== null) return problem;
+    const name = key as string;
+    const rule = PREFERENCE_RULES[name];
+    if (rule === undefined || rule.kind === 'readonly') return `\`${name}\` is not a preference this app edits`;
+    if (action === 'set') {
+      const invalid = valueProblem(name, value as PreferenceValue);
+      if (invalid !== null) return invalid;
+    }
+    if (seen.has(name)) return `\`${name}\` appears twice in one batch`;
+    seen.add(name);
+    changes.push(
+      action === 'unset' ? { key: name, action } : { key: name, action, value: value as PreferenceValue },
+    );
+  }
+  return changes;
 }

@@ -20,6 +20,7 @@ import {
   type BindRequest,
   type CatalogKind,
   type DevteamBridge,
+  type PreferenceChange,
   type ProjectId,
 } from '../shared/api.js';
 
@@ -62,6 +63,19 @@ const bridge: DevteamBridge = {
     ipcRenderer.invoke(CHANNELS.setPin, String(projectId), version === null ? null : String(version)),
   planUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.planUpgrade, String(projectId)),
   applyUpgrade: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.applyUpgrade, String(projectId)),
+  projectPreferences: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.projectPreferences, String(projectId)),
+  // Rebuilt into plain objects, like `bindProject`'s request; `main/ipc.ts` validates each
+  // change again against the project's own `prefs list` answer.
+  updateProjectPreferences: (projectId: ProjectId, changes: readonly PreferenceChange[]) =>
+    ipcRenderer.invoke(
+      CHANNELS.updateProjectPreferences,
+      String(projectId),
+      changes.map((change) =>
+        change.action === 'unset'
+          ? { key: String(change.key), action: 'unset' }
+          : { key: String(change.key), action: 'set', value: change.value },
+      ),
+    ),
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

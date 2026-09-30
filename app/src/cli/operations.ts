@@ -1,9 +1,10 @@
 /**
  * The named operations this app can perform, and nothing else.
  *
- * Read-only for most of this file — `list`, `catalog*`, `doctor` — plus the project
- * lifecycle's five write actions at the bottom: `bindProject`, `unbindProject`,
- * `syncProject`, `syncAllProjects`, `setPin`, `planUpgrade`, `applyUpgrade`. One function
+ * Read-only for most of this file — `list`, `catalog*`, `doctor`, `prefsList` — plus the
+ * project lifecycle's write actions at the bottom: `bindProject`, `unbindProject`,
+ * `syncProject`, `syncAllProjects`, `setPin`, `planUpgrade`, `applyUpgrade`, and the
+ * project-layer preference writes `prefsSet` / `prefsUnset`. One function
  * per screen's needs. Each builds its own argument vector — the renderer never supplies
  * one — and each validates the payload it got before handing it on.
  *
@@ -22,6 +23,7 @@
 
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
+import { textProblem } from '../shared/preferenceRules.js';
 import type {
   BindMode,
   BindProvider,
@@ -35,7 +37,10 @@ import type {
   DoctorReport,
   OperationResult,
   PinReport,
+  PreferenceValue,
+  PreferenceWrite,
   ProjectList,
+  ProjectPreferences,
   ProjectRecord,
   ProblemKind,
   SyncAllReport,
@@ -74,6 +79,7 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['catalog', 'skills'],
   ['catalog', 'commands'],
   ['catalog', 'show'],
+  ['prefs', 'list'],
 ]);
 
 /**
@@ -115,6 +121,8 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['sync'],
   ['pin'],
   ['upgrade'],
+  ['prefs', 'set'],
+  ['prefs', 'unset'],
 ]);
 
 /** Every subcommand this build is allowed to run. */
@@ -143,8 +151,8 @@ export const CATALOG_KINDS: readonly CatalogKind[] = Object.freeze(['agents', 's
  * would read as a flag is refused here even if a call site stops validating it.
  */
 export interface CommandShape {
-  /** Positional operands the app may pass after the command words. */
-  readonly operands: 0 | 1;
+  /** Positional operands the app may pass after the command words. `prefs set` is the one with two: key and value. */
+  readonly operands: 0 | 1 | 2;
   /**
    * Flags this command may be passed, and how each is used.
    *
@@ -184,6 +192,13 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   // here is always a path `main/ipc.ts` resolved from a `project_id`, never a renderer
   // string.
   upgrade: { operands: 1, flags: { '--apply': 'bare' } },
+  // The preference commands resolve their project from `--path` alone, so — as with `pin`
+  // — the path is always one `main/ipc.ts` resolved from a `project_id`. `--scope` is
+  // always `project`: the settings screen edits one project's layer and never the global
+  // one, which would silently change every other bound project too.
+  'prefs list': { operands: 0, flags: { '--path': 'value' } },
+  'prefs set': { operands: 2, flags: { '--scope': 'value', '--path': 'value' } },
+  'prefs unset': { operands: 1, flags: { '--scope': 'value', '--path': 'value' } },
 });
 
 const MAX_COMMAND_WORDS = 2;
@@ -592,6 +607,97 @@ export function planUpgrade(context: CliContext, path: string): Promise<Operatio
 
 export function applyUpgrade(context: CliContext, path: string): Promise<OperationResult<UpgradeReport>> {
   return run(context, ['upgrade', path, '--apply'], asUpgradeReport);
+}
+
+// ── preferences ─────────────────────────────────────────────────────────────────
+//
+// `path` is resolved by `main/ipc.ts` from a `project_id`, as for `setPin`. Writes are
+// always `--scope project`; see the `COMMAND_SHAPES` comment for why never `global`.
+
+export function prefsList(context: CliContext, path: string): Promise<OperationResult<ProjectPreferences>> {
+  return run(context, ['prefs', 'list', '--path', path], asProjectPreferences);
+}
+
+export function prefsSet(
+  context: CliContext,
+  path: string,
+  key: string,
+  value: PreferenceValue,
+): Promise<OperationResult<PreferenceWrite>> {
+  const problem = preferenceArgumentProblem(key, value);
+  if (problem !== null) return Promise.resolve(refusedPreference('set', problem));
+  return run(
+    context,
+    ['prefs', 'set', key, serializePreference(value), '--scope', 'project', '--path', path],
+    asPreferenceWrite,
+  );
+}
+
+export function prefsUnset(context: CliContext, path: string, key: string): Promise<OperationResult<PreferenceWrite>> {
+  const problem = preferenceArgumentProblem(key, null);
+  if (problem !== null) return Promise.resolve(refusedPreference('unset', problem));
+  return run(context, ['prefs', 'unset', key, '--scope', 'project', '--path', path], asPreferenceWrite);
+}
+
+/**
+ * The string `prefs set` parses back into `value`. `_coerce` in `prefs.py` reads `null`
+ * (and the empty string) as `None` and `true`/`false` as booleans before it looks at the
+ * default's type, so those spellings are the contract rather than a convenience.
+ */
+export function serializePreference(value: PreferenceValue): string {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return String(value);
+}
+
+/**
+ * Why this key/value may not reach an argv, or `null`. A value is refused when `_coerce`
+ * would read it as something else (`''` becomes `None`, `"true"` becomes a boolean) or
+ * when `argparse` would read it as a flag.
+ */
+export function preferenceArgumentProblem(key: unknown, value: unknown): string | null {
+  if (typeof key !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(key)) {
+    return 'a preference key must be lowercase letters, digits and underscores';
+  }
+  if (value === null || typeof value === 'boolean') return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? null : 'a numeric preference must be a finite, non-negative number';
+  }
+  if (typeof value !== 'string') return 'a preference value must be a string, number, boolean or null';
+  return textProblem(value);
+}
+
+function refusedPreference(verb: 'set' | 'unset', message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam prefs ${verb}`, durationMs: 0 };
+}
+
+/** `prefs list --json`. */
+export function asProjectPreferences(body: Record<string, unknown>): ProjectPreferences | string {
+  if (!isRecord(body['values'])) return 'no `values` object';
+  if (!isRecord(body['origin'])) return 'no `origin` object';
+  if (typeof body['version'] !== 'string') return 'no string `version`';
+  const origin: Record<string, string> = {};
+  for (const [key, layer] of Object.entries(body['origin'])) {
+    if (typeof layer === 'string') origin[key] = layer;
+  }
+  return {
+    project_id: asNullableString(body['project_id']),
+    version: body['version'],
+    values: { ...body['values'] },
+    origin,
+    unknown: asStringArray(body['unknown']),
+  };
+}
+
+/** `prefs set --json` and `prefs unset --json`, which share `key`, `scope` and `file`. */
+export function asPreferenceWrite(body: Record<string, unknown>): PreferenceWrite | string {
+  if (typeof body['key'] !== 'string') return 'no string `key`';
+  if (typeof body['scope'] !== 'string') return 'no string `scope`';
+  return {
+    key: body['key'],
+    scope: body['scope'],
+    ...(typeof body['removed'] === 'boolean' ? { removed: body['removed'] } : {}),
+  };
 }
 
 // ── write-action payload validation ─────────────────────────────────────────────

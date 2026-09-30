@@ -383,6 +383,63 @@ export interface UpgradeReport {
   readonly git_tracked: readonly string[];
 }
 
+// ── preferences ─────────────────────────────────────────────────────────────
+
+/** A value `prefs set` can store. Lists exist in the schema but cannot be written by the CLI. */
+export type PreferenceValue = string | number | boolean | null;
+
+/**
+ * Which layer of the cascade a value came from (ADR-0008). `consent-withheld` is the CLI's
+ * word for a consent key nobody opted into: the value is `false` whatever the default says.
+ * Kept as `string` rather than a closed union so a layer a newer CLI adds is shown, not
+ * rejected.
+ */
+export type PreferenceOrigin = 'defaults' | 'global' | 'project' | 'consent-withheld' | (string & {});
+
+/** `prefs list --path <project> --json`. */
+export interface ProjectPreferences {
+  readonly project_id: string | null;
+  readonly version: string;
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly origin: Readonly<Record<string, PreferenceOrigin>>;
+  /** Keys set in a layer that the version's defaults do not declare — shown, never edited. */
+  readonly unknown: readonly string[];
+}
+
+/**
+ * What the settings screen reads: the project's cascade, plus the cascade **without** the
+ * project layer — the value each key would fall back to if its project value were removed.
+ * `inherited` is `null` when it could not be read; the screen then cannot say what a reset
+ * leads to and says so.
+ */
+export interface ProjectPreferencesView extends ProjectPreferences {
+  readonly inherited: Readonly<Record<string, unknown>> | null;
+}
+
+/** `prefs set --json` / `prefs unset --json`. */
+export interface PreferenceWrite {
+  readonly key: string;
+  readonly scope: string;
+  readonly removed?: boolean;
+}
+
+/** One pending edit. `unset` drops the key from the project layer so the one below applies. */
+export type PreferenceChange =
+  | { readonly key: string; readonly action: 'set'; readonly value: PreferenceValue }
+  | { readonly key: string; readonly action: 'unset' };
+
+/**
+ * The outcome of applying a batch of changes, **in order, stopping at the first failure**.
+ * `applied` is what was actually written, so a partial save is stated rather than hidden.
+ */
+export interface PreferenceUpdateReport {
+  readonly applied: readonly PreferenceChange[];
+  readonly failed: {
+    readonly change: PreferenceChange;
+    readonly problem: Extract<OperationResult<never>, { ok: false }>;
+  } | null;
+}
+
 // ── the bridge ───────────────────────────────────────────────────────────────
 
 /** Static facts about the build, so the UI can be honest about what it is. */
@@ -538,6 +595,18 @@ export interface DevteamBridge {
   ) => Promise<OperationResult<PinReport>>;
   readonly planUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradePlan>>;
   readonly applyUpgrade: (projectId: ProjectId) => Promise<OperationResult<UpgradeReport>>;
+  /** `prefs list` for one project. Read-only. */
+  readonly projectPreferences: (projectId: ProjectId) => Promise<OperationResult<ProjectPreferencesView>>;
+  /**
+   * Writes a batch into the **project** layer only — `prefs set/unset --scope project`.
+   * Every key must be one `prefs list` returned for that project, and every value must pass
+   * `valueProblem` in `shared/preferenceRules.ts`; the main process checks both. Turning a
+   * consent key on asks the user in a native dialog the renderer cannot answer for them.
+   */
+  readonly updateProjectPreferences: (
+    projectId: ProjectId,
+    changes: readonly PreferenceChange[],
+  ) => Promise<OperationResult<PreferenceUpdateReport>>;
 }
 
 /** The channel names, shared so main and preload cannot disagree about a string. */
@@ -560,4 +629,6 @@ export const CHANNELS = {
   setPin: 'devteam:set-pin',
   planUpgrade: 'devteam:plan-upgrade',
   applyUpgrade: 'devteam:apply-upgrade',
+  projectPreferences: 'devteam:project-preferences',
+  updateProjectPreferences: 'devteam:update-project-preferences',
 } as const;
