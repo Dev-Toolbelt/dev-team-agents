@@ -52,6 +52,17 @@ import type {
   NotificationLevel,
   OperationResult,
   PinReport,
+  IntegrationConfigWrite,
+  IntegrationConnectReport,
+  IntegrationDisconnectReport,
+  IntegrationFact,
+  IntegrationField,
+  IntegrationList,
+  IntegrationResources,
+  IntegrationStatus,
+  IntegrationTestReport,
+  IntegrationTestResult,
+  IntegrationView,
   PluginAction,
   PluginConfigField,
   PluginConfigWrite,
@@ -103,6 +114,8 @@ import type {
  */
 export type CliContext = Required<Pick<InvokeOptions, 'binary' | 'cwd'>> &
   Pick<InvokeOptions, 'env' | 'timeoutMs' | 'declarationFile' | 'cancelOnQuit'>;
+// `secretStdin` is deliberately not part of `CliContext`: a context is reused and may be
+// logged, a secret belongs to one invocation only.
 
 /** Subcommands this build runs that the framework classifies in `compat.READ_ONLY`. */
 export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze([
@@ -116,6 +129,10 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['catalog', 'show'],
   ['prefs', 'list'],
   ['plugin', 'list'],
+  // ADR-0023. `resources` reaches the network but writes nothing the store keeps.
+  ['integration', 'list'],
+  ['integration', 'show'],
+  ['integration', 'resources'],
   ['notifications', 'list'],
   ['notifications', 'watch'],
   ['skills', 'list'],
@@ -177,6 +194,13 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['plugin', 'config', 'set'],
   ['plugin', 'config', 'unset'],
   ['plugin', 'run'],
+  // ADR-0023. `test` writes the machine-local status record, `connect` writes the account
+  // config and the token (which arrives on stdin, never argv).
+  ['integration', 'connect'],
+  ['integration', 'disconnect'],
+  ['integration', 'config', 'set'],
+  ['integration', 'config', 'unset'],
+  ['integration', 'test'],
   // Writes `notifications-seen.json` in one project's machine-local state directory —
   // the smallest write this app makes, and still a write, so it is declared and gated
   // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
@@ -284,6 +308,17 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'plugin config set': { operands: 3, flags: { '--path': 'value' } },
   'plugin config unset': { operands: 2, flags: { '--path': 'value' } },
   'plugin run': { operands: 2, flags: { '--path': 'value' } },
+  // ADR-0023. Project-scope commands resolve their project from `--path`, always one
+  // `main/ipc.ts` resolved from a `project_id` (or the app's own neutral directory). `disconnect`
+  // is account-level and takes no `--path`. The token is never an argument: it goes over stdin.
+  'integration list': { operands: 0, flags: { '--path': 'value' } },
+  'integration show': { operands: 1, flags: { '--path': 'value' } },
+  'integration connect': { operands: 1, flags: { '--field': 'repeatable', '--path': 'value' } },
+  'integration test': { operands: 1, flags: { '--path': 'value' } },
+  'integration disconnect': { operands: 1, flags: { '--keep-token': 'bare' } },
+  'integration config set': { operands: 3, flags: { '--path': 'value' } },
+  'integration config unset': { operands: 2, flags: { '--path': 'value' } },
+  'integration resources': { operands: 2, flags: { '--path': 'value' } },
   // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
   // — an ack the user did not see happen is a notification they never got.
   'notifications list': { operands: 0, flags: { '--unseen': 'bare' } },
@@ -476,6 +511,7 @@ export async function run<T>(
   context: CliContext,
   args: readonly string[],
   validate: (body: Record<string, unknown>) => T | string,
+  secretStdin?: string,
 ): Promise<OperationResult<T>> {
   const problem = argvProblem(args);
   if (problem !== null) {
@@ -493,7 +529,13 @@ export async function run<T>(
   // keeps `invokeDevteam`'s default.
   const timeoutMs = context.timeoutMs ?? (isGatedArgv(args) ? GATED_TIMEOUT_MS : undefined);
   return toOperationResult(
-    await invokeDevteam({ ...context, args, ...(timeoutMs !== undefined ? { timeoutMs } : {}) }),
+    await invokeDevteam({
+      ...context,
+      args,
+      ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      // For this one call only; a `CliContext` is reused and may be logged.
+      ...(secretStdin !== undefined ? { secretStdin } : {}),
+    }),
     validate,
   );
 }
@@ -1022,7 +1064,7 @@ function asPluginConfigField(raw: unknown): PluginConfigField | string {
     key: raw['key'],
     type: raw['type'],
     label: typeof raw['label'] === 'string' ? raw['label'] : raw['key'],
-    help: asNullableString(raw['help']),
+    help: nonEmpty(asNullableString(raw['help'])),
     required: raw['required'] === true,
     default: raw['default'] ?? null,
     placeholder: asNullableString(raw['placeholder']),
@@ -1196,6 +1238,375 @@ export function asPluginRunResult(body: Record<string, unknown>): PluginRunResul
     output: isRecord(output) ? { ...output } : null,
     log_tail: typeof body['log_tail'] === 'string' ? body['log_tail'] : '',
   };
+}
+
+// ── integrations (ADR-0023) ──────────────────────────────────────────────────────────
+
+/**
+ * A read-only network call is bounded by the CLI's own 10 s HTTP timeout; this is the margin
+ * around it. Gated commands (connect, test) take `run`'s long write deadline instead.
+ */
+export const INTEGRATION_NETWORK_TIMEOUT_MS = 30_000;
+export const INTEGRATION_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+export const INTEGRATION_KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+export const INTEGRATION_KIND = INTEGRATION_NAME;
+export const INTEGRATION_MAX_FIELDS = 32;
+export const INTEGRATION_MAX_VALUE = 2048;
+export const INTEGRATION_MAX_TOKEN = 4096;
+
+function refusedIntegration(command: string, message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
+}
+
+export function integrationNameProblem(name: unknown): string | null {
+  return typeof name === 'string' && INTEGRATION_NAME.test(name)
+    ? null
+    : 'an integration name is lowercase letters, digits and dashes';
+}
+
+function integrationKindProblem(kind: unknown): string | null {
+  return typeof kind === 'string' && INTEGRATION_KIND.test(kind) ? null : 'a resource kind is lowercase letters, digits and dashes';
+}
+
+function integrationKeyProblem(key: unknown): string | null {
+  return typeof key === 'string' && INTEGRATION_KEY.test(key) ? null : 'a field key is letters, digits and underscores';
+}
+
+/** A config value: a non-empty string that `argparse` will not read as a flag, free of control characters. */
+function integrationValueProblem(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return 'a field value must be a non-empty string';
+  if (value.startsWith('-')) return 'a field value cannot begin with "-"; it would be read as a flag';
+  if (value.length > INTEGRATION_MAX_VALUE) return `a field value is at most ${INTEGRATION_MAX_VALUE} characters`;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(value)) return 'a field value cannot contain control characters';
+  return null;
+}
+
+/** `--path <project>` when a project was resolved, otherwise the app's own neutral directory. */
+function integrationPath(context: CliContext, path: string | null): readonly string[] {
+  return path === null ? projectPathFlag(context) : ['--path', path];
+}
+
+/** Why `fields` cannot become `--field key=value` pairs, or `null`. Exported for `main/ipc.ts`. */
+export function integrationFieldsProblem(fields: unknown): string | null {
+  if (!isRecord(fields) || Array.isArray(fields)) return 'fields must be an object of strings';
+  const entries = Object.entries(fields);
+  if (entries.length > INTEGRATION_MAX_FIELDS) return `at most ${INTEGRATION_MAX_FIELDS} fields can be sent at once`;
+  for (const [key, value] of entries) {
+    const problem = integrationKeyProblem(key);
+    if (problem !== null) return problem;
+    if (typeof value !== 'string') return `\`${key}\` must be a string`;
+    if (value.length > INTEGRATION_MAX_VALUE) return `\`${key}\` is longer than ${INTEGRATION_MAX_VALUE} characters`;
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(value)) return `\`${key}\` cannot contain control characters`;
+  }
+  return null;
+}
+
+/** Why `token` cannot be sent on stdin, or `null`. `null` and `''` both mean "keep the stored token". */
+export function integrationTokenProblem(token: unknown): string | null {
+  if (token === null || token === undefined) return null;
+  if (typeof token !== 'string') return 'a token is a string';
+  if (token.length > INTEGRATION_MAX_TOKEN) return `a token is at most ${INTEGRATION_MAX_TOKEN} characters`;
+  // eslint-disable-next-line no-control-regex
+  if (/[\r\n\u0000]/.test(token)) return 'a token cannot contain a line break';
+  return null;
+}
+
+export function integrationList(context: CliContext, path: string | null): Promise<OperationResult<IntegrationList>> {
+  return run(context, ['integration', 'list', ...integrationPath(context, path)], asIntegrationList);
+}
+
+export function integrationShow(
+  context: CliContext,
+  path: string | null,
+  name: string,
+): Promise<OperationResult<{ readonly integration: IntegrationView }>> {
+  const problem = integrationNameProblem(name);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration show', problem));
+  return run(context, ['integration', 'show', name, ...integrationPath(context, path)], asIntegrationOnly);
+}
+
+/**
+ * `token` goes to the child's stdin for this one call. `null` or `''` sends nothing: the child's
+ * stdin is then `ignore` (/dev/null), which the CLI reads as empty and answers by keeping the
+ * stored token — the same as an explicitly empty stdin.
+ */
+export function integrationConnect(
+  context: CliContext,
+  path: string | null,
+  name: string,
+  fields: Readonly<Record<string, string>>,
+  token: string | null,
+): Promise<OperationResult<IntegrationConnectReport>> {
+  const problem = integrationNameProblem(name) ?? integrationFieldsProblem(fields) ?? integrationTokenProblem(token);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration connect', problem));
+  const argv = ['integration', 'connect', name];
+  for (const [key, value] of Object.entries(fields)) argv.push('--field', `${key}=${value}`);
+  argv.push(...integrationPath(context, path));
+  return run(
+    context,
+    argv,
+    asIntegrationTestReport,
+    token === null || token === '' ? undefined : token,
+  );
+}
+
+export function integrationTest(
+  context: CliContext,
+  path: string | null,
+  name: string,
+): Promise<OperationResult<IntegrationTestReport>> {
+  const problem = integrationNameProblem(name);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration test', problem));
+  return run(
+    context,
+    ['integration', 'test', name, ...integrationPath(context, path)],
+    asIntegrationTestReport,
+  );
+}
+
+export function integrationDisconnect(
+  context: CliContext,
+  name: string,
+  keepToken: boolean,
+): Promise<OperationResult<IntegrationDisconnectReport>> {
+  const problem = integrationNameProblem(name);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration disconnect', problem));
+  return run(
+    context,
+    ['integration', 'disconnect', name, ...(keepToken ? ['--keep-token'] : [])],
+    asIntegrationDisconnect,
+  );
+}
+
+export function integrationConfigSet(
+  context: CliContext,
+  path: string | null,
+  name: string,
+  key: string,
+  value: string,
+): Promise<OperationResult<IntegrationConfigWrite>> {
+  const problem = integrationNameProblem(name) ?? integrationKeyProblem(key) ?? integrationValueProblem(value);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration config set', problem));
+  return run(
+    context,
+    ['integration', 'config', 'set', name, key, value, ...integrationPath(context, path)],
+    asIntegrationConfigWrite,
+  );
+}
+
+export function integrationConfigUnset(
+  context: CliContext,
+  path: string | null,
+  name: string,
+  key: string,
+): Promise<OperationResult<IntegrationConfigWrite>> {
+  const problem = integrationNameProblem(name) ?? integrationKeyProblem(key);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration config unset', problem));
+  return run(
+    context,
+    ['integration', 'config', 'unset', name, key, ...integrationPath(context, path)],
+    asIntegrationConfigWrite,
+  );
+}
+
+export function integrationResources(
+  context: CliContext,
+  path: string | null,
+  name: string,
+  kind: string,
+): Promise<OperationResult<IntegrationResources>> {
+  const problem = integrationNameProblem(name) ?? integrationKindProblem(kind);
+  if (problem !== null) return Promise.resolve(refusedIntegration('integration resources', problem));
+  return run(
+    { ...context, timeoutMs: INTEGRATION_NETWORK_TIMEOUT_MS },
+    ['integration', 'resources', name, kind, ...integrationPath(context, path)],
+    asIntegrationResources,
+  );
+}
+
+// ── integration payload validation ──────────────────────────────────────────────────
+
+function asStringRecord(value: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!isRecord(value)) return out;
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') out[key] = entry;
+  }
+  return out;
+}
+
+function nonEmpty(value: string | null): string | null {
+  return value === null || value === '' ? null : value;
+}
+
+function asIntegrationField(raw: unknown): IntegrationField | string {
+  if (!isRecord(raw)) return 'a `fields` entry is not an object';
+  if (typeof raw['key'] !== 'string') return 'a `fields` entry has no string `key`';
+  if (raw['scope'] !== 'account' && raw['scope'] !== 'project') return `\`fields.${raw['key']}\` has no valid \`scope\``;
+  if (typeof raw['type'] !== 'string') return `\`fields.${raw['key']}\` has no string \`type\``;
+  const options: { value: string; label: string }[] = [];
+  if (Array.isArray(raw['options'])) {
+    for (const option of raw['options']) {
+      if (isRecord(option) && typeof option['value'] === 'string') {
+        options.push({ value: option['value'], label: typeof option['label'] === 'string' ? option['label'] : option['value'] });
+      }
+    }
+  }
+  const when = raw['visible_when'];
+  return {
+    key: raw['key'],
+    scope: raw['scope'],
+    type: raw['type'],
+    label: typeof raw['label'] === 'string' ? raw['label'] : raw['key'],
+    help: nonEmpty(asNullableString(raw['help'])),
+    required: raw['required'] === true,
+    default: asNullableString(raw['default']),
+    placeholder: asNullableString(raw['placeholder']),
+    options,
+    resource: asNullableString(raw['resource']),
+    visible_when:
+      isRecord(when) && typeof when['key'] === 'string' && typeof when['equals'] === 'string'
+        ? { key: when['key'], equals: when['equals'] }
+        : null,
+  };
+}
+
+function asIntegrationFacts(value: unknown): IntegrationFact[] {
+  const facts: IntegrationFact[] = [];
+  if (!Array.isArray(value)) return facts;
+  for (const fact of value) {
+    if (isRecord(fact) && typeof fact['label'] === 'string') {
+      const tone = fact['tone'];
+      facts.push({
+        label: fact['label'],
+        value: asFactValue(fact['value']),
+        tone: tone === 'positive' || tone === 'warning' || tone === 'neutral' ? tone : null,
+      });
+    }
+  }
+  return facts;
+}
+
+function asIntegrationStatus(raw: unknown): IntegrationStatus {
+  if (!isRecord(raw) || typeof raw['state'] !== 'string') {
+    return { state: 'unknown', checked_at: null, summary: '', facts: [] };
+  }
+  return {
+    state: raw['state'],
+    checked_at: asNullableString(raw['checked_at']),
+    summary: typeof raw['summary'] === 'string' ? raw['summary'] : '',
+    facts: asIntegrationFacts(raw['facts']),
+  };
+}
+
+/** One `IntegrationView`: `integration show`, and each entry of `integration list`'s `integrations`. */
+export function asIntegrationView(raw: unknown): IntegrationView | string {
+  if (!isRecord(raw)) return 'an integration entry is not an object';
+  const name = raw['name'];
+  if (typeof name !== 'string' || !INTEGRATION_NAME.test(name)) return 'an integration entry has no valid string `name`';
+  for (const key of ['connected', 'project_configured'] as const) {
+    if (typeof raw[key] !== 'boolean') return `integration \`${name}\` has no boolean \`${key}\``;
+  }
+  if (!Array.isArray(raw['fields'])) return `integration \`${name}\` has no \`fields\` array`;
+  const auth = raw['auth'];
+  if (!isRecord(auth) || typeof auth['has_token'] !== 'boolean') return `integration \`${name}\` has no \`auth\` with a boolean \`has_token\``;
+  const fields: IntegrationField[] = [];
+  for (const entry of raw['fields']) {
+    const field = asIntegrationField(entry);
+    if (typeof field === 'string') return `integration \`${name}\`: ${field}`;
+    fields.push(field);
+  }
+  return {
+    name,
+    title: typeof raw['title'] === 'string' ? raw['title'] : name,
+    description: typeof raw['description'] === 'string' ? raw['description'] : '',
+    homepage: asNullableString(raw['homepage']),
+    auth: {
+      kind: typeof auth['kind'] === 'string' ? auth['kind'] : 'token',
+      label: typeof auth['label'] === 'string' ? auth['label'] : 'Token',
+      help: nonEmpty(asNullableString(auth['help'])),
+      has_token: auth['has_token'],
+      stale: auth['stale'] === true,
+      backend: asNullableString(auth['backend']),
+    },
+    fields,
+    account: asStringRecord(raw['account']),
+    project: isRecord(raw['project']) ? asStringRecord(raw['project']) : null,
+    detected: asStringRecord(raw['detected']),
+    connected: raw['connected'] as boolean,
+    project_configured: raw['project_configured'] as boolean,
+    status: asIntegrationStatus(raw['status']),
+  };
+}
+
+/** `integration list --json`. */
+export function asIntegrationList(body: Record<string, unknown>): IntegrationList | string {
+  if (!Array.isArray(body['integrations'])) return 'no `integrations` array';
+  const integrations: IntegrationView[] = [];
+  for (const raw of body['integrations']) {
+    const view = asIntegrationView(raw);
+    if (typeof view === 'string') return view;
+    integrations.push(view);
+  }
+  return { project_id: asNullableString(body['project_id']), integrations };
+}
+
+/** `integration show --json`. */
+export function asIntegrationOnly(body: Record<string, unknown>): { readonly integration: IntegrationView } | string {
+  const integration = asIntegrationView(body['integration']);
+  if (typeof integration === 'string') return `\`integration\`: ${integration}`;
+  return { integration };
+}
+
+function asIntegrationTestResult(raw: unknown): IntegrationTestResult | string {
+  if (!isRecord(raw)) return '`test` is not an object';
+  if (typeof raw['ok'] !== 'boolean') return '`test` has no boolean `ok`';
+  if (typeof raw['state'] !== 'string') return '`test` has no string `state`';
+  return {
+    ok: raw['ok'],
+    state: raw['state'],
+    summary: typeof raw['summary'] === 'string' ? raw['summary'] : '',
+    facts: asIntegrationFacts(raw['facts']),
+    checked_at: asNullableString(raw['checked_at']),
+  };
+}
+
+/** `integration connect --json` and `integration test --json`: the same document. */
+export function asIntegrationTestReport(body: Record<string, unknown>): IntegrationTestReport | string {
+  const integration = asIntegrationView(body['integration']);
+  if (typeof integration === 'string') return `\`integration\`: ${integration}`;
+  const test = asIntegrationTestResult(body['test']);
+  if (typeof test === 'string') return test;
+  return { integration, test };
+}
+
+/** `integration disconnect --json`. */
+export function asIntegrationDisconnect(body: Record<string, unknown>): IntegrationDisconnectReport | string {
+  const integration = asIntegrationView(body['integration']);
+  if (typeof integration === 'string') return `\`integration\`: ${integration}`;
+  if (typeof body['changed'] !== 'boolean') return 'no boolean `changed`';
+  return { integration, changed: body['changed'] };
+}
+
+/** `integration config set --json` and `integration config unset --json`. */
+export function asIntegrationConfigWrite(body: Record<string, unknown>): IntegrationConfigWrite | string {
+  const integration = asIntegrationView(body['integration']);
+  if (typeof integration === 'string') return `\`integration\`: ${integration}`;
+  if (typeof body['key'] !== 'string') return 'no string `key`';
+  return { integration, key: body['key'], ...(typeof body['removed'] === 'boolean' ? { removed: body['removed'] } : {}) };
+}
+
+/** `integration resources --json`. */
+export function asIntegrationResources(body: Record<string, unknown>): IntegrationResources | string {
+  if (!Array.isArray(body['items'])) return 'no `items` array';
+  const items: { value: string; label: string }[] = [];
+  for (const raw of body['items']) {
+    if (!isRecord(raw) || typeof raw['value'] !== 'string') return 'an `items` entry has no string `value`';
+    items.push({ value: raw['value'], label: typeof raw['label'] === 'string' ? raw['label'] : raw['value'] });
+  }
+  return { items, truncated: body['truncated'] === true };
 }
 
 // ── write-action payload validation ─────────────────────────────────────────────

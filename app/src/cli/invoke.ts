@@ -11,6 +11,9 @@
  *   - **a non-conforming response is reported.** Never an empty success.
  *   - **every invocation has a deadline** and says what timed out when it trips.
  *   - **`--json` is added here**, not by callers, so no operation can forget it.
+ *   - **a secret goes through stdin, never argv.** `secretStdin` is written to the child's
+ *     stdin and closed. It is never part of `command`, and any echo of it in the child's
+ *     stdout/stderr is scrubbed before those are parsed, returned, or logged.
  *
  * Imports nothing from `electron`.
  */
@@ -87,6 +90,25 @@ export interface InvokeOptions {
    * `settleInFlight`.
    */
   readonly cancelOnQuit?: boolean;
+  /**
+   * A secret (an integration API token) for the child's stdin. Written, then stdin is
+   * closed. Never put a secret in `args`: argv is visible in the process table and in
+   * `command.display`. The value is redacted from everything this function returns; do
+   * not copy it into a log line, a `Problem`, or anything bound for the renderer.
+   * When absent, the child's stdin is `ignore`, exactly as before.
+   */
+  readonly secretStdin?: string;
+}
+
+export const REDACTED = '[redacted]';
+
+/** Replace every occurrence of `secret` (raw and JSON-escaped) in `text`. */
+export function redactSecret(text: string, secret: string | undefined): string {
+  if (secret === undefined || secret === '') return text;
+  const escaped = JSON.stringify(secret).slice(1, -1);
+  let out = text.split(secret).join(REDACTED);
+  if (escaped !== secret) out = out.split(escaped).join(REDACTED);
+  return out;
 }
 
 /** Variables a python CLI legitimately needs. Everything else is dropped. */
@@ -208,7 +230,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     child = spawn(options.binary, args, {
       // Explicit: never a shell. See the file header.
       shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [options.secretStdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
       env: childEnvironment(process.env, options.env ?? {}),
       windowsHide: true,
@@ -224,6 +246,13 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
       command,
       durationMs: Date.now() - startedAt,
     };
+  }
+
+  if (options.secretStdin !== undefined) {
+    // The child may exit, or close stdin, before reading it all: EPIPE is expected then.
+    // Swallowed; the exit code is the result, and no error text is surfaced.
+    child.stdin?.on('error', () => undefined);
+    child.stdin?.end(options.secretStdin, 'utf8');
   }
 
   inFlight.set(child, {
@@ -320,8 +349,8 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
   }
 
   const durationMs = Date.now() - startedAt;
-  const stdout = Buffer.concat(stdoutChunks).toString('utf8');
-  const stderr = Buffer.concat(stderrChunks).toString('utf8');
+  const stdout = redactSecret(Buffer.concat(stdoutChunks).toString('utf8'), options.secretStdin);
+  const stderr = redactSecret(Buffer.concat(stderrChunks).toString('utf8'), options.secretStdin);
 
   if (spawnError !== null) {
     // ENOENT is the first-run state a real user hits: no `devteam` where we looked.

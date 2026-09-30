@@ -127,6 +127,44 @@ const bridge: DevteamBridge = {
     ),
   runPluginAction: (projectId: ProjectId, name: string, actionId: string) =>
     ipcRenderer.invoke(CHANNELS.runPluginAction, String(projectId), String(name), String(actionId)),
+  // Integrations (ADR-0023). Everything is coerced to a string (or boolean / null) here; the token
+  // is passed straight through to main, which forwards it over stdin and validates every value.
+  integrationList: (projectId: ProjectId | null) =>
+    ipcRenderer.invoke(CHANNELS.integrationList, projectId === null ? null : String(projectId)),
+  integrationConnect: (
+    name: string,
+    fields: Readonly<Record<string, string>>,
+    token: string | null,
+    projectId: ProjectId | null,
+  ) =>
+    ipcRenderer.invoke(
+      CHANNELS.integrationConnect,
+      String(name),
+      Object.fromEntries(Object.entries(fields).map(([key, value]) => [String(key), String(value)])),
+      token === null ? null : String(token),
+      projectId === null ? null : String(projectId),
+    ),
+  integrationTest: (name: string, projectId: ProjectId | null) =>
+    ipcRenderer.invoke(CHANNELS.integrationTest, String(name), projectId === null ? null : String(projectId)),
+  integrationDisconnect: (name: string, keepToken: boolean) =>
+    ipcRenderer.invoke(CHANNELS.integrationDisconnect, String(name), keepToken === true),
+  integrationConfigSet: (name: string, key: string, value: string, projectId: ProjectId | null) =>
+    ipcRenderer.invoke(
+      CHANNELS.integrationConfigSet,
+      String(name),
+      String(key),
+      String(value),
+      projectId === null ? null : String(projectId),
+    ),
+  integrationConfigUnset: (name: string, key: string, projectId: ProjectId | null) =>
+    ipcRenderer.invoke(CHANNELS.integrationConfigUnset, String(name), String(key), projectId === null ? null : String(projectId)),
+  integrationResources: (name: string, kind: string, projectId: ProjectId | null) =>
+    ipcRenderer.invoke(
+      CHANNELS.integrationResources,
+      String(name),
+      String(kind),
+      projectId === null ? null : String(projectId),
+    ),
   pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) =>
     ipcRenderer.invoke(CHANNELS.pickProjectPath, String(projectId), String(picker)),
   notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),

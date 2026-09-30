@@ -33,6 +33,15 @@ import {
   catalogSummary,
   doctor,
   installSkill,
+  integrationConfigSet,
+  integrationConfigUnset,
+  integrationConnect,
+  integrationDisconnect,
+  integrationFieldsProblem,
+  integrationList,
+  integrationResources,
+  integrationTest,
+  integrationTokenProblem,
   listProjects,
   listSkills,
   pinProblem,
@@ -85,6 +94,12 @@ import {
   type HandshakeView,
   type OperationResult,
   type PinReport,
+  type IntegrationConfigWrite,
+  type IntegrationConnectReport,
+  type IntegrationDisconnectReport,
+  type IntegrationList,
+  type IntegrationResources,
+  type IntegrationTestReport,
   type PluginConfigChange,
   type PluginConfigField,
   type PluginConfigUpdateReport,
@@ -1122,6 +1137,121 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
         command: 'devteam plugin config set',
         durationMs: Date.now() - started,
       };
+    },
+  );
+
+  // ── integrations (ADR-0023) ────────────────────────────────────────────────────────
+  //
+  // Account-level connections to an external API. The renderer names an integration and a
+  // key; the CLI owns the descriptors and rejects anything it does not declare. `projectId`
+  // is optional: `null` means no project, a string is resolved against the registry exactly
+  // as the plugin handlers do. The token is forwarded over stdin to one invocation and is
+  // never logged, returned, or kept in this process.
+
+  /** `null` for "no project", a registered project's path for an id, or the refusal to return. */
+  async function integrationProject(projectId: unknown): Promise<{ readonly path: string | null } | OperationResult<never>> {
+    if (projectId === null) return { path: null };
+    if (typeof projectId !== 'string') return refusedBadArgument('integration');
+    return resolveProject(projectId);
+  }
+
+  handle(CHANNELS.integrationList, async (_event, projectId: unknown): Promise<OperationResult<IntegrationList>> => {
+    const resolved = await integrationProject(projectId);
+    if (!('path' in resolved)) return resolved;
+    const ctx = await context();
+    if (ctx === null) return NO_CLI;
+    return integrationList(ctx, resolved.path);
+  });
+
+  handle(
+    CHANNELS.integrationConnect,
+    async (
+      _event,
+      name: unknown,
+      fields: unknown,
+      token: unknown,
+      projectId: unknown,
+    ): Promise<OperationResult<IntegrationConnectReport>> => {
+      if (typeof name !== 'string') return refusedBadArgument('integration connect');
+      const problem = integrationFieldsProblem(fields) ?? integrationTokenProblem(token);
+      if (problem !== null) return refusedRequest('integration connect', `\`devteam integration connect\` was refused: ${problem}`);
+      const resolved = await integrationProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('integration connect');
+      if (!gated.ready) return gated.problem;
+      return integrationConnect(
+        gated.ctx,
+        resolved.path,
+        name,
+        fields as Readonly<Record<string, string>>,
+        typeof token === 'string' ? token : null,
+      );
+    },
+  );
+
+  handle(
+    CHANNELS.integrationTest,
+    async (_event, name: unknown, projectId: unknown): Promise<OperationResult<IntegrationTestReport>> => {
+      if (typeof name !== 'string') return refusedBadArgument('integration test');
+      const resolved = await integrationProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('integration test');
+      if (!gated.ready) return gated.problem;
+      return integrationTest(gated.ctx, resolved.path, name);
+    },
+  );
+
+  handle(
+    CHANNELS.integrationDisconnect,
+    async (_event, name: unknown, keepToken: unknown): Promise<OperationResult<IntegrationDisconnectReport>> => {
+      if (typeof name !== 'string' || typeof keepToken !== 'boolean') return refusedBadArgument('integration disconnect');
+      const gated = await gatedContext('integration disconnect');
+      if (!gated.ready) return gated.problem;
+      return integrationDisconnect(gated.ctx, name, keepToken);
+    },
+  );
+
+  handle(
+    CHANNELS.integrationConfigSet,
+    async (
+      _event,
+      name: unknown,
+      key: unknown,
+      value: unknown,
+      projectId: unknown,
+    ): Promise<OperationResult<IntegrationConfigWrite>> => {
+      if (typeof name !== 'string' || typeof key !== 'string' || typeof value !== 'string') {
+        return refusedBadArgument('integration config set');
+      }
+      const resolved = await integrationProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('integration config set');
+      if (!gated.ready) return gated.problem;
+      return integrationConfigSet(gated.ctx, resolved.path, name, key, value);
+    },
+  );
+
+  handle(
+    CHANNELS.integrationConfigUnset,
+    async (_event, name: unknown, key: unknown, projectId: unknown): Promise<OperationResult<IntegrationConfigWrite>> => {
+      if (typeof name !== 'string' || typeof key !== 'string') return refusedBadArgument('integration config unset');
+      const resolved = await integrationProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('integration config unset');
+      if (!gated.ready) return gated.problem;
+      return integrationConfigUnset(gated.ctx, resolved.path, name, key);
+    },
+  );
+
+  handle(
+    CHANNELS.integrationResources,
+    async (_event, name: unknown, kind: unknown, projectId: unknown): Promise<OperationResult<IntegrationResources>> => {
+      if (typeof name !== 'string' || typeof kind !== 'string') return refusedBadArgument('integration resources');
+      const resolved = await integrationProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const ctx = await context();
+      if (ctx === null) return NO_CLI;
+      return integrationResources(ctx, resolved.path, name, kind);
     },
   );
 

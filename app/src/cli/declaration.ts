@@ -29,6 +29,7 @@ export const APP_STORE_SCHEMAS: Readonly<Record<string, number>> = Object.freeze
   bind_manifest: 1,
   credentials: 1,
   plugin_settings: 1,
+  integrations: 1,
 });
 
 /** The name of the declaration file this app writes, inside its own user-data dir. */
