@@ -349,3 +349,18 @@ export function backgroundSettings(overrides: Partial<BackgroundSettings> = {}):
 export function installBridge(bridge: DevteamBridge): void {
   Object.defineProperty(window, 'devteam', { value: bridge, configurable: true, writable: true });
 }
+
+/** A promise a test settles by hand, for asserting on what a screen does *while* a call is in flight. */
+export function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}

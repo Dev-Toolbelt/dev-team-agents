@@ -13,8 +13,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Skills } from '../../src/renderer/screens/Skills.js';
-import type { SkillInstallAnswer, SkillList, SkillRecord } from '../../src/shared/api.js';
-import { environment, fail, fakeBridge, installBridge, ok } from './support.js';
+import type { OperationResult, SkillInstallAnswer, SkillList, SkillRecord } from '../../src/shared/api.js';
+import { deferred, environment, fail, fakeBridge, installBridge, ok } from './support.js';
 
 afterEach(() => {
   cleanup();
@@ -93,6 +93,22 @@ describe('Skills — the listing', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: /filter skills by provider/i }), 'codex');
     await vi.waitFor(() => expect(listSkills).toHaveBeenLastCalledWith('codex'));
+  });
+
+  it('does not show the previous provider’s list while the new one loads', async () => {
+    const user = userEvent.setup();
+    const codex = deferred<OperationResult<SkillList>>();
+    const listSkills = vi.fn((provider: string) =>
+      provider === 'codex' ? codex.promise : Promise.resolve(ok(list([skill()]))),
+    );
+    mount({ listSkills });
+    await screen.findByRole('button', { name: 'alpha' });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /filter skills by provider/i }), 'codex');
+
+    expect(screen.queryByRole('button', { name: 'alpha' })).not.toBeInTheDocument();
+    codex.resolve(ok(list([])));
+    expect(await screen.findByText(/no global skills for this provider/i)).toBeInTheDocument();
   });
 
   it('states the CLI problem instead of an empty table', async () => {

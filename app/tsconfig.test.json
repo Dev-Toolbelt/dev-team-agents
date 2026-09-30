@@ -30,6 +30,8 @@
     // program, not merely reachable through an import, or the renderer test files'
     // `window.devteam` references type-check against a bare `Window`.
     "src/renderer/global.d.ts",
+    // The PNG module declarations, for the same reason: `App` imports the logos.
+    "src/renderer/assets.d.ts",
     "vite.config.mts",
     "vite.preload.config.mts",
     "vitest.config.mts",

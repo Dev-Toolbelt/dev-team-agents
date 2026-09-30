@@ -18,7 +18,9 @@ import { Projects } from '../../src/renderer/screens/Projects.js';
 import type { DirectoryChoice, OperationResult, UpgradePlan } from '../../src/shared/api.js';
 import {
   bindReport,
+  deferred,
   environment,
+  fail,
   fakeBridge,
   installBridge,
   ok,
@@ -714,3 +716,186 @@ describe('Projects — a bind that adopted a v2 preferences file says so', () =>
   });
 });
 
+
+describe('Projects — a successful write refreshes the list however the dialog is left', () => {
+  function listing() {
+    return vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] })));
+  }
+
+  it('reloads on Esc after an unbind, and reopens Unbind as a fresh confirm step', async () => {
+    const user = userEvent.setup();
+    const listProjects = listing();
+    installBridge(fakeBridge({ listProjects }));
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /unbind…/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^unbind$/i }));
+    await within(dialog).findByText('159 links removed.');
+    // Held until the dialog closes: the reload removes the row, and the report with it.
+    expect(listProjects).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{Escape}');
+    await vi.waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+
+    await user.click(screen.getByRole('button', { name: /unbind…/i }));
+    const reopened = await screen.findByRole('dialog');
+    expect(within(reopened).queryByText('159 links removed.')).not.toBeInTheDocument();
+    expect(within(reopened).getByRole('button', { name: /^unbind$/i })).toBeEnabled();
+  });
+
+  it('does not close an Unbind dialog while the write is pending', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<OperationResult<ReturnType<typeof unbindReport>>>();
+    installBridge(fakeBridge({ listProjects: listing(), unbindProject: vi.fn(() => pending.promise) }));
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /unbind…/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^unbind/i }));
+
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeDisabled();
+
+    pending.resolve(ok(unbindReport()));
+    expect(await within(dialog).findByText('159 links removed.')).toBeInTheDocument();
+  });
+
+  it('reloads as soon as an upgrade applies, and blocks Esc while it is applying', async () => {
+    const user = userEvent.setup();
+    const listProjects = listing();
+    const applying = deferred<OperationResult<ReturnType<typeof upgradeReport>>>();
+    installBridge(fakeBridge({ listProjects, applyUpgrade: vi.fn(() => applying.promise) }));
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /upgrade…/i }));
+    const dialog = await screen.findByRole('dialog');
+    await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: /apply/i })).toBeEnabled());
+    await user.click(within(dialog).getByRole('button', { name: /apply/i }));
+
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    applying.resolve(ok(upgradeReport()));
+    // Before "Done" is pressed.
+    await vi.waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    await user.click(await within(dialog).findByRole('button', { name: /^done$/i }));
+    // Done only closes; it does not reload a second time.
+    expect(listProjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('reloads as soon as a bind lands, and Done only closes', async () => {
+    const user = userEvent.setup();
+    const listProjects = listing();
+    installBridge(
+      fakeBridge({
+        listProjects,
+        chooseProjectDirectory: vi.fn(() => Promise.resolve({ chosen: true, path: '/Users/dev/new-app' } as const)),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await user.click(await within(dialog).findByRole('button', { name: /^bind$/i }));
+
+    await vi.waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    await user.click(await within(dialog).findByRole('button', { name: /^done$/i }));
+    expect(listProjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not close the Bind dialog while the bind is pending', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<OperationResult<ReturnType<typeof bindReport>>>();
+    installBridge(
+      fakeBridge({
+        listProjects: listing(),
+        chooseProjectDirectory: vi.fn(() => Promise.resolve({ chosen: true, path: '/Users/dev/new-app' } as const)),
+        bindProject: vi.fn(() => pending.promise),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+    await user.click(await within(dialog).findByRole('button', { name: /^bind$/i }));
+
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    pending.resolve(ok(bindReport()));
+    await within(dialog).findByRole('button', { name: /^done$/i });
+  });
+});
+
+describe('Projects — a failed list can be retried', () => {
+  it('offers Try again next to the problem and reloads the list', async () => {
+    const user = userEvent.setup();
+    const listProjects = vi
+      .fn()
+      .mockResolvedValueOnce(fail('the store is locked', { kind: 'unavailable' }))
+      .mockResolvedValue(ok({ current: '2.48.0', projects: [project()] }));
+    installBridge(fakeBridge({ listProjects }));
+
+    render(<Projects environment={environment()} />);
+    expect(await screen.findByText('the store is locked')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByText('project-1')).toBeInTheDocument();
+    expect(listProjects).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Projects — bridge failures do not strand the screen', () => {
+  it('falls back to basenames when the stored names cannot be read', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))),
+        projectNames: vi.fn(() => Promise.reject(new Error('ipc gone'))),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    expect(await screen.findByText('project-1')).toBeInTheDocument();
+  });
+
+  it('turns a rejected row action into a shown problem and frees the button', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))),
+        syncProject: vi.fn(() => Promise.reject(new Error('handler gone'))),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+
+    await user.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(await screen.findByText(/could not reach its own main process/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^sync$/i })).toBeEnabled();
+  });
+
+  it('treats a picker that rejects as a dismissed one', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        chooseProjectDirectory: vi.fn(() => Promise.reject(new Error('no picker'))),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText(/nothing is bound yet/i);
+    await user.click(screen.getByRole('button', { name: /^bind…$/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /choose directory/i }));
+
+    expect(await within(dialog).findByRole('button', { name: /choose directory/i })).toBeEnabled();
+  });
+});
