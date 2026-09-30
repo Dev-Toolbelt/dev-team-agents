@@ -16,7 +16,7 @@
 
 import type { StreamEnd, StreamHandle } from '../cli/stream.js';
 import type { TaskWatchEvent } from '../cli/operations.js';
-import type { BoardFeed, BoardProject, BoardSession, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
+import type { BoardFeed, BoardProject, BoardSettings, BoardSession, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
 
 export const BOARD_BACKOFF_MIN_MS = 1_000;
 export const BOARD_BACKOFF_MAX_MS = 60_000;
@@ -48,6 +48,10 @@ export class TaskBoard {
   private incoming: Map<ProjectId, BoardProject> | null = null;
   private handle: StreamHandle | null = null;
   private stopped = false;
+  /** Terminal: set when the app is quitting; nothing may spawn a child afterwards. */
+  private disposed = false;
+  /** Bumped whenever the stream changes `projects`; a `refresh` that raced it yields. */
+  private streamRevision = 0;
   private backoff = BOARD_BACKOFF_MIN_MS;
   private retryTimer: unknown = null;
   private watchdogTimer: unknown = null;
@@ -76,6 +80,7 @@ export class TaskBoard {
   }
 
   async start(): Promise<void> {
+    if (this.disposed) return;
     this.stopped = false;
     if (this.handle !== null || this.spawning) return;
     await this.spawn();
@@ -92,8 +97,15 @@ export class TaskBoard {
     this.handle = null;
   }
 
+  /** The app is quitting: stop, and refuse every later `start` or `restart`. */
+  dispose(): void {
+    this.disposed = true;
+    this.stop();
+  }
+
   /** The CLI or the stale threshold changed: drop the child and start again now. */
   async restart(): Promise<void> {
+    if (this.disposed) return;
     this.generation += 1;
     this.handle?.stop();
     this.handle = null;
@@ -106,8 +118,12 @@ export class TaskBoard {
 
   /** A one-shot `tasks list` that replaces every snapshot. A failure leaves them as they were. */
   async refresh(): Promise<BoardFeed> {
+    const revision = this.streamRevision;
     const result = await this.deps.list().catch(() => null);
-    if (result !== null && result.ok) {
+    if (result !== null && result.ok && revision !== this.streamRevision) {
+      // The stream applied newer snapshots while `list` was running; this answer is older.
+      this.deps.log?.('task board: refresh skipped, the stream delivered newer data meanwhile');
+    } else if (result !== null && result.ok) {
       this.projects = new Map(result.data.projects.map((project) => [project.project_id, project] as const));
       this.emit();
     } else if (result !== null) {
@@ -119,13 +135,15 @@ export class TaskBoard {
   // ── the stream ────────────────────────────────────────────────────────────
 
   private async spawn(): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped || this.disposed) return;
     this.generation += 1;
     const generation = this.generation;
     const current = () => generation === this.generation && !this.stopped;
     this.incoming = new Map();
     this.streamError = null;
-    this.set({ status: this.status === 'retrying' ? 'retrying' : 'starting' });
+    // A restart keeps the data-bearing status: flipping to `starting` would flash "Waiting
+    // for the first snapshot" over a board that still has its last good snapshots.
+    if (this.status !== 'live' && this.status !== 'retrying') this.set({ status: 'starting' });
     let handle: StreamHandle | null;
     this.spawning = true;
     try {
@@ -162,16 +180,21 @@ export class TaskBoard {
       case 'snapshot':
         if (this.incoming !== null) this.incoming.set(event.project.project_id, event.project);
         else {
+          this.streamRevision += 1;
           this.projects.set(event.project.project_id, event.project);
           this.emit();
         }
         return;
       case 'removed':
         if (this.incoming !== null) this.incoming.delete(event.projectId);
-        else if (this.projects.delete(event.projectId)) this.emit();
+        else if (this.projects.delete(event.projectId)) {
+          this.streamRevision += 1;
+          this.emit();
+        }
         return;
       case 'ready':
         if (this.incoming !== null) {
+          this.streamRevision += 1;
           this.projects = this.incoming;
           this.incoming = null;
         }
@@ -259,6 +282,24 @@ export class TaskBoard {
   private emit(): void {
     this.deps.onChange(this.snapshot());
   }
+}
+
+export interface BoardSettingsStore {
+  readonly read: () => Promise<BoardSettings>;
+  readonly write: (settings: BoardSettings) => Promise<void>;
+  readonly restartStream: () => void;
+}
+
+/**
+ * Persist the board settings and apply them. `--stale-after` is an argument of the running
+ * child, so only a changed stale threshold needs a new stream; a retention-only save must
+ * leave the stream alone (a restart would blank "live" for nothing).
+ */
+export async function saveBoardSettings(store: BoardSettingsStore, next: BoardSettings): Promise<BoardSettings> {
+  const previous = await store.read();
+  await store.write(next);
+  if (previous.staleAfterMinutes !== next.staleAfterMinutes) store.restartStream();
+  return store.read();
 }
 
 function lastLine(text: string): string | null {

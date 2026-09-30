@@ -1,9 +1,10 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowLeft,
   Bot,
   Check,
+  ChevronDown,
   CircleAlert,
   Clock,
   Copy,
@@ -32,8 +33,9 @@ import {
   buildKanban,
   formatDuration,
   isRunning,
-  percent,
+  percentLabels,
   stepDurations,
+  timeInColumn,
   viewProject,
   type KanbanItem,
   type Period,
@@ -49,6 +51,8 @@ import {
   type BoardSettings,
 } from '../../shared/api.js';
 
+/** How long "Resume command copied" stays on screen. */
+const COPIED_MESSAGE_MS = 3_000;
 const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] };
 const DEFAULT_SETTINGS: BoardSettings = {
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
@@ -98,14 +102,20 @@ const STATUS_WORD: Readonly<Record<BoardSessionStatus, string>> = {
   ended: 'Ended',
 };
 
-/** Re-renders on an interval so "time in column" keeps moving without a new snapshot. */
-function useNow(clock: () => number, intervalMs: number): number {
-  const [now, setNow] = useState(() => Math.floor(clock() / 1000));
+/**
+ * Epoch seconds, floored to `bucketSeconds`, re-sampled on that interval so "time in column"
+ * keeps moving without a new snapshot. While `enabled` is false (the Board tab is mounted
+ * but hidden) no timer runs, and the value is re-sampled the moment it turns true again.
+ */
+function useNow(clock: () => number, bucketSeconds: number, enabled: boolean): number {
+  const sample = () => Math.floor(clock() / 1000 / bucketSeconds) * bucketSeconds;
+  const [now, setNow] = useState(sample);
   useEffect(() => {
-    setNow(Math.floor(clock() / 1000));
-    const timer = setInterval(() => setNow(Math.floor(clock() / 1000)), intervalMs);
+    if (!enabled) return;
+    setNow(sample());
+    const timer = setInterval(() => setNow(sample()), bucketSeconds * 1000);
     return () => clearInterval(timer);
-  }, [clock, intervalMs]);
+  }, [clock, bucketSeconds, enabled]);
   return now;
 }
 
@@ -122,20 +132,42 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   const [selected, setSelected] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('7d');
   const [refreshing, setRefreshing] = useState(false);
-  const now = useNow(clock, 1_000);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  // The overview only shows whole-minute figures (counts, a period cutoff); the seconds live in the kanban.
+  const now = useNow(clock, 60, active);
 
   useEffect(() => {
     let live = true;
-    void window.devteam.taskBoard().then((initial) => {
-      if (live) setFeed(initial);
+    // Subscribe first: a push that lands before the initial read answers is newer than it.
+    let pushed = false;
+    const unsubscribe = window.devteam.onTaskBoard((next) => {
+      pushed = true;
+      setLoadFailed(false);
+      setFeed(next);
     });
-    void window.devteam.projectNames().then((each) => {
-      if (live) setNames(each);
-    });
-    void window.devteam.boardSettings().then((each) => {
-      if (live) setSettings(each);
-    });
-    const unsubscribe = window.devteam.onTaskBoard((next) => setFeed(next));
+    window.devteam.taskBoard().then(
+      (initial) => {
+        if (live && !pushed) setFeed(initial);
+      },
+      (error: unknown) => {
+        if (!live) return;
+        setLoadFailed(true);
+        setProblem(`The task board could not be loaded: ${errorText(error)}`);
+      },
+    );
+    window.devteam.projectNames().then(
+      (each) => {
+        if (live) setNames(each);
+      },
+      () => undefined, // the board falls back to directory names
+    );
+    window.devteam.boardSettings().then(
+      (each) => {
+        if (live) setSettings(each);
+      },
+      () => undefined, // the board falls back to the default thresholds
+    );
     return () => {
       live = false;
       unsubscribe();
@@ -146,9 +178,12 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   useEffect(() => {
     if (!active) return;
     let live = true;
-    void window.devteam.projectNames().then((each) => {
-      if (live) setNames(each);
-    });
+    window.devteam.projectNames().then(
+      (each) => {
+        if (live) setNames(each);
+      },
+      () => undefined,
+    );
     return () => {
       live = false;
     };
@@ -156,8 +191,12 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
 
   async function refresh() {
     setRefreshing(true);
+    setProblem(null);
     try {
       setFeed(await window.devteam.refreshTaskBoard());
+      setLoadFailed(false);
+    } catch (error) {
+      setProblem(`The task board could not be refreshed: ${errorText(error)}`);
     } finally {
       setRefreshing(false);
     }
@@ -177,7 +216,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="board-period">
+          <label className="text-sm" htmlFor="board-period">
             Period
           </label>
           <select
@@ -200,15 +239,24 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
         </div>
       </header>
 
+      {problem !== null ? (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertTitle>Something went wrong</AlertTitle>
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <StreamNotice feed={feed} />
 
-      {selected !== null && project !== undefined ? (
+      {loadFailed ? null : selected !== null && project !== undefined ? (
         <Kanban
           project={project}
           name={boardProjectName(project, names)}
           period={period}
           settings={settings}
-          now={now}
+          clock={clock}
+          active={active}
           onBack={() => setSelected(null)}
         />
       ) : (
@@ -223,6 +271,10 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
       )}
     </section>
   );
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function StreamNotice({ feed }: { feed: BoardFeed }) {
@@ -272,6 +324,9 @@ function Overview({
 
   if (views.length === 0) {
     if (feed.status === 'unavailable') return null;
+    if (feed.projects.length === 0 && feed.status !== 'live') {
+      return <Empty>{feed.status === 'retrying' ? 'Reconnecting to the task stream…' : 'Loading the task board…'}</Empty>;
+    }
     return (
       <Empty>
         {feed.projects.length === 0
@@ -357,20 +412,22 @@ function AbandonedBadge({ count }: { count?: number }) {
 /** Stacked bar plus the figures beside it: the colours alone never carry the meaning. */
 function ProgressBar({ counts }: { counts: BoardCounts }) {
   const label = `${counts.todo} to do, ${counts.in_progress} in progress, ${counts.done} done`;
+  const segment = (value: number) => ({ flex: `${value} 1 0%` });
   return (
     <span role="img" aria-label={label} className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-      <span className="bg-muted-foreground/40" style={{ width: `${percent(counts.todo, counts.total)}%` }} />
-      <span className="bg-warning" style={{ width: `${percent(counts.in_progress, counts.total)}%` }} />
-      <span className="bg-success" style={{ width: `${percent(counts.done, counts.total)}%` }} />
+      <span className="bg-muted-foreground/40" style={segment(counts.todo)} />
+      <span className="bg-warning" style={segment(counts.in_progress)} />
+      <span className="bg-success" style={segment(counts.done)} />
     </span>
   );
 }
 
 function CountsRow({ counts }: { counts: BoardCounts }) {
-  const cells: readonly { readonly label: string; readonly value: number; readonly dot: string }[] = [
-    { label: 'To do', value: counts.todo, dot: 'bg-muted-foreground/40' },
-    { label: 'In progress', value: counts.in_progress, dot: 'bg-warning' },
-    { label: 'Done', value: counts.done, dot: 'bg-success' },
+  const shares = percentLabels(counts);
+  const cells: readonly { readonly label: string; readonly value: number; readonly dot: string; readonly share: number }[] = [
+    { label: 'To do', value: counts.todo, dot: 'bg-muted-foreground/40', share: shares[0] },
+    { label: 'In progress', value: counts.in_progress, dot: 'bg-warning', share: shares[1] },
+    { label: 'Done', value: counts.done, dot: 'bg-success', share: shares[2] },
   ];
   return (
     <dl className="grid grid-cols-3 gap-2 text-xs">
@@ -381,7 +438,7 @@ function CountsRow({ counts }: { counts: BoardCounts }) {
             {cell.label}
           </dt>
           <dd className="font-medium tabular-nums">
-            {cell.value} <span className="text-muted-foreground">({percent(cell.value, counts.total)}%)</span>
+            {cell.value} <span className="text-muted-foreground">({cell.share}%)</span>
           </dd>
         </div>
       ))}
@@ -396,26 +453,29 @@ function Kanban({
   name,
   period,
   settings,
-  now,
+  clock,
+  active,
   onBack,
 }: {
   project: BoardProject;
   name: string;
   period: Period;
   settings: BoardSettings;
-  now: number;
+  clock: () => number;
+  active: boolean;
   onBack: () => void;
 }) {
+  // Durations show seconds here, so this is the one place that ticks every second.
+  const now = useNow(clock, 1, active);
   const [sessionId, setSessionId] = useState<string>('all');
   const [hideOldDone, setHideOldDone] = useState(true);
-  const [localPeriod, setLocalPeriod] = useState<Period>(period);
   const hideId = useId();
 
   // A session that vanished from the snapshot must not leave the filter selecting nothing.
   const effectiveSession = project.sessions.some((each) => each.session_id === sessionId) ? sessionId : 'all';
   const view = useMemo(
-    () => buildKanban(project, { sessionId: effectiveSession, period: localPeriod, hideOldDone, retentionDays: settings.doneRetentionDays }, now),
-    [project, effectiveSession, localPeriod, hideOldDone, settings.doneRetentionDays, now],
+    () => buildKanban(project, { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays }, now),
+    [project, effectiveSession, period, hideOldDone, settings.doneRetentionDays, now],
   );
   const shownSessions = project.sessions.filter((each) => effectiveSession === 'all' || each.session_id === effectiveSession);
 
@@ -444,21 +504,6 @@ function Kanban({
           {project.sessions.map((each) => (
             <option key={each.session_id} value={each.session_id}>
               {sessionLabel(each)}
-            </option>
-          ))}
-        </select>
-        <label className="text-sm" htmlFor="kanban-period">
-          Period
-        </label>
-        <select
-          id="kanban-period"
-          value={localPeriod}
-          onChange={(event) => setLocalPeriod(event.target.value as Period)}
-          className={SELECT_CLASS}
-        >
-          {PERIODS.map((each) => (
-            <option key={each.value} value={each.value}>
-              {each.label}
             </option>
           ))}
         </select>
@@ -504,12 +549,34 @@ function SessionStrip({ projectId, sessions }: { projectId: string; sessions: re
 
 function SessionRow({ projectId, session }: { projectId: string; session: BoardSession }) {
   const [message, setMessage] = useState<{ readonly ok: boolean; readonly text: string } | null>(null);
+  const [copying, setCopying] = useState(false);
+  const inFlight = useRef(false);
   const StatusIcon = STATUS_ICON[session.status];
   const where = session.branch ?? 'no branch';
 
+  // A confirmation is about the command that was copied; it fades, and a new command voids it.
+  useEffect(() => {
+    if (message?.ok !== true) return;
+    const timer = setTimeout(() => setMessage(null), COPIED_MESSAGE_MS);
+    return () => clearTimeout(timer);
+  }, [message]);
+  useEffect(() => {
+    setMessage(null);
+  }, [session.resume_command]);
+
   async function copy() {
-    const answer = await window.devteam.copyResumeCommand({ projectId, sessionId: session.session_id });
-    setMessage(answer.copied ? { ok: true, text: 'Resume command copied' } : { ok: false, text: answer.message });
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setCopying(true);
+    try {
+      const answer = await window.devteam.copyResumeCommand({ projectId, sessionId: session.session_id });
+      setMessage(answer.copied ? { ok: true, text: 'Resume command copied' } : { ok: false, text: answer.message });
+    } catch (error) {
+      setMessage({ ok: false, text: `Nothing was copied: ${errorText(error)}` });
+    } finally {
+      inFlight.current = false;
+      setCopying(false);
+    }
   }
 
   return (
@@ -534,7 +601,7 @@ function SessionRow({ projectId, session }: { projectId: string; session: BoardS
         <Button
           variant="outline"
           size="sm"
-          disabled={session.resume_command === null}
+          disabled={session.resume_command === null || copying}
           title={session.resume_command === null ? 'No resume command is available for this session' : session.resume_command}
           aria-label={`Copy resume command for the ${providerLabel(session.provider)} session on ${where}`}
           onClick={() => void copy()}
@@ -582,53 +649,75 @@ function Column({
 }
 
 /**
- * One task. Focusable, so the per-step times that hover reveals are reachable from the
- * keyboard too: the same panel opens on `:focus-within`, and the card points at it with
- * `aria-describedby`, so a screen reader hears it without opening anything.
+ * One task. The per-step times sit behind a disclosure button, not a hover tooltip: one tab
+ * stop per card instead of two, nothing that overlaps its neighbours, and Escape closes it.
  */
 function TaskCard({ item, now }: { item: KanbanItem; now: number }) {
   const { session, task } = item;
-  const detailId = useId();
-  const steps = stepDurations(task, now, isRunning(session, task));
+  const ids = useId();
+  const contentId = `${ids}-content`;
+  const detailId = `${ids}-steps`;
+  const [open, setOpen] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const running = isRunning(session, task);
+  const inColumn = timeInColumn(session, task, now, running);
+  const steps = stepDurations(task, now, running, inColumn);
   const where = session.branch ?? 'no branch';
   return (
-    <li
-      tabIndex={0}
-      aria-describedby={detailId}
-      className="group relative rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
-    >
-      <p className={task.column === 'done' ? 'text-muted-foreground' : undefined}>{task.content}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1" title={`${providerLabel(session.provider)} session`}>
-          <ProviderIcon provider={session.provider} />
-          <span className="font-mono">{where}</span>
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Clock className="size-3" aria-hidden="true" />
-          <span className="sr-only">Time in this column: </span>
-          {formatDuration(now - task.status_since)}
-        </span>
-        {task.stale ? <StaleBadge /> : null}
-        {task.abandoned ? <AbandonedBadge /> : null}
-      </div>
-      <div
-        id={detailId}
-        role="tooltip"
-        className="absolute inset-x-2 top-full z-20 mt-1 hidden rounded-md border bg-popover p-2 text-xs text-popover-foreground shadow-md group-hover:block group-focus-within:block group-focus-visible:block"
+    <li>
+      <article
+        aria-labelledby={contentId}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && open) {
+            event.stopPropagation();
+            setOpen(false);
+            toggle.current?.focus();
+          }
+        }}
+        className="rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs"
       >
-        <p className="mb-1 font-medium">Time per step</p>
-        <ul>
-          {steps.map((step) => (
-            <li key={step.status} className="flex justify-between gap-4">
-              <span>
-                {step.label}
-                {step.current ? ' (now)' : ''}
-              </span>
-              <span className="tabular-nums">{formatDuration(step.seconds)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+        <p id={contentId} className={task.column === 'done' ? 'text-muted-foreground' : undefined}>
+          {task.content}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1" title={`${providerLabel(session.provider)} session`}>
+            <ProviderIcon provider={session.provider} />
+            <span className="font-mono">{where}</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="size-3" aria-hidden="true" />
+            <span className="sr-only">Time in this column: </span>
+            {formatDuration(inColumn)}
+          </span>
+          {task.stale ? <StaleBadge /> : null}
+          {task.abandoned ? <AbandonedBadge /> : null}
+          <button
+            ref={toggle}
+            type="button"
+            aria-expanded={open}
+            aria-controls={detailId}
+            aria-label={`Time per step, ${task.content}`}
+            onClick={() => setOpen((was) => !was)}
+            className="inline-flex items-center gap-1 rounded-sm underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+          >
+            Time per step
+            <ChevronDown className={`size-3 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </button>
+        </div>
+        <div id={detailId} hidden={!open} className="mt-2 rounded-md border bg-muted/40 p-2 text-xs text-foreground">
+          <ul>
+            {steps.map((step) => (
+              <li key={step.status} className="flex justify-between gap-4">
+                <span>
+                  {step.label}
+                  {step.current ? ' (now)' : ''}
+                </span>
+                <span className="tabular-nums">{formatDuration(step.seconds)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </article>
     </li>
   );
 }
@@ -651,15 +740,19 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
   }, [open, settings]);
 
   async function save() {
-    const answer = await window.devteam.setBoardSettings({
-      staleAfterMinutes: Number(stale),
-      doneRetentionDays: Number(retention),
-    });
-    if (answer.ok) {
-      onSaved(answer.settings);
-      setOpen(false);
-    } else {
-      setProblem(answer.message);
+    try {
+      const answer = await window.devteam.setBoardSettings({
+        staleAfterMinutes: Number(stale),
+        doneRetentionDays: Number(retention),
+      });
+      if (answer.ok) {
+        onSaved(answer.settings);
+        setOpen(false);
+      } else {
+        setProblem(answer.message);
+      }
+    } catch (error) {
+      setProblem(`The settings could not be saved: ${errorText(error)}`);
     }
   }
 

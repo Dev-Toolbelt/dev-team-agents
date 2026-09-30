@@ -65,6 +65,26 @@ export function percent(part: number, total: number): number {
   return total <= 0 ? 0 : Math.round((part / total) * 100);
 }
 
+/**
+ * The three percentages of a counts row, by the largest-remainder method, so they always
+ * sum to 100 (independent rounding turns 1/1/1 into 33+33+33). All zero when nothing counts.
+ */
+export function percentLabels(counts: BoardCounts): readonly [number, number, number] {
+  const parts = [counts.todo, counts.in_progress, counts.done] as const;
+  const total = parts[0] + parts[1] + parts[2];
+  if (total <= 0) return [0, 0, 0];
+  const exact = parts.map((part) => (part * 100) / total);
+  const floors = exact.map(Math.floor);
+  let left = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = [0, 1, 2].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
+  for (const index of order) {
+    if (left <= 0) break;
+    floors[index]! += 1;
+    left -= 1;
+  }
+  return [floors[0]!, floors[1]!, floors[2]!];
+}
+
 export const STEP_LABELS: Readonly<Record<string, string>> = {
   pending: 'To do',
   in_progress: 'In progress',
@@ -79,17 +99,30 @@ export function stepLabel(status: string): string {
 const STEP_ORDER = ['pending', 'in_progress', 'completed', 'cancelled'];
 
 /**
+ * How long a task has been in its current column. A running task keeps growing; anything
+ * else stopped growing when its session ended (or, without an end time, at the session's
+ * last activity), so it is measured to that instant and no further.
+ */
+export function timeInColumn(session: BoardSession, task: BoardTask, nowSeconds: number, running: boolean): number {
+  const until = running ? nowSeconds : (session.ended_at ?? session.last_activity_at);
+  return Math.max(0, until - task.status_since);
+}
+
+/**
  * Time per step, in the order a task moves through them. The step a task is in right now
- * is read live (`now - status_since`) when that is longer than the CLI's figure, because
- * the CLI's number stopped growing when it last spoke.
+ * is read from `currentSeconds` (see `timeInColumn`) when that is longer than the CLI's
+ * figure, because the CLI's number stopped growing when it last spoke. Passing the same
+ * `currentSeconds` the card shows keeps the two from disagreeing.
  */
 export function stepDurations(
   task: BoardTask,
   nowSeconds: number,
   running: boolean,
+  currentSeconds?: number,
 ): readonly { readonly status: string; readonly label: string; readonly seconds: number; readonly current: boolean }[] {
   const merged: Record<string, number> = { ...task.durations };
-  if (running) merged[task.status] = Math.max(merged[task.status] ?? 0, nowSeconds - task.status_since);
+  const live = currentSeconds ?? (running ? nowSeconds - task.status_since : undefined);
+  if (live !== undefined) merged[task.status] = Math.max(merged[task.status] ?? 0, live);
   const statuses = Object.keys(merged).sort((a, b) => rank(a) - rank(b));
   return statuses
     .filter((status) => (merged[status] ?? 0) > 0 || status === task.status)

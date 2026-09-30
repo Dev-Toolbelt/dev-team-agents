@@ -455,6 +455,16 @@ describe('NotificationCenter — the stream is supervised', () => {
     expect(h.center.snapshot().status).toBe('unavailable');
   });
 
+  it('a disposed center never spawns again: a CLI-path change during quit starts no child', async () => {
+    const h = harness();
+    await h.center.start();
+    h.center.dispose();
+    expect(h.streams[0]?.stop).toHaveBeenCalled();
+    await h.center.restart();
+    await h.center.start();
+    expect(h.streams).toHaveLength(1);
+  });
+
   it('a restart that lands while the first start is still pending leaves exactly one child', async () => {
     // The packaged app ran two `watch` children: start() at launch, then the renderer's
     // re-resolve called restart() before the first startStream had returned.

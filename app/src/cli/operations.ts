@@ -1349,8 +1349,18 @@ const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ende
 const MAX_TASK_TEXT = 2_000;
 const MAX_ID = 512;
 const MAX_TASKS_PER_SESSION = 2_000;
+/**
+ * One shell operand exactly as python's `shlex.quote` (the CLI's own quoting) writes it: a
+ * bare run of `[\w@%+=:,./-]`, or single-quoted segments, where an embedded quote is the
+ * escape `'"'"'`. Control characters are refused everywhere. Anything else — an unquoted
+ * `;`, `&`, `$`, a space, a backtick — is not one token and fails the whole command, so a
+ * hostile id or path can only ever reach the clipboard inside quotes.
+ */
+const SHELL_TOKEN = String.raw`(?:[\w@%+=:,./-]+|(?:'[^'\u0000-\u001f\u007f]*'|"'")+)`;
 /** A resume command is one line the user pastes into a terminal; anything else is not shown. */
-const RESUME_COMMAND = /^cd [^\r\n\0]+ && (claude --resume|codex resume|opencode --session) [^\r\n\0]+$/;
+export const RESUME_COMMAND = new RegExp(
+  String.raw`^cd ${SHELL_TOKEN} && (?:claude --resume|codex resume|opencode --session) ${SHELL_TOKEN}$`,
+);
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;

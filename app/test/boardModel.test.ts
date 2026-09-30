@@ -9,6 +9,8 @@ import {
   buildKanban,
   formatDuration,
   percent,
+  percentLabels,
+  timeInColumn,
   periodCutoff,
   stepDurations,
   viewProject,
@@ -39,6 +41,44 @@ describe('percent', () => {
     expect(percent(3, 10)).toBe(30);
     expect(percent(1, 3)).toBe(33);
     expect(percent(0, 0)).toBe(0);
+  });
+});
+
+describe('percentLabels', () => {
+  const c = (todo: number, in_progress: number, done: number) => ({ todo, in_progress, done, total: todo + in_progress + done });
+
+  it('always sums to 100 (largest remainder), where independent rounding gave 99', () => {
+    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 33]);
+    for (const counts of [c(1, 1, 1), c(1, 2, 4), c(3, 3, 1), c(7, 11, 13), c(1, 0, 6), c(5, 0, 0)]) {
+      expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
+    }
+  });
+
+  it('keeps exact shares exact, and is all zero for an empty board', () => {
+    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 50]);
+    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0]);
+  });
+});
+
+describe('timeInColumn', () => {
+  const task = boardTask({ status: 'in_progress', column: 'in_progress', status_since: NOW - 1000 });
+
+  it('grows with the clock while the session runs', () => {
+    expect(timeInColumn(boardSession({ tasks: [task] }), task, NOW, true)).toBe(1000);
+    expect(timeInColumn(boardSession({ tasks: [task] }), task, NOW + 60, true)).toBe(1060);
+  });
+
+  it('stops at the session end, or at its last activity when it has no end time', () => {
+    const ended = boardSession({ status: 'ended', ended_at: NOW - 400, last_activity_at: NOW - 500, tasks: [task] });
+    expect(timeInColumn(ended, task, NOW + 9999, false)).toBe(600);
+    const silent = boardSession({ status: 'ended', ended_at: null, last_activity_at: NOW - 500, tasks: [task] });
+    expect(timeInColumn(silent, task, NOW + 9999, false)).toBe(500);
+  });
+
+  it('feeds the same figure into the per-step list', () => {
+    const ended = boardSession({ status: 'ended', ended_at: NOW - 400, tasks: [task] });
+    const inColumn = timeInColumn(ended, task, NOW + 5000, false);
+    expect(stepDurations(task, NOW + 5000, false, inColumn).find((s) => s.current)?.seconds).toBe(600);
   });
 });
 

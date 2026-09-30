@@ -189,9 +189,9 @@ describe('Project kanban', () => {
     const todo = screen.getByRole('region', { name: /^To do/ });
     const doing = screen.getByRole('region', { name: /^In progress/ });
     const done = screen.getByRole('region', { name: /^Done/ });
-    expect(within(todo).getAllByRole('listitem').filter((li) => li.hasAttribute('tabindex'))).toHaveLength(3);
-    expect(within(doing).getAllByRole('listitem').filter((li) => li.hasAttribute('tabindex'))).toHaveLength(2);
-    expect(within(done).getAllByRole('listitem').filter((li) => li.hasAttribute('tabindex'))).toHaveLength(5);
+    expect(within(todo).getAllByRole('article')).toHaveLength(3);
+    expect(within(doing).getAllByRole('article')).toHaveLength(2);
+    expect(within(done).getAllByRole('article')).toHaveLength(5);
     expect(within(todo).getByText('a1- task 1')).toBeInTheDocument();
     expect(within(doing).getByText('a1- task 2')).toBeInTheDocument();
     expect(within(done).getByText('a1- task 3')).toBeInTheDocument();
@@ -208,28 +208,39 @@ describe('Project kanban', () => {
       completed_at: NOW - 125,
       durations: { pending: 120, in_progress: 3900, completed: 0 },
     });
-    await openKanban(boardProject({ sessions: [boardSession({ tasks: [task] })] }));
-    const item = screen.getByText('Ship it').closest('li')!;
+    const { user } = await openKanban(boardProject({ sessions: [boardSession({ last_activity_at: NOW, tasks: [task] })] }));
+    const item = screen.getByText('Ship it').closest('article')!;
     expect(item).toHaveTextContent('2m 5s');
-    // Reachable from the keyboard: focusable, and described by the per-step panel.
-    expect(item).toHaveAttribute('tabindex', '0');
-    const panel = document.getElementById(item.getAttribute('aria-describedby')!)!;
-    expect(panel).toHaveTextContent('Time per step');
+    expect(item).toHaveAccessibleName('Ship it');
+    // A disclosure, not a hover tooltip: closed until asked, opened by a real button.
+    const toggle = within(item).getByRole('button', { name: /time per step/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(panel).not.toBeVisible();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(panel).toBeVisible();
     expect(panel).toHaveTextContent('To do');
     expect(panel).toHaveTextContent('2m');
     expect(panel).toHaveTextContent('In progress');
     expect(panel).toHaveTextContent('1h 5m');
-    // Revealed by hover and by focus, never by hover alone.
-    expect(panel.className).toContain('group-hover:block');
-    expect(panel.className).toContain('group-focus-within:block');
+    // Escape closes it and hands focus back to the button.
+    await user.keyboard('{Escape}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).not.toBeVisible();
+    expect(toggle).toHaveFocus();
   });
 
-  it('a task can be focused with the keyboard', async () => {
-    const { user } = await openKanban();
-    const item = screen.getByText('a1- task 1').closest('li')!;
-    await user.tab(); // back button
-    item.focus();
-    expect(item).toHaveFocus();
+  it('has one tab stop per card, no tabindex on a plain list item, and a name on every card', async () => {
+    await openKanban();
+    const cards = screen.getAllByRole('article');
+    expect(cards).toHaveLength(10);
+    for (const card of cards) {
+      expect(card.closest('li')).not.toHaveAttribute('tabindex');
+      expect(card).not.toHaveAttribute('tabindex');
+      expect(card).toHaveAccessibleName(/task \d/);
+      expect(within(card).getAllByRole('button')).toHaveLength(1);
+    }
   });
 
   it('keeps the running step live between snapshots', async () => {
@@ -248,7 +259,7 @@ describe('Project kanban', () => {
     );
     render(<Board clock={() => ms} />);
     fireEvent.click(await card('storefront'));
-    const item = (await screen.findByText('Running task')).closest('li')!;
+    const item = (await screen.findByText('Running task')).closest('article')!;
     expect(item).toHaveTextContent('1m');
     ms += 5 * 60_000;
     act(() => {
@@ -261,7 +272,7 @@ describe('Project kanban', () => {
     const { user } = await openKanban();
     await user.selectOptions(screen.getByLabelText('Session'), 'a3');
     const todo = screen.getByRole('region', { name: /^To do/ });
-    expect(within(todo).getAllByRole('listitem').filter((li) => li.hasAttribute('tabindex'))).toHaveLength(1);
+    expect(within(todo).getAllByRole('article')).toHaveLength(1);
     expect(within(todo).getByText('a3- task 1')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /copy resume command/i })).toHaveLength(1);
   });
@@ -290,8 +301,8 @@ describe('Project kanban', () => {
         ],
       }),
     );
-    expect(within(screen.getByText('Slow one').closest('li')!).getByText('Stale')).toBeInTheDocument();
-    expect(within(screen.getByText('Left behind').closest('li')!).getByText('Abandoned')).toBeInTheDocument();
+    expect(within(screen.getByText('Slow one').closest('article')!).getByText('Stale')).toBeInTheDocument();
+    expect(within(screen.getByText('Left behind').closest('article')!).getByText('Abandoned')).toBeInTheDocument();
   });
 
   it('shows each session with its status in words, provider and counts', async () => {
@@ -376,5 +387,210 @@ describe('Board settings', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Board settings' });
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('between 5 and 1440');
+  });
+});
+
+describe('Board — timers and time in column', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function intervals(spy: { mock: { calls: unknown[][] } }): number[] {
+    return spy.mock.calls.map((call) => call[1] as number).filter((ms) => ms === 1_000 || ms === 60_000);
+  }
+
+  it('does not tick while the tab is hidden, re-samples on activation, and ticks each second only in the kanban', async () => {
+    const spy = vi.spyOn(globalThis, 'setInterval');
+    let ms = NOW * 1000;
+    installBridge(fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [projectA()] }))) }));
+    const view = render(<Board active={false} clock={() => ms} />);
+    await card('storefront');
+    expect(intervals(spy)).toEqual([]);
+
+    ms += 10 * 60_000;
+    view.rerender(<Board active clock={() => ms} />);
+    expect(intervals(spy)).toEqual([60_000]); // the overview: once a minute, never every second
+
+    fireEvent.click(await card('storefront'));
+    await screen.findByRole('button', { name: /back to the board/i });
+    expect(intervals(spy)).toEqual([60_000, 1_000]);
+
+    spy.mockClear();
+    view.rerender(<Board active={false} clock={() => ms} />);
+    expect(intervals(spy)).toEqual([]);
+  });
+
+  it('measures a task in an ended session to the session end, and freezes the step list at the same figure', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let ms = NOW * 1000;
+    const task = boardTask({
+      key: 'k',
+      content: 'Abandoned work',
+      status: 'in_progress',
+      column: 'in_progress',
+      abandoned: true,
+      status_since: NOW - 1000,
+      durations: { pending: 10, in_progress: 100 },
+    });
+    const session = boardSession({ status: 'ended', ended_at: NOW - 100, last_activity_at: NOW - 120, tasks: [task] });
+    installBridge(fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [boardProject({ sessions: [session] })] }))) }));
+    render(<Board clock={() => ms} />);
+    fireEvent.click(await card('storefront'));
+    const item = (await screen.findByText('Abandoned work')).closest('article')!;
+    expect(item).toHaveTextContent('15m'); // 900 s: NOW-100 minus NOW-1000
+    fireEvent.click(within(item).getByRole('button', { name: /time per step/i }));
+    expect(item).toHaveTextContent('In progress (now)15m');
+    ms += 60 * 60_000;
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(item).toHaveTextContent('15m');
+    expect(item).not.toHaveTextContent('1h');
+  });
+});
+
+describe('Board — loading, failures and races', () => {
+  it('shows a loading state, not the empty-state copy, until the stream is live', async () => {
+    renderBoard(boardFeed({ status: 'starting', projects: [] }));
+    expect(await screen.findByText('Loading the task board…')).toBeInTheDocument();
+    expect(screen.queryByText(/No project has tasks yet/)).not.toBeInTheDocument();
+  });
+
+  it('says it is reconnecting when the stream is retrying with nothing to show', async () => {
+    renderBoard(boardFeed({ status: 'retrying', detail: 'the task stream stopped (exit 1). Retrying in 1 s.', projects: [] }));
+    expect(await screen.findByText('Reconnecting to the task stream…')).toBeInTheDocument();
+    expect(screen.queryByText(/No project has tasks yet/)).not.toBeInTheDocument();
+  });
+
+  it('a push that arrives before the first read answers is not overwritten by it', async () => {
+    let resolveInitial: (feed: BoardFeed) => void = () => undefined;
+    let push: (feed: BoardFeed) => void = () => undefined;
+    installBridge(
+      fakeBridge({
+        taskBoard: vi.fn(() => new Promise<BoardFeed>((resolve) => (resolveInitial = resolve))),
+        onTaskBoard: vi.fn((listener: (feed: BoardFeed) => void) => {
+          push = listener;
+          return () => undefined;
+        }),
+      }),
+    );
+    render(<Board clock={clock} />);
+    act(() => push(boardFeed({ projects: [projectB()] })));
+    await card('billing');
+    resolveInitial(boardFeed({ projects: [projectA()] }));
+    await act(() => Promise.resolve());
+    expect(screen.getByText('billing')).toBeInTheDocument();
+    expect(screen.queryByText('storefront')).not.toBeInTheDocument();
+  });
+
+  it('a failed first read becomes an error state, not an empty board', async () => {
+    renderBoard(boardFeed(), { taskBoard: vi.fn(() => Promise.reject(new Error('ipc closed'))) });
+    expect(await screen.findByRole('alert')).toHaveTextContent('The task board could not be loaded: ipc closed');
+    expect(screen.queryByText(/No project has tasks yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading the task board…')).not.toBeInTheDocument();
+  });
+
+  it('survives failed name and settings reads', async () => {
+    renderBoard(boardFeed({ projects: [projectA()] }), {
+      projectNames: vi.fn(() => Promise.reject(new Error('no names'))),
+      boardSettings: vi.fn(() => Promise.reject(new Error('no settings'))),
+    });
+    expect(await card('storefront')).toBeInTheDocument();
+  });
+
+  it('a failed refresh is reported and the board stays', async () => {
+    const user = userEvent.setup();
+    renderBoard(boardFeed({ projects: [projectA()] }), {
+      refreshTaskBoard: vi.fn(() => Promise.reject(new Error('main is gone'))),
+    });
+    await card('storefront');
+    await user.click(screen.getByRole('button', { name: /refresh/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed: main is gone');
+    expect(screen.getByText('storefront')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeEnabled();
+  });
+
+  it('a failed save is shown in the settings form', async () => {
+    const user = userEvent.setup();
+    renderBoard(boardFeed({ projects: [] }), { setBoardSettings: vi.fn(() => Promise.reject(new Error('ipc closed'))) });
+    await user.click(await screen.findByRole('button', { name: /board settings/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Board settings' });
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('could not be saved: ipc closed');
+  });
+});
+
+describe('Board — one period, honest percentages', () => {
+  it('has a single Period control, shared by the overview and the kanban', async () => {
+    const user = userEvent.setup();
+    const old = boardSession({ session_id: 'o', last_activity_at: NOW - 20 * 86_400, tasks: [boardTask({ key: 'ancient', content: 'Ancient chore' })] });
+    renderBoard(boardFeed({ projects: [boardProject({ root: '/repo/storefront', sessions: [boardSession({ tasks: [boardTask({ key: 'n', content: 'New chore' })] }), old] })] }));
+    await user.click(await card('storefront'));
+    await screen.findByRole('button', { name: /back to the board/i });
+    expect(screen.getAllByLabelText('Period')).toHaveLength(1);
+    expect(screen.queryByText('Ancient chore')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Period'), '30d');
+    expect(screen.getByText('Ancient chore')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /back to the board/i }));
+    expect(screen.getByLabelText('Period')).toHaveValue('30d');
+  });
+
+  it('percentages of 1/1/1 sum to 100 and the bar is proportional to the counts', async () => {
+    renderBoard(boardFeed({ projects: [boardProject({ sessions: [boardSession({ tasks: tasksOf('x-', 1, 1, 1) })] })] }));
+    const c = await card('storefront');
+    const shares = ['To do', 'In progress', 'Done'].map((label) => {
+      const text = within(c).getByText(label).closest('div')?.textContent ?? '';
+      return Number(/\((\d+)%\)/.exec(text)![1]);
+    });
+    expect(shares.reduce((a, b) => a + b, 0)).toBe(100);
+    const bar = within(c).getByRole('img', { name: '1 to do, 1 in progress, 1 done' });
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '1']);
+  });
+});
+
+describe('Board — resume command feedback', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('clears the confirmation after a while, and ignores a second click while the first is in flight', async () => {
+    let finish: (answer: { copied: true; command: string }) => void = () => undefined;
+    const copy = vi.fn(() => new Promise<{ copied: true; command: string }>((resolve) => (finish = resolve)));
+    installBridge(
+      fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [boardProject({ sessions: [boardSession()] })] }))), copyResumeCommand: copy }),
+    );
+    render(<Board clock={clock} />);
+    fireEvent.click(await card('storefront'));
+    const button = await screen.findByRole('button', { name: /copy resume command/i });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    finish({ copied: true, command: 'cd x' });
+    await act(() => Promise.resolve());
+    expect(screen.getByText('Resume command copied')).toBeInTheDocument();
+    expect(button).toBeEnabled();
+    act(() => {
+      vi.advanceTimersByTime(3_500);
+    });
+    expect(screen.queryByText('Resume command copied')).not.toBeInTheDocument();
+  });
+
+  it('drops the confirmation when the session’s resume command changes', async () => {
+    let push: (feed: BoardFeed) => void = () => undefined;
+    const withCommand = (resume: string) =>
+      boardFeed({ projects: [boardProject({ sessions: [boardSession({ resume_command: resume })] })] });
+    installBridge(
+      fakeBridge({
+        taskBoard: vi.fn(() => Promise.resolve(withCommand("cd '/a' && claude --resume 'one'"))),
+        onTaskBoard: vi.fn((listener: (feed: BoardFeed) => void) => {
+          push = listener;
+          return () => undefined;
+        }),
+      }),
+    );
+    render(<Board clock={clock} />);
+    fireEvent.click(await card('storefront'));
+    fireEvent.click(await screen.findByRole('button', { name: /copy resume command/i }));
+    expect(await screen.findByText('Resume command copied')).toBeInTheDocument();
+    act(() => push(withCommand("cd '/a' && claude --resume 'two'")));
+    expect(screen.queryByText('Resume command copied')).not.toBeInTheDocument();
   });
 });

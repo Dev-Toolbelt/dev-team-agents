@@ -21,7 +21,7 @@ import { createFileLog, describeError, type FileLog } from './logFile.js';
 import { CODE_SIGNED } from './build-info.js';
 import { NotificationCenter, type NativeNotice } from './notifications.js';
 import { registerNotificationIpc } from './notificationIpc.js';
-import { TaskBoard } from './taskBoard.js';
+import { TaskBoard, saveBoardSettings } from './taskBoard.js';
 import { registerTaskBoardIpc } from './taskBoardIpc.js';
 import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
 import { readSettings, writeBoardSettings, writeOpenAtLogin } from './settings.js';
@@ -384,8 +384,8 @@ if (!primaryInstance) {
   });
   app.on('before-quit', () => {
     quitting = true;
-    center?.stop();
-    board?.stop();
+    center?.dispose();
+    board?.dispose();
   });
   void app.whenReady().then(onReady);
 }
@@ -505,13 +505,15 @@ function onReady(): void {
     resumeCommand: (projectId, sessionId) => board!.resumeCommand(projectId, sessionId),
     copyText: (text) => clipboard.writeText(text),
     boardSettings: async () => (await readSettings(userDataDir)).board,
-    saveBoardSettings: async (next) => {
-      const previous = (await readSettings(userDataDir)).board;
-      await writeBoardSettings(userDataDir, next);
-      // `--stale-after` is an argument of the running child, so a new threshold needs a new one.
-      if (previous.staleAfterMinutes !== next.staleAfterMinutes) void board?.restart();
-      return (await readSettings(userDataDir)).board;
-    },
+    saveBoardSettings: (next) =>
+      saveBoardSettings(
+        {
+          read: async () => (await readSettings(userDataDir)).board,
+          write: (settings) => writeBoardSettings(userDataDir, settings),
+          restartStream: () => void board?.restart(),
+        },
+        next,
+      ),
   });
 
   registerNotificationIpc({
