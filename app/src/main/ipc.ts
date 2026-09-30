@@ -16,7 +16,7 @@
  * while the app was open — and is what the retry button calls.
  */
 
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { dialog, ipcMain } from 'electron';
 
@@ -114,8 +114,34 @@ const BIND_MODES: readonly BindMode[] = ['auto', 'link', 'copy', 'vendored'];
 const SKILL_PROVIDERS: readonly SkillProvider[] = ['claude', 'codex', 'opencode'];
 const SKILL_FILTERS: readonly SkillProviderFilter[] = ['all', ...SKILL_PROVIDERS];
 
-/** The extensions `skills install` accepts as an archive; the picker offers only these. */
+/** The extensions `skills install` accepts as an archive. */
 const SKILL_ARCHIVE_EXTENSIONS = ['zip', 'skill'];
+
+/**
+ * One native picker for every kind of source. macOS lets a single dialog select a file or
+ * a folder. Windows and Linux cannot: Electron shows a folder picker when both are asked
+ * for, which would hide archives. There the picker selects files only, and the skill's own
+ * `SKILL.md` stands for its folder.
+ */
+function skillPickerOptions(platform: NodeJS.Platform): Electron.OpenDialogOptions {
+  return {
+    title: 'Select a skill folder, its SKILL.md, or a .zip/.skill archive',
+    properties: platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
+    filters: [{ name: 'Skill (folder, SKILL.md, .zip, .skill)', extensions: [...SKILL_ARCHIVE_EXTENSIONS, 'md'] }],
+  };
+}
+
+/**
+ * What a picked path is, from its name alone — the CLI validates the content either way.
+ * An archive by extension; a `SKILL.md` means its folder; anything else was a folder.
+ * Exported for direct testing.
+ */
+export function classifySkillPick(path: string): { readonly path: string; readonly kind: 'folder' | 'archive' } {
+  const lower = path.toLowerCase();
+  if (SKILL_ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`))) return { path, kind: 'archive' };
+  if (basename(path).toLowerCase() === 'skill.md') return { path: dirname(path), kind: 'folder' };
+  return { path, kind: 'folder' };
+}
 
 /**
  * An `installSkill` request, rebuilt from `unknown`, or why it was refused. Exported for
@@ -123,13 +149,13 @@ const SKILL_ARCHIVE_EXTENSIONS = ['zip', 'skill'];
  * this process and the path it returns never crosses back as an input.
  */
 export function validateSkillInstallRequest(request: unknown):
-  | { readonly source: 'folder' | 'archive' | 'previous'; readonly providers: readonly SkillProvider[]; readonly replace: boolean; readonly link: boolean }
+  | { readonly source: 'pick' | 'previous'; readonly providers: readonly SkillProvider[]; readonly replace: boolean; readonly link: boolean }
   | string {
   if (request === null || typeof request !== 'object') return 'an install request must be an object';
   const raw = request as Record<string, unknown>;
   const source = raw['source'];
-  if (source !== 'folder' && source !== 'archive' && source !== 'previous') {
-    return '`source` must be folder, archive or previous';
+  if (source !== 'pick' && source !== 'previous') {
+    return '`source` must be pick or previous';
   }
   if (!Array.isArray(raw['providers']) || raw['providers'].length === 0) return 'choose at least one provider';
   const providers: SkillProvider[] = [];
@@ -751,9 +777,6 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     });
     const validated = validateSkillInstallRequest(request);
     if (typeof validated === 'string') return refused(`\`devteam skills install\` was refused: ${validated}`);
-    if (validated.source === 'archive' && validated.link) {
-      return refused('`devteam skills install` was refused: --link works only with a folder, not an archive.');
-    }
     // Gate before the picker: a withheld action must not open a dialog and then fail.
     const gated = await gatedContext('skills install');
     if (!gated.ready) return { picked: true, source: '', result: gated.problem };
@@ -763,18 +786,10 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       if (lastSkillSource === null) return refused('There is no previous source to retry; choose one again.');
       chosen = lastSkillSource;
     } else {
-      const picked = await dialog.showOpenDialog(
-        validated.source === 'folder'
-          ? { title: 'Choose a skill folder', properties: ['openDirectory'] }
-          : {
-              title: 'Choose a skill archive',
-              properties: ['openFile'],
-              filters: [{ name: 'Skill archive', extensions: SKILL_ARCHIVE_EXTENSIONS }],
-            },
-      );
+      const picked = await dialog.showOpenDialog(skillPickerOptions(process.platform));
       const path = picked.filePaths[0];
       if (picked.canceled || path === undefined) return { picked: false };
-      chosen = { path, kind: validated.source };
+      chosen = classifySkillPick(path);
       lastSkillSource = chosen;
     }
     if (chosen.kind === 'archive' && validated.link) {

@@ -758,8 +758,11 @@ export interface SkillDetail extends SkillRecord {
   readonly files_truncated: boolean;
 }
 
-/** Where an install's source comes from. Never a path: the main process opens the picker. */
-export type SkillSourceChoice = 'folder' | 'archive' | 'previous';
+/**
+ * Where an install's source comes from. Never a path: `pick` opens the main process's one
+ * native picker (folder, `SKILL.md` or archive), and `previous` reuses what it last returned.
+ */
+export type SkillSourceChoice = 'pick' | 'previous';
 
 export interface SkillInstallRequest {
   readonly source: SkillSourceChoice;

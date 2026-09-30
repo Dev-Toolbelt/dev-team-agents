@@ -215,10 +215,10 @@ describe('Skills — install', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('checkbox', { name: 'Codex' }));
     await user.click(within(dialog).getByRole('checkbox', { name: /link instead of copy/i }));
-    expect(within(dialog).getByRole('button', { name: /archive/i })).toBeDisabled();
-    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    expect(within(dialog).queryByRole('button', { name: /archive/i })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
 
-    expect(installSkill).toHaveBeenCalledWith({ source: 'folder', providers: ['claude', 'codex'], replace: false, link: true });
+    expect(installSkill).toHaveBeenCalledWith({ source: 'pick', providers: ['claude', 'codex'], replace: false, link: true });
     expect(await within(dialog).findByText('/home/u/.claude/skills/beta')).toBeInTheDocument();
     await vi.waitFor(() => expect(listSkills).toHaveBeenCalledTimes(2));
   });
@@ -228,7 +228,7 @@ describe('Skills — install', () => {
     mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))) });
     await user.click(await screen.findByRole('button', { name: 'Install skill' }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
   });
@@ -258,7 +258,7 @@ describe('Skills — install', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Install skill' }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
     expect(await within(dialog).findByText('skill "clash" already exists')).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: /replace the existing skill and retry/i }));
@@ -279,7 +279,7 @@ describe('Skills — install', () => {
     mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
     await user.click(await screen.findByRole('button', { name: 'Install skill' }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
     expect(await within(dialog).findByText('unit is managed by dev-team-agents')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /replace the existing skill and retry/i })).not.toBeInTheDocument();
   });
@@ -304,7 +304,7 @@ describe('Skills — install', () => {
     mount({ listSkills: vi.fn(() => Promise.resolve(ok(list([])))), installSkill });
     await user.click(await screen.findByRole('button', { name: 'Install skill' }));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Folder…' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Select file…' }));
     expect(await within(dialog).findByText(/will see two copies/)).toBeInTheDocument();
   });
 });

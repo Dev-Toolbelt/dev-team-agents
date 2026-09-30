@@ -73,6 +73,7 @@ async function loadIpc(): Promise<{
   readonly registerIpc: typeof IpcModule.registerIpc;
   readonly validateBindRequest: typeof IpcModule.validateBindRequest;
   readonly validateSkillInstallRequest: typeof IpcModule.validateSkillInstallRequest;
+  readonly classifySkillPick: typeof IpcModule.classifySkillPick;
   readonly CHANNELS: typeof ApiModule.CHANNELS;
 }> {
   vi.resetModules();
@@ -88,12 +89,12 @@ async function loadIpc(): Promise<{
     },
     dialog: { showOpenDialog, showMessageBox },
   }));
-  const { registerIpc, validateBindRequest, validateSkillInstallRequest } = await import('../src/main/ipc.js');
+  const { registerIpc, validateBindRequest, validateSkillInstallRequest, classifySkillPick } = await import('../src/main/ipc.js');
   const { CHANNELS } = await import('../src/shared/api.js');
   onTestFinished(() => {
     vi.doUnmock('electron');
   });
-  return { handlers, showOpenDialog, showMessageBox, registerIpc, validateBindRequest, validateSkillInstallRequest, CHANNELS };
+  return { handlers, showOpenDialog, showMessageBox, registerIpc, validateBindRequest, validateSkillInstallRequest, classifySkillPick, CHANNELS };
 }
 
 async function registerAgainstFake(registerIpc: typeof IpcModule.registerIpc): Promise<void> {
@@ -935,17 +936,27 @@ describe('the CLI resolution', () => {
 
 // ── global skills ─────────────────────────────────────────────────────────────
 
+describe('classifySkillPick', () => {
+  it('reads an archive by extension, a SKILL.md as its folder, and anything else as a folder', async () => {
+    const { classifySkillPick } = await loadIpc();
+    expect(classifySkillPick('/x/pack.ZIP')).toEqual({ path: '/x/pack.ZIP', kind: 'archive' });
+    expect(classifySkillPick('/x/pack.skill')).toEqual({ path: '/x/pack.skill', kind: 'archive' });
+    expect(classifySkillPick('/x/my-skill/SKILL.md')).toEqual({ path: '/x/my-skill', kind: 'folder' });
+    expect(classifySkillPick('/x/my-skill')).toEqual({ path: '/x/my-skill', kind: 'folder' });
+  });
+});
+
 describe('validateSkillInstallRequest', () => {
   it('accepts a kind of source and closed providers, and drops a repeated provider', async () => {
     const { validateSkillInstallRequest } = await loadIpc();
     expect(
-      validateSkillInstallRequest({ source: 'folder', providers: ['claude', 'claude', 'codex'], replace: false, link: true }),
-    ).toEqual({ source: 'folder', providers: ['claude', 'codex'], replace: false, link: true });
+      validateSkillInstallRequest({ source: 'pick', providers: ['claude', 'claude', 'codex'], replace: false, link: true }),
+    ).toEqual({ source: 'pick', providers: ['claude', 'codex'], replace: false, link: true });
   });
 
   it('refuses a path as the source, an unknown provider, no provider, and non-boolean toggles', async () => {
     const { validateSkillInstallRequest } = await loadIpc();
-    const base = { source: 'folder', providers: ['claude'], replace: false, link: false };
+    const base = { source: 'pick', providers: ['claude'], replace: false, link: false };
     expect(validateSkillInstallRequest({ ...base, source: '/etc' })).toContain('`source`');
     expect(validateSkillInstallRequest({ ...base, providers: ['vim'] })).toContain('not a provider');
     expect(validateSkillInstallRequest({ ...base, providers: [] })).toContain('at least one provider');
@@ -975,11 +986,16 @@ describe('the skills handlers', () => {
 
     const answer = (await handlers.get(CHANNELS.installSkill)?.(
       TRUSTED,
-      { source: 'folder', providers: ['claude', 'opencode'], replace: false, link: true },
+      { source: 'pick', providers: ['claude', 'opencode'], replace: false, link: true },
     )) as { readonly picked: true; readonly source: string; readonly result: { readonly ok: boolean; readonly command: string } };
 
     expect(showOpenDialog).toHaveBeenCalledTimes(1);
-    expect(showOpenDialog.mock.calls[0]?.[0]).toMatchObject({ properties: ['openDirectory'] });
+    // One picker for every kind of source; on macOS it selects a file or a folder.
+    const expected = process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'];
+    expect(showOpenDialog.mock.calls[0]?.[0]).toMatchObject({
+      properties: expected,
+      filters: [{ extensions: ['zip', 'skill', 'md'] }],
+    });
     expect(answer.picked).toBe(true);
     expect(answer.source).toBe('/picked/my-skill');
     expect(answer.result.ok).toBe(true);
@@ -988,30 +1004,24 @@ describe('the skills handlers', () => {
     );
   });
 
-  it.skipIf(skipOnWindowsWithoutLauncher)('an archive uses a file picker limited to .zip and .skill, and refuses --link', async () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('a picked archive is refused with --link after the picker, and never spawns', async () => {
     const { handlers, registerIpc, CHANNELS, showOpenDialog } = await loadIpc();
     await registerAgainstFake(registerIpc);
+    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/pack.skill'] });
 
     const linked = (await handlers.get(CHANNELS.installSkill)?.(
       TRUSTED,
-      { source: 'archive', providers: ['claude'], replace: false, link: true },
-    )) as { readonly result: { readonly ok: boolean; readonly kind: string } };
+      { source: 'pick', providers: ['claude'], replace: false, link: true },
+    )) as { readonly result: { readonly ok: boolean; readonly kind: string; readonly command: string } };
     expect(linked.result.ok).toBe(false);
     expect(linked.result.kind).toBe('refused');
-    expect(showOpenDialog).not.toHaveBeenCalled();
-
-    showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/pack.skill'] });
-    await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { source: 'archive', providers: ['claude'], replace: false, link: false });
-    expect(showOpenDialog.mock.calls[0]?.[0]).toMatchObject({
-      properties: ['openFile'],
-      filters: [{ extensions: ['zip', 'skill'] }],
-    });
+    expect(linked.result.command).toBe('devteam skills install');
   });
 
   it.skipIf(skipOnWindowsWithoutLauncher)('a dismissed picker runs nothing', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);
-    const answer = await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { source: 'folder', providers: ['claude'], replace: false, link: false });
+    const answer = await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { source: 'pick', providers: ['claude'], replace: false, link: false });
     expect(answer).toEqual({ picked: false });
   });
 
@@ -1021,7 +1031,7 @@ describe('the skills handlers', () => {
     showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/picked/clash'] });
     const request = { providers: ['claude'], replace: false, link: false };
 
-    const first = (await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { ...request, source: 'folder' })) as {
+    const first = (await handlers.get(CHANNELS.installSkill)?.(TRUSTED, { ...request, source: 'pick' })) as {
       readonly result: { readonly ok: boolean; readonly kind?: string; readonly exitCode?: number };
     };
     expect(first.result.ok).toBe(false);

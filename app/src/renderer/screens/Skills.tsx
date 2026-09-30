@@ -151,10 +151,18 @@ function Roots({ roots }: { roots: readonly SkillRoot[] }) {
       <ul className="space-y-1 text-xs">
         {roots.map((root) => (
           <li key={root.id} className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{root.id}</Badge>
             <span className="font-mono text-muted-foreground">{root.path}</span>
             {root.exists ? null : <Badge variant="secondary">absent</Badge>}
-            <span className="text-muted-foreground">read by {root.providers.join(', ') || 'no provider'}</span>
+            <span className="text-muted-foreground">read by</span>
+            {root.providers.length > 0 ? (
+              root.providers.map((provider) => (
+                <Badge key={provider} variant="outline">
+                  {provider}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-muted-foreground">no provider</span>
+            )}
           </li>
         ))}
       </ul>
@@ -444,7 +452,7 @@ function InstallDialog({
   const conflict =
     answer !== null && !answer.result.ok && answer.result.kind === 'conflict' && answer.result.reason === 'exists';
 
-  async function start(source: 'folder' | 'archive' | 'previous', replaceExisting: boolean) {
+  async function start(source: 'pick' | 'previous', replaceExisting: boolean) {
     const result = await install.run({ source, providers, replace: replaceExisting, link });
     if (result.picked && result.result.ok) onInstalled();
   }
@@ -459,7 +467,8 @@ function InstallDialog({
         <DialogHeader>
           <DialogTitle>Install a skill</DialogTitle>
           <DialogDescription>
-            Choose where it goes, then pick the skill&apos;s folder or a <span className="font-mono">.zip</span> /{' '}
+            Choose where it goes, then select the skill&apos;s folder, its{' '}
+            <span className="font-mono">SKILL.md</span>, or a <span className="font-mono">.zip</span> /{' '}
             <span className="font-mono">.skill</span> archive. The file picker opens outside this window.
           </DialogDescription>
         </DialogHeader>
@@ -498,7 +507,7 @@ function InstallDialog({
               onCheckedChange={(checked) => setLink(checked === true)}
             />
             <Label htmlFor="skill-link" className="leading-snug">
-              Link instead of copy (a folder only; edits to the source show up in the installed skill)
+              Link instead of copy (folders only, not archives; edits to the source show up in the installed skill)
             </Label>
           </div>
         </div>
@@ -560,16 +569,8 @@ function InstallDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                variant="outline"
-                disabled={pending || providers.length === 0 || link}
-                onClick={() => void start('archive', replace)}
-                title={link ? 'Link works only with a folder' : undefined}
-              >
-                Archive (.zip/.skill)…
-              </Button>
-              <Button disabled={pending || providers.length === 0} onClick={() => void start('folder', replace)}>
-                {pending ? 'Installing…' : 'Folder…'}
+              <Button disabled={pending || providers.length === 0} onClick={() => void start('pick', replace)}>
+                {pending ? 'Installing…' : 'Select file…'}
               </Button>
             </>
           )}
