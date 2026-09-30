@@ -16,7 +16,7 @@
  * This fixture reads the subcommand out of argv instead, and needs no environment
  * variable at all. It knows one project, `proj-1` at `/repo/project-1`, and answers
  * `version`, `compat`, `list`, `bind`, `unbind`, `sync`, `pin`, `upgrade` and `prefs
- * list/set/unset` each with a
+ * list/set/unset` and `skills list/show/install/remove` each with a
  * shape real enough for their own validators in `cli/operations.ts` to accept — so
  * `test/ipc.test.ts` can assert on `result.data`, not only on `result.command`.
  */
@@ -253,6 +253,66 @@ switch (command) {
         ? { ok: true, key, scope: flagValue('--scope'), removed: true, file: '/store/prefs.json' }
         : { ok: true, key, value: args[3], scope: flagValue('--scope'), file: '/store/prefs.json' },
     );
+    process.exit(0);
+    break;
+  }
+
+  case 'skills': {
+    const verb = args[1];
+    const SKILL = (name, root, extra = {}) => ({
+      name,
+      description: `${name} skill`,
+      root,
+      root_path: `/home/u/.${root}/skills`,
+      path: `/home/u/.${root}/skills/${name}`,
+      providers: ['claude'],
+      is_symlink: false,
+      link_target: null,
+      managed: false,
+      status: 'ok',
+      error: null,
+      ...extra,
+    });
+    if (verb === 'list') {
+      emit({
+        ok: true,
+        provider: flagValue('--provider') ?? 'all',
+        roots: [{ id: 'claude', path: '/home/u/.claude/skills', exists: true, providers: ['claude'], install_target_for: ['claude'] }],
+        skills: [SKILL('alpha', 'claude'), SKILL('framework-owned', 'claude', { managed: true })],
+        count: 2,
+      });
+      process.exit(0);
+    }
+    if (verb === 'show') {
+      emit({ ...SKILL(args[2], flagValue('--root') ?? 'claude'), body: '# body', files: ['SKILL.md'], files_truncated: false });
+      process.exit(0);
+    }
+    if (verb === 'install') {
+      const source = flagValue('--source') ?? '';
+      // A source whose path says `clash` collides with an installed skill until --replace.
+      if (source.includes('clash') && !args.includes('--replace')) {
+        emit({ ok: false, error: 'skill "clash" already exists in claude', hint: 'Pass --replace.', exit_code: 4 });
+        process.exit(4);
+      }
+      emit({
+        ok: true,
+        name: 'installed-skill',
+        description: 'd',
+        source,
+        linked: args.includes('--link'),
+        installed: [{ root: 'claude', path: '/home/u/.claude/skills/installed-skill', providers: ['claude'], replaced: args.includes('--replace'), quarantined_to: null }],
+      });
+      process.exit(0);
+    }
+    emit({
+      ok: true,
+      name: args[2],
+      root: flagValue('--root'),
+      path: `/home/u/.${flagValue('--root')}/skills/${args[2]}`,
+      providers: ['claude'],
+      action: 'quarantined',
+      quarantined_to: '/store/quarantine/x',
+    });
     process.exit(0);
     break;
   }

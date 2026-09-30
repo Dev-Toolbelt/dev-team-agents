@@ -416,6 +416,10 @@ MUTATING = {
     "far end will trust",
     ("import",): "replaces the data store",
     ("uninstall",): "removes the core, and the data store with --purge",
+    ("skills", "install"): "writes a skill into a provider's global skill directory, and "
+    "quarantines the one it replaces with --replace (ADR-0017)",
+    ("skills", "remove"): "moves a global skill into the store's quarantine, or unlinks a "
+    "symlinked one (ADR-0017)",
     ("doctor",): "repairs what it finds — it rewrites the directory pointers, relocates a "
     "moved registry entry, and reassigns identity with --reassign-identity. Read the "
     "actions it returns, not the word 'diagnose', before reclassifying this one",
@@ -453,6 +457,8 @@ READ_ONLY = {
     ("catalog", "skills"): "read-only browse",
     ("catalog", "commands"): "read-only browse",
     ("catalog", "show"): "read-only browse",
+    ("skills", "list"): "reads the providers' global skill directories; creates nothing",
+    ("skills", "show"): "reads one global skill; creates nothing",
 }
 
 

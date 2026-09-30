@@ -16,8 +16,9 @@ export const CODE_SIGNED = false;
 /**
  * Whether this build exposes any write action at all.
  *
- * `true`: the project lifecycle — bind, unbind, sync, pin, upgrade — is reachable from
- * the UI, alongside `devteam doctor`, which was the one mutating command before it. See
+ * `true`: the project lifecycle — bind, unbind, sync, pin, upgrade — and the global
+ * skills install/remove are reachable from the UI, alongside `devteam doctor`, which was
+ * the one mutating command before it. See
  * `cli/operations.ts` -> `GATED_COMMANDS` for the full list of commands the framework
  * classifies as mutating that this build runs, and why each was admitted rather than
  * filed under read-only.

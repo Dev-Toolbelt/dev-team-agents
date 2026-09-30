@@ -34,11 +34,15 @@ import {
   catalogSummary,
   doctor,
   listNotifications,
+  installSkill,
   listProjects,
+  listSkills,
   prefsList,
   prefsSet,
   prefsUnset,
+  removeSkill,
   setPin,
+  showSkill,
   unbindProject,
   watchNotifications,
   type WatchEvent,
@@ -545,6 +549,41 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     const listed = await listNotifications(context());
     if (!listed.ok) throw new Error(`expected a list: ${listed.message}`);
     expect(listed.data.map((n) => [n.id, n.seen])).toEqual([[record.id, true]]);
+  });
+
+  it('installs, lists, shows and removes a global skill against a throwaway user home, reading the real shapes', async () => {
+    const userHome = await mkdtemp(join(tmpdir(), 'devteam-app-realcli-userhome-'));
+    scratch.push(userHome);
+    const source = join(userHome, 'source', 'demo-skill');
+    await mkdir(source, { recursive: true });
+    await writeFile(join(source, 'SKILL.md'), '---\nname: demo-skill\ndescription: A demo\n---\n# Demo\n', 'utf8');
+    // `DEVTEAM_USER_HOME` is the CLI's own seam for "whose home is this": nothing here can
+    // reach the developer's real `~/.claude/skills`.
+    const ctx = { ...context(), env: { DEVTEAM_HOME: home, DEVTEAM_USER_HOME: userHome } };
+
+    const installed = await installSkill(ctx, source, { providers: ['claude'], replace: false, link: false });
+    if (!installed.ok) throw new Error(`install failed: ${installed.message}`);
+    expect(installed.data.name).toBe('demo-skill');
+    expect(installed.data.installed[0]?.root).toBe('claude');
+
+    const again = await installSkill(ctx, source, { providers: ['claude'], replace: false, link: false });
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.kind).toBe('conflict');
+
+    const listed = await listSkills(ctx, 'claude');
+    if (!listed.ok) throw new Error(`list failed: ${listed.message}`);
+    const record = listed.data.skills.find((each) => each.name === 'demo-skill');
+    expect(record).toMatchObject({ root: 'claude', status: 'ok', managed: false, description: 'A demo' });
+
+    const shown = await showSkill(ctx, 'demo-skill', 'claude');
+    if (!shown.ok) throw new Error(`show failed: ${shown.message}`);
+    expect(shown.data.files).toContain('SKILL.md');
+    expect(shown.data.body).toContain('# Demo');
+
+    const removed = await removeSkill(ctx, 'demo-skill', 'claude');
+    if (!removed.ok) throw new Error(`remove failed: ${removed.message}`);
+    expect(removed.data.action).toBe('quarantined');
+    expect(removed.data.quarantined_to).not.toBeNull();
   });
 
   it('surfaces the exit-4 write gate as OperationResult.kind "conflict", a problem the UI can render', async () => {

@@ -23,6 +23,9 @@ import {
   type NotificationFeed,
   type PreferenceChange,
   type ProjectId,
+  type SkillInstallRequest,
+  type SkillProviderFilter,
+  type SkillRemoveRequest,
 } from '../shared/api.js';
 
 const bridge: DevteamBridge = {
@@ -102,6 +105,19 @@ const bridge: DevteamBridge = {
   takePendingProject: () => ipcRenderer.invoke(CHANNELS.takePendingProject),
   backgroundSettings: () => ipcRenderer.invoke(CHANNELS.backgroundSettings),
   setOpenAtLogin: (enabled: boolean) => ipcRenderer.invoke(CHANNELS.setOpenAtLogin, enabled === true),
+  // Global skills. Requests are rebuilt into plain objects; the install request names a
+  // *kind* of source, and the picker that yields the path opens in the main process.
+  listSkills: (provider: SkillProviderFilter) => ipcRenderer.invoke(CHANNELS.listSkills, String(provider)),
+  showSkill: (name: string, root: string) => ipcRenderer.invoke(CHANNELS.showSkill, String(name), String(root)),
+  installSkill: (request: SkillInstallRequest) =>
+    ipcRenderer.invoke(CHANNELS.installSkill, {
+      source: String(request.source),
+      providers: [...request.providers].map(String),
+      replace: request.replace === true,
+      link: request.link === true,
+    }),
+  removeSkill: (request: SkillRemoveRequest) =>
+    ipcRenderer.invoke(CHANNELS.removeSkill, { name: String(request.name), root: String(request.root) }),
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

@@ -256,6 +256,10 @@ class IncompatibleDeclarationRefusesEveryMutatingCommandTest(ClientGateTestCase)
             ("import",): (str(self.tmp / "no-such-archive.tar.gz"),),
             ("update",): ("--ref", "not-a-version"),
             ("uninstall",): ("--purge",),
+            # A source that does not exist and a name nothing has: a gate that let either
+            # through fails validation instead of touching the (pinned) user home.
+            ("skills", "install"): ("--source", str(self.tmp / "no-such-skill")),
+            ("skills", "remove"): ("no-such-skill",),
         }
 
     def _sweep(self, seam, declaration):
@@ -1283,6 +1287,7 @@ class GroupWithNoSubcommandTest(ClientGateTestCase):
         "store": "store needs a subcommand",
         "prefs": "prefs needs a subcommand",
         "cred": "cred needs a subcommand",
+        "skills": "skills needs a subcommand",
     }
 
     def test_a_group_is_a_usage_error_under_an_incompatible_declaration(self):

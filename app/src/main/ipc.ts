@@ -28,13 +28,18 @@ import {
   catalogListing,
   catalogSummary,
   doctor,
+  installSkill,
   listProjects,
+  listSkills,
   planUpgrade,
   preferenceArgumentProblem,
   prefsList,
   prefsSet,
   prefsUnset,
+  removeSkill,
   setPin,
+  showSkill,
+  skillTargetProblem,
   syncAllProjects,
   syncProject,
   unbindProject,
@@ -63,6 +68,12 @@ import {
   type PreferenceUpdateReport,
   type PreferenceValue,
   type ProjectPreferencesView,
+  type SkillDetail,
+  type SkillInstallAnswer,
+  type SkillList,
+  type SkillProvider,
+  type SkillProviderFilter,
+  type SkillRemoveReport,
   type SyncAllReport,
   type UnbindReport,
   type UpgradePlan,
@@ -75,6 +86,38 @@ import {
  *  already makes for `CatalogKind`. */
 const BIND_PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
 const BIND_MODES: readonly BindMode[] = ['auto', 'link', 'copy', 'vendored'];
+
+const SKILL_PROVIDERS: readonly SkillProvider[] = ['claude', 'codex', 'opencode'];
+const SKILL_FILTERS: readonly SkillProviderFilter[] = ['all', ...SKILL_PROVIDERS];
+
+/** The extensions `skills install` accepts as an archive; the picker offers only these. */
+const SKILL_ARCHIVE_EXTENSIONS = ['zip', 'skill'];
+
+/**
+ * An `installSkill` request, rebuilt from `unknown`, or why it was refused. Exported for
+ * direct testing. The renderer names a *kind* of source, never a path: the picker runs in
+ * this process and the path it returns never crosses back as an input.
+ */
+export function validateSkillInstallRequest(request: unknown):
+  | { readonly source: 'folder' | 'archive' | 'previous'; readonly providers: readonly SkillProvider[]; readonly replace: boolean; readonly link: boolean }
+  | string {
+  if (request === null || typeof request !== 'object') return 'an install request must be an object';
+  const raw = request as Record<string, unknown>;
+  const source = raw['source'];
+  if (source !== 'folder' && source !== 'archive' && source !== 'previous') {
+    return '`source` must be folder, archive or previous';
+  }
+  if (!Array.isArray(raw['providers']) || raw['providers'].length === 0) return 'choose at least one provider';
+  const providers: SkillProvider[] = [];
+  for (const entry of raw['providers']) {
+    if (!SKILL_PROVIDERS.includes(entry as SkillProvider)) return `\`${String(entry)}\` is not a provider this app knows`;
+    if (!providers.includes(entry as SkillProvider)) providers.push(entry as SkillProvider);
+  }
+  if (typeof raw['replace'] !== 'boolean' || typeof raw['link'] !== 'boolean') {
+    return '`replace` and `link` must be booleans';
+  }
+  return { source, providers, replace: raw['replace'], link: raw['link'] };
+}
 
 /** `validateBindRequest`'s accepted shape: `BindRequest` with `path` proven offered. */
 interface ValidatedBindRequest {
@@ -596,6 +639,128 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       const base = await prefsList(ctx, workingDirectory);
       const inherited = base.ok && base.data.project_id === null ? base.data.values : null;
       return { ...current, data: { ...current.data, inherited } };
+    },
+  );
+
+  // ── global skills ──────────────────────────────────────────────────────────
+
+  ipcMain.handle(CHANNELS.listSkills, async (_event, provider: unknown): Promise<OperationResult<SkillList>> => {
+    const ctx = await context();
+    if (ctx === null) return NO_CLI;
+    if (!SKILL_FILTERS.includes(provider as SkillProviderFilter)) return refusedBadArgument('skills list');
+    return listSkills(ctx, provider as SkillProviderFilter);
+  });
+
+  ipcMain.handle(
+    CHANNELS.showSkill,
+    async (_event, name: unknown, root: unknown): Promise<OperationResult<SkillDetail>> => {
+      const ctx = await context();
+      if (ctx === null) return NO_CLI;
+      if (typeof name !== 'string' || typeof root !== 'string') return refusedBadArgument('skills show');
+      return showSkill(ctx, name, root);
+    },
+  );
+
+  /**
+   * The last source the picker returned this session, held here and never handed to the
+   * renderer as something it can send back — a retry names `previous`, and this process
+   * supplies the path. That is how "retry with replace" works without the renderer ever
+   * holding a path it could substitute.
+   */
+  let lastSkillSource: { readonly path: string; readonly kind: 'folder' | 'archive' } | null = null;
+
+  ipcMain.handle(CHANNELS.installSkill, async (_event, request: unknown): Promise<SkillInstallAnswer> => {
+    const refused = (message: string): SkillInstallAnswer => ({
+      picked: true,
+      source: '',
+      result: {
+        ok: false,
+        kind: 'refused',
+        message,
+        exitCode: null,
+        command: 'devteam skills install',
+        durationMs: 0,
+      },
+    });
+    const validated = validateSkillInstallRequest(request);
+    if (typeof validated === 'string') return refused(`\`devteam skills install\` was refused: ${validated}`);
+    if (validated.source === 'archive' && validated.link) {
+      return refused('`devteam skills install` was refused: --link works only with a folder, not an archive.');
+    }
+    // Gate before the picker: a withheld action must not open a dialog and then fail.
+    const gated = await gatedContext('skills install');
+    if (!gated.ready) return { picked: true, source: '', result: gated.problem };
+
+    let chosen: { readonly path: string; readonly kind: 'folder' | 'archive' };
+    if (validated.source === 'previous') {
+      if (lastSkillSource === null) return refused('There is no previous source to retry; choose one again.');
+      chosen = lastSkillSource;
+    } else {
+      const picked = await dialog.showOpenDialog(
+        validated.source === 'folder'
+          ? { title: 'Choose a skill folder', properties: ['openDirectory'] }
+          : {
+              title: 'Choose a skill archive',
+              properties: ['openFile'],
+              filters: [{ name: 'Skill archive', extensions: SKILL_ARCHIVE_EXTENSIONS }],
+            },
+      );
+      const path = picked.filePaths[0];
+      if (picked.canceled || path === undefined) return { picked: false };
+      chosen = { path, kind: validated.source };
+      lastSkillSource = chosen;
+    }
+    if (chosen.kind === 'archive' && validated.link) {
+      return refused('`devteam skills install` was refused: --link works only with a folder, not an archive.');
+    }
+    const result = await installSkill(gated.ctx, chosen.path, {
+      providers: validated.providers,
+      replace: validated.replace,
+      link: validated.link,
+    });
+    return { picked: true, source: chosen.path, result };
+  });
+
+  ipcMain.handle(
+    CHANNELS.removeSkill,
+    async (_event, request: unknown): Promise<OperationResult<SkillRemoveReport>> => {
+      if (request === null || typeof request !== 'object') return refusedBadArgument('skills remove');
+      const { name, root } = request as { name?: unknown; root?: unknown };
+      const problem = skillTargetProblem(name, root);
+      if (problem !== null || typeof name !== 'string' || typeof root !== 'string') {
+        return refusedBadArgument('skills remove');
+      }
+      const ctx = await context();
+      if (ctx === null) return NO_CLI;
+      // The target must be a skill this session's own `skills list` returns, and not a
+      // managed one — the CLI refuses that at exit 4, but a refusal before the argv is built
+      // is the same posture `resolveProject` takes for the project lifecycle.
+      const listing = await listSkills(ctx, 'all');
+      if (!listing.ok) return listing;
+      const found = listing.data.skills.find((skill) => skill.name === name.trim() && skill.root === root);
+      if (found === undefined) {
+        return {
+          ok: false,
+          kind: 'refused',
+          message: `\`${name}\` is not a skill in the \`${root}\` root.`,
+          exitCode: null,
+          command: 'devteam skills list',
+          durationMs: 0,
+        };
+      }
+      if (found.managed) {
+        return {
+          ok: false,
+          kind: 'refused',
+          message: `\`${name}\` is managed by dev-team-agents and is not removed from here.`,
+          exitCode: null,
+          command: 'devteam skills remove',
+          durationMs: 0,
+        };
+      }
+      const gated = await gatedContext('skills remove');
+      if (!gated.ready) return gated.problem;
+      return removeSkill(gated.ctx, name, root);
     },
   );
 

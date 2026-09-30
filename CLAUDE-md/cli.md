@@ -153,6 +153,7 @@ mode.
 | `devteam path` | Resolved store locations |
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
+| `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
 | `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()` |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
@@ -240,6 +241,50 @@ in the version the project is bound to.
 - `devteam catalog`: `{version, project_id, counts: {agents, skills, commands}, malformed: {agents, skills, commands}}`
 - `devteam catalog agents|skills|commands`: `{version, project_id, <kind>: [{name, tier, model, description, path, version}, …], count}`
 - `devteam catalog show`: adds `kind` and `body` to the entry
+
+## Global skills
+
+`devteam skills` manages the skills each provider reads from the user's home — outside every
+project and outside the store (ADR-0017). `scripts/lib/global-skill-roots.json` is the single map
+of those directories; its unit is the physical **root**, each listing the providers that read it:
+
+| Root | Directory | Read by | Install target for |
+|------|-----------|---------|--------------------|
+| `claude` | `~/.claude/skills` | claude, opencode | claude |
+| `agents` | `~/.agents/skills` | codex, opencode | codex |
+| `codex` | `~/.codex/skills` | codex | — (listed, never written; `--root codex` is refused) |
+| `opencode` | `~/.config/opencode/skills` | opencode | opencode — used only when no other chosen root already covers opencode |
+
+- `list [--provider claude|codex|opencode|all]` and `show <name> [--root <id>]` are read-only and
+  create nothing. Dot-entries (Codex's `.system/`) are not skills; a folder without a valid
+  `SKILL.md` is reported `malformed`, never fatal.
+- `install --source <dir|.zip|.skill> [--provider …] [--root …] [--replace] [--link]`:
+  - **Validation:** checks the frontmatter and installs under the frontmatter `name`.
+  - **Fewest roots:** covers the chosen providers with as few roots as possible. Claude plus
+    opencode writes to `~/.claude/skills` only.
+  - **Conflicts:** checks every target before writing any. A conflict is exit 4 with
+    `details.reason` set to `exists` or `managed`.
+  - **Writing:** stages a copy in every root, then swaps each into place. A failure rolls back
+    the roots already swapped, and leftover `.devteam-staging-*` directories are quarantined on
+    the next install.
+  - **Archives:** validated before extraction. Absolute, `..`, backslash, drive-letter, symlink
+    and encrypted members are refused, with limits of 2000 entries and 50 MB. Permission bits
+    are kept, except setuid, setgid and sticky, and `__MACOSX/` is skipped.
+  - **`--link`:** refuses a source inside the core store or inside a target root.
+- `remove <name> [--root <id>]` **never deletes**. A directory goes to the store's quarantine
+  (`global-skills/<root>`), and a symlink is unlinked, with its target reported. Anything that
+  resolves into the core store is `managed` and refused.
+- `show` and `remove` match the name among a root's real children. `.`, `..`, separators, NUL
+  and dot-names are refused.
+- `install` and `remove` are in `compat.MUTATING`; `$DEVTEAM_USER_HOME` overrides `~` (the test
+  seam `StoreTestCase` pins).
+
+**Payload shapes (JSON output):**
+
+- `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error}], count}`
+- `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
+- `skills install`: `{name, description, source, linked, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
+- `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`
 
 ## Compatibility block in `version`
 

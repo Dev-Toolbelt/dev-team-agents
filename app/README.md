@@ -115,3 +115,18 @@ echo '{"id":"'$(date +%s)'-1-1","ts":'$(date +%s)',"project_id":"<id>","session_
 `devteam prefs list` and writes through `devteam prefs set|unset --scope project`, so every
 change lands in the store's project layer and in the project's `resolved/preferences.json`,
 exactly as if it had been made in a terminal. The app keeps no copy of any preference.
+
+## The Skills screen
+
+The **Skills** tab manages the *global* (user-level) skills of Claude Code, Codex and opencode:
+list, inspect, install and remove. It is a client of `devteam skills list|show|install|remove`
+and writes only through `install` and `remove`, both in `compat.MUTATING`, so they are
+withheld like every other write action when the schema declaration could not be written.
+
+Two rules keep the renderer out of the filesystem. **The file picker runs in the main
+process**, inside the `installSkill` IPC handler: the renderer asks for a *kind* of source
+(folder, archive, or the previous one for a retry after a conflict) and receives only the
+result, so it never holds a path it could send back. **Removal is aimed by name and root id**
+and the main process checks the pair against a fresh `skills list` before it builds an argv;
+a `managed` skill is refused there and not offered in the UI. A removed folder is moved to
+the store's quarantine, never deleted, and a symlink is only unlinked.

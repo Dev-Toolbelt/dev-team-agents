@@ -45,7 +45,7 @@ export function ok<T>(data: T, extra: { notice?: string; outcome?: 'success' | '
 /** A failed `OperationResult`, `hint` omitted unless given. */
 export function fail(
   message: string,
-  extra: { kind?: ProblemKind; hint?: string; exitCode?: number | null } = {},
+  extra: { kind?: ProblemKind; hint?: string; exitCode?: number | null; reason?: string } = {},
 ): Extract<OperationResult<never>, { ok: false }> {
   return {
     ok: false,
@@ -55,6 +55,7 @@ export function fail(
     command: 'devteam test',
     durationMs: 1,
     ...(extra.hint !== undefined ? { hint: extra.hint } : {}),
+    ...(extra.reason !== undefined ? { reason: extra.reason } : {}),
   };
 }
 
@@ -309,6 +310,10 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     takePendingProject: vi.fn(() => Promise.resolve(null)),
     backgroundSettings: vi.fn(() => Promise.resolve(backgroundSettings())),
     setOpenAtLogin: vi.fn((enabled: boolean) => Promise.resolve(backgroundSettings({ openAtLogin: enabled }))),
+    listSkills: vi.fn(() => Promise.resolve(ok({ provider: 'all', roots: [], skills: [] }))),
+    showSkill: vi.fn(),
+    installSkill: vi.fn(() => Promise.resolve({ picked: false } as const)),
+    removeSkill: vi.fn(),
     ...overrides,
   };
 }

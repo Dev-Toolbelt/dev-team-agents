@@ -9,6 +9,7 @@ import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
 import { Projects } from './screens/Projects.js';
 import { NotificationBell } from './NotificationBell.js';
+import { Skills } from './screens/Skills.js';
 import { Loading } from './Problem.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
@@ -27,8 +28,8 @@ import type {
 } from '../shared/api.js';
 
 /**
- * The shell: which CLI was resolved, what the compatibility handshake said, and the three
- * read-only screens.
+ * The shell: which CLI was resolved, what the compatibility handshake said, and the
+ * screens.
  *
  * The header carries only what changes a decision on every screen: the store version (what
  * Projects compares against), whether a CLI was found at all, and the unsigned-build
@@ -145,6 +146,7 @@ export function App() {
               <TabsList>
                 <TabsTrigger value="projects">Projects</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
+                <TabsTrigger value="skills">Skills</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
               </TabsList>
               {/* Kept mounted while another tab is shown: the project settings screen lives
@@ -154,6 +156,9 @@ export function App() {
               </TabsContent>
               <TabsContent value="catalog" className="pt-4">
                 <Catalog />
+              </TabsContent>
+              <TabsContent value="skills" className="pt-4">
+                <Skills environment={environment} />
               </TabsContent>
               <TabsContent value="doctor" className="pt-4">
                 <Doctor />

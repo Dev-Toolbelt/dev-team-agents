@@ -700,6 +700,41 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # included); `main()`'s exit-1 check is truthiness-based, so `[]` still
         # means success. The shape change was the deliberate fix, not this pin.
         "cred check": {"project_id", "findings", "problems"},
+        # ADR-0017: the global skills screen binds its table to `skills list` records.
+        "skills list": {"provider", "roots", "skills", "count"},
+        "skills list.root": {"id", "path", "exists", "providers", "install_target_for"},
+        "skills list.record": {
+            "name",
+            "description",
+            "root",
+            "root_path",
+            "path",
+            "providers",
+            "is_symlink",
+            "link_target",
+            "managed",
+            "status",
+            "error",
+        },
+        "skills show": {
+            "name",
+            "description",
+            "root",
+            "root_path",
+            "path",
+            "providers",
+            "is_symlink",
+            "link_target",
+            "managed",
+            "status",
+            "error",
+            "body",
+            "files",
+            "files_truncated",
+        },
+        "skills install": {"name", "description", "source", "linked", "installed", "also_present"},
+        "skills install.record": {"root", "path", "providers", "replaced", "quarantined_to"},
+        "skills remove": {"name", "root", "path", "providers", "action", "quarantined_to", "link_target"},
     }
 
     # A key whose name alone suggests it might carry an actual secret value,
@@ -961,6 +996,29 @@ class AppFacingKeySetContractTest(StoreTestCase):
         )
         self._assert_exact_keys("catalog show <name>", payload, self.EXPECTED["catalog show <name>"])
         self.assertEqual(payload["kind"], "agents")
+
+    def test_skills_list_show_install_remove(self):
+        source = self.tmp / "skill-src" / "sample-skill"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\nname: sample-skill\ndescription: a sample skill\n---\nBody.\n", encoding="utf-8"
+        )
+        payload = self._run_ok("skills", "install", "--source", str(source), "--provider", "claude", "--json")
+        self._assert_exact_keys("skills install", payload, self.EXPECTED["skills install"])
+        self._assert_record_keys(
+            "skills install.record", payload["installed"][0], self.EXPECTED["skills install.record"]
+        )
+
+        payload = self._run_ok("skills", "list", "--json")
+        self._assert_exact_keys("skills list", payload, self.EXPECTED["skills list"])
+        self._assert_record_keys("skills list.root", payload["roots"][0], self.EXPECTED["skills list.root"])
+        self._assert_record_keys("skills list.record", payload["skills"][0], self.EXPECTED["skills list.record"])
+
+        payload = self._run_ok("skills", "show", "sample-skill", "--root", "claude", "--json")
+        self._assert_exact_keys("skills show", payload, self.EXPECTED["skills show"])
+
+        payload = self._run_ok("skills", "remove", "sample-skill", "--root", "claude", "--json")
+        self._assert_exact_keys("skills remove", payload, self.EXPECTED["skills remove"])
 
     def test_prefs_list(self):
         payload = self._run_ok("prefs", "list", "--path", str(self.project_root), "--json")

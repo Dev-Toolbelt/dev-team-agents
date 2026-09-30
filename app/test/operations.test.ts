@@ -20,6 +20,14 @@ import {
   asBindReport,
   asPinReport,
   asSyncAllReport,
+  asSkillDetail,
+  asSkillInstallReport,
+  asSkillList,
+  asSkillRemoveReport,
+  installSkill,
+  listSkills,
+  removeSkill,
+  showSkill,
   asUnbindReport,
   asUpgradePlan,
   asUpgradeReport,
@@ -153,6 +161,8 @@ describe('what this slice is allowed to run', () => {
       // Acknowledging a notification writes that project's seen marks — admitted as a
       // write rather than dressed up as a read.
       'notifications ack',
+      'skills install',
+      'skills remove',
     ]);
     for (const command of GATED_COMMANDS) {
       const tuple = tupleLiteral(command);
@@ -358,7 +368,7 @@ describe('the write actions build the argv the CLI documents', () => {
     for (const [value, spelled] of cases) {
       const result = await prefsSet(unspawnable(), '/tmp/project', 'some_key', value);
       expect(result.command).toContain(`prefs set some_key ${spelled} --scope project --path /tmp/project --json`);
-      expect(result.command).not.toContain('global');
+      expect(result.command).not.toContain('--scope global');
     }
     const unset = await prefsUnset(unspawnable(), '/tmp/project', 'some_key');
     expect(unset.command).toContain('prefs unset some_key --scope project --path /tmp/project --json');
@@ -401,6 +411,100 @@ describe('the write actions build the argv the CLI documents', () => {
  * checked three ways: the real shape is accepted, an added key is tolerated (ADR-0014
  * § 2), and a missing required key is reported rather than silently dropped.
  */
+describe('the global skills operations build the argv the CLI documents', () => {
+  it('list passes the provider filter; show and remove always pass --root', async () => {
+    expect((await listSkills(unspawnable(), 'codex')).command).toContain('skills list --provider codex --json');
+    expect((await showSkill(unspawnable(), 'alpha', 'claude')).command).toContain('skills show alpha --root claude --json');
+    expect((await removeSkill(unspawnable(), ' alpha ', 'claude')).command).toContain('skills remove alpha --root claude --json');
+  });
+
+  it('install repeats --provider and passes --replace and --link only when asked', async () => {
+    const full = await installSkill(unspawnable(), '/picked/dir', { providers: ['claude', 'codex'], replace: true, link: true });
+    expect(full.command).toContain('skills install --source /picked/dir --provider claude --provider codex --replace --link --json');
+    const bare = await installSkill(unspawnable(), '/picked/dir', { providers: ['opencode'], replace: false, link: false });
+    expect(bare.command).toContain('skills install --source /picked/dir --provider opencode --json');
+    expect(bare.command).not.toContain('--replace');
+    expect(bare.command).not.toContain('--link');
+  });
+
+  it('refuses, without spawning, a flag-shaped name or a root that is not an id', async () => {
+    for (const result of [
+      await showSkill(unspawnable(), '--json', 'claude'),
+      await removeSkill(unspawnable(), 'alpha', '../etc'),
+      await removeSkill(unspawnable(), 'alpha', '--root'),
+      // Path-shaped names: the CLI refuses them too, but these must not rely on it.
+      ...(await Promise.all(
+        ['..', '.', '.hidden', 'a/b', 'a\\b', '/etc', 'C:evil', 'a\0b'].flatMap((name) => [
+          showSkill(unspawnable(), name, 'claude'),
+          removeSkill(unspawnable(), name, 'claude'),
+        ]),
+      )),
+    ]) {
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.kind).toBe('refused');
+    }
+  });
+
+  it('refuses flags the skills commands do not declare, including --root on install', () => {
+    expect(argvProblem(['skills', 'install', '--source', '/x', '--root', 'claude'])).toContain('--root');
+    expect(argvProblem(['skills', 'list', '--path', '/x'])).toContain('--path');
+    expect(argvProblem(['skills', 'remove', 'a', 'b'])).toContain('takes 1 operand');
+    expect(argvProblem(['skills'])).toContain('not a command');
+  });
+});
+
+describe('global skills payload validation', () => {
+  const record = {
+    name: 'alpha',
+    description: null,
+    root: 'claude',
+    root_path: '/h/.claude/skills',
+    path: '/h/.claude/skills/alpha',
+    providers: ['claude'],
+    is_symlink: true,
+    link_target: '/elsewhere/alpha',
+    managed: false,
+    status: 'ok',
+    error: null,
+  };
+
+  it('reads a list, tolerating an added key, and treats an absent `exists` as present', () => {
+    const parsed = asSkillList({
+      provider: 'all',
+      roots: [{ id: 'claude', path: '/h/.claude/skills', providers: ['claude'], install_target_for: [], surprise: 1 }],
+      skills: [{ ...record, surprise: 1 }],
+      count: 1,
+    });
+    expect(parsed).toMatchObject({ roots: [{ id: 'claude', exists: true }], skills: [{ name: 'alpha', is_symlink: true }] });
+  });
+
+  it('reports a missing required key rather than rendering nothing', () => {
+    expect(asSkillList({ roots: [], count: 0 })).toBe('no `skills` array');
+    expect(asSkillList({ roots: [], skills: [omit(record, 'managed')] })).toBe('a skill has no boolean `managed`');
+    expect(asSkillList({ roots: [], skills: [{ ...record, status: 'odd' }] })).toContain('status');
+  });
+
+  it('reads show, install and remove answers', () => {
+    expect(asSkillDetail({ ...record, body: '# hi', files: ['SKILL.md'], files_truncated: true })).toMatchObject({
+      body: '# hi',
+      files_truncated: true,
+    });
+    expect(
+      asSkillInstallReport({
+        name: 'alpha',
+        source: '/s',
+        linked: false,
+        installed: [{ root: 'claude', path: '/p', providers: ['claude'], replaced: true, quarantined_to: '/q' }],
+      }),
+    ).toMatchObject({ name: 'alpha', installed: [{ replaced: true, quarantined_to: '/q' }] });
+    expect(asSkillInstallReport({ name: 'alpha' })).toBe('no `installed` array');
+    expect(
+      asSkillRemoveReport({ name: 'a', root: 'claude', path: '/p', providers: [], action: 'unlinked', quarantined_to: null }),
+    ).toMatchObject({ action: 'unlinked', quarantined_to: null });
+    expect(asSkillRemoveReport({ name: 'a', root: 'claude', path: '/p', action: 'deleted' })).toContain('action');
+  });
+});
+
 describe('bind reports carry preferences_import when the CLI sends it', () => {
   const base = {
     path: '/p',

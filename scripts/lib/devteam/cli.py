@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, migrate, notifications, paths, prefs, project, providers, registry, store, update, upgrade, versions
+from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, prefs, project, providers, registry, store, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -604,6 +604,91 @@ def cmd_notifications_watch(args, emitter):
 
     reason = notifications.watch(emit, interval=args.interval)
     return {"reason": reason}, None
+
+
+def _skill_row(entry):
+    flags = []
+    if entry["is_symlink"]:
+        flags.append("link")
+    if entry["managed"]:
+        flags.append("managed")
+    if entry["status"] != "ok":
+        flags.append("MALFORMED: {}".format(entry["error"]))
+    return (
+        entry["name"],
+        entry["root"],
+        ",".join(entry["providers"]),
+        " ".join(flags) or "-",
+        entry["description"] or "-",
+    )
+
+
+def cmd_skills_list(args, emitter):
+    payload = global_skills.list_skills(args.provider)
+    rows = [_skill_row(entry) for entry in payload["skills"]]
+    lines = [
+        "{:<9} {}{}".format(root["id"], root["path"], "" if root["exists"] else "  (absent)")
+        for root in payload["roots"]
+    ]
+    lines.append("")
+    lines.append(
+        _table(rows, ["NAME", "ROOT", "PROVIDERS", "FLAGS", "DESCRIPTION"])
+        if rows
+        else "no global skills installed"
+    )
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_show(args, emitter):
+    payload = global_skills.show(args.name, args.root)
+    lines = ["{} ({})".format(payload["name"], payload["root"])]
+    lines.append("  path       {}".format(payload["path"]))
+    lines.append("  providers  {}".format(", ".join(payload["providers"])))
+    if payload["is_symlink"]:
+        lines.append("  link to    {}".format(payload["link_target"]))
+    if payload["status"] != "ok":
+        lines.append("  MALFORMED  {}".format(payload["error"]))
+    if payload["description"]:
+        lines.append("  {}".format(payload["description"]))
+    lines.append("  files      {}{}".format(len(payload["files"]), "+" if payload["files_truncated"] else ""))
+    if payload["body"]:
+        lines.append("")
+        lines.append(payload["body"])
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_install(args, emitter):
+    payload = global_skills.install(
+        args.source,
+        providers=args.provider,
+        root_ids=args.root,
+        replace=args.replace,
+        link=args.link,
+    )
+    lines = []
+    for item in payload["installed"]:
+        note = ""
+        if item["quarantined_to"]:
+            note = "  (previous copy quarantined to {})".format(item["quarantined_to"])
+        elif item["replaced"]:
+            note = "  (previous link replaced)"
+        lines.append("installed {} -> {}{}".format(payload["name"], item["path"], note))
+    for other in payload["also_present"]:
+        lines.append(
+            "note: {} also exists in the {} root ({}); a provider reading both sees two copies".format(
+                payload["name"], other["root"], other["path"]
+            )
+        )
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_remove(args, emitter):
+    payload = global_skills.remove(args.name, args.root)
+    if payload["action"] == "unlinked":
+        human = "unlinked {} (it pointed at {})".format(payload["path"], payload["link_target"])
+    else:
+        human = "moved {} to quarantine: {}".format(payload["path"], payload["quarantined_to"])
+    return payload, human
 
 
 def cmd_prefs_list(args, emitter):
@@ -1207,6 +1292,48 @@ def build_parser():
     catalog_show.add_argument("--path", help="project directory (default: the current one)")
     catalog_show.set_defaults(func=cmd_catalog_show)
 
+    # The user-level skill directories each provider reads (ADR-0017) — outside every
+    # project and outside the store. No `--path`: nothing here depends on a project.
+    skills_parser = leaf(
+        sub, "skills", help="list, show, install and remove the providers' global skills"
+    ).add_subparsers(dest="skills_cmd")
+    provider_choices = global_skills.PROVIDERS + ("all",)
+
+    skills_list = leaf(skills_parser, "list", help="every skill in the global skill directories")
+    skills_list.add_argument("--provider", default="all", choices=provider_choices)
+    skills_list.set_defaults(func=cmd_skills_list)
+
+    skills_show = leaf(skills_parser, "show", help="one global skill's metadata, body and files")
+    skills_show.add_argument("name")
+    skills_show.add_argument("--root", help="the root id, when the name exists in more than one")
+    skills_show.set_defaults(func=cmd_skills_show)
+
+    skills_install = leaf(skills_parser, "install", help="install a skill from a directory or a .zip")
+    skills_install.add_argument(
+        "--source", required=True, help="a directory holding SKILL.md, or a .zip/.skill archive"
+    )
+    skills_install.add_argument(
+        "--provider",
+        action="append",
+        choices=provider_choices,
+        help="repeatable; each provider installs into its own target root (default: all)",
+    )
+    skills_install.add_argument("--root", action="append", help="repeatable; install into this root id")
+    skills_install.add_argument(
+        "--replace", action="store_true", help="move an existing skill of the same name to quarantine"
+    )
+    skills_install.add_argument(
+        "--link", action="store_true", help="symlink a directory source instead of copying it"
+    )
+    skills_install.set_defaults(func=cmd_skills_install)
+
+    skills_remove = leaf(
+        skills_parser, "remove", help="remove a global skill (a directory goes to quarantine)"
+    )
+    skills_remove.add_argument("name")
+    skills_remove.add_argument("--root", help="the root id, when the name exists in more than one")
+    skills_remove.set_defaults(func=cmd_skills_remove)
+
     return parser
 
 
@@ -1387,6 +1514,8 @@ def main(argv=None, stdout=None, stderr=None):
             )
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
+        if getattr(args, "command", None) == "skills":
+            return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:
