@@ -37,6 +37,7 @@ import type {
   DoctorReport,
   OperationResult,
   PinReport,
+  PreferencesImport,
   PreferenceValue,
   PreferenceWrite,
   ProjectList,
@@ -733,6 +734,14 @@ export function asBindReport(body: Record<string, unknown>): BindReport | string
     pruned = { unlinked: asStringArray(prunedRaw['unlinked']), quarantined: prunedRaw['quarantined'] };
   }
 
+  let preferencesImport: BindReport['preferences_import'];
+  const importRaw = body['preferences_import'];
+  if (importRaw !== undefined) {
+    const parsed = importRaw === null ? null : asPreferencesImport(importRaw);
+    if (typeof parsed === 'string') return `\`preferences_import\`: ${parsed}`;
+    preferencesImport = parsed;
+  }
+
   let worktrees: BindReport['worktrees'];
   const worktreesRaw = body['worktrees'];
   if (worktreesRaw !== undefined) {
@@ -756,6 +765,30 @@ export function asBindReport(body: Record<string, unknown>): BindReport | string
     merged_project_files: asStringArray(body['merged_project_files']),
     ...(pruned !== undefined ? { pruned } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
+    ...(preferencesImport !== undefined ? { preferences_import: preferencesImport } : {}),
+  };
+}
+
+/** `preferences_import` inside a bind or sync report. */
+export function asPreferencesImport(raw: unknown): PreferencesImport | string {
+  if (!isRecord(raw)) return 'not an object';
+  if (typeof raw['source'] !== 'string') return 'no string `source`';
+  for (const key of ['imported', 'unchanged', 'conflicts', 'ignored'] as const) {
+    if (!Array.isArray(raw[key])) return `no \`${key}\` array`;
+  }
+  const ignored = (raw['ignored'] as unknown[]).flatMap((entry) =>
+    isRecord(entry) && typeof entry['key'] === 'string'
+      ? [{ key: entry['key'], reason: typeof entry['reason'] === 'string' ? entry['reason'] : 'unknown' }]
+      : [],
+  );
+  return {
+    source: raw['source'],
+    imported: asStringArray(raw['imported']),
+    unchanged: asStringArray(raw['unchanged']),
+    conflicts: asStringArray(raw['conflicts']),
+    ignored,
+    quarantined: asNullableString(raw['quarantined']),
+    problem: asNullableString(raw['problem']),
   };
 }
 

@@ -27,6 +27,7 @@ import type {
   BindProvider,
   BindReport,
   EnvironmentReport,
+  PreferencesImport,
   ProjectRecord,
   SyncAllReport,
   UnbindReport,
@@ -1259,6 +1260,42 @@ function BindDialog({
  * `merged_project_files` is repeated here in plain language, not just listed: a bind that
  * silently dirties the working tree is discovered days later from `git status`.
  */
+/**
+ * What `bind` adopted from a v2 `preferences.json`. Worth a line of its own: those values
+ * had silently stopped applying, and the file the user may remember editing is now gone
+ * from the project — the sentence says where it went.
+ */
+function PreferencesImportSummary({ report }: { report: PreferencesImport }) {
+  if (report.problem !== null) {
+    return (
+      <p className="text-amber-700 dark:text-amber-400">
+        Preferences in <span className="font-mono text-xs">{report.source}</span> were not imported: {report.problem}.
+      </p>
+    );
+  }
+  const count = report.imported.length;
+  return (
+    <div className="space-y-1">
+      <p>
+        {count === 0
+          ? 'The old preferences file held nothing new for this project.'
+          : `${count} preference${count === 1 ? ' was' : 's were'} imported from the old preferences file.`}{' '}
+        The file was moved out of the project; edit these values from the project&apos;s settings from now on.
+      </p>
+      {report.conflicts.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Kept this project&apos;s current value for: <span className="font-mono">{report.conflicts.join(', ')}</span>.
+        </p>
+      ) : null}
+      {report.ignored.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Not imported: <span className="font-mono">{report.ignored.map((item) => `${item.key} (${item.reason})`).join(', ')}</span>.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function BindResultSummary({ report, name }: { report: BindReport | null; name: string }) {
   if (report === null) return null;
   return (
@@ -1266,6 +1303,7 @@ function BindResultSummary({ report, name }: { report: BindReport | null; name: 
       <p>
         <strong className="font-semibold">{name}</strong> is bound — version {report.version}, mode {report.mode}.
       </p>
+      {report.preferences_import != null ? <PreferencesImportSummary report={report.preferences_import} /> : null}
       {report.merged_project_files.length > 0 ? (
         <div>
           <p className="font-medium">

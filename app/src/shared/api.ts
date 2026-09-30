@@ -314,6 +314,27 @@ export interface BindReport {
   readonly merged_project_files: readonly string[];
   readonly pruned?: { readonly unlinked: readonly string[]; readonly quarantined: readonly unknown[] };
   readonly worktrees?: readonly unknown[];
+  /**
+   * What `bind`/`sync` adopted from a v2 `user-data/preferences.json`. Absent from a CLI that
+   * predates the import, `null` when there was no such file.
+   */
+  readonly preferences_import?: PreferencesImport | null;
+}
+
+/**
+ * `prefs.import_legacy` in the CLI: the v2 file's keys, sorted by what happened to them. The
+ * file is moved to the store's quarantine only once every imported key has been read back.
+ */
+export interface PreferencesImport {
+  readonly source: string;
+  readonly imported: readonly string[];
+  readonly unchanged: readonly string[];
+  /** The project layer already held a different value, and kept it. */
+  readonly conflicts: readonly string[];
+  readonly ignored: readonly { readonly key: string; readonly reason: string }[];
+  readonly quarantined: string | null;
+  /** Why the file was left in place, when it was. */
+  readonly problem: string | null;
 }
 
 /** `sync --all --json`. One entry per project, plus the ones that failed. */
