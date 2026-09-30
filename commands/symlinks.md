@@ -20,6 +20,12 @@ Its job: detect the operating system and the active provider, analyze every dev-
 
 ---
 
+## Step 0 — A v3-bound project is repaired by the CLI
+
+If `.dev-team-agents/project.json` exists, run `devteam sync` then `devteam doctor`, print both, and **stop** — `fix-symlinks.sh` is the v2 repair and refuses to run in a bound project.
+
+---
+
 ## Step 1 — Detect the OS and the active provider
 
 ```bash

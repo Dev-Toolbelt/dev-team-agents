@@ -180,8 +180,8 @@ procedure here; load it and follow it.
 Health-check output rules that always apply: one of `✅ OK` · `⚠️ WARN` · `🔧 FIX` per item;
 auto-apply safe additive FIX items; **show a diff and ask for confirmation before modifying
 `settings.json`**. A **MATERIALIZED** symlink (a `.claude/` link written as a plain file because
-native symlinks were unavailable) is never repaired with `ln -s` — run
-`bash .dev-team-agents/scripts/fix-symlinks.sh` and, on exit 3, present its remediation options via
+native symlinks were unavailable) is never repaired with `ln -s` — in a v3-bound project run `devteam sync`;
+otherwise run `bash .dev-team-agents/scripts/fix-symlinks.sh` and, on exit 3, present its remediation options via
 `AskUserQuestion`; detail lives in `skills/shared/setup-health-check/references/fix-patterns.md`.
 
 ---

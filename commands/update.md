@@ -33,6 +33,12 @@ You are running the **`/devteam:update`** command.
 
 ---
 
+## Step 0 — A v3-bound project is updated by the CLI
+
+If `.dev-team-agents/project.json` exists, run `devteam update` (`<version tag>` → `--ref <tag>`; `--no` → `--check`; `--enable-auto`/`--disable-auto` → `devteam prefs set auto_update true|false` instead), print its output, and **stop** — every step below is the v2 path, and `update.sh` refuses to run in a bound project.
+
+---
+
 ## Step 1 — Read current version
 
 ```bash

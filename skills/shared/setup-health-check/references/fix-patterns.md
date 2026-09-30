@@ -1,5 +1,20 @@
 # Fix Patterns
 
+## A v3-bound project (`.dev-team-agents/project.json` exists) — read this first
+
+`.dev-team-agents/scripts` and `.dev-team-agents/templates` are **links into the store**, which is
+immutable per version. Every fix below that writes under them — `chmod`, a copy, a re-render — would
+change the installed version for every project bound to it. In a bound project:
+
+| v2 fix in this file | Use instead |
+|---|---|
+| `fix-symlinks.sh`, any `.claude/` link repair, `chmod +x` on a framework script | `devteam sync` |
+| `install-codex.sh` / `install-opencode.sh` | `devteam bind --provider codex` (or `opencode`) |
+| `update.sh` | `devteam update` |
+
+The v2 tools refuse to run in a bound project (`scripts/lib/bound-project-guard.sh`) and name the
+command above. `devteam doctor` is the diagnosis to run before and after.
+
 ## Auto-fix for `includeCoAuthoredBy`
 
 ```bash
