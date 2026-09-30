@@ -292,6 +292,94 @@ class PluginHookTest(unittest.TestCase):
                                           DEVTEAM_PROJECT_ROOT=str(self.root)).stdout)
         self.assertIn("last build not recorded", data["summary"])
 
+    # -- second review round (N2, N4-N7, N9) -------------------------------------------------
+
+    def test_refresh_refuses_reserved_and_root_entries(self):
+        (self.root / "gitlink").symlink_to(".git")
+        for bad in (".git", "./.git/hooks", ".GIT", ".dev-team-agents", ".worktrees/x", "graphify-out",
+                    "graphify-src", ".", "./", "gitlink"):
+            with self.subTest(bad=bad):
+                r = self.refresh({"targetPaths": [bad]})
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn("ignoring targetPaths entry", r.stderr)
+                self.assertFalse(self.calls.exists())
+
+    def test_a_malformed_marker_is_treated_as_absent(self):
+        self.refresh({"targetPaths": ["src"]})
+        marker = self.root / "graphify-out" / ".build-commit"
+        marker.write_text("--output=/tmp/pwned\n")
+        data = json.loads(self.run_script(PLUGIN / "scripts" / "status.sh",
+                                          DEVTEAM_PROJECT_ROOT=str(self.root)).stdout)
+        self.assertIn("last build not recorded", data["summary"])
+        r = self.refresh({"targetPaths": ["src"]}, "--if-changed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("not a commit hash", r.stderr)
+
+    def test_a_malformed_legacy_state_value_is_ignored(self):
+        self.refresh({"targetPaths": ["src"]})
+        (self.root / "graphify-out" / ".build-commit").unlink()
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / "state.json").write_text('{"graphify_last_run": "-bad; rm"}\n')
+        r = self.refresh({"targetPaths": ["src"]}, "--if-changed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("not a commit hash", r.stderr)
+
+    def test_a_lock_whose_pid_was_recycled_is_stale(self):
+        self.lock_dir().mkdir()
+        (self.lock_dir() / "pid").write_text(str(os.getpid()))
+        (self.lock_dir() / "start").write_text("Mon Jan 1 00:00:00 1990")
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.calls.exists())
+        self.assertFalse(self.lock_dir().exists())
+        self.assertEqual(list((self.root / ".git").glob("graphify-refresh.lock*")), [])
+
+    def test_a_successful_swap_leaves_no_old_output_behind(self):
+        self.graph()
+        r = self.refresh({"targetPaths": ["src"]})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(list(self.root.glob("graphify-out.old.*")), [])
+        self.assertTrue((self.root / "graphify-out" / ".build-commit").exists())
+
+    def test_sigterm_mid_build_leaves_no_source_copy_and_keeps_the_previous_graph(self):
+        import signal
+        self.graph()
+        (self.root / "graphify-out" / "graph.json").write_text("previous")
+        started = self.tmp / "started"
+        (self.bin / "graphify").write_text(
+            '#!/usr/bin/env bash\nmkdir -p "$2/graphify-out"\necho new > "$2/graphify-out/graph.json"\n'
+            'echo 1 > "%s"\nsleep 30\n' % started)
+        self.settings(True, {"targetPaths": ["src"]})
+        proc = subprocess.Popen(["bash", str(PLUGIN / "scripts" / "refresh.sh")], cwd=self.root,
+                                env=self.env(DEVTEAM_PROJECT_ROOT=str(self.root)),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(proc.kill)
+        import time
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and not started.exists():
+            time.sleep(0.05)
+        self.assertTrue(started.exists(), "the build never reached graphify")
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.communicate(timeout=20)
+        self.assertFalse((self.root / "graphify-src").exists())
+        self.assertEqual((self.root / "graphify-out" / "graph.json").read_text(), "previous")
+        self.assertFalse(self.lock_dir().exists())
+
+    def call_config(self, script, **extra):
+        return subprocess.run(["bash", "-c", '. "%s"; %s' % (PLUGIN / "lib" / "config.sh", script)],
+                              capture_output=True, text=True, env=self.env(**extra))
+
+    def test_shell_realpath_fallback_resolves_the_existing_ancestor(self):
+        real = self.tmp / "realdir"
+        (real / "proj").mkdir(parents=True)
+        (self.tmp / "linkdir").symlink_to(real)
+        root = self.tmp / "linkdir" / "proj"
+        r = self.call_config('graphify_path_problem "%s" "brand/new/dir"; echo "rc=$?"' % root,
+                             DEVTEAM_GRAPHIFY_NO_PYTHON="1")
+        self.assertEqual(r.stdout.strip(), "rc=1", r.stderr)
+        r = self.call_config('_graphify_realpath "%s/brand/new"' % root, DEVTEAM_GRAPHIFY_NO_PYTHON="1")
+        self.assertEqual(r.stdout.strip(), str(real / "proj" / "brand" / "new"))
+
     # -- dispatchers against a throwaway core (M4, lows) ----------------------------------
 
     def fake_core(self, plugins):

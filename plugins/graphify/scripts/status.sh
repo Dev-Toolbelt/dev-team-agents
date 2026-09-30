@@ -28,7 +28,9 @@ ROOT="${DEVTEAM_PROJECT_ROOT:-$(pwd)}"
 GRAPH="$ROOT/graphify-out/graph.json"
 MARKER="$ROOT/graphify-out/.build-commit"
 LAST_COMMIT=""
-[ -f "$MARKER" ] && LAST_COMMIT="$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || true)"
+[ -f "$MARKER" ] && LAST_COMMIT="$(head -c 200 "$MARKER" 2>/dev/null | tr -d '[:space:]' || true)"
+# The marker is committed with the graph, so untrusted: anything but a hex object name is absent.
+if [ -n "$LAST_COMMIT" ] && ! [[ "$LAST_COMMIT" =~ ^[0-9a-f]{7,64}$ ]]; then LAST_COMMIT=""; fi
 HEAD_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
 
 # Build time: the marker file's mtime (GNU stat, then BSD stat; GNU date, then BSD date).

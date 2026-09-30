@@ -92,7 +92,14 @@ CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
 # with the graph; a marker shared through the main checkout's state.json would let one
 # worktree's build stand in for another's.
 BUILD_MARKER="$OUTPUT_PATH/.build-commit"
-LAST_BUILD_COMMIT="$(tr -d '[:space:]' 2>/dev/null < "$BUILD_MARKER" || true)"
+# The marker is committed with the graph, so it is untrusted: only a plain hex object name
+# is ever handed to git; anything else counts as absent.
+COMMIT_RE='^[0-9a-f]{7,64}$'
+LAST_BUILD_COMMIT="$(head -c 200 "$BUILD_MARKER" 2>/dev/null | tr -d '[:space:]' || true)"
+if [ -n "$LAST_BUILD_COMMIT" ] && ! [[ "$LAST_BUILD_COMMIT" =~ $COMMIT_RE ]]; then
+  echo "Ignoring $BUILD_MARKER: not a commit hash." >&2
+  LAST_BUILD_COMMIT=""
+fi
 if [ -z "$LAST_BUILD_COMMIT" ]; then
   # Earlier versions kept the marker as the graphify_last_run key of state.json, which
   # described the main checkout. Honour it there only; a linked worktree without a
@@ -111,6 +118,10 @@ if [ -z "$LAST_BUILD_COMMIT" ]; then
       LEGACY_STATE_DIR="$(devteam_state_dir "$PROJECT_ROOT")"
     fi
     LAST_BUILD_COMMIT="$(state_get graphify_last_run "$LEGACY_STATE_DIR/state.json")"
+    if [ -n "$LAST_BUILD_COMMIT" ] && ! [[ "$LAST_BUILD_COMMIT" =~ $COMMIT_RE ]]; then
+      echo "Ignoring the legacy graphify_last_run value: not a commit hash." >&2
+      LAST_BUILD_COMMIT=""
+    fi
   fi
 fi
 
@@ -180,23 +191,43 @@ fi
 # hand. mkdir is the atomic primitive; a lock whose recorded pid is gone is stale.
 LOCK_DIR="$(git rev-parse --absolute-git-dir)/graphify-refresh.lock"
 LOCK_HELD=0
+# pid plus the process start time: a recycled pid has a different start time.
+proc_start() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' ' || true; }
+lock_holder_alive() {
+  local pid start
+  pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  start="$(cat "$LOCK_DIR/start" 2>/dev/null || true)"
+  [ -z "$start" ] || [ "$start" = "$(proc_start "$pid")" ]
+}
 acquire_lock() {
-  local holder
-  for _ in 1 2; do
+  local stale
+  for _ in 1 2 3; do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
+      proc_start "$$" > "$LOCK_DIR/start"
       echo "$$" > "$LOCK_DIR/pid"
       LOCK_HELD=1
       return 0
     fi
-    holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
-    if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
-      return 1
+    lock_holder_alive && return 1
+    # Half-created (no pid yet): give a fresh one a moment.
+    if [ ! -s "$LOCK_DIR/pid" ]; then
+      sleep 1
+      lock_holder_alive && return 1
     fi
-    # Stale (holder gone) or half-created (no pid yet): give a fresh one a moment.
-    [ -z "$holder" ] && sleep 1
-    holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
-    [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null && return 1
-    rm -rf "$LOCK_DIR"
+    # Take over by renaming: rename succeeds for exactly one contender, so two processes
+    # can never both delete the stale lock and then both create their own. If the lock we
+    # moved turns out to be live (someone re-created it in between), put it back.
+    stale="$LOCK_DIR.stale.$$"
+    if mv "$LOCK_DIR" "$stale" 2>/dev/null; then
+      if [ -s "$stale/pid" ] && kill -0 "$(cat "$stale/pid" 2>/dev/null)" 2>/dev/null \
+        && { [ ! -s "$stale/start" ] || [ "$(cat "$stale/start")" = "$(proc_start "$(cat "$stale/pid")")" ]; }; then
+        mv "$stale" "$LOCK_DIR" 2>/dev/null || rm -rf "$stale"
+        return 1
+      fi
+      rm -rf "$stale"
+    fi
   done
   return 1
 }
@@ -213,9 +244,18 @@ fi
 # shellcheck disable=SC2317,SC2329  # invoked indirectly via trap
 cleanup() {
   rm -rf "$PROJECT_ROOT/graphify-src"
+  # A kill between the two moves of the output swap left the previous graph aside.
+  if [ -n "${OLD_OUT:-}" ] && [ -e "$PROJECT_ROOT/$OLD_OUT" ] && [ ! -e "$PROJECT_ROOT/$OUTPUT_PATH" ]; then
+    mv "$PROJECT_ROOT/$OLD_OUT" "$PROJECT_ROOT/$OUTPUT_PATH" 2>/dev/null || true
+  fi
+  if [ -n "${OLD_OUT:-}" ] && [ -e "$PROJECT_ROOT/$OUTPUT_PATH" ]; then rm -rf "${PROJECT_ROOT:?}/$OLD_OUT"; fi
   if [ "$LOCK_HELD" -eq 1 ]; then rm -rf "$LOCK_DIR"; fi
 }
 trap cleanup EXIT
+# bash runs the EXIT trap on TERM/INT only when the signal is handled: exit through it.
+trap 'exit 143' TERM
+trap 'exit 130' INT
+OLD_OUT=""
 
 log "Building graphify-src..."
 rm -rf graphify-src
@@ -233,13 +273,33 @@ done
 # rsync -a copies symlinks as links. Drop every one that does not resolve inside the
 # copy, so graphify can never read a file outside what the config named.
 SRC_REAL="$(_graphify_realpath "$PROJECT_ROOT/graphify-src")"
-while IFS= read -r -d '' link; do
-  resolved="$(_graphify_realpath "$link")"
-  if [[ "$resolved" != "$SRC_REAL"/* ]]; then
-    log "Dropping symlink '${link#graphify-src/}': it points outside the copied sources."
-    rm -f -- "$link"
-  fi
-done < <(find graphify-src -type l -print0)
+if command -v python3 >/dev/null 2>&1; then
+  # One interpreter for all links; a fork per link is slow on a large tree.
+  find graphify-src -type l -print0 | python3 -c '
+import os, sys
+root, quiet = sys.argv[1], sys.argv[2] == "1"
+for raw in sys.stdin.buffer.read().split(b"\0"):
+    if not raw:
+        continue
+    link = os.fsdecode(raw)
+    resolved = os.path.realpath(link)
+    if resolved != root and not resolved.startswith(root + os.sep):
+        if not quiet:
+            sys.stderr.write("Dropping symlink %r: it points outside the copied sources.\n" % link[len("graphify-src/"):])
+        try:
+            os.remove(link)
+        except OSError:
+            pass
+' "$SRC_REAL" "$QUIET"
+else
+  while IFS= read -r -d '' link; do
+    resolved="$(_graphify_realpath "$link")"
+    if [[ "$resolved" != "$SRC_REAL"/* ]]; then
+      log "Dropping symlink '${link#graphify-src/}': it points outside the copied sources."
+      rm -f -- "$link"
+    fi
+  done < <(find graphify-src -type l -print0)
+fi
 
 for manifest in ${MANIFESTS[@]+"${MANIFESTS[@]}"}; do
   [ -z "$manifest" ] && continue
@@ -262,11 +322,23 @@ fi
 log "Moving $OUTPUT_PATH to project root..."
 # graphify protects the cache dir with a macOS `deny delete` ACL, which makes `rm -rf` fail with EACCES.
 # Strip ACLs first (no-op on Linux).
+# Swap without a window where no graph exists: set the old one aside, move the new one in,
+# and only then delete the old one (cleanup restores it if the process is killed in between).
 if [ -e "$OUTPUT_PATH" ]; then
   chmod -R -N "$OUTPUT_PATH" 2>/dev/null || true
+  OLD_OUT="$OUTPUT_PATH.old.$$"
+  rm -rf "$OLD_OUT"
+  mv "$OUTPUT_PATH" "$OLD_OUT"
 fi
-rm -rf "$OUTPUT_PATH"
-mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"
+if ! mv "graphify-src/$OUTPUT_PATH" "./$OUTPUT_PATH"; then
+  echo "Could not move the new $OUTPUT_PATH into place; keeping the previous one." >&2
+  exit 1
+fi
+if [ -n "$OLD_OUT" ]; then
+  chmod -R -N "$OLD_OUT" 2>/dev/null || true
+  rm -rf "$OLD_OUT"
+  OLD_OUT=""
+fi
 
 # Record the commit this build reflects (skips redundant rebuilds; read by status.sh).
 printf '%s\n' "$CURRENT_COMMIT" > "$BUILD_MARKER"
