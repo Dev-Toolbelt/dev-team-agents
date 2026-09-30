@@ -29,7 +29,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh`, `03d-design-token-lint.sh`, `03e-adr-gap-check.sh` |
 | `04-` | User-facing notifications | `04-notifier.sh`; `04b-task-board.sh` — marks the session idle on the task board (ADR-0018), forking python only when `<state-dir>/task-board/<session>.json` already exists |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
-| `99-` | Final/cleanup tasks | `99b-archive-index.sh` (graphify refresh disabled — see § Disabled Hooks) |
+| `99-` | Final/cleanup tasks | `99a-plugins.sh` (enabled plugins' stop hooks), `99b-archive-index.sh` |
 
 Each sub-script must:
 - **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — regex `^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$`. The dispatcher **skips any file that does not match**, so a draft, a `.sh.bak`, or a `notes.sh` left in the directory is ignored instead of being auto-run on every Stop. Set `DEVTEAM_HOOK_DEBUG=1` to see what was run and what was skipped
@@ -52,7 +52,7 @@ Sub-scripts in `scripts/hooks/pre-tool-use/` are run by `scripts/hooks/pre-tool-
 | Prefix | Reserved for | Current scripts |
 |--------|-------------|-----------------|
 | `01-` | Installation freshness | _(free — the update check moved to `SessionStart`, see below and § Disabled Hooks)_ |
-| `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02b-telemetry.sh` — queues telemetry events for agent spawns and devteam commands; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
+| `02-` | Context injection and reporting | `02d-plugins.sh` — runs enabled plugins' PreToolUse hooks; `02-graphify-hint.sh` — deprecated wrapper kept one minor version: no-op once `plugin-settings/graphify.json` exists, the old hint for a project still on the legacy config (the two share one once-per-session marker); `02b-telemetry.sh` — queues telemetry events; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
 | `03-` | Safety and policy guards | `03-credential-guard.sh` — hygiene guard on credential store access (Bash only), refuses obvious commands that dump credentials (ADR-0010), see below |
 | `04-` | Task board capture | `04-task-board.sh` — records Codex `update_plan` and opencode `todowrite` calls (Claude's tools are captured after the call by the `PostToolUse` hook), see below |
 
@@ -76,13 +76,14 @@ Each sub-script must:
 | Event | File | Dispatcher | Purpose |
 |-------|------|-----------|---------|
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
-| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard, credential-guard (update checks disabled, see § Disabled Hooks) |
+| `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: plugin hooks (via `02d-plugins.sh`), telemetry queue, full-suite test guard, credential-guard (update checks disabled, see § Disabled Hooks) |
 | `PostToolUse` | `scripts/hooks/post-tool-use.sh` | Dispatcher | Runs `post-tool-use/` (same filename convention and exit propagation as `pre-tool-use.sh`). Registered with the matcher `TodoWrite\|TaskCreate\|TaskUpdate`, so no other tool forks it. `01-task-board.sh` folds Claude's todo tools into the task board (ADR-0018). Claude Code only |
 | `SessionEnd` | `scripts/hooks/session-end.sh` | — | Single script (nothing else listens to this event). Marks the session ended on the task board and raises `tasks.session_abandoned` when it still has open tasks. Forks python only when `<state-dir>/task-board/<session>.json` exists. Claude Code only |
 | — | `scripts/hooks/lib/task-board.sh` | Shared library | Not a hook. Sourced by the task-board hooks: resolves the main checkout root and state dir, calls `devteam tasks record\|mark`, raises `tasks.session_done` / `tasks.session_abandoned` through `notify.sh` (dedupe per session, message in the user's `language`). Reads prefs with `sed`, not python; every function returns 0 and prints nothing |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
-| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, session-progress notifications (`04-notifier.sh` — context window, uncommitted work, tip of the day, raised through `lib/notify.sh`), telemetry flush (including per-agent usage, see `lib/agent-usage.sh` below), archive rotation (graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
+| `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, session-progress notifications (`04-notifier.sh` — context window, uncommitted work, tip of the day, raised through `lib/notify.sh`), telemetry flush (including per-agent usage, see `lib/agent-usage.sh` below), archive rotation, enabled plugins' stop hooks (`99a-plugins.sh`). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |
+| — | `scripts/hooks/lib/plugins.sh` | Shared library | Not a hook. Sourced by `pre-tool-use/02d-plugins.sh` and `stop/99a-plugins.sh` to iterate enabled plugins and dispatch their hooks. Provides `devteam_plugins_dir`, `devteam_plugin_settings_dir`, `devteam_plugin_enabled` (pure-bash match on `"enabled": true`), `devteam_plugin_hook`, `devteam_plugin_export_env` and `devteam_plugin_effective_config` (python3, Stop path only). |
 | — | `scripts/hooks/lib/touched-paths.sh` | Shared library | Not a hook. Sourced by `stop.sh` to compute the touched-path set once; sub-scripts `02`, `02b`, `03`, `03b` consume `DEVTEAM_TOUCHED_PATHS` instead of re-forking `git status` + `git log`, and fall back to computing it themselves when run standalone. |
 | — | `scripts/hooks/lib/agent-usage.sh` | Shared library | Not a hook. Sourced by `stop/05-telemetry.sh` to queue the `agent_completed` telemetry event. Reads the Stop hook's `transcript_path`, incrementally scans for `Agent` tool_use/toolUseResult pairs (same byte-offset-cache technique as `stop/04-notifier.sh`, separate cache file), and sums token usage from each agent's own `outputFile`. Dedup is by transcript byte offset, not by `agentId` completion state — an agent still writing its `outputFile` when scanned is undercounted and not retried later; this tradeoff is documented in the file's header comment, not hidden. |
 | — | `scripts/hooks/lib/notify.sh` | Shared library | Not a hook. **The only way a hook raises a notification**: `devteam_notify <level> <code> <message> [ttl] [dedupe-key]` appends one JSON line to `<state-dir>/notifications.jsonl`, which the desktop app shows (ADR-0017). Applies `suppress_notifications`, skips a dedupe key already queued, keeps the newest 200 lines, forks no python. **A hook never prints a notice to stdout**: `SessionStart` stdout is model context and `Stop` stdout is not shown — the reason the old boxed banner never reached anyone |
@@ -95,7 +96,22 @@ The following sub-scripts are disabled by renaming them out of the dispatcher's 
 | Disabled file | Was | Status |
 |---|---|---|
 | `pre-tool-use/_disabled-01-check-updates.sh` | `01-check-updates.sh` | Superseded — logic moved into `session-start.sh` so the check runs once per session instead of on every tool call |
-| `stop/_disabled-99-graphify-refresh.sh` | `99-graphify-refresh.sh` | Deliberate change — Graphify refresh is on-demand only now; run manually: `bash .dev-team-agents/scripts/graphify-refresh.sh` |
+
+### Plugin Hook Environment Contract
+
+Every plugin hook (PreToolUse and Stop) receives:
+
+```bash
+DEVTEAM_PROJECT_ROOT       # Project root (cwd is set to this)
+DEVTEAM_PLUGIN_DIR         # Absolute path to plugins/<name>/
+DEVTEAM_PLUGIN_SETTINGS    # Path to .dev-team-agents/plugin-settings/<name>.json (may not exist)
+DEVTEAM_PLUGIN_CONFIG      # Effective config as JSON (Stop and actions only, not PreToolUse — computing it needs python3)
+DEVTEAM_STATE_DIR          # Machine-local state directory for per-plugin observations
+```
+
+**PreToolUse hooks** must exit 0 by default and never block tool calls. Stays off the hot path. `DEVTEAM_PLUGIN_CONFIG` is **not set** on the PreToolUse path — read `DEVTEAM_PLUGIN_SETTINGS` yourself to check config.
+
+**Stop hooks** receive `--quiet` from the dispatcher and must honour `DEVTEAM_NO_CHANGES=1`. They may do expensive work (Graphify's rebuilds only when its `auto_refresh` setting is on). A non-zero exit is reported as `[devteam:plugin:<name>] stop hook exited N`; `99a-plugins.sh` itself always exits 0, so one plugin never fails the Stop.
 
 ### PreCompact Block — Ask, Don't Just Comply
 

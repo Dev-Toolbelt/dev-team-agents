@@ -274,6 +274,23 @@ Nothing in this system deletes knowledge automatically. The episodic layer is th
 
 ---
 
+## Plugins
+
+Optional, per-project integrations built on a manifest system. Enable them with `devteam plugin` commands — the desktop app also has a **Plugins** tab on each project screen.
+
+**Graphify** (reference plugin) — builds a code knowledge graph so agents read structure before searching raw files:
+
+```bash
+devteam plugin enable graphify          # enable and seed config from auto-detect
+devteam plugin config get graphify      # see what was detected
+devteam plugin run graphify rebuild     # build the graph now
+devteam plugin config set graphify auto_refresh true   # (optional) rebuild at session end when sources changed
+```
+
+All plugins ship in the core — no remote install, no third-party integrations. For details on plugin system design, authoring, and commands: [plugins/README.md](plugins/README.md) and [ADR-0017](docs/development/adrs/0017-plugins-as-manifest-declared-per-project-integrations.md).
+
+---
+
 ## Coexistence & Customization
 
 Project-level overrides, precedence rules, and customization guidance now live in [Harness Architecture](docs/harness.md).
@@ -288,7 +305,7 @@ Project-level overrides, precedence rules, and customization guidance now live i
 
 **Windows: the whole dev-team is missing (no `/devteam:*`, no agents, no skills)** — on Windows without Developer Mode, git/MSYS writes symlinks as plain ~62-byte text files: the `.claude/` links for the Claude Code install, and the `skills/` link under `.opencode/` or `.codex/` for the other providers. `git-bash`'s `ls -la` still shows them as `lrwxrwxrwx`, but the CLI sees plain files, so nothing loads. Confirm with `test -L .claude/commands/devteam && echo link || echo broken`. Repair the Claude tree by running `bash .dev-team-agents/scripts/fix-symlinks.sh` — it repairs automatically when it can, and otherwise prints three options: (1) enable **Developer Mode** (Settings → System → For developers — recommended, no admin), (2) run `git config core.symlinks true && git checkout -- .claude` once in an **elevated PowerShell**, or (3) run **your CLI as administrator** (fully close it first, including the tray icon). For opencode and Codex, re-run that provider's installer once native symlinks are enabled. Restart your CLI after repairing so it re-indexes the dev-team. If `fix-symlinks.sh` prints `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`, the fix worked locally but the committed blob is still a plain file — `git add`/`git commit` the paths it lists, or the same links break again on your next checkout, pull, or a teammate's fresh clone.
 
-**Update check seems stuck / not firing** — the check runs once per session from `SessionStart` (`scripts/hooks/session-start.sh`), not on every tool call. Verify `.dev-team-agents/user-data/state.json` is a writable file (not a directory) and that `session-start.sh` is executable — the `last_update_check` key lives there now. The automatic Graphify refresh hook is disabled by default — see `CLAUDE-md/hooks.md` § Disabled Hooks for status and how to re-enable.
+**Update check seems stuck / not firing** — the check runs once per session from `SessionStart` (`scripts/hooks/session-start.sh`), not on every tool call. Verify `.dev-team-agents/user-data/state.json` is a writable file (not a directory) and that `session-start.sh` is executable — the `last_update_check` key lives there now. Graphify's refresh at session end is the plugin's opt-in `auto_refresh` setting (`devteam plugin config set graphify auto_refresh true`).
 
 **Notifications and the task board reach the desktop app.** A provider shows none of a hook's stdout to the user (`SessionStart` output is model context, `Stop` output is not displayed), so hooks capture task updates and queue notifications instead — context window, uncommitted work, stale docs, updates, the tip of the day. The desktop app shows:
 - **Notifications** as system alerts, even with its window closed

@@ -1265,14 +1265,14 @@ echo "  opencode:   agents registered in .opencode/opencode.json"
 echo "  Codex CLI:  agents available at .codex/agents/ (run install-provider.sh codex)"
 echo "  Skills:     available in your provider's skill search path"
 echo ""
-if [ ! -f "$USER_DATA_DIR/graphify.json" ]; then
+if [ ! -f "$USER_DATA_DIR/graphify.json" ] && [ ! -f "$PROJECT_ROOT/.dev-team-agents/plugin-settings/graphify.json" ]; then
 echo "---"
 echo "Optional: Graphify (knowledge graph for this codebase)"
 echo ""
 echo "  Graphify indexes your codebase so agents can navigate code without"
 echo "  reading every file — fewer tokens per task, faster responses."
 echo ""
-echo "  To enable it, ask your AI CLI:"
-echo "    \"Set up Graphify for this project\""
+echo "  To enable it, ask your AI CLI \"Set up Graphify for this project\","
+echo "  run: devteam plugin enable graphify, or use the Plugins tab in the desktop app."
 echo "---"
 fi

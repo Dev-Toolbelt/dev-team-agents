@@ -107,7 +107,7 @@ On **Yes, install** → for each tool in `to_install` (in dependency order — `
 
 If `$ARGUMENTS` contains `--yes`, skip the confirmation question and proceed as if the user answered **Yes, install**.
 
-If `graphify` was installed and verified, hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 4 to finish project-level configuration (`graphify.json`, hooks, `.gitignore`, first build, `CLAUDE.md` injection).
+If `graphify` was installed and verified, hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 3 to finish project-level configuration (enable the plugin, detect paths, `.gitignore`, first build, `CLAUDE.md` injection).
 
 ---
 
@@ -122,4 +122,4 @@ Print exactly one line per requested tool:
 ⛔ not supported: <tool>
 ```
 
-Group in that order. If any `graphify` follow-up ran, append its own confirmation output from `graphify-setup/SKILL.md` Step 10.
+Group in that order. If any `graphify` follow-up ran, append its own confirmation output from `graphify-setup/SKILL.md` Step 8.
