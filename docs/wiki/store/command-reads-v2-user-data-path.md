@@ -38,9 +38,13 @@ PREFS_FILE="$(devteam_prefs_file "$ROOT")"
 
 The helper falls back to `user-data/` itself when no pointer or projection exists, so the same code works on a never-bound (layout 1) project. The second `LIB` path covers this repository, which runs its own tree unbound.
 
-Still reading `user-data/` directly as of 2026-09-29:
-- `commands/health-check.md`
+`commands/health-check.md`, `scripts/graphify-refresh.sh` and `setup-health-check/references/checks-list.md` (§ Before Category 1) use the same pattern. The checks-list section also prints `IN_STORE` — whether the state directory is outside the project — because "bound" alone does not say where the files are: a bound project keeps them in `user-data/` until `devteam upgrade` runs.
+
+`skills/shared/work-feedback/SKILL.md` reads its gate keys from the same state directory, then from the credential reference files (`devteam cred import` moves them there), with the Read tool — the credential guard hook blocks a shell read of the local credentials file.
+
+Still reading `user-data/` directly as of 2026-09-30:
 - the v2 section of `commands/update.md` — unreachable in a bound project, because its Step 0 hands off to `devteam update` when `project.json` exists
+- the category bodies of `setup-health-check/references/checks-list.md` — deliberately, since a v2 project runs them as written; a bound project applies § Before Category 1's routing table, which overrides them
 
 ## Gotchas
 
