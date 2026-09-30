@@ -27,14 +27,14 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 | `01-` | State detection and collection (session context) | `01-session-summary.sh` |
 | `02-` | Repository integrity checks | `02-orphan-skill-scan.sh`, `02b-orphan-template-scan.sh` |
 | `03-` | Static validation | `03-agent-lint.sh`, `03b-fingerprint-uniqueness.sh`, `03c-reuse-lint.sh`, `03d-design-token-lint.sh`, `03e-adr-gap-check.sh` |
-| `04-` | User-facing notifications | _(disabled — see § Disabled Hooks)_ |
+| `04-` | User-facing notifications | `04-notifier.sh`; `04b-task-board.sh` — marks the session idle on the task board (ADR-0018), forking python only when `<state-dir>/task-board/<session>.json` already exists |
 | `05-` | External reporting (telemetry) | `05-telemetry.sh` |
 | `99-` | Final/cleanup tasks | `99b-archive-index.sh` (graphify refresh disabled — see § Disabled Hooks) |
 
 Each sub-script must:
 - **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — regex `^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$`. The dispatcher **skips any file that does not match**, so a draft, a `.sh.bak`, or a `notes.sh` left in the directory is ignored instead of being auto-run on every Stop. Set `DEVTEAM_HOOK_DEBUG=1` to see what was run and what was skipped
 - Accept `--quiet` flag and suppress output when OK
-- Honour the dispatcher's `DEVTEAM_NO_CHANGES=1` fast path — a Stop with no staged/unstaged changes and no commits today must not trigger a full scan
+- Honour the dispatcher's `DEVTEAM_NO_CHANGES=1` fast path (exemption: `stop/04b-task-board.sh` must run on every Stop to mark the session idle, so it has no fast path and no `--quiet`; a bash `[ -f ]` on the session record is its only gate) — a Stop with no staged/unstaged changes and no commits today must not trigger a full scan
 - Reuse `DEVTEAM_TOUCHED_PATHS` / `DEVTEAM_TOUCHED_COMPUTED` (exported by `stop.sh` via `scripts/hooks/lib/touched-paths.sh`) instead of re-running `git status`/`git log`, while still working standalone when they are unset
 - Exit with code `0` when nothing is wrong
 - Exit non-zero only when action is required from the user
@@ -54,6 +54,7 @@ Sub-scripts in `scripts/hooks/pre-tool-use/` are run by `scripts/hooks/pre-tool-
 | `01-` | Installation freshness | _(free — the update check moved to `SessionStart`, see below and § Disabled Hooks)_ |
 | `02-` | Context injection and reporting | `02-graphify-hint.sh` — injects a graph hint on Glob/Grep when `graphify-out/graph.json` exists; `02b-telemetry.sh` — queues telemetry events for agent spawns and devteam commands; `02c-full-suite-guard.sh` — nudges on unscoped full-suite test commands (Bash), see below |
 | `03-` | Safety and policy guards | `03-credential-guard.sh` — hygiene guard on credential store access (Bash only), refuses obvious commands that dump credentials (ADR-0010), see below |
+| `04-` | Task board capture | `04-task-board.sh` — records Codex `update_plan` and opencode `todowrite` calls (Claude's tools are captured after the call by the `PostToolUse` hook), see below |
 
 > One script per bare number. `02-graphify-hint.sh` keeps `02-` because it is referenced externally; the telemetry script is `02b-telemetry.sh`. Two files sharing a bare prefix leaves execution order to an alphabetical tiebreak on the rest of the filename — never rely on that. Add a **lowercase letter suffix** (`02b-`, `02c-`, …) instead.
 
@@ -63,6 +64,8 @@ Each sub-script must:
 - Stay off the hot path: return from the TTL/cache check before forking anything (no `python3`, no network) — see `update-check.sh`, whose interval sidecar cache is invalidated with the `[ prefs -nt cache ]` bash builtin
 
 **Exit code exception**: `02c-full-suite-guard.sh` and `03-credential-guard.sh` exit with status 2 when refusing a tool call (scoped-test reminder on tests with no filter, credential-guard refusal on obvious dump commands). These are **documented, narrow exceptions** — a refusal exits 2 so the dispatcher propagates it and blocks the tool call. The alternative (every Bash test command blocked by safety-netting; every credential read blocked by default) would disable these hooks rather than improve them, so the exceptions are load-bearing.
+
+`04-task-board.sh` (ADR-0018) is gated by a bash regex on the payload — the JSON key immediately followed by `update_plan` (Codex) or `todowrite` (opencode) — before it sources anything, so **no python is forked for any other tool** (a shell command that merely mentions the name has its quotes escaped and does not match). It exits 0 always and prints nothing. `tests/test_tasks.py` pins the zero-fork guarantee with a python shim.
 
 `02c-full-suite-guard.sh` is the per-command safety net for `skills/shared/scoped-test-execution/SKILL.md`: when a `Bash` command matches an unscoped full-suite shape (e.g. `pytest` with no path/`-k`, `vendor/bin/phpunit` with no `--filter`), it injects an `additionalContext` reminder of the rule — it never blocks, consistent with the rule above (this script does **not** exit 2). It complements, and does not replace, the `SessionStart` reminder below, which covers sessions that never issue a matching Bash command but still need the rule in context from the start (e.g. work happening outside `/devteam:*` routing, where `project-context`'s mandatory skill load is never triggered).
 
@@ -74,6 +77,9 @@ Each sub-script must:
 |-------|------|-----------|---------|
 | `SessionStart` | `scripts/hooks/session-start.sh` | — | Stale config detection, missing prefs, TTL-gated update check (moved from `PreToolUse` — runs once per session instead of once per tool call), unconditional scoped-test-execution reminder, `[DEVTEAM:SESSION_BANNER]` identity banner (see § Session Start Banner — Echo Rule above) |
 | `PreToolUse` | `scripts/hooks/pre-tool-use.sh` | Dispatcher | Runs `pre-tool-use/`: graphify hint, telemetry queue, full-suite test guard, credential-guard (update checks disabled, see § Disabled Hooks) |
+| `PostToolUse` | `scripts/hooks/post-tool-use.sh` | Dispatcher | Runs `post-tool-use/` (same filename convention and exit propagation as `pre-tool-use.sh`). Registered with the matcher `TodoWrite\|TaskCreate\|TaskUpdate`, so no other tool forks it. `01-task-board.sh` folds Claude's todo tools into the task board (ADR-0018). Claude Code only |
+| `SessionEnd` | `scripts/hooks/session-end.sh` | — | Single script (nothing else listens to this event). Marks the session ended on the task board and raises `tasks.session_abandoned` when it still has open tasks. Forks python only when `<state-dir>/task-board/<session>.json` exists. Claude Code only |
+| — | `scripts/hooks/lib/task-board.sh` | Shared library | Not a hook. Sourced by the task-board hooks: resolves the main checkout root and state dir, calls `devteam tasks record\|mark`, raises `tasks.session_done` / `tasks.session_abandoned` through `notify.sh` (dedupe per session, message in the user's `language`). Reads prefs with `sed`, not python; every function returns 0 and prints nothing |
 | `PreCompact` | `scripts/hooks/pre-compact.sh` | — | Session summary before context compaction |
 | `Stop` | `scripts/hooks/stop.sh` | Dispatcher | Runs `stop/`: session summary, orphan scans, lint, fingerprint uniqueness, ADR gap check, session-progress notifications (`04-notifier.sh` — context window, uncommitted work, tip of the day, raised through `lib/notify.sh`), telemetry flush (including per-agent usage, see `lib/agent-usage.sh` below), archive rotation (graph refresh disabled, see § Disabled Hooks). Computes `DEVTEAM_NO_CHANGES` and `DEVTEAM_TOUCHED_PATHS` once and exports them |
 | — | `scripts/hooks/lib/session-summary-detect.sh` | Shared library | Not a hook. Sourced by **both** `pre-compact.sh` and `stop/01-session-summary.sh`; exports `TODAY`, `NOW`, `HAS_CHANGES`, `TODAY_COMMITS`. Changing it affects both hooks — test both. |

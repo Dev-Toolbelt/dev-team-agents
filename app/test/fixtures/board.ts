@@ -1,0 +1,102 @@
+/**
+ * Builders for the task-board payload. The types in `shared/api.ts` are the CLI's JSON
+ * shape as it arrives (snake_case), so the same objects serve as a raw document in the
+ * main-process tests and as a parsed one in the renderer tests.
+ */
+import type { BoardCounts, BoardProject, BoardSession, BoardTask } from '../../src/shared/api.js';
+
+export const NOW = 1_790_000_000;
+
+export function counts(todo: number, inProgress: number, done: number): BoardCounts {
+  return { todo, in_progress: inProgress, done, total: todo + inProgress + done };
+}
+
+export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
+  return {
+    key: 't1',
+    content: 'Write the migration',
+    owner: 'main',
+    agent_type: null,
+    status: 'pending',
+    column: 'todo',
+    created_at: NOW - 600,
+    status_since: NOW - 120,
+    completed_at: null,
+    durations: { pending: 120, in_progress: 0, completed: 0 },
+    stale: false,
+    abandoned: false,
+    ...overrides,
+  };
+}
+
+/** A session whose counts are derived from its tasks, so the two cannot disagree. */
+export function boardSession(overrides: Partial<BoardSession> & { tasks?: readonly BoardTask[] } = {}): BoardSession {
+  const tasks = overrides.tasks ?? [boardTask()];
+  const derived = counts(
+    tasks.filter((t) => t.column === 'todo').length,
+    tasks.filter((t) => t.column === 'in_progress').length,
+    tasks.filter((t) => t.column === 'done').length,
+  );
+  return {
+    session_id: 'session-aaaaaaaa',
+    provider: 'claude',
+    branch: 'feat/login',
+    cwd: '/repo/storefront',
+    status: 'active',
+    created_at: NOW - 3600,
+    last_activity_at: NOW - 60,
+    ended_at: null,
+    resume_command: "cd '/repo/storefront' && claude --resume 'session-aaaaaaaa'",
+    counts: derived,
+    ...overrides,
+    tasks,
+  };
+}
+
+/** A project whose totals are derived from its sessions. */
+export function boardProject(overrides: Partial<BoardProject> & { sessions?: readonly BoardSession[] } = {}): BoardProject {
+  const sessions = overrides.sessions ?? [boardSession()];
+  const total = counts(
+    sessions.reduce((n, s) => n + s.counts.todo, 0),
+    sessions.reduce((n, s) => n + s.counts.in_progress, 0),
+    sessions.reduce((n, s) => n + s.counts.done, 0),
+  );
+  const tasks = sessions.flatMap((s) => s.tasks);
+  return {
+    project_id: 'proj-a',
+    root: '/repo/storefront',
+    providers: [...new Set(sessions.map((s) => s.provider))],
+    sessions_total: sessions.length,
+    sessions_active: sessions.filter((s) => s.status === 'active').length,
+    counts: total,
+    stale: tasks.filter((t) => t.stale).length,
+    abandoned: tasks.filter((t) => t.abandoned).length,
+    last_activity_at: Math.max(0, ...sessions.map((s) => s.last_activity_at)),
+    ...overrides,
+    sessions,
+  };
+}
+
+/** `n` tasks split as evenly as possible across the columns, with unique keys. */
+export function tasksOf(prefix: string, todo: number, inProgress: number, done: number): BoardTask[] {
+  const out: BoardTask[] = [];
+  let index = 0;
+  const make = (column: 'todo' | 'in_progress' | 'done', status: string) => {
+    index += 1;
+    out.push(
+      boardTask({
+        key: `${prefix}${index}`,
+        content: `${prefix} task ${index}`,
+        column,
+        status,
+        created_at: NOW - 1000 + index,
+        completed_at: column === 'done' ? NOW - 30 : null,
+        status_since: NOW - 30,
+      }),
+    );
+  };
+  for (let i = 0; i < todo; i += 1) make('todo', 'pending');
+  for (let i = 0; i < inProgress; i += 1) make('in_progress', 'in_progress');
+  for (let i = 0; i < done; i += 1) make('done', 'completed');
+  return out;
+}

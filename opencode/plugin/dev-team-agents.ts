@@ -111,7 +111,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         })
         await writeFile(file, `${line}\n`)
         return {
-          stdin: JSON.stringify({ transcript_path: file }),
+          stdin: JSON.stringify({ transcript_path: file, session_id: sessionID }),
           cleanup: () => rm(dir, { recursive: true, force: true }),
         }
       }
@@ -119,7 +119,8 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // Fall through with no stdin — stop.sh's notifier falls back to the
       // turn-count heuristic, same as it does today.
     }
-    return {}
+    // No token usage yet: still name the session, so stop/04b-task-board.sh can mark it idle.
+    return { stdin: JSON.stringify({ session_id: sessionID }) }
   }
 
   const safe = async (label: string, fn: () => Promise<unknown>) => {
@@ -154,7 +155,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     },
 
     "tool.execute.before": async (input, output) => {
-      const payload = JSON.stringify({ tool: input.tool, args: output.args })
+      const payload = JSON.stringify({ tool: input.tool, args: output.args, sessionID: input.sessionID })
       await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload))
     },
 

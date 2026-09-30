@@ -83,6 +83,8 @@ export class NotificationCenter {
   private feed: NotificationFeed = { status: 'starting', detail: null, items: [], unread: 0, paused: false };
   private handle: StreamHandle | null = null;
   private stopped = false;
+  /** Terminal: set when the app is quitting; nothing may spawn a child afterwards. */
+  private disposed = false;
   private backoff = BACKOFF_MIN_MS;
   private retryTimer: unknown = null;
   private watchdogTimer: unknown = null;
@@ -122,6 +124,7 @@ export class NotificationCenter {
 
   /** Start the stream. Idempotent: a running or starting stream is left as it is. */
   async start(): Promise<void> {
+    if (this.disposed) return;
     this.stopped = false;
     if (this.handle !== null || this.spawning) return;
     await this.spawn();
@@ -140,8 +143,15 @@ export class NotificationCenter {
     this.handle = null;
   }
 
+  /** The app is quitting: stop, and refuse every later `start` or `restart`. */
+  dispose(): void {
+    this.disposed = true;
+    this.stop();
+  }
+
   /** Re-resolve happened, or the user asked: drop the current child and start again now. */
   async restart(): Promise<void> {
+    if (this.disposed) return;
     this.generation += 1;
     this.handle?.stop();
     this.handle = null;
@@ -167,7 +177,7 @@ export class NotificationCenter {
   // ── the stream ────────────────────────────────────────────────────────────
 
   private async spawn(): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped || this.disposed) return;
     this.generation += 1;
     const generation = this.generation;
     const current = () => generation === this.generation && !this.stopped;

@@ -58,6 +58,7 @@ SKIP_INVOCATION = {
     # compact document per event, each with `ok`, `end` last) is pinned in
     # `test_notifications.WatchTest`, against a real stream.
     ("notifications", "watch"): "streams until stdin closes; covered by test_notifications",
+    ("tasks", "watch"): "streams until stdin closes; covered by test_tasks",
 }
 
 

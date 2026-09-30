@@ -8,6 +8,7 @@
 //   error3  — writes the error as one `{"event":"error",…}` line and exits 3.
 //   indented3 — writes an indented, multi-line error document and exits 3.
 //   orphan  — exits 0 at once but leaves a grandchild holding the inherited pipes open.
+//   tasks   — `tasks watch`: two project snapshots, a removal, `ready`, then waits for stdin to close.
 //   argv    — prints its own argv as one event, then ends.
 const mode = process.argv[2];
 const out = (event) => process.stdout.write(JSON.stringify({ ok: true, ...event }) + '\n');
@@ -36,7 +37,30 @@ if (mode === 'indented3') {
   process.stdout.write('{\n  "error": "the store needs a layout migration first",\n  "ok": false\n}\n');
   process.exit(3);
 }
-if (mode === 'garbage') {
+if (mode === 'tasks') {
+  const counts = { todo: 1, in_progress: 0, done: 0, total: 1 };
+  const project = (id) => ({
+    project_id: id,
+    root: `/repo/${id}`,
+    providers: ['claude'],
+    sessions_total: 1,
+    sessions_active: 1,
+    counts,
+    stale: 0,
+    abandoned: 0,
+    last_activity_at: 1790000000,
+    sessions: [],
+  });
+  out({ event: 'snapshot', project: project('proj-a') });
+  out({ event: 'snapshot', project: project('proj-b') });
+  out({ event: 'snapshot', project: { project_id: 'proj-b', removed: true } });
+  out({ event: 'ready' });
+  process.stdin.on('data', () => undefined);
+  process.stdin.on('end', () => {
+    out({ event: 'end', reason: 'stdin-closed' });
+    process.exit(0);
+  });
+} else if (mode === 'garbage') {
   process.stdout.write('this is not json\n');
   setInterval(() => undefined, 1000);
 } else {

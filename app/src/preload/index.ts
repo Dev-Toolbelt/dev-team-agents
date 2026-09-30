@@ -18,6 +18,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   CHANNELS,
   type BindRequest,
+  type BoardFeed,
+  type BoardSettings,
+  type CopyResumeRequest,
   type CatalogKind,
   type DevteamBridge,
   type NotificationFeed,
@@ -118,6 +121,29 @@ const bridge: DevteamBridge = {
     }),
   removeSkill: (request: SkillRemoveRequest) =>
     ipcRenderer.invoke(CHANNELS.removeSkill, { name: String(request.name), root: String(request.root) }),
+
+  // The task board. Requests are rebuilt into plain objects; the main process validates
+  // them again, and copies only text the CLI itself sent.
+  taskBoard: () => ipcRenderer.invoke(CHANNELS.taskBoard),
+  refreshTaskBoard: () => ipcRenderer.invoke(CHANNELS.refreshTaskBoard),
+  onTaskBoard: (listener: (feed: BoardFeed) => void) => {
+    const handler = (_event: unknown, feed: BoardFeed): void => listener(feed);
+    ipcRenderer.on(CHANNELS.taskBoardChanged, handler);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.taskBoardChanged, handler);
+    };
+  },
+  copyResumeCommand: (request: CopyResumeRequest) =>
+    ipcRenderer.invoke(CHANNELS.copyResumeCommand, {
+      projectId: String(request.projectId),
+      sessionId: String(request.sessionId),
+    }),
+  boardSettings: () => ipcRenderer.invoke(CHANNELS.boardSettings),
+  setBoardSettings: (settings: BoardSettings) =>
+    ipcRenderer.invoke(CHANNELS.setBoardSettings, {
+      staleAfterMinutes: Number(settings.staleAfterMinutes),
+      doneRetentionDays: Number(settings.doneRetentionDays),
+    }),
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

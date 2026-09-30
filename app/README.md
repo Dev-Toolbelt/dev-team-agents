@@ -127,6 +127,27 @@ echo '{"id":"'$(date +%s)'-1-1","ts":'$(date +%s)',"project_id":"<id>","session_
 change lands in the store's project layer and in the project's `resolved/preferences.json`,
 exactly as if it had been made in a terminal. The app keeps no copy of any preference.
 
+## The Board screen
+
+Agents keep a todo list through their provider's own tool; hooks record it per session
+(ADR-0018) and this screen shows it. The main process runs one `devteam tasks watch`, keeps the
+latest snapshot per project, and pushes it to the window, so the board is current with the window
+closed and reopened. It is read-only: nothing here edits, moves or deletes a task.
+
+- **Overview.** One card per project that has at least one task: its name, the providers its
+  sessions used, `N sessions (M active)`, To do / In progress / Done with counts and percentages,
+  a stacked bar, and stale / abandoned badges. A period filter (today, 7 days, 30 days, all)
+  narrows it by each session's last activity.
+- **Kanban.** Click a card for three columns. Each task shows its session (provider and branch)
+  and the time it has spent in its column, kept live between snapshots; the time spent in each
+  step opens on hover **and** on keyboard focus. Filter by session or period, and hide done tasks
+  older than the retention. Each session has a status (active, idle, ended) and a **Copy resume
+  command** button; the text copied is the command the CLI sent for that session, never a string
+  the window supplies.
+- **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
+  (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
+  (default 7, 1 to 365) is the kanban's default retention.
+
 ## The Skills screen
 
 The **Skills** tab manages the *global* (user-level) skills of Claude Code, Codex and opencode:

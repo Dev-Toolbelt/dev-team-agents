@@ -687,6 +687,8 @@ PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-too
 STOP_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/stop.sh"
 SESSION_START_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-start.sh"
 PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-compact.sh"
+POST_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/post-tool-use.sh"
+SESSION_END_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-end.sh"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -733,6 +735,27 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$POST_TOOL_USE_HOOK"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$SESSION_END_HOOK"
+          }
+        ]
+      }
     ]
   }
 }
@@ -765,6 +788,8 @@ entries = hooks.setdefault(hook_type, [])
 new_entry = {"hooks": [{"type": "command", "command": hook_cmd}]}
 if hook_type == "PreToolUse":
     new_entry["matcher"] = ".*"
+elif hook_type == "PostToolUse":
+    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate"
 
 entries.append(new_entry)
 
@@ -781,7 +806,7 @@ PYEOF
 
     # Migrate existing hook commands to use `env -u BASH_ENV -u ENV` wrapper
     # (fixes WSL /etc/bash.bashrc noise from start-systemd-namespace).
-    if grep -q "hooks/pre-tool-use.sh\|hooks/stop.sh\|hooks/session-start.sh\|hooks/pre-compact.sh" "$SETTINGS_FILE" 2>/dev/null; then
+    if grep -q "hooks/pre-tool-use.sh\|hooks/stop.sh\|hooks/session-start.sh\|hooks/pre-compact.sh\|hooks/post-tool-use.sh\|hooks/session-end.sh" "$SETTINGS_FILE" 2>/dev/null; then
         if ! grep -q "env -u BASH_ENV" "$SETTINGS_FILE" 2>/dev/null; then
             if command -v python3 >/dev/null 2>&1; then
                 python3 - "$SETTINGS_FILE" <<'PYEOF'
@@ -792,7 +817,7 @@ with open(settings_file, 'r') as f:
     content = f.read()
 
 # Replace bare hook paths with env-wrapped versions
-hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh"]
+hooks = ["pre-tool-use.sh", "stop.sh", "session-start.sh", "pre-compact.sh", "post-tool-use.sh", "session-end.sh"]
 for hook in hooks:
     pattern = r'(\.dev-team-agents/scripts/hooks/' + re.escape(hook) + r')'
     replacement = r'env -u BASH_ENV -u ENV \1'
@@ -812,6 +837,8 @@ PYEOF
     _inject_hook "Stop"         "$STOP_HOOK"           "hooks/stop.sh"
     _inject_hook "SessionStart" "$SESSION_START_HOOK"  "hooks/session-start.sh"
     _inject_hook "PreCompact"   "$PRE_COMPACT_HOOK"    "hooks/pre-compact.sh"
+    _inject_hook "PostToolUse"  "$POST_TOOL_USE_HOOK"  "hooks/post-tool-use.sh"
+    _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
 
     # Ensure includeCoAuthoredBy is set to false (idempotent)
     if ! grep -q '"includeCoAuthoredBy"' "$SETTINGS_FILE" 2>/dev/null; then

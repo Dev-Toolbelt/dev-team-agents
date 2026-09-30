@@ -272,6 +272,16 @@ class DoctorTest(StoreTestCase):
         self.assertEqual(report["status"], "fail")
         self.assertTrue(any(f["category"] == "bind" for f in report["findings"]))
 
+    def test_the_hook_finding_counts_every_registered_dispatcher(self):
+        from devteam import hooks
+
+        self.install_version("3.0.0", activate=True)
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        report = doctor.run(project_root=root)
+        message = [f["message"] for f in report["findings"] if f["category"] == "hooks"][0]
+        self.assertTrue(message.startswith("{} dispatchers".format(len(hooks.EVENTS))), message)
+
     def test_missing_artifacts_are_a_warning_pointing_at_sync(self):
         self.install_version("3.0.0", activate=True)
         root = self.new_project()

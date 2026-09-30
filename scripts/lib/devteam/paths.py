@@ -473,6 +473,12 @@ MACHINE_LOCAL_RECORDS = (
     # means nothing on another host.
     "notifications.jsonl",
     "notifications-seen.json",
+    # One record per agent session on THIS machine (ADR-0018): the todo lists the
+    # session's provider tools produced. A directory, so everything under it is
+    # machine-local (`path_is_machine_local`); a session id means nothing elsewhere.
+    # The name is matched at any depth, so it must be one no user directory would carry
+    # (a generic `tasks` would capture a user's own `wiki/tasks/`).
+    "task-board",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:

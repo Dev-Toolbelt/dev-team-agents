@@ -64,6 +64,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Vincular um projeto | `devteam bind /caminho/do/projeto` |
 | Listar o que está disponível | `devteam catalog agents|skills|commands` |
 | Gerenciar suas skills globais do Claude / Codex / opencode | `devteam skills list\|show\|install\|remove` |
+| Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
 | Converter uma instalação v2 existente (o `bind` recusa) | `devteam migrate --apply`, depois o `git rm -r --cached` que ele imprime |
@@ -289,7 +290,11 @@ Overrides no nível do projeto, regras de precedência e orientações de custom
 
 **Verificação de atualização parece travada / não dispara** — a checagem roda uma vez por sessão a partir do `SessionStart` (`scripts/hooks/session-start.sh`), não a cada tool call. Verifique se `.dev-team-agents/user-data/state.json` é um arquivo gravável (não um diretório) e se `session-start.sh` é executável — a chave `last_update_check` agora vive lá. O hook de refresh automático do Graphify está desativado por padrão — veja `CLAUDE-md/hooks.md` § Disabled Hooks para status e como reativar.
 
-**As notificações nunca aparecem no terminal** — de propósito. Nenhum provider mostra ao usuário a saída de um hook (a do `SessionStart` vira contexto do modelo, a do `Stop` não é exibida), então os hooks enfileiram as notificações — janela de contexto, trabalho sem commit, docs desatualizados, atualizações, a dica do dia — e o app desktop as mostra como notificações do sistema, inclusive com a janela fechada. Sem o app, elas esperam na fila: `devteam notifications list` as mostra. Detalhes: `CLAUDE-md/notifications.md`.
+**As notificações e o quadro de tarefas chegam ao app desktop.** Nenhum provider mostra ao usuário a saída de um hook (a do `SessionStart` vira contexto do modelo, a do `Stop` não é exibida), então os hooks capturam atualizações de tarefas e enfileiram as notificações — janela de contexto, trabalho sem commit, docs desatualizados, atualizações, a dica do dia. O app desktop mostra:
+- **Notificações** como alertas do sistema, inclusive com a janela fechada
+- **Quadro** — visualização Kanban de todas as tarefas que os agentes criam, de todos os projetos vinculados, com tempo gasto em cada etapa. Sessões são capturadas automaticamente pelos hooks para Claude Code e opencode (melhor esforço para Codex); o quadro é somente leitura. Equivalente CLI: `devteam tasks list` e `watch`.
+
+Sem o app, as notificações e registros de tarefas esperam na fila: `devteam notifications list` e `devteam tasks list` as mostram. Detalhes: `CLAUDE-md/notifications.md`.
 
 **O `setup-assistant` rodou, mas a seção `## dev-team-agents` está ausente do CLAUDE.md** — diga ao seu CLI: `"Como o setup-assistant, a seção dev-team-agents está faltando no CLAUDE.md — por favor adicione-a."`
 
