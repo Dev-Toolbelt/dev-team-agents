@@ -150,9 +150,13 @@ The Projects screen groups bound projects into folders (ADR-0021). Like a projec
 reach the CLI, `project.json` or the store. They are per machine.
 
 - **New folder** above the table; **Rename…**, **Delete folder…** from a folder's `⋯` menu. Deleting
-  a folder moves its projects to **No folder**; it never unbinds anything.
-- **Move** a project by dragging its handle onto a folder, or with the row's folder button — the
-  keyboard path to the same result. Dragging a selected row carries the whole selection.
+  a folder moves its projects out to the top level; it never unbinds anything.
+- Like a file manager, projects in no folder are listed at the top level below the folders, with
+  no header of their own, and projects inside a folder are indented under it.
+- **Move** a project by dragging its handle onto a folder, or onto the top-level projects to take it
+  out of one; when the top level is empty, a drop strip appears while dragging. The row's folder
+  button is the keyboard path to the same result. Dragging a selected row carries the whole
+  selection.
 - **Select** rows, a whole folder, or everything shown; the bar that appears moves, removes from a
   folder, or syncs the selection one project at a time (**Stop after this one** ends it between
   projects). Bulk actions act only on rows on screen: never on rows a filter hides or a collapsed

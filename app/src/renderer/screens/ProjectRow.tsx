@@ -141,7 +141,10 @@ export function ProjectRow({
   syncState,
   syncBlocked,
   onSync,
+  depth = 0,
 }: {
+  /** How many folders deep the row sits: 0 at the top level. Indents the name, tree-style. */
+  depth?: number;
   /**
    * Owned by the list, not the row: a row remounts when it moves to another folder, and a
    * sync in flight must keep its state — and its result — across that.
@@ -191,7 +194,7 @@ export function ProjectRow({
           <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${name}`} />
         </span>
       </TableCell>
-      <TableCell>
+      <TableCell style={depth > 0 ? { paddingLeft: `calc(0.5rem + ${depth * 1.5}rem)` } : undefined}>
         {/* The name only. `project_id` is a UUID that means nothing to the reader and is
             never rendered — `devteam list` in a terminal is where a debugger gets it. The
             name is the way into the project's settings, so it is a real button. */}

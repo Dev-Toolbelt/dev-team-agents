@@ -24,7 +24,6 @@ import {
   FolderNameDialog,
   MoveToMenu,
   NO_FOLDER_KEY,
-  NoFolderHeaderRow,
   projectCount,
   setDragChip,
   useLastDefined,
@@ -260,7 +259,7 @@ export function ProjectList({
     };
   }
 
-  function groupBody(key: string, header: ReactNode, rows: readonly ProjectRecord[], expanded: boolean, emptyText: string) {
+  function groupBody(key: string, header: ReactNode, rows: readonly ProjectRecord[], expanded: boolean, emptyText: string, depth: number) {
     return (
       <TableBody
         key={key}
@@ -272,7 +271,32 @@ export function ProjectList({
         )}
       >
         {header}
-        {expanded ? rows.length > 0 ? rows.map(renderRow) : <EmptyGroupRow columns={COLUMNS}>{emptyText}</EmptyGroupRow> : null}
+        {expanded ? rows.length > 0 ? rows.map((project) => renderRow(project, depth)) : <EmptyGroupRow columns={COLUMNS}>{emptyText}</EmptyGroupRow> : null}
+      </TableBody>
+    );
+  }
+
+  /**
+   * Projects in no folder, at the top level like files beside folders in a file manager:
+   * no header of their own. The group is still the drop target that takes a project out of
+   * its folder; with nothing in it, it shows a strip only while a filed project is dragged.
+   */
+  function rootBody() {
+    const draggingFiled = dragging !== null && dragging.some((id) => folderOf(folders, id) !== null);
+    if (noFolderRows.length === 0 && !draggingFiled) return null;
+    return (
+      <TableBody
+        key={NO_FOLDER_KEY}
+        data-drop-target={NO_FOLDER_KEY}
+        {...dropHandlers(NO_FOLDER_KEY)}
+        className={cn('border-t-8 border-background transition-colors', dropTarget === NO_FOLDER_KEY && '[&>tr]:!bg-primary/10')}
+      >
+        {noFolderRows.map((project) => renderRow(project, 0))}
+        {noFolderRows.length === 0 ? (
+          <EmptyGroupRow columns={COLUMNS}>
+            <span className="inline-block w-full rounded-md border border-dashed border-primary/50 py-2">Drop here to take it out of its folder</span>
+          </EmptyGroupRow>
+        ) : null}
       </TableBody>
     );
   }
@@ -319,18 +343,20 @@ export function ProjectList({
         rows,
         expanded,
         'Empty — drag projects here, or use “Move to folder” on a row.',
+        node.depth,
       ),
       ...(expanded ? node.children.flatMap(renderFolder) : []),
     ];
   }
 
-  function renderRow(project: ProjectRecord) {
+  function renderRow(project: ProjectRecord, depth = 0) {
     const id = project.project_id;
     const isSelected = selected.has(id);
     return (
       <ProjectRow
         key={id}
         project={project}
+        depth={depth}
         environment={environment}
         projectNames={projectNames}
         current={current}
@@ -494,23 +520,10 @@ export function ProjectList({
             {hasFolders ? (
               <>
                 {tree.flatMap(renderFolder)}
-                {noFolderRows.length > 0 || !filtering
-                  ? groupBody(
-                      NO_FOLDER_KEY,
-                      <NoFolderHeaderRow
-                        count={noFolderRows.length}
-                        selection={selectionOf(noFolderRows.map((project) => project.project_id))}
-                        onToggleSelection={(checked) => select(noFolderRows.map((project) => project.project_id), checked)}
-                        columns={COLUMNS}
-                      />,
-                      noFolderRows,
-                      true,
-                      'Drop a project here to take it out of its folder.',
-                    )
-                  : null}
+                {rootBody()}
               </>
             ) : (
-              <TableBody>{filteredProjects.map(renderRow)}</TableBody>
+              <TableBody>{filteredProjects.map((project) => renderRow(project))}</TableBody>
             )}
           </Table>
         </>
