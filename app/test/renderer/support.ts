@@ -309,6 +309,10 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     takePendingProject: vi.fn(() => Promise.resolve(null)),
     backgroundSettings: vi.fn(() => Promise.resolve(backgroundSettings())),
     setOpenAtLogin: vi.fn((enabled: boolean) => Promise.resolve(backgroundSettings({ openAtLogin: enabled }))),
+    listSkills: vi.fn(() => Promise.resolve(ok({ provider: 'all', roots: [], skills: [] }))),
+    showSkill: vi.fn(),
+    installSkill: vi.fn(() => Promise.resolve({ picked: false } as const)),
+    removeSkill: vi.fn(),
     ...overrides,
   };
 }

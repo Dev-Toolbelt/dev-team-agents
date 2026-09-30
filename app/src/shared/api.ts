@@ -580,6 +580,105 @@ export interface AppHealth {
   readonly findings: readonly AppFinding[];
 }
 
+// ── global skills ─────────────────────────────────────────────────────────────
+
+/** The providers whose user-level skill directories `devteam skills` manages. */
+export type SkillProvider = 'claude' | 'codex' | 'opencode';
+export type SkillProviderFilter = SkillProvider | 'all';
+
+/**
+ * One global skill directory. `id` is data, not an enum: the CLI decides which roots exist
+ * (today `claude`, `agents`, `codex`, `opencode`) and this app only echoes it back to name
+ * a skill's location. `path` is display text; it is never sent back to the main process.
+ */
+export interface SkillRoot {
+  readonly id: string;
+  readonly path: string;
+  readonly exists: boolean;
+  readonly providers: readonly string[];
+  readonly install_target_for: readonly string[];
+}
+
+/** One skill found in one root. The same name in two roots is two records. */
+export interface SkillRecord {
+  readonly name: string;
+  readonly description: string | null;
+  readonly root: string;
+  readonly root_path: string | null;
+  readonly path: string;
+  readonly providers: readonly string[];
+  readonly is_symlink: boolean;
+  readonly link_target: string | null;
+  /** Owned by dev-team-agents itself: the CLI refuses to remove or replace it (exit 4). */
+  readonly managed: boolean;
+  readonly status: 'ok' | 'malformed';
+  readonly error: string | null;
+}
+
+export interface SkillList {
+  readonly provider: string;
+  readonly roots: readonly SkillRoot[];
+  readonly skills: readonly SkillRecord[];
+}
+
+/** `skills show`: the record plus what the directory holds. `body` is text, never markup. */
+export interface SkillDetail extends SkillRecord {
+  readonly body: string | null;
+  readonly files: readonly string[];
+  readonly files_truncated: boolean;
+}
+
+/** Where an install's source comes from. Never a path: the main process opens the picker. */
+export type SkillSourceChoice = 'folder' | 'archive' | 'previous';
+
+export interface SkillInstallRequest {
+  readonly source: SkillSourceChoice;
+  readonly providers: readonly SkillProvider[];
+  readonly replace: boolean;
+  /** Symlink instead of copy. Only meaningful for a folder; refused for an archive. */
+  readonly link: boolean;
+}
+
+export interface SkillInstalledTo {
+  readonly root: string;
+  readonly path: string;
+  readonly providers: readonly string[];
+  readonly replaced: boolean;
+  readonly quarantined_to: string | null;
+}
+
+export interface SkillInstallReport {
+  readonly name: string;
+  readonly description: string | null;
+  readonly source: string | null;
+  readonly linked: boolean;
+  readonly installed: readonly SkillInstalledTo[];
+}
+
+/**
+ * The answer to an install: either the user dismissed the picker (nothing ran), or the CLI
+ * ran and `result` says how it went. `source` is display text for what the user picked; a
+ * retry names `'previous'` rather than sending it back.
+ */
+export type SkillInstallAnswer =
+  | { readonly picked: false }
+  | { readonly picked: true; readonly source: string; readonly result: OperationResult<SkillInstallReport> };
+
+/** A skill is named by name and root id, both of which the main process checks against `skills list`. */
+export interface SkillRemoveRequest {
+  readonly name: string;
+  readonly root: string;
+}
+
+export interface SkillRemoveReport {
+  readonly name: string;
+  readonly root: string;
+  readonly path: string;
+  readonly providers: readonly string[];
+  readonly action: 'unlinked' | 'quarantined';
+  readonly quarantined_to: string | null;
+}
+
 export interface DevteamBridge {
   readonly buildInfo: () => Promise<BuildInfo>;
   readonly environment: () => Promise<EnvironmentReport>;
@@ -652,6 +751,18 @@ export interface DevteamBridge {
   readonly backgroundSettings: () => Promise<BackgroundSettings>;
   /** Opt in or out of starting at login. Reports what the OS actually recorded. */
   readonly setOpenAtLogin: (enabled: boolean) => Promise<BackgroundSettings>;
+
+  /** `skills list` for a provider filter. Read-only. */
+  readonly listSkills: (provider: SkillProviderFilter) => Promise<OperationResult<SkillList>>;
+  /** `skills show`. Read-only; `root` comes from a listed record. */
+  readonly showSkill: (name: string, root: string) => Promise<OperationResult<SkillDetail>>;
+  /**
+   * `skills install`. The native picker opens in the main process **inside this call**, and
+   * the chosen path goes to the CLI from there; the renderer receives the result only.
+   */
+  readonly installSkill: (request: SkillInstallRequest) => Promise<SkillInstallAnswer>;
+  /** `skills remove`. A directory is moved to quarantine, a symlink is unlinked; nothing is deleted. */
+  readonly removeSkill: (request: SkillRemoveRequest) => Promise<OperationResult<SkillRemoveReport>>;
 }
 
 export type NotificationLevel = 'info' | 'warning' | 'critical';
@@ -750,4 +861,8 @@ export const CHANNELS = {
   takePendingProject: 'devteam:take-pending-project',
   backgroundSettings: 'devteam:background-settings',
   setOpenAtLogin: 'devteam:set-open-at-login',
+  listSkills: 'devteam:list-skills',
+  showSkill: 'devteam:show-skill',
+  installSkill: 'devteam:install-skill',
+  removeSkill: 'devteam:remove-skill',
 } as const;

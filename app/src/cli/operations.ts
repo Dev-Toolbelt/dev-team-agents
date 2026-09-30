@@ -4,7 +4,8 @@
  * Read-only for most of this file — `list`, `catalog*`, `doctor`, `prefsList` — plus the
  * project lifecycle's write actions at the bottom: `bindProject`, `unbindProject`,
  * `syncProject`, `syncAllProjects`, `setPin`, `planUpgrade`, `applyUpgrade`, and the
- * project-layer preference writes `prefsSet` / `prefsUnset`. One function
+ * project-layer preference writes `prefsSet` / `prefsUnset`, and the global-skills
+ * commands `skills list|show|install|remove`. One function
  * per screen's needs. Each builds its own argument vector — the renderer never supplies
  * one — and each validates the payload it got before handing it on.
  *
@@ -47,6 +48,13 @@ import type {
   ProjectPreferences,
   ProjectRecord,
   ProblemKind,
+  SkillDetail,
+  SkillInstallReport,
+  SkillList,
+  SkillProvider,
+  SkillProviderFilter,
+  SkillRecord,
+  SkillRemoveReport,
   SyncAllReport,
   UnbindReport,
   UpgradePlan,
@@ -86,6 +94,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['prefs', 'list'],
   ['notifications', 'list'],
   ['notifications', 'watch'],
+  ['skills', 'list'],
+  ['skills', 'show'],
 ]);
 
 /**
@@ -133,6 +143,8 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   // the smallest write this app makes, and still a write, so it is declared and gated
   // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
   ['notifications', 'ack'],
+  ['skills', 'install'],
+  ['skills', 'remove'],
 ]);
 
 /** Every subcommand this build is allowed to run. */
@@ -216,6 +228,18 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   // Streamed, not invoked: `stream.ts`, entered through `watchNotifications` below, which
   // consults this table exactly as `run()` does.
   'notifications watch': { operands: 0, flags: {} },
+  // Global (user-level) skills. These take no `--path`: they act on the providers' own
+  // directories, never on a project. `--source` is always a path the main process's own
+  // picker returned (`main/ipc.ts` -> `installSkill`), and `--root` on `remove`/`show` is a
+  // root id copied from a `skills list` record. `install` passes no `--root`: which roots a
+  // skill lands in is the CLI's decision from the providers, not this app's.
+  'skills list': { operands: 0, flags: { '--provider': 'value' } },
+  'skills show': { operands: 1, flags: { '--root': 'value' } },
+  'skills install': {
+    operands: 0,
+    flags: { '--source': 'value', '--provider': 'repeatable', '--replace': 'bare', '--link': 'bare' },
+  },
+  'skills remove': { operands: 1, flags: { '--root': 'value' } },
 });
 
 const MAX_COMMAND_WORDS = 2;
@@ -909,6 +933,165 @@ export function asUpgradeReport(body: Record<string, unknown>): UpgradeReport | 
     state_pointer: body['state_pointer'],
     memory_pointer: body['memory_pointer'],
     git_tracked: asStringArray(body['git_tracked']),
+  };
+}
+
+// ── global skills ─────────────────────────────────────────────────────────────
+//
+// The user-level skill directories of Claude Code, Codex and opencode, through
+// `devteam skills`. `list` and `show` only read; `install` and `remove` are in
+// `GATED_COMMANDS`. The main process (`main/ipc.ts`) chooses the install source through
+// its own picker and resolves a removal against `skills list` before any of this runs.
+
+export function listSkills(context: CliContext, provider: SkillProviderFilter): Promise<OperationResult<SkillList>> {
+  return run(context, ['skills', 'list', '--provider', provider], asSkillList);
+}
+
+/** `root` is always passed: without it the CLI answers exit 2 for a name in several roots. */
+export function showSkill(context: CliContext, name: string, root: string): Promise<OperationResult<SkillDetail>> {
+  const problem = skillTargetProblem(name, root);
+  if (problem !== null) return Promise.resolve(refusedSkill('show', problem));
+  return run(context, ['skills', 'show', name.trim(), '--root', root], asSkillDetail);
+}
+
+export interface SkillInstallOptions {
+  readonly providers: readonly SkillProvider[];
+  readonly replace: boolean;
+  readonly link: boolean;
+}
+
+export function installSkill(
+  context: CliContext,
+  source: string,
+  options: SkillInstallOptions,
+): Promise<OperationResult<SkillInstallReport>> {
+  const args: string[] = ['skills', 'install', '--source', source];
+  for (const provider of options.providers) args.push('--provider', provider);
+  if (options.replace) args.push('--replace');
+  if (options.link) args.push('--link');
+  return run(context, args, asSkillInstallReport);
+}
+
+export function removeSkill(context: CliContext, name: string, root: string): Promise<OperationResult<SkillRemoveReport>> {
+  const problem = skillTargetProblem(name, root);
+  if (problem !== null) return Promise.resolve(refusedSkill('remove', problem));
+  return run(context, ['skills', 'remove', name.trim(), '--root', root], asSkillRemoveReport);
+}
+
+/** Why this name/root pair may not reach an argv. `argparse` would read a leading `-` as a flag. */
+export function skillTargetProblem(name: unknown, root: unknown): string | null {
+  const nameProblem = validateEntryName(name);
+  if (nameProblem !== null) return nameProblem.replace('catalog entry', 'skill');
+  if (typeof root !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(root)) {
+    return 'a skill root id must be letters, digits, dots, dashes and underscores';
+  }
+  return null;
+}
+
+function refusedSkill(verb: 'show' | 'remove', message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam skills ${verb}`, durationMs: 0 };
+}
+
+function asSkillRecord(raw: Record<string, unknown>): SkillRecord | string {
+  if (typeof raw['name'] !== 'string') return 'a skill has no string `name`';
+  if (typeof raw['root'] !== 'string') return 'a skill has no string `root`';
+  if (typeof raw['path'] !== 'string') return 'a skill has no string `path`';
+  if (typeof raw['managed'] !== 'boolean') return 'a skill has no boolean `managed`';
+  if (raw['status'] !== 'ok' && raw['status'] !== 'malformed') return 'a skill has no `status` of ok or malformed';
+  return {
+    name: raw['name'],
+    description: asNullableString(raw['description']),
+    root: raw['root'],
+    root_path: asNullableString(raw['root_path']),
+    path: raw['path'],
+    providers: asStringArray(raw['providers']),
+    is_symlink: raw['is_symlink'] === true,
+    link_target: asNullableString(raw['link_target']),
+    managed: raw['managed'],
+    status: raw['status'],
+    error: asNullableString(raw['error']),
+  };
+}
+
+/** `skills list --json`. */
+export function asSkillList(body: Record<string, unknown>): SkillList | string {
+  if (!Array.isArray(body['roots'])) return 'no `roots` array';
+  if (!Array.isArray(body['skills'])) return 'no `skills` array';
+  const roots: SkillList['roots'][number][] = [];
+  for (const raw of body['roots']) {
+    if (!isRecord(raw)) return 'a root is not an object';
+    if (typeof raw['id'] !== 'string' || typeof raw['path'] !== 'string') return 'a root has no string `id` and `path`';
+    roots.push({
+      id: raw['id'],
+      path: raw['path'],
+      // Not `=== true`: an absent flag is not the claim that the directory is absent.
+      exists: raw['exists'] !== false,
+      providers: asStringArray(raw['providers']),
+      install_target_for: asStringArray(raw['install_target_for']),
+    });
+  }
+  const skills: SkillRecord[] = [];
+  for (const raw of body['skills']) {
+    if (!isRecord(raw)) return 'a skill entry is not an object';
+    const record = asSkillRecord(raw);
+    if (typeof record === 'string') return record;
+    skills.push(record);
+  }
+  return { provider: typeof body['provider'] === 'string' ? body['provider'] : 'all', roots, skills };
+}
+
+/** `skills show --json`. */
+export function asSkillDetail(body: Record<string, unknown>): SkillDetail | string {
+  const record = asSkillRecord(body);
+  if (typeof record === 'string') return record;
+  return {
+    ...record,
+    body: typeof body['body'] === 'string' ? body['body'] : null,
+    files: asStringArray(body['files']),
+    files_truncated: body['files_truncated'] === true,
+  };
+}
+
+/** `skills install --json`. */
+export function asSkillInstallReport(body: Record<string, unknown>): SkillInstallReport | string {
+  if (typeof body['name'] !== 'string') return 'no string `name`';
+  if (!Array.isArray(body['installed'])) return 'no `installed` array';
+  const installed: SkillInstallReport['installed'][number][] = [];
+  for (const raw of body['installed']) {
+    if (!isRecord(raw)) return 'an `installed` entry is not an object';
+    if (typeof raw['root'] !== 'string' || typeof raw['path'] !== 'string') {
+      return 'an `installed` entry has no string `root` and `path`';
+    }
+    installed.push({
+      root: raw['root'],
+      path: raw['path'],
+      providers: asStringArray(raw['providers']),
+      replaced: raw['replaced'] === true,
+      quarantined_to: asNullableString(raw['quarantined_to']),
+    });
+  }
+  return {
+    name: body['name'],
+    description: asNullableString(body['description']),
+    source: asNullableString(body['source']),
+    linked: body['linked'] === true,
+    installed,
+  };
+}
+
+/** `skills remove --json`. */
+export function asSkillRemoveReport(body: Record<string, unknown>): SkillRemoveReport | string {
+  if (typeof body['name'] !== 'string') return 'no string `name`';
+  if (typeof body['root'] !== 'string') return 'no string `root`';
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (body['action'] !== 'unlinked' && body['action'] !== 'quarantined') return 'no `action` of unlinked or quarantined';
+  return {
+    name: body['name'],
+    root: body['root'],
+    path: body['path'],
+    providers: asStringArray(body['providers']),
+    action: body['action'],
+    quarantined_to: asNullableString(body['quarantined_to']),
   };
 }
 
