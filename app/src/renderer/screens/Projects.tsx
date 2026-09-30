@@ -70,11 +70,13 @@ const MODE_LABELS: Record<BindMode, string> = {
 const RECOMMENDED_MODE: BindMode = 'link';
 
 // One line per mode, phrased as the consequence a user cares about — not the mechanism.
+// One line each (reuse guideline `app_support_copy`): the consequence that decides the
+// choice, not how the mode works — `CLAUDE-md/cli.md` § bind modes has that.
 const MODE_DESCRIPTIONS: Record<BindMode, string> = {
-  auto: 'Detects whether this system supports symlinks and behaves like Link or Copy accordingly.',
-  link: 'Framework updates reach this project automatically — no extra step needed.',
-  copy: 'For Windows systems without symlink permission. Requires running sync by hand after every update.',
-  vendored: 'Also copies the framework in, but commits it into this project’s own repository.',
+  auto: 'Link if symlinks work here, else Copy.',
+  link: 'Updates reach the project automatically.',
+  copy: 'No symlinks; run sync after each update.',
+  vendored: 'Copies the framework into your repo.',
 };
 
 /**
