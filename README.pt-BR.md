@@ -67,7 +67,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
-| Converter uma instalação v2 existente (o `bind` recusa) | `devteam migrate --apply`, depois o `git rm -r --cached` que ele imprime |
+| Converter uma instalação v2 existente, em qualquer formato (o `bind` recusa; o diálogo de bind do app oferece) | `devteam migrate --apply --untrack`, depois o commit |
 | Mover a memória de um projeto para o store | `devteam upgrade --apply` |
 | Gerenciar credenciais (definir, obter, auditar, migrar v2) | `devteam cred set\|get\|list\|unset\|import\|check\|backends` |
 

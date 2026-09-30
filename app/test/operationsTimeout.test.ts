@@ -38,6 +38,7 @@ const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
   sync: ['sync', '--all'],
   pin: ['pin', '--path', '/p', '--release'],
   upgrade: ['upgrade', '/p'],
+  migrate: ['migrate', '/p', '--apply', '--untrack'],
   'prefs set': ['prefs', 'set', 'language', 'en', '--scope', 'project', '--path', '/p'],
   'prefs unset': ['prefs', 'unset', 'language', '--scope', 'project', '--path', '/p'],
   'notifications ack': ['notifications', 'ack', '1-2-3'],

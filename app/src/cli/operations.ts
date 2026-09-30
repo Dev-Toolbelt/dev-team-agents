@@ -44,6 +44,9 @@ import type {
   CatalogSummary,
   DoctorFinding,
   DoctorReport,
+  MigrationMove,
+  MigrationPlan,
+  MigrationReport,
   NotificationLevel,
   OperationResult,
   PinReport,
@@ -157,6 +160,11 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['sync'],
   ['pin'],
   ['upgrade'],
+  // A v2 install converted from the bind dialog. Its plan writes nothing, but the command is
+  // classified mutating by the CLI (`compat.py`) and the gate is per command, not per flag.
+  // `--untrack` is the one path by which this app causes a git operation (`git rm -r
+  // --cached` on the plan's own paths); see ADR-0015's amendment.
+  ['migrate'],
   ['prefs', 'set'],
   ['prefs', 'unset'],
   // ADR-0019. `plugin run` is listed here although only some actions write: the framework
@@ -253,6 +261,10 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   // here is always a path `main/ipc.ts` resolved from a `project_id`, never a renderer
   // string.
   upgrade: { operands: 1, flags: { '--apply': 'bare' } },
+  migrate: {
+    operands: 1,
+    flags: { '--provider': 'repeatable', '--mode': 'value', '--apply': 'bare', '--untrack': 'bare' },
+  },
   // The preference commands resolve their project from `--path` alone, so — as with `pin`
   // — the path is always one `main/ipc.ts` resolved from a `project_id`. `--scope` is
   // always `project`: the settings screen edits one project's layer and never the global
@@ -735,6 +747,37 @@ export function planUpgrade(context: CliContext, path: string): Promise<Operatio
 
 export function applyUpgrade(context: CliContext, path: string): Promise<OperationResult<UpgradeReport>> {
   return run(context, ['upgrade', path, '--apply'], asUpgradeReport);
+}
+
+/**
+ * `devteam migrate`, for a directory the picker offered (as `bindProject`). The plan and
+ * the apply take the same options, so what the user reviewed is what runs. The apply
+ * always passes `--untrack`: the app's migration ends with the old paths out of git's
+ * index, ready for the user's own commit — see `MigrationReport`.
+ */
+function migrateArgs(path: string, options: MigrateOptions): string[] {
+  const args: string[] = ['migrate', path];
+  for (const provider of options.providers ?? []) args.push('--provider', provider);
+  if (options.mode !== undefined) args.push('--mode', options.mode);
+  return args;
+}
+
+export type MigrateOptions = Pick<BindOptions, 'providers' | 'mode'>;
+
+export function planMigration(
+  context: CliContext,
+  path: string,
+  options: MigrateOptions = {},
+): Promise<OperationResult<MigrationPlan>> {
+  return run(context, migrateArgs(path, options), asMigrationPlan);
+}
+
+export function applyMigration(
+  context: CliContext,
+  path: string,
+  options: MigrateOptions = {},
+): Promise<OperationResult<MigrationReport>> {
+  return run(context, [...migrateArgs(path, options), '--apply', '--untrack'], asMigrationReport);
 }
 
 // ── preferences ─────────────────────────────────────────────────────────────────
@@ -1263,6 +1306,82 @@ export function asPinReport(body: Record<string, unknown>): PinReport | string {
 }
 
 /** `upgrade --json` without `--apply` — a preview; nothing was written. */
+function asMoves(raw: unknown): MigrationMove[] | null {
+  if (!Array.isArray(raw)) return null;
+  const moves: MigrationMove[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) return null;
+    const record = item as Record<string, unknown>;
+    if (typeof record['from'] !== 'string' || typeof record['to'] !== 'string') return null;
+    moves.push({ from: record['from'], to: record['to'] });
+  }
+  return moves;
+}
+
+export function asMigrationPlan(body: Record<string, unknown>): MigrationPlan | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['layout'] !== 'string') return 'no string `layout`';
+  if (typeof body['install_dir'] !== 'string') return 'no string `install_dir`';
+  if (typeof body['mode'] !== 'string') return 'no string `mode`';
+  if (typeof body['adopts_identity'] !== 'boolean') return 'no boolean `adopts_identity`';
+  for (const key of ['providers', 'actions', 'context_paths_added', 'git_tracked', 'git_tracked_artifacts', 'preserved']) {
+    if (!Array.isArray(body[key])) return `no \`${key}\` array`;
+  }
+  const moves = asMoves(body['memory_moves']);
+  if (moves === null) return 'no well-formed `memory_moves` array';
+  return {
+    path: body['path'],
+    layout: body['layout'],
+    install_dir: body['install_dir'],
+    providers: asStringArray(body['providers']),
+    mode: body['mode'],
+    actions: asStringArray(body['actions']),
+    adopts_identity: body['adopts_identity'],
+    memory_moves: moves,
+    context_paths_added: asStringArray(body['context_paths_added']),
+    git_tracked: asStringArray(body['git_tracked']),
+    git_tracked_artifacts: asStringArray(body['git_tracked_artifacts']),
+    preserved: asStringArray(body['preserved']),
+  };
+}
+
+export function asMigrationReport(body: Record<string, unknown>): MigrationReport | string {
+  for (const key of ['path', 'layout', 'project_id', 'version', 'mode']) {
+    if (typeof body[key] !== 'string') return `no string \`${key}\``;
+  }
+  if (typeof body['adopted_identity'] !== 'boolean') return 'no boolean `adopted_identity`';
+  for (const key of ['providers', 'context_paths_added', 'retired_links', 'git_tracked', 'git_tracked_artifacts', 'untracked', 'unrecognised']) {
+    if (!Array.isArray(body[key])) return `no \`${key}\` array`;
+  }
+  const memory = asMoves(body['memory_moved']);
+  if (memory === null) return 'no well-formed `memory_moved` array';
+  const quarantined = asMoves(body['quarantined']);
+  if (quarantined === null) return 'no well-formed `quarantined` array';
+  const quarantineDir = body['quarantine_dir'];
+  if (quarantineDir !== null && typeof quarantineDir !== 'string') return '`quarantine_dir` is neither a string nor null';
+  const problem = body['untrack_problem'];
+  if (problem !== null && typeof problem !== 'string') return '`untrack_problem` is neither a string nor null';
+  return {
+    path: body['path'] as string,
+    layout: body['layout'] as string,
+    project_id: body['project_id'] as string,
+    version: body['version'] as string,
+    mode: body['mode'] as string,
+    providers: asStringArray(body['providers']),
+    adopted_identity: body['adopted_identity'],
+    memory_moved: memory,
+    context_paths_added: asStringArray(body['context_paths_added']),
+    quarantined,
+    quarantine_dir: quarantineDir,
+    retired_links: asStringArray(body['retired_links']),
+    git_tracked: asStringArray(body['git_tracked']),
+    git_tracked_artifacts: asStringArray(body['git_tracked_artifacts']),
+    untracked: asStringArray(body['untracked']),
+    untrack_problem: problem,
+    unrecognised: asStringArray(body['unrecognised']),
+  };
+}
+
 export function asUpgradePlan(body: Record<string, unknown>): UpgradePlan | string {
   if (typeof body['path'] !== 'string') return 'no string `path`';
   if (typeof body['project_id'] !== 'string') return 'no string `project_id`';

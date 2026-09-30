@@ -85,6 +85,16 @@ macOS, `%APPDATA%\Dev Team Agents\logs\` on Windows): CLI resolution and stream 
 uncaught errors, and a renderer or helper process that died. It rotates to `main.old.log` at
 1 MB, so it never holds more than two files.
 
+## Binding a project that already has dev-team-agents v2
+
+Choosing a directory in the bind dialog asks `devteam migrate` for a plan before anything else. A
+directory with no v2 install (exit 2) binds as it always did. One with a v2 install — vendored at
+`.dev-team-agents/`, or the pre-v2.1.0 shape at `.claude/dev-team-agents/` — gets **Review migration**
+instead of Bind: the plan, with the providers and mode on screen, then **Migrate**, which runs
+`migrate --apply --untrack` with exactly those options. The old framework goes to a dated quarantine,
+memory is kept, and the old paths leave git's index; the result says so, and the commit is yours. A
+pre-v2.1.0 project lands on layout 1 — use Upgrade on its row to move the memory into the store.
+
 ## Notifications and running in the background
 
 Hooks queue notifications; this app shows them (ADR-0017). The main process runs one

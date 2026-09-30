@@ -30,10 +30,12 @@ import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../sr
 import type { StreamEnd } from '../src/cli/stream.js';
 import {
   ackNotification,
+  applyMigration,
   bindProject,
   catalogSummary,
   doctor,
   listNotifications,
+  planMigration,
   installSkill,
   listProjects,
   listTasks,
@@ -480,6 +482,49 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     if (!after.ok) throw new Error('unreachable');
     expect(after.data.values['session_no_commit_turns']).toBe(inherited);
     expect(after.data.values['worktree_base_branch']).toBeNull();
+  });
+
+  it('migrates a pre-v2.1.0 install end to end: plan, apply with --untrack, the index emptied of the old paths', async () => {
+    installStoreVersion();
+    const root = await mkdtemp(join(tmpdir(), 'devteam-app-realcli-pre-root-'));
+    scratch.push(root);
+    const legacy = join(root, '.claude', 'dev-team-agents', 'agents');
+    await mkdir(legacy, { recursive: true });
+    await writeFile(join(legacy, 'backend-developer.md'), '# agent\n', 'utf8');
+    await mkdir(join(root, '.claude', 'user-data'), { recursive: true });
+    await writeFile(join(root, '.claude', 'user-data', 'session-summary.md'), '## kept\n', 'utf8');
+    const git = (...args: string[]) =>
+      spawnSync('git', args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@e', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@e' },
+      });
+    for (const args of [['init', '-q', '.'], ['add', '-A'], ['commit', '-qm', 'v2.0']]) {
+      const result = git(...args);
+      if (result.status !== 0) throw new Error(`fixture git ${args.join(' ')} failed: ${result.stderr}`);
+    }
+
+    const plan = await planMigration(context(), root, { providers: ['claude'], mode: 'link' });
+    if (!plan.ok) throw new Error(`expected a plan: ${plan.message}`);
+    expect(plan.data.layout).toBe('pre-root');
+    expect(plan.data.git_tracked).toEqual(expect.arrayContaining(['.claude/dev-team-agents/agents', '.claude/user-data']));
+
+    const applied = await applyMigration(context(), root, { providers: ['claude'], mode: 'link' });
+    if (!applied.ok) throw new Error(`expected a migration: ${applied.message}`);
+    expect(applied.data.untrack_problem).toBeNull();
+    expect(applied.data.untracked).toEqual(expect.arrayContaining(['.claude/dev-team-agents/agents', '.claude/user-data']));
+    expect(await readFile(join(root, '.dev-team-agents', 'user-data', 'session-summary.md'), 'utf8')).toBe('## kept\n');
+    const tracked = git('ls-files', '--', '.claude/dev-team-agents', '.claude/user-data').stdout.trim();
+    expect(tracked).toBe('');
+    // Nothing was committed: the removals wait in the index for the user.
+    expect(git('log', '--oneline').stdout.trim().split('\n')).toHaveLength(1);
+
+    // A directory with no v2 install is exit 2 — the bind dialog's signal to bind instead.
+    const fresh = await mkdtemp(join(tmpdir(), 'devteam-app-realcli-fresh-'));
+    scratch.push(fresh);
+    const notV2 = await planMigration(context(), fresh, {});
+    if (notV2.ok) throw new Error('expected no v2 install');
+    expect(notV2.exitCode).toBe(2);
   });
 
   it('binds over a v2 preferences.json, imports it into the project layer and moves the file out', async () => {

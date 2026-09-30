@@ -211,7 +211,15 @@ def _is_managed_path(rel, path, previous_paths, project_root):
         return False
     if not target.is_absolute():
         target = path.parent / target
-    roots = [paths.core_dir(), Path(project_root) / project.PROJECT_DIR]
+    # The pre-v2.1.0 install directory too: `migrate` quarantines that tree and then
+    # binds, and the links it committed (`.claude/agents/dev-team ->
+    # ../dev-team-agents/agents`, one per skill) are v2 artifacts like any other.
+    # `devteam bind` itself never gets here with one — it refuses that shape first.
+    roots = [
+        paths.core_dir(),
+        Path(project_root) / project.PROJECT_DIR,
+        Path(project_root) / project.PRE_ROOT_DIR,
+    ]
     return any(_is_inside(target, root) for root in roots)
 
 

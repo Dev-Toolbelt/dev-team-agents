@@ -418,19 +418,44 @@ def cmd_update(args, emitter):
 def cmd_migrate(args, emitter):
     if getattr(args, "pin", None) is not None:
         paths.validate_version(args.pin)
+    if args.untrack and not args.apply:
+        # A preview writes nothing — least of all git's index.
+        raise UsageError("--untrack only acts with --apply", hint="Run `devteam migrate --apply --untrack`.")
     if args.apply:
         result = migrate.apply(
-            args.path, provider_names=args.provider, mode=args.mode, pin=args.pin, emitter=emitter
+            args.path,
+            provider_names=args.provider,
+            mode=args.mode,
+            pin=args.pin,
+            emitter=emitter,
+            untrack_paths=args.untrack,
         )
         lines = [
-            "migrated {}".format(result["path"]),
-            "  identity   {}".format(result["project_id"]),
+            "migrated {} ({} layout)".format(result["path"], result["layout"]),
+            "  identity   {}{}".format(
+                result["project_id"], " (adopted)" if result["adopted_identity"] else ""
+            ),
             "  version    {}".format(result["version"]),
             "  quarantine {}".format(result["quarantine_dir"] or "(nothing moved)"),
             "  preserved  {}".format(", ".join(result["preserved"])),
         ]
-        untrack = result["git_tracked"] + result["git_tracked_artifacts"]
-        if untrack:
+        for move in result["memory_moved"]:
+            lines.append("  memory     {} -> {}".format(move["from"], move["to"]))
+        if result["context_paths_added"]:
+            lines.append("  context    added {}".format(", ".join(result["context_paths_added"])))
+        if result["untracked"]:
+            lines.append(
+                "  git        {} path(s) removed from the index (files kept) — review and "
+                "commit".format(len(result["untracked"]))
+            )
+        if result["untrack_problem"]:
+            lines.append("  git        not untracked: {}".format(result["untrack_problem"]))
+        untrack = [
+            path
+            for path in result["git_tracked"] + result["git_tracked_artifacts"] + result["retired_links"]
+            if path not in set(result["untracked"])
+        ]
+        if untrack and not result["untracked"]:
             lines.append(
                 "  git        {} path(s) still tracked — commit their removal:".format(len(untrack))
             )
@@ -444,7 +469,7 @@ def cmd_migrate(args, emitter):
     lines.extend("  - {}".format(action) for action in result["actions"])
     untrack = result["git_tracked"] + result["git_tracked_artifacts"]
     if untrack:
-        lines.append("  after --apply, untrack them (the files stay on disk):")
+        lines.append("  after --apply, untrack them (the files stay on disk) — or pass --untrack:")
         lines.append("    git rm -r --cached {}".format(" ".join(untrack)))
     lines.append("  run again with --apply to execute")
     return result, "\n".join(lines)
@@ -1318,6 +1343,11 @@ def build_parser():
     migrate_parser = leaf(sub, "migrate", help="convert a v2 vendored install into a bind")
     migrate_parser.add_argument("path", nargs="?")
     migrate_parser.add_argument("--apply", action="store_true", help="execute (default: preview)")
+    migrate_parser.add_argument(
+        "--untrack",
+        action="store_true",
+        help="with --apply: `git rm -r --cached` the paths the plan lists (files stay on disk; nothing is committed)",
+    )
     migrate_parser.add_argument(
         "--provider", action="append", choices=providers.ALL_PROVIDERS
     )

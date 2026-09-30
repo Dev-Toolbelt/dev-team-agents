@@ -543,6 +543,7 @@ describe('buildInfo reports write actions honestly', () => {
       [
         'bind',
         'doctor',
+        'migrate',
         'notifications ack',
         'pin',
         'plugin config set',
@@ -587,6 +588,7 @@ describe('environment withholds every gated command when the declaration could n
         [
           'bind',
           'doctor',
+          'migrate',
           'notifications ack',
           'pin',
           'plugin config set',
@@ -1067,5 +1069,30 @@ describe('the skills handlers', () => {
     const removed = (await remove(TRUSTED, { name: 'alpha', root: 'claude' })) as { readonly ok: boolean; readonly command: string };
     expect(removed.ok).toBe(true);
     expect(removed.command).toContain('skills remove alpha --root claude --json');
+  });
+});
+
+describe('migrate holds the bind provenance rule', () => {
+  it('refuses a path the picker never offered, and a pin, before anything spawns', async () => {
+    const { handlers, showOpenDialog, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    for (const channel of [CHANNELS.planMigration, CHANNELS.applyMigration]) {
+      const refused = (await handlers.get(channel)?.(TRUSTED, { path: '/never/offered' })) as {
+        readonly ok: boolean;
+        readonly kind: string;
+        readonly message: string;
+      };
+      expect(refused.ok).toBe(false);
+      expect(refused.kind).toBe('refused');
+      expect(refused.message).toContain('never offered');
+    }
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/chosen/dir'] });
+    await handlers.get(CHANNELS.chooseProjectDirectory)?.(TRUSTED);
+    const pinned = (await handlers.get(CHANNELS.applyMigration)?.(TRUSTED, { path: '/chosen/dir', pin: '3.0.0' })) as {
+      readonly kind: string;
+      readonly message: string;
+    };
+    expect(pinned.kind).toBe('refused');
+    expect(pinned.message).toContain('pin');
   });
 });

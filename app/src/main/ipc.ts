@@ -23,6 +23,9 @@ import { dialog, ipcMain } from 'electron';
 import { DECLARATION_FILE_NAME, performHandshakeCall, writeDeclarationFile } from '../cli/declaration.js';
 import {
   applyUpgrade,
+  applyMigration,
+  planMigration,
+  type MigrateOptions,
   bindProject,
   catalogEntry,
   catalogListing,
@@ -100,6 +103,8 @@ import {
   type SkillRemoveReport,
   type SyncAllReport,
   type UnbindReport,
+  type MigrationPlan,
+  type MigrationReport,
   type UpgradePlan,
   type UpgradeReport,
 } from '../shared/api.js';
@@ -456,6 +461,18 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
   }
 
   /** A write channel was called with an argument that does not even typecheck as sent. */
+  /** A request refused before anything was spawned, carrying the validator's own reason. */
+  function refusedRequest(command: string, message: string): OperationResult<never> {
+    return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
+  }
+
+  function migrateOptions(validated: ValidatedBindRequest): MigrateOptions {
+    return {
+      ...(validated.providers !== undefined ? { providers: validated.providers } : {}),
+      ...(validated.mode !== undefined ? { mode: validated.mode } : {}),
+    };
+  }
+
   function refusedBadArgument(command: string): OperationResult<never> {
     return {
       ok: false,
@@ -653,6 +670,40 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
         // Best-effort: this app's own local convenience record, not the framework's
         // write. A bind that succeeded must be reported as succeeded even when naming it
         // afterward failed — see `BindRequest.name`'s doc comment in `shared/api.ts`.
+      }
+    }
+    return result;
+  });
+
+  // `migrate` has `bind`'s provenance rule, and the same validator: its target is a
+  // directory with no registry entry yet, so there is no `project_id` to resolve — the
+  // path must be one this process handed back through the picker. `pin` is refused by the
+  // validator's caller below rather than silently dropped: migrate takes no `--pin`.
+  const validateMigrateRequest = (request: unknown): ValidatedBindRequest | string => {
+    if (typeof request === 'object' && request !== null && 'pin' in request) return '`pin` is not a migrate option';
+    return validateBindRequest(request, offeredDirectories);
+  };
+
+  handle(CHANNELS.planMigration, async (_event, request: unknown): Promise<OperationResult<MigrationPlan>> => {
+    const validated = validateMigrateRequest(request);
+    if (typeof validated === 'string') return refusedRequest('migrate', validated);
+    const gated = await gatedContext('migrate');
+    if (!gated.ready) return gated.problem;
+    return planMigration(gated.ctx, validated.path, migrateOptions(validated));
+  });
+
+  handle(CHANNELS.applyMigration, async (_event, request: unknown): Promise<OperationResult<MigrationReport>> => {
+    const validated = validateMigrateRequest(request);
+    if (typeof validated === 'string') return refusedRequest('migrate', validated);
+    const gated = await gatedContext('migrate');
+    if (!gated.ready) return gated.problem;
+    const result = await applyMigration(gated.ctx, validated.path, migrateOptions(validated));
+    if (result.ok && validated.name !== undefined) {
+      try {
+        await writeProjectName(deps.userDataDir, result.data.project_id, validated.name);
+        settings = null; // see the same line in the bindProject handler
+      } catch {
+        // Best-effort, exactly as for a bind: the migration succeeded either way.
       }
     }
     return result;

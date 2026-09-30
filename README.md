@@ -67,7 +67,7 @@ Help me set up this project with dev-team-agents
 | See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
-| Convert an existing v2 install (`bind` refuses one) | `devteam migrate --apply`, then the `git rm -r --cached` it prints |
+| Convert an existing v2 install, either shape (`bind` refuses one; the app's bind dialog offers it) | `devteam migrate --apply --untrack`, then commit |
 | Move a project's memory into the store | `devteam upgrade --apply` |
 | Manage credentials (set, get, audit, migrate v2) | `devteam cred set|get|list|unset|import|check|backends` |
 

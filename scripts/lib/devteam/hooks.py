@@ -37,6 +37,11 @@ HOOK_DIR = "{}/scripts/hooks".format(project.PROJECT_DIR)
 #: version. Still recognised as ours, so a sync rewrites such an entry in place
 #: instead of appending a second one beside it.
 CORE_POINTER_HOOK_DIR = "{}/core/scripts/hooks".format(project.PROJECT_DIR)
+#: What a pre-v2.1.0 install wrote. Recognised so a migration rewrites it in place:
+#: left alone, each event would run a dispatcher from a tree the migration just
+#: moved into quarantine, beside the new one.
+PRE_ROOT_HOOK_DIR = "{}/scripts/hooks".format(project.PRE_ROOT_DIR)
+OWNED_HOOK_DIRS = (HOOK_DIR, CORE_POINTER_HOOK_DIR, PRE_ROOT_HOOK_DIR)
 
 EVENTS = (
     ("PreToolUse", "pre-tool-use.sh"),
@@ -68,7 +73,7 @@ def _is_devteam_entry(entry, script):
         if not isinstance(hook, dict):
             continue
         command = hook.get("command") or ""
-        if script in command and (HOOK_DIR in command or CORE_POINTER_HOOK_DIR in command):
+        if script in command and any(owned in command for owned in OWNED_HOOK_DIRS):
             return True
     return False
 

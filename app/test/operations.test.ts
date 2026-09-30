@@ -36,6 +36,10 @@ import {
   catalogListing,
   listProjects,
   planUpgrade,
+  planMigration,
+  applyMigration,
+  asMigrationPlan,
+  asMigrationReport,
   run,
   setPin,
   prefsList,
@@ -156,6 +160,9 @@ describe('what this slice is allowed to run', () => {
       'sync',
       'pin',
       'upgrade',
+      // A v2 install converted from the bind dialog (ADR-0015 amendment). `--untrack` is the
+      // one path by which this app causes a git operation — pinned below.
+      'migrate',
       'prefs set',
       'prefs unset',
       'plugin enable',
@@ -244,18 +251,56 @@ describe('the argv boundary refuses before it spawns', () => {
     expect(result.message).toContain('not a command this app is allowed to run');
   });
 
-  it('refuses every mutating command outside the gated list, and `migrate` in particular', async () => {
-    // `bind`/`unbind`/`sync`/`pin`/`upgrade` moved into the gated list with this app's
-    // write actions, and `prefs set`/`prefs unset` with the project settings screen; these
-    // are the ones that remain refused because nothing in this build spawns them yet —
-    // `migrate` in particular, because it is the project lifecycle's other mutating
-    // command and has no handler.
-    for (const args of [['migrate'], ['export'], ['store', 'use'], ['cred', 'list'], ['update'], ['uninstall']]) {
+  it('refuses every mutating command outside the gated list', async () => {
+    // `bind`/`unbind`/`sync`/`pin`/`upgrade`/`migrate` are in the gated list, `prefs
+    // set`/`prefs unset` came with the project settings screen; these remain refused
+    // because nothing in this build spawns them.
+    for (const args of [['export'], ['store', 'use'], ['cred', 'list'], ['update'], ['uninstall']]) {
       const result = await run(unspawnable(), args, (body) => body);
       expect(result.ok, args.join(' ')).toBe(false);
       if (result.ok) throw new Error('unreachable');
       expect(result.kind, args.join(' ')).toBe('refused');
     }
+  });
+
+  it('builds migrate with the reviewed options, and applies it with --untrack and nothing else', async () => {
+    const options = { providers: ['claude', 'codex'] as const, mode: 'link' as const };
+    // The binary does not exist, so nothing runs; the result still names the argv built.
+    const plan = await planMigration(unspawnable(), '/chosen/dir', options);
+    const apply = await applyMigration(unspawnable(), '/chosen/dir', options);
+    expect(plan.command).toContain('migrate /chosen/dir --provider claude --provider codex --mode link');
+    expect(plan.command).not.toContain('--apply');
+    expect(apply.command).toContain('migrate /chosen/dir --provider claude --provider codex --mode link --apply --untrack');
+    // A flag migrate never takes is refused by the allow-list before any spawn.
+    for (const args of [
+      ['migrate', '/chosen/dir', '--pin', '3.0.0'],
+      ['migrate', '/chosen/dir', '--apply', '--untrack', '--force'],
+    ]) {
+      const result = await run(unspawnable(), args, (body) => body);
+      if (result.ok) throw new Error(`expected a refusal for ${args.join(' ')}`);
+      expect(result.kind, args.join(' ')).toBe('refused');
+    }
+    expect(argvProblem(['migrate', '/chosen/dir', '--provider', 'claude', '--mode', 'link', '--apply', '--untrack'])).toBeNull();
+  });
+
+  it('parses the migrate plan and report the CLI emits, and names what a malformed one lacks', () => {
+    const plan = {
+      path: '/p', layout: 'pre-root', install_dir: '.claude/dev-team-agents', providers: ['claude'], mode: 'link',
+      actions: ['a'], adopts_identity: true, memory_moves: [{ from: '.claude/user-data', to: '.dev-team-agents/user-data' }],
+      context_paths_added: ['.claude/docs'], git_tracked: ['x'], git_tracked_artifacts: ['y'], preserved: ['user-data'],
+    };
+    expect(asMigrationPlan(plan)).toEqual(plan);
+    expect(asMigrationPlan({ ...plan, memory_moves: [{ from: 1 }] })).toMatch(/memory_moves/);
+    expect(asMigrationPlan({ ...plan, adopts_identity: 'yes' })).toMatch(/adopts_identity/);
+    const report = {
+      path: '/p', layout: 'root', project_id: 'id', version: '3.0.0', mode: 'link', providers: ['claude'],
+      adopted_identity: false, memory_moved: [], context_paths_added: [], quarantined: [{ from: 'a', to: 'b' }],
+      quarantine_dir: null, retired_links: [], git_tracked: [], git_tracked_artifacts: [], untracked: ['a'],
+      untrack_problem: null, unrecognised: [],
+    };
+    expect(asMigrationReport(report)).toEqual(report);
+    expect(asMigrationReport({ ...report, untrack_problem: 3 })).toMatch(/untrack_problem/);
+    expect(asMigrationReport({ ...report, quarantine_dir: 1 })).toMatch(/quarantine_dir/);
   });
 
   it('refuses a `--project-id`-shaped or `--provider`-shaped flag on a command that does not take it', async () => {

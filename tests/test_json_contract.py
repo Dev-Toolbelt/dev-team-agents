@@ -737,6 +737,42 @@ class AppFacingKeySetContractTest(StoreTestCase):
         "skills install": {"name", "description", "source", "linked", "installed", "also_present"},
         "skills install.record": {"root", "path", "providers", "replaced", "quarantined_to"},
         "skills remove": {"name", "root", "path", "providers", "action", "quarantined_to", "link_target"},
+        # The app's migrate flow: plan in the bind dialog, then apply with --untrack.
+        "migrate": {
+            "path",
+            "layout",
+            "install_dir",
+            "detected",
+            "providers",
+            "mode",
+            "actions",
+            "adopts_identity",
+            "memory_moves",
+            "context_paths_added",
+            "git_tracked",
+            "git_tracked_artifacts",
+            "preserved",
+        },
+        "migrate --apply": {
+            "path",
+            "layout",
+            "project_id",
+            "version",
+            "mode",
+            "providers",
+            "adopted_identity",
+            "memory_moved",
+            "context_paths_added",
+            "quarantined",
+            "quarantine_dir",
+            "retired_links",
+            "git_tracked",
+            "git_tracked_artifacts",
+            "untracked",
+            "untrack_problem",
+            "preserved",
+            "unrecognised",
+        },
     }
 
     # A key whose name alone suggests it might carry an actual secret value,
@@ -927,6 +963,22 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # one successful payload, not a second invocation.
         self.assertTrue(self.bind_payload.get("ok", True) is not False)
         self._assert_exact_keys("bind", self.bind_payload, self.EXPECTED["bind"])
+
+    def test_migrate_plan_and_apply(self):
+        # A pre-v2.1.0 install, the shape the app's bind dialog now converts.
+        root = make_git_project(self.tmp / "v2-pre-root", name="v2-pre-root")
+        agents = root / ".claude" / "dev-team-agents" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "backend-developer.md").write_text("# agent\n", encoding="utf-8")
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@e", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@e")
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "commit", "-qm", "v2"], cwd=str(root), check=True, stdout=subprocess.DEVNULL, env=env)
+        plan = self._run_ok("migrate", str(root), "--provider", "claude", "--mode", "link", "--json")
+        self._assert_exact_keys("migrate", plan, self.EXPECTED["migrate"])
+        applied = self._run_ok(
+            "migrate", str(root), "--provider", "claude", "--mode", "link", "--apply", "--untrack", "--json"
+        )
+        self._assert_exact_keys("migrate --apply", applied, self.EXPECTED["migrate --apply"])
 
     def test_store_list(self):
         payload = self._run_ok("store", "list", "--json")

@@ -26,6 +26,13 @@ from . import jsonio
 from .errors import EnvError, UsageError
 
 PROJECT_DIR = ".dev-team-agents"
+#: Where a v2 install lived before v2.1.0 moved it to the project root, with its
+#: memory beside it at ``.claude/user-data/`` and its docs at ``.claude/docs/``.
+#: Recognised by `bind` (its links are v2 artifacts), `hooks` (its settings entries
+#: are ours) and `migrate` (which converts it); never written.
+PRE_ROOT_DIR = ".claude/dev-team-agents"
+PRE_ROOT_MEMORY_DIR = ".claude/user-data"
+PRE_ROOT_DOCS_DIR = ".claude/docs"
 PROJECT_FILE = "project.json"
 SCHEMA = 1
 DEFAULT_CONTEXT_PATHS = ["docs"]

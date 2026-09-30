@@ -140,6 +140,190 @@ class MigrationTest(StoreTestCase):
         self.assertIn(".claude/agents/dev-team", result["git_tracked_artifacts"])
 
 
+class UntrackTest(StoreTestCase):
+    """`--untrack`: the one git command the CLI runs, on exactly the plan's paths."""
+
+    def setUp(self):
+        super().setUp()
+        self.install_version("3.0.0", activate=True)
+
+    _git_env = staticmethod(MigrationTest._git_env)
+    _legacy_project = MigrationTest._legacy_project
+    _install_sh_project = MigrationTest._install_sh_project
+
+    def _tracked(self, root, *paths):
+        result = subprocess.run(
+            ["git", "ls-files", "--", *paths], cwd=str(root), stdout=subprocess.PIPE, check=True
+        )
+        return result.stdout.decode().split()
+
+    def test_apply_with_untrack_empties_the_index_of_the_plan_paths_only(self):
+        root = self._install_sh_project()
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        listed = preview["git_tracked"] + preview["git_tracked_artifacts"]
+        self.assertTrue(listed)
+        result = migrate.apply(root, provider_names=["claude"], mode="link", untrack_paths=True)
+        self.assertIsNone(result["untrack_problem"])
+        self.assertEqual(self._tracked(root, *listed), [])
+        # Nothing outside the plan left the index, and nothing was committed.
+        self.assertEqual(self._tracked(root, "docs/note.md"), ["docs/note.md"])
+        head = subprocess.run(
+            ["git", "log", "--oneline"], cwd=str(root), stdout=subprocess.PIPE, check=True
+        ).stdout.decode().splitlines()
+        self.assertEqual(len(head), 1 + 1)  # the fixture's two commits, no new one
+
+    def test_apply_without_untrack_leaves_the_index_alone(self):
+        root = self._install_sh_project()
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(result["untracked"], [])
+        self.assertTrue(self._tracked(root, *result["git_tracked"]))
+
+    def test_the_cli_refuses_untrack_without_apply(self):
+        root = self._install_sh_project()
+        code, _, _ = self.run_cli("--json", "migrate", str(root), "--untrack")
+        self.assertEqual(code, 2)
+
+    def test_untrack_outside_a_git_work_tree_reports_instead_of_failing(self):
+        plain = self.tmp / "not-git"
+        plain.mkdir()
+        done, problem = migrate.untrack(plain, ["anything"])
+        self.assertEqual(done, [])
+        self.assertIn("not inside a git work tree", problem)
+
+
+class PreRootMigrationTest(StoreTestCase):
+    """A pre-v2.1.0 install converted in one `migrate`, no script to run first."""
+
+    def setUp(self):
+        super().setUp()
+        self.install_version("3.0.0", activate=True)
+
+    _git_env = staticmethod(MigrationTest._git_env)
+
+    def _pre_root_project(self, name="pre-root", stale_identity=False):
+        root = self.new_project(name)
+        legacy = root / ".claude" / "dev-team-agents"
+        for rel, text in (
+            ("agents/backend-developer.md", "# agent\n"),
+            ("scripts/hooks/stop.sh", "#!/bin/sh\n"),
+            ("workflows/bug-fix.md", "# workflow\n"),
+            ("skills/removed/old-skill/SKILL.md", "# gone since v2.0\n"),
+        ):
+            (legacy / rel).parent.mkdir(parents=True, exist_ok=True)
+            (legacy / rel).write_text(text, encoding="utf-8")
+        claude = root / ".claude"
+        (claude / "agents").mkdir()
+        os.symlink("../dev-team-agents/agents", str(claude / "agents" / "dev-team"))
+        (claude / "skills").mkdir()
+        os.symlink("../dev-team-agents/skills/removed/old-skill", str(claude / "skills" / "old-skill"))
+        (claude / "user-data").mkdir()
+        (claude / "user-data" / "session-summary.md").write_text("## kept\n", encoding="utf-8")
+        (claude / "docs").mkdir()
+        (claude / "docs" / "project.md").write_text("# project\n", encoding="utf-8")
+        (claude / "settings.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "Stop": [
+                            {"hooks": [{"type": "command", "command": ".claude/dev-team-agents/scripts/hooks/stop.sh"}]}
+                        ]
+                    },
+                    "permissions": {"allow": ["Bash(npm test)"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", "commit", "-qm", "v2.0 install"],
+            cwd=str(root),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            env=self._git_env(),
+        )
+        if stale_identity:
+            # What a refused bind used to leave: an unregistered identity on layout 2.
+            project.ensure(root)
+        return root
+
+    def test_detect_and_plan_describe_the_pre_root_shape_without_writing(self):
+        root = self._pre_root_project()
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertEqual(preview["layout"], "pre-root")
+        self.assertEqual(preview["install_dir"], ".claude/dev-team-agents")
+        self.assertIn("workflows", preview["detected"]["vendored_trees"])
+        self.assertEqual(preview["memory_moves"], [{"from": ".claude/user-data", "to": ".dev-team-agents/user-data"}])
+        self.assertEqual(preview["context_paths_added"], [".claude/docs"])
+        self.assertIn(".claude/user-data", preview["git_tracked"])
+        self.assertIn(".claude/agents/dev-team", preview["git_tracked_artifacts"])
+        self.assertFalse((root / project.PROJECT_DIR).exists())
+
+    def test_apply_converts_it_keeps_memory_and_docs_and_repoints_the_hooks(self):
+        root = self._pre_root_project()
+        result = migrate.apply(root, provider_names=["claude"], mode="link", untrack_paths=True)
+        self.assertFalse((root / ".claude" / "dev-team-agents").exists())
+        self.assertTrue(result["quarantine_dir"])
+        # Memory moved, not quarantined; the project is on layout 1 for `upgrade`.
+        self.assertEqual(
+            (root / project.PROJECT_DIR / "user-data" / "session-summary.md").read_text(encoding="utf-8"),
+            "## kept\n",
+        )
+        self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_PROJECT)
+        # Docs left in place, and visible to agents.
+        self.assertTrue((root / ".claude" / "docs" / "project.md").is_file())
+        self.assertIn(".claude/docs", project.context_paths(root))
+        # The pre-root hook entry was rewritten in place, and the user's keys kept.
+        settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        stops = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
+        self.assertEqual(len(stops), 1)
+        self.assertIn(".dev-team-agents/scripts/hooks/stop.sh", stops[0])
+        self.assertNotIn(".claude/dev-team-agents", stops[0])
+        self.assertEqual(settings["permissions"], {"allow": ["Bash(npm test)"]})
+        # The link the bind recreates points into the store; the one it does not is gone.
+        self.assertTrue(os.readlink(str(root / ".claude" / "agents" / "dev-team")).startswith(str(self.home)))
+        self.assertFalse(os.path.lexists(str(root / ".claude" / "skills" / "old-skill")))
+        self.assertIn(".claude/skills/old-skill", result["retired_links"])
+        # doctor has nothing left to say about the old install or tracked artifacts.
+        findings = doctor.run(project_root=root)["findings"]
+        # Only layout 1 remains to report: `devteam upgrade` is the next, separate step.
+        about_v2 = [f for f in findings if f["level"] != "ok" and f["category"] != "layout"]
+        self.assertEqual(about_v2, [])
+
+    def test_a_stale_unregistered_identity_is_adopted_and_moved_to_layout_1(self):
+        root = self._pre_root_project(stale_identity=True)
+        stale_id = project.load(root)["project_id"]
+        self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_STORE)
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue(preview["adopts_identity"])
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(result["project_id"], stale_id)
+        self.assertTrue(result["adopted_identity"])
+        self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_PROJECT)
+
+    def test_two_memory_directories_are_refused_before_anything_moves(self):
+        root = self._pre_root_project()
+        inner = root / ".claude" / "dev-team-agents" / "user-data"
+        inner.mkdir()
+        (inner / "session-summary.md").write_text("## other\n", encoding="utf-8")
+        with self.assertRaises(ConflictError):
+            migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue((root / ".claude" / "user-data" / "session-summary.md").is_file())
+
+    def test_the_cli_plan_and_apply_json(self):
+        root = self._pre_root_project()
+        code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude", "--mode", "link")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["layout"], "pre-root")
+        code, out, err = self.run_cli(
+            "--json", "migrate", str(root), "--provider", "claude", "--mode", "link", "--apply", "--untrack"
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        for key in ("layout", "adopted_identity", "memory_moved", "context_paths_added", "retired_links", "untracked", "untrack_problem"):
+            self.assertIn(key, payload)
+        self.assertTrue(payload["untracked"])
+
+
 class BindOverV2Test(StoreTestCase):
     """A bind run straight over a v2 install — the path a user took before `bind` refused it.
 
@@ -197,8 +381,7 @@ class BindOverV2Test(StoreTestCase):
 
     def test_the_bind_command_refuses_a_pre_root_install_in_every_mode_and_writes_nothing(self):
         # Found binding a real project: this shape passed the v2 refusal, collided on
-        # its own committed link, and left `project.json` — which then made
-        # `migrate-to-root.sh` refuse, since `.dev-team-agents/` existed.
+        # its own committed link, and left `project.json` behind.
         for mode in ("link", "vendored"):
             with self.subTest(mode):
                 root = self._pre_root_project("pre-root-" + mode)
@@ -208,22 +391,8 @@ class BindOverV2Test(StoreTestCase):
                 self.assertEqual(code, 4)
                 payload = json.loads(out)
                 self.assertIn(".claude/dev-team-agents", payload["error"])
-                self.assertIn("migrate-to-root.sh", payload["hint"])
                 self.assertIn("devteam migrate", payload["hint"])
                 self.assertFalse((root / project.PROJECT_DIR).exists())
-
-    def test_the_pre_root_hint_says_when_a_stale_install_dir_is_in_the_way(self):
-        root = self._pre_root_project()
-        (root / project.PROJECT_DIR).mkdir()
-        (root / project.PROJECT_DIR / "project.json").write_text("{}", encoding="utf-8")
-        self.assertIn("move it aside", migrate.pre_root_error(root).hint)
-
-    def test_migrate_refuses_a_pre_root_install_with_the_same_words(self):
-        root = self._pre_root_project()
-        with self.assertRaises(ConflictError) as caught:
-            migrate.plan(root)
-        resolved = project.resolve_root(root)
-        self.assertEqual(caught.exception.message, migrate.pre_root_error(resolved).message)
 
     def test_a_first_bind_that_collides_leaves_no_project_json(self):
         # Every destination is checked before the identity is written.
@@ -278,25 +447,6 @@ class BindOverV2Test(StoreTestCase):
         report = doctor.run(project_root=root)
         messages = [f["message"] for f in report["findings"] if f["level"] != "ok"]
         self.assertFalse(any("v2 vendored install" in m or "tracked by git" in m for m in messages), messages)
-
-    def test_migrate_json_shapes_are_exact_for_plan_and_apply(self):
-        # Pinned here until the app consumes `migrate` (roadmap phase 2); at that point
-        # these two sets move into `test_json_contract.AppFacingKeySetContractTest`.
-        root = self._install_sh_project()
-        code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude")
-        self.assertEqual(code, 0, err)
-        self.assertEqual(
-            set(json.loads(out)) - {"ok"},
-            {"path", "detected", "providers", "mode", "actions", "git_tracked",
-             "git_tracked_artifacts", "preserved"},
-        )
-        code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude", "--apply")
-        self.assertEqual(code, 0, err)
-        self.assertEqual(
-            set(json.loads(out)) - {"ok"},
-            {"path", "project_id", "version", "mode", "providers", "quarantined",
-             "quarantine_dir", "git_tracked", "git_tracked_artifacts", "preserved", "unrecognised"},
-        )
 
     def test_a_clean_link_bind_reports_no_tracked_artifacts(self):
         root = self.new_project("clean")
@@ -414,14 +564,14 @@ class DoctorTest(StoreTestCase):
         self.assertTrue(findings)
         self.assertIn("devteam migrate", findings[0]["hint"])
 
-    def test_a_pre_root_install_points_at_the_root_migration_script(self):
+    def test_a_pre_root_install_points_at_migrate(self):
         # The shape `scripts/migrate-to-root.sh` targets: the framework still
         # sitting at `.claude/dev-team-agents/` instead of the project root.
         root = self.new_project("prerooted")
         (root / ".claude" / "dev-team-agents").mkdir(parents=True)
         findings = self._project_findings(root)
         self.assertTrue(findings)
-        self.assertIn("migrate-to-root.sh", findings[0]["hint"])
+        self.assertIn("devteam migrate", findings[0]["hint"])
 
     def test_a_directory_with_no_legacy_shape_still_gets_the_bind_hint(self):
         root = self.new_project("fresh")

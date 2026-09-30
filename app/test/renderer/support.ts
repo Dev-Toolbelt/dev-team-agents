@@ -33,6 +33,8 @@ import type {
   ProblemKind,
   ProjectRecord,
   UnbindReport,
+  MigrationPlan,
+  MigrationReport,
   UpgradePlan,
   UpgradeReport,
 } from '../../src/shared/api.js';
@@ -216,6 +218,52 @@ export function upgradeReport(overrides: Partial<UpgradeReport> = {}): UpgradeRe
   };
 }
 
+export function migrationPlan(overrides: Partial<MigrationPlan> = {}): MigrationPlan {
+  return {
+    path: '/chosen/dir',
+    layout: 'pre-root',
+    install_dir: '.claude/dev-team-agents',
+    providers: ['claude'],
+    mode: 'link',
+    actions: ['move .claude/dev-team-agents/agents into the data-store quarantine', 'bind providers: claude (mode=link)'],
+    adopts_identity: false,
+    memory_moves: [{ from: '.claude/user-data', to: '.dev-team-agents/user-data' }],
+    context_paths_added: ['.claude/docs'],
+    git_tracked: ['.claude/dev-team-agents/agents', '.claude/user-data'],
+    git_tracked_artifacts: ['.claude/agents/dev-team'],
+    preserved: ['user-data', 'project.json'],
+    ...overrides,
+  };
+}
+
+export function migrationReport(overrides: Partial<MigrationReport> = {}): MigrationReport {
+  return {
+    path: '/chosen/dir',
+    layout: 'pre-root',
+    project_id: 'proj-new',
+    version: '2.48.0',
+    mode: 'link',
+    providers: ['claude'],
+    adopted_identity: false,
+    memory_moved: [{ from: '.claude/user-data', to: '.dev-team-agents/user-data' }],
+    context_paths_added: ['.claude/docs'],
+    quarantined: [{ from: '.claude/dev-team-agents/agents', to: '/store/data/quarantine/x/agents' }],
+    quarantine_dir: '/store/data/quarantine/x',
+    retired_links: [],
+    git_tracked: ['.claude/dev-team-agents/agents', '.claude/user-data'],
+    git_tracked_artifacts: ['.claude/agents/dev-team'],
+    untracked: ['.claude/agents/dev-team', '.claude/dev-team-agents/agents', '.claude/user-data'],
+    untrack_problem: null,
+    unrecognised: [],
+    ...overrides,
+  };
+}
+
+/** What `migrate` answers for a directory with no v2 install: exit 2, and the bind proceeds. */
+export function notV2(): Extract<OperationResult<never>, { ok: false }> {
+  return fail('/chosen/dir has no vendored v2 install to migrate', { kind: 'usage', exitCode: 2 });
+}
+
 export function doctorReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
   return {
     status: 'ok',
@@ -361,6 +409,8 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     setPin: vi.fn(() => Promise.resolve(ok({ project_id: 'proj-1', path: '/repo/project-1', pin: null }))),
     planUpgrade: vi.fn(() => Promise.resolve(ok(upgradePlan()))),
     applyUpgrade: vi.fn(() => Promise.resolve(ok(upgradeReport()))),
+    planMigration: vi.fn(() => Promise.resolve(notV2())),
+    applyMigration: vi.fn(() => Promise.resolve(ok(migrationReport()))),
     projectPreferences: vi.fn(() => Promise.resolve(ok(projectPreferences()))),
     updateProjectPreferences: vi.fn((_projectId: string, changes: readonly PreferenceChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
