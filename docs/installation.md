@@ -38,6 +38,25 @@ Pass any version tag to install that exact version regardless of what is current
 
 ---
 
+## Where preferences live
+
+Every setting below is a key in the preference schema (`scripts/lib/preferences-defaults.json`). Where you change it depends on how the project is installed:
+
+- **A project bound with `devteam bind`** — preferences cascade defaults → global → project, the project layer lives in the store, and agents read the generated `.dev-team-agents/resolved/preferences.json` (never edit that file; the next `bind`/`sync` rewrites it). Change a value with:
+
+  ```bash
+  devteam prefs set <key> <value> --scope project   # this project only
+  devteam prefs set <key> <value> --scope global    # every project on this machine
+  devteam prefs list                                # every key, its value and the layer it came from
+  ```
+
+  or from the desktop app: click the project's name to open its settings. If the project still had a v2 `.dev-team-agents/user-data/preferences.json`, `devteam bind` imported it into the project layer and moved the file to the store's quarantine.
+- **A v2 install that is not bound yet** — edit `.dev-team-agents/user-data/preferences.json` directly.
+
+The JSON snippets below show each key and its value; apply them whichever way fits your install.
+
+---
+
 ## Automatic Updates (opt-in)
 
 Enable automatic updates so the daily check applies new versions instead of just notifying:
@@ -52,7 +71,7 @@ Disable at any time:
 .dev-team-agents/scripts/update.sh --disable-auto
 ```
 
-You can also toggle this in `.dev-team-agents/user-data/preferences.json`:
+You can also set the `auto_update` preference (see [Where preferences live](#where-preferences-live)):
 
 ```json
 { "auto_update": true }
@@ -70,7 +89,7 @@ The update check runs once per day. The interval is configurable:
 
 During installation the installer asks which language agents should use when talking to you. Plans presented for approval and all direct responses use the configured language. Documents (ADRs, changelogs, code comments) always remain in English.
 
-Update at any time by editing `.dev-team-agents/user-data/preferences.json`:
+Update it at any time through the `language` preference (see [Where preferences live](#where-preferences-live)):
 
 ```json
 { "language": "pt-BR" }
@@ -88,7 +107,7 @@ Agents and hooks emit notifications in the DEV TEAM AGENTS format throughout you
 - **⚠️ warning** — context window approaching limit, stale docs, missing config
 - **🚨 critical** — context window at limit, broken installation
 
-Configure in `.dev-team-agents/user-data/preferences.json`:
+Configure these preferences (see [Where preferences live](#where-preferences-live)):
 
 ```json
 {
@@ -114,7 +133,7 @@ Context window warnings read the last transcript usage entry's cache/input token
 
 ### Worktree & Docker isolation
 
-Control how coding agents isolate their work, in the same `preferences.json`:
+Control how coding agents isolate their work with these preferences (see [Where preferences live](#where-preferences-live)):
 
 ```json
 {
@@ -159,7 +178,7 @@ This repository uses semantic versioning via git tags (`v1.0.0`, `v1.1.0`, `v2.0
 .claude/
 ├── dev-team-agents/        ← extracted from tarball (no .git — safe to commit)
 ├── user-data/              ← user state and config (preserved across updates)
-│   ├── preferences.json        ← language, thresholds, notification settings (gitignored)
+│   ├── preferences.json        ← language, thresholds, notification settings (gitignored; imported into the store by `devteam bind`)
 │   ├── graphify.json           ← Graphify config — commit this one
 │   ├── session-summary.md      ← gitignored
 │   └── state.json              ← consolidated state markers (installed_version, last_update_check, etc.) — gitignored

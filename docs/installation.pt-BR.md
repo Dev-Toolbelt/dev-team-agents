@@ -38,6 +38,25 @@ Passe qualquer tag de versão para instalar exatamente aquela versão, independe
 
 ---
 
+## Onde ficam as preferências
+
+Cada configuração abaixo é uma chave do schema de preferências (`scripts/lib/preferences-defaults.json`). Onde você a altera depende de como o projeto foi instalado:
+
+- **Um projeto vinculado com `devteam bind`** — as preferências seguem a cascata defaults → global → projeto, a camada do projeto fica no store e os agentes leem o arquivo gerado `.dev-team-agents/resolved/preferences.json` (nunca edite esse arquivo; o próximo `bind`/`sync` o reescreve). Altere um valor com:
+
+  ```bash
+  devteam prefs set <chave> <valor> --scope project   # só este projeto
+  devteam prefs set <chave> <valor> --scope global    # todos os projetos desta máquina
+  devteam prefs list                                  # cada chave, seu valor e a camada de onde veio
+  ```
+
+  ou pelo app desktop: clique no nome do projeto para abrir as configurações dele. Se o projeto ainda tinha um `.dev-team-agents/user-data/preferences.json` da v2, o `devteam bind` o importou para a camada do projeto e moveu o arquivo para a quarentena do store.
+- **Uma instalação v2 ainda não vinculada** — edite `.dev-team-agents/user-data/preferences.json` diretamente.
+
+Os trechos JSON abaixo mostram cada chave e seu valor; aplique-os da forma que servir à sua instalação.
+
+---
+
 ## Atualizações Automáticas (opt-in)
 
 Habilite atualizações automáticas para que a verificação diária aplique novas versões em vez de apenas notificar:
@@ -52,7 +71,7 @@ Desabilite a qualquer momento:
 .dev-team-agents/scripts/update.sh --disable-auto
 ```
 
-Você também pode alternar isso em `.dev-team-agents/user-data/preferences.json`:
+Você também pode definir a preferência `auto_update` (veja [Onde ficam as preferências](#onde-ficam-as-preferências)):
 
 ```json
 { "auto_update": true }
@@ -70,7 +89,7 @@ A verificação de atualização executa uma vez por dia. O intervalo é configu
 
 Durante a instalação, o instalador pergunta em qual idioma os agentes devem conversar com você. Planos apresentados para aprovação e todas as respostas diretas usam o idioma configurado. Documentos (ADRs, changelogs, comentários de código) permanecem sempre em inglês.
 
-Atualize a qualquer momento editando `.dev-team-agents/user-data/preferences.json`:
+Atualize a qualquer momento pela preferência `language` (veja [Onde ficam as preferências](#onde-ficam-as-preferências)):
 
 ```json
 { "language": "pt-BR" }
@@ -88,7 +107,7 @@ Agentes e hooks emitem notificações no formato DEV TEAM AGENTS ao longo das su
 - **⚠️ warning** — janela de contexto se aproximando do limite, docs desatualizados, config ausente
 - **🚨 critical** — janela de contexto no limite, instalação quebrada
 
-Configure em `.dev-team-agents/user-data/preferences.json`:
+Configure estas preferências (veja [Onde ficam as preferências](#onde-ficam-as-preferências)):
 
 ```json
 {
@@ -114,7 +133,7 @@ Os warnings de janela de contexto lêem a contagem de tokens de cache/input da �
 
 ### Worktree e isolamento Docker
 
-Controle como os agentes de codificação isolam o trabalho, no mesmo `preferences.json`:
+Controle como os agentes de codificação isolam o trabalho com estas preferências (veja [Onde ficam as preferências](#onde-ficam-as-preferências)):
 
 ```json
 {
@@ -159,7 +178,7 @@ Este repositório usa versionamento semântico via git tags (`v1.0.0`, `v1.1.0`,
 .claude/
 ├── dev-team-agents/        ← extraído do tarball (sem .git — seguro para commit)
 ├── user-data/              ← estado e configuração do usuário (preservado nas atualizações)
-│   ├── preferences.json        ← idioma, thresholds, configurações de notificação (gitignored)
+│   ├── preferences.json        ← idioma, thresholds, configurações de notificação (gitignored; importado para o store pelo `devteam bind`)
 │   ├── graphify.json           ← config do Graphify — faça commit deste
 │   ├── session-summary.md      ← gitignored
 │   └── state.json              ← markers de estado consolidados (installed_version, last_update_check, etc.) — gitignored
