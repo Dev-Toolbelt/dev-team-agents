@@ -110,7 +110,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 > **Skill `name` must equal the skill's directory basename, and must be unique across all categories.** This is a cross-provider invariant, not a style rule: the render engine resolves opencode skills by frontmatter `name`, while the installers symlink by directory. A skill whose `name` disagrees with its directory loads under Claude and Codex but not under opencode. `helpers/agent-lint.sh` enforces both the match and the uniqueness.
 
-**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,post-tool-use,session-end,stop}.sh` are the same bash scripts across all three providers. Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with `SessionStart` / `PreToolUse` / `PostToolUse` / `PreCompact` / `SessionEnd` / `Stop` event names (new in this release: `PostToolUse` and `SessionEnd` for task board capture).
+**Hooks stay shared.** `scripts/hooks/{session-start,pre-tool-use,pre-compact,post-tool-use,session-end,stop}.sh` are the same bash scripts across providers (`post-tool-use.sh` and `session-end.sh` are wired for Claude Code only). Only the *binding* differs: Claude uses `.claude/settings.json`, opencode uses a TS plugin, Codex uses `.codex/hooks.json` with its own event set. `PostToolUse` and `SessionEnd` are registered for **Claude Code only** (task board capture and session end); Codex and opencode are captured through the `PreToolUse` path (`pre-tool-use/04-task-board.sh`).
 
 **Context-window notification payload is provider-specific — by design, not oversight.** `stop/04-notifier.sh` estimates context usage from whatever JSON its stdin's `transcript_path` points at, reading the last usage entry's `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` (see `CLAUDE-md/notifications.md`). Each provider's stdin comes from a different source:
 - **Claude Code** passes its own transcript JSONL directly — the native format, no adaptation needed.
@@ -125,7 +125,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 | **Claude Code** | `PostToolUse` (same matcher) | `TodoWrite` (legacy, disabled by default) | Replace — full list each call | Matched by normalized content |
 | **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | Existing `PreToolUse` | `update_plan` | Replace | Matched by normalized content |
-| **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `todos[].id` from the tool response |
+| **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `args.todos[].id` |
 
 Codex coverage is best-effort: whether `PreToolUse` fires for `update_plan` could not be verified empirically. When it does not, Codex sessions simply do not appear on the board; nothing fails.
 

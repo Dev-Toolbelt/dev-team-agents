@@ -189,7 +189,7 @@ def _find_id(value, depth):
                 return found
         return None
     if isinstance(value, str):
-        match = re.search(r"#(\w+)", value) or re.search(r"\bid\W{0,3}(\w+)", value, re.IGNORECASE)
+        match = re.match(r"\s*Task #(\w+)", value) or re.search(r"\bTask #(\w+) created", value)
         return match.group(1) if match else None
     if isinstance(value, list):
         for entry in value[:5]:
@@ -413,7 +413,11 @@ def _apply_create(record, call, item, now):
         item = dict(item, id=_next_sequential_id(record))
     for task in record["tasks"]:
         if task.get("id") == item["id"] and task["owner"] == call["owner"]:
-            _revive(task, dict(item, id=None), now)
+            # A replayed create names a task that exists: refresh its text only, so a
+            # started or finished task is never pushed back to pending.
+            if item.get("content"):
+                task["content"] = item["content"]
+            task["removed_at"] = None
             return
     _add_task(record, call, item, now)
 
@@ -535,7 +539,7 @@ def record(root, payload, provider="auto", now=None):
                     # overwrite what we cannot read.
                     return result
                 rec = _new_record(call, project_id, now)
-            was_open = _open_count(rec) > 0
+            open_before = {t["key"] for t in rec["tasks"] if _shown(t) and _column(t["status"]) != "done"}
             _apply(rec, call, now)
             rec["provider"] = call["provider"]
             if call["cwd"]:
@@ -550,7 +554,10 @@ def record(root, payload, provider="auto", now=None):
             rec["ended_at"] = None
             jsonio.write_json_atomic(path, rec)
         done = _all_done(rec)
-        result.update(recorded=True, session=call["session_id"], all_done=done, became_all_done=done and was_open)
+        # Dropping an unfinished task is abandonment, not completion: the transition counts
+        # only when a task that was open is now actually completed or cancelled.
+        finished = any(t["key"] in open_before and _shown(t) and _column(t["status"]) == "done" for t in rec["tasks"])
+        result.update(recorded=True, session=call["session_id"], all_done=done, became_all_done=done and finished)
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
     return result
@@ -652,6 +659,8 @@ def resume_command(root, provider, session_id, cwd=None):
     """
     base = RESUME.get(provider)
     if not base:
+        return None
+    if not isinstance(session_id, str) or session_id.startswith("-") or not _SAFE_KEY.match(session_id):
         return None
     where = cwd if isinstance(cwd, str) and cwd and os.path.isdir(cwd) else root
     return "cd {} && {} {}".format(shlex.quote(str(where)), base, shlex.quote(session_id))

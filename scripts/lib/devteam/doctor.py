@@ -531,13 +531,13 @@ def check_project(project_root):
                     WARN,
                     "hooks",
                     "{} not registered in {}".format(", ".join(absent), hooks.SETTINGS_FILE),
-                    "Run `devteam sync` — without them the Stop, SessionStart and "
-                    "PreCompact enforcement does not run in this project.",
+                    "Run `devteam sync` — without them the {} enforcement and "
+                    "task board capture do not run in this project.".format(", ".join(expected_events)),
                 )
             )
         elif settings.is_file():
             findings.append(
-                _finding(OK, "hooks", "4 dispatchers registered in {}".format(hooks.SETTINGS_FILE))
+                _finding(OK, "hooks", "{} dispatchers registered in {}".format(len(expected_events), hooks.SETTINGS_FILE))
             )
 
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:

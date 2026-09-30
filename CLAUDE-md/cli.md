@@ -108,8 +108,8 @@ directory at either path is a v2 tree: `bind` and `sync` refuse with exit 4 and 
 The v2 tools that now resolve there (`update.sh`, `rollback.sh`, `fix-symlinks.sh`) refuse to run
 in a bound project (`scripts/lib/bound-project-guard.sh`) and name the `devteam` command instead.
 
-**The bind registers the four hook dispatchers** (`SessionStart`, `Stop`, `PreCompact`,
-`PreToolUse`) by merging into the project's own `.claude/settings.json`; a stale v2 path is
+**The bind registers the six hook dispatchers** (`SessionStart`, `Stop`, `PreCompact`,
+`PreToolUse`, `PostToolUse`, `SessionEnd`) by merging into the project's own `.claude/settings.json`; a stale v2 path is
 rewritten in place rather than duplicated, and `unbind` removes only those entries. Without them
 the session banner, session-summary enforcement, orphan-skill scan, agent lint and ADR-gap check
 do not run in that project at all.

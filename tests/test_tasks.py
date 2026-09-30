@@ -280,6 +280,36 @@ class RecordTest(BoardCase):
         self.assertEqual([r["became_all_done"] for r in (first, second, third, fourth)], [False, False, True, False])
         self.assertTrue(third["all_done"] and fourth["all_done"])
 
+    def test_dropping_an_unfinished_task_is_not_a_session_done(self):
+        self.rec(todo_write("s1", [todo("A", "completed"), todo("B")]), now=T0)
+        dropped = self.rec(todo_write("s1", [todo("A", "completed")]), now=T0 + 1)
+        self.assertTrue(dropped["all_done"])
+        self.assertFalse(dropped["became_all_done"])
+
+    def test_completing_the_last_open_task_fires_once(self):
+        self.rec(todo_write("s1", [todo("A", "completed"), todo("B")]), now=T0)
+        fired = self.rec(todo_write("s1", [todo("A", "completed"), todo("B", "completed")]), now=T0 + 1)
+        again = self.rec(todo_write("s1", [todo("A", "completed"), todo("B", "completed")]), now=T0 + 2)
+        self.assertEqual([fired["became_all_done"], again["became_all_done"]], [True, False])
+
+    def test_a_replayed_create_keeps_the_status_of_an_existing_task(self):
+        self.rec(task_create("s1", "Do it", "Task #1 created successfully: Do it"), now=T0)
+        self.rec(task_update("s1", "1", status="completed"), now=T0 + 1)
+        self.rec(task_create("s1", "Do it", "Task #1 created successfully: Do it"), now=T0 + 2)
+        task = self.load("s1")["tasks"][0]
+        self.assertEqual((len(self.load("s1")["tasks"]), task["status"]), (1, "completed"))
+
+    def test_a_subject_containing_a_hash_is_not_taken_for_the_id(self):
+        payload = task_create("s1", "Fix #12", "Task #3 created successfully: Fix #12")
+        self.assertEqual(tasks.normalize(payload)["op"][1]["id"], "3")
+        payload = task_create("s1", "x", "Created: Fix #12")
+        self.assertIsNone(tasks.normalize(payload)["op"][1].get("id"))
+
+    def test_an_option_like_session_id_gets_no_resume_command(self):
+        self.assertIsNone(tasks.resume_command(self.root, "claude", "--evil"))
+        self.assertIsNone(tasks.resume_command(self.root, "claude", "a b"))
+        self.assertTrue(tasks.resume_command(self.root, "claude", "abc-1").endswith("abc-1"))
+
     def test_a_list_that_starts_all_done_is_not_a_transition(self):
         self.assertFalse(self.rec(todo_write("s1", [todo("A", "completed")]))["became_all_done"])
 

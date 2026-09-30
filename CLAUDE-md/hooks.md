@@ -34,7 +34,7 @@ Sub-scripts in `scripts/hooks/stop/` are executed in alphabetical order by filen
 Each sub-script must:
 - **Match the filename pattern `NN-name.sh` or `NNx-name.sh`** — regex `^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$`. The dispatcher **skips any file that does not match**, so a draft, a `.sh.bak`, or a `notes.sh` left in the directory is ignored instead of being auto-run on every Stop. Set `DEVTEAM_HOOK_DEBUG=1` to see what was run and what was skipped
 - Accept `--quiet` flag and suppress output when OK
-- Honour the dispatcher's `DEVTEAM_NO_CHANGES=1` fast path — a Stop with no staged/unstaged changes and no commits today must not trigger a full scan
+- Honour the dispatcher's `DEVTEAM_NO_CHANGES=1` fast path (exemption: `stop/04b-task-board.sh` must run on every Stop to mark the session idle, so it has no fast path and no `--quiet`; a bash `[ -f ]` on the session record is its only gate) — a Stop with no staged/unstaged changes and no commits today must not trigger a full scan
 - Reuse `DEVTEAM_TOUCHED_PATHS` / `DEVTEAM_TOUCHED_COMPUTED` (exported by `stop.sh` via `scripts/hooks/lib/touched-paths.sh`) instead of re-running `git status`/`git log`, while still working standalone when they are unset
 - Exit with code `0` when nothing is wrong
 - Exit non-zero only when action is required from the user
