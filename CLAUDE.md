@@ -290,7 +290,7 @@ dev-team-agents/
 │   ├── render-provider.sh         ← renders the canonical source into a provider-specific tree
 │   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
 │   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
-│   ├── fix-symlinks.sh · check-updates.sh (shim) · new-adr.sh
+│   ├── fix-symlinks.sh · check-updates.sh (on-demand v2 update check) · new-adr.sh
 │   ├── graphify-refresh.sh (deprecated wrapper) · validate-commit-msg.sh · reuse-lint.sh · design-token-lint.sh
 │   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
 │   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
@@ -317,7 +317,7 @@ dev-team-agents/
 │           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
 │           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
 │           ├── plugins.sh                ← plugin hook dispatcher and helper functions
-│           └── update-check.sh           ← update-check engine behind pre-tool-use/01-
+│           └── update-check.sh           ← update-check engine behind session-start.sh and check-updates.sh
 ├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
 │                      (incl. 04-packaging.sh, 05-app.sh ← the app/ JS gate) + scripts/release/bump-homebrew-formula.sh — stripped at install
 ├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
