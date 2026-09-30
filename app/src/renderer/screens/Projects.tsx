@@ -1399,8 +1399,8 @@ function BindDialog({
 }
 
 const V2_LAYOUT_LABELS: Record<string, string> = {
-  root: 'vendored in .dev-team-agents/',
-  'pre-root': 'from before v2.1.0, in .claude/dev-team-agents/',
+  root: 'in .dev-team-agents/',
+  'pre-root': 'in .claude/dev-team-agents/ (pre-v2.1.0)',
 };
 
 function v2Label(plan: { readonly layout: string; readonly install_dir: string }): string {
@@ -1414,10 +1414,10 @@ function V2Detected({ plan }: { plan: MigrationPlan }) {
       <AlertTriangle aria-hidden="true" />
       <AlertTitle>dev-team-agents v2 found</AlertTitle>
       <AlertDescription>
+        {/* Two lines at most (reuse guideline `app_support_copy`): what happens, what to do.
+            The quarantine, the kept memory and the untracked paths are itemised in the plan. */}
         <p>
-          Installed {v2Label(plan)}. It will be migrated instead of bound: the old framework moves to a dated
-          quarantine (nothing is deleted), its memory is kept, and the old paths leave git&apos;s index for you to
-          commit. Review the plan before anything changes.
+          Found {v2Label(plan)}. It will be migrated, not bound — nothing is deleted. Review the plan first.
         </p>
       </AlertDescription>
     </Alert>

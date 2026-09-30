@@ -14,8 +14,9 @@ this sprint**. One-off preferences do not.
 | devteam_record_class | design-rule | Every caller asks paths.is_machine_local_record or paths.path_is_machine_local which subtree a record belongs in; no caller re-derives the classification from a basename, a dot prefix or a first path component | (review-only — no regex; the failure is the absence of a call, and the ad-hoc test that replaces it is indistinguishable from ordinary path handling) | scripts/lib/devteam/paths.py |
 | devteam_credential_read | design-rule | Every read of a credential value goes through creds.get_value, which resolves the layer, checks scope and audits; no caller loads a reference file and resolves the value itself, and no output path carries a value or anything derived from one | (review-only — no regex; the backend read is legitimate inside the resolver and forbidden everywhere else, which no pattern can tell apart; pinned by tests/test_review_regressions.py::DesignRuleTest) | scripts/lib/devteam/creds.py |
 | placeholder_anchor | design-rule | A check for a placeholder value anchors on the directive or assignment that holds it, never a whole-file grep, because a file's own comments name its placeholder on purpose and a whole-file match keeps firing after the value goes real | (review-only — no regex; the anchored check and the whole-file grep both contain the placeholder literal, so any pattern that finds one finds the other) | .github/scripts/ci/04-packaging.sh |
+| app_support_copy | design-rule | Support text in the desktop app — alert and dialog descriptions, field hints, tooltips, result notes — is at most two lines at the component's width (about 160 characters): what happens and what the user does next, in plain words. Detail the user acts on goes into a list or a plan the UI already shows; rationale goes into a code comment or the docs, never on screen | (review-only — no regex; JSX splits a sentence across lines and interpolations, so a length check would miss the long ones and flag headings) | app/src/renderer/screens/Projects.tsx |
 
-All six are `design-rule`, deliberately. For the five `devteam_*` rows, each one's violation is the
+All seven are `design-rule`, deliberately. For the five `devteam_*` rows, each one's violation is the
 *absence* of a call, or an ordering across functions, and a regex that tried to catch either would
 fire on the legitimate uses in `versions.py` and `lock.py`. A noisy rule gets disabled; a
 review-only rule gets read. The
@@ -67,3 +68,10 @@ applied to its detection. Nor are the literals enumerable in advance; each new m
 own. A pattern aimed at the grep call instead would fire on `winget_scaffold`'s legitimate
 `grep -rq 'vX\.Y\.Z'` over `packaging/winget/`, which is safe today only because nothing there names
 that string in a comment — so the regex would be noisy exactly where the rule is not violated.
+
+`app_support_copy` earns its row on the v2 notice in the bind dialog: four clauses (quarantine, nothing
+deleted, memory kept, git's index) in a notice whose whole job is "this will be migrated — review the
+plan", written the same week as a plan view that itemises all four. A notice that restates the screen
+below it is read once and skimmed forever after, and the explanation that did matter was lost in it.
+The rule is about **support** text; a result or plan the user must check line by line is content, not
+support, and stays as long as its facts.

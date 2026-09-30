@@ -85,6 +85,12 @@ macOS, `%APPDATA%\Dev Team Agents\logs\` on Windows): CLI resolution and stream 
 uncaught errors, and a renderer or helper process that died. It rotates to `main.old.log` at
 1 MB, so it never holds more than two files.
 
+## Writing UI text
+
+Support text — descriptions, hints, tooltips, notices — follows the reuse guideline
+`app_support_copy` in `docs/development/reuse-guidelines.md`: two lines at most, what happens and
+what to do next.
+
 ## Binding a project that already has dev-team-agents v2
 
 Choosing a directory in the bind dialog asks `devteam migrate` for a plan before anything else. A
