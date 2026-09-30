@@ -18,6 +18,8 @@ import type {
   EnvironmentReport,
   HandshakeView,
   OperationResult,
+  PreferenceChange,
+  ProjectPreferencesView,
   ProblemKind,
   ProjectRecord,
   UnbindReport,
@@ -212,6 +214,65 @@ export function doctorReport(overrides: Partial<DoctorReport> = {}): DoctorRepor
   };
 }
 
+/**
+ * `prefs list --json` for one project, shaped like the real CLI's answer at 2.48.0, plus the
+ * `inherited` cascade the main process adds. Only `language` differs from its inherited value.
+ */
+export function projectPreferences(overrides: Partial<ProjectPreferencesView> = {}): ProjectPreferencesView {
+  const base = {
+    project_id: 'proj-1',
+    version: '2.48.0',
+    values: {
+      language: 'en',
+      auto_update: false,
+      telemetry: false,
+      update_check_interval_hours: 24,
+      model_max_tokens: 200000,
+      context_window_percent_warning: 55,
+      context_window_percent_limit: 60,
+      session_no_commit_turns: 8,
+      transcript_multiplier: 1.8,
+      session_summary_max_days: 30,
+      session_summary_max_entries: 30,
+      docs_stale_after_days: 30,
+      auto_learn_before_commit: true,
+      worktree_active: true,
+      worktree_base_branch: null,
+      worktree_path: '.worktrees',
+      worktree_commit_action: 'ask',
+      worktree_docker_isolate: true,
+      suppress_notifications: false,
+      qa_browser: null,
+      ci_cd_detected: null,
+    },
+    origin: {
+      language: 'project',
+      auto_update: 'consent-withheld',
+      telemetry: 'consent-withheld',
+      update_check_interval_hours: 'defaults',
+      model_max_tokens: 'global',
+      context_window_percent_warning: 'defaults',
+      context_window_percent_limit: 'defaults',
+      session_no_commit_turns: 'defaults',
+      transcript_multiplier: 'defaults',
+      session_summary_max_days: 'defaults',
+      session_summary_max_entries: 'defaults',
+      docs_stale_after_days: 'defaults',
+      auto_learn_before_commit: 'defaults',
+      worktree_active: 'project',
+      worktree_base_branch: 'defaults',
+      worktree_path: 'defaults',
+      worktree_commit_action: 'defaults',
+      worktree_docker_isolate: 'defaults',
+      suppress_notifications: 'defaults',
+      qa_browser: 'defaults',
+      ci_cd_detected: 'defaults',
+    },
+    unknown: [],
+  };
+  return { ...base, inherited: { ...base.values, language: 'pt-BR' }, ...overrides };
+}
+
 /** A fake bridge with every method stubbed to a benign default; tests override per case. */
 export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridge {
   return {
@@ -233,6 +294,10 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     setPin: vi.fn(() => Promise.resolve(ok({ project_id: 'proj-1', path: '/repo/project-1', pin: null }))),
     planUpgrade: vi.fn(() => Promise.resolve(ok(upgradePlan()))),
     applyUpgrade: vi.fn(() => Promise.resolve(ok(upgradeReport()))),
+    projectPreferences: vi.fn(() => Promise.resolve(ok(projectPreferences()))),
+    updateProjectPreferences: vi.fn((_projectId: string, changes: readonly PreferenceChange[]) =>
+      Promise.resolve(ok({ applied: [...changes], failed: null })),
+    ),
     ...overrides,
   };
 }

@@ -64,6 +64,7 @@ type Handler = (...args: unknown[]) => unknown;
 async function loadIpc(): Promise<{
   readonly handlers: Map<string, Handler>;
   readonly showOpenDialog: ReturnType<typeof vi.fn>;
+  readonly showMessageBox: ReturnType<typeof vi.fn>;
   readonly registerIpc: typeof IpcModule.registerIpc;
   readonly validateBindRequest: typeof IpcModule.validateBindRequest;
   readonly CHANNELS: typeof ApiModule.CHANNELS;
@@ -71,20 +72,22 @@ async function loadIpc(): Promise<{
   vi.resetModules();
   const handlers = new Map<string, Handler>();
   const showOpenDialog = vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] as string[] }));
+  // Declines by default: a test that expects a consent key to be written has to say yes.
+  const showMessageBox = vi.fn(() => Promise.resolve({ response: 1, checkboxChecked: false }));
   vi.doMock('electron', () => ({
     ipcMain: {
       handle: (channel: string, listener: Handler) => {
         handlers.set(channel, listener);
       },
     },
-    dialog: { showOpenDialog },
+    dialog: { showOpenDialog, showMessageBox },
   }));
   const { registerIpc, validateBindRequest } = await import('../src/main/ipc.js');
   const { CHANNELS } = await import('../src/shared/api.js');
   onTestFinished(() => {
     vi.doUnmock('electron');
   });
-  return { handlers, showOpenDialog, registerIpc, validateBindRequest, CHANNELS };
+  return { handlers, showOpenDialog, showMessageBox, registerIpc, validateBindRequest, CHANNELS };
 }
 
 async function registerAgainstFake(registerIpc: typeof IpcModule.registerIpc): Promise<void> {
@@ -365,6 +368,155 @@ describe('write actions resolve project_id against list, never trust a path from
   });
 });
 
+// ── project preferences — project layer only, keys checked against `prefs list` ──
+
+describe('project preferences are written to the project layer only, for keys the project declares', () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('reads prefs list against the resolved path, never a renderer path', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const result = (await handlers.get(CHANNELS.projectPreferences)?.({}, 'proj-1')) as ApiModule.OperationResult<ApiModule.ProjectPreferencesView>;
+    expect(result.command).toContain('prefs list --path /repo/project-1 --json');
+    if (!result.ok) throw new Error(result.message);
+    expect(result.data.origin['model_max_tokens']).toBe('global');
+    expect(result.data.unknown).toEqual(['mystery_key']);
+    // The cascade without the project layer, read from the app's own non-project directory.
+    expect(result.data.inherited?.['language']).toBe('pt-BR');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('applies a batch in order with --scope project, and never --scope global', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const changes = [
+      { key: 'language', action: 'set', value: 'pt-BR' },
+      { key: 'worktree_active', action: 'set', value: false },
+      { key: 'model_max_tokens', action: 'unset' },
+    ];
+    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    if (!result.ok) throw new Error(result.message);
+    expect(result.data.failed).toBeNull();
+    expect(result.data.applied.map((change) => change.key)).toEqual(['language', 'worktree_active', 'model_max_tokens']);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('stops at the first failing key and reports what was written before it', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const changes = [
+      { key: 'language', action: 'set', value: 'es' },
+      { key: 'model_max_tokens', action: 'set', value: 5000 },
+      { key: 'worktree_active', action: 'set', value: false },
+    ];
+    const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', changes)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    if (!result.ok) throw new Error(result.message);
+    expect(result.data.applied.map((change) => change.key)).toEqual(['language']);
+    expect(result.data.failed?.change.key).toBe('model_max_tokens');
+    expect(result.data.failed?.problem.message).toContain('too small');
+    expect(result.data.failed?.problem.command).toContain('prefs set model_max_tokens 5000 --scope project --path /repo/project-1');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses a key the project does not declare, and an unknown carried key, before writing anything', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    for (const key of ['not_a_pref', 'mystery_key']) {
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [
+        { key: 'language', action: 'set', value: 'es' },
+        { key, action: 'set', value: 2 },
+      ])) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+      expect(result.ok, key).toBe(false);
+      if (result.ok) throw new Error('unreachable');
+      expect(result.kind, key).toBe('refused');
+      expect(result.message, key).toContain(key);
+    }
+  });
+
+  it('refuses a value of the wrong type or out of range, and read-only keys, before spawning anything', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    for (const change of [
+      // `_coerce` reads true/false/null before the default's type, so these would be stored.
+      { key: 'model_max_tokens', action: 'set', value: true },
+      { key: 'model_max_tokens', action: 'set', value: null },
+      { key: 'model_max_tokens', action: 'set', value: 99_999_999 },
+      { key: 'model_max_tokens', action: 'set', value: 1.5 },
+      { key: 'worktree_active', action: 'set', value: 'yes' },
+      { key: 'worktree_commit_action', action: 'set', value: 'push' },
+      { key: 'language', action: 'set', value: null },
+      { key: 'worktree_path', action: 'set', value: '../outside' },
+      { key: 'transcript_multiplier', action: 'set', value: 2 },
+      { key: 'transcript_multiplier', action: 'unset' },
+    ]) {
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [change])) as {
+        readonly ok: boolean;
+        readonly kind: string;
+        readonly durationMs: number;
+      };
+      expect(result.ok, JSON.stringify(change)).toBe(false);
+      expect(result.kind, JSON.stringify(change)).toBe('refused');
+      expect(result.durationMs, JSON.stringify(change)).toBe(0);
+    }
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('asks natively before turning a consent key on, and writes nothing on cancel', async () => {
+    const { handlers, registerIpc, showMessageBox, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const batch = [
+      { key: 'language', action: 'set', value: 'es' },
+      { key: 'telemetry', action: 'set', value: true },
+    ];
+
+    const declined = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    expect(showMessageBox).toHaveBeenCalledOnce();
+    expect(declined.ok).toBe(false);
+    if (declined.ok) throw new Error('unreachable');
+    expect(declined.kind).toBe('refused');
+    expect(declined.message).toContain('not confirmed');
+
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    const accepted = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    if (!accepted.ok) throw new Error(accepted.message);
+    expect(accepted.data.applied.map((change) => change.key)).toEqual(['language', 'telemetry']);
+
+    // Turning one off needs no confirmation.
+    showMessageBox.mockClear();
+    const off = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', [
+      { key: 'telemetry', action: 'set', value: false },
+    ])) as ApiModule.OperationResult<ApiModule.PreferenceUpdateReport>;
+    expect(off.ok).toBe(true);
+    expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed batch before resolving the project', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    for (const batch of [
+      'language=en',
+      [],
+      [{ key: 'language', action: 'delete' }],
+      [{ key: '--scope', action: 'set', value: 'global' }],
+      [{ key: 'language', action: 'set', value: '--path' }],
+      [{ key: 'language', action: 'set', value: { nested: true } }],
+      [
+        { key: 'language', action: 'set', value: 'en' },
+        { key: 'language', action: 'unset' },
+      ],
+    ]) {
+      const result = (await handlers.get(CHANNELS.updateProjectPreferences)?.({}, 'proj-1', batch)) as {
+        readonly ok: boolean;
+        readonly kind: string;
+        readonly durationMs: number;
+      };
+      expect(result.ok, JSON.stringify(batch)).toBe(false);
+      expect(result.kind, JSON.stringify(batch)).toBe('refused');
+      expect(result.durationMs, JSON.stringify(batch)).toBe(0);
+    }
+  });
+});
+
 // ── buildInfo and environment — the surfaces the UI reads the write-action state from ──
 
 describe('buildInfo reports write actions honestly', () => {
@@ -381,13 +533,13 @@ describe('buildInfo reports write actions honestly', () => {
     // — `sync` covers both the per-row sync and Sync All, because the framework
     // classifies one `("sync",)` leaf in `compat.MUTATING`, not two.
     expect([...info.mutatingCommandsRun].sort()).toEqual(
-      ['bind', 'doctor', 'pin', 'sync', 'unbind', 'upgrade'].sort(),
+      ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
     );
   });
 });
 
 describe('environment withholds every gated command when the declaration could not be written', () => {
-  it('lists all six gated commands in withheld, spelled as exact subcommand words', async () => {
+  it('lists every gated command in withheld, spelled as exact subcommand words', async () => {
     const { handlers, registerIpc, CHANNELS } = await loadIpc();
     await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE }), 'utf8');
     registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false });
@@ -408,7 +560,7 @@ describe('environment withholds every gated command when the declaration could n
         return;
       }
       expect([...report.withheld.map((w) => w.command)].sort()).toEqual(
-        ['bind', 'doctor', 'pin', 'sync', 'unbind', 'upgrade'].sort(),
+        ['bind', 'doctor', 'pin', 'prefs set', 'prefs unset', 'sync', 'unbind', 'upgrade'].sort(),
       );
       for (const entry of report.withheld) {
         expect(entry.reason).toContain('schema declaration');

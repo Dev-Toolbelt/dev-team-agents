@@ -30,12 +30,18 @@ import {
   planUpgrade,
   run,
   setPin,
+  prefsList,
+  prefsSet,
+  prefsUnset,
+  asProjectPreferences,
+  asPreferenceWrite,
   syncAllProjects,
   syncProject,
   unbindProject,
 } from '../src/cli/operations.js';
 import { scanTopLevelJson, parseSingleDocument } from '../src/cli/parse.js';
 import type { CliContext } from '../src/cli/operations.js';
+import type { PreferenceValue } from '../src/shared/api.js';
 import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 /** A copy of `body` with `key` dropped, for the "missing required key" validator tests. */
@@ -142,6 +148,8 @@ describe('what this slice is allowed to run', () => {
       'sync',
       'pin',
       'upgrade',
+      'prefs set',
+      'prefs unset',
     ]);
     for (const command of GATED_COMMANDS) {
       const tuple = tupleLiteral(command);
@@ -220,10 +228,11 @@ describe('the argv boundary refuses before it spawns', () => {
 
   it('refuses every mutating command outside the gated list, and `migrate` in particular', async () => {
     // `bind`/`unbind`/`sync`/`pin`/`upgrade` moved into the gated list with this app's
-    // write actions; these are the ones that remain refused because nothing in this
-    // build spawns them yet — `migrate` in particular, because it is the project
-    // lifecycle's other mutating command and has no handler.
-    for (const args of [['migrate'], ['export'], ['prefs', 'set'], ['cred', 'list'], ['update'], ['uninstall']]) {
+    // write actions, and `prefs set`/`prefs unset` with the project settings screen; these
+    // are the ones that remain refused because nothing in this build spawns them yet —
+    // `migrate` in particular, because it is the project lifecycle's other mutating
+    // command and has no handler.
+    for (const args of [['migrate'], ['export'], ['store', 'use'], ['cred', 'list'], ['update'], ['uninstall']]) {
       const result = await run(unspawnable(), args, (body) => body);
       expect(result.ok, args.join(' ')).toBe(false);
       if (result.ok) throw new Error('unreachable');
@@ -334,6 +343,46 @@ describe('the write actions build the argv the CLI documents', () => {
     expect(released.command).not.toContain('pin ""');
   });
 
+  it('prefsSet and prefsUnset always write --scope project, with values spelled the way _coerce reads them', async () => {
+    const cases: readonly [PreferenceValue, string][] = [
+      [true, 'true'],
+      [false, 'false'],
+      [null, 'null'],
+      [24, '24'],
+      [1.8, '1.8'],
+      ['pt-BR', 'pt-BR'],
+    ];
+    for (const [value, spelled] of cases) {
+      const result = await prefsSet(unspawnable(), '/tmp/project', 'some_key', value);
+      expect(result.command).toContain(`prefs set some_key ${spelled} --scope project --path /tmp/project --json`);
+      expect(result.command).not.toContain('global');
+    }
+    const unset = await prefsUnset(unspawnable(), '/tmp/project', 'some_key');
+    expect(unset.command).toContain('prefs unset some_key --scope project --path /tmp/project --json');
+    const list = await prefsList(unspawnable(), '/tmp/project');
+    expect(list.command).toContain('prefs list --path /tmp/project --json');
+  });
+
+  it('prefsSet refuses, without spawning, a value _coerce would misread or argparse would take as a flag', async () => {
+    for (const [key, value] of [
+      ['language', ''],
+      ['language', ' en'],
+      ['language', 'true'],
+      ['language', 'None'],
+      ['language', '--scope'],
+      ['language', 'a\nb'],
+      ['model_max_tokens', -1],
+      ['model_max_tokens', Number.NaN],
+      ['--scope', 'global'],
+      ['Language', 'en'],
+    ] as const) {
+      const result = await prefsSet(unspawnable(), '/tmp/project', key, value);
+      if (result.ok) throw new Error(`expected a refusal for ${key}=${String(value)}`);
+      expect(result.kind, `${key}=${String(value)}`).toBe('refused');
+      expect(result.durationMs).toBe(0);
+    }
+  });
+
   it('planUpgrade and applyUpgrade pass a path, never a project id, with --apply only on apply', async () => {
     const plan = await planUpgrade(unspawnable(), '/tmp/project');
     expect(plan.command).toContain('upgrade /tmp/project --json');
@@ -349,6 +398,33 @@ describe('the write actions build the argv the CLI documents', () => {
  * checked three ways: the real shape is accepted, an added key is tolerated (ADR-0014
  * § 2), and a missing required key is reported rather than silently dropped.
  */
+describe('preference payload validation', () => {
+  it('reads prefs list and keeps only string origins', () => {
+    const parsed = asProjectPreferences({
+      project_id: 'p',
+      version: '2.48.0',
+      values: { language: 'en' },
+      origin: { language: 'project', odd: 3 },
+      unknown: ['x', 4],
+    });
+    if (typeof parsed === 'string') throw new Error(parsed);
+    expect(parsed.origin).toEqual({ language: 'project' });
+    expect(parsed.unknown).toEqual(['x']);
+  });
+
+  it('rejects a prefs list without values, origin or version', () => {
+    expect(asProjectPreferences({ origin: {}, version: '1' })).toContain('values');
+    expect(asProjectPreferences({ values: {}, version: '1' })).toContain('origin');
+    expect(asProjectPreferences({ values: {}, origin: {} })).toContain('version');
+  });
+
+  it('reads prefs set and unset answers', () => {
+    expect(asPreferenceWrite({ key: 'a', scope: 'project', value: 1, file: '/x' })).toEqual({ key: 'a', scope: 'project' });
+    expect(asPreferenceWrite({ key: 'a', scope: 'project', removed: false })).toEqual({ key: 'a', scope: 'project', removed: false });
+    expect(asPreferenceWrite({ scope: 'project' })).toContain('key');
+  });
+});
+
 describe('write-action payload validation, against the real shapes', () => {
   const bindBody: Record<string, unknown> = {
     path: '/repo/project',

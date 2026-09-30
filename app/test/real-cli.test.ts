@@ -27,7 +27,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { invokeDevteam } from '../src/cli/invoke.js';
 import { ranAndAnswered } from '../src/cli/contract.js';
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
-import { bindProject, catalogSummary, doctor, listProjects, setPin, unbindProject } from '../src/cli/operations.js';
+import {
+  bindProject,
+  catalogSummary,
+  doctor,
+  listProjects,
+  prefsList,
+  prefsSet,
+  prefsUnset,
+  setPin,
+  unbindProject,
+} from '../src/cli/operations.js';
 
 /** `app/test/` → the repository root → `scripts/cli/devteam`. */
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -426,6 +436,38 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     // clear the pin") — a release that reached the CLI as an empty string would have
     // failed this assertion with a `usage` result, not a successful release.
     expect(released.outcome).toBe('success');
+  });
+
+  it('round-trips a project-layer preference: set shows origin project, unset brings the inherited value back', async () => {
+    installStoreVersion();
+    const bound = await bindProject(context(), work, {});
+    if (!bound.ok) throw new Error(`expected a successful bind: ${bound.message}`);
+
+    const before = await prefsList(context(), work);
+    if (!before.ok) throw new Error(`expected a payload: ${before.message}`);
+    const inherited = before.data.values['session_no_commit_turns'];
+    expect(before.data.origin['session_no_commit_turns']).not.toBe('project');
+
+    const set = await prefsSet(context(), work, 'session_no_commit_turns', 13);
+    if (!set.ok) throw new Error(`expected success: ${set.message}`);
+    expect(set.data).toMatchObject({ key: 'session_no_commit_turns', scope: 'project' });
+
+    const during = await prefsList(context(), work);
+    if (!during.ok) throw new Error('unreachable');
+    expect(during.data.values['session_no_commit_turns']).toBe(13);
+    expect(during.data.origin['session_no_commit_turns']).toBe('project');
+
+    const nulled = await prefsSet(context(), work, 'worktree_base_branch', null);
+    if (!nulled.ok) throw new Error(`expected success: ${nulled.message}`);
+
+    const unset = await prefsUnset(context(), work, 'session_no_commit_turns');
+    if (!unset.ok) throw new Error(`expected success: ${unset.message}`);
+    expect(unset.data.removed).toBe(true);
+
+    const after = await prefsList(context(), work);
+    if (!after.ok) throw new Error('unreachable');
+    expect(after.data.values['session_no_commit_turns']).toBe(inherited);
+    expect(after.data.values['worktree_base_branch']).toBeNull();
   });
 
   it('surfaces the exit-4 write gate as OperationResult.kind "conflict", a problem the UI can render', async () => {

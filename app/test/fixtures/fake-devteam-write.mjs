@@ -15,7 +15,8 @@
  *
  * This fixture reads the subcommand out of argv instead, and needs no environment
  * variable at all. It knows one project, `proj-1` at `/repo/project-1`, and answers
- * `version`, `compat`, `list`, `bind`, `unbind`, `sync`, `pin` and `upgrade` each with a
+ * `version`, `compat`, `list`, `bind`, `unbind`, `sync`, `pin`, `upgrade` and `prefs
+ * list/set/unset` each with a
  * shape real enough for their own validators in `cli/operations.ts` to accept — so
  * `test/ipc.test.ts` can assert on `result.data`, not only on `result.command`.
  */
@@ -212,6 +213,46 @@ switch (command) {
         actions: ['copy 12 file(s)'],
       });
     }
+    process.exit(0);
+    break;
+  }
+
+  case 'prefs': {
+    const verb = args[1];
+    if (verb === 'list') {
+      // Anywhere but the project, the CLI resolves no project: the cascade without its layer.
+      if (flagValue('--path') !== PROJECT_PATH) {
+        emit({
+          ok: true,
+          project_id: null,
+          version: '3.0.0',
+          values: { language: 'pt-BR', worktree_active: true, model_max_tokens: 200000 },
+          origin: { language: 'defaults', worktree_active: 'defaults', model_max_tokens: 'global' },
+          unknown: [],
+        });
+        process.exit(0);
+      }
+      emit({
+        ok: true,
+        project_id: PROJECT_ID,
+        version: '3.0.0',
+        values: { language: 'en', worktree_active: true, model_max_tokens: 200000, telemetry: false, mystery_key: 1 },
+        origin: { language: 'project', worktree_active: 'defaults', model_max_tokens: 'global', telemetry: 'consent-withheld', mystery_key: 'project' },
+        unknown: ['mystery_key'],
+      });
+      process.exit(0);
+    }
+    const key = args[2];
+    // `model_max_tokens 5000` is the fixture's one refusal, so a batch can fail part-way.
+    if (verb === 'set' && key === 'model_max_tokens' && args[3] === '5000') {
+      emit({ ok: false, error: 'model_max_tokens is too small', hint: 'Use at least 1000.', exit_code: 2 });
+      process.exit(2);
+    }
+    emit(
+      verb === 'unset'
+        ? { ok: true, key, scope: flagValue('--scope'), removed: true, file: '/store/prefs.json' }
+        : { ok: true, key, value: args[3], scope: flagValue('--scope'), file: '/store/prefs.json' },
+    );
     process.exit(0);
     break;
   }
