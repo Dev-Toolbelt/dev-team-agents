@@ -46,6 +46,7 @@ O laranja base sobre branco tem contraste de 4.17:1. Evite usá-lo em textos peq
 - Horizontal: corresponde ao master, que já traz o símbolo à direita do texto.
 - Vertical: o mesmo asterisco é centralizado acima do conjunto moldura, nome e slogan. Sua proporção em relação aos demais elementos é preservada. A moldura mantém o desenho e sua abertura original; não foi fechada nem redesenhada.
 - Símbolo: somente o asterisco existente, sem inventar ícone novo.
+- Ícone do app: composição própria, distinta do símbolo — a pasta laranja com `/d` em grafite e o asterisco laranja, sobre um bloco branco de cantos arredondados na grade de ícones da Apple (bloco de 824 px numa tela transparente de 1024 px, raio de 185 px, sombra suave). É usado só como ícone do aplicativo desktop (Dock, janela Sobre, instalador); nas demais aplicações o símbolo continua sendo apenas o asterisco. As cores vêm da arte original e não são recoloridas.
 - Positiva: idêntica ao master sobre branco.
 - Todas as recolorações derivam das mesmas máscaras do master; nenhuma versão foi gerada novamente. Todas as versões solicitadas são aplicáveis, com as adaptações de composição descritas acima.
 
@@ -60,6 +61,8 @@ O laranja base sobre branco tem contraste de 4.17:1. Evite usá-lo em textos peq
 - `logo-principal-light-positiva.png` — 3600 × 1440 px; fundo sólido; perfil sRGB incorporado.
 - `logo-principal-light.png` — 3600 × 1440 px; fundo sólido; perfil sRGB incorporado.
 - `logo-principal-transparente.png` — 3600 × 1440 px; transparência real (RGBA); perfil sRGB incorporado.
+- `logo-icone-app-original.png` — 1254 × 1254 px; arte original do ícone do app sobre fundo branco (convertida de WebP, com perda); fonte do bloco abaixo.
+- `logo-icone-app.png` — 1024 × 1024 px; ícone do app no bloco arredondado, transparência real (RGBA); gerado por `app/build/make-icon.sh --tile` e origem de `app/build/icon.icns` e `app/build/icon.png`.
 - `logo-simbolo-light.png` — 2400 × 2400 px; fundo sólido; perfil sRGB incorporado.
 - `logo-simbolo-transparente.png` — 2400 × 2400 px; transparência real (RGBA); perfil sRGB incorporado.
 - `logo-vertical-light.png` — 3000 × 3000 px; fundo sólido; perfil sRGB incorporado.
