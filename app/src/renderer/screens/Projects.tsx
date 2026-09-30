@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FolderSync, Plus, RefreshCw } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -264,12 +264,21 @@ export function Projects({
 
   const filtering = normalizedFilterText !== '' || filterMode !== 'all' || filterProviders.size > 0;
 
+  const refreshButton = (
+    <Hint content="Reload the project list from the CLI">
+      <Button variant="outline" size="xs" onClick={reload}>
+        <RefreshCw className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
+        Refresh
+      </Button>
+    </Hint>
+  );
+
   return (
     <section aria-labelledby="projects-heading" className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <h2 id="projects-heading" className="text-base font-semibold">
-            Bound projects
+            Projects
           </h2>
           <p className="text-sm text-muted-foreground">
             {projects.length === 0
@@ -285,23 +294,8 @@ export function Projects({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {projects.length > 0 ? (
-            <WriteButton
-              command="sync"
-              environment={environment}
-              variant="outline"
-              size="sm"
-              tooltip="Re-apply the current store version to every bound project that is not pinned"
-              disabled={syncAll.state.phase === 'pending' || syncs.busy}
-              onClick={() => {
-                void syncAll.run().then((result) => {
-                  if (result.ok) reload();
-                });
-              }}
-            >
-              {syncAll.state.phase === 'pending' ? 'Syncing all…' : 'Sync all'}
-            </WriteButton>
-          ) : null}
+          {/* With no projects there is no table toolbar to hold Refresh, so it stays here. */}
+          {projects.length === 0 ? refreshButton : null}
           <WriteButton
             command="bind"
             environment={environment}
@@ -309,13 +303,9 @@ export function Projects({
             tooltip="Bind a new project directory to this store"
             onClick={() => setBindOpen(true)}
           >
-            Bind…
+            <Plus />
+            New project
           </WriteButton>
-          <Hint content="Reload the project list from the CLI">
-            <Button variant="outline" size="sm" onClick={reload}>
-              Refresh
-            </Button>
-          </Hint>
         </div>
       </header>
 
@@ -326,7 +316,7 @@ export function Projects({
       {syncAll.state.phase === 'done' ? <Notice result={syncAll.state.result} /> : null}
 
       {projects.length === 0 ? (
-        <Empty>Nothing is bound yet. Use Bind above to choose a project directory.</Empty>
+        <Empty>Nothing is bound yet. Use New project above to choose a project directory.</Empty>
       ) : (
         <>
           <ProjectFilters
@@ -356,6 +346,27 @@ export function Projects({
             syncAllPending={syncAll.state.phase === 'pending'}
             onChanged={reload}
             onOpenSettings={setOpenSettings}
+            toolbar={
+              <>
+                <WriteButton
+                  command="sync"
+                  environment={environment}
+                  variant="outline"
+                  size="xs"
+                  tooltip="Re-apply the current store version to every bound project that is not pinned"
+                  disabled={syncAll.state.phase === 'pending' || syncs.busy}
+                  onClick={() => {
+                    void syncAll.run().then((result) => {
+                      if (result.ok) reload();
+                    });
+                  }}
+                >
+                  <FolderSync aria-hidden="true" />
+                  {syncAll.state.phase === 'pending' ? 'Syncing all…' : 'Sync all'}
+                </WriteButton>
+                {refreshButton}
+              </>
+            }
           />
         </>
       )}
