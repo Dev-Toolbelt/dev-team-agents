@@ -21,8 +21,10 @@ and committed relative links to it under `.claude/`. Running `devteam bind` over
   them modified and the next `git add -A` commits links into a directory no teammate has.
 - `doctor` only checked for a v2 shape when `project.json` was absent. After the bind it existed, so the
   report was `status: ok`.
-- Nothing reads the vendored tree any more (hooks point at `.dev-team-agents/core/…`), so it is dead
-  weight that still ships with every clone.
+- Nothing reads the vendored tree any more (hooks pointed at `.dev-team-agents/core/…`), so it is dead
+  weight that still ships with every clone. Since the runtime root became two links at
+  `.dev-team-agents/scripts` and `/templates`, the vendored `scripts/` sits exactly where a link must
+  go: `bind` and `sync` refuse such a project with exit 4 until `devteam migrate` has run.
 
 Since 2026-09-29 the `bind` command refuses a v2 install (exit 4, pointing at `migrate`), and `doctor` and
 `migrate` report both the leftover tree and the tracked artifacts with the exact untrack command.
