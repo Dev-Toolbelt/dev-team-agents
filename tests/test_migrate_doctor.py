@@ -263,6 +263,15 @@ class DoctorTest(StoreTestCase):
         report = doctor.run(project_root=root)
         self.assertEqual(report["status"], "ok")
 
+    def test_a_hostile_pin_in_the_registry_is_a_finding_not_an_abort(self):
+        self.install_version("3.0.0", activate=True)
+        root = self.new_project()
+        project_id = bind.bind(root, provider_names=["claude"])["project_id"]
+        registry.set_pin(project_id, "../../elsewhere")
+        report = doctor.run(project_root=root)
+        self.assertEqual(report["status"], "fail")
+        self.assertTrue(any(f["category"] == "bind" for f in report["findings"]))
+
     def test_missing_artifacts_are_a_warning_pointing_at_sync(self):
         self.install_version("3.0.0", activate=True)
         root = self.new_project()

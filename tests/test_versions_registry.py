@@ -4,7 +4,7 @@ import unittest
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, registry, versions
+from devteam import bind, paths, registry, versions
 from devteam.errors import ConflictError, EnvError, UsageError
 
 
@@ -34,6 +34,36 @@ class VersionStoreTest(StoreTestCase):
     def test_rejects_a_non_semver_version(self):
         with self.assertRaises(UsageError):
             versions.install_from_tree(self.source, version="latest")
+        for sloppy in ("1.2.3-", "1.2.3\n"):
+            with self.subTest(version=sloppy):
+                with self.assertRaises(UsageError):
+                    versions.install_from_tree(self.source, version=sloppy)
+
+    def test_hostile_version_operands_are_rejected(self):
+        self.install_version("3.0.0")
+        for bad in ("../x", "/abs", "a/b", "..", "", "-x", "3.0.0/../..", "3.0", "..\\x", None):
+            with self.subTest(version=bad):
+                # Typed on the command line: a usage error.
+                with self.assertRaises(UsageError):
+                    paths.validate_version(bad)
+                # Read back from the store: a broken store, which doctor reports.
+                with self.assertRaises(EnvError):
+                    versions.require(bad)
+                with self.assertRaises(EnvError):
+                    versions.resolve(bad or "..")
+
+    def test_non_ascii_digits_are_not_a_version(self):
+        self.assertFalse(paths.is_version_name("\u0661.\u0662.\u0663"))
+
+    def test_a_stray_directory_the_guard_refuses_is_not_listed_as_installed(self):
+        self.install_version("3.0.0")
+        (paths.versions_dir() / "1.2.3-").mkdir()
+        self.assertEqual(versions.installed(), ["3.0.0"])
+
+    def test_valid_version_names_still_resolve(self):
+        self.install_version("3.0.0")
+        self.assertEqual(versions.resolve("3.0.0"), "3.0.0")
+        self.assertTrue(versions.require("3.0.0").is_dir())
 
     def test_semver_ordering_is_numeric_not_lexicographic(self):
         for version in ("2.9.0", "2.10.0", "2.10.1"):
