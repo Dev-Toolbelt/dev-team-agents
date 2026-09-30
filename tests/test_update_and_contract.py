@@ -143,16 +143,18 @@ class RefAndDigestTest(StoreTestCase):
 
 
 class DelegatedArtifactTest(StoreTestCase):
-    def test_only_paths_that_exist_are_recorded(self):
+    def test_only_target_files_that_exist_are_recorded(self):
         root = self.new_project()
         (root / ".codex" / "agents").mkdir(parents=True)
+        (root / ".codex" / "agents" / "a.toml").write_text("", encoding="utf-8")
+        (root / ".codex" / "agents" / "mine.toml").write_text("", encoding="utf-8")
         (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
-        records = providers.delegated_artifacts("codex", root)
-        paths = [r["path"] for r in records]
-        self.assertIn(".codex/agents", paths)
-        self.assertIn(".codex/hooks.json", paths)
-        self.assertNotIn(".codex/skills", paths)
-        self.assertTrue(all(r["kind"] == "delegated" for r in records))
+        targets = [".codex/agents/a.toml", ".codex/agents/b.toml"]
+        records = providers.delegated_artifacts("codex", root, targets)
+        by_path = {r["path"]: r["kind"] for r in records}
+        self.assertEqual(
+            by_path, {".codex/agents/a.toml": "delegated", ".codex/hooks.json": "codex-hooks"}
+        )
 
 
 class MigrateGuardTest(StoreTestCase):
