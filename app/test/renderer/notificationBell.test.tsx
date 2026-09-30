@@ -57,6 +57,14 @@ describe('NotificationBell', () => {
     expect(await screen.findByText(/Critical:/)).toBeInTheDocument();
   });
 
+  it('presents an available update as news, not as a warning', async () => {
+    const user = userEvent.setup();
+    renderBell(notificationFeed({ items: [appNotification({ level: 'warning', code: 'update.available' })] }));
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    expect(await screen.findByText(/Update available:/)).toBeInTheDocument();
+    expect(screen.queryByText(/Warning:/)).not.toBeInTheDocument();
+  });
+
   it('clicking an item opens its project', async () => {
     const user = userEvent.setup();
     const { onOpenProject } = renderBell(notificationFeed({ items: [appNotification({ projectId: 'proj-7' })] }));
