@@ -321,6 +321,19 @@ class SettlementTest(BoardCase):
         task = self.agents()["bg-late"]
         self.assertEqual((task["status"], task["history"][-1]["at"]), ("completed", T0 + 1000))
 
+    def test_a_backdated_end_never_lands_before_the_tasks_last_event(self):
+        transcript = self.tmp / "order.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        # An earlier background agent keeps the scan open from T0, so a hand-back stamped before this
+        # task's own spawn (clock skew between hooks) is still read for it.
+        self.background("bg-first", transcript, now=T0)
+        self.background("bg-order", transcript, now=T0 + 1500)  # spawned after the T0 + 1000 stamp
+        transcript.write_text(hand_back("bg-order"), encoding="utf-8")
+        self.stop(transcript, now=T0 + 3000)
+        task = self.agents()["bg-order"]
+        self.assertEqual(task["status"], "completed")
+        self.assertEqual([h["at"] for h in task["history"]], [T0 + 1500, T0 + 1500])
+
     def test_the_cursor_restarts_at_the_transcript_end_when_no_other_background_agent_runs(self):
         transcript = self.tmp / "t.jsonl"
         transcript.write_text("", encoding="utf-8")

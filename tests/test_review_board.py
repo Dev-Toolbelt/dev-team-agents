@@ -1362,6 +1362,18 @@ class BackgroundReviewTest(ReviewCase):
         )
         self.result(ack, now=now + 1)
 
+    def retarget(self, entries, task_id):
+        """The same hand-back from another background agent: its own `<task-id>`."""
+        for entry in entries:
+            queued = entry["type"] == "queue-operation"
+            body = entry["content"] if queued else entry["message"]["content"]
+            body = body.replace("<task-id>a1</task-id>", "<task-id>{}</task-id>".format(task_id))
+            if queued:
+                entry["content"] = body
+            else:
+                entry["message"]["content"] = body
+        return entries
+
     def escaped(self, text):
         """The notification's <result> as Claude Code writes it: HTML-escaped."""
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -1377,15 +1389,7 @@ class BackgroundReviewTest(ReviewCase):
         self.stop_bg(now=T0 + 14)
         cr = self.hand_back(self.escaped(marker(0)), launch="tu-cr")
         qa = self.hand_back(self.escaped(marker(3)), launch="tu-qa", at=self.stamp(20))
-        for entries, task_id in ((cr, "a0daa7f1ebed8a715"), (qa, "ac4bea0c3ea4c50da")):
-            for entry in entries:
-                body = entry.get("content") if entry["type"] == "queue-operation" else entry["message"]["content"]
-                body = body.replace("<task-id>a1</task-id>", "<task-id>{}</task-id>".format(task_id))
-                if entry["type"] == "queue-operation":
-                    entry["content"] = body
-                else:
-                    entry["message"]["content"] = body
-        self.append(*cr, *qa)
+        self.append(*self.retarget(cr, "a0daa7f1ebed8a715"), *self.retarget(qa, "ac4bea0c3ea4c50da"))
         out = self.stop_bg(now=T0 + 30)
         window = self.window()
         self.assertEqual((window["pending"], window["markers"], window["findings"]), (0, 2, 3), window)
@@ -1416,7 +1420,8 @@ class BackgroundReviewTest(ReviewCase):
         self.stop_bg(now=later + 10)
         window = self.window()
         self.assertEqual((window["findings"], window["result_at"]), (3, T0 + 60))
-        self.assertEqual(window["resolution"], "fixed")
+        # Resolved when the fix finished, not at the earlier hand-back.
+        self.assertEqual((window["resolution"], window["resolved_at"]), ("fixed", later))
         self.assertEqual(self.columns(now=later + 20)["A"], "done")
 
     def test_a_hand_back_after_the_wait_ran_out_is_still_unread(self):
@@ -1450,19 +1455,21 @@ class BackgroundReviewTest(ReviewCase):
         self.assertEqual((window["result_at"], window["resolution"]), (T0 + 60, "fixed"))
         self.assertEqual(window["resolved_at"], T0 + 7200)
 
+    def test_a_cancelled_fix_also_resolves_no_earlier_than_it_ended(self):
+        self.start(items=[todo("A", "completed")])
+        self.launch()
+        self.append(*self.hand_back(marker(1), at=self.stamp(60)))
+        self.todos("s1", todo("A", "completed"), todo("Fix", "in_progress"), now=T0 + 3600)
+        self.todos("s1", todo("A", "completed"), todo("Fix", "cancelled"), now=T0 + 5400)
+        self.stop_bg(now=T0 + 11 * 3600)
+        self.assertEqual((self.window()["resolution"], self.window()["resolved_at"]), ("fixed", T0 + 5400))
+
     def two_reviewers(self, second_at):
         self.start()
         self.launch("tu1")
         self.launch("tu2")
         first = self.hand_back(marker(1), launch="tu1", at=self.stamp(60))
-        second = self.hand_back(marker(2), launch="tu2", at=self.stamp(second_at))
-        for entry in second:
-            body = entry["content"] if entry["type"] == "queue-operation" else entry["message"]["content"]
-            body = body.replace("<task-id>a1</task-id>", "<task-id>a2</task-id>")
-            if entry["type"] == "queue-operation":
-                entry["content"] = body
-            else:
-                entry["message"]["content"] = body
+        second = self.retarget(self.hand_back(marker(2), launch="tu2", at=self.stamp(second_at)), "a2")
         self.append(*first, *second)
         self.stop_bg(now=T0 + 20 * 3600)
         return self.window()
