@@ -1348,6 +1348,93 @@ class BackgroundReviewTest(ReviewCase):
         self.assertEqual((out["review_findings"], self.window()["markers"]), (0, 1))
         self.assertEqual(self.window()["resolution"], "passed")
 
+    def replay_launch(self, launch, agent, agent_id, now):
+        """A reviewer launched the way Claude Code's desktop app does it: no `run_in_background`
+        in the input (background is its default), and the ack is the async-launch record."""
+        spawn = claude_spawn("s1", agent=agent)
+        spawn.update(tool_use_id=launch, transcript_path=str(self.path))
+        self.open(spawn, now=now)
+        ack = claude_return("s1", "Async agent launched successfully.", agent=agent)
+        ack.update(
+            tool_use_id=launch,
+            transcript_path=str(self.path),
+            tool_response={"isAsync": True, "status": "async_launched", "agentId": agent_id, "description": "d"},
+        )
+        self.result(ack, now=now + 1)
+
+    def escaped(self, text):
+        """The notification's <result> as Claude Code writes it: HTML-escaped."""
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def test_two_background_reviewers_with_escaped_markers_are_both_read(self):
+        # A live session: code-reviewer then qa-specialist, both in the background, each handing
+        # back `&lt;!-- review-result: findings=N --&gt;`. Before the fix the QA never joined the
+        # window and neither marker was read: the tasks sat in review as "result not read".
+        self.start()
+        self.replay_launch("tu-cr", "code-reviewer", "a0daa7f1ebed8a715", now=T0 + 10)
+        self.replay_launch("tu-qa", "qa-specialist", "ac4bea0c3ea4c50da", now=T0 + 12)
+        self.assertEqual(self.window()["pending"], 2)
+        self.stop_bg(now=T0 + 14)
+        cr = self.hand_back(self.escaped(marker(0)), launch="tu-cr")
+        qa = self.hand_back(self.escaped(marker(3)), launch="tu-qa", at=self.stamp(20))
+        for entries, task_id in ((cr, "a0daa7f1ebed8a715"), (qa, "ac4bea0c3ea4c50da")):
+            for entry in entries:
+                body = entry.get("content") if entry["type"] == "queue-operation" else entry["message"]["content"]
+                body = body.replace("<task-id>a1</task-id>", "<task-id>{}</task-id>".format(task_id))
+                if entry["type"] == "queue-operation":
+                    entry["content"] = body
+                else:
+                    entry["message"]["content"] = body
+        self.append(*cr, *qa)
+        out = self.stop_bg(now=T0 + 30)
+        window = self.window()
+        self.assertEqual((window["pending"], window["markers"], window["findings"]), (0, 2, 3), window)
+        self.assertEqual(out["review_findings"], 3)
+        self.assertEqual(self.session()["tasks"][0]["review"]["state"], "findings")
+
+    def test_a_hand_back_in_time_counts_even_when_the_next_stop_comes_after_the_wait(self):
+        # The live session: the QA handed back a minute after launch, but the turn then sat on a
+        # question for eleven hours, so the next Stop came after the window's wait had run out.
+        self.start()
+        self.launch()
+        self.append(*self.hand_back(marker(3), at=self.stamp(60)))
+        late = T0 + tasks.PENDING_MAX_AGE + 3600
+        out = self.stop_bg(now=late)
+        window = self.window()
+        self.assertEqual((window["markers"], window["findings"], window.get("unread", 0)), (1, 3, 0))
+        self.assertEqual(out["review_findings"], 3)
+
+    def test_fixes_started_while_the_turn_waited_release_the_tasks(self):
+        # The whole live sequence: the result is handed back, the turn waits on a question for
+        # hours, the fixes are launched and finish, and only then does a Stop read the result.
+        # The result counts from its hand-back, so the fixes come after it and release the tasks.
+        self.start(items=[todo("A", "completed")])
+        self.launch()
+        self.append(*self.hand_back(marker(3), at=self.stamp(60)))
+        later = T0 + 11 * 3600
+        self.todos("s1", todo("A", "completed"), todo("Fix", "completed"), now=later)
+        self.stop_bg(now=later + 10)
+        window = self.window()
+        self.assertEqual((window["findings"], window["result_at"]), (3, T0 + 60))
+        self.assertEqual(window["resolution"], "fixed")
+        self.assertEqual(self.columns(now=later + 20)["A"], "done")
+
+    def test_a_hand_back_after_the_wait_ran_out_is_still_unread(self):
+        self.start()
+        self.launch()
+        self.append(*self.hand_back(marker(3), at=self.stamp(tasks.PENDING_MAX_AGE + 600)))
+        self.stop_bg(now=T0 + tasks.PENDING_MAX_AGE + 3600)
+        window = self.window()
+        self.assertEqual((window["markers"], window["unread"]), (0, 1))
+
+    def test_an_escaped_marker_quoted_mid_report_is_still_not_a_result(self):
+        self.start()
+        self.launch()
+        quoted = self.escaped("I end with <!-- review-result: findings=2 --> as the rule says.\nNothing else.")
+        self.append(*self.hand_back(quoted))
+        self.stop_bg()
+        self.assertEqual(self.window()["markers"], 0)
+
     def test_a_later_stop_does_not_consume_the_same_notification_again(self):
         self.start()
         self.open(prompt("s1", "/devteam:review"), now=T0 + 5)
