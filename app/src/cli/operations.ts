@@ -2245,6 +2245,8 @@ const COLUMN_FOR_STATUS: Readonly<Record<string, BoardColumn>> = {
 const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ended'];
 const MAX_TASK_TEXT = 2_000;
 const MAX_ID = 512;
+/** A session title past this is not a title anyone typed; it is dropped, not cut. */
+const MAX_SESSION_TITLE = 512;
 /** A worktree path from the CLI: relative to the checkout, or absolute; no real path is longer. */
 const MAX_PATH = 4_096;
 const MAX_TASKS_PER_SESSION = 2_000;
@@ -2387,6 +2389,7 @@ function asBoardSession(raw: unknown): BoardSession | null {
   }
   return {
     session_id: sessionId,
+    title: boundedString(raw['title'], MAX_SESSION_TITLE),
     provider,
     branch: asNullableString(raw['branch']),
     cwd: typeof raw['cwd'] === 'string' ? raw['cwd'] : '',
