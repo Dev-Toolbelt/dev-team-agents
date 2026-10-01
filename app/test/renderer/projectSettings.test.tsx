@@ -261,7 +261,7 @@ describe('ProjectSettings — grouping and origin', () => {
     }
     expect(screen.getAllByText('Not opted in').length).toBe(2);
     expect(screen.getAllByLabelText(/^This project:/)).toHaveLength(2);
-    // The retired key is no longer part of the schema, so it is not offered.
+    // The retired key is not offered at all — not as a field, not under "other keys".
     expect(screen.queryByText(/transcript/i)).not.toBeInTheDocument();
   });
 
