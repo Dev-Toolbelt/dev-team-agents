@@ -124,7 +124,7 @@ class CorePointerUpgradeTest(StoreTestCase):
             commands = [h["command"] for e in settings["hooks"][event] for h in e["hooks"]]
             self.assertEqual(len(commands), 1, event)
             self.assertIn("{}/{}".format(hooks.HOOK_DIR, script), commands[0])
-            self.assertTrue((root / commands[0].split()[-1]).exists(), commands[0])
+            self.assertTrue((root / hooks.HOOK_DIR / script).exists(), commands[0])
 
 
 @requires_bash()
