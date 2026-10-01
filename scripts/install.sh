@@ -637,7 +637,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -648,7 +648,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
     ],
     "PostToolUseFailure": [
       {
-        "matcher": "Agent|Task",
+        "matcher": "Agent|Task|Bash|mcp__.*create_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -699,8 +699,8 @@ import sys, json
 settings_file, check_str = sys.argv[1], sys.argv[2]
 with open(settings_file, 'r') as f:
     data = json.load(f)
-wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"
-previous = ("TodoWrite|TaskCreate|TaskUpdate",)
+wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+previous = ("TodoWrite|TaskCreate|TaskUpdate", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task")
 changed = False
 for entry in data.get('hooks', {}).get('PostToolUse', []):
     if not isinstance(entry, dict):
@@ -739,7 +739,7 @@ new_entry = {"hooks": [{"type": "command", "command": hook_cmd}]}
 if hook_type == "PreToolUse":
     new_entry["matcher"] = ".*"
 elif hook_type == "PostToolUse":
-    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"
+    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
 
 entries.append(new_entry)
 
@@ -845,8 +845,19 @@ ours = [
         "hooks/post-tool-use.sh" in h.get('command', '') for h in e.get('hooks', []) if isinstance(h, dict)
     )
 ]
+wanted = "Agent|Task|Bash|mcp__.*create_pull_request"
+changed = False
 if not ours:
-    entries.append({"matcher": "Agent|Task", "hooks": [{"type": "command", "command": hook_cmd}]})
+    entries.append({"matcher": wanted, "hooks": [{"type": "command", "command": hook_cmd}]})
+    changed = True
+else:
+    # Only our entry, and only a matcher we shipped before, is widened (a PR/MR "already exists"
+    # result arrives as a failed Bash call); a matcher the user chose is left alone.
+    for entry in ours:
+        if entry.get('matcher') == "Agent|Task":
+            entry['matcher'] = wanted
+            changed = True
+if changed:
     with open(settings_file, 'w') as f:
         json.dump(data, f, indent=2)
         f.write('\n')

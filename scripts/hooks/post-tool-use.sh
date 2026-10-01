@@ -2,10 +2,14 @@
 # Dispatcher for all PostToolUse hooks.
 # Reads stdin once (Claude Code sends hook JSON here) and pipes it to each sub-script.
 # Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated.
-# Registered with a narrow matcher on every provider — Claude Code: the todo tools and the
-# subagent tool (`Agent`/`Task`), plus a `PostToolUseFailure` entry for the subagent tool;
-# Codex: `spawn_agent` and `wait_agent` only — so it does not run for other tools at all. The sub-scripts still
-# gate on the payload themselves.
+# Registered with a narrow matcher on every provider — Claude Code: the todo tools, the
+# subagent tool (`Agent`/`Task`), `Bash` and the pull-request MCP tools (`create_pull_request`,
+# `merge_pull_request`), plus a `PostToolUseFailure` entry for the subagent tool; Codex: the agent
+# tools (`spawn_agent`, `wait_agent`, `close_agent`), `Bash` and the same MCP tools; opencode: the
+# plugin forwards `task`, and `bash` / the MCP tools only when their call could be a PR/MR
+# creation or merge — so it does not run for other tools at all. The sub-scripts still gate on the
+# payload themselves (a `Bash` call forks nothing unless its command names `gh pr`, `glab mr` or
+# `git merge`).
 
 # Prevent WSL from loading /etc/bash.bashrc for every sub-process spawned here.
 unset BASH_ENV ENV

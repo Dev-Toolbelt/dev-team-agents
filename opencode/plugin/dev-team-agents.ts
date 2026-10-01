@@ -15,10 +15,13 @@
  *   ─────────────────────────────────────────────────────────────
  *   `session.created`                 → scripts/hooks/session-start.sh
  *   `tool.execute.before`             → scripts/hooks/pre-tool-use.sh
- *   `tool.execute.after` (`task` only) → scripts/hooks/post-tool-use.sh
- *     (a review agent's report: the task board reads its review-result marker)
+ *   `tool.execute.after`              → scripts/hooks/post-tool-use.sh
+ *     (`task`: a review agent's report, whose review-result marker the task board reads;
+ *     `bash` when its command could create or merge a PR/MR, and the MCP tools ending in
+ *     `create_pull_request` / `merge_pull_request`: the board records the PR/MR their RESULT
+ *     confirms. Every other tool stays free.)
  *   `chat.message`                    → scripts/hooks/user-prompt-submit.sh
- *     (the user's prompt text, for review commands and requests on the task board)
+ *     (the user's prompt text, for review commands and requests and issue references on the task board)
  *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh
  *   `session.idle` (event bus)        → scripts/hooks/stop.sh
  *     (stdin carries a synthetic transcript_path built from the SDK's
@@ -54,6 +57,13 @@ const TASK_BOARD_HOOK_TIMEOUT_MS = 12000
 // `tool.execute.before` remembers a `task` call's `subagent_type` here, keyed by callID, for the
 // matching `after` when opencode does not repeat the args. Bounded: an unmatched call is evicted.
 const SUBAGENT_CALLS_KEPT = 256
+// `bash` and pull-request MCP calls: a call whose command (or tool name) could not create or merge a
+// PR/MR is never forwarded, so an ordinary shell command costs no process. The detector that decides
+// what a forwarded call means is scripts/lib/devteam/pr_refs.py; this is only the cheap filter.
+const PR_COMMAND_RE = /gh\s+pr\s+(create|merge)|glab\s+mr\s+(create|merge)|git\s[^|;&\n]*merge/
+const PR_TOOL_RE = /(create|merge)_pull_request$/
+// The output tail forwarded to the hook: a result sits at the end of a long command chain.
+const OUTPUT_KEPT = 200000
 // Session titles the plugin has looked up, for the task board's notifications. Bounded likewise.
 const SESSION_TITLES_KEPT = 256
 
@@ -192,6 +202,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     }
   }
 
+  const prArgsByCall = new Map<string, any>()
   const subagentByCall = new Map<string, string>()
   const rememberSubagent = (callID: unknown, type: unknown) => {
     if (typeof callID !== "string" || typeof type !== "string" || !callID || !type) return
@@ -274,6 +285,15 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
 
     "tool.execute.before": async (input, output) => {
       if (input.tool === "task") rememberSubagent((input as any).callID, output.args?.subagent_type)
+      const before: any = input
+      if (typeof before.callID === "string" && (input.tool === "bash" || PR_TOOL_RE.test(input.tool))) {
+        prArgsByCall.set(before.callID, output.args)
+        while (prArgsByCall.size > SUBAGENT_CALLS_KEPT) {
+          const oldest = prArgsByCall.keys().next().value
+          if (oldest === undefined) break
+          prArgsByCall.delete(oldest)
+        }
+      }
       // `sessionID` first: the bash gates take the first session key in the payload, and
       // `args` is whatever the model or the user put there.
       // `cwd`: the board records the worktree a task was started in, as Claude Code and Codex
@@ -292,9 +312,28 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     },
 
     "tool.execute.after": async (input, output) => {
+      const callID = (input as any).callID
+      if (input.tool === "bash" || PR_TOOL_RE.test(input.tool)) {
+        const known: any = (input as any).args ?? (typeof callID === "string" ? prArgsByCall.get(callID) : undefined)
+        if (typeof callID === "string") prArgsByCall.delete(callID)
+        const isPrTool = input.tool !== "bash"
+        if (!isPrTool && !(typeof known?.command === "string" && PR_COMMAND_RE.test(known.command))) return
+        const text = typeof output.output === "string" ? output.output.slice(-OUTPUT_KEPT) : output.output
+        // Same key order as the `task` payload below: `sessionID` first, the call's args before its output.
+        const payload = JSON.stringify({
+          sessionID: input.sessionID,
+          tool: input.tool,
+          tool_use_id: callID,
+          cwd: directory,
+          session_title: await sessionTitle(input.sessionID),
+          args: known,
+          output: text,
+        })
+        await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
+        return
+      }
       // Only a subagent's report can carry a review result; every other tool stays free.
       if (input.tool !== "task") return
-      const callID = (input as any).callID
       const args: any = { ...((input as any).args ?? {}) }
       // The spawn's `subagent_type` names the agent whose report this is; opencode may not
       // repeat the args in `after`, so it is taken from the matching `before`.

@@ -14,6 +14,17 @@
 set -uo pipefail
 
 INPUT="$(cat)"
+# A shell call or an MCP call is never ours (02-pr-created.sh handles those): leave before any
+# whole-payload match runs over what can be a very large tool result. The tool name sits in the
+# head of every provider's payload, before the tool's input and output.
+HEAD="${INPUT:0:4096}"
+FIRST_TOOL_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"([^"]*)"'
+if [[ "$HEAD" =~ $FIRST_TOOL_RE ]]; then
+    # Only the FIRST tool key counts: a later one can sit inside an agent's quoted prompt.
+    case "${BASH_REMATCH[2]}" in
+        Bash|bash|mcp__*) exit 0 ;;
+    esac
+fi
 TODO_RE='"tool_name"[[:space:]]*:[[:space:]]*"(TodoWrite|TaskCreate|TaskUpdate)"'
 SUBAGENT_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(Agent|Task|task)"'
 SPAWN_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?spawn_agent"'

@@ -7,6 +7,9 @@
 #   devteam_task_board_record <payload>          fold a todo-tool or agent call into its record; raise session_done
 #   devteam_task_board_mark <idle|ended> <payload>   mark a session; raise session_abandoned on `ended`;
 #                                                on `idle` also settles a command/prompt review window
+#                                                and raises pr_created for each PR/MR the Stop fixed
+#   devteam_task_board_event <payload>           fold a PR/MR creation or merge, or a prompt's issue
+#                                                reference, into its record (the CLI decides what it is)
 #   devteam_task_board_review_open <payload>     open or join a review window (In Review column)
 #   devteam_task_board_review_result <payload>   fold a review agent's output into its window
 #   devteam_task_board_has_record <payload>      0 when the payload's session has a task record
@@ -129,6 +132,17 @@ _tb_notify_findings() {  # _tb_notify_findings <session> <window> <count> <cli-j
         "$2"
 }
 
+_tb_notify_pr_created() {  # _tb_notify_pr_created <session> <kind> <number> <cli-json>
+    local label sign word
+    label="$(_tb_label "$1" "$4")"
+    if [ "$2" = "mr" ]; then sign="!"; word="MR"; else sign="#"; word="PR"; fi
+    _tb_notify info "tasks.pr_created" "$1" \
+        "Session ${label}: ${word} ${sign}${3} created." \
+        "Sessão ${label}: ${word} ${sign}${3} criado." \
+        "Sesión ${label}: ${word} ${sign}${3} creado." \
+        "${2}${3}"
+}
+
 _tb_int() {  # _tb_int <json> <key>  → the integer value of "key": N, or empty
     printf '%s' "$1" | sed -n "s/.*\"$2\": \([0-9][0-9]*\).*/\1/p" | head -1
 }
@@ -158,6 +172,7 @@ devteam_task_board_mark() {
         if ! printf '%s' "$out" | grep -q '"review_result": true' && printf '%s' "$out" | grep -q '"became_all_done": true'; then
             _tb_notify_done "$(devteam_task_board_session_id "$payload")" "$out"
         fi
+        _tb_pr_marks "$out" "$payload"
         return 0
     fi
     open="$(printf '%s' "$out" | sed -n 's/.*"open": \([0-9]*\).*/\1/p' | head -1)"
@@ -169,6 +184,25 @@ devteam_task_board_mark() {
         "Session ${label} ended with ${open} task(s) still open." \
         "A sessão ${label} terminou com ${open} tarefa(s) em aberto." \
         "La sesión ${label} terminó con ${open} tarea(s) abierta(s)."
+    return 0
+}
+
+# One notification per PR/MR the Stop just fixed (`pr_marks`), once each: the dedupe suffix names it.
+# Only forks python when the CLI reported a mark.
+_tb_pr_marks() {  # _tb_pr_marks <mark-json> <payload>
+    local out="$1" session kind number
+    printf '%s' "$out" | grep -q '"kind"' || return 0
+    session="$(devteam_task_board_session_id "$2")"
+    [ -n "$session" ] || session="$(_tb_str "$out" session)"
+    [ -n "$session" ] || return 0
+    printf '%s' "$out" | python3 -c '
+import json, sys
+for m in json.load(sys.stdin).get("pr_marks") or []:
+    if m.get("kind") in ("pr", "mr") and isinstance(m.get("number"), int):
+        print(m["kind"], m["number"])
+' 2>/dev/null | while read -r kind number; do
+        _tb_notify_pr_created "$session" "$kind" "$number" "$out"
+    done
     return 0
 }
 
@@ -215,5 +249,11 @@ devteam_task_board_review_result() {
     [ -f "$TB_CLI" ] || return 0
     out="$(printf '%s' "$payload" | python3 "$TB_CLI" tasks review-result --project-root "$TB_ROOT" --json 2>/dev/null)" || return 0
     _tb_review_outcome "$out" result window findings "$payload"
+    return 0
+}
+
+devteam_task_board_event() {
+    [ -f "$TB_CLI" ] || return 0
+    printf '%s' "$1" | python3 "$TB_CLI" tasks record --project-root "$TB_ROOT" --json >/dev/null 2>&1
     return 0
 }
