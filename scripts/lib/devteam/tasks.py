@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import datetime
 import hashlib
+import html
 import json
 import os
 import re
@@ -794,6 +795,14 @@ def _completed_at(task):
     return task["created_at"]
 
 
+def _ended_at(task):
+    """When the task last entered its current status: its last history entry, else its creation."""
+    for entry in reversed(task.get("history") or []):
+        if isinstance(entry, dict) and entry.get("status") == task["status"] and _number(entry.get("at")):
+            return entry["at"]
+    return task["created_at"]
+
+
 def _window_state(window):
     """``pending`` | ``findings`` | ``unread``: what a task held by an unresolved window shows.
 
@@ -891,7 +900,10 @@ def _sweep_reviews(record, now):
         excluded = set(window.get("known_keys") or window["task_keys"]) | set(window["task_keys"])
         fixes = [t for t in _visible(record) if t["key"] not in excluded and t["created_at"] >= fix_after]
         if fixes and all(_column(t["status"]) == "done" for t in fixes):
-            _resolve(window, now, "fixed")
+            # Never before the last fix finished: a result dated at its (earlier) hand-back would
+            # otherwise close the window before work that was still being done when it arrived.
+            # `_ended_at`, not `_completed_at`: a cancelled fix also counts as done, and also ends.
+            _resolve(window, max([now] + [_ended_at(t) for t in fixes]), "fixed")
             changed = True
     return changed
 
@@ -901,7 +913,7 @@ def _strong(window):
     return bool(window.get("strong", window.get("trigger") != "prompt"))
 
 
-def _finalize(record, window, now):
+def _finalize(record, window, now, observed=None):
     """Record the result of a window whose sources have all answered."""
     if window.get("markers", 0) == 0:
         findings = None
@@ -923,7 +935,13 @@ def _finalize(record, window, now):
         _resolve(window, now, "unread-dismissed")
     else:
         window["fix_after"] = now
-        window["known_keys"] = [t["key"] for t in record["tasks"]]
+        # Tasks that existed when the result arrived. A background report read at a later Stop
+        # (`observed`) is dated at its hand-back, so a task created after that is a fix candidate;
+        # a live result keeps every task it can see, whatever a parallel hook stamped it.
+        backdated = observed is not None and now < observed
+        window["known_keys"] = [
+            t["key"] for t in record["tasks"] if not backdated or (t.get("created_at") or 0) <= now
+        ]
     _sweep_reviews(record, now)
 
 
@@ -991,14 +1009,19 @@ def _take_slot(window, ident, kind):
     return False
 
 
+def _wait_base(window):
+    """When the window's wait for its agents started: its last activity, else its opening."""
+    last = window.get("last_at")
+    return window["opened_at"] if last is None else last
+
+
 def _expire(rec, now):
     """Settle every window that has waited too long for an agent. Returns every outcome."""
     outcomes = []
     for window in _windows(rec):
         if window.get("resolved_at") is not None or window.get("result_at") is not None:
             continue
-        last = window.get("last_at")
-        if now - (window["opened_at"] if last is None else last) <= PENDING_MAX_AGE:
+        if now - _wait_base(window) <= PENDING_MAX_AGE:
             continue
         fg, bg = _tokens(window)
         window["unread"] = window.get("unread", 0) + len(fg) + len(bg)
@@ -1259,7 +1282,7 @@ def _remember_transcript(window, call):
         pass
 
 
-def _apply_result(rec, call, now):
+def _apply_result(rec, call, now, observed=None):
     """Fold one report into the open window: one report retires one slot and carries one marker.
 
     A report that carries several markers (an orchestrator's summary) counts its LAST one;
@@ -1298,7 +1321,7 @@ def _apply_result(rec, call, now):
     elif slot:
         window["unread"] = window.get("unread", 0) + 1
     window["last_at"] = now
-    return _finish(rec, window, now)
+    return _finish(rec, window, now, observed)
 
 
 def _late_window(rec, now):
@@ -1360,12 +1383,12 @@ def _apply_backgrounded(rec, call, now):
     }
 
 
-def _finish(rec, window, now):
+def _finish(rec, window, now, observed=None):
     _sync_pending(window)
     complete = window["pending"] <= 0
     if complete:
         window["pending"] = 0
-        _finalize(rec, window, now)
+        _finalize(rec, window, now, observed)
     return {
         "recorded": True,
         "window": window["id"],
@@ -1476,6 +1499,14 @@ _TAG_RE = {
 #: The agent's own answer: from the first ``<result>`` to the last ``</result>``. A notification
 #: with no such section (a Bash background task reports a ``<summary>``) carries no report.
 _RESULT_RE = re.compile(r"<result>(.*)</result>", re.DOTALL)
+
+
+def _result_text(section):
+    """The agent's answer as it wrote it. Claude Code HTML-escapes the ``<result>`` of a
+    notification, so its closing ``<!-- review-result: findings=N -->`` arrives as
+    ``&lt;!-- … --&gt;``; unescaped here, it is read by the same last-line rule as any report."""
+    return html.unescape(section)
+
 
 #: Task ids of the queue entries seen, kept per window so a later user entry can mirror one.
 QUEUE_IDS_KEPT = 64
@@ -1603,7 +1634,8 @@ def _scan_chunk(window, path):
         section = _RESULT_RE.search(text)
         reports.append({
             "id": use_id or task_id,
-            "markers": review_triggers.markers(section.group(1)) [-1:] if section else [],
+            "at": int(at),
+            "markers": review_triggers.markers(_result_text(section.group(1)))[-1:] if section else [],
             "status": _notification_status(text),
         })
     return reports, more
@@ -1629,9 +1661,18 @@ def _scan_background(rec, payload, now):
             break
         if report["id"] in window.get("consumed", []) or report["id"] not in _tokens(window)[1]:
             continue
+        base = _wait_base(window)
+        if report["at"] - base > PENDING_MAX_AGE:
+            # Handed back after the window's wait ran out: `_expire` settles it as unread, the
+            # same as if this Stop had come in time.
+            continue
         window.setdefault("consumed", []).append(report["id"])
+        # The result counts from when it was handed back, not from this Stop: a turn that sat on
+        # a question for hours must not make the fixes started meanwhile look older than it. Never
+        # before the window's last activity, so `last_at` only moves forward.
+        at = max(base, min(now, report["at"]))
         applied = _apply_result(
-            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, now
+            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, at, now
         )
         if applied is not None and applied["result"]:
             outcomes.append(applied)
@@ -1660,10 +1701,14 @@ def _scan_agent_tasks(rec, payload, now):
     for report in _background_reports(scan, path):
         task = pending.get(report["id"])
         if task is not None and task["status"] == "in_progress":
+            # Ended when it handed back, not at this Stop, which may come hours later; never before
+            # its own last event, so the history stays in order.
+            last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
+            at = max(last, task["created_at"], min(now, report["at"]))
             if report["status"] in _HANDBACK_FAILED:
-                _end_agent(task, "cancelled", True, now)
+                _end_agent(task, "cancelled", True, at)
             else:
-                _end_agent(task, "completed", False, now)
+                _end_agent(task, "completed", False, at)
     return True
 
 
@@ -1717,9 +1762,8 @@ def _retire_at_stop(rec, payload, now):
     return outcomes
 
 
-def _git_branch(cwd):
-    if not cwd or not os.path.isdir(cwd):
-        return None
+def _git_head(cwd):
+    """The branch ``HEAD`` names in ``cwd``, else ``None``."""
     try:
         result = subprocess.run(
             ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
@@ -1732,6 +1776,52 @@ def _git_branch(cwd):
         return None
     branch = result.stdout.decode("utf-8", "replace").strip()
     return branch if result.returncode == 0 and branch else None
+
+
+def _git_location(cwd):
+    """``(branch, worktree)`` for a working directory, from one ``git`` call.
+
+    ``worktree`` is ``{"path", "branch"}`` when ``cwd`` is inside a linked worktree (its git dir is
+    not the repository's common dir), else ``None``. ``path`` is the worktree's root relative to
+    the main checkout when it lives under it (``.worktrees/feat/x``), else absolute.
+    """
+    if not cwd or not os.path.isdir(cwd):
+        return None, None
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel", "--abbrev-ref", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+    # Options before `HEAD`: git prints each answer in order and stops at the first it cannot give.
+    # A normal checkout or worktree answers all four. A repository with no commit yet answers the
+    # paths but not `HEAD` (exit 128, the branch is unknown). A bare repository, or a `cwd` inside
+    # `.git`, has no work tree: only the two git dirs, so no worktree, and the branch is asked alone.
+    lines = [line.strip() for line in result.stdout.decode("utf-8", "replace").splitlines()]
+    if len(lines) < 2:
+        return None, None
+    if len(lines) < 3:
+        # No work tree: no worktree either, but `HEAD` alone still names the branch, as it did
+        # before this call also asked for the worktree.
+        return _git_head(cwd), None
+    git_dir, common_dir = lines[:2]
+    toplevel = lines[2] if len(lines) >= 3 else ""
+    branch = lines[3] if result.returncode == 0 and len(lines) >= 4 else None
+    branch = branch or None
+    # `--git-dir`/`--git-common-dir` are relative to `cwd` outside a worktree.
+    git_dir = os.path.realpath(os.path.join(cwd, git_dir))
+    common_dir = os.path.realpath(os.path.join(cwd, common_dir))
+    if git_dir == common_dir or not toplevel:
+        return branch, None
+    main = os.path.dirname(common_dir)
+    top = os.path.realpath(toplevel)
+    path = os.path.relpath(top, main) if top.startswith(main + os.sep) else top
+    # A detached HEAD answers the literal `HEAD`: the worktree is on no branch.
+    return branch, {"path": path.replace(os.sep, "/"), "branch": None if branch == "HEAD" else branch}
 
 
 #: Long enough to outlast a concurrent hook's whole critical section (a read, a diff and an
@@ -1768,7 +1858,7 @@ def record(root, payload, provider="auto", now=None):
         # Resolved before the lock: `git` can take seconds, and holding the lock across it
         # made a concurrent hook time out and its call vanish for good.
         stored = _load(path)
-        branch = _git_branch(call["cwd"] or (stored or {}).get("cwd"))
+        branch, worktree = _git_location(call["cwd"] or (stored or {}).get("cwd"))
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -1788,6 +1878,10 @@ def record(root, payload, provider="auto", now=None):
                 # the record is not touched, so a stray call cannot keep a session looking alive.
                 return result
             _reopen(rec, before, now)
+            # Where a task was started is fixed at its creation: the session may `cd` on later.
+            for task in rec["tasks"]:
+                if task["key"] not in before and worktree is not None:
+                    task["worktree"] = dict(worktree)
             _sweep_reviews(rec, now)
             rec["provider"] = call["provider"]
             if call["cwd"]:
@@ -1851,7 +1945,10 @@ def mark(root, payload, state, now=None):
                 rec["idle_at"] = now
                 _alive(rec, now)
                 was_done = _all_done(rec, _review_members(rec)) and not rec.get("done_pending")
-                for outcomes in (_expire(rec, now), _scan_background(rec, payload, now), _retire_at_stop(rec, payload, now)):
+                # Hand-backs first: one that arrived within the window's wait counts even when this
+                # Stop comes hours later (the turn sat on a question), and only then does the wait
+                # expire what is still missing.
+                for outcomes in (_scan_background(rec, payload, now), _expire(rec, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
                 _interrupt_agents(rec, now)
@@ -1906,6 +2003,14 @@ def _durations(history, until, review_spans=()):
     return totals
 
 
+def _worktree_view(value):
+    """A stored worktree as the JSON contract shows it; anything malformed is null."""
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"]:
+        return None
+    branch = value.get("branch")
+    return {"path": value["path"], "branch": branch if isinstance(branch, str) and branch else None}
+
+
 def _task_view(task, session_status, now, stale_after, until, member=None, review_spans=()):
     history = [h for h in task.get("history", []) if isinstance(h, dict) and _number(h.get("at"))]
     if not history:
@@ -1923,6 +2028,8 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "kind": "agent" if _is_agent(task) else "todo",
         "failed": bool(task.get("failed")),
         "interrupted": bool(task.get("interrupted")),
+        # Additive: the linked worktree the task was started in (`{"path", "branch"}`), else null.
+        "worktree": _worktree_view(task.get("worktree")),
         "status": task["status"],
         "column": column,
         "created_at": task["created_at"],

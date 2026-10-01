@@ -1343,6 +1343,17 @@ export interface BoardTask {
   readonly failed: boolean;
   /** Null when the task is not in review (and for a CLI that predates the review window). */
   readonly review: BoardReview | null;
+  /**
+   * The linked worktree the task was started in; null in the main checkout (and for a CLI that
+   * predates the field).
+   */
+  readonly worktree: BoardWorktree | null;
+}
+
+export interface BoardWorktree {
+  /** Relative to the main checkout when it lives under it (`.worktrees/feat/x`), else absolute. */
+  readonly path: string;
+  readonly branch: string | null;
 }
 
 export interface BoardSession {

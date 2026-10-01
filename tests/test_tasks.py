@@ -454,7 +454,7 @@ class CollectTest(BoardCase):
         self.assertEqual(
             set(session["tasks"][0]),
             {"key", "content", "owner", "agent_type", "kind", "failed", "interrupted", "status", "column", "created_at",
-             "status_since", "completed_at", "durations", "stale", "abandoned", "review"},
+             "status_since", "completed_at", "durations", "stale", "abandoned", "review", "worktree"},
         )
         self.assertEqual(set(session["counts"]), {"todo", "in_progress", "done", "in_review", "total"})
         self.assertTrue(session["resume_command"].startswith("cd "))
@@ -901,12 +901,12 @@ class ReviewRegressionTest(BoardCase):
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), damaged)
 
     def test_git_runs_outside_the_session_lock(self):
-        def slow_branch(cwd):
+        def slow_location(cwd):
             time.sleep(0.4)
-            return "feat/x"
+            return "feat/x", None
 
         results = []
-        with mock.patch.object(tasks, "_git_branch", slow_branch), mock.patch.object(tasks, "LOCK_TIMEOUT", 0.2):
+        with mock.patch.object(tasks, "_git_location", slow_location), mock.patch.object(tasks, "LOCK_TIMEOUT", 0.2):
             threads = [
                 threading.Thread(target=lambda n=n: results.append(
                     self.rec(task_create("s1", "task {}".format(n), {"id": str(n)}), now=T0 + n)["recorded"]))

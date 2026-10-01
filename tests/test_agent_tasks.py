@@ -9,9 +9,10 @@ is not an agent forks no python.
 
 import datetime
 import json
+import subprocess
 import unittest
 
-from devteam_support import requires_bash
+from devteam_support import REPO_ROOT, requires_bash
 
 from devteam import providers, review_triggers, tasks
 
@@ -312,6 +313,28 @@ class SettlementTest(BoardCase):
                 task = self.agents()["bg-" + (status or "none")]
                 self.assertEqual((task["status"], bool(task.get("failed"))), expected)
 
+    def test_a_background_agent_ends_at_its_hand_back_not_at_a_late_stop(self):
+        transcript = self.tmp / "late.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        self.background("bg-late", transcript)
+        transcript.write_text(hand_back("bg-late"), encoding="utf-8")  # stamped T0 + 1000
+        self.stop(transcript, now=T0 + 11 * 3600)
+        task = self.agents()["bg-late"]
+        self.assertEqual((task["status"], task["history"][-1]["at"]), ("completed", T0 + 1000))
+
+    def test_a_backdated_end_never_lands_before_the_tasks_last_event(self):
+        transcript = self.tmp / "order.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        # An earlier background agent keeps the scan open from T0, so a hand-back stamped before this
+        # task's own spawn (clock skew between hooks) is still read for it.
+        self.background("bg-first", transcript, now=T0)
+        self.background("bg-order", transcript, now=T0 + 1500)  # spawned after the T0 + 1000 stamp
+        transcript.write_text(hand_back("bg-order"), encoding="utf-8")
+        self.stop(transcript, now=T0 + 3000)
+        task = self.agents()["bg-order"]
+        self.assertEqual(task["status"], "completed")
+        self.assertEqual([h["at"] for h in task["history"]], [T0 + 1500, T0 + 1500])
+
     def test_the_cursor_restarts_at_the_transcript_end_when_no_other_background_agent_runs(self):
         transcript = self.tmp / "t.jsonl"
         transcript.write_text("", encoding="utf-8")
@@ -571,6 +594,82 @@ class AgentHookTest(tt.HookTest):
             self.run_script(PRE_TOOL_USE, spawn)
         self.assertEqual(self.agents(), [])
         self.assertEqual(len(self.load("s1")["reviews"]), 1)
+
+
+
+
+@requires_bash()
+class WorktreeTest(BoardCase):
+    """A task records the linked worktree it was started in, on every provider."""
+
+    def setUp(self):
+        super().setUp()
+        self.worktree = self.root / ".worktrees" / "feat" / "ping"
+        subprocess.run(
+            ["git", "-C", str(self.root), "worktree", "add", "-q", str(self.worktree), "-b", "feat/ping"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        (self.worktree / "apps" / "api").mkdir(parents=True)
+
+    def task_view(self, session):
+        for project in self.view(now=T0 + 10):
+            for item in project["sessions"]:
+                if item["session_id"] == session:
+                    return item["tasks"][0]
+        return None
+
+    def test_a_task_started_in_a_worktree_names_it_on_every_provider(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "wt-" + provider
+                spawn, _ = CYCLES[provider](session, AGENT, "c-" + provider, cwd=str(self.worktree / "apps" / "api"))
+                tasks.record(self.root, spawn, now=T0)
+                self.assertEqual(self.task_view(session)["worktree"], {"path": ".worktrees/feat/ping", "branch": "feat/ping"})
+
+    def test_a_task_started_in_the_main_checkout_has_no_worktree(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "main-" + provider
+                spawn, _ = CYCLES[provider](session, AGENT, "m-" + provider, cwd=str(self.root))
+                tasks.record(self.root, spawn, now=T0)
+                self.assertIsNone(self.task_view(session)["worktree"])
+
+    def test_the_worktree_is_fixed_when_the_task_is_created(self):
+        spawn, (end,) = claude_cycle("s1", AGENT, "c1", cwd=str(self.worktree))
+        tasks.record(self.root, spawn, now=T0)
+        # The session moves back to the main checkout; the task still says where it started.
+        tasks.record(self.root, dict(end, cwd=str(self.root)), now=T0 + 5)
+        self.assertEqual(self.task_view("s1")["worktree"]["path"], ".worktrees/feat/ping")
+
+    def test_a_detached_worktree_has_no_branch(self):
+        detached = self.root / ".worktrees" / "detached"
+        subprocess.run(["git", "-C", str(self.root), "worktree", "add", "-q", "--detach", str(detached)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.assertEqual(tasks._git_location(str(detached))[1], {"path": ".worktrees/detached", "branch": None})
+
+    def test_no_work_tree_and_no_commit_yet_degrade_without_a_worktree(self):
+        bare = self.tmp / "bare.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+        self.assertEqual(tasks._git_location(str(bare))[1], None)
+        # Inside `.git` there is no work tree, but HEAD still names the branch, as it always did.
+        self.assertEqual(tasks._git_location(str(self.root / ".git")), (tasks._git_location(str(self.root))[0], None))
+        unborn = self.tmp / "unborn"
+        subprocess.run(["git", "init", "-q", str(unborn)], check=True)
+        self.assertEqual(tasks._git_location(str(unborn)), (None, None))
+        # The main checkout still names its branch.
+        self.assertIsNotNone(tasks._git_location(str(self.root))[0])
+
+    def test_the_opencode_plugin_sends_its_directory_as_cwd(self):
+        source = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
+        for hook in ('"tool.execute.before"', '"tool.execute.after"'):
+            body = source[source.index(hook):]
+            body = body[: body.index("runHook(")]
+            self.assertIn("cwd: directory,", body, hook)
+
+    def test_a_malformed_stored_worktree_reads_as_null(self):
+        for stored in ("x", {"path": ""}, {"path": 3}, None):
+            self.assertIsNone(tasks._worktree_view(stored))
+        self.assertEqual(tasks._worktree_view({"path": "/abs/wt", "branch": ""}), {"path": "/abs/wt", "branch": None})
 
 
 if __name__ == "__main__":

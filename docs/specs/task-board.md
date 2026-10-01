@@ -55,6 +55,14 @@ task by the hooks, with no agent cooperation:
 - **Review interplay (intended)** — an agent task created after a review's result counts toward the fix rule (the fix is usually delegated to an agent), and an in-progress background agent can enter In Review like any in-progress task.
 
 JSON (additive): task `kind` (`"agent"` | `"todo"`), `failed` (bool) and `interrupted` (bool), all optional for clients.
+Task `worktree` (additive, every provider): `{"path", "branch"}` when the hook call that created the task ran
+inside a linked worktree (its git dir differs from the repository's common dir; `path` is relative to the main
+checkout when under it, e.g. `.worktrees/feat/x`, else absolute), else `null`. Fixed at creation — the session
+may move afterwards. Claude Code and Codex report the session's current directory, so a session that
+`cd`s into a worktree marks what it starts there; the opencode plugin sends its `directory` (where
+opencode was started), so opencode marks only sessions started inside a worktree. A detached HEAD gives
+`branch: null`. The kanban card shows a
+worktree mark, only when set, whose tooltip (hover and keyboard focus) names the path and branch.
 
 #### Capture per provider
 
@@ -253,8 +261,14 @@ A **background** agent's hand-back is read from the transcript at `Stop`. It cou
 the harness-injected form (a `queue-operation` entry, or the `user` entry whose task id mirrors a
 queue entry already seen; a user entry that stands alone is never one), its id (`tool-use-id`, else
 `task-id`) is a background token the open window launched, and the marker is in its `<result>`
-section only; a notification with no `<result>` (a Bash job's `<summary>`) carries no report. A
-transcript line longer than the per-`Stop` read cap is skipped rather than waited for.
+section only; a notification with no `<result>` (a Bash job's `<summary>`) carries no report. Claude
+Code HTML-escapes that section, so it is unescaped before the marker's last-line rule applies. A
+transcript line longer than the per-`Stop` read cap is skipped rather than waited for. `Stop` reads
+the hand-backs **before** it expires a window, so one handed back within the window's wait counts
+however late the `Stop` comes (one timestamped after the wait still expires), and a background
+result is dated at its hand-back: `result_at` and `fix_after` take that time, and only tasks created
+by then are excluded from the fix list (a live result keeps every task it can see). The fix rule
+resolves no earlier than the last fix ended (completed or cancelled), and a background agent task ends at its hand-back.
 
 A Codex `wait_agent` that returns after `Stop` already settled its launch as unread reattaches to
 the most recent window that is unresolved and closed unread (only that one, only within
@@ -383,3 +397,5 @@ findings.
 | 2026-10-01 | The project kanban is one horizontally scrolling row of columns with a minimum width, each scrolling its own cards, instead of a responsive grid | The grid stacked the columns 2×2 or 1×4 in a narrower window, which no longer read as a kanban |
 | 2026-10-01 | The per-session **Copy resume command** button and the project's path beside its name are removed from the kanban; its way back is the shared breadcrumb (`← Board`) the project settings use; the Done column is tinted; leaving the tab returns the Board to its overview. The CLI still emits `resume_command` | UI decluttering requested by the user; the resume command stays in the `tasks` contract, so no consumer breaks |
 | 2026-10-01 | The app's `copyResumeCommand` IPC (channel `devteam:copy-resume-command`, its preload method and the supervisor's `resumeCommand` lookup) is removed with the button it served. `resume_command` stays in the CLI's `tasks` output and is still validated on parse | No caller was left; an unused privileged channel that writes the clipboard is attack surface with no use |
+| 2026-10-01 | A background hand-back's `<result>` is HTML-unescaped before its marker is read; `Stop` scans hand-backs before expiring a window, and a hand-back timestamped after the window's wait still expires; a background result is dated at its hand-back, and the fix list excludes only tasks created by then; the fix rule resolves no earlier than the last fix finished; a background agent task ends at its hand-back | Claude Code escapes the notification's result, and a turn that waits hours on a question made in-time results look late and the fixes look older than the result |
+| 2026-10-01 | Task `worktree` (`{path, branch}` or null) captured at creation from the hook call's `cwd` with one `git rev-parse` (branch, git dir, common dir, toplevel); the opencode plugin now sends `cwd`; the card shows a worktree mark with a tooltip only when set | Requested: see at a glance which work ran in an isolated worktree |
