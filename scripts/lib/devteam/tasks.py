@@ -892,7 +892,10 @@ def _sweep_reviews(record, now):
         excluded = set(window.get("known_keys") or window["task_keys"]) | set(window["task_keys"])
         fixes = [t for t in _visible(record) if t["key"] not in excluded and t["created_at"] >= fix_after]
         if fixes and all(_column(t["status"]) == "done" for t in fixes):
-            _resolve(window, now, "fixed")
+            # Never before the last fix finished: a result dated at its (earlier) hand-back would
+            # otherwise close the window before work that was still being done when it arrived.
+            finished = [_completed_at(t) for t in fixes]
+            _resolve(window, max([now] + [at for at in finished if at is not None]), "fixed")
             changed = True
     return changed
 
@@ -902,7 +905,7 @@ def _strong(window):
     return bool(window.get("strong", window.get("trigger") != "prompt"))
 
 
-def _finalize(record, window, now):
+def _finalize(record, window, now, observed=None):
     """Record the result of a window whose sources have all answered."""
     if window.get("markers", 0) == 0:
         findings = None
@@ -924,9 +927,13 @@ def _finalize(record, window, now):
         _resolve(window, now, "unread-dismissed")
     else:
         window["fix_after"] = now
-        # Tasks that existed when the result arrived. `now` is the hand-back's own time for a
-        # background report read at a later Stop, so a task created after it is a fix candidate.
-        window["known_keys"] = [t["key"] for t in record["tasks"] if (t.get("created_at") or 0) <= now]
+        # Tasks that existed when the result arrived. A background report read at a later Stop
+        # (`observed`) is dated at its hand-back, so a task created after that is a fix candidate;
+        # a live result keeps every task it can see, whatever a parallel hook stamped it.
+        backdated = observed is not None and now < observed
+        window["known_keys"] = [
+            t["key"] for t in record["tasks"] if not backdated or (t.get("created_at") or 0) <= now
+        ]
     _sweep_reviews(record, now)
 
 
@@ -994,14 +1001,19 @@ def _take_slot(window, ident, kind):
     return False
 
 
+def _wait_base(window):
+    """When the window's wait for its agents started: its last activity, else its opening."""
+    last = window.get("last_at")
+    return window["opened_at"] if last is None else last
+
+
 def _expire(rec, now):
     """Settle every window that has waited too long for an agent. Returns every outcome."""
     outcomes = []
     for window in _windows(rec):
         if window.get("resolved_at") is not None or window.get("result_at") is not None:
             continue
-        last = window.get("last_at")
-        if now - (window["opened_at"] if last is None else last) <= PENDING_MAX_AGE:
+        if now - _wait_base(window) <= PENDING_MAX_AGE:
             continue
         fg, bg = _tokens(window)
         window["unread"] = window.get("unread", 0) + len(fg) + len(bg)
@@ -1262,7 +1274,7 @@ def _remember_transcript(window, call):
         pass
 
 
-def _apply_result(rec, call, now):
+def _apply_result(rec, call, now, observed=None):
     """Fold one report into the open window: one report retires one slot and carries one marker.
 
     A report that carries several markers (an orchestrator's summary) counts its LAST one;
@@ -1301,7 +1313,7 @@ def _apply_result(rec, call, now):
     elif slot:
         window["unread"] = window.get("unread", 0) + 1
     window["last_at"] = now
-    return _finish(rec, window, now)
+    return _finish(rec, window, now, observed)
 
 
 def _late_window(rec, now):
@@ -1363,12 +1375,12 @@ def _apply_backgrounded(rec, call, now):
     }
 
 
-def _finish(rec, window, now):
+def _finish(rec, window, now, observed=None):
     _sync_pending(window)
     complete = window["pending"] <= 0
     if complete:
         window["pending"] = 0
-        _finalize(rec, window, now)
+        _finalize(rec, window, now, observed)
     return {
         "recorded": True,
         "window": window["id"],
@@ -1479,6 +1491,7 @@ _TAG_RE = {
 #: The agent's own answer: from the first ``<result>`` to the last ``</result>``. A notification
 #: with no such section (a Bash background task reports a ``<summary>``) carries no report.
 _RESULT_RE = re.compile(r"<result>(.*)</result>", re.DOTALL)
+
 
 def _result_text(section):
     """The agent's answer as it wrote it. Claude Code HTML-escapes the ``<result>`` of a
@@ -1640,17 +1653,18 @@ def _scan_background(rec, payload, now):
             break
         if report["id"] in window.get("consumed", []) or report["id"] not in _tokens(window)[1]:
             continue
-        last = window.get("last_at")
-        if report["at"] - (window["opened_at"] if last is None else last) > PENDING_MAX_AGE:
+        base = _wait_base(window)
+        if report["at"] - base > PENDING_MAX_AGE:
             # Handed back after the window's wait ran out: `_expire` settles it as unread, the
             # same as if this Stop had come in time.
             continue
         window.setdefault("consumed", []).append(report["id"])
         # The result counts from when it was handed back, not from this Stop: a turn that sat on
-        # a question for hours must not make the fixes started meanwhile look older than it.
-        at = min(now, max(report["at"], window.get("last_at") or window["opened_at"]))
+        # a question for hours must not make the fixes started meanwhile look older than it. Never
+        # before the window's last activity, so `last_at` only moves forward.
+        at = max(base, min(now, report["at"]))
         applied = _apply_result(
-            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, at
+            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, at, now
         )
         if applied is not None and applied["result"]:
             outcomes.append(applied)
@@ -1679,10 +1693,12 @@ def _scan_agent_tasks(rec, payload, now):
     for report in _background_reports(scan, path):
         task = pending.get(report["id"])
         if task is not None and task["status"] == "in_progress":
+            # Ended when it handed back, not at this Stop, which may come hours later.
+            at = max(task["created_at"], min(now, report["at"]))
             if report["status"] in _HANDBACK_FAILED:
-                _end_agent(task, "cancelled", True, now)
+                _end_agent(task, "cancelled", True, at)
             else:
-                _end_agent(task, "completed", False, now)
+                _end_agent(task, "completed", False, at)
     return True
 
 
