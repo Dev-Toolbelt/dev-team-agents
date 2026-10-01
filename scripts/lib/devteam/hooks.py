@@ -77,17 +77,23 @@ PREVIOUS_MATCHERS = {
 
 #: The provider runs a hook in the session's CURRENT directory, and a Claude Code session keeps
 #: the directory a Bash call `cd`-ed into — a relative path then names nothing, and every hook
-#: (credential guard included) fails as a "non-blocking error" nobody reads. So the command enters
-#: the root Claude Code was opened at first; every hook already assumes it runs there. `bash -c`
-#: rather than bare shell syntax because the hook shell is not ours to choose, and `env -u` comes
-#: before it so that bash does not source `BASH_ENV` either. `${CLAUDE_PROJECT_DIR:-.}` keeps a
-#: build without the variable exactly where it was. `exec bash <script>`, like Codex's command,
-#: so a copy that lost its mode bits still runs. Still relative: settings.json is committed.
-ROOT_LAUNCHER = """bash -c 'cd "${{CLAUDE_PROJECT_DIR:-.}}" && exec bash {}/{}'"""
+#: (credential guard included) fails as a "non-blocking error" nobody reads. So the command first
+#: walks up from there to the nearest directory holding the hooks — the project root, or a
+#: worktree's own root when it has one — and falls back to the root Claude Code was opened at.
+#: Every hook already assumes it runs there. `bash -c` rather than bare shell syntax because the
+#: hook shell is not ours to choose, and `env -u` comes before it so bash does not source
+#: `BASH_ENV` either. `exec bash <script>`, like Codex's command, so a copy that lost its mode
+#: bits still runs. Still relative: settings.json is committed. The walk is the same text as
+#: `install-codex.sh` `cmd()`; `scripts/install.sh` `_hook_cmd` writes this exact command.
+ROOT_WALK = (
+    'd=$PWD; while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do d=${{d%/*}}; done; '
+    'cd "${{d:-{fallback}}}" && exec bash {hooks}/{script}'
+)
 
 
 def command_for(script):
-    return "{} {}".format(ENV_PREFIX, ROOT_LAUNCHER.format(HOOK_DIR, script))
+    body = ROOT_WALK.format(hooks=HOOK_DIR, fallback="${CLAUDE_PROJECT_DIR:-.}", script=script)
+    return "{} bash -c '{}'".format(ENV_PREFIX, body)
 
 
 def _is_devteam_entry(entry, script):

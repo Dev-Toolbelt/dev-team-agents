@@ -683,11 +683,13 @@ fi
 # Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
 # where BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every hook
 # invocation (start-systemd-namespace is absent in many WSL setups).
-# The command enters the project root first: Claude Code runs a hook in the session's
-# CURRENT directory, which a Bash `cd` moves, and a relative path from a subdirectory names
-# nothing. Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
+# The command finds the project root first: Claude Code runs a hook in the session's CURRENT
+# directory, which a Bash `cd` moves, and a relative path from a subdirectory names nothing. It
+# walks up to the nearest directory holding the hooks, then falls back to $CLAUDE_PROJECT_DIR.
+# Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
 _hook_cmd() {
-    printf "env -u BASH_ENV -u ENV bash -c 'cd \"\${CLAUDE_PROJECT_DIR:-.}\" && exec bash .dev-team-agents/scripts/hooks/%s'" "$1"
+    local hooks=".dev-team-agents/scripts/hooks"
+    printf '%s' "env -u BASH_ENV -u ENV bash -c 'd=\$PWD; while [ -n \"\$d\" ] && [ ! -d \"\$d/${hooks}\" ]; do d=\${d%/*}; done; cd \"\${d:-\${CLAUDE_PROJECT_DIR:-.}}\" && exec bash ${hooks}/$1'"
 }
 # The same command as a JSON string body, for the settings.json written from a heredoc.
 _json_str() {
@@ -903,9 +905,9 @@ PYEOF
     _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
     _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
 
-    # An entry written before the command entered the project root runs from whatever directory
-    # the session is in. Rewrite OUR entries to the current command in place; any other entry,
-    # and the matcher on ours, is left as it is.
+    # An entry written before the command found the project root runs from whatever directory
+    # the session is in. Rewrite an entry whose command is EXACTLY one we shipped to the current
+    # one, in place; a user's own wrapper around our script, and the matcher on ours, are kept.
     if command -v python3 >/dev/null 2>&1; then
         python3 - "$SETTINGS_FILE" \
             "pre-tool-use.sh=$PRE_TOOL_USE_HOOK" "stop.sh=$STOP_HOOK" \
@@ -930,7 +932,8 @@ for entries in (data.get('hooks') or {}).values():
                 continue
             command = hook.get('command') or ''
             for script, current in wanted.items():
-                if ".dev-team-agents/scripts/hooks/" + script in command and command != current:
+                path = ".dev-team-agents/scripts/hooks/" + script
+                if command in (path, "env -u BASH_ENV -u ENV " + path):
                     hook['command'] = current
                     changed = True
 if changed:

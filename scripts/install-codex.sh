@@ -194,8 +194,8 @@ done
 # ── hooks.json for Codex (idempotent merge of dev-team-agents-managed entries)
 if [[ $DRY_RUN -eq 0 ]]; then
   HOOKS_FILE="$CODEX_DIR/hooks.json"
-  # Codex runs hook commands from the session cwd (the project root), so
-  # project-relative paths are stable across machines (no baked-in user paths).
+  # Hook commands stay project-relative (no baked-in user paths); `cmd()` below finds the
+  # project root from wherever the session is.
   # One path for both layouts: a v2 install vendors `scripts/` here and a v3 bind
   # links it here. It used to prefer a v3 `core/` pointer when present — and a sync
   # that ran this installer before pruning that pointer wrote a path the same sync
@@ -215,15 +215,21 @@ MANAGED_MARKER  = "_dev_team_agents_managed"
 
 # Codex runs a hook through the user's own shell (`$SHELL -lc`) in the session's working
 # directory, which is not the project root when Codex was started in a subdirectory: a relative
-# path then names nothing and every hook fails unseen. So the command enters the repository
-# root first. `bash -c '…'` because that shell may be zsh or fish, where the substitution below
-# is not the same syntax; single quotes are literal in all of them. Still relative, like the
-# Claude command (`scripts/lib/devteam/hooks.py:command_for`).
+# path then names nothing and every hook fails unseen. So the command walks up from there to the
+# nearest directory holding the hooks — the same walk as `scripts/lib/devteam/hooks.py`
+# (ROOT_WALK), with the working directory as its fallback. `bash -c '…'` because that shell may
+# be zsh or fish; single quotes are literal in all of them. Windows is the exception: Codex runs
+# the command through `cmd.exe /C`, where single quotes do not quote, so it keeps the plain form.
+ROOT_WALK = (
+    'd=$PWD; while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do d=${{d%/*}}; done; '
+    'cd "${{d:-.}}" && exec bash {hooks}/{script}'
+)
+WINDOWS = sys.platform.startswith(("win", "msys", "cygwin"))
+
 def cmd(script):
-    return (
-        "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)\" "
-        f"&& exec bash {hooks_dir}/{script}'"
-    )
+    if WINDOWS:
+        return f"bash {hooks_dir}/{script}"
+    return "bash -c '{}'".format(ROOT_WALK.format(hooks=hooks_dir, script=script))
 
 # Each managed hook carries a statusMessage with the MANAGED_MARKER so we can
 # idempotently strip our own entries on re-install without touching user hooks.
