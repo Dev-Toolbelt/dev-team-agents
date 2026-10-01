@@ -197,16 +197,26 @@ uc_is_suppressed() {
 }
 
 # Routes to the notification queue (scripts/hooks/lib/notify.sh) — the boxed
-# stdout banner this used to print reached the model, never the user. `info` is
-# an applied update, `warning` an available one; the message carries both
-# versions, so it is its own dedupe key: the same "2.48 → 2.49" is raised once,
-# not on every session until the user acts.
+# stdout banner this used to print reached the model, never the user. Both an
+# applied and an available update are `info`: news, not a problem. The message
+# carries both versions, so it is its own dedupe key: the same "2.48 → 2.49" is
+# raised once, not on every session until the user acts.
+#
+# An available update ignores level-based suppression and is silenced only by
+# `suppress_notifications: true`. With auto_update off it is the one way a user
+# learns a fix shipped — muting `info` to quiet the daily tip must not cost that.
+# uc_notify <updated|available> <message>
 uc_notify() {
-    local type="$1" msg="$2" code="update.available"
-    uc_is_suppressed "$type" && return 0
-    [ "$type" = "info" ] && code="update.applied"
+    local kind="$1" msg="$2" code="update.available"
     command -v devteam_notify >/dev/null 2>&1 || return 0
-    devteam_notify "$type" "$code" "$msg" 0 "${code}:${msg}"
+    if [ "$kind" = "updated" ]; then
+        code="update.applied"
+        uc_is_suppressed "info" && return 0
+        devteam_notify "info" "$code" "$msg" 0 "${code}:${msg}"
+        return 0
+    fi
+    case "${DEVTEAM_NOTIFY_SUPPRESS:-${UC_SUPPRESS:-false}}" in true|True) return 0 ;; esac
+    DEVTEAM_NOTIFY_SUPPRESS=false devteam_notify "info" "$code" "$msg" 0 "${code}:${msg}"
 }
 
 # uc_message <updated|available> <lang> <current> <latest>

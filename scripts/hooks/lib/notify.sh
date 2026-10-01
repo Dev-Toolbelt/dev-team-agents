@@ -13,6 +13,7 @@
 # Not a hook. Source it, then:
 #   devteam_notify_init <main-repo-root> <state-dir> <suppress_notifications value>
 #   devteam_notify <level> <code> <message> [ttl-seconds] [dedupe-key]
+#   devteam_msg <lang> <en> <pt-BR> <es>   — picks the message in the user's language
 #
 #   level       info | warning | critical
 #   code        stable identifier, e.g. context.critical — what a client switches on
@@ -58,6 +59,16 @@ devteam_notify_suppressed() {
         false|False|"") return 1 ;;
         *"$1"*)     return 0 ;;
         *)          return 1 ;;
+    esac
+}
+
+# devteam_msg <lang> <en> <pt-BR> <es> — the one language switch every notice uses.
+# pt-BR/pt* and es* get their own text; any other language falls back to English.
+devteam_msg() {
+    case "$1" in
+        pt-BR|pt*) printf '%s' "$3" ;;
+        es*)       printf '%s' "$4" ;;
+        *)         printf '%s' "$2" ;;
     esac
 }
 

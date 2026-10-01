@@ -73,12 +73,6 @@ export interface NotificationCenterDeps {
   readonly log?: (message: string) => void;
 }
 
-const LEVEL_PREFIX: Readonly<Record<QueuedNotification['level'], string>> = {
-  info: '',
-  warning: '⚠︎ ',
-  critical: '‼︎ ',
-};
-
 export class NotificationCenter {
   private feed: NotificationFeed = { status: 'starting', detail: null, items: [], unread: 0, paused: false };
   private handle: StreamHandle | null = null;
@@ -380,7 +374,7 @@ function byNewest(a: AppNotification, b: AppNotification): number {
 
 function singleNotice(item: AppNotification, openProject: (projectId: ProjectId) => void): NativeNotice {
   return {
-    title: `${LEVEL_PREFIX[item.level]}${item.projectName}`,
+    title: item.projectName,
     body: item.message,
     persistent: item.level === 'critical',
     onClick: () => openProject(item.projectId),
@@ -393,11 +387,14 @@ function summaryNotice(items: readonly AppNotification[], openProject: (projectI
   const projects = [...new Set(items.map((item) => item.projectName))];
   const where =
     projects.length <= 3 ? projects.join(', ') : `${projects.slice(0, 3).join(', ')} and ${projects.length - 3} more`;
-  const critical = items.some((item) => item.level === 'critical');
+  // The title carries no level prefix, so a critical record would hide among tips:
+  // its message leads the body instead.
+  const critical = [...items].sort(byNewest).find((item) => item.level === 'critical');
+  const rest = `From ${where}. They are all in the bell.`;
   return {
-    title: `${critical ? LEVEL_PREFIX.critical : ''}${items.length} notifications`,
-    body: `From ${where}. They are all in the bell.`,
-    persistent: critical,
+    title: `${items.length} notifications`,
+    body: critical ? `${critical.message}\n${rest}` : rest,
+    persistent: critical !== undefined,
     onClick: () => openProject(newest.projectId),
   };
 }

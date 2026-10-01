@@ -26,6 +26,7 @@ NOTIFY_LIB = REPO_ROOT / "scripts" / "hooks" / "lib" / "notify.sh"
 STATE_LIB = REPO_ROOT / "scripts" / "lib" / "state.sh"
 NOTIFIER = REPO_ROOT / "scripts" / "hooks" / "stop" / "04-notifier.sh"
 SESSION_START = REPO_ROOT / "scripts" / "hooks" / "session-start.sh"
+UPDATE_CHECK_LIB = REPO_ROOT / "scripts" / "hooks" / "lib" / "update-check.sh"
 
 
 def record(id_, level="warning", code="test.code", message="m", expires_at=0, ts=None, project_id="p"):
@@ -332,6 +333,32 @@ class NotifyShTest(StoreTestCase):
         self.assertGreater(rows[0]["expires_at"], rows[0]["ts"])
         self.assertTrue(notifications._valid(rows[0]))
 
+    def uc_notify(self, state_dir, kind, suppress):
+        script = 'source "$1"; source "$2"; source "$3"; devteam_notify_init "$4" "$5" "$6" "sess"; ' \
+                 'UC_SUPPRESS="$6" uc_notify "$7" "msg-$7"'
+        root = self.tmp / "proj"
+        (root / ".dev-team-agents").mkdir(parents=True, exist_ok=True)
+        (root / ".dev-team-agents" / "project.json").write_text(json.dumps({"project_id": "p"}), encoding="utf-8")
+        subprocess.run(
+            ["bash", "-c", script, "_", str(STATE_LIB), str(NOTIFY_LIB), str(UPDATE_CHECK_LIB),
+             str(root), str(state_dir), suppress, kind],
+            check=True, env=dict(os.environ),
+        )
+        path = Path(state_dir) / notifications.QUEUE_FILE
+        return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()] if path.is_file() else []
+
+    def test_updates_are_info_and_an_available_one_survives_muting_info(self):
+        self.uc_notify(self.tmp / "s1", "available", "false")
+        rows = self.uc_notify(self.tmp / "s1", "updated", "false")  # the whole queue
+        self.assertEqual([(r["code"], r["level"]) for r in rows],
+                         [("update.available", "info"), ("update.applied", "info")])
+        # Muting info quiets the tip and the applied notice, never the only channel for a fix.
+        muted = "['info']"
+        self.assertEqual([r["code"] for r in self.uc_notify(self.tmp / "s2", "available", muted)],
+                         ["update.available"])
+        self.assertEqual(self.uc_notify(self.tmp / "s3", "updated", muted), [])
+        self.assertEqual(self.uc_notify(self.tmp / "s4", "available", "true"), [])
+
     def test_a_dedupe_key_already_queued_is_not_written_again(self):
         state = self.tmp / "state"
         rows = self.notify(state, ("warning", "c", "one", 0, "same"), ("warning", "c", "two", 0, "same"))
@@ -433,6 +460,25 @@ class NotifierHookTest(StoreTestCase):
         self.assertEqual(codes.count("context.critical"), 1)
         self.assertEqual(codes.count("tip.daily"), 1)
 
+    def test_uncommitted_progress_is_raised_as_info(self):
+        (self.root / ".dev-team-agents" / "user-data" / "preferences.json").write_text(
+            json.dumps({"session_no_commit_turns": 1}), encoding="utf-8"
+        )
+        (self.root / "dirty.txt").write_text("x", encoding="utf-8")
+        self.run_hook()
+        rows = [r for r in self.queued() if r["code"] == "session.uncommitted"]
+        self.assertEqual([r["level"] for r in rows], ["info"])
+
+    def test_the_tip_carries_a_localized_label(self):
+        prefs = self.root / ".dev-team-agents" / "user-data" / "preferences.json"
+        for lang, label in (("en", "Tip: "), ("pt-BR", "Dica: "), ("es", "Consejo: ")):
+            (self.state / notifications.QUEUE_FILE).unlink(missing_ok=True)
+            prefs.write_text(json.dumps({"language": lang}), encoding="utf-8")
+            self.run_hook()
+            tip = [r for r in self.queued() if r["code"] == "tip.daily"][0]
+            self.assertTrue(tip["message"].startswith(label), (lang, tip["message"]))
+            self.assertEqual(tip["level"], "info")
+
     def test_without_a_session_id_once_per_session_becomes_once_per_day(self):
         # A fixed `0` fallback made the notice fire once and then never again.
         (self.state / "state.json").write_text(json.dumps({}), encoding="utf-8")
@@ -470,6 +516,54 @@ class SessionStartTest(StoreTestCase):
         queue = root / ".dev-team-agents" / "user-data" / notifications.QUEUE_FILE
         codes = [json.loads(l)["code"] for l in queue.read_text(encoding="utf-8").splitlines()]
         self.assertIn("docs.project_stale", codes)
+
+    def test_messages_follow_the_language_preference_and_fall_back_to_english(self):
+        # Opening words per code and language; `fr` has no translation and falls back.
+        expected = {
+            "pt-BR": {"docs.project_stale": "docs/project.md tem 90 dias",
+                      "symlinks.broken": "1 link(s) do dev-team-agents",
+                      "layout.upgrade_available": "Este projeto ainda guarda"},
+            "es": {"docs.project_stale": "docs/project.md tiene 90 días",
+                   "symlinks.broken": "1 enlace(s) de dev-team-agents",
+                   "layout.upgrade_available": "Este proyecto todavía guarda"},
+            "fr": {"docs.project_stale": "docs/project.md is 90 days old",
+                   "symlinks.broken": "1 dev-team-agents link(s)",
+                   "layout.upgrade_available": "This project still keeps"},
+        }
+        for lang, starts in expected.items():
+            rows = self.start_session_with_every_localized_trigger("lang-" + lang.lower(), lang)
+            for code, start in starts.items():
+                row = rows[code]
+                self.assertTrue(row["message"].startswith(start), (lang, code, row["message"]))
+            self.assertIn("`devteam upgrade`", rows["layout.upgrade_available"]["message"])
+            self.assertTrue(rows["symlinks.broken"]["message"].endswith("devteam sync"))
+
+    def test_levels_of_the_session_start_notices(self):
+        rows = self.start_session_with_every_localized_trigger("levels", "en")
+        self.assertEqual(rows["symlinks.broken"]["level"], "critical")
+        self.assertEqual(rows["docs.project_stale"]["level"], "warning")
+        self.assertEqual(rows["layout.upgrade_available"]["level"], "info")
+
+    def start_session_with_every_localized_trigger(self, name, lang):
+        """A bound project with a stale project.md, a materialized link and in-project memory."""
+        root = self.new_project(name)
+        (root / "docs" / "project.md").write_text("# p\n", encoding="utf-8")
+        old = time.time() - 90 * 86400
+        os.utime(str(root / "docs" / "project.md"), (old, old))
+        (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "agents" / "dev-team").write_text("../../x\n", encoding="utf-8")
+        user_data = root / ".dev-team-agents" / "user-data"
+        user_data.mkdir(parents=True, exist_ok=True)
+        (root / ".dev-team-agents" / "project.json").write_text(
+            json.dumps({"schema": 1, "project_id": "pid-" + name}), encoding="utf-8"
+        )
+        (user_data / "preferences.json").write_text(json.dumps({"language": lang}), encoding="utf-8")
+        subprocess.run(
+            ["bash", str(SESSION_START)], cwd=str(root), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, env=dict(os.environ), check=True,
+        )
+        queue = user_data / notifications.QUEUE_FILE
+        return {r["code"]: r for r in (json.loads(l) for l in queue.read_text(encoding="utf-8").splitlines())}
 
 
 if __name__ == "__main__":

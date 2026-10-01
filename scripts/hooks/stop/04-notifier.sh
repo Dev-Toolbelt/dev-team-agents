@@ -156,13 +156,7 @@ else
 fi
 printf '%s:%d\n' "$SESSION_ID" "$TURNS" > "$NOTIFIER_STATE_FILE" 2>/dev/null || true
 
-_msg() {  # _msg <en> <pt-BR> <es>
-    case "$USER_LANG" in
-        pt-BR|pt*) printf '%s' "$2" ;;
-        es*)       printf '%s' "$3" ;;
-        *)         printf '%s' "$1" ;;
-    esac
-}
+_msg() { devteam_msg "$USER_LANG" "$@"; }  # _msg <en> <pt-BR> <es>; devteam_msg is in lib/notify.sh
 
 # ── Context window ────────────────────────────────────────────────────────────
 PCT_USED=0
@@ -199,7 +193,7 @@ fi
 if [ "$TURNS" -ge "$NO_COMMIT_TURNS" ] 2>/dev/null; then
     if [ -n "$SESSION_HEAD" ] && [ "$SESSION_HEAD" = "$(git rev-parse HEAD 2>/dev/null)" ] \
         && [ -n "$(git status --porcelain 2>/dev/null | head -1)" ]; then
-        devteam_notify "warning" "session.uncommitted" "$(_msg \
+        devteam_notify "info" "session.uncommitted" "$(_msg \
             "${TURNS} turns of work this session and no commit yet. Consider committing so the progress is not lost." \
             "${TURNS} turnos de trabalho nesta sessão e nenhum commit. Considere commitar para não perder o progresso." \
             "${TURNS} turnos de trabajo en esta sesión y ningún commit. Considera hacer commit para no perder el progreso.")" \
@@ -220,7 +214,7 @@ if [ -n "$TODAY" ] && ! devteam_notify_suppressed "info"; then
     # single grep and the tip file is never opened.
     if ! grep -qF "\"dedupe_key\":\"tip:${TODAY}\"" "$DEVTEAM_NOTIFY_FILE" 2>/dev/null; then
         TIP=$(sed -n "$((TIP_INDEX + 1))p" "$TIP_FILE" 2>/dev/null || true)
-        [ -n "$TIP" ] && devteam_notify "info" "tip.daily" "$TIP" 86400 "tip:${TODAY}"
+        [ -n "$TIP" ] && devteam_notify "info" "tip.daily" "$(_msg "Tip: " "Dica: " "Consejo: ")${TIP}" 86400 "tip:${TODAY}"
     fi
 fi
 

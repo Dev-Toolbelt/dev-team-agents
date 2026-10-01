@@ -19,23 +19,23 @@ hook ──devteam_notify──▶ <state-dir>/notifications.jsonl ──devteam
 
 | Level | Use for |
 |-------|---------|
-| `info` | Tips, suggestions |
-| `warning` | Context approaching its limit, stale docs or health check, work without a commit, an update available |
+| `info` | Tips, suggestions, an update available or applied, a pending `devteam upgrade`, work without a commit |
+| `warning` | Context approaching its limit, stale docs or health check |
 | `critical` | Context at or past its limit, broken links (the dev-team is not loaded) |
 
-`critical` stays on screen until dismissed where the OS allows it.
+`critical` stays on screen until dismissed where the OS allows it. The banner's title is the project's name alone — no level prefix; a backlog summary that holds a `critical` record leads its body with that record's message. Every message is rendered in the user's `language` (`en`, `pt-BR`, `es`; others fall back to English).
 
 ## What raises what
 
 | Code | Level | Raised by | Once per |
 |------|-------|-----------|----------|
-| `update.available` / `update.applied` | warning / info | `session-start.sh` (update check) | version pair |
+| `update.available` / `update.applied` | info | `session-start.sh` (update check) | version pair |
 | `symlinks.broken` | critical | `session-start.sh` | day |
 | `docs.project_stale`, `docs.session_summary_stale` | warning | `session-start.sh` | day |
 | `health_check.stale`, `health_check.never` | warning | `session-start.sh` | day |
-| `layout.upgrade_available` | warning | `session-start.sh` | day |
+| `layout.upgrade_available` | info | `session-start.sh` | day |
 | `context.warning`, `context.critical` | warning / critical | `stop/04-notifier.sh` | session (expires after 2 h) |
-| `session.uncommitted` | warning | `stop/04-notifier.sh` | session |
+| `session.uncommitted` | info | `stop/04-notifier.sh` | session |
 | `tip.daily` | info | `stop/04-notifier.sh` | day |
 | `tasks.session_done` | info | `post-tool-use/01-task-board.sh`, `pre-tool-use/04-task-board.sh`, `stop/04b-task-board.sh` (a review pass releasing the last task) | session |
 | `tasks.review_findings` | warning | `post-tool-use/01-task-board.sh` (agent result), `stop/04b-task-board.sh` (command/prompt review) | review window |
@@ -53,6 +53,8 @@ Thresholds come from preferences: `context_window_percent_warning`, `context_win
 | `true` | Queue none |
 | `["info"]` | Skip only the listed levels |
 
+One exception: `update.available` ignores the level list and is skipped only by `true` — with `auto_update` off it is the one way a user learns a fix shipped.
+
 The app's own **Pause** only silences banners for that app session; paused notices still land in the bell.
 
 ## Raising a new one (hook authors)
@@ -60,8 +62,10 @@ The app's own **Pause** only silences banners for that app session; paused notic
 ```bash
 . "${SCRIPT_DIR}/lib/notify.sh"
 devteam_notify_init "$MAIN_REPO_ROOT" "$STATE_DIR" "$SUPPRESS" "$SESSION_ID"
-devteam_notify warning my.code "Message in the user's language." 86400 "my.code:$(date +%Y-%m-%d)"
+devteam_notify warning my.code "$(devteam_msg "$USER_LANG" "English text." "Texto em português." "Texto en español.")" 86400 "my.code:$(date +%Y-%m-%d)"
 ```
+
+- Render every message with `devteam_msg <lang> <en> <pt-BR> <es>` from `notify.sh` — the one language switch; never write a local copy.
 
 - Pick a stable `code` — clients switch on it; the message may change.
 - Always pass a dedupe key: a notice raised on every turn is a notification per turn.

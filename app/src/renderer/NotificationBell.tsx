@@ -43,9 +43,8 @@ interface Presentation {
 const INFORMATIVE_TONE = 'text-sky-600 dark:text-sky-400';
 
 /**
- * Codes whose look is not their level's. The hook raises an available update as a
- * `warning` so a user can suppress it apart from applied ones, but nothing is wrong —
- * it reads as news, not as a problem.
+ * Codes whose look is not their level's: an update, available or applied, is `info`
+ * but gets its own icon and word so it reads as news about the install.
  */
 const CODE_PRESENTATION: Readonly<Record<string, Presentation>> = {
   'update.available': { icon: CircleArrowUp, tone: INFORMATIVE_TONE, word: 'Update available' },
