@@ -4,7 +4,7 @@
 # Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated.
 # Registered with a narrow matcher on every provider — Claude Code: the todo tools and the
 # subagent tool (`Agent`/`Task`), plus a `PostToolUseFailure` entry for the subagent tool;
-# Codex: `wait_agent` only — so it does not run for other tools at all. The sub-scripts still
+# Codex: `spawn_agent` and `wait_agent` only — so it does not run for other tools at all. The sub-scripts still
 # gate on the payload themselves.
 
 # Prevent WSL from loading /etc/bash.bashrc for every sub-process spawned here.

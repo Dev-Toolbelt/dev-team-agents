@@ -115,6 +115,20 @@ disappears, an agent that plans stops loading plan-mode, or a plan-gated command
 | Agents calling `devteam tasks` directly | A second channel beside the provider's own list, and the one this ADR already rejected for depending on agent compliance — with none of the provider UI benefit |
 | Accept an empty board for planned sessions | The board's purpose is following planned work; empty in exactly those sessions defeats it |
 
+## Amendment — 2026-09-30: agent spawns are tasks
+
+**Context.** A live `/devteam:backend` run asked one question and delegated to two agents; no plan was
+presented, so plan mirroring never fired and the board stayed empty. Commands delegate this way by
+design.
+
+**Decision.** The hooks record every agent a session spawns as a task — created on the spawn, completed
+on its result (foreground, background hand-back, or Codex `wait_agent`), marked failed on a failure —
+keyed by the spawn's own id. Provider built-ins and review/QA agents are excluded; a mirrored plan of
+the same owner hides them on read. Full rules: `docs/specs/task-board.md` § Agent spawns are tasks.
+
+**Why.** It restores Decision 1 for the dominant path: capture is automatic again, needing nothing from
+the agent. Plan mirroring stays for sessions that do present a plan.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |

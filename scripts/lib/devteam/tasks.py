@@ -60,6 +60,11 @@ RESUME = {
 }
 
 _CLAUDE_TOOLS = ("TodoWrite", "TaskCreate", "TaskUpdate")
+_CLAUDE_AGENT_TOOLS = ("Agent", "Task")
+_CODEX_AGENT_TOOLS = ("spawn_agent", "wait_agent", "close_agent")
+#: Longest first line of a Codex spawn message kept as a task's description.
+AGENT_TEXT = 120
+PLAN_STEP_RE = re.compile(r"^Step \d+:")
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -213,6 +218,111 @@ def _find_id(value, depth):
     return None
 
 
+def _json_objects(value):
+    """Dicts in ``value``: itself, or any string inside it that parses as a JSON object."""
+    if isinstance(value, dict):
+        yield value
+    for text in review_triggers._strings(value):
+        if text.lstrip().startswith("{"):
+            try:
+                found = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(found, dict):
+                yield found
+
+
+def _spawned_agent_id(response):
+    """The agent id a Codex ``spawn_agent`` answered with, else ``""``."""
+    for found in _json_objects(response):
+        ident = _id_text(found.get("agent_id") or found.get("agentId"))
+        if ident:
+            return ident
+    return ""
+
+
+#: Codex's final agent states (`AgentStatus`, snake_case) -> (task status, failed).
+_WAIT_FINAL = {
+    "completed": ("completed", False),
+    "errored": ("cancelled", True),
+    "not_found": ("cancelled", True),
+    "shutdown": ("cancelled", False),
+}
+
+
+def _wait_results(response):
+    """``[(agent id, status, failed)]`` for every agent a Codex ``wait_agent`` reports as finished."""
+    out = []
+    for found in _json_objects(response):
+        statuses = found.get("status")
+        if not isinstance(statuses, dict):
+            continue
+        for ident, state in statuses.items():
+            if isinstance(state, str):
+                word = state
+            elif isinstance(state, dict) and len(state) == 1:
+                word = next(iter(state))
+            else:
+                word = None
+            if isinstance(word, str) and word in _WAIT_FINAL:
+                out.append((str(ident),) + _WAIT_FINAL[word])
+        if out:
+            break
+    return out
+
+
+def _agent_text(provider, name, inp):
+    """``<agent>: <description>``; the agent's name alone when the call has no description."""
+    if provider == "codex":
+        described = _text(inp.get("message")).splitlines()
+        described = described[0].strip()[:AGENT_TEXT] if described else ""
+    else:
+        described = _text(inp.get("description"))
+    return _task_text("{}: {}".format(name, described) if described else name)
+
+
+def _agent_op(payload, provider, bare):
+    """The op an agent spawn, its result, its failure or a Codex wait stands for, else ``None``.
+
+    Review/QA agents and the provider's built-in agents are not tasks (their effect is the review
+    window, or none). ``agent_wait`` carries no name: it settles whichever tasks it reports.
+    """
+    tool_input = _dict(payload.get("tool_input"))
+    inp = tool_input or _dict(payload.get("args"))
+    if bare == "wait_agent":
+        results = _wait_results(payload.get("tool_response"))
+        return ("agent_wait", results) if results else None
+    if bare == "close_agent":
+        # An agent the session closed ahead of its result will never report one.
+        ident = _id_text(inp.get("target") or inp.get("id") or inp.get("agent_id"))
+        return ("agent_wait", [(ident, "cancelled", False)]) if ident else None
+    name = review_triggers.spawn_name(_first_text(inp, "subagent_type", "agent_type"))
+    if not name or review_triggers.agent_name(name) or review_triggers.is_builtin(provider, name):
+        return None
+    use_id = _first_text(payload, "tool_use_id", "toolUseId")
+    transcript = _first_text(payload, "transcript_path")
+    event = _text(payload.get("hook_event_name"))
+    failed = event == "PostToolUseFailure"
+    after = failed or event == "PostToolUse" or any(k in payload for k in ("output", "tool_response", "tool_output"))
+    background = inp.get("run_in_background") is True
+    if not after:
+        return ("agent_spawn", {
+            "id": use_id, "agent": name, "content": _agent_text(provider, name, inp),
+            "background": background, "transcript": transcript,
+        })
+    if failed:
+        return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
+    if bare == "spawn_agent":
+        ref = _spawned_agent_id(payload.get("tool_response"))
+        if ref:
+            return ("agent_ref", {"id": use_id, "ref": ref}) if use_id else None
+        # The spawn answered with no agent id: no agent exists, and no wait can ever settle it.
+        return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
+    if background or _async_launch(payload):
+        return ("agent_bg", {"id": use_id, "agent": name, "transcript": transcript})
+    return ("agent_end", {"id": use_id, "agent": name, "status": "completed", "failed": False})
+
+
 def normalize(payload, provider="auto"):
     """Turn a hook payload into ``{provider, session_id, cwd, owner, agent_type, op}``.
 
@@ -233,6 +343,12 @@ def normalize(payload, provider="auto"):
         detected = "codex"
     elif bare_tool.lower() == "todowrite":
         detected = "opencode"
+    elif tool_name in _CLAUDE_AGENT_TOOLS:
+        detected = "claude"
+    elif tool_name.split(".")[-1] in _CODEX_AGENT_TOOLS:
+        detected = "codex"
+    elif bare_tool.lower() == "task":
+        detected = "opencode"
     if detected is None or provider not in ("auto", detected):
         return None
 
@@ -247,7 +363,9 @@ def normalize(payload, provider="auto"):
         "op": None,
     }
 
-    if detected == "claude":
+    if tool_name in _CLAUDE_AGENT_TOOLS or tool_name.split(".")[-1] in _CODEX_AGENT_TOOLS or bare_tool.lower() == "task":
+        call["op"] = _agent_op(payload, detected, tool_name.split(".")[-1])
+    elif detected == "claude":
         tool_input = _dict(payload.get("tool_input"))
         if tool_name == "TodoWrite":
             items = _items(tool_input.get("todos"))
@@ -410,7 +528,7 @@ def _apply_replace(record, call, items, now):
     another owner is not even a candidate. A task absent from the new list is marked
     removed, not deleted. Duplicates are paired in order, live before removed.
     """
-    mine = [t for t in record["tasks"] if t["owner"] == call["owner"]]
+    mine = [t for t in record["tasks"] if t["owner"] == call["owner"] and not _is_agent(t)]
     # A task removed after it finished is history: a new item that reads the same is a
     # new task, not that one coming back to life as pending.
     revivable = [t for t in mine if t["removed_at"] is not None and t["status"] not in ("completed", "cancelled")]
@@ -444,7 +562,7 @@ def _apply_create(record, call, item, now):
         # The tool output named no id: assume the session assigned the next integer.
         item = dict(item, id=_next_sequential_id(record))
     for task in record["tasks"]:
-        if task.get("id") == item["id"] and task["owner"] == call["owner"]:
+        if task.get("id") == item["id"] and task["owner"] == call["owner"] and not _is_agent(task):
             # A replayed create names a task that exists: refresh its text only, so a
             # started or finished task is never pushed back to pending.
             if item.get("content"):
@@ -455,7 +573,7 @@ def _apply_create(record, call, item, now):
 
 
 def _apply_update(record, call, item, now):
-    same_id = [t for t in record["tasks"] if t.get("id") == item["id"]]
+    same_id = [t for t in record["tasks"] if t.get("id") == item["id"] and not _is_agent(t)]
     # Same owner first; another owner's task only when this owner has none with that id
     # (Claude's task ids are shared by a session's main agent and its subagents).
     found = next((t for t in same_id if t["owner"] == call["owner"]), None) or (same_id[0] if same_id else None)
@@ -483,8 +601,121 @@ def _apply_update(record, call, item, now):
         _push(found, item["status"], now)
 
 
+def _is_agent(task):
+    return task.get("kind") == "agent"
+
+
+def _find_agent(record, item, statuses=("in_progress", "pending")):
+    """The open agent task a result belongs to: by spawn id, by Codex agent id, else the oldest of its kind.
+
+    The oldest-open fallback is for a result that names no spawn id; it needs the same owner
+    and agent so two agents running side by side are not swapped.
+    """
+    agents = [t for t in record["tasks"] if _is_agent(t) and t["status"] in statuses]
+    ident = item.get("id")
+    if ident:
+        for task in agents:
+            if ident in (task.get("id"), task.get("agent_ref")):
+                return task
+        return None
+    return next((t for t in agents if t.get("agent_type") == item.get("agent") and t["owner"] == item.get("owner")), None)
+
+
+def _agent_scan(record, path, opened_at):
+    """The record's transcript cursor for background agents' hand-backs, created on demand.
+
+    It is shaped like a review window so :func:`_background_reports` reads both the same way.
+    """
+    scan = record.get("agent_scan")
+    if not isinstance(scan, dict):
+        scan = {"opened_at": opened_at, "tx_path": None, "tx_offset": None, "queue_ids": []}
+        record["agent_scan"] = scan
+    if scan.get("tx_path") is None and isinstance(path, str) and path and os.path.isfile(path):
+        try:
+            scan["tx_offset"] = os.path.getsize(path)
+            scan["tx_path"] = path
+        except OSError:
+            pass
+    return scan
+
+
+def _follow_background(record, task, path, opened_at):
+    """Start the background hand-back cursor for ``task`` where the transcript ends now.
+
+    The cursor is shared by every background agent of the record. While another one is still
+    running it keeps its place (its hand-back may sit anywhere after it); with none running it
+    is stale, so it restarts at the transcript's end — a hand-back cannot precede the launch.
+    """
+    others = any(
+        t is not task and _is_agent(t) and t.get("background") and t["status"] == "in_progress"
+        for t in record["tasks"]
+    )
+    scan = _agent_scan(record, path, opened_at)
+    if others or not (isinstance(path, str) and path and os.path.isfile(path)):
+        return
+    try:
+        scan["tx_offset"] = os.path.getsize(path)
+        scan["tx_path"] = path
+        scan["opened_at"] = opened_at
+    except OSError:
+        pass
+
+
+def _end_agent(task, status, failed, now):
+    if failed:
+        task["failed"] = True
+    _push(task, status, now)
+
+
+def _apply_agent(record, call, now):
+    """Fold an agent event into the record. Returns True when it changed something."""
+    kind, body = call["op"]
+    if kind == "agent_spawn":
+        if body["id"]:
+            replayed = any(_is_agent(t) and t.get("id") == body["id"] for t in record["tasks"])
+        else:
+            # No id to match: a replay is the same agent, text and owner still open without one.
+            replayed = any(
+                _is_agent(t) and not t.get("id") and t["status"] == "in_progress" and t["owner"] == call["owner"]
+                and t.get("agent_type") == body["agent"] and t["content"] == body["content"]
+                for t in record["tasks"]
+            )
+        if replayed:
+            return False  # a replayed spawn names a task that exists
+        task = _add_task(
+            record, call, {"id": body["id"] or None, "content": body["content"], "status": "in_progress"}, now
+        )
+        task.update(kind="agent", agent_type=body["agent"], background=bool(body["background"]), failed=False)
+        if body["background"]:
+            _follow_background(record, task, body.get("transcript"), now)
+        return True
+    if kind == "agent_wait":
+        changed = False
+        for ident, status, failed in body:
+            task = _find_agent(record, {"id": ident})
+            if task is not None:
+                _end_agent(task, status, failed, now)
+                changed = True
+        return changed
+    item = dict(body, owner=call["owner"])
+    task = _find_agent(record, item)
+    if task is None:
+        return False
+    if kind == "agent_ref":
+        task["agent_ref"] = body["ref"]
+        return True
+    if kind == "agent_bg":
+        task["background"] = True
+        _follow_background(record, task, body.get("transcript"), now)
+        return True
+    _end_agent(task, body["status"], body["failed"], now)
+    return True
+
+
 def _apply(record, call, now):
     kind, body = call["op"]
+    if kind.startswith("agent_"):
+        return _apply_agent(record, call, now)
     if kind == "replace":
         _apply_replace(record, call, body, now)
     elif kind == "create":
@@ -507,8 +738,27 @@ def _task_column(task, members):
     return "in_review" if task["key"] in members else _column(task["status"])
 
 
+def _hidden_keys(record):
+    """Keys of the agent tasks the board leaves out: their owner also keeps a mirrored plan.
+
+    The plan's ``Step N:`` tasks are the better grain; the agent tasks stay in the record.
+    """
+    owners = {
+        t["owner"] for t in record["tasks"]
+        if not _is_agent(t) and _shown(t) and PLAN_STEP_RE.match(t["content"])
+    }
+    if not owners:
+        return set()
+    return {t["key"] for t in record["tasks"] if _is_agent(t) and t["owner"] in owners}
+
+
+def _visible(record):
+    hidden = _hidden_keys(record)
+    return [t for t in record["tasks"] if _shown(t) and t["key"] not in hidden]
+
+
 def _open_keys(record, members):
-    return {t["key"] for t in record["tasks"] if _shown(t) and _task_column(t, members) != "done"}
+    return {t["key"] for t in _visible(record) if _task_column(t, members) != "done"}
 
 
 def _open_count(record):
@@ -516,8 +766,15 @@ def _open_count(record):
 
 
 def _all_done(record, members):
-    shown = [t for t in record["tasks"] if _shown(t)]
+    shown = _visible(record)
     return bool(shown) and all(_task_column(t, members) == "done" for t in shown)
+
+
+def _cleanly_done(record, members):
+    """``_all_done`` with no task that failed or was cut off: those are not a finished session."""
+    return _all_done(record, members) and not any(
+        t.get("failed") or t.get("interrupted") for t in _visible(record)
+    )
 
 
 # ── review windows (In Review column) ────────────────────────────────────────
@@ -632,7 +889,7 @@ def _sweep_reviews(record, now):
         # A fix task is one created at or after the result. Tasks that existed when the result
         # arrived (`known_keys`, else the window's own members) can never be fixes.
         excluded = set(window.get("known_keys") or window["task_keys"]) | set(window["task_keys"])
-        fixes = [t for t in record["tasks"] if _shown(t) and t["key"] not in excluded and t["created_at"] >= fix_after]
+        fixes = [t for t in _visible(record) if t["key"] not in excluded and t["created_at"] >= fix_after]
         if fixes and all(_column(t["status"]) == "done" for t in fixes):
             _resolve(window, now, "fixed")
             changed = True
@@ -772,8 +1029,9 @@ def _entering_keys(record):
     # session's own beginning: its creation, or its latest resume (`resumed_at`), whichever is later.
     floor = max(record.get("created_at") or 0, record.get("resumed_at") or 0)
     keys = []
+    hidden = _hidden_keys(record)
     for task in sorted(record["tasks"], key=_task_order):
-        if task["removed_at"] is not None:
+        if task["removed_at"] is not None or task["key"] in hidden:
             continue
         if task["status"] == "in_progress":
             keys.append(task["key"])
@@ -1134,7 +1392,7 @@ def review_result(root, payload, now=None):
         if outcome is None:
             return None
         done = outcome.pop("_all_done_now")
-        outcome.update(all_done=done, became_all_done=done and not was_done)
+        outcome.update(all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec)))
         return outcome
 
     result = {
@@ -1207,10 +1465,13 @@ def last_assistant_text(payload):
 
 #: Bytes of transcript read per `Stop` for background hand-backs; the rest waits for the next one.
 BACKGROUND_SCAN_BYTES = 2 * 1024 * 1024
+#: One Stop reads this much of the transcript at most (in chunks of ``BACKGROUND_SCAN_BYTES``), so a
+#: long gap is caught up in one go and a runaway transcript still cannot stall the hook.
+BACKGROUND_SCAN_CAP = 64 * 1024 * 1024
 
 _TAG_RE = {
     name: re.compile(r"<{0}>(.*?)</{0}>".format(name), re.DOTALL)
-    for name in ("tool-use-id", "task-id")
+    for name in ("tool-use-id", "task-id", "status")
 }
 #: The agent's own answer: from the first ``<result>`` to the last ``</result>``. A notification
 #: with no such section (a Bash background task reports a ``<summary>``) carries no report.
@@ -1223,6 +1484,12 @@ QUEUE_IDS_KEPT = 64
 def _notification_ids(text):
     found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
     return found["tool-use-id"], found["task-id"]
+
+
+def _notification_status(text):
+    """The hand-back's own ``<status>`` word, lowercased, else ``""``."""
+    found = _TAG_RE["status"].search(text)
+    return found.group(1).strip().lower() if found else ""
 
 
 def _entry_text(entry, queued=()):
@@ -1268,12 +1535,24 @@ def _entry_epoch(entry):
 def _background_reports(window, path):
     """New background hand-backs in the transcript since the window's offset.
 
-    Yields ``{"id", "markers"}`` per notification, and advances ``window["tx_offset"]`` past the
-    complete lines read. The same notification appears as a queue entry and as a user entry, and
-    a resumed agent may notify twice: the caller dedupes on ``id``. A notification with no
-    ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line longer than the read
-    cap is skipped, not waited for: the scan resumes at the next line.
+    Yields ``{"id", "markers", "status"}`` per notification (``status`` is the hand-back's own
+    ``<status>``, else ``""``), and advances ``window["tx_offset"]`` past the complete lines read,
+    chunk by chunk up to ``BACKGROUND_SCAN_CAP``. The same notification appears as a queue entry
+    and as a user entry, and a resumed agent may notify twice: the caller dedupes on ``id``. A
+    notification with no ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line
+    longer than the read cap is skipped, not waited for: the scan resumes at the next line.
     """
+    reports = []
+    for _ in range(max(1, BACKGROUND_SCAN_CAP // BACKGROUND_SCAN_BYTES)):
+        found, more = _scan_chunk(window, path)
+        reports.extend(found)
+        if not more:
+            break
+    return reports
+
+
+def _scan_chunk(window, path):
+    """One read of at most ``BACKGROUND_SCAN_BYTES``: ``(reports, more)``, ``more`` when text remains."""
     try:
         size = os.path.getsize(path)
         offset = window.get("tx_offset")
@@ -1289,12 +1568,13 @@ def _background_reports(window, path):
             handle.seek(offset)
             chunk = handle.read(BACKGROUND_SCAN_BYTES)
     except OSError:
-        return []
+        return [], False
     end = chunk.rfind(b"\n") + 1
     if end == 0 and len(chunk) < BACKGROUND_SCAN_BYTES:
         window["tx_offset"] = offset
-        return []
+        return [], False
     window["tx_offset"] = offset + (end or len(chunk))
+    more = window["tx_offset"] < size
     queued = window.setdefault("queue_ids", [])
     reports = []
     for line in chunk[:end].decode("utf-8", "replace").splitlines():
@@ -1324,8 +1604,9 @@ def _background_reports(window, path):
         reports.append({
             "id": use_id or task_id,
             "markers": review_triggers.markers(section.group(1)) [-1:] if section else [],
+            "status": _notification_status(text),
         })
-    return reports
+    return reports, more
 
 
 def _scan_background(rec, payload, now):
@@ -1355,6 +1636,54 @@ def _scan_background(rec, payload, now):
         if applied is not None and applied["result"]:
             outcomes.append(applied)
     return outcomes
+
+
+#: A hand-back ``<status>`` that means the background agent did not finish its work.
+_HANDBACK_FAILED = ("failed", "killed", "error")
+
+
+def _scan_agent_tasks(rec, payload, now):
+    """Complete the background agent tasks whose hand-back is in the transcript. True when it looked.
+
+    A hand-back counts only for a task this record launched in the background, matched by the
+    spawn's id: a notification from any other task (a Bash job) never touches one. The cursor
+    advances every time, so a mutated record is always written.
+    """
+    pending = {
+        t["id"]: t for t in rec["tasks"]
+        if _is_agent(t) and t.get("background") and t["status"] == "in_progress" and t.get("id")
+    }
+    path = payload.get("transcript_path")
+    if not pending or not isinstance(path, str) or not path or not os.path.isfile(path):
+        return False
+    scan = _agent_scan(rec, path, min(t["created_at"] for t in pending.values()))
+    for report in _background_reports(scan, path):
+        task = pending.get(report["id"])
+        if task is not None and task["status"] == "in_progress":
+            if report["status"] in _HANDBACK_FAILED:
+                _end_agent(task, "cancelled", True, now)
+            else:
+                _end_agent(task, "completed", False, now)
+    return True
+
+
+def _interrupt_agents(rec, now):
+    """Settle the foreground agent tasks a finished turn left open as cancelled and ``interrupted``.
+
+    A turn that ended cannot have a foreground agent running in front of it (the call was
+    interrupted, or its end never reached a hook). A background agent survives, and so does a
+    Codex agent whose spawn answered with an id: its ``wait_agent`` may come in a later turn.
+    """
+    changed = False
+    for task in rec["tasks"]:
+        if (
+            _is_agent(task) and task["status"] == "in_progress"
+            and not task.get("background") and not task.get("agent_ref")
+        ):
+            task["interrupted"] = True
+            _push(task, "cancelled", now)
+            changed = True
+    return changed
 
 
 def _retire_at_stop(rec, payload, now):
@@ -1447,10 +1776,17 @@ def record(root, payload, provider="auto", now=None):
                     # Present but unreadable, or a schema this build does not know: never
                     # overwrite what we cannot read.
                     return result
+                if call["op"][0] != "agent_spawn" and call["op"][0].startswith("agent_"):
+                    # A result for a spawn this session never recorded: nothing to settle, no record to start.
+                    return result
                 rec = _new_record(call, project_id, now)
             open_before = _open_keys(rec, _review_members(rec))
             before = {t["key"]: t["status"] for t in rec["tasks"]}
-            _apply(rec, call, now)
+            changed = _apply(rec, call, now)
+            if changed is False:
+                # An agent event that matched no task (a replayed spawn, a result nobody launched):
+                # the record is not touched, so a stray call cannot keep a session looking alive.
+                return result
             _reopen(rec, before, now)
             _sweep_reviews(rec, now)
             rec["provider"] = call["provider"]
@@ -1464,15 +1800,26 @@ def record(root, payload, provider="auto", now=None):
             rec["last_seen_at"] = now
             # A call proves the session is alive, even one resumed after `SessionEnd`.
             _alive(rec, now)
+            members = _review_members(rec)
+            done = _all_done(rec, members)
+            # Dropping an unfinished task is abandonment, not completion: the transition counts
+            # only when a task that was open is now actually completed or cancelled.
+            finished = any(
+                t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+            )
+            clean = _cleanly_done(rec, members)
+            # An agent's end is raised at `Stop` (`mark`), never mid-turn: more agents may follow
+            # it. The debt is kept on the record for that Stop to pay.
+            mid_turn = call["op"][0].startswith("agent_")
+            if not done:
+                rec["done_pending"] = False
+            elif finished and mid_turn and clean:
+                rec["done_pending"] = True
             jsonio.write_json_atomic(path, rec)
-        members = _review_members(rec)
-        done = _all_done(rec, members)
-        # Dropping an unfinished task is abandonment, not completion: the transition counts
-        # only when a task that was open is now actually completed or cancelled.
-        finished = any(
-            t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+        result.update(
+            recorded=True, session=call["session_id"], all_done=done,
+            became_all_done=done and finished and not mid_turn and clean,
         )
-        result.update(recorded=True, session=call["session_id"], all_done=done, became_all_done=done and finished)
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
     return result
@@ -1503,14 +1850,20 @@ def mark(root, payload, state, now=None):
             if state == "idle":
                 rec["idle_at"] = now
                 _alive(rec, now)
-                was_done = _all_done(rec, _review_members(rec))
+                was_done = _all_done(rec, _review_members(rec)) and not rec.get("done_pending")
                 for outcomes in (_expire(rec, now), _scan_background(rec, payload, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
-                done_now = _all_done(rec, _review_members(rec))
+                _scan_agent_tasks(rec, payload, now)
+                _interrupt_agents(rec, now)
+                done_now = _cleanly_done(rec, _review_members(rec))
+                rec["done_pending"] = False
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
         result.update(marked=True, open=_open_count(rec))
+        if state == "idle" and done_now and not was_done:
+            # A background agent's hand-back can finish the last task with no review window involved.
+            result["became_all_done"] = True
         if done:
             # One entry per window that closed in this Stop; the flat keys mirror the last one.
             result.update(
@@ -1567,6 +1920,9 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "content": task["content"],
         "owner": task["owner"],
         "agent_type": task.get("agent_type"),
+        "kind": "agent" if _is_agent(task) else "todo",
+        "failed": bool(task.get("failed")),
+        "interrupted": bool(task.get("interrupted")),
         "status": task["status"],
         "column": column,
         "created_at": task["created_at"],
@@ -1628,10 +1984,11 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     _sweep_reviews(rec, rec.get("updated_at") or now)
     members = _review_members(rec)
     spans = _review_spans(rec, until)
+    shown = {t["key"] for t in _visible(rec)}
     views = [
         _task_view(task, status, now, stale_after, until, members.get(task["key"]), spans.get(task["key"], ()))
         for task in sorted(rec["tasks"], key=_task_order)
-        if isinstance(task, dict) and _shown(task)
+        if isinstance(task, dict) and task["key"] in shown
     ]
     if not views:
         return None

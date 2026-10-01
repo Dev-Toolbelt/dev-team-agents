@@ -1103,3 +1103,158 @@ describe.skipIf(!available)('the In Review column against the real hooks and CLI
     expect(await reviewNotifications('s-bg')).toHaveLength(1);
   }, 90_000);
 });
+
+// ── agent spawns are tasks, end to end: real hooks -> real CLI -> listTasks ──────────────
+
+const claudeSpawn = (root: string, session: string, agent: string, call: string, description: string, input: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) =>
+  runHook('pre-tool-use.sh', root, {
+    session_id: session,
+    hook_event_name: 'PreToolUse',
+    tool_use_id: call,
+    tool_name: 'Agent',
+    tool_input: { description, prompt: 'p', subagent_type: agent, ...input },
+    ...extra,
+  });
+const claudeSpawnEnd = (root: string, session: string, agent: string, call: string, description: string, response: unknown, input: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) =>
+  runHook('post-tool-use.sh', root, {
+    session_id: session,
+    hook_event_name: 'PostToolUse',
+    tool_use_id: call,
+    tool_name: 'Agent',
+    tool_input: { description, prompt: 'p', subagent_type: agent, ...input },
+    tool_response: response,
+    ...extra,
+  });
+const agentTasks = (tasks: readonly { kind: string }[]) => tasks.filter((t) => t.kind === 'agent');
+
+describe.skipIf(!available)('agent spawns are tasks against the real hooks and CLI', () => {
+  it('1. the /devteam:backend session: a foreground agent and a background agent end done, not failed', async () => {
+    const root = await bindRealProject('agents-backend');
+    const transcript = await newTranscript([{ type: 'user', message: { role: 'user', content: '/devteam:backend' } }]);
+    claudeSpawn(root, 's-be', 'backend-developer', 'toolu_dev', 'Implement health readiness endpoint');
+    claudeSpawnEnd(root, 's-be', 'backend-developer', 'toolu_dev', 'Implement health readiness endpoint', textResponse('implemented'));
+
+    const bg = { run_in_background: true };
+    claudeSpawn(root, 's-be', 'backend-test-specialist', 'toolu_bg', 'Test health readiness endpoint', bg, { transcript_path: transcript });
+    claudeSpawnEnd(
+      root, 's-be', 'backend-test-specialist', 'toolu_bg', 'Test health readiness endpoint',
+      { isAsync: true, status: 'async_launched', agentId: 'a1' }, bg, { transcript_path: transcript },
+    );
+
+    const waiting = await sessionTasks('s-be');
+    expect(waiting.tasks).toHaveLength(2);
+    expect(waiting.tasks.every((t) => t.kind === 'agent')).toBe(true);
+    expect(columnsOf(waiting.tasks)).toEqual({
+      'backend-developer: Implement health readiness endpoint': 'done',
+      'backend-test-specialist: Test health readiness endpoint': 'in_progress',
+    });
+
+    const body = [
+      '<task-notification>',
+      '<task-id>a1</task-id>',
+      '<tool-use-id>toolu_bg</tool-use-id>',
+      '<status>completed</status>',
+      '<result>tests written</result>',
+      '</task-notification>',
+    ].join('\n');
+    const stamp = new Date(Date.now() + 1_000).toISOString();
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(
+      transcript,
+      [
+        { type: 'queue-operation', operation: 'enqueue', timestamp: stamp, content: body },
+        { type: 'user', timestamp: stamp, message: { role: 'user', content: body } },
+      ].map((l) => `${JSON.stringify(l)}\n`).join(''),
+    );
+    stopHook(root, 's-be', { transcript_path: transcript });
+
+    const projects = await board();
+    const rootReal = await realpath(root);
+    let project;
+    for (const p of projects) if ((await realpath(p.root)) === rootReal) project = p;
+    expect(project, 'the project is on the board').toBeDefined();
+    const session = project?.sessions.find((s) => s.session_id === 's-be');
+    expect(session?.tasks).toHaveLength(2);
+    expect(session?.tasks.every((t) => t.kind === 'agent' && t.column === 'done' && t.failed === false)).toBe(true);
+  }, 90_000);
+
+  it('2. a code-reviewer spawn is no task but still opens a review window', async () => {
+    const root = await bindRealProject('agents-review');
+    claudeCreate(root, 's-rev', '1', 'Step 1: build');
+    claudeUpdate(root, 's-rev', '1', 'completed');
+    claudeSpawn(root, 's-rev', 'code-reviewer', 'toolu_rev', 'review it');
+    const session = await sessionTasks('s-rev');
+    expect(agentTasks(session.tasks)).toHaveLength(0);
+    expect(columnsOf(session.tasks)).toEqual({ 'Step 1: build': 'in_review' });
+  }, 60_000);
+
+  it('3. an Explore spawn creates no task and no record', async () => {
+    const root = await bindRealProject('agents-explore');
+    claudeSpawn(root, 's-exp', 'Explore', 'toolu_e', 'look around');
+    claudeSpawnEnd(root, 's-exp', 'Explore', 'toolu_e', 'look around', textResponse('found'));
+    const projects = await board();
+    expect(projects.flatMap((p) => p.sessions).some((s) => s.session_id === 's-exp')).toBe(false);
+  }, 60_000);
+
+  it('4. a PostToolUseFailure for a spawn is a failed task in Done', async () => {
+    const root = await bindRealProject('agents-failure');
+    claudeSpawn(root, 's-fail', 'backend-developer', 'toolu_f', 'Break things');
+    runHook('post-tool-use.sh', root, {
+      session_id: 's-fail',
+      hook_event_name: 'PostToolUseFailure',
+      tool_use_id: 'toolu_f',
+      tool_name: 'Agent',
+      tool_input: { description: 'Break things', prompt: 'p', subagent_type: 'backend-developer' },
+      error: 'boom',
+    });
+    const session = await sessionTasks('s-fail');
+    expect(session.tasks).toHaveLength(1);
+    expect(session.tasks[0]).toMatchObject({ kind: 'agent', failed: true, column: 'done' });
+  }, 60_000);
+
+  it('5. mirrored Step tasks from the same owner hide the agent spawn', async () => {
+    const root = await bindRealProject('agents-hidden');
+    claudeSpawn(root, 's-hide', 'backend-developer', 'toolu_h', 'Implement thing');
+    claudeCreate(root, 's-hide', '1', 'Step 1: design');
+    claudeCreate(root, 's-hide', '2', 'Step 2: ship');
+    const session = await sessionTasks('s-hide');
+    expect(session.tasks.map((t) => t.content)).toEqual(['Step 1: design', 'Step 2: ship']);
+    expect(session.tasks.every((t) => t.kind === 'todo')).toBe(true);
+    expect(session.counts.total).toBe(2);
+  }, 60_000);
+
+  it('6. Codex: spawn_agent plus a wait_agent that reports it completed is a done task', async () => {
+    const root = await bindRealProject('agents-codex');
+    const spawn = {
+      session_id: 's-codex',
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'cx1',
+      tool_name: 'spawn_agent',
+      tool_input: { agent_type: 'backend-developer', message: 'Implement health readiness endpoint\nmore' },
+    };
+    runHook('pre-tool-use.sh', root, spawn);
+    runHook('post-tool-use.sh', root, { ...spawn, hook_event_name: 'PostToolUse', tool_response: { agent_id: 'ag-cx1', nickname: null } });
+    expect(columnsOf((await sessionTasks('s-codex')).tasks)).toEqual({ 'backend-developer: Implement health readiness endpoint': 'in_progress' });
+    runHook('post-tool-use.sh', root, {
+      session_id: 's-codex',
+      hook_event_name: 'PostToolUse',
+      tool_use_id: 'w-cx1',
+      tool_name: 'wait_agent',
+      tool_input: { targets: ['ag-cx1'] },
+      tool_response: { status: { 'ag-cx1': { completed: 'done' } }, timed_out: false },
+    });
+    const session = await sessionTasks('s-codex');
+    expect(session.tasks).toHaveLength(1);
+    expect(session.tasks[0]).toMatchObject({ kind: 'agent', column: 'done', failed: false });
+  }, 60_000);
+
+  it('7. opencode: task before/after with the same callID is a done task', async () => {
+    const root = await bindRealProject('agents-opencode');
+    const call = { tool: 'task', sessionID: 's-oc', tool_use_id: 'oc1', args: { description: 'Implement health readiness endpoint', prompt: 'p', subagent_type: 'backend-developer' } };
+    runHook('pre-tool-use.sh', root, call);
+    expect(columnsOf((await sessionTasks('s-oc')).tasks)).toEqual({ 'backend-developer: Implement health readiness endpoint': 'in_progress' });
+    runHook('post-tool-use.sh', root, { ...call, output: 'done' });
+    const session = await sessionTasks('s-oc');
+    expect(session.tasks[0]).toMatchObject({ kind: 'agent', column: 'done', failed: false });
+  }, 60_000);
+});

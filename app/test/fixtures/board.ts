@@ -25,6 +25,8 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     durations: { pending: 120, in_progress: 0, completed: 0 },
     stale: false,
     abandoned: false,
+    kind: 'todo',
+    failed: false,
     review: null,
     ...overrides,
   };

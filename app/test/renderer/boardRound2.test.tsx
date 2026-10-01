@@ -485,3 +485,32 @@ describe('Board kanban — an old CLI payload', () => {
     expect(screen.queryByText(/not shown/)).not.toBeInTheDocument();
   });
 });
+
+describe('Board kanban — agent and failed badges', () => {
+  const card = (text: string) => screen.getByText(text).closest('article')!;
+
+  it('splits an agent task into an Agent badge and its description, and flags a failure in words', async () => {
+    const tasks = [
+      boardTask({ key: 'a', content: 'reviewer: check the diff', kind: 'agent', column: 'in_progress', status: 'in_progress' }),
+      boardTask({ key: 'b', content: 'builder: ship it', kind: 'agent', failed: true, column: 'done', status: 'completed' }),
+    ];
+    await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
+    const a = card('check the diff');
+    expect(within(a).getByText('Agent: reviewer')).toBeInTheDocument();
+    expect(within(a).queryByText('Failed')).not.toBeInTheDocument();
+    const b = card('ship it');
+    expect(within(b).getByText('Agent: builder')).toBeInTheDocument();
+    expect(within(b).getByText('Failed')).toBeInTheDocument();
+  });
+
+  it('keeps the text whole when it does not split cleanly, and draws nothing for a plain task', async () => {
+    const tasks = [
+      boardTask({ key: 'a', content: 'no separator here', kind: 'agent' }),
+      boardTask({ key: 'b', content: 'Fix: the thing', kind: 'todo' }),
+    ];
+    await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
+    expect(within(card('no separator here')).getByText('Agent')).toBeInTheDocument();
+    const plain = card('Fix: the thing');
+    expect(within(plain).queryByText(/Agent|Failed/)).not.toBeInTheDocument();
+  });
+});

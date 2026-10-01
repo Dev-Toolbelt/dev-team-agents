@@ -220,9 +220,11 @@ def cmd(script):
 # idempotently strip our own entries on re-install without touching user hooks.
 # (Codex spec does NOT define a per-hook id field — statusMessage is the
 # documented human-readable surface; we encode our marker there.)
-# PostToolUse is narrowed to `wait_agent` — the only Codex tool whose result the task board
-# reads (a review agent's report). Codex feeds the todo list from PreToolUse (`update_plan`).
-MATCHERS = {"PostToolUse": ".*wait_agent"}
+# PostToolUse is narrowed to `spawn_agent` (its response names the agent id a later wait settles),
+# `wait_agent` (the agents' final states, and a review agent's report) and `close_agent` (an agent
+# closed before it reported) — the only Codex tools
+# whose result the task board reads. Codex feeds the todo list from PreToolUse (`update_plan`).
+MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent)"}
 
 managed_groups = {
     event: [

@@ -1324,6 +1324,8 @@ export interface BoardReview {
   readonly since: number;
 }
 
+export type BoardTaskKind = 'agent' | 'todo';
+
 /** One task, as `devteam tasks list|watch --json` derives it. Epoch fields are seconds. */
 export interface BoardTask {
   readonly key: string;
@@ -1340,6 +1342,10 @@ export interface BoardTask {
   readonly durations: Readonly<Record<string, number>>;
   readonly stale: boolean;
   readonly abandoned: boolean;
+  /** `agent` for a spawned sub-agent run, `todo` otherwise (and for a CLI that predates the field). */
+  readonly kind: BoardTaskKind;
+  /** An agent task whose run failed; false for a CLI that predates the field. */
+  readonly failed: boolean;
   /** Null when the task is not in review (and for a CLI that predates the review window). */
   readonly review: BoardReview | null;
 }

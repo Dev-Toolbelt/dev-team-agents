@@ -190,7 +190,7 @@ mode.
 | `devteam notifications list [--project <id>] [--unseen]` | Live notifications across bound projects: what the hooks queued (`scripts/hooks/lib/notify.sh`), minus the expired, each with `seen` (ADR-0017) |
 | `devteam notifications ack <id>… \| --all [--project <id>]` | Mark notifications seen. Writes `notifications-seen.json` under a lock; **never rewrites the queue** a hook may be appending to |
 | `devteam notifications watch [--interval <s>]` | Stream the unseen backlog, then each new record, until stdin closes or SIGTERM. `--json` is JSON Lines — see § The `--json` contract |
-| `devteam tasks record --project-root <dir> [--provider auto]` | **Hook-only.** Reads a hook payload on stdin and folds a todo-tool call into its session's record; prints `{recorded, session, all_done, became_all_done}`. Never fails on bad input — exit 0 with `recorded: false` (ADR-0018) |
+| `devteam tasks record --project-root <dir> [--provider auto]` | **Hook-only.** Reads a hook payload on stdin and folds a todo-tool call, or an agent spawn/result (docs/specs/task-board.md § Agent spawns are tasks), into its session's record; prints `{recorded, session, all_done, became_all_done}`. Never fails on bad input — exit 0 with `recorded: false` (ADR-0018) |
 | `devteam tasks mark --project-root <dir> --state idle\|ended` | **Hook-only.** Marks the payload's session idle or ended; no-op without a record. Prints `{marked, open, review_result, review_window, review_findings, became_all_done}` — on `idle` it also settles a command/prompt review window from the turn's final message |
 | `devteam tasks review-open --project-root <dir>` | **Hook-only.** Reads a review trigger on stdin (a review/QA agent spawn, a review command or an explicit request in a prompt) and opens or joins the session's review window. Prints `{recorded, session, window, joined}`. Never fails on bad input |
 | `devteam tasks review-result --project-root <dir>` | **Hook-only.** Reads a finished review agent's output on stdin, sums its `<!-- review-result: findings=N -->` markers and records the window's result once every source answered. Prints `{recorded, session, window, result, findings, resolved, all_done, became_all_done}` |
@@ -257,6 +257,14 @@ Nothing deletes a record or a task: a task a replace-style call omits gets `remo
   reopen) and the derived `column: "in_review"`, task `review`, `counts.in_review`, project
   `with_findings` and `durations.in_review` — all additive to the `--json` contract. `session_done`
   requires every task in the Done column, so it waits for the review to resolve.
+- **Agent spawns are tasks.** `record` also takes an agent call (Claude `Agent`/`Task`, Codex `spawn_agent`/`wait_agent`/`close_agent`,
+  opencode `task`): a spawn is an `in_progress` task with `kind: "agent"` (text `<agent>: <description>`, id = the spawn's
+  own id, owner = the spawning agent); its result completes it, Claude `PostToolUseFailure` cancels it with `failed: true`,
+  a background launch stays open until its transcript hand-back at `Stop` (`tasks mark --state idle`), and a Codex
+  `wait_agent` settles each agent id it reports, matched through the `agent_ref` the `spawn_agent` response gave. A result
+  never starts a record. Built-ins (`review_triggers.BUILTIN_AGENTS`, one list keyed by provider) and review/QA agents are
+  no tasks. `tasks mark --state idle` settles a foreground agent task left open as `cancelled` + `interrupted: true`, and a background hand-back's `<status>` of `failed`/`killed`/`error` fails the task. `became_all_done` for an agent's end is raised only at `Stop`, never with a `failed`/`interrupted` task visible. A task's `kind`, `failed` and `interrupted` are additive in `--json`; an agent task is hidden on read (columns, counts,
+  `all_done`) when its owner also keeps `Step N:` plan tasks.
 - `sessions_active` counts sessions whose status is not `ended` (active **or** idle).
 - `tasks watch` is excluded from the bulk contract sweep and pinned by `tests/test_tasks.py`.
 

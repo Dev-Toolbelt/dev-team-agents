@@ -324,3 +324,13 @@ export function basename(path: string): string {
 export function boardProjectName(project: BoardProject, names: Readonly<Record<string, string>>): string {
   return names[project.project_id] ?? (project.root !== '' ? basename(project.root) : project.project_id);
 }
+
+/** An agent task reads `<agent>: <description>`; the badge takes the name only when that split is clean. */
+export function splitAgentTask(content: string): { agent: string; title: string } | null {
+  const at = content.indexOf(': ');
+  if (at <= 0) return null;
+  const agent = content.slice(0, at);
+  const title = content.slice(at + 2).trim();
+  if (title === '' || agent.length > 64 || /\s/.test(agent)) return null;
+  return { agent, title };
+}

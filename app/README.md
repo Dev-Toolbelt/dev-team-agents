@@ -215,7 +215,7 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
 - **Kanban.** Click a card for three columns, or an optional fourth **In Review** column when a review is
   active. Each task shows its session (provider and branch) and the time it has spent in its column,
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
-  Tasks in review show a findings badge (count of issues found, or **result not read**). Filter by
+  Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. Filter by
   session or period, hide done tasks older than the retention, and show/hide tasks with findings.
   Each session has a status (active, idle, ended) and a **Copy resume command** button; the text
   copied is the command the CLI sent for that session, never a string the window supplies.
