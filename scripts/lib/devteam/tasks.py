@@ -1773,7 +1773,7 @@ def _git_location(cwd):
         return None, None
     try:
         result = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD", "--git-dir", "--git-common-dir", "--show-toplevel"],
+            ["git", "-C", cwd, "rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel", "--abbrev-ref", "HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=3,
@@ -1781,10 +1781,16 @@ def _git_location(cwd):
         )
     except (OSError, subprocess.SubprocessError):
         return None, None
-    lines = result.stdout.decode("utf-8", "replace").splitlines()
-    if result.returncode != 0 or len(lines) < 4:
+    # Options before `HEAD`: git prints each answer in order and stops at the first it cannot give.
+    # A normal checkout or worktree answers all four. A repository with no commit yet answers the
+    # paths but not `HEAD` (exit 128, the branch is unknown). A bare repository, or a `cwd` inside
+    # `.git`, has no work tree: only the two git dirs, so no branch and no worktree.
+    lines = [line.strip() for line in result.stdout.decode("utf-8", "replace").splitlines()]
+    if len(lines) < 2:
         return None, None
-    branch, git_dir, common_dir, toplevel = (line.strip() for line in lines[:4])
+    git_dir, common_dir = lines[:2]
+    toplevel = lines[2] if len(lines) >= 3 else ""
+    branch = lines[3] if result.returncode == 0 and len(lines) >= 4 else None
     branch = branch or None
     # `--git-dir`/`--git-common-dir` are relative to `cwd` outside a worktree.
     git_dir = os.path.realpath(os.path.join(cwd, git_dir))
@@ -1794,7 +1800,8 @@ def _git_location(cwd):
     main = os.path.dirname(common_dir)
     top = os.path.realpath(toplevel)
     path = os.path.relpath(top, main) if top.startswith(main + os.sep) else top
-    return branch, {"path": path.replace(os.sep, "/"), "branch": branch}
+    # A detached HEAD answers the literal `HEAD`: the worktree is on no branch.
+    return branch, {"path": path.replace(os.sep, "/"), "branch": None if branch == "HEAD" else branch}
 
 
 #: Long enough to outlast a concurrent hook's whole critical section (a read, a diff and an
