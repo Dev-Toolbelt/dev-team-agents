@@ -39,11 +39,11 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
 | `language` | `"pt-BR"` | BCP 47 language tag for agent conversation with the user. The installer prompts for it on first install; this is the value used when nobody answers | `skills/shared/project-context/SKILL.md` (agent-executed) |
 | `context_window_percent_warning` | `55` | % at which agents emit a `warning` notification | `scripts/hooks/stop/04-notifier.sh` |
 | `context_window_percent_limit` | `60` | % at which agents emit a `critical` notification | `scripts/hooks/stop/04-notifier.sh` |
-| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types | `scripts/hooks/stop/04-notifier.sh`, `scripts/hooks/session-start.sh`, `scripts/hooks/pre-tool-use/01-check-updates.sh` |
+| `suppress_notifications` | `false` | `false` / `true` / `["info"]` — suppress notification types | `scripts/hooks/stop/04-notifier.sh`, `scripts/hooks/session-start.sh`, `scripts/hooks/lib/update-check.sh` (update notices, via `session-start.sh`) |
 | `session_summary_max_days` | `30` | Days before session-summary entries are trimmed | `skills/shared/project-context/SKILL.md` (agent-executed) |
 | `session_summary_max_entries` | `30` | Maximum number of session-summary entries | `skills/shared/project-context/SKILL.md` (agent-executed) |
 | `docs_stale_after_days` | `30` | Days before `project.md`, `session-summary.md`, and the last `/devteam:health-check` run are flagged as stale | `scripts/hooks/session-start.sh`, `skills/shared/notifier/SKILL.md` |
-| `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table | `scripts/hooks/lib/update-check.sh` (`uc_auto_update_enabled`), gates `scripts/hooks/pre-tool-use/01-check-updates.sh` |
+| `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table | `scripts/hooks/lib/update-check.sh` (`uc_auto_update_enabled`), gates the update check in `scripts/hooks/session-start.sh` |
 | `update_check_interval_hours` | `24` | Hours between update checks | `scripts/hooks/lib/update-check.sh` |
 | `transcript_multiplier` | `1.8` | **Deprecated, no longer applied.** `04-notifier.sh` now reads the last transcript usage entry's cache/input tokens directly — the exact context size, no multiplier needed. Kept only for backward-compat reads | `scripts/hooks/stop/04-notifier.sh` (read, unused) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens | `scripts/hooks/stop/04-notifier.sh` |
