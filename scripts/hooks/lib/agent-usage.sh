@@ -39,8 +39,8 @@ devteam_queue_agent_usage() {
 
     local transcript_path
     transcript_path=$(python3 -c \
-        "import json; d=json.load(open('$hook_payload')); print(d.get('transcript_path',''))" \
-        2>/dev/null || echo "")
+        'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("transcript_path",""))' \
+        "$hook_payload" 2>/dev/null || echo "")
     [ -n "$transcript_path" ] && [ -f "$transcript_path" ] || return 0
 
     local cache_file="${user_data_dir}/.agent-usage-cache"
