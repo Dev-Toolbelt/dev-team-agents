@@ -166,10 +166,10 @@ class SecretsKeychainAdapterTest(CredsTestCase):
     def test_put_never_places_the_value_on_argv_only_on_stdin(self):
         calls = []
 
-        def fake_run(args, input=None, capture_output=True, timeout=None):  # noqa: A002
+        def fake_run(args, input=None, capture_output=True, timeout=None, start_new_session=False):  # noqa: A002
             # `args` is the full argv `_run_security` builds: ["security", <subcommand>, ...].
             calls.append((list(args), input))
-            if args[1] == "add-generic-password":
+            if args[1] == "-i":
                 return mock.Mock(returncode=0, stdout=b"", stderr=b"")
             if args[1] == "find-generic-password":
                 return mock.Mock(returncode=0, stdout=(PLANTED + "\n").encode("utf-8"), stderr=b"")
@@ -182,20 +182,68 @@ class SecretsKeychainAdapterTest(CredsTestCase):
         write_argv, write_stdin = calls[0]
         for token in write_argv:
             self.assertNotIn(PLANTED, token, "the value must never appear in argv")
-        # Per `security add-generic-password -h`: "-w" as the LAST option prompts
-        # on stdin instead of taking a trailing argv value.
-        self.assertEqual(write_argv[-1], "-w")
-        self.assertEqual(write_stdin, (PLANTED + "\n" + PLANTED + "\n").encode("utf-8"))
+        # The whole command goes to `security -i` on stdin; a bare `-w` would go
+        # through readpassphrase, which cuts a value at 128 characters.
+        self.assertEqual(write_argv, ["security", "-i"])
+        line = write_stdin.decode("utf-8")
+        self.assertTrue(line.startswith("add-generic-password -a devteam/proj/tok -s dev-team-agents -U -w "))
+        self.assertTrue(line.endswith("\n"))
+        self.assertEqual(line.count("\n"), 1)
+
+    def test_put_quotes_the_value_so_it_reads_back_unchanged(self):
+        # `security -i` honours backslash escapes inside double quotes, like a POSIX
+        # shell does for `\` and `"`; shlex stands in for it here (the real binary
+        # was checked by hand: spaces, quotes, backslashes, `$`, backticks).
+        import shlex
+
+        for value in ['plain', 'sp ace', 'q"uo"te', 'back\\slash\\', "it's", "ATATT3x" + "aB9-_=" * 30]:
+            word = secrets_module._quote_for_security(value)
+            self.assertEqual(shlex.split(word), [value])
+
+    def test_put_refuses_a_value_over_the_keychain_limit_before_calling_security(self):
+        with mock.patch("devteam.secrets.subprocess.run") as run:
+            with self.assertRaises(SecretError) as ctx:
+                secrets_module.put("devteam/proj/tok", "x" * (secrets_module.KEYCHAIN_VALUE_MAX_BYTES + 1), backend="keychain")
+        run.assert_not_called()
+        self.assertIn("insecure", ctx.exception.hint)
+        # A token of a realistic length is well inside it.
+        self.assertGreater(secrets_module.KEYCHAIN_VALUE_MAX_BYTES, 1024)
+
+    def test_put_failure_never_echoes_the_value_from_stderr(self):
+        failed = mock.Mock(returncode=1, stdout=b"", stderr=("bad: " + PLANTED).encode("utf-8"))
+        with mock.patch("devteam.secrets.subprocess.run", return_value=failed):
+            with self.assertRaises(SecretError) as ctx:
+                secrets_module.put("devteam/proj/tok", PLANTED, backend="keychain")
+        self.assertNotIn(PLANTED, str(ctx.exception))
+        self.assertIn("<redacted>", str(ctx.exception))
+
+    def test_every_security_call_runs_without_a_controlling_terminal(self):
+        # With a controlling tty, `add-generic-password -w` prompts on /dev/tty and
+        # ignores stdin, so a CLI started under a terminal hung until the timeout.
+        sessions = []
+
+        def fake_run(args, input=None, capture_output=True, timeout=None, start_new_session=False):  # noqa: A002
+            sessions.append(start_new_session)
+            if args[1] == "find-generic-password":
+                return mock.Mock(returncode=0, stdout=(PLANTED + "\n").encode("utf-8"), stderr=b"")
+            return mock.Mock(returncode=0, stdout=b"", stderr=b"")
+
+        with mock.patch("devteam.secrets.subprocess.run", side_effect=fake_run):
+            secrets_module.put("devteam/proj/tok", PLANTED, backend="keychain")
+            secrets_module.get("devteam/proj/tok", backend="keychain")
+            secrets_module.delete("devteam/proj/tok", backend="keychain")
+
+        self.assertTrue(sessions)
+        self.assertTrue(all(sessions), "a `security` call kept the controlling terminal")
 
     def test_put_verifies_by_reading_back_and_deletes_on_mismatch(self):
-        # A real keychain has been observed to return 0 while silently storing an
-        # empty password when the double-entry prompt fails to match; put() must
-        # not trust the exit code alone.
+        # A cut or mangled value can still exit 0; put() must not trust the exit
+        # code alone.
         calls = []
 
-        def fake_run(args, input=None, capture_output=True, timeout=None):  # noqa: A002
+        def fake_run(args, input=None, capture_output=True, timeout=None, start_new_session=False):  # noqa: A002
             calls.append(list(args))
-            if args[1] == "add-generic-password":
+            if args[1] == "-i":
                 return mock.Mock(returncode=0, stdout=b"", stderr=b"")
             if args[1] == "find-generic-password":
                 return mock.Mock(returncode=0, stdout=b"\n")  # empty password read back

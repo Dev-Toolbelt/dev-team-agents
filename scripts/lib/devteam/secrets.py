@@ -7,7 +7,8 @@ stores or retrieves the value and nothing else.
 
 Backends, best first:
 
-* ``keychain`` — macOS, via the ``security`` CLI.
+* ``keychain`` — macOS, via the ``security`` CLI. A value is limited to
+  ``KEYCHAIN_VALUE_MAX_BYTES`` (see ``_keychain_put``).
 * ``dpapi`` — Windows, via ``CryptProtectData``/``CryptUnprotectData``.
 * ``insecure`` — a JSON file, chmod'ed 0600 where the filesystem has POSIX
   permission bits. Always available, so an unsupported platform is never
@@ -72,11 +73,10 @@ def _validate_ref(ref):
 def _validate_value(value):
     if not isinstance(value, str):
         raise SecretError("secret value must be a string")
-    # The keychain backend frames the value as two newline-terminated stdin
-    # lines (see _keychain_put); an embedded NUL or newline breaks that framing
-    # and, tested against a real keychain, silently stores an empty password
-    # instead of failing. Rejecting it here keeps every backend's behavior the
-    # same regardless of which one a given machine defaults to.
+    # The keychain backend sends the value inside one newline-terminated command
+    # line on stdin (see _keychain_put); an embedded NUL or newline breaks that
+    # framing. Rejecting it here keeps every backend's behavior the same
+    # regardless of which one a given machine defaults to.
     if "\x00" in value or "\n" in value or "\r" in value:
         raise SecretError(
             "secret value must not contain NUL or newline characters",
@@ -96,14 +96,24 @@ def _known_backend(name):
 
 _KEYCHAIN_SERVICE = "dev-team-agents"
 
+#: `security -i` reads one command line into a ~4 KiB buffer and silently cuts
+#: the rest (measured: a 4100-byte value came back as 4025). 3 KiB leaves room for
+#: the command, the ref and escaping, and is far above any real API token.
+KEYCHAIN_VALUE_MAX_BYTES = 3072
+
 
 def _run_security(args, input_bytes=None):
+    # A new session detaches `security` from any controlling terminal. With one,
+    # `add-generic-password -w` reads the value from /dev/tty instead of stdin and
+    # waits there until the timeout -- which is what happens to every child of a
+    # desktop app started from a terminal, and to `devteam cred set` run in one.
     try:
         return subprocess.run(
             ["security"] + list(args),
             input=input_bytes,
             capture_output=True,
             timeout=_CMD_TIMEOUT,
+            start_new_session=True,
         )
     except FileNotFoundError as exc:
         raise SecretError(
@@ -120,12 +130,26 @@ def _run_security(args, input_bytes=None):
         ) from exc
 
 
-def _safe_stderr(raw):
+def _quote_for_security(value):
+    """A double-quoted word in `security -i`'s own command syntax.
+
+    Inside double quotes it honours backslash escapes, so a backslash and a double
+    quote are the only characters that need one -- verified against a real keychain with
+    spaces, quotes, backslashes, ``$`` and backticks round-tripping unchanged.
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _safe_stderr(raw, value=None):
     # `security`'s stderr carries only OS diagnostic text — confirmed against a
     # real keychain for both the not-found and locked-keychain paths — never the
     # password, which only ever appears on stdout of a successful `find`. Safe
     # to surface here.
     text = (raw or b"").decode("utf-8", errors="replace").strip()
+    if value:
+        # `security -i` was not seen echoing a failed command line, but the value
+        # is on its stdin; never let it reach an error message if it ever does.
+        text = text.replace(value, "<redacted>")
     return text[:300] if text else "no diagnostic output"
 
 
@@ -149,24 +173,32 @@ def _probe_keychain():
 def _keychain_put(ref, value):
     if paths.platform_key() != "darwin":
         raise SecretError("keychain backend requires macOS", hint="ref={}".format(ref))
-    # `-w` given a trailing argv value would put the secret in the process table
-    # (readable via `ps` by anyone else on the box). Per `security add-generic-
-    # password -h`, "-w" as the LAST option instead prompts for the value twice,
-    # newline-terminated, on stdin — verified against a real keychain. We supply
-    # both lines ourselves so it is non-interactive.
-    payload = (value + "\n" + value + "\n").encode("utf-8")
-    completed = _run_security(
-        ["add-generic-password", "-a", ref, "-s", _KEYCHAIN_SERVICE, "-U", "-w"],
-        input_bytes=payload,
+    # The value never goes on argv: `-w <value>` there would put it in the process
+    # table, readable via `ps` by anyone else on the box. A bare trailing `-w`
+    # prompts instead, but through readpassphrase, which cuts the value at 128
+    # characters (an Atlassian API token is ~190). So the whole command goes to
+    # `security -i` on stdin, the value quoted in its own syntax. The item is
+    # still created by /usr/bin/security, so its access list -- and every item
+    # stored before this -- keeps trusting the same binary.
+    size = len(value.encode("utf-8"))
+    if size > KEYCHAIN_VALUE_MAX_BYTES:
+        raise SecretError(
+            "secret value for {} is {} bytes; the keychain backend stores at most {}".format(
+                ref, size, KEYCHAIN_VALUE_MAX_BYTES
+            ),
+            hint="store it with --backend insecure, or split it",
+        )
+    line = "add-generic-password -a {} -s {} -U -w {}\n".format(
+        ref, _KEYCHAIN_SERVICE, _quote_for_security(value)
     )
+    completed = _run_security(["-i"], input_bytes=line.encode("utf-8"))
     if completed.returncode != 0:
         raise SecretError(
-            "keychain write failed for {}: {}".format(ref, _safe_stderr(completed.stderr)),
+            "keychain write failed for {}: {}".format(ref, _safe_stderr(completed.stderr, value)),
             hint="check `security`'s diagnostic output; the keychain may be locked",
         )
-    # `security` returns 0 even when its double-entry prompt fails to match —
-    # observed on a real keychain to silently store an empty password in that
-    # case. Read the value back rather than trusting the exit code alone.
+    # A cut or mangled value can still exit 0; read it back rather than trusting
+    # the exit code alone.
     stored = _keychain_get(ref)
     if stored != value:
         _keychain_delete(ref)
