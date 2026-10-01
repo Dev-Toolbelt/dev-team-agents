@@ -1,3 +1,4 @@
+<!-- last-updated: 2026-10-01 -->
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -16,6 +17,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
 | `electron/ipc-channels-need-the-trusted-sender-check.md` | electron, IPC, ipcMain.handle, security, trustedHandler, trustedRenderer, audit trail | After rebasing app work on main, grep for new `ipcMain.handle` calls |
 | `electron/project-naming-scope.md` | project, name, BindRequest, settings.json, app-local, not portable, machine-local, product naming | Deciding whether project names belong in the app-local settings or the CLI's committed record |
+| `electron/third-party-runtime-styles-and-csp.md` | sonner, CSP, content-security-policy, third-party, runtime styles, development vs production, __insertCSS, unsafe-inline | Libraries that inject `<style>` at module load render unstyled when CSP forbids `'unsafe-inline'` |
 | `electron/userdata-collides-with-the-cli-store.md` | electron, userData, getPath, productName, APP_NAME, Application Support, APPDATA, second writer, setPath | An Electron app is named after a CLI whose data directory follows the same convention, or a store-wide operation reports a size that makes no sense |
 | `git/worktree-exclude-scope.md` | worktree, info/exclude, gitignore, GIT_DIR, GIT_COMMON_DIR, untracked | Keeping generated files out of git in a repository that uses linked worktrees |
 | `hooks/a-relative-hook-command-breaks-after-cd.md` | hook, settings.json, hooks.json, relative path, cwd, cd, subdirectory, monorepo, CLAUDE_PROJECT_DIR, non-blocking error, empty board | Hooks stop working, or the board stays empty, after a session `cd`-ed into a subdirectory |
@@ -41,4 +43,5 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `store/runtime-root-at-the-cited-path.md` | core, pointer, scripts, templates, runtime root, project-relative, new-adr.sh, reuse-lint, design-token-lint, exit 0, silent gate | A framework path an agent runs does not exist in a bound project, or a Stop gate never reports anything |
 | `store/sync-wires-hooks-the-linked-core-lacks.md` | devteam sync, hook, hooks.EVENTS, core version, linked tree, missing hook, symlink, scripts | A tool call fails after `devteam sync`, or a project needs to upgrade to resolve its core version |
 | `testing/fixture-circularity.md` | fixture, migration, test design, circular, legacy layout, false confidence | Writing a test for a migration away from a layout the current code no longer produces |
+| `testing/wait-for-the-data-a-control-depends-on.md` | async, flaky test, fixture, wait, disabled control, Radix, DropdownMenu, data loading, ProjectList, folders, sonner, toasts, race condition | Wait for the readiness signal of the data a control depends on, not for unrelated text rendered earlier |
 | `testing/windows-launcher-testing.md` | windows, launcher, fixture, spawn, shell false, CreateProcessA, _spawnv, argv quoting, PE, .exe, .scenario, PASS_THROUGH_ENV, CVE-2024-27980 | A Windows test spawns the fake CLI and the child gets a mangled argument, no scenario, or nothing executable at all |
