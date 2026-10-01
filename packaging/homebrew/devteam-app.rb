@@ -66,9 +66,9 @@ cask "devteam-app" do
 
   # MEASURED against the build, which is what this comment used to ask for.
   # `app/node_modules/electron/dist/Electron.app/Contents/Info.plist` declares
-  # `LSMinimumSystemVersion` **12.0** for the pinned Electron (39.8.10), so
-  # Electron 39 does not launch on Big Sur at all; `app/electron-builder.yml`
-  # sets `mac.minimumSystemVersion: '12.0'` to match. The previous
+  # `LSMinimumSystemVersion` **13.0** for the pinned Electron (44.5.1), so
+  # Electron 44 does not launch on Monterey or older; `app/electron-builder.yml`
+  # sets `mac.minimumSystemVersion: '13.0'` to match. The previous
   # `">= :big_sur"` was a guess and it was wrong in the dangerous direction —
   # it licenses `brew install` on a system where the app cannot start, which
   # the user experiences as the app being broken rather than as unsupported.
@@ -79,7 +79,7 @@ cask "devteam-app" do
   # both this line and `mac.minimumSystemVersion` together. Nothing enforces
   # the pair: `.github/scripts/ci/04-packaging.sh` only runs `ruby -c` on this
   # file, and `05-app.sh` never reads the cask.
-  depends_on macos: ">= :monterey"
+  depends_on macos: ">= :ventura"
 
   # The CLI is not an optional companion, it is what this app *is*. ADR-0011:
   # "The app is a client of the CLI. Every action in the UI invokes

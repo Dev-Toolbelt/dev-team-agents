@@ -7,7 +7,7 @@
   "license": "MIT",
   "main": "dist/node/main/index.js",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=24.15.0"
   },
   "scripts": {
     "clean": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('dist',{recursive:true,force:true});rmSync('release',{recursive:true,force:true})\"",
@@ -24,6 +24,7 @@
     "start": "npm run build && electron .",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:all": "npm run build && electron-builder --mac --win --publish never",
     "build:preload": "vite build -c vite.preload.config.mts"
   },
   "devDependencies": {
@@ -32,16 +33,16 @@
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
-    "@types/node": "20.19.43",
+    "@types/node": "24.12.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "5.2.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "electron": "39.8.10",
+    "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "eslint": "10.11.0",
-    "jsdom": "26.0.0",
+    "jsdom": "30.1.1",
     "lucide-react": "1.48.0",
     "radix-ui": "1.6.7",
     "react": "19.3.0",
@@ -53,5 +54,10 @@
     "vite": "7.3.6",
     "vitest": "4.1.11"
   },
-  "author": "dev-team-agents contributors"
+  "author": "dev-team-agents contributors",
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true,
+    "fsevents": false
+  }
 }

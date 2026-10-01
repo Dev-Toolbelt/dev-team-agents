@@ -11,21 +11,19 @@ cd app
 npm ci
 ```
 
-**Plain `npm ci`, without `--ignore-scripts`.** That flag is what CI uses
-(`.github/scripts/ci/05-app.sh`), deliberately — a runner should not execute arbitrary
-postinstall scripts — and CI never launches the app, so it never needs what the flag
-skips. Locally you do.
+Use the Node version in `.nvmrc` (`nvm use`): it matches the Node that the pinned Electron
+embeds, and Electron 40+ refuses to install on anything below Node 22.12.
 
-`electron`'s postinstall is what downloads the ~270 MB Electron binary. Skip it and the
-build still succeeds (TypeScript and Vite do not need the binary) but launching fails
-with:
+**Install scripts are allow-listed.** npm 11+ blocks dependency install scripts unless
+`allowScripts` in `package.json` names them. The list pins `esbuild` and
+`electron-winstaller` (needed by `dist:win`) to the versions that were reviewed, and
+denies `fsevents`, which ships prebuilt. After a bump of one of those packages, review the
+new version and re-approve it with `npm install-scripts approve <pkg>`; until then npm
+skips its script and warns. CI runs `npm ci --ignore-scripts`
+(`.github/scripts/ci/05-app.sh`), which skips them all.
 
-```
-Error: Electron failed to install correctly, please delete node_modules/electron and try installing again
-```
-
-**Do not follow that advice** — reinstalling the same way reproduces it. Fetch the binary
-instead:
+Electron no longer downloads its ~270 MB binary at install time: the first `npm start`
+fetches it. To fetch it ahead of time, for example before going offline:
 
 ```bash
 node node_modules/electron/install.js
@@ -138,6 +136,11 @@ project's name, acknowledging it as it is shown. Because the stream lives in the
 Automated tests cover the supervisor, the stream, the bell and the login-item logic against a
 simulated OS. What only a packaged build on a real desktop can show is checked by hand —
 `npm run dist:mac` (or `npm run dist:win`), install, then:
+
+Every `dist:*` script starts with `clean`, which empties `release/`: running `dist:win` after
+`dist:mac` deletes the `.dmg`. To get both, run `npm run dist:all` — one build, one
+`electron-builder --mac --win` pass. It needs a macOS host, since a `.dmg` cannot be built
+elsewhere.
 
 | # | Do | Expect |
 |---|----|--------|

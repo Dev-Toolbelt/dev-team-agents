@@ -71,12 +71,11 @@ mac:
   icon: build/icon.icns
   category: public.app-category.developer-tools
   # MEASURED, not guessed: `node_modules/electron/dist/Electron.app` declares
-  # LSMinimumSystemVersion 12.0, so Electron 39 does not run on Big Sur. The cask in
-  # packaging/ says `depends_on macos: ">= :big_sur"` and its own comment asks for this to
-  # be confirmed against the build — it is wrong and must become `">= :monterey"`, or the
-  # cask will install on a system the app cannot launch on. Re-measure on every Electron
-  # major; the floor moves with it.
-  minimumSystemVersion: '12.0'
+  # LSMinimumSystemVersion 13.0, so Electron 44 does not run on Monterey. The cask in
+  # packaging/ mirrors it as `depends_on macos: ">= :ventura"`; a lower cask floor would
+  # install on a system the app cannot launch on. Re-measure on every Electron major; the
+  # floor moves with it.
+  minimumSystemVersion: '13.0'
   # One universal artifact, because the cask has one URL and ADR-0011's amendment describes
   # "a signed, notarised universal .dmg". Two per-arch dmgs would need two cask URLs and a
   # per-arch sha256, which the cask is not shaped for.

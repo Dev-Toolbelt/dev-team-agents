@@ -28,7 +28,8 @@ export interface TaskBoardIpcDeps {
   readonly refresh: () => Promise<BoardFeed>;
   /** The resume command the CLI sent for a session, or `null` when there is none. */
   readonly resumeCommand: (projectId: string, sessionId: string) => string | null;
-  readonly copyText: (text: string) => void;
+  /** Resolves once the system clipboard holds `text`; rejects when the write failed. */
+  readonly copyText: (text: string) => Promise<void>;
   readonly boardSettings: () => Promise<BoardSettings>;
   /** Persist, then apply (the stream restarts when the stale threshold changed). */
   readonly saveBoardSettings: (settings: BoardSettings) => Promise<BoardSettings>;
@@ -56,14 +57,18 @@ export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
   handle(CHANNELS.taskBoard, () => deps.feed());
   handle(CHANNELS.refreshTaskBoard, () => deps.refresh());
 
-  handle(CHANNELS.copyResumeCommand, (_event, raw: unknown): CopyResumeAnswer => {
+  handle(CHANNELS.copyResumeCommand, async (_event, raw: unknown): Promise<CopyResumeAnswer> => {
     const request = parseCopyRequest(raw);
     if (typeof request === 'string') return { copied: false, message: `Nothing was copied: ${request}.` };
     const command = deps.resumeCommand(request.projectId, request.sessionId);
     if (command === null) {
       return { copied: false, message: 'This session has no resume command the app could verify, so nothing was copied.' };
     }
-    deps.copyText(command);
+    try {
+      await deps.copyText(command);
+    } catch {
+      return { copied: false, message: 'The system clipboard refused the write, so nothing was copied.' };
+    }
     return { copied: true, command };
   });
 

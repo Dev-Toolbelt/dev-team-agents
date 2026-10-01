@@ -36,7 +36,8 @@
 # plus `build`, run after lint and asserted to emit the main, preload and renderer entries.
 #
 # CI calls exactly those three and nothing else. The scripts that open a window
-# (`start`, `dev:app`, `dev:renderer`) or produce an installer (`dist:mac`, `dist:win`) are
+# (`start`, `dev:app`, `dev:renderer`) or produce an installer (`dist:mac`, `dist:win`,
+# `dist:all`) are
 # never invoked here: a gate that needs a display cannot run on a headless
 # runner, and one that builds an unsigned artifact is shipping, not checking.
 #
@@ -114,7 +115,7 @@ preflight() {
   [ -f "$LOCK" ] \
     || cannot_run "no ${LOCK} — \`npm ci\` needs a committed lockfile, and a gate that resolves fresh versions on every run is not a gate."
   [ -f "$NVMRC" ] \
-    || cannot_run "no ${NVMRC} — the node version must be pinned in one file that both actions/setup-node (node-version-file:) and \`nvm use\` read. Write a literal version there, e.g. 20.19.0."
+    || cannot_run "no ${NVMRC} — the node version must be pinned in one file that both actions/setup-node (node-version-file:) and \`nvm use\` read. Write a literal version there, e.g. 24.21.0."
   echo "  ${APP_DIR}/ present; ${LOCK##*/} and ${NVMRC##*/} in place"
 }
 
@@ -257,10 +258,10 @@ check_script_contract() {
 # the lockfile, so it would verify a dependency tree that no commit describes.
 # --no-audit/--no-fund only quieten output; neither changes what is installed.
 #
-# --ignore-scripts is the one flag here that changes what runs. Four of the 641
-# locked packages declare install scripts (electron, electron-winstaller, esbuild,
-# fsevents) and `npm ci` executes them — on a runner a fork PR can reach by editing
-# package.json or the lockfile. Measured before adding it: with the scripts skipped
+# --ignore-scripts is the one flag here that changes what runs. Three locked
+# packages declare install scripts (electron-winstaller, esbuild, fsevents), and
+# `npm ci` executes the ones `allowScripts` in package.json approves — a list a fork
+# PR can edit along with the lockfile, on a runner it can reach. Measured before adding it: with the scripts skipped
 # and no Electron binary downloaded at all, `typecheck` and `lint` are clean and
 # every test that does not depend on the repository layout passes. This gate never
 # launches Electron, so the binary those scripts fetch is not needed.
@@ -271,9 +272,8 @@ check_script_contract() {
 # to drop the flag rather than to stub the runtime.
 #
 # ONE LOCAL COST, because `npm ci` reinstalls the tree: running this gate on a
-# developer's machine removes the Electron binary, so a later `npm start` fails with
-# "Electron failed to install correctly". Harmless in CI, where the runner is thrown
-# away. Restore it with:
+# developer's machine removes the Electron binary. Electron 40+ downloads it again
+# on the next `npm start`; to fetch it ahead of time:
 #     node app/node_modules/electron/install.js
 npm_ci() {
   app_npm npm ci --no-audit --no-fund --ignore-scripts
