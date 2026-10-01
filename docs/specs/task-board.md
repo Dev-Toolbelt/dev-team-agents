@@ -370,27 +370,67 @@ findings.
 | `tasks.review_findings` | A review window records `findings > 0` (dedupe per window; a `Stop` that closes several windows raises one per window with findings) |
 | `tasks.session_abandoned` | `SessionEnd` fires while the session still has open tasks (Claude Code and Codex; opencode has no session-end event) |
 
+#### PR/MR Created — the fifth column
+
+An optional `pr_created` column appears between In Review and Done when a PR or MR is recorded for
+the session. Only **confirmed** creations reach the board: when `gh pr create` / `glab mr create` /
+MCP `create_pull_request` succeeds, their output carries the URL or number. A PR/MR mark stores
+(kind, number, url, head branch, host, state). Tasks enter this column when their membership is
+fixed at the next `Stop`: every task completed since the previous PR mark's `fixed_at` timestamp
+(or since the session's creation/resume when no prior mark exists), up to that Stop. Tasks leave
+when a merge of that PR/MR is observed (`gh pr merge` / `glab mr merge` / `/devteam:merge` / MCP
+`merge_pull_request` success) or cancelled (repo check fails, mark removed). Merge is joined across
+sessions on read: a mark is merged when its (repo + number) matches a recorded merge or its head
+branch matches a merge's branch at >= the mark's creation time. Notifications `tasks.pr_created`
+raised by the hook.
+
+Implementation details:
+
+- Hook cwd is trusted only when it resolves (realpath) inside the record's project root or inside a linked worktree listed by `git worktree list` run against the project root; the check runs before any git command in that cwd, and git (rev-parse, remote -v) otherwise runs against the project root
+- Project `link_hosts` entries are `{host, kinds[]}`, plus for Jira a `base_path` field (`""` at root, `""` e.g. `/jira` for Server, validated `^(/[A-Za-z0-9._~-]+)*$`); GitHub Enterprise hosts are listed only when connected (no integration → omitted); GitLab hosts are gitlab.com plus any remote host existing at read time; marks never add hosts
+- Claude `PostToolUseFailure` (matcher `Agent|Task|Bash|mcp__.*create_pull_request`) carries gh's non-zero "already exists" form; failure events can only CREATE a PR/MR mark, never record a merge
+- Field read order for tool output: first present of `tool_response`, `tool_output`, `output`, `error` (Claude failure payload is not verified live)
+- A first prompt carrying a valid ref creates a task-less session record; tasks created afterwards inherit the ref; a record with no tasks never makes a project appear on the board
+- opencode `tool.execute.after` behavior for bash non-zero exit is not verified live
+
+#### Issue refs
+
+Issue references (Jira, GitHub) are captured from the user prompt, branch name, and task text,
+stored as parsed parts (system, key, url), and rebuilt+revalidated on every read against current
+integration config (Jira site + project binding, GitHub account + repository binding). A ref without
+a configured integration is omitted from the view (kept in the record). Refs appear as badges on task
+cards and link to the tracker in the desktop app (ADR-0025).
+
+Implementation details:
+
+- Branch name inference: a Jira key of the bound project in the session branch name is recognized when word-bounded by branch separators (/, -, _)
+- Command detection handles redirections (`2>&1`), line continuations, and prefixes `time`, `command`, `env VAR=…`, `(/{`, `if/then/do/!` — it is a false-positive filter, not a security control (ADR-0025)
+
 #### Desktop app
 
 - **Board (overview):** only projects with ≥ 1 task. Card: display name, provider icons (the set used
   by its sessions), sessions `total (N active)`, counts and percentages for To do / In progress /
-  In Review / Done, a stacked progress bar, and badges for stale and abandoned tasks and for tasks
-  with findings. Period filter
+  In Review / PR/MR Created / Done, a stacked progress bar, and badges for stale and abandoned tasks,
+  tasks with findings, and sessions with PR/MR Created tasks. Period filter
   (today / 7 days / 30 days / all).
-- **Project kanban:** four columns — To do, In progress, **In Review**, Done — with In Review empty
-  when no task is in review. The columns sit side by side in one row that never stacks: they share
-  the width when it fits and the row scrolls horizontally when it does not (mouse, trackpad, or the
-  arrow keys — the row is a tab stop only while it overflows). A column is at most as tall as the
-  visible part of the page, measured, so its heading stays on screen and its cards scroll inside it
-  (a column's card list is a tab stop too while it overflows); columns are as tall as their cards up
-  to that cap.
-  Tasks in review carry a badge: **N findings**, **result not read**
-  (`unread`), **pending** (the review has not answered yet) or a neutral **In review** for a state
-  this app version does not know. A "with findings" filter
-  shows only tasks in review that have findings. Card: task text, session chip (provider icon + branch), time in
-  current column; on hover/focus, time per step. Filters: session, period, show/hide done older than
-  the retention setting. Sessions as compact chips on one wrapping line: provider, session title (when the provider has one; cut by width) or else branch, and status; the branch beside a title and the per-session counts are in the chip's tooltip and accessible text; the session filter names a session by its title (40 characters), or by its short id when it has none. The Done
-  column carries a faint success tint. Leaving the Board tab returns it to the overview.
+- **Project kanban:** five columns — To do, In progress, **In Review**, **PR/MR Created**, Done — with
+  In Review and PR/MR Created empty when no task enters them. The columns sit side by side in one
+  row that never stacks: they share the width when it fits and the row scrolls horizontally when it
+  does not (mouse, trackpad, or the arrow keys — the row is a tab stop only while it overflows). A
+  column is at most as tall as the visible part of the page, measured, so its heading stays on screen
+  and its cards scroll inside it (a column's card list is a tab stop too while it overflows); columns
+  are as tall as their cards up to that cap.
+  Card badges: task text, session chip (provider icon + branch), time in current column; PR/MR badges
+  (`#N` for GitHub PR, `!N` for GitLab MR, clickable to open in browser); issue badges (Jira `PROJ-12`,
+  GitHub `owner/repo#45`, clickable); review status badges (**N findings**, **result not read**,
+  **pending**, or neutral **In review**). Filters: session, period, show/hide done older than
+  the retention setting, show/hide tasks without findings in review. On hover/focus: time per step,
+  link destination (host + path). Sessions as compact chips on one wrapping line: provider, PR/MR
+  badge if the session has PR marks, session title (when the provider has one; cut by width) or else
+  branch, and status; the branch beside a title and the per-session counts are in the chip's tooltip
+  and accessible text; the session filter names a session by its title (40 characters), or by its
+  short id when it has none. The Done column carries a faint success tint. Leaving the Board tab
+  returns it to the overview.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
   (days, default 7). Not preferences.json keys.
 - Resume commands (in the CLI's `tasks` output; the desktop app no longer shows or copies them): `cd <dir> && claude --resume <id>`, `cd <dir> && codex resume <id>`,
@@ -436,6 +476,23 @@ findings.
 17. **Given** a turn that only reads (`ls`, `git status`, `Read`), or a subagent's edit, **Then** no
     direct card is created and no python is forked.
 18. **Given** a prompt containing `API_KEY=abc123`, **Then** the stored excerpt reads `API_KEY=[redacted]`.
+19. **Given** `gh pr create` succeeds with URL `https://github.com/owner/repo/pull/123`, **Then** a
+    `pr_created` column appears and a PR badge `#123` appears on tasks completed after the PR was created
+    and before the next `Stop`.
+20. **Given** a session with a PR mark whose head branch matches a branch in a later `git merge`,
+    **Then** the tasks in the `pr_created` column move to Done.
+21. **Given** a session with a PR mark whose repo check fails (remote removed), **Then** the mark is
+    omitted from the board on read (kept in the record).
+22. **Given** a connected GitHub account and a bound repository, **When** the user adds `fixes #42` in
+    a prompt, **Then** an issue badge `owner/repo#42` appears on the session's tasks, clickable to
+    open the issue in the browser on the configured GitHub host.
+23. **Given** a Jira project binding without a connected account, **Then** no Jira badges appear on
+    the board even if a task text names a key.
+24. **Given** a task with an issue badge in the kanban, **When** the badge is clicked, **Then** the
+    browser opens to that issue on the configured tracker host; if the link is invalid (no longer
+    exists, config removed), the click is refused silently (logged).
+25. **Given** the project kanban, **Then** five columns appear in order — To do, In progress, In Review,
+    PR/MR Created, Done — side by side in one row; PR/MR Created is empty when no task enters it.
 
 ### Out of Scope
 - Editing, moving or deleting tasks from the board (read-only).
@@ -482,3 +539,6 @@ findings.
 | 2026-10-01 | The per-session header rows in the kanban become one wrapping line of compact chips; per-session counts move to the chip's tooltip and screen-reader text | Projects routinely have several sessions, and a full-width row each pushed the columns below the fold |
 | 2026-10-01 | Direct work: the main session's own edits and write-shaped shell commands, with no plan step in progress and no agent spawned in the turn, land on one `kind: "direct"` card per session with a redacted prompt excerpt per turn (§ Direct work); acceptance criterion 9 widened, 16-18 added | User request: everything done in a session should reach the board, including work that never produces a plan |
 | 2026-10-01 | Direct work review fixes: (1) the direct card is left out of the `tasks.session_done` decision both ways, so a plan or agent finished in a turn with direct work still notifies; (2) the bash gate is a superset of `tasks.writes()` that lets `2>&1`, `2>/dev/null`, `sed -n` and `git log --grep=reset` fork nothing; (3) `writes()` tokenizes the whole command before splitting, so `bash -lc 'mv a b && echo ok'` is a write and quoted `>`/`=>` are not; (4) the prompt file holds only the first line (≤ 512 bytes), owner-only, deleted at `Stop` and `SessionEnd`; (5) redaction covers Bearer, URL passwords, Stripe/Google keys, quoted JSON values, env-style names and `password is`, and leaves paths, prose `key:` and commit ids alone; invisible characters are dropped; (6) the subagent test reads the payload's own `agent_id`/`parent_id` key; (7) without a prompt file one turn is one entry; edges and privacy documented | Findings of the review of Direct work |
+| 2026-10-01 | Fifth column: `pr_created`, optional, between In Review and Done; task membership fixed at `Stop` for tasks completed since the previous PR's `fixed_at`; merge observed on `gh pr merge`/`glab mr merge`/`/devteam:merge`/MCP `merge_pull_request` success and joined across sessions on read by (repo+number) or (branch match); notifications `tasks.pr_created` raised by hook; both CLI and app store PR/MR as parts not URLs (kind, number, url, head, host, state), rebuilt and revalidated on read against git remotes and integration config | User request: see what work has reached a PR/MR and what is waiting in flight |
+| 2026-10-01 | Issue refs: Jira and GitHub issues captured from prompt (strict patterns per integration, no config → no ref), branch name (branch name inference: a Jira key of the bound project in the session branch name is recognized, word-bounded by separators), and task text (agent-written task descriptions); stored as parts (system, key, url), rebuilt and revalidated on read against current bindings; refs without config validation are omitted from view (kept in record); appear as clickable badges on task cards linked through the main process IPC with allow-list and path validation (ADR-0025); cwd validation: hook cwd trusted only when inside project root, else git used against project root; link_hosts: Jira entries carry base_path (validated regex), GitHub Enterprise listed only when connected; merge records structure: {kind, number\|null, repo\|null, host, branch\|null, at}; Claude PostToolUseFailure (matchers: Agent/Task create_pull_request) carries gh "already exists" form and can only CREATE PR/MR marks, not merge records; field read: first present of tool_response, tool_output, output, error (not verified live); task-less first-prompt refs create sessions without tasks; opencode bash non-zero exit behavior not verified live; command detection: handles redirections, continuations, prefixes (time, command, env VAR=…, (/{, if/then/do/!) — false-positive filter, not a security control (ADR-0025) | User request: link work directly to the tracker issues it addresses |
+| 2026-10-01 | App: new PR/MR badges `#N` (PR) / `!N` (MR) on cards, clickable IPC to main with host/path validation; issue badges `PROJ-12` / `owner/repo#45`, clickable IPC; "with findings" filter added; session chip shows PR/MR badge if session has marks; board overview shows `pr_created` in counts and stacked bar; five-column kanban with horizontal scroll; security validation per ADR-0025 (no renderer URLs, main-process allow-list, IDN/canonical round-trip, path shapes) | Completes the flow from tool output through CLI to the board and app |

@@ -121,7 +121,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 | Provider | Hook point | Tool | Replace or incremental | Ownership |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | `PostToolUse` (matcher: `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
+| **Claude Code** | `PostToolUse` (matcher: `TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
 | **Claude Code** | `PostToolUse` (same matcher) | `TodoWrite` (legacy, disabled by default) | Replace — full list each call | Matched by normalized content |
 | **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | `SessionEnd` (`codex-rs/hooks/src/events/session_end.rs`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`) | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
@@ -151,6 +151,25 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 The built-in list is `review_triggers.BUILTIN_AGENTS`; a spawn with no agent type is the provider's default agent and is no task either. Codex needs `PostToolUse` on `spawn_agent` (a widened matcher, `.*(wait_agent|spawn_agent|close_agent)`), because its `PreToolUse` fires before the agent id exists. At every `Stop`, a foreground agent task still `in_progress` (no background hand-back owed; on Codex, no agent id awaiting a `wait_agent`) is settled `cancelled` with `interrupted: true`: a turn that ended cannot have it still running. `session_done` is never raised for a session holding a `failed` or `interrupted` task, and an agent's end raises it only at `Stop`, not mid-turn.
 
 Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, so its result is read from the transcript hand-back at a later `Stop` (the window shows *pending* until then); Codex `spawn_agent`'s `PostToolUse` carries an agent id, not a report, and is ignored; a Codex `wait_agent` without a marker is ignored because it does not say which agent it waited on — the launch it should have retired is settled as *unread* at the turn's `Stop`, as is any foreground launch whose result never arrived. A window with no activity for 6 hours is settled as unread.
+
+**PR/MR Created and merge capture per provider** (spec `docs/specs/task-board.md` § PR/MR Created; issue refs):
+
+| Signal | Claude Code | Codex | opencode |
+| --- | --- | --- | --- |
+| PR creation `gh pr create` / `glab mr create` | `PostToolUse` on `Bash`, command contains `gh pr create\|glab mr create` | `PostToolUse` on `Bash` (output from `exec_command`/`write_stdin` post-tool-use, openai/codex @ `92bc601` `codex-rs/core/src/tools/handlers/unified_exec.rs`, `codex-rs/core/src/tools/context.rs`) | `tool.execute.after` on `bash` |
+| PR/MR link from MCP `create_pull_request` | `PostToolUse` on tool whose name ends in `create_pull_request` | `PostToolUse` on tool ending in `create_pull_request` | `tool.execute.after` on tool ending in `create_pull_request` |
+| Merge `gh pr merge` / `glab mr merge` | `PostToolUse` on `Bash`, output contains success marker | `PostToolUse` on `Bash`, output contains success marker | `tool.execute.after` on `bash` |
+| Merge `/devteam:merge` (`git merge <ref>`) | `PostToolUse` on `Bash`, command contains `git merge`, success = no `CONFLICT`/`fatal`/`error:` in output | `PostToolUse` on `Bash` | `tool.execute.after` on `bash` |
+| Issue refs in prompt | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message` → `{session_id, prompt}` |
+| Branch name refs | Hook call's `branch` (git `rev-parse --abbrev-ref HEAD`) | Hook call's `branch` | Hook call's `branch` |
+
+Claude Code: `PostToolUseFailure` on matchers `Agent|Task|Bash|mcp__.*create_pull_request` carries gh's non-zero "already exists" form and can only CREATE a PR/MR mark (failure events never record merges); field read order is the first present of `tool_response`, `tool_output`, `output`, `error` (the Claude failure payload is not verified live).
+
+Codex confirmed: `exec_command` and `write_stdin` completion fire `PostToolUse` with `tool_name: "Bash"`, `tool_input: {command: …}`, `tool_use_id`, and `tool_response` = a JSON string of the output (only when the process finishes, so success/failure is inferred from the output). MCP tools emit `PostToolUse` with `tool_name: "mcp__<server>__<tool>"` and structured `tool_response` (content[], structuredContent, isError). Codex is **in scope**; no provider is excluded. Matchers for PR/MR creation widen to catch `Bash` and MCP tools ending in `create_pull_request|merge_pull_request`.
+
+opencode notes (unverified): `tool.execute.after` behavior for bash non-zero exit is not verified live.
+
+Issue refs are captured from the user prompt (Jira: project-key-N pattern; GitHub: owner/repo#N or closing keywords), the session branch name (when it matches a Jira key or GitHub issue pattern, word-bounded by separators), and task text (agent-written). Refs are stored only when a binding is configured (Jira requires site_url + project_key; GitHub requires api_url + repository); refs with no binding are neither stored nor displayed.
 
 **Session title in task-board notifications.** `tasks.session_done`, `tasks.review_findings` and `tasks.session_abandoned` name a session by the title its provider shows, cut to 15 characters (`tasks.title_short`), and fall back to the first 8 characters of its id when there is none. Each provider keeps the title elsewhere, and `tasks.session_title` reads it: Claude Code, the **last** `{"type":"custom-title","customTitle":…}` line in the tail (1 MB) of the hook payload's `transcript_path` (re-appended on every write; a rename appends the new value); Codex, the last `thread_name` for the session id in `${CODEX_HOME:-~/.codex}/session_index.jsonl` (the rollout transcript does not carry it); opencode, a `session_title` field the plugin adds to its `tool.execute.before`/`after` and `session.idle` payloads from `client.session.get`, cached per session and refreshed by `session.updated`. The title is stored on the session record when first seen and refreshed at every Stop and SessionEnd.
 

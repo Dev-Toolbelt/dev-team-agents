@@ -232,18 +232,25 @@ latest snapshot per project, and pushes it to the window, so the board is curren
 closed and reopened. It is read-only: nothing here edits, moves or deletes a task.
 
 - **Overview.** One card per project that has at least one task: its name, the providers its
-  sessions used, `N sessions (M active)`, To do / In progress / Done with counts and percentages,
-  a stacked bar, and stale / abandoned badges. A period filter (today, 7 days, 30 days, all)
+  sessions used, `N sessions (M active)`, To do / In progress / In Review / PR/MR Created / Done with counts and
+  percentages, a stacked bar, and stale / abandoned badges. A period filter (today, 7 days, 30 days, all)
   narrows it by each session's last activity.
-- **Kanban.** Click a card for four columns — To do, In progress, **In Review** and Done — side by side
-  in one row that scrolls horizontally when the window is too narrow for them, never stacking; each
-  column scrolls its own cards under a heading that stays in view. Each task shows its session
-  (provider and branch) and the time it has spent in its column,
+- **Kanban.** Click a card for five columns — To do, In progress, **In Review**, **PR/MR Created**, and Done —
+  side by side in one row that scrolls horizontally when the window is too narrow for them, never stacking; each
+  column scrolls its own cards under a heading that stays in view. The **PR/MR Created** column appears only
+  when a PR or MR has been created in that project; it shows tasks that have reached a pull request.
+  Each task shows its session (provider and branch) and the time it has spent in its column,
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
-  Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. A worktree mark appears only on a task started in a linked worktree; its tooltip (hover or keyboard focus) names the worktree path and branch. Filter by
-  session or period, hide done tasks older than the retention, and show/hide tasks with findings.
-  Sessions are compact chips — provider, title or branch, status icon — with the counts in the chip's tooltip. The Done
-  column is tinted green. **← Board** returns to the overview, and so does leaving the tab.
+  Task badges include PR/MR badges (`#N` for GitHub PR, `!N` for GitLab MR, clickable to open in the browser),
+  issue badges (Jira `PROJ-12`, GitHub `owner/repo#45`, clickable), origin badges (plan step, **Agent** for
+  spawned agent, or built-in tool list), and review state badges (findings count, **result not read**, **pending**,
+  or neutral **In Review**). A **Failed** badge marks a spawned agent run that failed. A worktree mark appears
+  only on a task started in a linked worktree; its tooltip (hover or keyboard focus) names the worktree path and branch.
+  PR/MR and issue links open in your system browser on the configured tracker host (GitHub, GitLab, or Jira),
+  protected by security validation. Filter by session or period, hide done tasks older than the retention, and
+  show/hide tasks with findings. Sessions are compact chips — provider, optional PR/MR badge, title or branch,
+  status icon — with the counts in the chip's tooltip. The Done column is tinted green. **← Board** returns to
+  the overview, and so does leaving the tab.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.

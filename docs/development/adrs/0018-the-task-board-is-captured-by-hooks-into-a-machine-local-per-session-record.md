@@ -156,6 +156,28 @@ sessions simply lack the card.
 | A card on every prompt | Questions would fill the board, and python would fork on every prompt |
 | Diff the working tree at `Stop` | Misses commits, pushes and anything that leaves the tree clean |
 
+## Amendment — 2026-10-01: PR/MR Created column and issue refs
+
+**Decision.** A new `pr_created` column appears between In Review and Done, optional and derived on read. A PR/MR mark is recorded only when its URL or number appears in `gh pr create` / `glab mr create` / MCP `create_pull_request` output — confirmed, not inferred — along with its head branch for later merge matching. Tasks entered this column when its membership is fixed at the next Stop: every completed task completed since the previous PR's `fixed_at` timestamp. A merge is observed when `gh pr merge` / `glab mr merge` / `/devteam:merge` / MCP `merge_pull_request` succeeds, recorded per session, and joined across sessions on read: a PR mark is merged when its (repo + number) matches or its head branch matches a merge's branch (at >= the mark's timestamp). Issue references are captured from the user prompt, branch name, and task text with strict rules per integration (Jira requires site + project binding; GitHub requires account + repository binding; no integration → no ref badge). Refs are stored as parsed parts, rebuilt and revalidated on every read against current remotes and config.
+
+**Why confirmed-only.** A PR/MR is created by the provider's CLI or an MCP tool; the URL/number reaches the hook only in the tool's response. Inferring from the prompt would fire on `"I'll make a PR"` and stay silent on success — backward. A URL string taken from tool output or prompt is parsed into parts (kind, host, path segments, number/key), never stored raw, and rebuilt+revalidated on read against current remotes and integration config (see § SECURITY AMENDMENTS below).
+
+**Why merge is joined on read by branch, not written cross-session.** Per-session locks remain untouched. A merge can happen in a different session than the PR's, and the Bash hook-side code cannot cross sessions (no store access). Branch matching (mark.head == merge.branch) lets the CLI join them on read, with no second write. If a merge is never observed (PR closed without merge, branch force-pushed), the task stays in `pr_created`.
+
+**Why strict refs.** Integration config is an explicit user choice (connected account + project binding). Refs without config are omitted from the view (kept in the record). A GitHub ref without a connected account or binding does not validate; a Jira ref whose project key does not match the binding does not validate. This guards against a misconfigured state producing noise and against refs from a copy-pasted unrelated text.
+
+**Implementation notes.** Detailed runtime behavior including cwd trust validation (hook cwd trusted only when inside the project root or one of its listed linked worktrees, checked before any git runs there), failure-events-create-only semantics (Claude PostToolUseFailure can only CREATE a PR/MR mark, never record a merge), task-less first-prompt records (a first prompt carrying a valid ref creates a record with no tasks; later tasks inherit the ref; records with no tasks do not appear on the board), and Jira base_path validation (path field in link_hosts, validated `^(/[A-Za-z0-9._~-]+)*$`) are documented in the spec at `docs/specs/task-board.md`.
+
+**Consequences.** Hook matchers widen to catch `gh pr merge`, `glab mr merge`, `git merge` (via Bash PostToolUse), and MCP `merge_pull_request`. The CLI reads refs from the UserPromptSubmit hook (Claude, Codex), the session branch name (all), and task text (all). Tasks stored as parts not URLs survive config changes, and the app validates link hosts and path shapes before opening them. `tasks.pr_created` notification code registers with other notification types.
+
+| Alternative | Why rejected |
+|---|---|
+| Trigger on prompt intent ("I'll make a PR") | Tool-independent URIs are the ground truth; intent parsing is error-prone (false positives on "should we make a PR?") and silent when the intent doesn't match the outcome |
+| PreToolUse intent detection for refs | Refs are user- and agent-written, not yet known at PreToolUse time |
+| Cross-session writes from the merge hook | Every session gets its own lock; a hook cannot write another session's record atomically |
+| Loose refs without integration config | An unbound GitHub issue is still a URL; binding makes it canonical and auditable |
+| Store URLs, validate on read | Removes the ability to detect a stale reference (e.g. a remote was removed) until the view is built |
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
@@ -164,3 +186,22 @@ sessions simply lack the card.
 | Parse plan and sprint documents | Only persisted plans are visible, at sprint granularity, with no in-progress signal |
 | One append-only event log for all sessions | Every reader replays the whole log, and one lock is shared by every concurrent session |
 | Snapshot only, no history | Cannot answer how long a task spent in each step, which is a stated requirement |
+
+## SECURITY AMENDMENTS (mandatory, override earlier sections where they differ)
+
+**Refs and PR/MR handling security review approved 2026-10-01 with mandatory changes. Full enforcement per the app ADR listed below.**
+
+1. **Store parts, not URLs.** Parse every URL/number from tool output and prompts into validated parts (kind, host, path segments, number/key), store those, rebuild the URL on every read, and re-validate on every read.
+2. **Allow-list by kind.** The CLI computes `link_hosts` dynamically from configured integrations (GitHub web host, Jira site host, hosts of git remotes that carry a PR/MR URL). A mark never adds a host — it is a consistency check inside the CLI trust boundary, not a second trust anchor.
+3. **Canonical round-trip in the app.** Refuse a URL unless it parses, protocol is `https:`, hostname matches the canonical form (lowercase, no username/password, default port only), hostname matches a configured kind in `link_hosts`, and path matches the exact shape for that kind.
+4. **Path validation.** GitHub PR/issue: `^/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100})/(pull|issues)/([1-9][0-9]{0,9})$`. GitLab MR: `^/((?:[A-Za-z0-9_.-]{1,255}/){1,20}[A-Za-z0-9_.-]{1,255})/-/merge_requests/([1-9][0-9]{0,9})$`. Jira: `^<escaped site path>/browse/([A-Z][A-Z0-9_]{1,9})-([1-9][0-9]{0,9})$`. No percent-encoding allowed.
+5. **Extraction.** CLI accepts a URL only when it appears whole on a line (gh/glab tools) or as `html_url`/`number` in JSON (MCP tools), validated before storing. MCP tools must parse structured responses only; free-text regex never.
+6. **Repo check.** Normalize hosts (lowercase) and paths, strip `.git`, compare case-insensitively. Reject if the mark's host/owner/repo does not match one of the project's `git remote -v` entries (verified inside CLI trust boundary).
+7. **Command-token filter.** The substring check `gh pr create`, `glab mr create`, etc. is a false-positive filter, NOT a security control — explicitly documented. Additionally refuse segments with env assignments for PATH, GH_HOST, GH_REPO, GITLAB_HOST, GLAB_*, or a function/alias redefining gh/glab.
+8. **Ref regexes.** Jira: word-boundary + project-key regex. GitHub: owner/repo#N and closing-keyword patterns. Validate key/repo formats (Jira: `^[A-Z][A-Z0-9_]{1,9}$`; GitHub owner: `[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})`; repo: `[A-Za-z0-9._-]{1,100}`).
+9. **IPC in app.** Renderer sends only ids; main looks them up in its snapshot, validates paths/hosts, caps 20 prs[], 50 refs[], 50 merges[] per session, rate limits 1 open/750ms + 10/min.
+10. **Testing mandate.** Unit-test the validator for IDN/punycode, trailing dot, uppercase host, percent-encoding, userinfo, port, fragment, shape mismatches, number divergence, cross-host mark reuse.
+
+**Reference implementation:** ADR-0025: The desktop app opens allow-listed tracker links from the main process.
+
+## Alternatives Considered

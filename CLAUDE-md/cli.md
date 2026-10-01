@@ -253,7 +253,8 @@ Nothing deletes a record or a task: a task a replace-style call omits gets `remo
 - `list` and `watch` are read-only. `watch` is JSON Lines like `notifications watch` (same stdin-EOF /
   SIGTERM / 30 s heartbeat lifecycle); because "stale" moves with the clock, it recomputes every
   project every 30 s and emits a `snapshot` only when the view differs from the last one sent.
-- **In Review** is an optional fourth column inferred from *review windows* stored in the record
+- **PR/MR Created** is an optional fifth column. The `mark` subcommand raises `pr_marks` (one per PR/MR/merge), and `tasks.py` owns the membership lifecycle: tasks completed since the previous PR's `fixed_at` are collected at `Stop` and fixed to this column. The derived `column: "pr_created"`, task `pr` (containing parts: `kind`, `number`, `url`, `head`, `host`, `state`), `refs` (parts: `system`, `key`, `url`), `counts.pr_created`, `durations.pr_created`, session `prs`, and project `link_hosts` — all additive to the `--json` contract. `session_done` waits for work in flight to reach Done.
+- **In Review** (fourth column) is inferred from *review windows* stored in the record
   (`reviews`, absent on older files). `review_triggers.py` decides what opens a window and reads the
   marker; `tasks.py` owns the window lifecycle (open/join, result, Stop scan, fix rule, re-review rule,
   reopen) and the derived `column: "in_review"`, task `review`, `counts.in_review`, project
