@@ -69,7 +69,9 @@ not retried.
 ### Suppression
 
 `suppress_notifications`: `false` (all), `true` (none), or a list of levels (`["info"]`), applied by
-`notify.sh` before anything is queued. The app's **Pause** silences banners for its session only;
+`notify.sh` before anything is queued. `update.available` is the exception: it ignores the level list
+and only `true` silences it, since with `auto_update` off it is the one way a user learns a fix shipped.
+The app's **Pause** silences banners for its session only;
 paused notices still land in the bell.
 
 ### Context Window Estimation
@@ -103,7 +105,8 @@ the turn threshold is reached.
 ### Tip of the Day
 
 One `info` per day, index `(day_of_month - 1) % 15`, from `scripts/hooks/stop/tips/tips.<lang>.txt`
-(one tip per line, 15 lines; `en`, `pt-BR`, `es`; others fall back to English). After the first Stop
+(one tip per line, 15 lines; `en`, `pt-BR`, `es`; others fall back to English), prefixed with the
+localized label `Tip: ` / `Dica: ` / `Consejo: `. After the first Stop
 of the day this is a single `grep` for the day's dedupe key — the tip file is not opened.
 
 ### Stop Sub-script Convention
