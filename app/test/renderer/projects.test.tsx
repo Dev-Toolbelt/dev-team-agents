@@ -10,10 +10,12 @@
 import './setup.js';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderScreen, screen, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { Toaster } from '../../src/components/ui/sonner.js';
 import { Projects } from '../../src/renderer/screens/Projects.js';
 import type { DevteamBridge, DirectoryChoice, OperationResult, ProjectFolders, ProjectFoldersAnswer, UpgradePlan } from '../../src/shared/api.js';
 import {
@@ -36,6 +38,16 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+/** Write results are toasts (see `toasts.tsx`): mount the host the app mounts, so they can be read. */
+function render(ui: ReactElement) {
+  return renderScreen(
+    <>
+      {ui}
+      <Toaster />
+    </>,
+  );
+}
 
 describe('Projects — path_exists is rendered faithfully', () => {
   it('shows a missing badge only for false, never for true or null', async () => {
@@ -216,14 +228,14 @@ describe('Projects — a successful write surfaces its notice, and only when the
     await user.click(screen.getByRole('button', { name: /^sync all$/i }));
 
     expect(await screen.findByText(/added to no ignore file/i)).toBeInTheDocument();
-    expect(screen.getByText(/the command succeeded and reported this/i)).toBeInTheDocument();
+    expect(screen.getByText(/the command reported this/i)).toBeInTheDocument();
   });
 
   it('shows no notice banner when the command reported none', async () => {
     installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));
     render(<Projects environment={environment()} />);
     await screen.findByText('project-1');
-    expect(screen.queryByText(/the command succeeded and reported this/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the command reported this/i)).not.toBeInTheDocument();
   });
 });
 
@@ -401,6 +413,59 @@ describe('Projects — bind defaults to the recommended mode, but lets it be cha
     await user.click(within(dialog).getByRole('button', { name: /^bind$/i }));
 
     expect(bindProject).toHaveBeenCalledWith(expect.objectContaining({ mode: 'copy' }));
+  });
+});
+
+describe('Projects — sync results are toasts', () => {
+  const listOne = () => vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] })));
+
+  it('reports a Sync all that left projects unsynced as a failure, kept until closed', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        listProjects: listOne(),
+        syncAllProjects: vi.fn(() => Promise.resolve(ok({ synced: [bindReport()], problems: [{ path: '/repo/x' }] }))),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^sync all$/i }));
+
+    const title = await screen.findByText('Synced 1 project. 1 could not be synced.');
+    const toast = title.closest('[data-sonner-toast]')!;
+    expect(toast).toHaveAttribute('data-type', 'error');
+    expect(within(toast as HTMLElement).getByRole('button', { name: /close/i })).toBeInTheDocument();
+  });
+
+  it('replaces a row’s earlier failure when the sync is retried, instead of stacking a second', async () => {
+    const user = userEvent.setup();
+    installBridge(fakeBridge({ listProjects: listOne(), syncProject: vi.fn(() => Promise.resolve(fail('the store is locked'))) }));
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^sync$/i }));
+    await screen.findByText(/the store is locked/);
+    await user.click(screen.getByRole('button', { name: /^sync$/i }));
+    await vi.waitFor(() => expect(window.devteam.syncProject).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText(/the store is locked/)).toHaveLength(1);
+  });
+
+  it('still reports a bulk sync that finishes after the screen is gone', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<OperationResult<ReturnType<typeof bindReport>>>();
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))),
+        syncProject: vi.fn(() => pending.promise),
+      }),
+    );
+    renderScreen(<Toaster />);
+    const screenView = renderScreen(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('checkbox', { name: 'Select project-1' }));
+    await user.click(screen.getByRole('button', { name: 'Sync selected' }));
+    screenView.unmount();
+    pending.resolve(ok(bindReport()));
+    expect(await screen.findByText('Synced 1 of 1 project.')).toBeInTheDocument();
   });
 });
 
@@ -1432,7 +1497,7 @@ describe('Projects — folders (ADR-0021)', () => {
     expect(screen.getByText('The folder change was undone')).toBeInTheDocument();
   });
 
-  it('keeps a row sync in flight, and its result, when the row moves to another folder', async () => {
+  it('keeps a row sync in flight when the row moves to another folder, and reports its result as a toast', async () => {
     const user = userEvent.setup();
     const pending = deferred<OperationResult<ReturnType<typeof bindReport>>>();
     withFolders({ folders: [SITES], membership: {} }, { syncProject: vi.fn(() => pending.promise) });
@@ -1447,7 +1512,10 @@ describe('Projects — folders (ADR-0021)', () => {
     expect(within(group('Sites')).getByText('acme-site')).toBeInTheDocument();
     expect(within(row()).getByRole('button', { name: /syncing/i })).toBeDisabled();
     pending.resolve(fail('the store is locked'));
-    expect(await within(row()).findByText(/the store is locked/)).toBeInTheDocument();
+    expect(await screen.findByText(/the store is locked/)).toBeInTheDocument();
+    // Reported as a toast, never written into the table row.
+    expect(within(row()).queryByText(/the store is locked/)).not.toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: /^sync$/i })).toBeEnabled();
   });
 
   it('lists projects in no folder at the top level, indented less than those inside a folder', async () => {

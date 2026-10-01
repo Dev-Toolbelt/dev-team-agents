@@ -73,7 +73,7 @@ describe('ProjectSettings — a notification asking for another project', () => 
     // Still on project-1: its unsaved-changes guard was not bypassed.
     expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(await screen.findByRole('heading', { name: /project-2 · Settings/ })).toBeInTheDocument();
     expect(screen.queryByText(/A notification asked to open/)).not.toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('ProjectSettings — opening another project does not carry the previou
     expect(await screen.findByLabelText('Conversation language')).toHaveValue('en');
 
     view.rerender(<Projects environment={env} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
-    await user.click(await screen.findByRole('button', { name: 'Projects' }));
+    await user.click(await screen.findByRole('button', { name: 'Back to Projects' }));
     await screen.findByRole('heading', { name: /project-2 · Settings/ });
 
     // Project 1's form is gone the moment project 2 is asked for.
@@ -165,7 +165,7 @@ describe('ProjectSettings — navigation', () => {
     expect(await screen.findByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
     expect(window.devteam.projectPreferences).toHaveBeenCalledWith('proj-1');
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(await screen.findByRole('heading', { name: 'Projects' })).toBeInTheDocument();
   });
 
@@ -178,7 +178,7 @@ describe('ProjectSettings — navigation', () => {
     const heading = await screen.findByRole('heading', { name: /project-1 · Settings/ });
     expect(heading).toHaveFocus();
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(await screen.findByRole('button', { name: 'project-1 — open settings' })).toHaveFocus();
     // Returning refetches the list, so a change made elsewhere is not hidden behind a stale table.
     expect(window.devteam.listProjects).toHaveBeenCalledTimes(2);
@@ -193,18 +193,61 @@ describe('ProjectSettings — navigation', () => {
     await vi.waitFor(() => expect(window.devteam.listProjects).toHaveBeenCalledTimes(2));
   });
 
+  it('closes the settings when another tab is shown, so the tab reopens on the list', async () => {
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));
+    const user = userEvent.setup();
+    const view = render(<Projects environment={environment()} active />);
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await screen.findByRole('heading', { name: /project-1 · Settings/ });
+
+    view.rerender(<Projects environment={environment()} active={false} />);
+    view.rerender(<Projects environment={environment()} active />);
+    expect(await screen.findByRole('button', { name: 'project-1 — open settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /project-1 · Settings/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the project a notification was waiting on when the tab is left', async () => {
+    const projects = [project(), project({ project_id: 'proj-2', path: '/repo/project-2' })];
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))) }));
+    const user = userEvent.setup();
+    const env = environment();
+    const view = render(<Projects environment={env} active openRequest={null} />);
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await screen.findByRole('heading', { name: /project-1 · Settings/ });
+    view.rerender(<Projects environment={env} active openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    expect(await screen.findByText(/A notification asked to open project-2/)).toBeInTheDocument();
+
+    view.rerender(<Projects environment={env} active={false} openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    view.rerender(<Projects environment={env} active openRequest={{ projectId: 'proj-2', nonce: 1 }} />);
+    expect(await screen.findByRole('heading', { name: /project-2 · Settings/ })).toBeInTheDocument();
+    expect(screen.queryByText(/A notification asked to open/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the settings open across a tab switch while they hold unsaved changes', async () => {
+    installBridge(fakeBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }));
+    const user = userEvent.setup();
+    const view = render(<Projects environment={environment()} active />);
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await user.click(await screen.findByRole('switch', { name: 'Learn before every commit' }));
+
+    view.rerender(<Projects environment={environment()} active={false} />);
+    view.rerender(<Projects environment={environment()} active />);
+    expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
+    expect(screen.getAllByText('1 unsaved change').length).toBeGreaterThan(0);
+  });
+
   it('asks before leaving with unsaved changes', async () => {
     const { onBack } = renderSettings();
     const user = userEvent.setup();
     await user.click(await screen.findByRole('switch', { name: 'Learn before every commit' }));
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Discard unsaved changes?')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
     expect(onBack).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Discard and leave' }));
     expect(onBack).toHaveBeenCalledOnce();
   });

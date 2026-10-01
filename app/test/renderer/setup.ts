@@ -1,3 +1,6 @@
+import { toast } from 'sonner';
+import { afterEach } from 'vitest';
+
 /**
  * jsdom polyfills Radix primitives (Dialog, RadioGroup, Checkbox) reach for and jsdom does
  * not implement: pointer capture and `ResizeObserver`. Without these, mounting a screen
@@ -24,3 +27,23 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect(): void {}
   };
 }
+// The toast host (sonner) reads the colour scheme through `matchMedia`, which jsdom lacks.
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+}
+
+// Toasts live in a module-level store that outlives a test's render; a new host replays every
+// toast still active into itself, so one test's result would show up in the next.
+afterEach(() => {
+  toast.dismiss();
+});

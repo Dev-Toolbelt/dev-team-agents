@@ -557,12 +557,36 @@ describe('actions', () => {
     await screen.findByRole('heading', { name: 'Graphify' });
     await expand();
     await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/still running/)).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
     expect(onBack).toHaveBeenCalled();
+    finish(ok(runResult()));
+  });
+
+  it('keeps the settings open across a tab switch while an action is running', async () => {
+    let finish: (value: unknown) => void = () => {};
+    const runPluginAction = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    installBridge(
+      fakeBridge({
+        runPluginAction: runPluginAction as never,
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))),
+      }),
+    );
+    const user = userEvent.setup();
+    const env = environment();
+    const view = render(<Projects environment={env} active />);
+    await user.click(await screen.findByRole('button', { name: 'project-1 — open settings' }));
+    await user.click(await screen.findByRole('tab', { name: /Plugins/ }));
+    await screen.findByRole('heading', { name: 'Graphify' });
+    await expand();
+    await user.click(within(card()).getByRole('button', { name: 'Detect paths' }));
+
+    view.rerender(<Projects environment={env} active={false} />);
+    view.rerender(<Projects environment={env} active />);
+    expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
     finish(ok(runResult()));
   });
 
@@ -594,7 +618,7 @@ describe('actions', () => {
     expect(await screen.findByText(/A notification asked to open/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /project-1 · Settings/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(within(await screen.findByRole('dialog')).getByText(/still running/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /project-1 · Settings/, hidden: true })).toBeInTheDocument();
     finish(ok(runResult()));
@@ -761,7 +785,7 @@ describe('leaving with unsaved plugin edits', () => {
     await user.click(screen.getByRole('tab', { name: /Plugins/ }));
     expect(within(card()).getByRole('switch', { name: /Refresh at session end/ })).toBeChecked();
 
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/1 change to project-1 will be lost/)).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
@@ -772,7 +796,7 @@ describe('leaving with unsaved plugin edits', () => {
   it('leaves at once when nothing is staged', async () => {
     const { user, onBack } = await openPlugins();
     await screen.findByRole('heading', { name: 'Graphify' });
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(onBack).toHaveBeenCalled();
   });
 });

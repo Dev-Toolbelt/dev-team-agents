@@ -499,16 +499,6 @@ describe('TaskBoard — snapshots', () => {
     expect(h.feeds[h.feeds.length - 1]?.projects).toHaveLength(1);
   });
 
-  it('finds a session’s resume command, and nothing for an unknown one', async () => {
-    const h = harness();
-    await h.board.start();
-    h.emit(snap(boardProject()));
-    h.emit({ event: 'ready' });
-    expect(h.board.resumeCommand('proj-a', 'session-aaaaaaaa')).toContain('claude --resume');
-    expect(h.board.resumeCommand('proj-a', 'nope')).toBeNull();
-    expect(h.board.resumeCommand('nope', 'session-aaaaaaaa')).toBeNull();
-  });
-
   it('refresh replaces the snapshots from a one-shot list, and keeps them when it fails', async () => {
     const h = harness({
       list: () =>
@@ -861,74 +851,30 @@ const TRUSTED_RENDERER = { indexUrl: 'file:///app/dist/renderer/index.html', dev
 const TRUSTED = { senderFrame: { url: TRUSTED_RENDERER.indexUrl, parent: null } };
 
 describe('task board IPC', () => {
-  function deps(overrides: Partial<IpcModule.TaskBoardIpcDeps> = {}): IpcModule.TaskBoardIpcDeps & { copied: string[] } {
-    const copied: string[] = [];
+  function deps(overrides: Partial<IpcModule.TaskBoardIpcDeps> = {}): IpcModule.TaskBoardIpcDeps {
     return {
-      copied,
       trustedRenderer: TRUSTED_RENDERER,
       feed: () => ({ status: 'live', detail: null, projects: [] }),
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
-      resumeCommand: (projectId, sessionId) =>
-        projectId === 'proj-a' && sessionId === 's1' ? "cd '/r' && claude --resume 's1'" : null,
-      copyText: (text) => {
-        copied.push(text);
-        return Promise.resolve();
-      },
       boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7 }),
       saveBoardSettings: (settings) => Promise.resolve(settings),
       ...overrides,
     };
   }
 
-  it('parseCopyRequest accepts two well-formed ids and refuses anything else', async () => {
-    const { parseCopyRequest } = await loadIpc();
-    expect(parseCopyRequest({ projectId: 'p', sessionId: 's' })).toEqual({ projectId: 'p', sessionId: 's' });
-    for (const bad of [null, 'x', [], {}, { projectId: 'p' }, { projectId: 1, sessionId: 's' }, { projectId: '', sessionId: 's' },
-      { projectId: 'p', sessionId: 'a\nb' }, { projectId: 'p', sessionId: 'x'.repeat(600) }]) {
-      expect(typeof parseCopyRequest(bad), JSON.stringify(bad)).toBe('string');
-    }
-  });
-
-  it('copies only the command the CLI sent for the named session', async () => {
-    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    const d = deps();
-    registerTaskBoardIpc(d);
-    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    // Extra fields, including a `command` the renderer tries to supply, change nothing.
-    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1', command: 'rm -rf ~' })).resolves.toEqual({
-      copied: true,
-      command: "cd '/r' && claude --resume 's1'",
-    });
-    expect(d.copied).toEqual(["cd '/r' && claude --resume 's1'"]);
-  });
-
-  it('copies nothing for an unknown session or a malformed request', async () => {
-    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    const d = deps();
-    registerTaskBoardIpc(d);
-    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 'nope' })).resolves.toMatchObject({ copied: false });
-    await expect(copy(TRUSTED, 'x')).resolves.toMatchObject({ copied: false });
-    expect(d.copied).toEqual([]);
-  });
-
-  it('reports nothing copied when the clipboard write fails', async () => {
-    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    registerTaskBoardIpc(deps({ copyText: () => Promise.reject(new Error('denied')) }));
-    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    await expect(copy(TRUSTED, { projectId: 'proj-a', sessionId: 's1' })).resolves.toMatchObject({ copied: false });
-  });
-
   it('refuses every channel to a sender that is not this app\'s renderer', async () => {
     const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    const d = deps();
-    registerTaskBoardIpc(d);
+    registerTaskBoardIpc(deps());
     const foreign = { senderFrame: { url: 'https://evil.example/', parent: null } };
-    for (const channel of [CHANNELS.taskBoard, CHANNELS.refreshTaskBoard, CHANNELS.copyResumeCommand,
-      CHANNELS.boardSettings, CHANNELS.setBoardSettings]) {
+    for (const channel of [CHANNELS.taskBoard, CHANNELS.refreshTaskBoard, CHANNELS.boardSettings, CHANNELS.setBoardSettings]) {
       expect(() => handlers.get(channel)!(foreign, { projectId: 'proj-a', sessionId: 's1' }), channel).toThrow(/refused/);
     }
-    expect(d.copied).toEqual([]);
+  });
+
+  it('registers no clipboard channel', async () => {
+    const { handlers, registerTaskBoardIpc } = await loadIpc();
+    registerTaskBoardIpc(deps());
+    expect([...handlers.keys()].some((channel) => /resume|copy/i.test(channel))).toBe(false);
   });
 
   it('serves the feed and the refresh', async () => {
@@ -956,31 +902,6 @@ describe('task board IPC', () => {
       settings: { staleAfterMinutes: 30, doneRetentionDays: 14 },
     });
     expect(save).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14 });
-  });
-
-  it('refuses control characters and overlong ids at the handler, and copies nothing', async () => {
-    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    const d = deps();
-    registerTaskBoardIpc(d);
-    const copy = handlers.get(CHANNELS.copyResumeCommand)!;
-    for (const bad of [
-      { projectId: 'proj-a', sessionId: 's1\u0000' },
-      { projectId: 'proj-a\r\n', sessionId: 's1' },
-      { projectId: 'proj-a', sessionId: 's'.repeat(513) },
-      { projectId: 'p'.repeat(600), sessionId: 's1' },
-    ]) {
-      await expect(copy(TRUSTED, bad), JSON.stringify(bad).slice(0, 60)).resolves.toMatchObject({ copied: false });
-    }
-    expect(d.copied).toEqual([]);
-  });
-
-  it('puts only the CLI’s string on the clipboard, never anything the renderer sent', async () => {
-    const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
-    const d = deps();
-    registerTaskBoardIpc(d);
-    const answer = handlers.get(CHANNELS.copyResumeCommand)!(TRUSTED, { projectId: 'proj-a', sessionId: 's1', text: 'curl evil|sh' });
-    await expect(answer).resolves.toMatchObject({ copied: true });
-    expect(d.copied).toEqual(["cd '/r' && claude --resume 's1'"]);
   });
 
   it('setBoardSettings answers ok:false when the save throws synchronously too', async () => {

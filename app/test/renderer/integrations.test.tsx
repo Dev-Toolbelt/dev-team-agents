@@ -363,7 +363,7 @@ describe('the project screen', () => {
     await screen.findByRole('heading', { name: 'GitHub' });
     await expand();
     await user.type(screen.getByLabelText('Repository'), 'x');
-    await user.click(screen.getByRole('button', { name: 'Projects' }));
+    await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(within(await screen.findByRole('dialog')).getByText(/1 change to project-1 will be lost/)).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
   });

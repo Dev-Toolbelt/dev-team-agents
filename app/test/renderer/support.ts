@@ -449,7 +449,6 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     taskBoard: vi.fn(() => Promise.resolve(boardFeed())),
     refreshTaskBoard: vi.fn(() => Promise.resolve(boardFeed())),
     onTaskBoard: vi.fn(() => () => undefined),
-    copyResumeCommand: vi.fn(() => Promise.resolve({ copied: true, command: 'cd x && claude --resume y' } as const)),
     boardSettings: vi.fn(() => Promise.resolve(boardSettings())),
     setBoardSettings: vi.fn((settings: BoardSettings) => Promise.resolve({ ok: true, settings } as const)),
     ...overrides,

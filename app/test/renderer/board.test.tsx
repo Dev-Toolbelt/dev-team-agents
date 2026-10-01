@@ -212,7 +212,7 @@ describe('Project kanban', () => {
     const user = userEvent.setup();
     const harness = renderBoard(boardFeed({ projects: [project] }), overrides);
     await user.click(await card('storefront'));
-    await screen.findByRole('button', { name: /back to the board/i });
+    await screen.findByRole('button', { name: /^Back to Board$/ });
     return { user, ...harness };
   }
 
@@ -380,7 +380,7 @@ describe('Project kanban', () => {
     const todo = screen.getByRole('region', { name: /^To do/ });
     expect(within(todo).getAllByRole('article')).toHaveLength(1);
     expect(within(todo).getByText('a3- task 1')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /copy resume command/i })).toHaveLength(1);
+    expect(screen.getAllByRole('listitem').filter((li) => li.closest('[aria-label="Sessions"]'))).toHaveLength(1);
   });
 
   it('hides done tasks older than the retention, and says so; unticking shows them', async () => {
@@ -424,33 +424,38 @@ describe('Project kanban', () => {
     expect(sessions[1]).toHaveTextContent('1 to do · 1 in progress · 3 done');
   });
 
-  it('copies a session’s resume command through the main process, naming the session, not supplying text', async () => {
-    const copy = vi.fn(() => Promise.resolve({ copied: true, command: 'cd x' } as const));
-    const { user } = await openKanban(projectA(), { copyResumeCommand: copy });
-    const buttons = screen.getAllByRole('button', { name: /copy resume command/i });
-    await user.click(buttons[1]!);
-    expect(copy).toHaveBeenCalledWith({ projectId: 'proj-a', sessionId: 'a2' });
-    expect(await screen.findByText('Resume command copied')).toBeInTheDocument();
+  it('offers no resume-command button on a session', async () => {
+    await openKanban();
+    expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();
   });
 
-  it('says why nothing was copied, and disables the button for a session with no resume command', async () => {
-    const copy = vi.fn(() => Promise.resolve({ copied: false, message: 'no resume command' } as const));
-    const project = boardProject({
-      sessions: [
-        boardSession({ session_id: 'ok' }),
-        boardSession({ session_id: 'none', resume_command: null, branch: 'no-resume' }),
-      ],
-    });
-    const { user } = await openKanban(project, { copyResumeCommand: copy });
-    const buttons = screen.getAllByRole('button', { name: /copy resume command/i });
-    expect(buttons[1]).toBeDisabled();
-    await user.click(buttons[0]!);
-    expect(await screen.findByText('no resume command')).toBeInTheDocument();
+  it('shows the project name without its path', async () => {
+    await openKanban();
+    expect(screen.getByRole('heading', { level: 3, name: 'storefront' })).toBeInTheDocument();
+    expect(screen.queryByText('/repo/storefront')).not.toBeInTheDocument();
+  });
+
+  it('tints the Done column as the positive end of the flow, and only that one', async () => {
+    await openKanban();
+    expect(screen.getByRole('region', { name: /^Done/ })).toHaveAttribute('data-tone', 'positive');
+    expect(screen.getByRole('region', { name: /^To do/ })).not.toHaveAttribute('data-tone');
+  });
+
+  it('returns to the overview when the tab is left and shown again', async () => {
+    const user = userEvent.setup();
+    installBridge(fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [projectA()] }))) }));
+    const { rerender } = render(<Board clock={clock} active />);
+    await user.click(await card('storefront'));
+    await screen.findByRole('button', { name: /^Back to Board$/ });
+    rerender(<Board clock={clock} active={false} />);
+    rerender(<Board clock={clock} active />);
+    expect(screen.queryByRole('button', { name: /^Back to Board$/ })).not.toBeInTheDocument();
+    expect(await card('storefront')).toBeInTheDocument();
   });
 
   it('goes back to the board', async () => {
     const { user } = await openKanban();
-    await user.click(screen.getByRole('button', { name: /back to the board/i }));
+    await user.click(screen.getByRole('button', { name: /^Back to Board$/ }));
     expect(await card('storefront')).toBeInTheDocument();
   });
 
@@ -516,7 +521,7 @@ describe('Board — timers and time in column', () => {
     expect(intervals(spy)).toEqual([60_000]); // the overview: once a minute, never every second
 
     fireEvent.click(await card('storefront'));
-    await screen.findByRole('button', { name: /back to the board/i });
+    await screen.findByRole('button', { name: /^Back to Board$/ });
     expect(intervals(spy)).toEqual([60_000, 60_000, 1_000]); // kanban: filters each minute, running cards each second
 
     spy.mockClear();
@@ -630,12 +635,12 @@ describe('Board — one period, honest percentages', () => {
     const old = boardSession({ session_id: 'o', last_activity_at: NOW - 20 * 86_400, tasks: [boardTask({ key: 'ancient', content: 'Ancient chore' })] });
     renderBoard(boardFeed({ projects: [boardProject({ root: '/repo/storefront', sessions: [boardSession({ tasks: [boardTask({ key: 'n', content: 'New chore' })] }), old] })] }));
     await user.click(await card('storefront'));
-    await screen.findByRole('button', { name: /back to the board/i });
+    await screen.findByRole('button', { name: /^Back to Board$/ });
     expect(screen.getAllByLabelText('Period')).toHaveLength(1);
     expect(screen.queryByText('Ancient chore')).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Period'), '30d');
     expect(screen.getByText('Ancient chore')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /back to the board/i }));
+    await user.click(screen.getByRole('button', { name: /^Back to Board$/ }));
     expect(screen.getByLabelText('Period')).toHaveValue('30d');
   });
 
@@ -649,54 +654,5 @@ describe('Board — one period, honest percentages', () => {
     expect(shares.reduce((a, b) => a + b, 0)).toBe(100);
     const bar = within(c).getByRole('img', { name: '1 to do, 1 in progress, 0 in review, 1 done' });
     expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '0', '1']);
-  });
-});
-
-describe('Board — resume command feedback', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('clears the confirmation after a while, and ignores a second click while the first is in flight', async () => {
-    let finish: (answer: { copied: true; command: string }) => void = () => undefined;
-    const copy = vi.fn(() => new Promise<{ copied: true; command: string }>((resolve) => (finish = resolve)));
-    installBridge(
-      fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [boardProject({ sessions: [boardSession()] })] }))), copyResumeCommand: copy }),
-    );
-    render(<Board clock={clock} />);
-    fireEvent.click(await card('storefront'));
-    const button = await screen.findByRole('button', { name: /copy resume command/i });
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(copy).toHaveBeenCalledTimes(1);
-    expect(button).toBeDisabled();
-    finish({ copied: true, command: 'cd x' });
-    await act(() => Promise.resolve());
-    expect(screen.getByText('Resume command copied')).toBeInTheDocument();
-    expect(button).toBeEnabled();
-    act(() => {
-      vi.advanceTimersByTime(3_500);
-    });
-    expect(screen.queryByText('Resume command copied')).not.toBeInTheDocument();
-  });
-
-  it('drops the confirmation when the session’s resume command changes', async () => {
-    let push: (feed: BoardFeed) => void = () => undefined;
-    const withCommand = (resume: string) =>
-      boardFeed({ projects: [boardProject({ sessions: [boardSession({ resume_command: resume })] })] });
-    installBridge(
-      fakeBridge({
-        taskBoard: vi.fn(() => Promise.resolve(withCommand("cd '/a' && claude --resume 'one'"))),
-        onTaskBoard: vi.fn((listener: (feed: BoardFeed) => void) => {
-          push = listener;
-          return () => undefined;
-        }),
-      }),
-    );
-    render(<Board clock={clock} />);
-    fireEvent.click(await card('storefront'));
-    fireEvent.click(await screen.findByRole('button', { name: /copy resume command/i }));
-    expect(await screen.findByText('Resume command copied')).toBeInTheDocument();
-    act(() => push(withCommand("cd '/a' && claude --resume 'two'")));
-    expect(screen.queryByText('Resume command copied')).not.toBeInTheDocument();
   });
 });

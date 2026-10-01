@@ -51,7 +51,7 @@ async function openKanban(project: BoardProject, overrides: Parameters<typeof fa
   const user = userEvent.setup({ advanceTimers: (ms) => void ms });
   const harness = renderBoard(boardFeed({ projects: [project] }), overrides, boardClock);
   fireEvent.click((await screen.findByText('storefront')).closest('button')!);
-  await screen.findByRole('button', { name: /back to the board/i });
+  await screen.findByRole('button', { name: /^Back to Board$/ });
   return { user, ...harness };
 }
 
@@ -259,11 +259,11 @@ describe('Board — recovery and disappearance', () => {
     const { push } = await openKanban(boardProject());
     push(boardFeed({ projects: [] }));
     expect(await screen.findByText('That project no longer has tasks.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /back to the board/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Back to Board$/ })).not.toBeInTheDocument();
 
     push(boardFeed({ projects: [boardProject()] }));
     expect(await overviewCard('storefront')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /back to the board/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Back to Board$/ })).not.toBeInTheDocument();
   });
 });
 
