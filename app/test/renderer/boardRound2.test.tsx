@@ -279,15 +279,11 @@ describe('Board — accessibility and overflow', () => {
     expect(screen.queryByText('1 tasks')).not.toBeInTheDocument();
   });
 
-  it('lays the four columns out in one row that scrolls sideways instead of stacking', async () => {
+  // jsdom does no layout, so how the row looks is checked in a real window; these pin the
+  // structure and the measured behaviour the layout depends on.
+  it('puts the four columns, in order, in one named group', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
-    const row = screen.getByRole('region', { name: 'Kanban columns' });
-    // `relative`: the cards' absolutely positioned sr-only text must not escape the scroller and
-    // widen the page (seen in a real window before the fix).
-    expect(row).toHaveClass('relative', 'flex', 'overflow-x-auto');
-    expect(row.className).not.toMatch(/grid-cols/);
-    // Focusable, so the arrow keys scroll it when the columns do not fit.
-    expect(row).toHaveAttribute('tabindex', '0');
+    const row = screen.getByRole('group', { name: 'Kanban columns' });
     const columns = within(row).getAllByRole('region');
     expect(columns.map((column) => column.querySelector('h4')?.firstChild?.textContent)).toEqual([
       'To do',
@@ -295,18 +291,55 @@ describe('Board — accessibility and overflow', () => {
       'In Review',
       'Done',
     ]);
-    for (const column of columns) {
-      // A minimum width that never shrinks: below it, the row scrolls rather than squeezing.
-      expect(column).toHaveClass('min-w-72', 'shrink-0', 'flex-col');
-    }
+    // A group, not a landmark: one widget does not add five entries to the landmark list.
+    expect(screen.queryByRole('region', { name: 'Kanban columns' })).not.toBeInTheDocument();
+    // The cards' absolutely positioned sr-only text must not escape the scroller and widen the
+    // page — seen in a real window before `relative` was added.
+    expect(row).toHaveClass('relative');
   });
 
-  it('scrolls the cards inside their column and keeps the heading out of the scroll', async () => {
+  it('is a tab stop only while the columns overflow it', async () => {
+    const wide = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(1200);
+    const narrow = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(760);
+    try {
+      await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+      expect(screen.getByRole('group', { name: 'Kanban columns' })).toHaveAttribute('tabindex', '0');
+    } finally {
+      wide.mockRestore();
+      narrow.mockRestore();
+    }
+    cleanup();
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
-    const todo = screen.getByRole('region', { name: /^To do/ });
+    expect(screen.getByRole('group', { name: 'Kanban columns' })).not.toHaveAttribute('tabindex');
+  });
+
+  it('caps a column at the visible height so its heading stays on screen and its cards scroll', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+    const row = screen.getByRole('group', { name: 'Kanban columns' });
+    // No scrolling ancestor here, so the window's height less the row's bottom padding.
+    expect(row.style.getPropertyValue('--kanban-column-max')).toBe(`${window.innerHeight - 8}px`);
+    const todo = within(row).getByRole('region', { name: /^To do/ });
     const list = within(todo).getByRole('list');
-    expect(list).toHaveClass('relative', 'overflow-y-auto', 'min-h-0');
     expect(list).not.toContainElement(todo.querySelector('h4'));
+    expect(list).toHaveClass('relative');
+  });
+
+  it('shows no column row when the findings filter leaves nothing', async () => {
+    const withFindings = boardTask({
+      key: 'f',
+      content: 'Task f',
+      column: 'in_review',
+      status: 'in_progress',
+      review: { state: 'findings', findings: 2, since: NOW - 120 },
+    });
+    const plain = boardTask({ key: 'p', content: 'Plain todo' });
+    const { user, push } = await openKanban(boardProject({ sessions: [boardSession({ tasks: [withFindings, plain] })] }));
+    await user.click(screen.getByRole('checkbox', { name: /with findings/i }));
+    expect(screen.getByRole('group', { name: 'Kanban columns' })).toBeInTheDocument();
+    // The findings are fixed while the filter is on: nothing is left to show.
+    push(boardFeed({ projects: [boardProject({ sessions: [boardSession({ tasks: [plain] })] })] }));
+    expect(await screen.findByText('No tasks with findings')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Kanban columns' })).not.toBeInTheDocument();
   });
 
   it('lets an unbroken task text wrap instead of overflowing the column', async () => {
