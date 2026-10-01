@@ -16,7 +16,17 @@
 
 import type { StreamEnd, StreamHandle } from '../cli/stream.js';
 import { TaskStreamRefused, type TaskWatchEvent } from '../cli/operations.js';
-import type { BoardFeed, BoardProject, BoardSettings, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
+import type {
+  BoardFeed,
+  BoardLinkHost,
+  BoardLinkKind,
+  BoardProject,
+  BoardSettings,
+  BoardStreamStatus,
+  OpenTaskLinkRequest,
+  OperationResult,
+  ProjectId,
+} from '../shared/api.js';
 
 export const BOARD_BACKOFF_MIN_MS = 1_000;
 export const BOARD_BACKOFF_MAX_MS = 60_000;
@@ -72,6 +82,11 @@ export class TaskBoard {
   snapshot(): BoardFeed {
     const projects = [...this.projects.values()].sort((a, b) => b.last_activity_at - a.last_activity_at);
     return { status: this.status, detail: this.detail, projects };
+  }
+
+  /** The link an open request names, from this process's own latest snapshot; see `resolveTaskLink`. */
+  linkFor(request: OpenTaskLinkRequest): ResolvedTaskLink | null {
+    return resolveTaskLink(this.projects.get(request.project_id), request);
   }
 
   async start(): Promise<void> {
@@ -291,6 +306,44 @@ export class TaskBoard {
   private emit(): void {
     this.deps.onChange(this.snapshot());
   }
+}
+
+/** A link as the snapshot holds it, ready for `validateTrackerLink`. */
+export interface ResolvedTaskLink {
+  readonly url: string;
+  readonly kind: BoardLinkKind;
+  /** What the URL must be about: `'45'` for a PR/MR, `owner/repo#45` or `PROJ-12` for an issue. */
+  readonly identity: string;
+  readonly linkHosts: readonly BoardLinkHost[];
+}
+
+/**
+ * Look an open request up in a project's snapshot. Only ids are matched; the URL is whatever
+ * the snapshot holds. `null` when anything named is missing or the index is out of range.
+ */
+export function resolveTaskLink(project: BoardProject | undefined, request: OpenTaskLinkRequest): ResolvedTaskLink | null {
+  const session = project?.sessions.find((each) => each.session_id === request.session_id);
+  if (project === undefined || session === undefined) return null;
+  const { type, index } = request.link;
+  if (request.task_key === null) {
+    if (type !== 'pr') return null;
+    const pr = session.prs[index];
+    return pr === undefined
+      ? null
+      : { url: pr.url, kind: pr.kind === 'pr' ? 'github_pr' : 'gitlab_mr', identity: String(pr.number), linkHosts: project.link_hosts };
+  }
+  const task = session.tasks.find((each) => each.key === request.task_key);
+  if (task === undefined) return null;
+  if (type === 'pr') {
+    const pr = index === 0 ? task.pr : null;
+    return pr === null
+      ? null
+      : { url: pr.url, kind: pr.kind === 'pr' ? 'github_pr' : 'gitlab_mr', identity: String(pr.number), linkHosts: project.link_hosts };
+  }
+  const ref = task.refs[index];
+  return ref === undefined
+    ? null
+    : { url: ref.url, kind: ref.system === 'jira' ? 'jira' : 'github_issue', identity: ref.key, linkHosts: project.link_hosts };
 }
 
 export interface BoardSettingsStore {

@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, screen, session } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, screen, session, shell } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
@@ -521,6 +521,13 @@ function onReady(): void {
     feed: () => board!.snapshot(),
     refresh: () => board!.refresh(),
     boardSettings: async () => (await readSettings(userDataDir)).board,
+    linkFor: (request) => board!.linkFor(request),
+    openExternal: (url) => shell.openExternal(url, { activate: true }),
+    appWindowFocused: () => {
+      const focused = BrowserWindow.getFocusedWindow();
+      return focused !== null && !focused.isDestroyed() && BrowserWindow.getAllWindows().includes(focused);
+    },
+    log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
     saveBoardSettings: (next) =>
       saveBoardSettings(
         {

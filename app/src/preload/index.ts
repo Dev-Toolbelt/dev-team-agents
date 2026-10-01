@@ -21,6 +21,7 @@ import {
   type ProjectFolders,
   type BoardFeed,
   type BoardSettings,
+  type OpenTaskLinkRequest,
   type CatalogKind,
   type CredentialsPatchOp,
   type MigrateRequest,
@@ -236,6 +237,13 @@ const bridge: DevteamBridge = {
     ipcRenderer.invoke(CHANNELS.setBoardSettings, {
       staleAfterMinutes: Number(settings.staleAfterMinutes),
       doneRetentionDays: Number(settings.doneRetentionDays),
+    }),
+  openTaskLink: (request: OpenTaskLinkRequest) =>
+    ipcRenderer.invoke(CHANNELS.openTaskLink, {
+      project_id: String(request.project_id),
+      session_id: String(request.session_id),
+      task_key: request.task_key === null ? null : String(request.task_key),
+      link: { type: request.link.type, index: Number(request.link.index) },
     }),
 };
 

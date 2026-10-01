@@ -31,6 +31,11 @@ import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/plug
 import type {
   BoardColumn,
   BoardCounts,
+  BoardLinkHost,
+  BoardLinkKind,
+  BoardRef,
+  BoardSessionPr,
+  BoardTaskPr,
   BoardReview,
   BoardReviewState,
   BoardProject,
@@ -2393,7 +2398,7 @@ export function watchNotifications(
 
 // ── the task board ────────────────────────────────────────────────────────────
 
-const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'in_review', 'done'];
+const BOARD_COLUMNS: readonly BoardColumn[] = ['todo', 'in_progress', 'in_review', 'pr_created', 'done'];
 const REVIEW_STATES: readonly BoardReviewState[] = ['pending', 'findings', 'unread'];
 /** The board column a provider status maps to when the CLI's own `column` is one this app does not know. */
 const COLUMN_FOR_STATUS: Readonly<Record<string, BoardColumn>> = {
@@ -2447,8 +2452,79 @@ function asBoardCounts(value: unknown): BoardCounts | string {
   }
   // An absent or malformed `in_review` is derived from what the other columns leave of the total,
   // so the bar, the figures and the total agree; an older CLI (no review column) derives 0.
-  const inReview = nonNegative(value['in_review']) ?? Math.max(0, total - todo - inProgress - done);
-  return { todo, in_progress: inProgress, in_review: inReview, done, total };
+  // `pr_created` is absent from an older CLI and derives 0, so it never absorbs another column's tasks.
+  const prCreated = nonNegative(value['pr_created']) ?? 0;
+  const inReview = nonNegative(value['in_review']) ?? Math.max(0, total - todo - inProgress - prCreated - done);
+  return { todo, in_progress: inProgress, in_review: inReview, pr_created: prCreated, done, total };
+}
+
+const MAX_LINK_URL = 2_048;
+const MAX_PRS_PER_SESSION = 20;
+const MAX_REFS_PER_TASK = 50;
+const MAX_LINK_HOSTS = 50;
+const BASE_PATH = /^(\/[A-Za-z0-9._~-]+)*$/;
+const LINK_KINDS: readonly BoardLinkKind[] = ['github_pr', 'github_issue', 'gitlab_mr', 'jira'];
+
+/**
+ * A PR/MR mark, or null when malformed. The URL is kept as the CLI sent it and is never trusted
+ * here: the main process re-validates it against the project's `link_hosts` before any open.
+ */
+function asBoardPr(raw: unknown): BoardTaskPr | null {
+  if (!isRecord(raw)) return null;
+  const kind = raw['kind'];
+  const state = raw['state'];
+  const number = raw['number'];
+  const url = boundedString(raw['url'], MAX_LINK_URL);
+  if (kind !== 'pr' && kind !== 'mr') return null;
+  if (state !== 'open' && state !== 'merged') return null;
+  if (typeof number !== 'number' || !Number.isSafeInteger(number) || number < 1 || url === null) return null;
+  return { kind, number, url, state };
+}
+
+function asBoardSessionPrs(raw: unknown): readonly BoardSessionPr[] {
+  if (!Array.isArray(raw)) return [];
+  const prs: BoardSessionPr[] = [];
+  for (const entry of raw.slice(0, MAX_PRS_PER_SESSION)) {
+    const pr = asBoardPr(entry);
+    if (pr !== null) prs.push({ ...pr, head: isRecord(entry) ? boundedString(entry['head'], MAX_ID) : null });
+  }
+  return prs;
+}
+
+function asBoardRefs(raw: unknown): readonly BoardRef[] {
+  if (!Array.isArray(raw)) return [];
+  const refs: BoardRef[] = [];
+  for (const entry of raw.slice(0, MAX_REFS_PER_TASK)) {
+    if (!isRecord(entry)) continue;
+    const system = entry['system'];
+    const key = boundedString(entry['key'], 256);
+    const url = boundedString(entry['url'], MAX_LINK_URL);
+    if ((system !== 'jira' && system !== 'github') || key === null || url === null) continue;
+    refs.push({ system, key, url });
+  }
+  return refs;
+}
+
+function asBoardLinkHosts(raw: unknown): readonly BoardLinkHost[] {
+  if (!Array.isArray(raw)) return [];
+  const hosts: BoardLinkHost[] = [];
+  for (const entry of raw.slice(0, MAX_LINK_HOSTS)) {
+    if (!isRecord(entry)) continue;
+    const host = boundedString(entry['host'], 253);
+    if (host === null || !Array.isArray(entry['kinds'])) continue;
+    const kinds = entry['kinds'].filter((k): k is BoardLinkKind => (LINK_KINDS as readonly unknown[]).includes(k));
+    if (kinds.length === 0) continue;
+    const basePath = entry['base_path'];
+    if (!kinds.includes('jira') || basePath === undefined || basePath === null || basePath === '') {
+      hosts.push({ host: host.toLowerCase(), kinds });
+      continue;
+    }
+    // A malformed context path drops the entry: guessing one would widen what a link may look like.
+    if (typeof basePath !== 'string' || !BASE_PATH.test(basePath) || basePath.length > 200) continue;
+    if (basePath.split('/').some((segment) => segment === '.' || segment === '..')) continue;
+    hosts.push({ host: host.toLowerCase(), kinds, base_path: basePath });
+  }
+  return hosts;
 }
 
 /**
@@ -2518,6 +2594,8 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     review,
     worktree: asBoardWorktree(raw['worktree']),
     turns: asBoardTurns(raw['turns']),
+    pr: asBoardPr(raw['pr']),
+    refs: asBoardRefs(raw['refs']),
   };
 }
 
@@ -2576,6 +2654,7 @@ function asBoardSession(raw: unknown): BoardSession | null {
     ended_at: nonNegative(raw['ended_at']),
     resume_command: typeof resume === 'string' && resume.length <= 4_096 && RESUME_COMMAND.test(resume) ? resume : null,
     counts,
+    prs: asBoardSessionPrs(raw['prs']),
     tasks,
   };
 }
@@ -2610,6 +2689,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
     with_findings: nonNegative(raw['with_findings']) ?? 0,
     ...(asOf === null ? {} : { as_of: asOf }),
     last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
+    link_hosts: asBoardLinkHosts(raw['link_hosts']),
     sessions,
   };
 }

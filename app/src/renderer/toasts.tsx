@@ -95,3 +95,8 @@ export function toastBatch(title: string, failures: readonly { readonly id: stri
     closeButton: true,
   });
 }
+
+/** A tracker link the main process refused to open; kept until closed, like every failure. */
+export function toastLinkRefused(message: string): void {
+  toast.error('The link was not opened', { id: 'task-link', description: <p>{message}</p>, duration: Infinity, closeButton: true });
+}

@@ -80,30 +80,31 @@ export function percent(part: number, total: number): number {
 }
 
 /**
- * The four percentages of a counts row (to do, in progress, in review, done), by the
+ * The five percentages of a counts row (to do, in progress, in review, PR/MR created, done), by the
  * largest-remainder method, so they always sum to 100 (independent rounding turns 1/1/1 into
  * 33+33+33). All zero when nothing counts.
  */
-export function percentLabels(counts: BoardCounts): readonly [number, number, number, number] {
-  const parts = [counts.todo, counts.in_progress, counts.in_review, counts.done] as const;
-  const total = parts[0] + parts[1] + parts[2] + parts[3];
-  if (total <= 0) return [0, 0, 0, 0];
+export function percentLabels(counts: BoardCounts): readonly [number, number, number, number, number] {
+  const parts = [counts.todo, counts.in_progress, counts.in_review, counts.pr_created, counts.done] as const;
+  const total = parts.reduce((a, b) => a + b, 0);
+  if (total <= 0) return [0, 0, 0, 0, 0];
   const exact = parts.map((part) => (part * 100) / total);
   const floors = exact.map(Math.floor);
   let left = 100 - floors.reduce((a, b) => a + b, 0);
-  const order = [0, 1, 2, 3].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
+  const order = [0, 1, 2, 3, 4].sort((a, b) => exact[b]! - floors[b]! - (exact[a]! - floors[a]!) || a - b);
   for (const index of order) {
     if (left <= 0) break;
     floors[index]! += 1;
     left -= 1;
   }
-  return [floors[0]!, floors[1]!, floors[2]!, floors[3]!];
+  return [floors[0]!, floors[1]!, floors[2]!, floors[3]!, floors[4]!];
 }
 
 export const STEP_LABELS: Readonly<Record<string, string>> = {
   pending: 'To do',
   in_progress: 'In progress',
   in_review: 'In Review',
+  pr_created: 'PR/MR Created',
   completed: 'Done',
   cancelled: 'Cancelled',
 };
@@ -112,11 +113,11 @@ export function stepLabel(status: string): string {
   return STEP_LABELS[status] ?? status.replace(/_/g, ' ');
 }
 
-const STEP_ORDER = ['pending', 'in_progress', 'in_review', 'completed', 'cancelled'];
+const STEP_ORDER = ['pending', 'in_progress', 'in_review', 'pr_created', 'completed', 'cancelled'];
 
-/** The step a task is in: the review window while in review, else the provider's own status. */
+/** The step a task is in: the review window or the PR/MR column when it is there, else the provider's own status. */
 function currentStep(task: BoardTask): string {
-  return task.column === 'in_review' ? 'in_review' : task.status;
+  return task.column === 'in_review' || task.column === 'pr_created' ? task.column : task.status;
 }
 
 /**
@@ -207,11 +208,12 @@ export interface ProjectView {
 }
 
 function sumCounts(sessions: readonly BoardSession[]): BoardCounts {
-  const counts = { todo: 0, in_progress: 0, in_review: 0, done: 0, total: 0 };
+  const counts = { todo: 0, in_progress: 0, in_review: 0, pr_created: 0, done: 0, total: 0 };
   for (const session of sessions) {
     counts.todo += session.counts.todo;
     counts.in_progress += session.counts.in_progress;
     counts.in_review += session.counts.in_review;
+    counts.pr_created += session.counts.pr_created;
     counts.done += session.counts.done;
     counts.total += session.counts.total;
   }
@@ -281,6 +283,7 @@ export interface KanbanView {
   readonly todo: readonly KanbanItem[];
   readonly in_progress: readonly KanbanItem[];
   readonly in_review: readonly KanbanItem[];
+  readonly pr_created: readonly KanbanItem[];
   readonly done: readonly KanbanItem[];
   /** Done tasks the retention setting is hiding. */
   readonly hiddenDone: number;
@@ -306,6 +309,7 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
     todo: visible.filter((i) => i.task.column === 'todo').sort(byCreated),
     in_progress: visible.filter((i) => i.task.column === 'in_progress').sort(byCreated),
     in_review: visible.filter((i) => i.task.column === 'in_review').sort(byCreated),
+    pr_created: visible.filter((i) => i.task.column === 'pr_created').sort(byCreated),
     done: visible
       .filter((i) => i.task.column === 'done')
       .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),

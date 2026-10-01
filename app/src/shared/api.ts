@@ -1300,6 +1300,8 @@ export interface DevteamBridge {
   readonly onTaskBoard: (listener: (feed: BoardFeed) => void) => () => void;
   readonly boardSettings: () => Promise<BoardSettings>;
   readonly setBoardSettings: (settings: BoardSettings) => Promise<BoardSettingsAnswer>;
+  /** Open one validated PR/MR or issue link in the OS browser; the renderer sends ids, never a URL. */
+  readonly openTaskLink: (request: OpenTaskLinkRequest) => Promise<OpenTaskLinkAnswer>;
 }
 
 export type NotificationLevel = 'info' | 'warning' | 'critical';
@@ -1368,7 +1370,7 @@ export interface BackgroundSettings {
 
 // ── the task board (ADR-0018) ─────────────────────────────────────────────────
 
-export type BoardColumn = 'todo' | 'in_progress' | 'in_review' | 'done';
+export type BoardColumn = 'todo' | 'in_progress' | 'in_review' | 'pr_created' | 'done';
 /** `unknown`: the CLI sent no review state this app knows; the card claims nothing about the result. */
 export type BoardReviewState = 'pending' | 'findings' | 'unread' | 'unknown';
 export type BoardSessionStatus = 'active' | 'idle' | 'ended';
@@ -1378,8 +1380,45 @@ export interface BoardCounts {
   readonly in_progress: number;
   /** Tasks in the review window; 0 when an older CLI does not emit the field. */
   readonly in_review: number;
+  /** Finished tasks whose pull/merge request is open; 0 when an older CLI does not emit the field. */
+  readonly pr_created: number;
   readonly done: number;
   readonly total: number;
+}
+
+export type BoardPrKind = 'pr' | 'mr';
+export type BoardPrState = 'open' | 'merged';
+
+/** The pull request (`pr`) or merge request (`mr`) a task shipped in. `url` is the CLI's rebuilt, validated URL. */
+export interface BoardTaskPr {
+  readonly kind: BoardPrKind;
+  readonly number: number;
+  readonly url: string;
+  readonly state: BoardPrState;
+}
+
+/** A pull/merge request of a session, for its chip. */
+export interface BoardSessionPr extends BoardTaskPr {
+  readonly head: string | null;
+}
+
+export type BoardRefSystem = 'jira' | 'github';
+
+/** An issue the task refers to: `PROJ-12` (Jira) or `owner/repo#45` (GitHub). */
+export interface BoardRef {
+  readonly system: BoardRefSystem;
+  readonly key: string;
+  readonly url: string;
+}
+
+/** What a link host may be used for; the CLI decides, and the app re-checks every link against it. */
+export type BoardLinkKind = 'github_pr' | 'github_issue' | 'gitlab_mr' | 'jira';
+
+export interface BoardLinkHost {
+  readonly host: string;
+  readonly kinds: readonly BoardLinkKind[];
+  /** Jira Server context path (`/jira`); absent means the host root. Never set on GitHub or GitLab entries. */
+  readonly base_path?: string;
 }
 
 /** A task's review window; `findings` is null until a result is read. `since` is epoch seconds. */
@@ -1431,6 +1470,10 @@ export interface BoardTask {
   readonly worktree: BoardWorktree | null;
   /** The prompts behind a `direct` task, oldest first (at most 20); empty for other kinds and older CLIs. */
   readonly turns: readonly BoardTurn[];
+  /** The PR/MR the task is a member of; null when none (and for a CLI that predates the field). */
+  readonly pr: BoardTaskPr | null;
+  /** Issue-tracker references; empty when none (and for a CLI that predates the field). */
+  readonly refs: readonly BoardRef[];
 }
 
 export interface BoardWorktree {
@@ -1454,6 +1497,8 @@ export interface BoardSession {
   /** A single-line shell command the CLI composed; `null` when the shape did not validate. */
   readonly resume_command: string | null;
   readonly counts: BoardCounts;
+  /** Empty for a CLI that predates the field. */
+  readonly prs: readonly BoardSessionPr[];
   readonly tasks: readonly BoardTask[];
 }
 
@@ -1471,6 +1516,8 @@ export interface BoardProject {
   /** Epoch seconds the CLI computed this view at; absent from an older CLI. Live figures grow from it. */
   readonly as_of?: number;
   readonly last_activity_at: number;
+  /** Hosts this project's links may point at, per kind; empty from an older CLI (no link opens). */
+  readonly link_hosts: readonly BoardLinkHost[];
   readonly sessions: readonly BoardSession[];
 }
 
@@ -1484,6 +1531,21 @@ export interface BoardFeed {
   /** Newest activity first. Only projects with at least one task are ever here. */
   readonly projects: readonly BoardProject[];
 }
+
+/**
+ * A request to open one link of the board. Ids only, never a URL: the main process looks the
+ * link up in its own latest snapshot and validates it before the OS browser sees it.
+ */
+export interface OpenTaskLinkRequest {
+  readonly project_id: string;
+  readonly session_id: string;
+  /** `null` for a link on a session chip (`type: 'pr'` indexes `session.prs`). */
+  readonly task_key: string | null;
+  /** `pr`: the task's own PR/MR (index 0) or a session PR; `ref`: `task.refs[index]`. */
+  readonly link: { readonly type: 'pr' | 'ref'; readonly index: number };
+}
+
+export type OpenTaskLinkAnswer = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 /** App-local (`settings.json`); never a `preferences.json` key. */
 export interface BoardSettings {
@@ -1564,4 +1626,5 @@ export const CHANNELS = {
   taskBoardChanged: 'devteam:task-board-changed',
   boardSettings: 'devteam:board-settings',
   setBoardSettings: 'devteam:set-board-settings',
+  openTaskLink: 'devteam:open-task-link',
 } as const;

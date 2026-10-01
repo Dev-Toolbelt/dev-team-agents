@@ -18,9 +18,12 @@
  *     file on the window would otherwise navigate to it, and the preload would hand that
  *     page the whole `window.devteam` API. The IPC handlers close the same door from the
  *     other side by refusing any sender that is not the renderer's own main frame.
- *   - window-open and webview attachment are denied. Window-open is denied
- *     **without** an `openExternal` escape: the app renders no links, so a handler that
- *     opened one would be an outbound capability with no caller.
+ *   - window-open and webview attachment are denied, with no `openExternal` escape. The
+ *     renderer holds no URL it could open: the one outbound path is the `openTaskLink` IPC,
+ *     which takes **ids**, looks the link up in the main process's own board snapshot and
+ *     passes it through `validateTrackerLink` (below) before `shell.openExternal` — an exact
+ *     `https:` URL on a host the CLI named for that link kind, with one allow-listed path
+ *     shape. Anything else is refused. See the ADR on allow-listed tracker links.
  *   - every permission request (notifications, media, geolocation…) is denied. This app
  *     needs none, so the handler is a flat `false` rather than a list to maintain.
  */
@@ -29,6 +32,8 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Session, WebContents } from 'electron';
+
+import type { BoardLinkHost, BoardLinkKind } from '../shared/api.js';
 
 /**
  * The renderer options every window in this app is created with.
@@ -279,15 +284,14 @@ export function hardenSession(session: Session, target: Pick<RendererTarget, 'bu
  * this file did not create.
  */
 export function hardenContents(contents: WebContents, target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>): void {
-  // Denied outright. Nothing in this app opens a window or a link, so the handler has
-  // nothing to allow — and the version that called `shell.openExternal` for any `https://`
-  // URL was a standing outbound primitive inside a renderer whose CSP sets
-  // `connect-src 'none'` precisely so that none exists. Unreachable today is not a reason
-  // to keep it: the next screen that renders CLI text as markup makes it reachable, and
-  // then the capability is already there.
+  // Denied outright, and it stays denied. The version that called `shell.openExternal` for
+  // any `https://` URL was a standing outbound primitive inside a renderer whose CSP sets
+  // `connect-src 'none'` precisely so that none exists: the next screen that renders CLI
+  // text as markup would have made it reachable.
   //
-  // If a link ever needs to open, allow-list the exact hosts here and say which; do not
-  // widen this back to a scheme test.
+  // The only link this app opens is a PR/MR or issue link, through the `openTaskLink` IPC
+  // and `validateTrackerLink` below — ids in, validated canonical URL out, never a URL from
+  // the renderer. Do not widen this handler back to a scheme test.
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   contents.on('will-navigate', (event, url) => {
@@ -300,4 +304,119 @@ export function hardenContents(contents: WebContents, target: Pick<RendererTarge
   });
 
   contents.on('will-attach-webview', (event) => event.preventDefault());
+}
+
+// ── tracker links (the one allow-listed path to `shell.openExternal`) ─────────
+
+const HOSTNAME = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const GITHUB_PATH = /^\/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})\/(pull|issues)\/([1-9][0-9]{0,9})$/;
+const GITLAB_MR_PATH = /^\/((?:[A-Za-z0-9_.-]{1,255}\/){1,20}[A-Za-z0-9_.-]{1,255})\/-\/merge_requests\/([1-9][0-9]{0,9})$/;
+const JIRA_KEY_PATH = '/browse/([A-Z][A-Z0-9_]{1,9})-([1-9][0-9]{0,9})$';
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const MAX_LINK_LENGTH = 2_048;
+
+export interface TrackerLinkInput {
+  /** The URL from the main process's own snapshot (never from the renderer). */
+  readonly url: string;
+  readonly kind: BoardLinkKind;
+  /**
+   * What the link must be about, from the same snapshot: the number as a string for a PR or MR
+   * (`'45'`), `owner/repo#45` for a GitHub issue, `PROJ-12` for Jira.
+   */
+  readonly identity: string;
+  readonly linkHosts: readonly BoardLinkHost[];
+}
+
+export type TrackerLinkVerdict =
+  | { readonly ok: true; readonly canonical: string; readonly host: string; readonly path: string }
+  | { readonly ok: false; readonly reason: string };
+
+function gitlabSegmentsValid(group: string): boolean {
+  return group
+    .split('/')
+    .every((segment) => segment !== '.' && segment !== '..' && !segment.startsWith('-') && !segment.endsWith('.git'));
+}
+
+/**
+ * Whether a tracker link may be handed to the OS browser, and the exact string to hand over.
+ *
+ * Pure, so every pitfall is a unit test. The URL must survive a canonical round-trip
+ * (`https://` + hostname + pathname equals the input byte for byte), which refuses in one
+ * check userinfo, ports, query, fragment, backslashes, uppercase hosts, `..` segments and a
+ * trailing dot; the host must be one the CLI named for *this kind* of link; the path must be
+ * exactly one shape for the kind (no `%`); and the number or key in it must be the one the
+ * snapshot says the link is about. `link_hosts` is a consistency check inside the CLI's trust
+ * boundary, not a second trust anchor.
+ */
+export function validateTrackerLink(input: TrackerLinkInput): TrackerLinkVerdict {
+  const refuse = (reason: string): TrackerLinkVerdict => ({ ok: false, reason });
+  const { url, kind, identity, linkHosts } = input;
+  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_LINK_LENGTH) return refuse('length');
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return refuse('unparseable');
+  }
+  if (parsed.protocol !== 'https:') return refuse('protocol');
+  const host = parsed.hostname;
+  const canonical = `https://${host}${parsed.pathname}`;
+  if (url !== canonical) return refuse('not canonical');
+  if (!HOSTNAME.test(host)) return refuse('hostname shape');
+  const allowed = linkHosts.some((entry) => entry.host.toLowerCase() === host && entry.kinds.includes(kind));
+  if (!allowed) return refuse('host not allowed for this kind');
+  if (/(^|\.)xn--/.test(host) && !linkHosts.some((entry) => entry.host === host)) return refuse('punycode');
+  const path = parsed.pathname;
+  if (path.includes('%')) return refuse('percent-encoding');
+
+  switch (kind) {
+    case 'github_pr':
+    case 'github_issue': {
+      const match = GITHUB_PATH.exec(path);
+      if (match === null) return refuse('path shape');
+      const [, owner, repo, segment, number] = match;
+      if (repo === '.' || repo === '..') return refuse('path shape');
+      if (segment !== (kind === 'github_pr' ? 'pull' : 'issues')) return refuse('path shape');
+      const expected = kind === 'github_pr' ? number : `${owner}/${repo}#${number}`;
+      if (expected!.toLowerCase() !== identity.toLowerCase()) return refuse('identity mismatch');
+      break;
+    }
+    case 'gitlab_mr': {
+      const match = GITLAB_MR_PATH.exec(path);
+      if (match === null || !gitlabSegmentsValid(match[1]!)) return refuse('path shape');
+      if (match[2] !== identity) return refuse('identity mismatch');
+      break;
+    }
+    case 'jira': {
+      const bases = linkHosts
+        .filter((entry) => entry.host.toLowerCase() === host && entry.kinds.includes('jira'))
+        .map((entry) => entry.base_path ?? '');
+      let match: RegExpExecArray | null = null;
+      for (const base of new Set(bases)) {
+        match = new RegExp(`^${escapeRegExp(base)}${JIRA_KEY_PATH}`).exec(path);
+        if (match !== null) break;
+      }
+      if (match === null) return refuse('path shape');
+      if (`${match[1]}-${match[2]}` !== identity) return refuse('identity mismatch');
+      break;
+    }
+  }
+  return { ok: true, canonical, host, path };
+}
+
+/**
+ * At most one open per `minGapMs` and `perMinute` in any 60 s, process-wide. A refused call
+ * does not count, so a held-down key cannot starve the next real click.
+ */
+export function createLinkRateLimiter(now: () => number, minGapMs = 750, perMinute = 10): () => boolean {
+  const opened: number[] = [];
+  return () => {
+    const t = now();
+    while (opened.length > 0 && t - opened[0]! >= 60_000) opened.shift();
+    const last = opened[opened.length - 1];
+    if (last !== undefined && t - last < minGapMs) return false;
+    if (opened.length >= perMinute) return false;
+    opened.push(t);
+    return true;
+  };
 }

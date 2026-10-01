@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleAlert,
   Clock,
+  ExternalLink,
   FolderGit2,
   Moon,
   Pause,
@@ -28,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Hint } from '@/components/ui/tooltip';
 import { BackNav } from '../BackNav.js';
 import { Empty } from '../Problem.js';
+import { toastLinkRefused } from '../toasts.js';
 import { useOnDeactivate } from '../useOnDeactivate.js';
 import {
   PERIODS,
@@ -59,7 +61,10 @@ import {
   type BoardSessionStatus,
   type BoardSettings,
   type BoardTurn,
+  type BoardRef,
+  type BoardTaskPr,
   type BoardWorktree,
+  type OpenTaskLinkRequest,
 } from '../../shared/api.js';
 
 const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] };
@@ -534,6 +539,57 @@ function DirectTurns({ turns }: { turns: readonly BoardTurn[] }) {
   );
 }
 
+/** `host/path` of a link, for its tooltip: where the click goes, without the scheme. Empty when unparseable. */
+function destinationOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname}${parsed.pathname}`;
+  } catch {
+    return '';
+  }
+}
+
+/** Ids only: the main process finds the URL in its own snapshot and validates it before opening. */
+async function openLink(request: OpenTaskLinkRequest): Promise<void> {
+  try {
+    const answer = await window.devteam.openTaskLink(request);
+    if (!answer.ok) toastLinkRefused(answer.message);
+  } catch (error) {
+    toastLinkRefused(String(error));
+  }
+}
+
+const LINK_BUTTON_CLASS =
+  'inline-flex items-center gap-0.5 rounded-sm font-mono text-info underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden';
+
+/** `#45` for a pull request, `!45` for a merge request. The accessible name says what pressing it does. */
+function PrBadge({ pr, request }: { pr: BoardTaskPr; request: OpenTaskLinkRequest }) {
+  const label = pr.kind === 'pr' ? `#${pr.number}` : `!${pr.number}`;
+  const name = `Open ${pr.kind === 'pr' ? 'pull' : 'merge'} request ${label} in browser`;
+  const destination = destinationOf(pr.url);
+  return (
+    <Hint content={destination === '' ? name : `${name} (${destination})`}>
+      <button type="button" aria-label={name} onClick={() => void openLink(request)} className={LINK_BUTTON_CLASS}>
+        {label}
+        <ExternalLink className="size-3" aria-hidden="true" />
+      </button>
+    </Hint>
+  );
+}
+
+function IssueBadge({ issue, request }: { issue: BoardRef; request: OpenTaskLinkRequest }) {
+  const name = `Open issue ${issue.key} in browser`;
+  const destination = destinationOf(issue.url);
+  return (
+    <Hint content={destination === '' ? name : `${name} (${destination})`}>
+      <button type="button" aria-label={name} onClick={() => void openLink(request)} className={LINK_BUTTON_CLASS}>
+        {issue.key}
+        <ExternalLink className="size-3" aria-hidden="true" />
+      </button>
+    </Hint>
+  );
+}
+
 function FailedBadge() {
   return (
     <Badge variant="outline" className="border-destructive text-foreground" title="The agent run failed">
@@ -597,13 +653,14 @@ function AbandonedBadge({ count }: { count?: number }) {
 
 /** Stacked bar plus the figures beside it: the colours alone never carry the meaning. */
 function ProgressBar({ counts }: { counts: BoardCounts }) {
-  const label = `${counts.todo} to do, ${counts.in_progress} in progress, ${counts.in_review} in review, ${counts.done} done`;
+  const label = `${counts.todo} to do, ${counts.in_progress} in progress, ${counts.in_review} in review, ${counts.pr_created > 0 ? `${counts.pr_created} PR/MR created, ` : ''}${counts.done} done`;
   const segment = (value: number) => ({ flex: `${value} 1 0%` });
   return (
     <span role="img" aria-label={label} className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
       <span className="bg-muted-foreground/40" style={segment(counts.todo)} />
       <span className="bg-warning" style={segment(counts.in_progress)} />
       <span className="bg-info" style={segment(counts.in_review)} />
+      <span className="bg-primary" style={segment(counts.pr_created)} />
       <span className="bg-success" style={segment(counts.done)} />
     </span>
   );
@@ -615,10 +672,11 @@ function CountsRow({ counts }: { counts: BoardCounts }) {
     { label: 'To do', value: counts.todo, dot: 'bg-muted-foreground/40', share: shares[0] },
     { label: 'In progress', value: counts.in_progress, dot: 'bg-warning', share: shares[1] },
     { label: 'In Review', value: counts.in_review, dot: 'bg-info', share: shares[2] },
-    { label: 'Done', value: counts.done, dot: 'bg-success', share: shares[3] },
+    { label: 'PR/MR Created', value: counts.pr_created, dot: 'bg-primary', share: shares[3] },
+    { label: 'Done', value: counts.done, dot: 'bg-success', share: shares[4] },
   ];
   return (
-    <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
       {cells.map((cell) => (
         <div key={cell.label}>
           <dt className="flex items-center gap-1 text-muted-foreground">
@@ -744,7 +802,7 @@ function Kanban({
         </span>
       </div>
 
-      <SessionStrip sessions={shownSessions} />
+      <SessionStrip projectId={project.project_id} sessions={shownSessions} />
 
       {unshown > 0 ? (
         <p role="status" className="text-xs text-muted-foreground">
@@ -752,18 +810,20 @@ function Kanban({
         </p>
       ) : null}
 
-      {findingsOn && view.todo.length + view.in_progress.length + view.in_review.length + view.done.length === 0 ? (
+      {findingsOn && view.todo.length + view.in_progress.length + view.in_review.length + view.pr_created.length + view.done.length === 0 ? (
         <p role="status" className="rounded-lg bg-muted/40 p-6 text-center text-sm text-muted-foreground">
           No tasks with findings
         </p>
       ) : (
         <KanbanRow>
-          <Column title="To do" items={view.todo} now={coarseNow} asOf={project.as_of} />
-          <Column title="In progress" items={view.in_progress} now={tick} asOf={project.as_of} />
-          <Column title="In Review" items={view.in_review} now={coarseNow} asOf={project.as_of} />
+          <Column title="To do" items={view.todo} projectId={project.project_id} now={coarseNow} asOf={project.as_of} />
+          <Column title="In progress" items={view.in_progress} projectId={project.project_id} now={tick} asOf={project.as_of} />
+          <Column title="In Review" items={view.in_review} projectId={project.project_id} now={coarseNow} asOf={project.as_of} />
+          <Column title="PR/MR Created" items={view.pr_created} projectId={project.project_id} now={coarseNow} asOf={project.as_of} />
           <Column
             title="Done"
             positive
+            projectId={project.project_id}
             items={view.done}
             now={coarseNow}
             asOf={project.as_of}
@@ -908,23 +968,23 @@ function sessionLabel(session: BoardSession): string {
  * them apart at a glance — provider, title or branch, status — and the rest (branch beside a
  * title, the per-session counts) is in its tooltip and, for a screen reader, in its text.
  */
-function SessionStrip({ sessions }: { sessions: readonly BoardSession[] }) {
+function SessionStrip({ projectId, sessions }: { projectId: string; sessions: readonly BoardSession[] }) {
   if (sessions.length === 0) return null;
   return (
     <ul aria-label="Sessions" className="flex flex-wrap gap-2">
       {sessions.map((session) => (
-        <SessionChip key={session.session_id} session={session} />
+        <SessionChip key={session.session_id} projectId={projectId} session={session} />
       ))}
     </ul>
   );
 }
 
-function SessionChip({ session }: { session: BoardSession }) {
+function SessionChip({ projectId, session }: { projectId: string; session: BoardSession }) {
   const StatusIcon = STATUS_ICON[session.status];
   const where = session.branch ?? 'no branch';
   const counts = `${session.counts.todo} to do · ${session.counts.in_progress} in progress${
     session.counts.in_review > 0 ? ` · ${session.counts.in_review} in review` : ''
-  } · ${session.counts.done} done`;
+  }${session.counts.pr_created > 0 ? ` · ${session.counts.pr_created} PR/MR created` : ''} · ${session.counts.done} done`;
   const provider = providerLabel(session.provider);
   const details = [provider, session.title, where, STATUS_WORD[session.status], counts].filter((each) => each !== null).join(' — ');
   return (
@@ -948,6 +1008,13 @@ function SessionChip({ session }: { session: BoardSession }) {
       <StatusIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="sr-only">{STATUS_WORD[session.status]}</span>
       <span className="sr-only">{counts}</span>
+      {session.prs.map((pr, index) => (
+        <PrBadge
+          key={pr.url}
+          pr={pr}
+          request={{ project_id: projectId, session_id: session.session_id, task_key: null, link: { type: 'pr', index } }}
+        />
+      ))}
     </li>
   );
 }
@@ -955,6 +1022,7 @@ function SessionChip({ session }: { session: BoardSession }) {
 function Column({
   title,
   items,
+  projectId,
   now,
   asOf,
   note = null,
@@ -962,6 +1030,7 @@ function Column({
 }: {
   title: string;
   items: readonly KanbanItem[];
+  projectId: string;
   now: number;
   asOf?: number | undefined;
   note?: string | null;
@@ -995,6 +1064,7 @@ function Column({
             <TaskCard
               key={`${item.session.session_id}:${item.task.key}`}
               item={item}
+              projectId={projectId}
               now={isRunning(item.session, item.task) ? now : 0}
               asOf={asOf}
             />
@@ -1010,7 +1080,17 @@ function Column({
  * One task. The per-step times sit behind a disclosure button, not a hover tooltip: one tab
  * stop per card instead of two, nothing that overlaps its neighbours, and Escape closes it.
  */
-const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem; now: number; asOf?: number | undefined }) {
+const TaskCard = memo(function TaskCard({
+  item,
+  projectId,
+  now,
+  asOf,
+}: {
+  item: KanbanItem;
+  projectId: string;
+  now: number;
+  asOf?: number | undefined;
+}) {
   const { session, task } = item;
   const ids = useId();
   const contentId = `${ids}-content`;
@@ -1054,6 +1134,19 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
             {format(inColumn)}
           </span>
           {task.worktree !== null ? <WorktreeMark worktree={task.worktree} /> : null}
+          {task.pr !== null ? (
+            <PrBadge
+              pr={task.pr}
+              request={{ project_id: projectId, session_id: session.session_id, task_key: task.key, link: { type: 'pr', index: 0 } }}
+            />
+          ) : null}
+          {task.refs.map((issue, index) => (
+            <IssueBadge
+              key={issue.url}
+              issue={issue}
+              request={{ project_id: projectId, session_id: session.session_id, task_key: task.key, link: { type: 'ref', index } }}
+            />
+          ))}
           {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
           {task.kind === 'direct' ? <DirectBadge /> : null}
           {task.failed ? <FailedBadge /> : null}

@@ -14,9 +14,12 @@ import {
   type BoardFeed,
   type BoardSettings,
   type BoardSettingsAnswer,
+  type OpenTaskLinkAnswer,
+  type OpenTaskLinkRequest,
 } from '../shared/api.js';
 import { boardSettingsProblem } from './settings.js';
-import { trustedHandler, type RendererTarget } from './security.js';
+import { createLinkRateLimiter, trustedHandler, validateTrackerLink, type RendererTarget } from './security.js';
+import type { ResolvedTaskLink } from './taskBoard.js';
 
 export interface TaskBoardIpcDeps {
   /** Who may call these channels; see `trustedHandler` in `security.ts`. */
@@ -26,6 +29,43 @@ export interface TaskBoardIpcDeps {
   readonly boardSettings: () => Promise<BoardSettings>;
   /** Persist, then apply (the stream restarts when the stale threshold changed). */
   readonly saveBoardSettings: (settings: BoardSettings) => Promise<BoardSettings>;
+  /** Look a link up in the board's own latest snapshot. */
+  readonly linkFor: (request: OpenTaskLinkRequest) => ResolvedTaskLink | null;
+  /** `shell.openExternal(url, { activate: true })`. */
+  readonly openExternal: (url: string) => Promise<void>;
+  /** Whether the focused window is one of this app's own. */
+  readonly appWindowFocused: () => boolean;
+  readonly now?: () => number;
+  /** Never receives a full URL: host and kind only. */
+  readonly log?: (message: string) => void;
+}
+
+const idOk = (value: unknown): value is string =>
+  typeof value === 'string' && value.length >= 1 && value.length <= 512 && ![...value].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f);
+const LINK_REQUEST_KEYS = ['project_id', 'session_id', 'task_key', 'link'];
+
+/** A request that is exactly the documented shape, or `null`. A type is a claim; this is the boundary. */
+export function parseOpenTaskLink(raw: unknown): OpenTaskLinkRequest | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const body = raw as Record<string, unknown>;
+  const keys = Object.keys(body);
+  if (keys.length !== LINK_REQUEST_KEYS.length || !LINK_REQUEST_KEYS.every((key) => Object.hasOwn(body, key))) return null;
+  const projectId = body['project_id'];
+  const sessionId = body['session_id'];
+  const taskKey = body['task_key'];
+  const link = body['link'];
+  if (!idOk(projectId)) return null;
+  if (!idOk(sessionId)) return null;
+  if (taskKey !== null && !idOk(taskKey)) return null;
+  if (typeof link !== 'object' || link === null || Array.isArray(link)) return null;
+  const linkBody = link as Record<string, unknown>;
+  const linkKeys = Object.keys(linkBody);
+  if (linkKeys.length !== 2 || !Object.hasOwn(linkBody, 'type') || !Object.hasOwn(linkBody, 'index')) return null;
+  const type = linkBody['type'];
+  const index = linkBody['index'];
+  if (type !== 'pr' && type !== 'ref') return null;
+  if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index > 63) return null;
+  return { project_id: projectId, session_id: sessionId, task_key: taskKey, link: { type, index } };
 }
 
 export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
@@ -33,6 +73,29 @@ export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
     ipcMain.handle(channel, trustedHandler(deps.trustedRenderer, listener));
   handle(CHANNELS.taskBoard, () => deps.feed());
   handle(CHANNELS.refreshTaskBoard, () => deps.refresh());
+
+  const mayOpen = createLinkRateLimiter(deps.now ?? Date.now);
+  const refused = (why: string): OpenTaskLinkAnswer => {
+    deps.log?.(`task link refused: ${why}`);
+    return { ok: false, message: 'That link could not be opened.' };
+  };
+  handle(CHANNELS.openTaskLink, async (_event, raw: unknown): Promise<OpenTaskLinkAnswer> => {
+    const request = parseOpenTaskLink(raw);
+    if (request === null) return refused('malformed request');
+    if (!deps.appWindowFocused()) return refused('app window not focused');
+    const link = deps.linkFor(request);
+    if (link === null) return refused('no such link in the snapshot');
+    const verdict = validateTrackerLink(link);
+    if (!verdict.ok) return refused(`${link.kind}: ${verdict.reason}`);
+    if (!mayOpen()) return refused('rate limited');
+    try {
+      await deps.openExternal(verdict.canonical);
+      deps.log?.(`task link opened: ${link.kind} on ${verdict.host}`);
+      return { ok: true };
+    } catch {
+      return refused('the system could not open it');
+    }
+  });
 
   handle(CHANNELS.boardSettings, () => deps.boardSettings());
   handle(CHANNELS.setBoardSettings, async (_event, raw: unknown): Promise<BoardSettingsAnswer> => {
