@@ -73,6 +73,26 @@ The spawn branch of the same script has a second gate: the tool key must be `Age
 
 `03-credential-guard.sh` (ADR-0010) refuses commands that read credential stores (dump keychain, cat a secrets file, etc.) and warns on reads via the audit-path CLI. It is **hygiene and auditability, not a sandbox** — it matches command text, so it is trivially bypassed (a variable, base64, a here-doc, etc.). Its value is stopping the obvious spelling by default; the audit log and the `DEVTEAM_CRED_READ_CONFIRMED=1` escape hatch are the record.
 
+### Hook Commands Run From the Project Root
+
+A provider runs a hook in the session's **current** directory, and that is not always the project root: a Claude Code session keeps the directory a Bash call `cd`-ed into, and Codex can be started in a subdirectory. Every hook, and every sub-script that reads `$PWD` or calls `git`, assumes the root, so the registered command finds it first. It walks up from the current directory to the nearest one holding `.dev-team-agents/scripts/hooks` (`ROOT_WALK` in `scripts/lib/devteam/hooks.py`):
+
+| Provider | Registered by | Root | When no ancestor has the hooks |
+|----------|---------------|------|--------------------------------|
+| Claude Code | `scripts/lib/devteam/hooks.py:command_for` (v3), `scripts/install.sh` `_hook_cmd` (v2) — the two must stay equal | `env -u BASH_ENV -u ENV bash -c '<ROOT_WALK>'` | `$CLAUDE_PROJECT_DIR`, then `.` |
+| Codex | `scripts/install-codex.sh` `cmd()` — same walk | `bash -c '<ROOT_WALK>'` | `.` |
+| opencode | the plugin spawns the dispatcher itself | `spawn("bash", [script], { cwd: directory, … })` | — |
+
+- **The nearest ancestor wins, even over `$CLAUDE_PROJECT_DIR`.** A session opened at a bound repository that `cd`s into a bound sub-project runs the sub-project's hooks and feeds its board — the same rule that makes a package installed below the repository root work. `$CLAUDE_PROJECT_DIR` is only the fallback when no ancestor has the hooks.
+- **The logical path is walked first, then the physical one** (`pwd -P`), so a directory entered through a symlink from outside the project still finds it. A step that cannot shorten the path ends the walk rather than spinning.
+- **Walk up, not `git rev-parse --show-toplevel`.** The project root is not always the repository root (a package with its own install inside a monorepo), and a worktree may or may not carry its own hooks: the nearest ancestor is right in each case. A worktree with only a partial `.dev-team-agents/` runs the hooks of the checkout that holds it.
+- **`bash -c '…'`**, not bare shell syntax: Claude Code and Codex run the command through a shell that is not ours to choose (Codex uses the user's `$SHELL`, which may be zsh or fish), and single quotes are literal in all of them. `env -u` comes before it so that bash does not source `BASH_ENV`.
+- **Codex on Windows keeps the plain `bash .dev-team-agents/scripts/hooks/<x>.sh`.** Codex runs the command through `cmd.exe /C` there, where single quotes do not quote; such a session must start at the project root.
+- **Still relative.** `settings.json` is committed, so an absolute path would break every other clone.
+- **`exec bash <script>`**, so stdin, the exit status (PreToolUse exit 2 blocks) and a copy that lost its mode bits all work.
+- A relative command run from a subdirectory fails as a *non-blocking error* the provider does not surface: the board stays empty and the credential guard does not run, with nothing on screen. `tests/test_hook_project_root.py` runs the real registered command from `apps/api` on every provider, plus nested roots and worktrees.
+- `devteam sync` rewrites the earlier relative command in place (ours are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command): only that hook's `command` changes, so a sibling hook in the same entry, a key such as `timeout` on ours, and a matcher the user chose are all kept. The v2 `install.sh` rewrites only a command that is exactly one it shipped, so a user's own wrapper around our script is kept.
+
 ### Hook Files Map
 
 | Event | File | Dispatcher | Purpose |

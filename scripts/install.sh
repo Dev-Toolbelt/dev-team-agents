@@ -683,13 +683,26 @@ fi
 # Hooks are wrapped with `env -u BASH_ENV -u ENV` so that WSL environments
 # where BASH_ENV=/etc/bash.bashrc do not trigger bashrc errors on every hook
 # invocation (start-systemd-namespace is absent in many WSL setups).
-PRE_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-tool-use.sh"
-STOP_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/stop.sh"
-SESSION_START_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-start.sh"
-PRE_COMPACT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/pre-compact.sh"
-POST_TOOL_USE_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/post-tool-use.sh"
-SESSION_END_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/session-end.sh"
-USER_PROMPT_HOOK="env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/user-prompt-submit.sh"
+# The command finds the project root first: Claude Code runs a hook in the session's CURRENT
+# directory, which a Bash `cd` moves, and a relative path from a subdirectory names nothing. It
+# walks up to the nearest directory holding the hooks, then falls back to $CLAUDE_PROJECT_DIR.
+# `_HOOK_TEMPLATE` is that command with `@SCRIPT@` for the script name.
+# Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
+_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && exec bash .dev-team-agents/scripts/hooks/@SCRIPT@'"'"''
+_hook_cmd() {
+    printf '%s' "${_HOOK_TEMPLATE//@SCRIPT@/$1}"
+}
+# The same command as a JSON string body, for the settings.json written from a heredoc.
+_json_str() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+PRE_TOOL_USE_HOOK="$(_hook_cmd pre-tool-use.sh)"
+STOP_HOOK="$(_hook_cmd stop.sh)"
+SESSION_START_HOOK="$(_hook_cmd session-start.sh)"
+PRE_COMPACT_HOOK="$(_hook_cmd pre-compact.sh)"
+POST_TOOL_USE_HOOK="$(_hook_cmd post-tool-use.sh)"
+SESSION_END_HOOK="$(_hook_cmd session-end.sh)"
+USER_PROMPT_HOOK="$(_hook_cmd user-prompt-submit.sh)"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -702,7 +715,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$PRE_TOOL_USE_HOOK"
+            "command": "$(_json_str "$PRE_TOOL_USE_HOOK")"
           }
         ]
       }
@@ -712,7 +725,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$STOP_HOOK"
+            "command": "$(_json_str "$STOP_HOOK")"
           }
         ]
       }
@@ -722,7 +735,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$SESSION_START_HOOK"
+            "command": "$(_json_str "$SESSION_START_HOOK")"
           }
         ]
       }
@@ -732,7 +745,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$PRE_COMPACT_HOOK"
+            "command": "$(_json_str "$PRE_COMPACT_HOOK")"
           }
         ]
       }
@@ -743,7 +756,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$POST_TOOL_USE_HOOK"
+            "command": "$(_json_str "$POST_TOOL_USE_HOOK")"
           }
         ]
       }
@@ -754,7 +767,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$POST_TOOL_USE_HOOK"
+            "command": "$(_json_str "$POST_TOOL_USE_HOOK")"
           }
         ]
       }
@@ -764,7 +777,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$SESSION_END_HOOK"
+            "command": "$(_json_str "$SESSION_END_HOOK")"
           }
         ]
       }
@@ -774,7 +787,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         "hooks": [
           {
             "type": "command",
-            "command": "$USER_PROMPT_HOOK"
+            "command": "$(_json_str "$USER_PROMPT_HOOK")"
           }
         ]
       }
@@ -892,6 +905,45 @@ PYEOF
     _inject_hook "PostToolUse"  "$POST_TOOL_USE_HOOK"  "hooks/post-tool-use.sh"
     _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
     _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
+
+    # An entry written before the command found the project root runs from whatever directory
+    # the session is in. Rewrite an entry whose command is EXACTLY one we shipped to the current
+    # one, in place; a user's own wrapper around our script, and the matcher on ours, are kept.
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$SETTINGS_FILE" \
+            "pre-tool-use.sh=$PRE_TOOL_USE_HOOK" "stop.sh=$STOP_HOOK" \
+            "session-start.sh=$SESSION_START_HOOK" "pre-compact.sh=$PRE_COMPACT_HOOK" \
+            "post-tool-use.sh=$POST_TOOL_USE_HOOK" "session-end.sh=$SESSION_END_HOOK" \
+            "user-prompt-submit.sh=$USER_PROMPT_HOOK" <<'PYEOF'
+import sys, json
+
+settings_file = sys.argv[1]
+wanted = dict(arg.split("=", 1) for arg in sys.argv[2:])
+with open(settings_file, 'r') as f:
+    data = json.load(f)
+changed = False
+for entries in (data.get('hooks') or {}).values():
+    if not isinstance(entries, list):
+        continue
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for hook in entry.get('hooks') or []:
+            if not isinstance(hook, dict):
+                continue
+            command = hook.get('command') or ''
+            for script, current in wanted.items():
+                path = ".dev-team-agents/scripts/hooks/" + script
+                if command in (path, "env -u BASH_ENV -u ENV " + path):
+                    hook['command'] = current
+                    changed = True
+if changed:
+    with open(settings_file, 'w') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+    print("→ Hook commands now run from the project root")
+PYEOF
+    fi
 
     # A failed subagent launch never reaches PostToolUse: the same dispatcher retires it.
     if command -v python3 >/dev/null 2>&1; then

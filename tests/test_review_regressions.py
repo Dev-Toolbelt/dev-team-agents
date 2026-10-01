@@ -497,7 +497,7 @@ class LegacyV2MigrationTest(StoreTestCase):
             self.assertEqual(len(commands), 1, event)
             self.assertIn(".dev-team-agents/scripts/hooks/" + script, commands[0])
             # The path the rewritten hook names must actually exist.
-            self.assertTrue((root / commands[0].split()[-1]).exists(), commands[0])
+            self.assertTrue((root / hooks.HOOK_DIR / script).exists(), commands[0])
         self.assertEqual(settings["model"], "opus")
 
     def test_migration_quarantines_a_hand_written_file_instead_of_deleting_it(self):
