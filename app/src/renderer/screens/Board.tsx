@@ -466,7 +466,9 @@ function AgentBadge({ name }: { name: string | null }) {
 /**
  * Shown only when the task was started in a linked worktree. A button rather than a focusable
  * image, so the tooltip opens from the keyboard on an element whose role says it can take focus;
- * it does nothing when pressed. Its name carries the same text as the tooltip.
+ * it does nothing when pressed. Its name carries the same text as the tooltip on purpose: the path
+ * must be reachable with the tooltip closed, at the cost of a screen reader possibly repeating it
+ * while the tooltip is open and describes the button.
  */
 function WorktreeMark({ worktree }: { worktree: BoardWorktree }) {
   const text = `Worktree: ${worktree.path}${worktree.branch !== null ? ` (branch ${worktree.branch})` : ''}`;

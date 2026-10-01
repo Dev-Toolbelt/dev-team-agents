@@ -1762,6 +1762,22 @@ def _retire_at_stop(rec, payload, now):
     return outcomes
 
 
+def _git_head(cwd):
+    """The branch ``HEAD`` names in ``cwd``, else ``None``."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    branch = result.stdout.decode("utf-8", "replace").strip()
+    return branch if result.returncode == 0 and branch else None
+
+
 def _git_location(cwd):
     """``(branch, worktree)`` for a working directory, from one ``git`` call.
 
@@ -1784,10 +1800,14 @@ def _git_location(cwd):
     # Options before `HEAD`: git prints each answer in order and stops at the first it cannot give.
     # A normal checkout or worktree answers all four. A repository with no commit yet answers the
     # paths but not `HEAD` (exit 128, the branch is unknown). A bare repository, or a `cwd` inside
-    # `.git`, has no work tree: only the two git dirs, so no branch and no worktree.
+    # `.git`, has no work tree: only the two git dirs, so no worktree, and the branch is asked alone.
     lines = [line.strip() for line in result.stdout.decode("utf-8", "replace").splitlines()]
     if len(lines) < 2:
         return None, None
+    if len(lines) < 3:
+        # No work tree: no worktree either, but `HEAD` alone still names the branch, as it did
+        # before this call also asked for the worktree.
+        return _git_head(cwd), None
     git_dir, common_dir = lines[:2]
     toplevel = lines[2] if len(lines) >= 3 else ""
     branch = lines[3] if result.returncode == 0 and len(lines) >= 4 else None
