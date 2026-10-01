@@ -178,7 +178,7 @@ or {"project_id": "…", "removed": true} when it no longer has tasks>}`, then `
 after the backlog, `{"event":"heartbeat","ts":…}` every 30 s, and `{"event":"end","reason":…}` —
 the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 
-#### In Review — an optional fourth column (amendment 2026-09-30)
+#### In Review — the fourth column (amendment 2026-09-30)
 
 A task may go from In progress straight to Done. It passes through **In Review** only when a review
 is triggered in its session, and leaves only when the review passed or its findings were fixed.
@@ -296,7 +296,13 @@ findings.
   with findings. Period filter
   (today / 7 days / 30 days / all).
 - **Project kanban:** four columns — To do, In progress, **In Review**, Done — with In Review empty
-  when no task is in review. Tasks in review carry a badge: **N findings**, **result not read**
+  when no task is in review. The columns sit side by side in one row that never stacks: they share
+  the width when it fits and the row scrolls horizontally when it does not (mouse, trackpad, or the
+  arrow keys — the row is a tab stop only while it overflows). A column is at most as tall as the
+  visible part of the page, measured, so its heading stays on screen and its cards scroll inside it
+  (a column's card list is a tab stop too while it overflows); columns are as tall as their cards up
+  to that cap.
+  Tasks in review carry a badge: **N findings**, **result not read**
   (`unread`), **pending** (the review has not answered yet) or a neutral **In review** for a state
   this app version does not know. A "with findings" filter
   shows only tasks in review that have findings. Card: task text, session chip (provider icon + branch), time in
@@ -332,7 +338,9 @@ findings.
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
 12. **Given** any project, **When** its kanban opens, **Then** it shows four columns in order — To do,
-    In progress, In Review, Done — with In Review empty when no task is in review.
+    In progress, In Review, Done — with In Review empty when no task is in review — side by side in
+    one row; **When** the window is narrower than the four columns' minimum width, **Then** the row
+    scrolls horizontally and the columns never stack.
 13. **Given** a task in review whose window recorded 2 findings, **Then** its card shows **2 findings**;
     with no marker read it shows **result not read**; with no answer yet it shows **pending**.
 14. **Given** the findings filter is on, **Then** only tasks in review with findings are listed.
@@ -371,3 +379,4 @@ findings.
 | 2026-09-30 | Agent spawns are tasks: every non-built-in, non-review agent a session spawns is recorded by the hooks (`kind: "agent"`, `failed` on failure), hidden when the owner keeps a mirrored plan | A live `/devteam:backend` run delegated to two agents without a plan and the board stayed empty |
 | 2026-09-30 | Agent spawns implementation details the amendment left open: (1) a Codex task's `id` is the `spawn_agent` call's `tool_use_id` (its `PreToolUse` fires before an agent id exists); the spawned agent id from the `PostToolUse` response is stored as `agent_ref`, and `wait_agent` matches on it, so the Codex `PostToolUse` matcher widens to `.*(wait_agent\|spawn_agent)`. (2) `wait_agent` settles each agent whose state is final: `completed` → `completed`; `errored`/`not_found` → `cancelled`, `failed: true`; `shutdown` → `cancelled` (not failed); running states change nothing. (3) A background agent's hand-back marks it `completed` regardless of the notification's own status (a failed background agent is not distinguished). (4) A result, ack or failure that matches no recorded spawn never starts a record and never touches one; a spawn replayed with the same id adds nothing. (5) Agent tasks are not todo-list members: `TodoWrite`/`update_plan`/`TaskUpdate` diffs and id lookups skip them, so a replace never removes one. (6) Agent tasks still enter a later review window as finished work, unless hidden; hidden agent tasks are excluded from review entry, the fix rule, counts and `all_done`. (7) Hook gates: the spawn gate is the tool key alone; a review-typed spawn (`subagent_type`/`agent_type`) takes the review path and needs a record, any other agent forks `tasks record`; results fork only when the session has a record. Built-ins fork python once and are dropped by the CLI (one list, in Python). (8) The opencode plugin needed no change: it already forwards `callID` and `args` for `task`. |
 | 2026-09-30 | Agent spawns review fixes: (1) a background hand-back's `<status>` decides the outcome: `completed` or any other word → `completed`; `failed`/`killed`/`error` (case-insensitive) → `cancelled`, `failed: true`; this supersedes item (3) of the implementation-details row above. (2) The shared background cursor restarts at the transcript's end when a background spawn or ack arrives and no other agent task is background and `in_progress`; one `Stop` reads chunks of 2 MiB until the transcript end or a 64 MiB cap (review windows read the same way). (3) `Stop` settles every foreground agent task left `in_progress` as `cancelled` with `interrupted: true` (not on Codex while it holds an `agent_ref`); additive `interrupted` in the task view, and `session_done` is also withheld while a visible task is `interrupted` (deviation: the spec only named `failed`, but a cut-off run is not a finished session). (4) Codex: a `spawn_agent` `PostToolUse` with no agent id → `cancelled`, `failed: true`; `close_agent` → `cancelled` (not failed), so the Codex matcher is `.*(wait_agent\|spawn_agent\|close_agent)` and `install-codex.sh` writes it; opencode's thrown `task` is covered by (3). (5) An agent's end raises `became_all_done` only from `Stop`, via `done_pending` on the record; never with a `failed`/`interrupted` task visible. (6) Free gate in both bash scripts: a spawn payload with neither `"subagent_type"` nor `"agent_type"` exits before forking. (7) `claude` (the catch-all agent) joins `BUILTIN_AGENTS["claude"]`. (8) Agent tasks created after a review's result count toward its fix rule and an in-progress background agent can enter In Review: intended, documented above. (9) A spawn with no id is deduplicated by agent, text and owner against an open id-less agent task (a replay adds nothing). (10) App fixture task `t5` is `cancelled` + `failed`; `app/README.md` words the Failed badge as a failed spawned agent run. | Findings of the review of Agent spawns are tasks |
+| 2026-10-01 | The project kanban is one horizontally scrolling row of columns with a minimum width, each scrolling its own cards, instead of a responsive grid | The grid stacked the columns 2×2 or 1×4 in a narrower window, which no longer read as a kanban |
