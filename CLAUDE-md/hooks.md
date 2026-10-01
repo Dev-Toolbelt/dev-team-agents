@@ -73,6 +73,22 @@ The spawn branch of the same script has a second gate: the tool key must be `Age
 
 `03-credential-guard.sh` (ADR-0010) refuses commands that read credential stores (dump keychain, cat a secrets file, etc.) and warns on reads via the audit-path CLI. It is **hygiene and auditability, not a sandbox** — it matches command text, so it is trivially bypassed (a variable, base64, a here-doc, etc.). Its value is stopping the obvious spelling by default; the audit log and the `DEVTEAM_CRED_READ_CONFIRMED=1` escape hatch are the record.
 
+### Hook Commands Run From the Project Root
+
+A provider runs a hook in the session's **current** directory, and that is not always the project root: a Claude Code session keeps the directory a Bash call `cd`-ed into, and Codex can be started in a subdirectory. Every hook, and every sub-script that reads `$PWD` or calls `git`, assumes the root, so the registered command enters it first:
+
+| Provider | Registered by | Command |
+|----------|---------------|---------|
+| Claude Code | `scripts/lib/devteam/hooks.py:command_for` (v3), `scripts/install.sh` `_hook_cmd` (v2) — the two must stay equal | `env -u BASH_ENV -u ENV bash -c 'cd "${CLAUDE_PROJECT_DIR:-.}" && exec bash .dev-team-agents/scripts/hooks/<x>.sh'` |
+| Codex | `scripts/install-codex.sh` `cmd()` | `bash -c 'cd "$(git rev-parse --show-toplevel 2>/dev/null \|\| echo .)" && exec bash .dev-team-agents/scripts/hooks/<x>.sh'` |
+| opencode | the plugin spawns the dispatcher itself | `spawn("bash", [script], { cwd: directory, … })` |
+
+- **`bash -c '…'`**, not bare shell syntax: Claude Code and Codex run the command through a shell that is not ours to choose (Codex uses the user's `$SHELL`, which may be zsh or fish), and single quotes are literal in all of them. `env -u` comes before it so that bash does not source `BASH_ENV`.
+- **Still relative.** `settings.json` is committed, so an absolute path would break every other clone.
+- **`exec bash <script>`**, so a copy that lost its mode bits still runs.
+- A relative command run from a subdirectory fails as a *non-blocking error* the provider does not surface: the board stays empty and the credential guard does not run, with nothing on screen. `tests/test_hook_project_root.py` runs the real registered command from `apps/api` on every provider.
+- `devteam sync` rewrites an entry carrying the earlier relative command in place (our entries are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command), keeps a matcher the user chose, and leaves every other hook alone.
+
 ### Hook Files Map
 
 | Event | File | Dispatcher | Purpose |
