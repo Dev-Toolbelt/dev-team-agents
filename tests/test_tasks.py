@@ -22,7 +22,7 @@ from devteam_support import CLI, REPO_ROOT, StoreTestCase, requires_bash
 
 from unittest import mock
 
-from devteam import bind, hooks, project, tasks
+from devteam import bind, hooks, project, providers, tasks
 
 HOOKS = REPO_ROOT / "scripts" / "hooks"
 PRE_TOOL_USE = HOOKS / "pre-tool-use" / "04-task-board.sh"
@@ -343,6 +343,85 @@ class RecordTest(BoardCase):
         self.assertIsNotNone(self.load("s1")["ended_at"])
         self.rec(todo_write("s1", [todo("A", "in_progress")]), now=T0 + 9)
         self.assertIsNone(self.load("s1")["ended_at"])
+
+
+class SessionTitleTest(BoardCase):
+    """A session is named in notifications by the title its provider shows, cut to 15 characters."""
+
+    def claude_transcript(self, *titles):
+        path = self.tmp / "claude-transcript.jsonl"
+        with open(str(path), "a", encoding="utf-8") as handle:
+            for title in titles:
+                handle.write(json.dumps({"type": "user", "message": {"content": "hi"}}) + "\n")
+                handle.write(json.dumps({"type": "custom-title", "customTitle": title, "sessionId": "c1"}) + "\n")
+        return path
+
+    def codex_index(self, *titles):
+        home = self.tmp / "codex-home"
+        home.mkdir(exist_ok=True)
+        with open(str(home / "session_index.jsonl"), "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"id": "someone-else", "thread_name": "Other thread", "updated_at": "x"}) + "\n")
+            for title in titles:
+                handle.write(json.dumps({"id": "x1", "thread_name": title, "updated_at": "x"}) + "\n")
+        return home
+
+    # One case per provider: (record payload, mark payload after a rename). Each provider keeps
+    # the title somewhere else; a provider added without a case fails the parity test below.
+    def case_claude(self):
+        transcript = self.claude_transcript("First name", "Notificações do app")
+        record = dict(todo_write("c1", [todo("A", "completed")], cwd=str(self.root)), transcript_path=str(transcript))
+        def rename():
+            self.claude_transcript("Renamed later")
+            return {"session_id": "c1", "transcript_path": str(transcript)}
+        return "c1", record, rename
+
+    def case_codex(self):
+        home = self.codex_index("First name", "Notificações do app")
+        self.enterContext(mock.patch.dict(os.environ, {"CODEX_HOME": str(home)}))
+        def rename():
+            self.codex_index("Renamed later")
+            return {"session_id": "x1", "transcript_path": "/nonexistent/rollout.jsonl"}
+        return "x1", codex_plan("x1", [("A", "completed")]), rename
+
+    def case_opencode(self):
+        record = dict(opencode_todos("o1", [("a", "A", "completed")]), session_title="Notificações do app")
+        return "o1", record, lambda: {"session_id": "o1", "session_title": "Renamed later"}
+
+    def test_every_provider_has_a_title_case(self):
+        cases = {name[len("case_"):] for name in dir(self) if name.startswith("case_")}
+        self.assertEqual(cases, set(providers.ALL_PROVIDERS))
+
+    def test_each_provider_names_the_session_by_its_last_title(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session, payload, rename = getattr(self, "case_" + provider)()
+                result = self.rec(payload)
+                self.assertEqual(result["title_short"], "Notificações do\u2026")
+                self.assertEqual(self.load(session)["title"], "Notificações do app")
+                marked = tasks.mark(self.root, rename(), "idle", now=T0 + 5)
+                self.assertEqual(marked["title_short"], "Renamed later")
+                self.assertEqual(self.load(session)["title"], "Renamed later")
+
+    def test_without_a_title_nothing_is_stored_and_the_short_title_is_none(self):
+        result = self.rec(todo_write("c2", [todo("A")], cwd=str(self.root)))
+        self.assertIsNone(result["title_short"])
+        self.assertNotIn("title", self.load("c2"))
+        self.assertIsNone(tasks.mark(self.root, {"session_id": "c2"}, "idle", now=T0 + 5)["title_short"])
+
+    def test_the_opencode_plugin_sends_the_session_title_with_every_task_board_payload(self):
+        # opencode keeps the title only behind its SDK, so the plugin must look it up and pass it.
+        source = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
+        self.assertIn("client.session.get({ path: { id: sessionID } })", source)
+        self.assertIn('event.type === "session.updated"', source)
+        # tool.execute.before, tool.execute.after and both session.idle payload shapes.
+        self.assertEqual(source.count("session_title: await sessionTitle("), 4)
+
+    def test_title_short_cuts_and_cleans(self):
+        self.assertEqual(tasks.title_short("Notificações do app"), "Notificações do\u2026")
+        self.assertEqual(tasks.title_short("Short one"), "Short one")
+        self.assertEqual(tasks.title_short('say "hi"\\now\nplease'), "say hi now plea\u2026")
+        self.assertIsNone(tasks.title_short(" \t "))
+        self.assertIsNone(tasks.title_short(None))
 
 
 class MarkAndDerivedStateTest(BoardCase):
@@ -712,6 +791,21 @@ class HookTest(BoardCase):
     def test_post_tool_use_dispatcher_runs_the_sub_script(self):
         self.run_script(POST_DISPATCHER, todo_write("s1", [todo("A")], cwd=str(self.root)))
         self.assertEqual(len(self.load("s1")["tasks"]), 1)
+
+    def test_the_done_notification_names_the_session_by_its_title_and_falls_back_to_the_id(self):
+        transcript = self.tmp / "t.jsonl"
+        transcript.write_text(
+            json.dumps({"type": "custom-title", "customTitle": 'Notificações "do" app', "sessionId": "s1"}) + "\n",
+            encoding="utf-8",
+        )
+        for session, extra in (("s1", {"transcript_path": str(transcript)}), ("abcdef0123456789", {})):
+            self.run_script(POST_TOOL_USE, dict(todo_write(session, [todo("A")], cwd=str(self.root)), **extra))
+            self.run_script(POST_TOOL_USE, dict(todo_write(session, [todo("A", "completed")], cwd=str(self.root)), **extra))
+        self.assertEqual([r["message"] for r in self.queue()], [
+            # `pt-BR` is the default `language` in scripts/lib/preferences-defaults.json.
+            'Sessão "Notificações do\u2026": todas as tarefas foram concluídas.',
+            "Sessão abcdef01: todas as tarefas foram concluídas.",
+        ])
 
     def test_post_tool_use_ignores_a_non_todo_tool(self):
         self.run_script(POST_TOOL_USE, {"tool_name": "Edit", "session_id": "s1", "tool_input": {}})
