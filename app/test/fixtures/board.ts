@@ -28,6 +28,7 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     kind: 'todo',
     failed: false,
     review: null,
+    worktree: null,
     ...overrides,
   };
 }

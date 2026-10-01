@@ -205,6 +205,21 @@ describe('asBoardProject', () => {
     }
   });
 
+  it('reads the worktree a task was started in, and null when absent or malformed', () => {
+    const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
+    expect(asBoardTask({ ...raw, worktree: { path: '.worktrees/feat/x', branch: 'feat/x' } })?.worktree).toEqual({
+      path: '.worktrees/feat/x',
+      branch: 'feat/x',
+    });
+    expect(asBoardTask({ ...raw, worktree: { path: '/abs/wt', branch: null } })?.worktree).toEqual({ path: '/abs/wt', branch: null });
+    const old = { ...raw };
+    delete old['worktree'];
+    expect(asBoardTask(old)?.worktree).toBeNull();
+    for (const bad of ['x', 7, { path: '' }, { path: 3 }, { branch: 'b' }, { path: 'p'.repeat(5_000) }]) {
+      expect(asBoardTask({ ...raw, worktree: bad })?.worktree).toBeNull();
+    }
+  });
+
   it('reads the review window: column, state, findings, since, and the counts', () => {
     const review = { state: 'findings', findings: 3, since: NOW - 50 } as const;
     const task = boardTask({ key: 'r', column: 'in_review', status: 'in_progress', review });
