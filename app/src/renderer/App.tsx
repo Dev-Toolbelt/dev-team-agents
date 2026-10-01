@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Board } from './screens/Board.js';
 import { Catalog } from './screens/Catalog.js';
@@ -15,6 +16,7 @@ import { NotificationBell } from './NotificationBell.js';
 import { Skills } from './screens/Skills.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Loading } from './Problem.js';
+import { isPrerelease } from '../shared/appVersion.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
 // `bash build/make-icon.sh`. Imported rather than referenced from `public/` so a missing
@@ -137,6 +139,7 @@ export function App() {
             />
           </h1>
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
+          {build !== null ? <AppVersion version={build.appVersion} /> : null}
           <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
           <div className="ml-auto self-center">
             <NotificationBell onOpenProject={openProject} />
@@ -234,6 +237,27 @@ export function App() {
       {/* Write results land here, outside every layout — see `toasts.tsx`. */}
       <Toaster position="bottom-right" richColors />
     </div>
+  );
+}
+
+/**
+ * This app's own version, beside the store's — two different things, both named so the
+ * header never shows a bare number. A pre-release (see `isPrerelease`) carries a "beta"
+ * badge: the build is for testing, and the badge goes away on its own at the first
+ * stable version.
+ */
+function AppVersion({ version }: { version: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      app {version}
+      {isPrerelease(version) ? (
+        <Hint content="A pre-release build, for testing">
+          <Badge className="bg-warning text-warning-foreground">
+            beta
+          </Badge>
+        </Hint>
+      ) : null}
+    </span>
   );
 }
 
