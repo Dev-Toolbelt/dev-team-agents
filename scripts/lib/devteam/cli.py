@@ -1119,6 +1119,7 @@ def _read_token_from_stdin():
 def cmd_integration_connect(args, emitter):
     adapter = integrations.get_adapter(args.name)
     fields = integrations.parse_field_args(adapter, args.field)
+    integrations.check_connect_fields(args.name, fields)
     token = _read_token_from_stdin()
     result, backend = integrations.connect(args.name, fields, token)
     view = _integration_view(args.name, args)

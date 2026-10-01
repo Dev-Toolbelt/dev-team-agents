@@ -89,7 +89,14 @@ def origin(url):
 
 def _opener(base_origin):
     def check(newurl):
-        if origin(newurl) != base_origin:
+        try:
+            target = origin(newurl)
+        except ValueError:
+            # A malformed redirect target (a bad port, say) is the server's fault, not
+            # the token's: report it as such rather than letting it reach the header
+            # handler below.
+            raise FetchError("unreachable", "Refused a malformed redirect target") from None
+        if target != base_origin:
             raise FetchError(
                 "unreachable", "Refused a redirect to a different origin than the configured URL"
             )
@@ -124,12 +131,25 @@ def _classify(exc):
     return FetchError("unreachable", "The server answered HTTP {}".format(code))
 
 
+def _shrink_timeout(response, remaining):
+    """Cap the socket's timeout at what is left of the deadline, so one blocking read
+    cannot run past it. Best effort: the attribute path is an implementation detail."""
+    sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    if sock is not None:
+        try:
+            sock.settimeout(max(0.01, min(TIMEOUT, remaining)))
+        except OSError:
+            pass
+
+
 def _read_capped(response, deadline):
     """The body, read in chunks so a drip-fed answer cannot outlive ``deadline``."""
     chunks, total = [], 0
     while True:
-        if time.monotonic() > deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             raise FetchError("unreachable", "The server did not answer in time")
+        _shrink_timeout(response, remaining)
         chunk = response.read(min(CHUNK, MAX_RESPONSE_BYTES + 1 - total))
         if not chunk:
             break

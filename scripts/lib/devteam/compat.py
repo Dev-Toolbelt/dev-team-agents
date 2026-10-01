@@ -98,6 +98,7 @@ def store_schemas():
         "credentials": creds.SCHEMA,
         "plugin_settings": plugins.SCHEMA,
         "integrations": integrations.SCHEMA,
+        "integration_settings": integrations.SETTINGS_SCHEMA,
     }
 
 

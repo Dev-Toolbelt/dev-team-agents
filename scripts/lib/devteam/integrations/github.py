@@ -11,7 +11,9 @@ from . import http
 from .base import check_token, fact, field
 
 DEFAULT_API_URL = "https://api.github.com"
-_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+# Owner and name may contain dots, but neither may be only dots (`.`, `..`): the value
+# will one day be part of an API path, and must never walk out of it.
+_REPO_RE = re.compile(r"^(?!\.+/)[A-Za-z0-9_.-]+/(?!\.+$)[A-Za-z0-9_.-]+$")
 
 
 class GitHub:
@@ -34,7 +36,8 @@ class GitHub:
         ),
         field(
             "repository", "project", "Repository", placeholder="owner/name", resource="repos",
-            help="The repository this project works against.",
+            help="The repository this project works against. Suggested from the git remote "
+            "when its host matches the API URL's.",
         ),
     ]
 

@@ -499,6 +499,10 @@ MACHINE_LOCAL_RECORDS = (
 #: `plugin-settings/graphify.json` by `plugins.migrate_legacy` on bind/sync.
 #: `integration-settings/` is the same idea for integrations (GitHub, Jira): which
 #: repository or project key this project works against is committed, shared config.
+#: The two directory entries are documentation: `upgrade` matches *file* basenames under
+#: `user-data/`, so they never match there. They are listed so the tuple stays the one
+#: answer to "what does the project own", and nothing in bind/sync/unbind/upgrade/doctor
+#: touches either directory.
 PROJECT_OWNED_RECORDS = ("graphify.json", "plugin-settings", "integration-settings")
 
 #: Top-level entries of ``data/`` that never leave this machine.

@@ -20,28 +20,48 @@ The token is bound to the origin it was stored for (``token_origin`` in the acco
 config). Change ``api_url``/``site_url`` and the token is *stale*: it is sent nowhere until
 the user reconnects with a new token. The keychain value is kept (No-Destruction).
 
-Lock order: the integrations lock is the outer one. ``connect`` takes it and then the
-``credentials`` lock inside ``creds.set_entry``; nothing in ``creds`` takes the
+Storing a new token is three steps under the integrations lock: drop ``token_origin`` from
+the account file, write the token, then write the new origin and a fresh
+``token_generation``. A failure between any two leaves the token stale, never bound to the
+previous host. A reader that uses the token without the lock (``test``, ``resources``)
+re-reads the account file after reading the token and refuses when it changed: whatever
+it read may belong to a connect that was in flight. The keychain read itself stays outside
+the lock, because an OS prompt there must not block every other command.
+
+Lock order: the integrations lock is the outer one. ``connect`` and ``disconnect`` take it
+and then the ``credentials`` lock inside ``creds``; nothing in ``creds`` takes the
 integrations lock, so the order cannot invert. No lock is held across a network call.
+
+Schemas: ``SCHEMA`` versions the account file and ``SETTINGS_SCHEMA`` the committed project
+binding — separate numbers, because a client must declare each before writing it and the
+two can change independently. The machine-local status file is a cache the CLI alone
+writes; it carries its own ``STATUS_SCHEMA`` and is not part of the client declaration.
 """
 
 from __future__ import annotations
 
 import datetime
+import uuid
 from pathlib import Path
 
 from .. import creds, jsonio, paths, project, quarantine
 from ..errors import EnvError, UsageError
 from ..lock import store_lock
 from . import http
-from .base import is_blank
+from .base import check_token, is_blank
 from .github import GitHub
 from .jira import Jira
 
 SCHEMA = 1
+SETTINGS_SCHEMA = 1
+STATUS_SCHEMA = 1
 #: Reserved, non-field key in the account config: the normalised origin the stored token
 #: was issued for. The token is only ever sent to that origin.
 TOKEN_ORIGIN = "token_origin"
+#: Reserved, non-field key: changes on every token write, so a test result for a replaced
+#: token is recognised as stale even when the origin is unchanged.
+TOKEN_GENERATION = "token_generation"
+RESERVED_KEYS = (TOKEN_ORIGIN, TOKEN_GENERATION)
 SETTINGS_DIR = "integration-settings"
 STATUS_FILE = "integrations-status.json"
 LOCK = "integrations"
@@ -86,18 +106,20 @@ def status_path():
     return paths.machine_dir() / STATUS_FILE
 
 
-def _read_config(path):
+def _read_config(path, max_schema=SCHEMA):
     data = jsonio.read_json(path)
     if data is None:
         return {}
     if not isinstance(data, dict):
         raise EnvError("{} must hold a JSON object".format(path), hint="Fix the file by hand.")
-    schema = data.get("schema", SCHEMA)
+    schema = data.get("schema", max_schema)
     if not isinstance(schema, int) or isinstance(schema, bool) or schema < 1:
         raise EnvError("{}: 'schema' must be a positive integer".format(path))
-    if schema > SCHEMA:
+    if schema > max_schema:
         raise EnvError(
-            "{}: schema {} is newer than this CLI understands (max {})".format(path, schema, SCHEMA)
+            "{}: schema {} is newer than this CLI understands (max {})".format(
+                path, schema, max_schema
+            )
         )
     config = data.get("config", {})
     if not isinstance(config, dict):
@@ -111,11 +133,11 @@ def _read_account_raw(name):
 
 
 def read_account(name):
-    return {k: v for k, v in _read_account_raw(name).items() if k != TOKEN_ORIGIN}
+    return {k: v for k, v in _read_account_raw(name).items() if k not in RESERVED_KEYS}
 
 
 def read_project(project_root, name):
-    return _read_config(project_path(project_root, name))
+    return _read_config(project_path(project_root, name), SETTINGS_SCHEMA)
 
 
 def _write_account(name, config):
@@ -148,7 +170,7 @@ def _write_project(project_root, name, config):
     target = _checked_project_path(project_root, name)
     jsonio.write_json_atomic(
         target,
-        {"schema": SCHEMA, "config": config},
+        {"schema": SETTINGS_SCHEMA, "config": config},
         mode=jsonio.PROJECT_FILE_MODE,
         dir_mode=None,
     )
@@ -167,8 +189,8 @@ def _load_status():
         return {}, True
     if not isinstance(data, dict) or not isinstance(data.get("status", {}), dict):
         return {}, False
-    schema = data.get("schema", SCHEMA)
-    if not isinstance(schema, int) or isinstance(schema, bool) or schema < 1 or schema > SCHEMA:
+    schema = data.get("schema", STATUS_SCHEMA)
+    if not isinstance(schema, int) or isinstance(schema, bool) or schema < 1 or schema > STATUS_SCHEMA:
         return {}, False
     return data.get("status", {}), True
 
@@ -200,13 +222,8 @@ def _update_status_locked(name, record):
         del status[name]
     else:
         status[name] = record
-    jsonio.write_json_atomic(status_path(), {"schema": SCHEMA, "status": status})
+    jsonio.write_json_atomic(status_path(), {"schema": STATUS_SCHEMA, "status": status})
     return True
-
-
-def _update_status(name, record):
-    with store_lock(LOCK):
-        return _update_status_locked(name, record)
 
 
 # ── config semantics ──────────────────────────────────────────────────────────
@@ -273,9 +290,32 @@ def token_reference(name):
     return entry
 
 
+class TokenMissing(Exception):
+    """The reference exists but this machine holds no value for it (ADR-0010: references
+    are portable, values are not)."""
+
+
 def read_token(name):
-    """The token, through `creds.get_value` so ADR-0010's audit line is written."""
-    return creds.get_value(token_key(name), None, agent=None)
+    """The token, through `creds.get_value` so ADR-0010's audit line is written.
+
+    Raises :class:`TokenMissing` when only the reference reached this machine.
+    """
+    try:
+        return creds.get_value(token_key(name), None, agent=None)
+    except EnvError:
+        # `get_value` raises EnvError for a missing value; the reference was checked by
+        # the caller, so that is the case here. Its message names no secret.
+        raise TokenMissing() from None
+
+
+class TokenNotOnMachine(UsageError):
+    """`UsageError` for a reference whose value is not on this machine."""
+
+
+def _missing_message(adapter):
+    return "The {} token is not stored on this machine; reconnect with the token".format(
+        adapter.title
+    )
 
 
 def _origin_string(url):
@@ -309,11 +349,20 @@ def _stale_message(adapter):
     )
 
 
+def _changed_while_reading(adapter):
+    return UsageError(
+        "{} was reconfigured while its token was being read".format(adapter.name),
+        hint="Run the command again.",
+    )
+
+
 def _require_ready(adapter):
     """``(account, token, snapshot)`` or ``UsageError`` naming what is missing.
 
     ``snapshot`` is the raw account config the token is about to be used with, so a caller
-    can tell afterwards whether it changed while the request was in flight.
+    can tell afterwards whether it changed while the request was in flight. The account
+    file is read again after the token: if a connect ran in between, the token may belong
+    to a different origin than ``account`` says, so nothing is sent.
     """
     raw = _read_account_raw(adapter.name)
     account = effective_account(adapter, raw)
@@ -333,7 +382,16 @@ def _require_ready(adapter):
             _stale_message(adapter),
             hint="Run `devteam integration connect {}` and pipe the new token in.".format(adapter.name),
         )
-    return account, read_token(adapter.name), raw
+    try:
+        token = read_token(adapter.name)
+    except TokenMissing:
+        raise TokenNotOnMachine(
+            _missing_message(adapter),
+            hint="Run `devteam integration connect {}` and pipe the token in.".format(adapter.name),
+        ) from None
+    if _read_account_raw(adapter.name) != raw:
+        raise _changed_while_reading(adapter)
+    return account, token, raw
 
 
 # ── view ──────────────────────────────────────────────────────────────────────
@@ -350,10 +408,21 @@ def build_view(adapter, project_root=None, project_id=None):
 
     bound = project_root is not None and project_id is not None
     project_values = None
+    project_problem = None
     detected = {}
     if bound:
-        project_values = valid_project_values(adapter, read_project(project_root, name))
-        detected = adapter.detect(project_root, account) if account else {}
+        try:
+            raw_project = read_project(project_root, name)
+        except EnvError as exc:
+            # The binding is committed and hand-editable: one bad file must not take the
+            # whole list down with it. It reads as unset, and the problem is reported.
+            raw_project, project_problem = {}, str(exc)
+        project_values = valid_project_values(adapter, raw_project)
+        # Detection shells out; only worth it while there is a project field left to fill.
+        unfilled = [f for f in _fields(adapter, "project") if f["key"] not in project_values]
+        if account and unfilled:
+            detected = {k: v for k, v in adapter.detect(project_root, account).items()
+                        if k not in project_values}
 
     record = read_status(name) if connected else None
     if stale:
@@ -383,9 +452,10 @@ def build_view(adapter, project_root=None, project_id=None):
         "auth": dict(
             adapter.auth, has_token=has_token, stale=stale, backend=entry.get("source") if entry else None
         ),
-        "fields": [dict(f) for f in adapter.fields],
+        "fields": [dict(f, binds_token=f["key"] == adapter.origin_key) for f in adapter.fields],
         "account": account,
         "project": project_values,
+        "project_problem": project_problem,
         "detected": detected,
         "connected": connected,
         "project_configured": bool(project_values),
@@ -421,9 +491,18 @@ def _persist_if_unchanged(name, snapshot, result):
     return True
 
 
+def _not_connected(summary):
+    return {"ok": False, "state": "not_connected", "summary": summary, "facts": [], "checked_at": _now()}
+
+
 def test(name):
     adapter = get_adapter(name)
-    account, token, snapshot = _require_ready(adapter)
+    try:
+        account, token, snapshot = _require_ready(adapter)
+    except TokenNotOnMachine:
+        # A result, not an error: the account is configured, this machine just lacks the
+        # value. The card says so instead of showing a raw problem.
+        return _not_connected("{}.".format(_missing_message(adapter)))
     result = run_test(adapter, account, token)
     _persist_if_unchanged(name, snapshot, result)
     return result
@@ -445,6 +524,20 @@ def parse_field_args(adapter, pairs):
             )
         out[key] = adapter.normalize(key, value)
     return out
+
+
+def check_connect_fields(name, field_values):
+    """``UsageError`` when required account fields would still be missing — checked
+    before the CLI prompts for a token, so nobody types a secret into a doomed command."""
+    adapter = get_adapter(name)
+    merged = dict(_read_account_raw(name))
+    merged.update(field_values)
+    missing = missing_fields(adapter, effective_account(adapter, merged))
+    if missing:
+        raise UsageError(
+            "{} needs: {}".format(name, ", ".join(missing)),
+            hint="Pass them with --field key=value.",
+        )
 
 
 def connect(name, field_values, token):
@@ -476,8 +569,17 @@ def connect(name, field_values, token):
             origin = current_origin(adapter, account)
             if origin is None:
                 raise UsageError("{} is not a valid URL".format(adapter.origin_key))
-            # Token first: if the config write fails afterwards the recorded origin is the
-            # old one, so the token reads as stale rather than bound to the wrong host.
+            try:
+                check_token(token)
+            except http.FetchError as exc:
+                # Refused before it reaches the secret store: it could never be sent.
+                raise UsageError(exc.summary, hint="Paste the token without spaces or line breaks.") from None
+            # Unbind first: should the token write or the final config write fail, the
+            # file names no origin and the token reads as stale, never as bound to the
+            # previous host.
+            unbound = {k: v for k, v in raw.items() if k not in RESERVED_KEYS}
+            if unbound != raw:
+                _write_account(name, unbound)
             entry = creds.set_entry(
                 token_key(name),
                 "{} API access for `devteam integration`".format(adapter.title),
@@ -486,18 +588,21 @@ def connect(name, field_values, token):
             )
             backend = entry.get("source")
             merged[TOKEN_ORIGIN] = origin
+            merged[TOKEN_GENERATION] = uuid.uuid4().hex
+            raw = unbound
         if merged != raw:
             _write_account(name, merged)
         stale = token is None and is_stale(adapter, merged, account)
     if stale:
-        return {
-            "ok": False,
-            "state": "not_connected",
-            "summary": "{}.".format(_stale_message(adapter)),
-            "facts": [],
-            "checked_at": _now(),
-        }, backend
-    result = run_test(adapter, account, token if token is not None else read_token(name))
+        return _not_connected("{}.".format(_stale_message(adapter))), backend
+    if token is None:
+        try:
+            token = read_token(name)
+        except TokenMissing:
+            return _not_connected("{}.".format(_missing_message(adapter))), backend
+        if _read_account_raw(name) != merged:
+            raise _changed_while_reading(adapter)
+    result = run_test(adapter, account, token)
     _persist_if_unchanged(name, merged, result)
     return result, backend
 
@@ -505,9 +610,10 @@ def connect(name, field_values, token):
 def disconnect(name, keep_token=False):
     adapter = get_adapter(name)
     changed = False
-    if not keep_token:
-        changed = creds.unset(token_key(name), None, forget_value=True)["removed"]
-    changed = _update_status(name, None) or changed
+    with store_lock(LOCK):
+        if not keep_token:
+            changed = creds.unset(token_key(name), None, forget_value=True)["removed"]
+        changed = _update_status_locked(name, None) or changed
     return adapter, changed
 
 

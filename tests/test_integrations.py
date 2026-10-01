@@ -28,7 +28,7 @@ from devteam_support import StoreTestCase
 
 from devteam import bind, paths, project
 from devteam import update as update_module
-from devteam.errors import EnvError
+from devteam.errors import EnvError, UsageError
 from devteam.integrations import http as ihttp
 from devteam import integrations
 from devteam.lock import store_lock
@@ -180,7 +180,7 @@ class ViewShapeTest(IntegrationTestCase):
         self.assertEqual(
             set(view),
             {"name", "title", "description", "homepage", "auth", "fields", "account", "project",
-             "detected", "connected", "project_configured", "status"},
+             "project_problem", "detected", "connected", "project_configured", "status"},
         )
         self.assertEqual(set(view["auth"]), {"kind", "label", "help", "has_token", "stale", "backend"})
         self.assertFalse(view["auth"]["has_token"])
@@ -188,7 +188,7 @@ class ViewShapeTest(IntegrationTestCase):
         self.assertEqual(view["account"], {"api_url": "https://api.github.com"})
         self.assertEqual(view["project"], {})
         keys = {"key", "scope", "type", "label", "help", "required", "default", "placeholder",
-                "options", "resource", "visible_when"}
+                "options", "resource", "visible_when", "binds_token"}
         for field in view["fields"]:
             self.assertEqual(set(field), keys)
         self.assertEqual(set(view["status"]), {"state", "checked_at", "summary", "facts"})
@@ -976,7 +976,8 @@ class LockAndConsistencyTest(IntegrationTestCase):
 
     def test_a_test_does_not_record_a_result_for_a_config_that_changed_meanwhile(self):
         self.connect_github()
-        integrations._update_status("github", None)
+        with integrations.store_lock(integrations.LOCK):
+            integrations._update_status_locked("github", None)
 
         def changed_during_the_request(adapter, account, token):
             integrations.config_set("github", "api_url", self.server.url + "/v3")
@@ -1118,3 +1119,140 @@ class ProjectBindingSafetyTest(IntegrationTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TokenRebindingTest(IntegrationTestCase):
+    """A new token can never be sent to the origin the previous one was stored for."""
+
+    def other_origin(self):
+        other = FakeServer()
+        self.addCleanup(other.stop)
+        other.routes["/user"] = (200, {}, {"login": "other"})
+        return other
+
+    def test_a_failed_config_write_after_storing_the_token_leaves_it_stale(self):
+        self.assertEqual(self.connect_github()[0], 0)
+        other = self.other_origin()
+        real_write = integrations._write_account
+        calls = []
+
+        def fail_the_final_write(name, config):
+            calls.append(dict(config))
+            if integrations.TOKEN_ORIGIN in config:
+                raise OSError("disk full")
+            real_write(name, config)
+
+        with mock.patch.object(integrations, "_write_account", fail_the_final_write):
+            with self.assertRaises(OSError):
+                integrations.connect("github", {"api_url": other.url}, "ghp_SECOND-token")
+
+        with self.assertRaises(UsageError):
+            integrations.test("github")
+        self.assertEqual(self.server.log[-1]["path"], "/user")
+        self.assertTrue(all("ghp_SECOND-token" not in str(e["headers"]) for e in self.server.log))
+        self.assertEqual(other.log, [])
+
+    def test_a_connect_between_reading_the_config_and_the_token_sends_nothing(self):
+        self.assertEqual(self.connect_github()[0], 0)
+        other = self.other_origin()
+        before = len(self.server.log)
+        real_read = integrations.read_token
+
+        def connect_meanwhile(name):
+            integrations.connect("github", {"api_url": other.url}, "ghp_SECOND-token")
+            return real_read(name)
+
+        with mock.patch.object(integrations, "read_token", connect_meanwhile):
+            with self.assertRaises(UsageError):
+                integrations.test("github")
+        # The only request the old origin saw is none; the new one got the connect's own test.
+        self.assertEqual(len(self.server.log), before)
+        self.assertTrue(all("ghp_SECOND-token" in e["headers"].get("Authorization", "") for e in other.log))
+
+    def test_replacing_the_token_on_the_same_origin_invalidates_an_in_flight_result(self):
+        self.assertEqual(self.connect_github()[0], 0)
+
+        real_run = integrations.run_test
+        replaced = []
+
+        def replaced_during_the_request(adapter, account, token):
+            if replaced:
+                return real_run(adapter, account, token)
+            replaced.append(True)
+            integrations.connect("github", {}, "ghp_REPLACED-token")
+            return {"ok": False, "state": "invalid_token", "summary": "old", "facts": [], "checked_at": "t"}
+
+        with mock.patch.object(integrations, "run_test", replaced_during_the_request):
+            integrations.test("github")
+        record = integrations.read_status("github")
+        self.assertNotEqual((record or {}).get("summary"), "old")
+
+    def test_an_unsendable_token_never_reaches_the_secret_store(self):
+        with self.assertRaises(UsageError):
+            integrations.connect("github", {"api_url": self.server.url}, "has a space")
+        self.assertIsNone(integrations.token_reference("github"))
+
+
+class TokenNotOnThisMachineTest(IntegrationTestCase):
+    def test_test_reports_not_connected_and_resources_explains(self):
+        self.assertEqual(self.connect_github()[0], 0)
+        entry = integrations.token_reference("github")
+        from devteam import secrets as secrets_module
+        secrets_module.delete(entry["ref"], entry["source"])
+
+        result = integrations.test("github")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "not_connected")
+        self.assertIn("not stored on this machine", result["summary"])
+        with self.assertRaises(UsageError) as caught:
+            integrations.resources("github", "repos")
+        self.assertIn("not stored on this machine", str(caught.exception))
+
+
+class ProjectBindingToleranceTest(IntegrationTestCase):
+    def test_a_malformed_binding_reads_as_unset_with_a_problem(self):
+        target = integrations.project_path(self.root, "github")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("{not json", encoding="utf-8")
+
+        code, body, _o, _e = self.cli("list")
+        self.assertEqual(code, 0)
+        views = {v["name"]: v for v in body["integrations"]}
+        self.assertEqual(views["github"]["project"], {})
+        self.assertIsInstance(views["github"]["project_problem"], str)
+        self.assertIsNone(views["jira"]["project_problem"])
+
+    def test_a_filled_binding_skips_detection(self):
+        integrations.config_set("github", "repository", "acme/widgets", self.root, self.pid)
+        with mock.patch.object(integrations.get_adapter("github"), "detect") as detect:
+            integrations.build_view(integrations.get_adapter("github"), self.root, self.pid)
+        detect.assert_not_called()
+
+
+class DescriptorAndCliTest(IntegrationTestCase):
+    def test_only_the_origin_field_binds_the_token(self):
+        _c, body, _o, _e = self.cli("show", "jira")
+        binds = {f["key"]: f["binds_token"] for f in body["integration"]["fields"]}
+        self.assertEqual(binds, {"site_url": True, "deployment": False, "email": False, "project_key": False})
+
+    def test_connect_checks_required_fields_before_reading_the_token(self):
+        code, body, _o, err = self.cli("connect", "jira", input_text=TOKEN)
+        self.assertEqual(code, 2)
+        self.assertIn("site_url", err + json.dumps(body))
+        self.assertIsNone(integrations.token_reference("jira"))
+
+    def test_repository_refuses_dot_only_segments(self):
+        for value in ("../..", "./x", "acme/.."):
+            with self.assertRaises(UsageError):
+                integrations.get_adapter("github").normalize("repository", value)
+        self.assertEqual(integrations.get_adapter("github").normalize("repository", "a.b/c.d"), "a.b/c.d")
+
+    def test_a_malformed_redirect_target_is_unreachable_not_a_bad_token(self):
+        self.server.routes["/user"] = (302, {"Location": "http://127.0.0.1:99999/user"}, {})
+        self.assertEqual(
+            self.cli("connect", "github", "--field", "api_url={}".format(self.server.url), input_text=TOKEN)[0],
+            0,
+        )
+        result = integrations.test("github")
+        self.assertEqual(result["state"], "unreachable")
+        self.assertIn("redirect", result["summary"])
