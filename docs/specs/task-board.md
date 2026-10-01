@@ -178,7 +178,7 @@ or {"project_id": "…", "removed": true} when it no longer has tasks>}`, then `
 after the backlog, `{"event":"heartbeat","ts":…}` every 30 s, and `{"event":"end","reason":…}` —
 the same lifecycle, stdin-EOF and SIGTERM handling as `notifications watch`.
 
-#### In Review — an optional fourth column (amendment 2026-09-30)
+#### In Review — the fourth column (amendment 2026-09-30)
 
 A task may go from In progress straight to Done. It passes through **In Review** only when a review
 is triggered in its session, and leaves only when the review passed or its findings were fixed.
@@ -297,8 +297,10 @@ findings.
   (today / 7 days / 30 days / all).
 - **Project kanban:** four columns — To do, In progress, **In Review**, Done — with In Review empty
   when no task is in review. The columns sit side by side in one row that never stacks: they share
-  the width when it fits and the row scrolls horizontally (mouse, trackpad or arrow keys on the
-  focused row) when it does not; each column keeps its heading in view and scrolls its own cards.
+  the width when it fits and the row scrolls horizontally when it does not (mouse, trackpad, or the
+  arrow keys — the row is a tab stop only while it overflows). A column is at most as tall as the
+  visible part of the page, measured, so its heading stays on screen and its cards scroll inside it;
+  columns are as tall as their cards up to that cap.
   Tasks in review carry a badge: **N findings**, **result not read**
   (`unread`), **pending** (the review has not answered yet) or a neutral **In review** for a state
   this app version does not know. A "with findings" filter
@@ -335,7 +337,9 @@ findings.
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
 12. **Given** any project, **When** its kanban opens, **Then** it shows four columns in order — To do,
-    In progress, In Review, Done — with In Review empty when no task is in review.
+    In progress, In Review, Done — with In Review empty when no task is in review — side by side in
+    one row; **When** the window is narrower than the four columns' minimum width, **Then** the row
+    scrolls horizontally and the columns never stack.
 13. **Given** a task in review whose window recorded 2 findings, **Then** its card shows **2 findings**;
     with no marker read it shows **result not read**; with no answer yet it shows **pending**.
 14. **Given** the findings filter is on, **Then** only tasks in review with findings are listed.
