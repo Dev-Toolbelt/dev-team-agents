@@ -1228,11 +1228,6 @@ export interface DevteamBridge {
   readonly refreshTaskBoard: () => Promise<BoardFeed>;
   /** Called with the feed whenever it changes. Returns the unsubscribe. */
   readonly onTaskBoard: (listener: (feed: BoardFeed) => void) => () => void;
-  /**
-   * Copy a session's resume command to the clipboard. The renderer names the session; the
-   * text copied is the one the CLI sent for it, never a string the renderer supplies.
-   */
-  readonly copyResumeCommand: (request: CopyResumeRequest) => Promise<CopyResumeAnswer>;
   readonly boardSettings: () => Promise<BoardSettings>;
   readonly setBoardSettings: (settings: BoardSettings) => Promise<BoardSettingsAnswer>;
 }
@@ -1406,15 +1401,6 @@ export type BoardSettingsAnswer =
   | { readonly ok: true; readonly settings: BoardSettings }
   | { readonly ok: false; readonly message: string };
 
-export interface CopyResumeRequest {
-  readonly projectId: ProjectId;
-  readonly sessionId: string;
-}
-
-export type CopyResumeAnswer =
-  | { readonly copied: true; readonly command: string }
-  | { readonly copied: false; readonly message: string };
-
 /** The bounds `boardSettings` enforces; shared so the form and the main process agree. */
 export const BOARD_SETTING_BOUNDS = {
   staleAfterMinutes: { min: 5, max: 1440, fallback: 60 },
@@ -1477,7 +1463,6 @@ export const CHANNELS = {
   refreshTaskBoard: 'devteam:refresh-task-board',
   /** Main → renderer push. */
   taskBoardChanged: 'devteam:task-board-changed',
-  copyResumeCommand: 'devteam:copy-resume-command',
   boardSettings: 'devteam:board-settings',
   setBoardSettings: 'devteam:set-board-settings',
 } as const;

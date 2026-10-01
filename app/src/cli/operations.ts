@@ -2250,7 +2250,7 @@ const MAX_TASKS_PER_SESSION = 2_000;
  * bare run of `[\w@%+=:,./-]`, or single-quoted segments, where an embedded quote is the
  * escape `'"'"'`. Control characters are refused everywhere. Anything else — an unquoted
  * `;`, `&`, `$`, a space, a backtick — is not one token and fails the whole command, so a
- * hostile id or path can only ever reach the clipboard inside quotes.
+ * session's `resume_command` is accepted only when every hostile id or path in it is quoted.
  */
 const SHELL_TOKEN = String.raw`(?:[\w@%+=:,./-]+|(?:'[^'\u0000-\u001f\u007f]*'|"'")+)`;
 /** A resume command is one line the user pastes into a terminal; anything else is not shown. */

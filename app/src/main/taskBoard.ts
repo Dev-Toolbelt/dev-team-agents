@@ -16,7 +16,7 @@
 
 import type { StreamEnd, StreamHandle } from '../cli/stream.js';
 import { TaskStreamRefused, type TaskWatchEvent } from '../cli/operations.js';
-import type { BoardFeed, BoardProject, BoardSettings, BoardSession, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
+import type { BoardFeed, BoardProject, BoardSettings, BoardStreamStatus, OperationResult, ProjectId } from '../shared/api.js';
 
 export const BOARD_BACKOFF_MIN_MS = 1_000;
 export const BOARD_BACKOFF_MAX_MS = 60_000;
@@ -72,12 +72,6 @@ export class TaskBoard {
   snapshot(): BoardFeed {
     const projects = [...this.projects.values()].sort((a, b) => b.last_activity_at - a.last_activity_at);
     return { status: this.status, detail: this.detail, projects };
-  }
-
-  /** The resume command the CLI sent for a session — the only text ever copied. */
-  resumeCommand(projectId: ProjectId, sessionId: string): string | null {
-    const session = this.projects.get(projectId)?.sessions.find((each: BoardSession) => each.session_id === sessionId);
-    return session?.resume_command ?? null;
   }
 
   async start(): Promise<void> {

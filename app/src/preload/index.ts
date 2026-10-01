@@ -21,7 +21,6 @@ import {
   type ProjectFolders,
   type BoardFeed,
   type BoardSettings,
-  type CopyResumeRequest,
   type CatalogKind,
   type MigrateRequest,
   type DevteamBridge,
@@ -216,11 +215,6 @@ const bridge: DevteamBridge = {
       ipcRenderer.removeListener(CHANNELS.taskBoardChanged, handler);
     };
   },
-  copyResumeCommand: (request: CopyResumeRequest) =>
-    ipcRenderer.invoke(CHANNELS.copyResumeCommand, {
-      projectId: String(request.projectId),
-      sessionId: String(request.sessionId),
-    }),
   boardSettings: () => ipcRenderer.invoke(CHANNELS.boardSettings),
   setBoardSettings: (settings: BoardSettings) =>
     ipcRenderer.invoke(CHANNELS.setBoardSettings, {

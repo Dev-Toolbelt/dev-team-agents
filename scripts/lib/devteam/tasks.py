@@ -52,7 +52,7 @@ DEFAULT_ENDED_AFTER = 6 * 3600
 #: unread instead of being joined: a lost result must not wedge the column forever.
 PENDING_MAX_AGE = 6 * 3600
 
-#: Per-provider command that reopens a session, for the board's "Copy resume command".
+#: Per-provider command that reopens a session; emitted as `resume_command` in the `tasks` JSON contract.
 RESUME = {
     "claude": "claude --resume",
     "codex": "codex resume",

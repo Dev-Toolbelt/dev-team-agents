@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, session } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
@@ -518,8 +518,6 @@ function onReady(): void {
     trustedRenderer: RENDERER_TARGET,
     feed: () => board!.snapshot(),
     refresh: () => board!.refresh(),
-    resumeCommand: (projectId, sessionId) => board!.resumeCommand(projectId, sessionId),
-    copyText: (text) => clipboard.writeText(text),
     boardSettings: async () => (await readSettings(userDataDir)).board,
     saveBoardSettings: (next) =>
       saveBoardSettings(
