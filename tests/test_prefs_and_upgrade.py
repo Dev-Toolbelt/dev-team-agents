@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from devteam_support import POSIX_MODES, StoreTestCase, requires_posix_modes, rmtree as _rmtree_readonly_safe
+from devteam_support import POSIX_MODES, REPO_ROOT, StoreTestCase, requires_posix_modes, rmtree as _rmtree_readonly_safe
 
 from devteam import bind, gitignore, jsonio, paths, prefs, project, registry, store, upgrade, versions
 from devteam.errors import ConflictError, EnvError, UsageError
@@ -69,6 +69,24 @@ class CascadeTest(StoreTestCase):
     def test_an_unknown_key_is_rejected_on_write(self):
         with self.assertRaises(UsageError):
             prefs.set_value("langauge", "en", "3.0.0", scope="global")
+
+    def test_a_retired_key_is_not_shipped_and_cannot_be_set(self):
+        shipped = json.loads((REPO_ROOT / "scripts" / "lib" / "preferences-defaults.json").read_text(encoding="utf-8"))
+        for key in prefs.RETIRED_KEYS:
+            self.assertNotIn(key, shipped)
+        with self.assertRaises(UsageError) as raised:
+            prefs.set_value("transcript_multiplier", "2", "3.0.0", scope="global")
+        self.assertIn("retired", str(raised.exception))
+
+    def test_a_retired_key_left_in_a_layer_is_neither_a_value_nor_unknown(self):
+        # Written before the key was retired; the file is left alone, and stays quiet.
+        jsonio.write_json_atomic(prefs.global_file(), {"transcript_multiplier": 1.8, "language": "es"})
+        resolved = prefs.resolve(self.pid, "3.0.0")
+        self.assertNotIn("transcript_multiplier", resolved["values"])
+        self.assertNotIn("transcript_multiplier", resolved["unknown"])
+        self.assertEqual(resolved["values"]["language"], "es")
+        # `unset` is how a user cleans it out of a layer.
+        self.assertTrue(prefs.unset("transcript_multiplier", scope="global")["removed"])
 
     def test_the_projection_is_one_file_and_says_it_is_generated(self):
         projected = self.root / prefs.RESOLVED_FILE
@@ -205,6 +223,12 @@ class LegacyPreferencesImportTest(StoreTestCase):
         # Retired all the same; the quarantined copy keeps what was not imported.
         kept = json.loads(self._quarantined(report).read_text(encoding="utf-8"))
         self.assertEqual(kept["retired_v1_key"], 1)
+
+    def test_a_retired_key_in_a_v2_file_is_ignored_as_retired(self):
+        root = self._legacy_project({"language": "en", "transcript_multiplier": 1.8})
+        report = bind.bind(root, provider_names=["claude"])["preferences_import"]
+        self.assertEqual(report["imported"], ["language"])
+        self.assertEqual(report["ignored"], [{"key": "transcript_multiplier", "reason": "retired"}])
 
     def test_a_malformed_file_is_left_in_place_and_nothing_is_imported(self):
         root = self.new_project("broken")
