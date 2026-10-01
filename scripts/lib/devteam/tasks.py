@@ -795,6 +795,14 @@ def _completed_at(task):
     return task["created_at"]
 
 
+def _ended_at(task):
+    """When the task last entered its current status: its last history entry, else its creation."""
+    for entry in reversed(task.get("history") or []):
+        if isinstance(entry, dict) and entry.get("status") == task["status"] and _number(entry.get("at")):
+            return entry["at"]
+    return task["created_at"]
+
+
 def _window_state(window):
     """``pending`` | ``findings`` | ``unread``: what a task held by an unresolved window shows.
 
@@ -894,8 +902,8 @@ def _sweep_reviews(record, now):
         if fixes and all(_column(t["status"]) == "done" for t in fixes):
             # Never before the last fix finished: a result dated at its (earlier) hand-back would
             # otherwise close the window before work that was still being done when it arrived.
-            finished = [_completed_at(t) for t in fixes]
-            _resolve(window, max([now] + [at for at in finished if at is not None]), "fixed")
+            # `_ended_at`, not `_completed_at`: a cancelled fix also counts as done, and also ends.
+            _resolve(window, max([now] + [_ended_at(t) for t in fixes]), "fixed")
             changed = True
     return changed
 
@@ -1693,8 +1701,10 @@ def _scan_agent_tasks(rec, payload, now):
     for report in _background_reports(scan, path):
         task = pending.get(report["id"])
         if task is not None and task["status"] == "in_progress":
-            # Ended when it handed back, not at this Stop, which may come hours later.
-            at = max(task["created_at"], min(now, report["at"]))
+            # Ended when it handed back, not at this Stop, which may come hours later; never before
+            # its own last event, so the history stays in order.
+            last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
+            at = max(last, task["created_at"], min(now, report["at"]))
             if report["status"] in _HANDBACK_FAILED:
                 _end_agent(task, "cancelled", True, at)
             else:
