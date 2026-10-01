@@ -68,11 +68,11 @@ LANG_PREF="en"
 UC_SUPPRESS="false"
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     LANG_PREF=$(python3 -c \
-        "import json; d=json.load(open('$PREFS_FILE')); print(d.get('language','en'))" \
-        2>/dev/null || echo "en")
+        'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("language","en"))' \
+        "$PREFS_FILE" 2>/dev/null || echo "en")
     UC_SUPPRESS=$(python3 -c \
-        "import json,sys; d=json.load(open('$PREFS_FILE')); v=d.get('suppress_notifications',False); print('true' if v is True else ('false' if v is False else ','.join(v)))" \
-        2>/dev/null || echo "false")
+        'import json,sys; d=json.load(open(sys.argv[1])); v=d.get("suppress_notifications",False); print("true" if v is True else ("false" if v is False else ",".join(v)))' \
+        "$PREFS_FILE" 2>/dev/null || echo "false")
 fi
 export UC_SUPPRESS
 

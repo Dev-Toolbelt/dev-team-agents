@@ -68,8 +68,8 @@ fi
 STOP_REASON=""
 if [ -f "${DEVTEAM_HOOK_PAYLOAD:-}" ] && command -v python3 >/dev/null 2>&1; then
     STOP_REASON=$(python3 -c \
-        "import json; d=json.load(open('$DEVTEAM_HOOK_PAYLOAD')); print(d.get('stop_hook_active',False))" \
-        2>/dev/null || echo "false")
+        'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("stop_hook_active",False))' \
+        "$DEVTEAM_HOOK_PAYLOAD" 2>/dev/null || echo "false")
 fi
 
 # Queue session_end event

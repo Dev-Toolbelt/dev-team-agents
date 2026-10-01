@@ -32,13 +32,14 @@ uc_now_epoch() {
 
 # ── Preferences ───────────────────────────────────────────────────────────────
 # uc_read_pref <prefs_file> <key> <python_default>
-# Forks python3. Callers must keep this off the hot path.
+# Forks python3. Callers must keep this off the hot path. Every value reaches
+# python as argv, never as source text, so a quote in a path cannot break it.
 uc_read_pref() {
     local prefs_file="$1" key="$2" default="$3"
     if [ -f "$prefs_file" ] && command -v python3 >/dev/null 2>&1; then
         python3 -c \
-            "import json; d=json.load(open('$prefs_file')); print(d.get('$key',$default))" \
-            2>/dev/null && return 0
+            'import ast,json,sys; d=json.load(open(sys.argv[1])); print(d.get(sys.argv[2], ast.literal_eval(sys.argv[3])))' \
+            "$prefs_file" "$key" "$default" 2>/dev/null && return 0
     fi
     printf '%s' "$default" | tr -d "'"
 }
@@ -259,8 +260,8 @@ uc_auto_update_enabled() {
     local prefs_file="$1" user_data_dir="$2" auto="false"
     if [ -f "$prefs_file" ] && command -v python3 >/dev/null 2>&1; then
         auto=$(python3 -c \
-            "import json; d=json.load(open('$prefs_file')); print(str(d.get('auto_update',False)).lower())" \
-            2>/dev/null || echo false)
+            'import json,sys; d=json.load(open(sys.argv[1])); print(str(d.get("auto_update",False)).lower())' \
+            "$prefs_file" 2>/dev/null || echo false)
     fi
     # Legacy flag file support (migration period)
     [ -f "${user_data_dir}/.auto-update" ] && auto=true

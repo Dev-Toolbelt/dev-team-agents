@@ -115,17 +115,19 @@ SUPPRESS="false"
 if [ -f "$PREFS_FILE" ] && command -v python3 >/dev/null 2>&1; then
     # Single fork reading all three keys at once (was 3 separate python3
     # subprocess calls) — same defaults, same fallback-to-default on
-    # malformed/missing file.
-    _ALL_PREFS=$(python3 -c "
-import json
+    # malformed/missing file. The path goes in as argv, never into the source:
+    # a quote in the project path would otherwise break (or inject into) it.
+    _ALL_PREFS=$(python3 - "$PREFS_FILE" 2>/dev/null <<'PYEOF' || true
+import json, sys
 try:
-    d = json.load(open('$PREFS_FILE'))
+    d = json.load(open(sys.argv[1]))
 except Exception:
     d = {}
 def s(v):
     return str(v).lower() if isinstance(v, bool) else str(v)
 print('\x1f'.join([s(d.get('docs_stale_after_days', 30)), s(d.get('language', 'en')), s(d.get('suppress_notifications', False)), s(d.get('auto_update', False)), s(d.get('worktree_active', False))]))
-" 2>/dev/null || true)
+PYEOF
+)
     if [ -n "$_ALL_PREFS" ]; then
         IFS=$'\x1f' read -r STALE_DAYS USER_LANG SUPPRESS AUTO_UPDATE WORKTREE_ACTIVE <<< "$_ALL_PREFS"
     fi
