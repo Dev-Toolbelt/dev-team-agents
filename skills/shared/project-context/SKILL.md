@@ -270,7 +270,7 @@ container, which compose form to use, and the explicit-host exception.
 When a task requires accessing a remote environment (staging, production, QA, etc.):
 
 1. **Load** `skills/shared/credentials/SKILL.md` and follow its instructions
-2. **Read** credentials from `.dev-team-agents/user-data/credentials.local.json`
+2. **Read** credentials from `.dev-team-agents/credentials.local.json` in the main checkout (resolve its path as `skills/shared/credentials/SKILL.md` § How to Use describes)
 3. If fields are empty, ask the user for access details
 4. **Read-only by default** — ask permission before any write/execute operation
 

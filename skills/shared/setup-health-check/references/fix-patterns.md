@@ -359,108 +359,19 @@ with open(path, "w") as f:
     f.write("\n")
 ```
 
-## Auto-fix for missing credentials.local.json
+## Credentials — Category 10
 
-When the file does not exist, create it with the default template (fields empty):
+The file is never created by the health check. Creation only happens via `devteam cred local init` or the app's Credentials tab — see `skills/shared/credentials/SKILL.md`.
 
-```bash
-CRED_FILE=".dev-team-agents/user-data/credentials.local.json"
-cat > "$CRED_FILE" << 'JSONEOF'
-{
-  "devops": {
-    "agents": ["software-architect", "devops-specialist", "security-specialist"],
-    "staging": {
-      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
-      "database": [
-        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
-      ]
-    },
-    "production": {
-      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
-      "docker": {},
-      "database": [
-        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
-      ]
-    }
-  },
-  "app": {
-    "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
-    "staging": { "appUrl": "", "username": "", "password": "" },
-    "production": { "appUrl": "", "username": "", "password": "" }
-  }
-}
-JSONEOF
-chmod 600 "$CRED_FILE"
-```
-
-## Auto-fix for missing top-level keys in credentials.local.json
-
-Inject missing keys (`devops`, `app`, `work_feedback_active`, `work_feedback_interval_minutes`) with
-defaults without overwriting existing data:
-
-```python
-import json
-
-path = ".dev-team-agents/user-data/credentials.local.json"
-template = {
-    "work_feedback_active": True,
-    "work_feedback_interval_minutes": 5,
-    "devops": {
-        "agents": ["software-architect", "devops-specialist", "security-specialist"],
-        "staging": {"ssh": {"user": "", "host": "", "privateKeyPath": "", "path": ""}, "database": []},
-        "production": {"ssh": {"user": "", "host": "", "privateKeyPath": "", "path": ""}, "docker": {}, "database": []}
-    },
-    "app": {
-        "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
-        "staging": {"appUrl": "", "username": "", "password": ""},
-        "production": {"appUrl": "", "username": "", "password": ""}
-    }
-}
-
-with open(path) as f:
-    data = json.load(f)
-
-changed = False
-for key, val in template.items():
-    if key not in data:
-        data[key] = val
-        changed = True
-
-if changed:
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-```
-
-## Auto-fix for root-level credentials.local.json
-
-When `credentials.local.json` exists at the project root instead of the correct location:
+When the check detects a legacy copy (in `user-data/` or in the store):
 
 ```bash
-if [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ ! -f ".dev-team-agents/user-data/credentials.local.json" ]; then
-    mv "$PROJECT_ROOT/credentials.local.json" ".dev-team-agents/user-data/credentials.local.json"
-    chmod 600 ".dev-team-agents/user-data/credentials.local.json"
-    echo "→ Migrated credentials.local.json from project root to .dev-team-agents/user-data/"
-elif [ -f "$PROJECT_ROOT/credentials.local.json" ] && [ -f ".dev-team-agents/user-data/credentials.local.json" ]; then
-    QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
-    mkdir -p "$QUARANTINE"
-    mv "$PROJECT_ROOT/credentials.local.json" "$QUARANTINE/credentials.local.json"
-    chmod 600 "$QUARANTINE/credentials.local.json"
-    echo "→ credentials.local.json existed at both locations. The root-level copy was moved to $QUARANTINE/ — the one in user-data/ is authoritative. Compare them before discarding: the two may hold different keys."
-fi
+devteam doctor
 ```
 
-Never instruct the user to `rm` the duplicate. Two credential files at different paths are not presumed identical — the root-level one may carry a key the other lacks, and that is unrecoverable once deleted.
+It moves the legacy copy to `.dev-team-agents/credentials.local.json` byte-for-byte, quarantines blank or duplicate copies per the No-Destruction Rule, and reports — without touching anything — two copies with different content (ADR-0024 § 2). It never creates the file when none exists.
 
-## Auto-fix for missing gitignore entry
-
-```bash
-_ENTRY=".dev-team-agents/user-data/credentials.local.json"
-grep -qF "$_ENTRY" .gitignore 2>/dev/null || {
-    echo "# NEVER commit credentials — contains remote access secrets" >> .gitignore
-    echo "$_ENTRY" >> .gitignore
-}
-```
+The `.gitignore` entry for `.dev-team-agents/credentials.local.json` is part of the managed block — `devteam sync` fixes it when missing. Never append it manually.
 
 ## Auto-fix for opencode agent model/variant config
 

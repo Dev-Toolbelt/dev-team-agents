@@ -11,9 +11,9 @@ When an orchestrating agent spawns sub-agents that run **in the background** (e.
 
 ## Configuration Gate
 
-Before doing anything in this skill, read the two keys below from the first of these files that exists, in order. Use the **Read** tool, not a shell command — the first file holds secrets next to these keys, and the credential guard hook stops a shell read of it:
+Before doing anything in this skill, read the two keys below from the first of these files that carries them, in order. Use the **Read** tool, not a shell command — the first file holds secrets next to these keys, and the credential guard hook stops a shell read of it:
 
-1. `credentials.local.json` in the project's **state directory** — the directory named by the one-line pointer `.dev-team-agents/state-dir`, or `.dev-team-agents/user-data/` when that pointer is absent. After `devteam upgrade` the pointer names a machine-local directory in the store.
+1. `.dev-team-agents/credentials.local.json` of the main checkout — resolve the path exactly as `skills/shared/credentials/SKILL.md` § File Location does (linked worktrees share it).
 2. `<credentials>/<project_id>.json`, then `<credentials>/global.json` — the credential reference files, where `devteam cred import` moves these two keys (and quarantines file 1). `<credentials>` is the `credentials` path in `devteam path --json`; `project_id` is in `.dev-team-agents/project.json`. These files hold no secret values.
 
 Only these keys are read:
@@ -27,7 +27,7 @@ Only these keys are read:
 
 - `work_feedback_active: false` → **do not** run any part of this skill. No table, no scheduling. Proceed with the task silently as if this skill did not exist.
 - `work_feedback_interval_minutes` → the polling interval in minutes. Convert to seconds and clamp to `[60, 3600]` (the `ScheduleWakeup` runtime limit) before use. A value outside that range after conversion is clamped, never rejected.
-- If no file above carries a key, treat it as `active: true`, `interval_minutes: 5` — the default `scripts/install.sh` writes. Nothing recreates the keys once a bound project's file is gone, so their absence is the default, not an opt-out.
+- If no file above carries a key, treat it as `active: true`, `interval_minutes: 5`. Nothing creates the file implicitly, so absence is the default, not an opt-out.
 
 These two keys are the **only** source of truth for whether and how often this skill runs. Do not infer a different cadence from context, and do not skip the gate check because "it's probably fine."
 

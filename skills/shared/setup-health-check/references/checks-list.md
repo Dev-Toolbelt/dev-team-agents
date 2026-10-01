@@ -3,7 +3,7 @@
 ## Before Category 1 — resolve the data paths
 
 A v3-bound project (`.dev-team-agents/project.json` exists) reads its preferences from a generated
-projection, and once `devteam upgrade` has run it keeps `state.json`, `credentials.local.json`,
+projection, and once `devteam upgrade` has run it keeps `state.json`,
 dot-markers and `session-summary.md` in the store rather than in `.dev-team-agents/user-data/`.
 Resolve where they live once, with the helper `session-start.sh` uses, and print the result — every
 later category reads these values instead of the literal path:
@@ -32,7 +32,7 @@ On a project that is not bound, the three paths resolve to `.dev-team-agents/use
 
 **This table overrides the category bodies below.** Where a body names a literal
 `.dev-team-agents/user-data/…` path, substitute `STATE_DIR` for machine-local records (`state.json`,
-`credentials.local.json`, every dot-prefixed marker), `MEMORY_DIR` for `session-summary.md`, and
+every dot-prefixed marker), `MEMORY_DIR` for `session-summary.md`, and
 `PREFS_FILE` for `preferences.json`; where a body prescribes a fix this table replaces, apply the
 table's. Plugin settings are project-owned and committed at `.dev-team-agents/plugin-settings/<name>.json`
 on every layout; a legacy `.dev-team-agents/user-data/graphify.json` is moved there by `devteam sync`.
@@ -45,10 +45,10 @@ on every layout; a legacy `.dev-team-agents/user-data/graphify.json` is moved th
 | 1 Symlinks, 2 Scripts | Run `devteam doctor` and report its findings instead of the v2 fixes — each writes through a link into the store (`fix-patterns.md` § A v3-bound project) |
 | 3 User Data | `IN_STORE: yes` → skip the directory and `mkdir` checks. Either way, look for legacy markers in `STATE_DIR` and migrate them with `state_migrate_legacy "$STATE_DIR"`; a marker left in `user-data/` after an upgrade is reported, not migrated. Report `.claude/` leftovers with `devteam doctor` as the next step |
 | 5 Graphify | Unchanged — the CLI resolves the settings file, and the build marker (`graphify-out/.build-commit`) lives in the project on every layout |
-| 7 .gitignore | `bind`/`sync` write this block from the project's recorded layout. `IN_STORE: no` → the `user-data/` directory line and the `graphify.json` negation are **required** — `user-data/` holds `credentials.local.json` and the session summary; check them as written. `IN_STORE: yes` → do not add them back (`upgrade` retired them). A missing managed line is fixed by `devteam sync`, not by appending |
+| 7 .gitignore | `bind`/`sync` write this block from the project's recorded layout. `IN_STORE: no` → the `user-data/` directory line and the `graphify.json` negation are **required** — `user-data/` is gitignored and holds `session-summary.md` and other runtime state; check them as written. `IN_STORE: yes` → do not add them back (`upgrade` retired them); `credentials.local.json` at the project root is managed on both layouts. A missing managed line is fixed by `devteam sync`, not by appending |
 | 8 User Preferences | Read `PREFS_FILE` only. A missing field is a stale projection → `devteam sync`, never inject it. Step 3's legacy `.auto-update` flag is looked for in `STATE_DIR`; if present, `devteam prefs set auto_update true --scope project` and rename the flag to `.auto-update.pre-migration.bak` |
 | 9 Notifier | Read `state.json` from `STATE_DIR` |
-| 10 Credentials | Run `devteam cred check` and report it. Check `credentials.local.json` in `STATE_DIR` only if it exists — never create it. A root-level copy (or one left in `user-data/` after an upgrade) is reported with `devteam cred import` as the fix; that import moves `work_feedback_*` to the credential reference file, which `skills/shared/work-feedback/SKILL.md` reads |
+| 10 Credentials | Run `devteam doctor` and report its `credentials_local` findings. Check `.dev-team-agents/credentials.local.json` only if it exists — never create it. A legacy copy in `user-data/` or in the store is relocated byte-for-byte by `devteam doctor` / `devteam sync`; a conflict between two non-blank copies is reported for the user to merge by hand |
 | 11 Memory Artifacts | Check `session-summary.md` in `MEMORY_DIR`; the missing-file fix creates it there |
 
 Categories 4, 6, 12 and 13 are unchanged.
@@ -561,37 +561,15 @@ STATE=.dev-team-agents/user-data/state.json
 ⚠️ **CRITICAL — this file contains remote environment credentials. It must NEVER be committed or shared.**
 
 ```bash
-# Check file exists
-[ -f .dev-team-agents/user-data/credentials.local.json ] && echo "OK" || echo "MISSING"
-
-# Check required top-level keys exist
-if [ -f .dev-team-agents/user-data/credentials.local.json ]; then
-    python3 -c "
-import json
-with open('.dev-team-agents/user-data/credentials.local.json') as f:
-    d = json.load(f)
-missing = [k for k in ['devops', 'app', 'work_feedback_active', 'work_feedback_interval_minutes'] if k not in d]
-if missing:
-    print('MISSING_KEYS: ' + ', '.join(missing))
-else:
-    print('KEYS_OK')
-"
-fi
-
-# Check for legacy root-level file
-[ -f credentials.local.json ] && echo "LEGACY_ROOT: credentials.local.json found at project root" || echo "ROOT_OK"
-
-# Check gitignore entry
-grep -qF ".dev-team-agents/user-data/credentials.local.json" .gitignore 2>/dev/null && echo "GITIGNORE: OK" || echo "GITIGNORE: MISSING"
+# Relocates legacy copies (byte-for-byte) and reports conflicts — never creates the file
+devteam doctor
 ```
 
-| Check | Status | Auto-fix |
-|-------|--------|----------|
-| `credentials.local.json` exists | Required | Create with default template if missing |
-| Top-level keys (`devops`, `app`) present | Required | Add missing keys with defaults (never remove existing data) |
-| `work_feedback_active` / `work_feedback_interval_minutes` present | Required | Add missing keys only (`true` / `5`), never overwrite an existing value — see `skills/shared/work-feedback/SKILL.md` |
-| No root-level `credentials.local.json` | Required (migrate) | Move to `.dev-team-agents/user-data/credentials.local.json` (see fix-patterns.md) |
-| `.gitignore` entry present | Required | Append `.dev-team-agents/user-data/credentials.local.json` with a strong comment |
+| Check | Status | Report / Fix |
+|-------|--------|-------------|
+| `credentials.local.json` at `.dev-team-agents/credentials.local.json` | INFO if missing | Report present/absent. If missing, tell the user to create it via `devteam cred local init` or the app's Credentials tab. Never create the file yourself. |
+| Legacy copies (`user-data/`, store) | WARN if `devteam doctor` reports a conflict | `devteam doctor` moves a legacy copy to the root without changing its content and quarantines blank or duplicate copies. Two different non-blank copies are left untouched — tell the user to merge them by hand. |
+| `.gitignore` entry for `.dev-team-agents/credentials.local.json` | OK if present | The managed `.gitignore` block includes this entry on both layouts — `devteam sync` fixes a missing line. |
 
 ## Category 11 — Memory Artifacts
 

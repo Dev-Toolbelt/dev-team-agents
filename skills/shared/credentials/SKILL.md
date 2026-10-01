@@ -9,41 +9,13 @@ Use this skill whenever a task requires accessing a remote environment (staging,
 
 ## File Location
 
-`.dev-team-agents/user-data/credentials.local.json`
+`.dev-team-agents/credentials.local.json` in the **main checkout** — every linked git worktree shares that one file (see § 1 for resolving it).
 
-This file is **gitignored** and **never committed**. It is created automatically by `install.sh` and the health check.
+This file is **gitignored** and **never committed**. It is created only via an explicit action: `devteam cred local init` or the app's Credentials tab. If the file does not exist, tell the user to create it via one of those methods — never create it yourself.
 
 ## Structure
 
-The file follows a category → environment → credential pattern. Two top-level categories are provided by default; users may add more. It also carries two flat top-level settings unrelated to credentials — `work_feedback_active` and `work_feedback_interval_minutes`, consumed by `skills/shared/work-feedback/SKILL.md`, not by this skill:
-
-```json
-{
-  "work_feedback_active": true,
-  "work_feedback_interval_minutes": 5,
-  "devops": {
-    "agents": ["software-architect", "devops-specialist", "security-specialist"],
-    "staging": {
-      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
-      "database": [
-        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
-      ]
-    },
-    "production": {
-      "ssh": { "user": "", "host": "", "privateKeyPath": "", "path": "" },
-      "docker": {},
-      "database": [
-        { "type": "", "host": "", "port": "", "database": "", "username": "", "password": "" }
-      ]
-    }
-  },
-  "app": {
-    "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
-    "staging": { "appUrl": "", "username": "", "password": "" },
-    "production": { "appUrl": "", "username": "", "password": "" }
-  }
-}
-```
+`devteam cred local init` writes the canonical template. The file follows a category → environment → credential pattern: `devops` (per environment: `ssh`, `database[]`, `docker`) and `app` (per environment: `appUrl`, `username`, `password`); users may add more. It also carries two flat top-level settings unrelated to credentials — `work_feedback_active` and `work_feedback_interval_minutes`, consumed by `skills/shared/work-feedback/SKILL.md`.
 
 ### Key `agents`
 
@@ -62,20 +34,22 @@ Treat any unknown key as valid. Never reject or remove user-added structure.
 
 ### 1. Locate the File
 
+Ask the CLI for the path — it resolves the main checkout (worktrees, monorepo subprojects) and prints no secret value:
+
 ```bash
-CRED_FILE=".dev-team-agents/user-data/credentials.local.json"
-if [ ! -f "$CRED_FILE" ]; then
-  echo "MISSING"
-fi
+CRED_FILE=$(devteam cred local show --json 2>/dev/null \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])' 2>/dev/null)
+[ -n "$CRED_FILE" ] || CRED_FILE=".dev-team-agents/credentials.local.json"
+[ -f "$CRED_FILE" ] || echo "MISSING"
 ```
 
-If the file does not exist, notify the user and ask them to create it or run a health check.
+If the file does not exist, tell the user to create it via `devteam cred local init` or the app's Credentials tab.
 
 ### 2. Read the JSON
 
 ```python
 import json
-with open(".dev-team-agents/user-data/credentials.local.json") as f:
+with open(CRED_FILE) as f:  # the path resolved in step 1
     creds = json.load(f)
 ```
 

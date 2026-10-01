@@ -65,8 +65,7 @@ if [ ! -f .dev-team-agents/VERSION ]; then
   echo "v2.0.0" > .dev-team-agents/VERSION
 fi
 
-# Bug: v2 installer writes .dev-team-agents/user-data/credentials.local.json
-# without creating user-data/ first. Pre-create to avoid installer abort:
+# user-data/ holds the session summary and other runtime state
 mkdir -p .dev-team-agents/user-data
 ```
 
@@ -363,8 +362,6 @@ git config --local core.excludesFile /dev/null 2>/dev/null || true
 #   .claude/user-data/.graphify-last-run
 #   .claude/.worktree-session
 #
-# Keep the root credentials.local.json ignore line (it's project secrets, unrelated to v2)
-
 # The v2 installer adds the .dev-team-agents/ equivalents automatically
 ```
 
