@@ -17,6 +17,7 @@ replaces a stale v2 path with the current one, and leaves every other key alone.
 
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 
@@ -79,14 +80,19 @@ PREVIOUS_MATCHERS = {
 #: the directory a Bash call `cd`-ed into — a relative path then names nothing, and every hook
 #: (credential guard included) fails as a "non-blocking error" nobody reads. So the command first
 #: walks up from there to the nearest directory holding the hooks — the project root, or a
-#: worktree's own root when it has one — and falls back to the root Claude Code was opened at.
+#: worktree's own root when it has one, or a sub-project's own install even when Claude Code was
+#: opened above it — and falls back to the root Claude Code was opened at. The logical path is
+#: walked first, then the physical one, for a directory entered through a symlink; a step that
+#: does not shorten the path (no `/` left) ends the walk instead of spinning.
 #: Every hook already assumes it runs there. `bash -c` rather than bare shell syntax because the
 #: hook shell is not ours to choose, and `env -u` comes before it so bash does not source
 #: `BASH_ENV` either. `exec bash <script>`, like Codex's command, so a copy that lost its mode
 #: bits still runs. Still relative: settings.json is committed. The walk is the same text as
 #: `install-codex.sh` `cmd()`; `scripts/install.sh` `_hook_cmd` writes this exact command.
 ROOT_WALK = (
-    'd=$PWD; while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do d=${{d%/*}}; done; '
+    'for d in "$PWD" "$(pwd -P)"; do '
+    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
+    '[ -n "$d" ] && break; done; '
     'cd "${{d:-{fallback}}}" && exec bash {hooks}/{script}'
 )
 
@@ -96,17 +102,19 @@ def command_for(script):
     return "{} bash -c '{}'".format(ENV_PREFIX, body)
 
 
+def _is_our_command(command, script):
+    """True when a hook command runs our dispatcher for ``script``, in any layout we have shipped."""
+    return script in command and any(owned in command for owned in OWNED_HOOK_DIRS)
+
+
 def _is_devteam_entry(entry, script):
     """True when this settings entry is one we own, in any layout we have shipped."""
     if not isinstance(entry, dict):
         return False
-    for hook in entry.get("hooks", []) or []:
-        if not isinstance(hook, dict):
-            continue
-        command = hook.get("command") or ""
-        if script in command and any(owned in command for owned in OWNED_HOOK_DIRS):
-            return True
-    return False
+    return any(
+        isinstance(hook, dict) and _is_our_command(hook.get("command") or "", script)
+        for hook in entry.get("hooks", []) or []
+    )
 
 
 def _warn(emitter, message):
@@ -154,20 +162,24 @@ def wire(project_root, emitter=None):
             changed = True
         else:
             # A v2 entry pointing at the pre-pointer path, or a stale variant: rewrite it in
-            # place rather than adding a second one. A matcher we never shipped is kept.
+            # place rather than adding a second one. Only OUR hook's command changes — a sibling
+            # hook the user put in the same entry, and any key on ours (`timeout`), are kept,
+            # and so is a matcher we never shipped.
             current = entries[existing_index]
-            merged = desired
+            merged = copy.deepcopy(current)
+            for hook in merged.get("hooks") or []:
+                if isinstance(hook, dict) and _is_our_command(hook.get("command") or "", script):
+                    hook["command"] = command_for(script)
+                    hook.setdefault("type", "command")
             has, wanted = current.get("matcher"), desired.get("matcher")
-            if has != wanted and has not in PREVIOUS_MATCHERS.get(event, ()):
-                merged = dict(desired)
-                if has is None:
-                    merged.pop("matcher", None)
+            if has != wanted:
+                if has in PREVIOUS_MATCHERS.get(event, ()):
+                    merged["matcher"] = wanted
                 else:
-                    merged["matcher"] = has
-                _warn(
-                    emitter,
-                    "{} matcher {!r} left as is; dev-team-agents needs {!r}".format(event, has, wanted),
-                )
+                    _warn(
+                        emitter,
+                        "{} matcher {!r} left as is; dev-team-agents needs {!r}".format(event, has, wanted),
+                    )
             if current != merged:
                 entries[existing_index] = merged
                 changed = True

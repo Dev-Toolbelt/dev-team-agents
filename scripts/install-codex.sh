@@ -221,7 +221,9 @@ MANAGED_MARKER  = "_dev_team_agents_managed"
 # be zsh or fish; single quotes are literal in all of them. Windows is the exception: Codex runs
 # the command through `cmd.exe /C`, where single quotes do not quote, so it keeps the plain form.
 ROOT_WALK = (
-    'd=$PWD; while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do d=${{d%/*}}; done; '
+    'for d in "$PWD" "$(pwd -P)"; do '
+    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
+    '[ -n "$d" ] && break; done; '
     'cd "${{d:-.}}" && exec bash {hooks}/{script}'
 )
 WINDOWS = sys.platform.startswith(("win", "msys", "cygwin"))

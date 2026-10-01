@@ -686,10 +686,11 @@ fi
 # The command finds the project root first: Claude Code runs a hook in the session's CURRENT
 # directory, which a Bash `cd` moves, and a relative path from a subdirectory names nothing. It
 # walks up to the nearest directory holding the hooks, then falls back to $CLAUDE_PROJECT_DIR.
+# `_HOOK_TEMPLATE` is that command with `@SCRIPT@` for the script name.
 # Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
+_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && exec bash .dev-team-agents/scripts/hooks/@SCRIPT@'"'"''
 _hook_cmd() {
-    local hooks=".dev-team-agents/scripts/hooks"
-    printf '%s' "env -u BASH_ENV -u ENV bash -c 'd=\$PWD; while [ -n \"\$d\" ] && [ ! -d \"\$d/${hooks}\" ]; do d=\${d%/*}; done; cd \"\${d:-\${CLAUDE_PROJECT_DIR:-.}}\" && exec bash ${hooks}/$1'"
+    printf '%s' "${_HOOK_TEMPLATE//@SCRIPT@/$1}"
 }
 # The same command as a JSON string body, for the settings.json written from a heredoc.
 _json_str() {
