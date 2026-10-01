@@ -16,6 +16,7 @@ import {
   SquareTerminal,
   TriangleAlert,
   Braces,
+  XCircle,
 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -36,6 +37,7 @@ import {
   formatDurationMinutes,
   isRunning,
   percentLabels,
+  splitAgentTask,
   sessionsInPeriod,
   stepDurations,
   timeInColumn,
@@ -427,6 +429,24 @@ function StaleBadge({ count }: { count?: number }) {
 
 const FINDINGS_HINT = 'Review found issues that are still to be fixed';
 
+function AgentBadge({ name }: { name: string | null }) {
+  return (
+    <Badge variant="outline" className="border-info text-foreground" title="A sub-agent run">
+      <Bot aria-hidden="true" />
+      Agent{name === null ? '' : `: ${name}`}
+    </Badge>
+  );
+}
+
+function FailedBadge() {
+  return (
+    <Badge variant="outline" className="border-destructive text-foreground" title="The agent run failed">
+      <XCircle aria-hidden="true" />
+      Failed
+    </Badge>
+  );
+}
+
 /** The explanation is in the text too, not only in `title`, so keyboard and screen-reader users get it. */
 function BadgeHint({ text }: { text: string }) {
   return <span className="sr-only">{`. ${text}`}</span>;
@@ -806,6 +826,8 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
   // their seconds would be stale the moment they are drawn.
   const format = task.column === 'in_progress' ? formatDuration : formatDurationMinutes;
   const where = session.branch ?? 'no branch';
+  const split = task.kind === 'agent' ? splitAgentTask(task.content) : null;
+  const title = split?.title ?? task.content;
   return (
     <li className="min-w-0">
       <article
@@ -820,7 +842,7 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
         className="rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs"
       >
         <p id={contentId} className={`break-words [overflow-wrap:anywhere] ${task.column === 'done' ? 'text-muted-foreground' : ''}`}>
-          {task.content}
+          {title}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1" title={`${providerLabel(session.provider)} session`}>
@@ -832,6 +854,8 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
             <span className="sr-only">Time in this column: </span>
             {format(inColumn)}
           </span>
+          {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
+          {task.failed ? <FailedBadge /> : null}
           {task.review !== null && task.column === 'in_review' ? <ReviewBadge review={task.review} /> : null}
           {task.stale ? <StaleBadge /> : null}
           {task.abandoned ? <AbandonedBadge /> : null}

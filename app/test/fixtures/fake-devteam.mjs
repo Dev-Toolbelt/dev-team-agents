@@ -113,6 +113,8 @@ switch (scenario) {
               counts,
               tasks: [
                 { key: 't1', content: 'ok', owner: 'main', agent_type: null, status: 'pending', column: 'todo', created_at: 1, status_since: 1, completed_at: null, durations: { pending: 5 }, stale: false, abandoned: false, review: null },
+                { key: 't4', content: 'reviewer: check the diff', owner: 'main', agent_type: 'reviewer', status: 'in_progress', column: 'in_progress', created_at: 1, status_since: 1, completed_at: null, durations: { in_progress: 5 }, stale: false, abandoned: false, kind: 'agent', failed: false, review: null },
+                { key: 't5', content: 'builder: ship it', owner: 'main', agent_type: 'builder', status: 'completed', column: 'done', created_at: 1, status_since: 1, completed_at: 2, durations: { completed: 1 }, stale: false, abandoned: false, kind: 'agent', failed: true, review: null },
                 { key: 't3', content: 'reviewed', owner: 'main', agent_type: null, status: 'in_progress', column: 'in_review', created_at: 1, status_since: 1, completed_at: null, durations: { in_progress: 5, in_review: 3 }, stale: false, abandoned: false, review: { state: 'findings', findings: 2, since: 4 } },
                 { key: 't2', content: 'no column and no status', created_at: 1, status_since: 1 },
               ],

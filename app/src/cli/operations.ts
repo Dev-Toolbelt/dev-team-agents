@@ -2348,6 +2348,8 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     durations,
     stale: raw['stale'] === true,
     abandoned: raw['abandoned'] === true,
+    kind: raw['kind'] === 'agent' ? 'agent' : 'todo',
+    failed: raw['failed'] === true,
     review,
   };
 }

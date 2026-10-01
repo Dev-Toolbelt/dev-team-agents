@@ -193,6 +193,18 @@ describe('asBoardProject', () => {
     expect(parsed.sessions[0]?.tasks.map((t) => t.review)).toEqual([null, null]);
   });
 
+  it('reads kind and failed, and degrades to todo / not failed when absent or invalid', () => {
+    const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
+    expect(asBoardTask({ ...raw, kind: 'agent', failed: true })).toMatchObject({ kind: 'agent', failed: true });
+    const old = { ...raw };
+    delete old['kind'];
+    delete old['failed'];
+    expect(asBoardTask(old)).toMatchObject({ kind: 'todo', failed: false });
+    for (const bad of [{ kind: 'robot', failed: 'yes' }, { kind: 7, failed: 1 }, { kind: null, failed: null }]) {
+      expect(asBoardTask({ ...raw, ...bad })).toMatchObject({ key: 'k', kind: 'todo', failed: false });
+    }
+  });
+
   it('reads the review window: column, state, findings, since, and the counts', () => {
     const review = { state: 'findings', findings: 3, since: NOW - 50 } as const;
     const task = boardTask({ key: 'r', column: 'in_review', status: 'in_progress', review });
@@ -361,8 +373,14 @@ describe('watchTasks and listTasks', () => {
     if (!result.ok) return;
     // The project without the documented fields is dropped; the task without a column too.
     expect(result.data.projects.map((p) => p.project_id)).toEqual(['proj-a']);
-    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1', 't3']);
-    expect(result.data.projects[0]?.sessions[0]?.tasks[1]?.review).toEqual({ state: 'findings', findings: 2, since: 4 });
+    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => t.key)).toEqual(['t1', 't4', 't5', 't3']);
+    expect(result.data.projects[0]?.sessions[0]?.tasks[3]?.review).toEqual({ state: 'findings', findings: 2, since: 4 });
+    expect(result.data.projects[0]?.sessions[0]?.tasks.map((t) => [t.kind, t.failed])).toEqual([
+      ['todo', false],
+      ['agent', false],
+      ['agent', true],
+      ['todo', false],
+    ]);
   });
 });
 
