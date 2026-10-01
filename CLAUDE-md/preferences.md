@@ -15,7 +15,6 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
   "docs_stale_after_days": 30,
   "auto_update": true,
   "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "session_no_commit_turns": 8,
   "telemetry": true,
@@ -45,7 +44,6 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
 | `docs_stale_after_days` | `30` | Days before `project.md`, `session-summary.md`, and the last `/devteam:health-check` run are flagged as stale | `scripts/hooks/session-start.sh`, `skills/shared/notifier/SKILL.md` |
 | `auto_update` | `true` on a fresh file, `false` on backfill | Auto-update when a new version is detected. Consent key — see the note above the table | `scripts/hooks/lib/update-check.sh` (`uc_auto_update_enabled`), gates the update check in `scripts/hooks/session-start.sh` |
 | `update_check_interval_hours` | `24` | Hours between update checks | `scripts/hooks/lib/update-check.sh` |
-| `transcript_multiplier` | `1.8` | **Deprecated, no longer applied.** `04-notifier.sh` now reads the last transcript usage entry's cache/input tokens directly — the exact context size, no multiplier needed. Kept only for backward-compat reads | `scripts/hooks/stop/04-notifier.sh` (read, unused) |
 | `model_max_tokens` | `200000` | Maximum context window for the active model; used to compute context percentage from transcript tokens | `scripts/hooks/stop/04-notifier.sh` |
 | `session_no_commit_turns` | `8` | Turn count after which a `warning` fires if the session has real work (dirty working tree) but HEAD hasn't moved since `session-start.sh` recorded it. Fires at most once per session | `scripts/hooks/stop/04-notifier.sh` |
 | `telemetry` | written by consent, not by the schema | Anonymous usage telemetry. On first install `install.sh` **overwrites** the schema value with the user's answer, and it is `false` unless the user actively accepted — see "Telemetry consent" below. Set to `false` at any time to opt out. No personal data is ever collected — see `PRIVACY.md` | `scripts/lib/telemetry-guard.sh` (`_telemetry_enabled`), consumed by `scripts/hooks/pre-tool-use/02b-telemetry.sh`, `scripts/hooks/stop/05-telemetry.sh`, `scripts/helpers/telemetry-send.sh` |

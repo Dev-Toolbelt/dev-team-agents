@@ -114,7 +114,6 @@ Configure these preferences (see [Where preferences live](#where-preferences-liv
   "context_window_percent_warning": 55,
   "context_window_percent_limit": 60,
   "suppress_notifications": false,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000
 }
 ```
@@ -124,12 +123,11 @@ Configure these preferences (see [Where preferences live](#where-preferences-liv
 | `context_window_percent_warning` | `55` | % at which a warning is emitted |
 | `context_window_percent_limit` | `60` | % at which a critical alert is emitted |
 | `suppress_notifications` | `false` | `false` / `true` / `["info"]` |
-| `transcript_multiplier` | `1.8` | Deprecated, no longer applied (see below) |
 | `model_max_tokens` | `200000` | Context window of the active model |
 
 Set `suppress_notifications` to `true` to silence all notifications, or to `["info"]` to suppress only tips.
 
-Context window warnings read the last transcript usage entry's cache/input token counts (from the Stop hook payload) — the exact size of the context sent on the most recent API call, no multiplier needed. `transcript_multiplier` is kept in the schema for backward compatibility but has no effect. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
+Context window warnings read the last transcript usage entry's cache/input token counts (from the Stop hook payload) — the exact size of the context sent on the most recent API call, no multiplier needed. The retired `transcript_multiplier` key is no longer in the schema; one left in an older `preferences.json` is ignored. Set `model_max_tokens` to match your model's actual context window if you switch to a non-200k model.
 
 ### Worktree & Docker isolation
 

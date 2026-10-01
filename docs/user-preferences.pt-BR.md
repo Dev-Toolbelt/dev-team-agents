@@ -60,7 +60,6 @@ scripts/lib/preferences-defaults.json
   "docs_stale_after_days": 30,
   "auto_update": true,
   "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "session_no_commit_turns": 8,
   "telemetry": true,
@@ -89,7 +88,6 @@ scripts/lib/preferences-defaults.json
 | `docs_stale_after_days` | `30` | number | Limiar de desatualização para docs mantidos |
 | `auto_update` | `true` | bool | Se a checagem de atualização pode aplicar updates automaticamente |
 | `update_check_interval_hours` | `24` | number | Intervalo entre checagens de atualização |
-| `transcript_multiplier` | `1.8` | number | Campo legado de compatibilidade; não é mais aplicado |
 | `model_max_tokens` | `200000` | number | Tamanho assumido da janela de contexto para warnings |
 | `session_no_commit_turns` | `8` | number | Número de turns antes de avisar sobre sessão suja sem commit |
 | `telemetry` | `true` | bool | Flag de opt-in para telemetria anônima |
