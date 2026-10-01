@@ -213,8 +213,17 @@ hooks_file, hooks_dir = sys.argv[1], sys.argv[2]
 MANAGED_EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd")
 MANAGED_MARKER  = "_dev_team_agents_managed"
 
+# Codex runs a hook through the user's own shell (`$SHELL -lc`) in the session's working
+# directory, which is not the project root when Codex was started in a subdirectory: a relative
+# path then names nothing and every hook fails unseen. So the command enters the repository
+# root first. `bash -c '…'` because that shell may be zsh or fish, where the substitution below
+# is not the same syntax; single quotes are literal in all of them. Still relative, like the
+# Claude command (`scripts/lib/devteam/hooks.py:command_for`).
 def cmd(script):
-    return f"bash {hooks_dir}/{script}"
+    return (
+        "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)\" "
+        f"&& exec bash {hooks_dir}/{script}'"
+    )
 
 # Each managed hook carries a statusMessage with the MANAGED_MARKER so we can
 # idempotently strip our own entries on re-install without touching user hooks.

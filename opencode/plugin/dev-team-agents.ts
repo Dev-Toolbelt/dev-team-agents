@@ -67,11 +67,12 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // spawned child; a hook that reads stdin would otherwise wait for it until the timeout.
   // stderr is ignored: nothing reads it, and an unread pipe fills and blocks the script. The
   // child leads its own process group, so a timeout kills the python children the dispatcher
-  // forked too, not just bash.
+  // forked too, not just bash. `cwd` is the project root every hook assumes it runs in; left
+  // unset, the child inherits whatever directory the opencode process happens to be in.
   const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<string> =>
     new Promise((resolve, reject) => {
       const posix = process.platform !== "win32"
-      const child = spawn("bash", [script], { stdio: ["pipe", "pipe", "ignore"], detached: posix })
+      const child = spawn("bash", [script], { cwd: directory, stdio: ["pipe", "pipe", "ignore"], detached: posix })
       let stdout = ""
       const timer = setTimeout(() => {
         try {
