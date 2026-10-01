@@ -312,6 +312,15 @@ class SettlementTest(BoardCase):
                 task = self.agents()["bg-" + (status or "none")]
                 self.assertEqual((task["status"], bool(task.get("failed"))), expected)
 
+    def test_a_background_agent_ends_at_its_hand_back_not_at_a_late_stop(self):
+        transcript = self.tmp / "late.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        self.background("bg-late", transcript)
+        transcript.write_text(hand_back("bg-late"), encoding="utf-8")  # stamped T0 + 1000
+        self.stop(transcript, now=T0 + 11 * 3600)
+        task = self.agents()["bg-late"]
+        self.assertEqual((task["status"], task["history"][-1]["at"]), ("completed", T0 + 1000))
+
     def test_the_cursor_restarts_at_the_transcript_end_when_no_other_background_agent_runs(self):
         transcript = self.tmp / "t.jsonl"
         transcript.write_text("", encoding="utf-8")
