@@ -78,12 +78,12 @@ export UC_SUPPRESS
 
 if uc_auto_update_enabled "$PREFS_FILE" "$USER_DATA_DIR"; then
     if uc_perform_auto_update "$CURRENT" "$LATEST" "$INSTALL_DIR"; then
-        uc_notify "info" "$(uc_message updated "$LANG_PREF" "$CURRENT" "$LATEST")"
+        uc_notify updated "$(uc_message updated "$LANG_PREF" "$CURRENT" "$LATEST")"
     else
-        uc_notify "warning" "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
+        uc_notify available "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
     fi
     exit 0
 fi
 
-uc_notify "warning" "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
+uc_notify available "$(uc_message available "$LANG_PREF" "$CURRENT" "$LATEST")"
 exit 0

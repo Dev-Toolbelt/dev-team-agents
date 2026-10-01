@@ -79,20 +79,12 @@ _tb_suppress() {
     printf '%s' "${raw:-false}"
 }
 
-_tb_msg() {  # _tb_msg <lang> <en> <pt-BR> <es>
-    case "$1" in
-        pt-BR|pt*) printf '%s' "$3" ;;
-        es*)       printf '%s' "$4" ;;
-        *)         printf '%s' "$2" ;;
-    esac
-}
-
 _tb_notify() {  # _tb_notify <level> <code> <session> <en> <pt-BR> <es> [dedupe-suffix]
     local level="$1" code="$2" session="$3" lang key
     lang="$(_tb_pref language en)"
     key="${code}:${session}${7:+:$7}"
     devteam_notify_init "$TB_ROOT" "$TB_STATE_DIR" "$(_tb_suppress)" "$session"
-    devteam_notify "$level" "$code" "$(_tb_msg "$lang" "$4" "$5" "$6")" 86400 "$key"
+    devteam_notify "$level" "$code" "$(devteam_msg "$lang" "$4" "$5" "$6")" 86400 "$key"
 }
 
 _tb_notify_done() {  # _tb_notify_done <session>

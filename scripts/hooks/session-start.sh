@@ -131,6 +131,7 @@ print('\x1f'.join([s(d.get('docs_stale_after_days', 30)), s(d.get('language', 'e
     fi
 fi
 AUTO_UPDATE="${AUTO_UPDATE:-false}"
+_msg() { devteam_msg "$USER_LANG" "$@"; }  # _msg <en> <pt-BR> <es>; devteam_msg is in lib/notify.sh
 WORKTREE_ACTIVE="${WORKTREE_ACTIVE:-false}"
 
 # ── Write session ID for the notifier turn counter ────────────────
@@ -186,12 +187,12 @@ if [ -f "$UC_LIB_FILE" ]; then
                 # in STATE_DIR, not USER_DATA_DIR.
                 if uc_auto_update_enabled "$PREFS_FILE" "$STATE_DIR"; then
                     if uc_perform_auto_update "$UC_CURRENT" "$UC_LATEST" "$UC_INSTALL_DIR"; then
-                        uc_notify "info" "$(uc_message updated "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                        uc_notify updated "$(uc_message updated "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
                     else
-                        uc_notify "warning" "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                        uc_notify available "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
                     fi
                 else
-                    uc_notify "warning" "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
+                    uc_notify available "$(uc_message available "$USER_LANG" "$UC_CURRENT" "$UC_LATEST")"
                 fi
             fi
         fi
@@ -290,8 +291,10 @@ if [ "$BROKEN_LINKS" -gt 0 ]; then
     # The marker above tells the agent; this tells the user, who otherwise only
     # notices that /devteam:* commands have vanished.
     if [ -f "$PROJECT_ROOT/.dev-team-agents/project.json" ]; then _fix="devteam sync"; else _fix="bash .dev-team-agents/scripts/fix-symlinks.sh"; fi
-    devteam_notify "critical" "symlinks.broken" \
+    devteam_notify "critical" "symlinks.broken" "$(_msg \
         "${BROKEN_LINKS} dev-team-agents link(s) are plain files, so agents, commands and skills are not loaded. Run: ${_fix}" \
+        "${BROKEN_LINKS} link(s) do dev-team-agents são arquivos comuns, então agents, comandos e skills não são carregados. Execute: ${_fix}" \
+        "${BROKEN_LINKS} enlace(s) de dev-team-agents son archivos comunes, por lo que no se cargan agentes, comandos ni skills. Ejecuta: ${_fix}")" \
         "$DAY_TTL" "symlinks.broken:${TODAY_KEY}"
 fi
 
@@ -303,8 +306,10 @@ PROJECT_MD="${DOCS_DIR}/project.md"
 if [ -f "$PROJECT_MD" ]; then
     DAYS_OLD=$(_days_since_modified "$PROJECT_MD")
     if [ "$DAYS_OLD" -gt "$STALE_DAYS" ]; then
-        devteam_notify "warning" "docs.project_stale" \
+        devteam_notify "warning" "docs.project_stale" "$(_msg \
             "docs/project.md is ${DAYS_OLD} days old — consider running /devteam:architect to refresh it." \
+            "docs/project.md tem ${DAYS_OLD} dias — considere executar /devteam:architect para atualizá-lo." \
+            "docs/project.md tiene ${DAYS_OLD} días — considera ejecutar /devteam:architect para actualizarlo.")" \
             "$DAY_TTL" "docs.project_stale:${TODAY_KEY}"
     fi
 fi
@@ -318,8 +323,10 @@ if [ -f "$SESSION_SUMMARY" ]; then
     if [ -n "$LAST_DATE" ]; then
         DAYS_SINCE=$(_days_since_date_str "$LAST_DATE")
         if [ "$DAYS_SINCE" -gt "$STALE_DAYS" ]; then
-            devteam_notify "warning" "docs.session_summary_stale" \
+            devteam_notify "warning" "docs.session_summary_stale" "$(_msg \
                 "The session summary's last entry is ${DAYS_SINCE} days old — this project may be inactive, or the summary needs updating." \
+                "A última entrada do session summary tem ${DAYS_SINCE} dias — o projeto pode estar inativo, ou o resumo precisa ser atualizado." \
+                "La última entrada del session summary tiene ${DAYS_SINCE} días — el proyecto puede estar inactivo, o el resumen necesita actualizarse.")" \
                 "$DAY_TTL" "docs.session_summary_stale:${TODAY_KEY}"
         fi
     fi
@@ -332,8 +339,10 @@ if [ -n "$LAST_HEALTH_CHECK" ]; then
     if [ -n "$HC_DATE" ]; then
         DAYS_SINCE_HC=$(_days_since_date_str "$HC_DATE")
         if [ "$DAYS_SINCE_HC" -gt "$STALE_DAYS" ]; then
-            devteam_notify "warning" "health_check.stale" \
+            devteam_notify "warning" "health_check.stale" "$(_msg \
                 "The last /devteam:health-check was ${DAYS_SINCE_HC} days ago — run it to catch drift (broken links, stale config, missing scripts)." \
+                "O último /devteam:health-check foi há ${DAYS_SINCE_HC} dias — execute-o para detectar desvios (links quebrados, configuração desatualizada, scripts ausentes)." \
+                "El último /devteam:health-check fue hace ${DAYS_SINCE_HC} días — ejecútalo para detectar desvíos (enlaces rotos, configuración desactualizada, scripts faltantes).")" \
                 "$DAY_TTL" "health_check.stale:${TODAY_KEY}"
         fi
     fi
@@ -343,8 +352,10 @@ else
     # session-summary.md already exists) — a brand-new install already gets
     # a setup flow and doesn't need a second, redundant prompt.
     if [ -f "$PROJECT_MD" ] || [ -f "$SESSION_SUMMARY" ]; then
-        devteam_notify "warning" "health_check.never" \
+        devteam_notify "warning" "health_check.never" "$(_msg \
             "No /devteam:health-check has been recorded for this project — run it once to verify the installation." \
+            "Nenhum /devteam:health-check foi registrado para este projeto — execute-o uma vez para verificar a instalação." \
+            "No se ha registrado ningún /devteam:health-check para este proyecto — ejecútalo una vez para verificar la instalación.")" \
             "$DAY_TTL" "health_check.never:${TODAY_KEY}"
     fi
 fi
@@ -357,8 +368,10 @@ fi
 # Nothing is ever moved automatically — this only tells the user the command
 # exists.
 if devteam_memory_still_in_project "$MAIN_REPO_ROOT"; then
-    devteam_notify "warning" "layout.upgrade_available" \
+    devteam_notify "info" "layout.upgrade_available" "$(_msg \
         "This project still keeps its memory in .dev-team-agents/user-data — run \`devteam upgrade\` to move it into the store. Nothing moves until you do." \
+        "Este projeto ainda guarda sua memória em .dev-team-agents/user-data — execute \`devteam upgrade\` para movê-la para o store. Nada é movido até você fazer isso." \
+        "Este proyecto todavía guarda su memoria en .dev-team-agents/user-data — ejecuta \`devteam upgrade\` para moverla al store. Nada se mueve hasta que lo hagas.")" \
         "$DAY_TTL" "layout.upgrade_available:${TODAY_KEY}"
 fi
 
