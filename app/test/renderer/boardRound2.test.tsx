@@ -628,15 +628,15 @@ describe('Board kanban — the worktree mark', () => {
       boardTask({ key: 'm', content: 'In the main checkout' }),
     ];
     await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
-    const mark = within(card('In the worktree')).getByRole('img', { name: 'Worktree: .worktrees/feat/ping (branch feat/ping)' });
-    expect(mark).toHaveAttribute('tabindex', '0');
-    expect(within(card('In the main checkout')).queryByRole('img', { name: /^Worktree:/ })).not.toBeInTheDocument();
+    const mark = within(card('In the worktree')).getByRole('button', { name: 'Worktree: .worktrees/feat/ping (branch feat/ping)' });
+    expect(mark).toHaveAttribute('type', 'button');
+    expect(within(card('In the main checkout')).queryByRole('button', { name: /^Worktree:/ })).not.toBeInTheDocument();
   });
 
   it('opens the tooltip from the keyboard', async () => {
     const tasks = [boardTask({ key: 'w', content: 'In the worktree', worktree: { path: '/abs/wt', branch: null } })];
     const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
-    const mark = within(card('In the worktree')).getByRole('img', { name: 'Worktree: /abs/wt' });
+    const mark = within(card('In the worktree')).getByRole('button', { name: 'Worktree: /abs/wt' });
     for (let step = 0; step < 50 && document.activeElement !== mark; step += 1) await user.tab();
     expect(mark).toHaveFocus();
     expect((await screen.findByRole('tooltip')).textContent).toContain('Worktree: /abs/wt');

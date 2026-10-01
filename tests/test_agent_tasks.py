@@ -12,7 +12,7 @@ import json
 import subprocess
 import unittest
 
-from devteam_support import requires_bash
+from devteam_support import REPO_ROOT, requires_bash
 
 from devteam import providers, review_triggers, tasks
 
@@ -596,8 +596,6 @@ class AgentHookTest(tt.HookTest):
         self.assertEqual(len(self.load("s1")["reviews"]), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 @requires_bash()
@@ -643,7 +641,35 @@ class WorktreeTest(BoardCase):
         tasks.record(self.root, dict(end, cwd=str(self.root)), now=T0 + 5)
         self.assertEqual(self.task_view("s1")["worktree"]["path"], ".worktrees/feat/ping")
 
+    def test_a_detached_worktree_has_no_branch(self):
+        detached = self.root / ".worktrees" / "detached"
+        subprocess.run(["git", "-C", str(self.root), "worktree", "add", "-q", "--detach", str(detached)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.assertEqual(tasks._git_location(str(detached))[1], {"path": ".worktrees/detached", "branch": None})
+
+    def test_no_work_tree_and_no_commit_yet_degrade_without_a_worktree(self):
+        bare = self.tmp / "bare.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+        self.assertEqual(tasks._git_location(str(bare)), (None, None))
+        self.assertEqual(tasks._git_location(str(self.root / ".git")), (None, None))
+        unborn = self.tmp / "unborn"
+        subprocess.run(["git", "init", "-q", str(unborn)], check=True)
+        self.assertEqual(tasks._git_location(str(unborn)), (None, None))
+        # The main checkout still names its branch.
+        self.assertIsNotNone(tasks._git_location(str(self.root))[0])
+
+    def test_the_opencode_plugin_sends_its_directory_as_cwd(self):
+        source = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
+        for hook in ('"tool.execute.before"', '"tool.execute.after"'):
+            body = source[source.index(hook):]
+            body = body[: body.index("runHook(")]
+            self.assertIn("cwd: directory,", body, hook)
+
     def test_a_malformed_stored_worktree_reads_as_null(self):
         for stored in ("x", {"path": ""}, {"path": 3}, None):
             self.assertIsNone(tasks._worktree_view(stored))
         self.assertEqual(tasks._worktree_view({"path": "/abs/wt", "branch": ""}), {"path": "/abs/wt", "branch": None})
+
+
+if __name__ == "__main__":
+    unittest.main()
