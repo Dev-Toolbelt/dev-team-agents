@@ -28,8 +28,15 @@ const REASON_TITLES: Record<string, string> = {
   'invalid-source': 'This source cannot be installed',
 };
 
-export function Problem({ problem }: { problem: Extract<OperationResult<never>, { ok: false }> }) {
-  const title = (problem.reason !== undefined ? REASON_TITLES[problem.reason] : undefined) ?? TITLES[problem.kind];
+type Failure = Extract<OperationResult<never>, { ok: false }>;
+
+/** The heading a failure is reported under — shared by the inline alert and the toast. */
+export function problemTitle(problem: Failure): string {
+  return (problem.reason !== undefined ? REASON_TITLES[problem.reason] : undefined) ?? TITLES[problem.kind];
+}
+
+export function Problem({ problem }: { problem: Failure }) {
+  const title = problemTitle(problem);
   return (
     <Alert variant="destructive">
       <AlertTriangle />

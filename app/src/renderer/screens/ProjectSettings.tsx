@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Info, RotateCcw, Undo2 } from 'lucide-react';
+import { CheckCircle2, Info, RotateCcw, Undo2 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,8 @@ import { ProjectIntegrations } from './ProjectIntegrations.js';
 import { ProjectPlugins } from './ProjectPlugins.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
+import { BackNav } from '../BackNav.js';
+import { useOnDeactivate } from '../useOnDeactivate.js';
 import { WriteButton } from '../WriteButton.js';
 import {
   BOOLEAN_SELECT_KEYS,
@@ -100,6 +102,7 @@ export function ProjectSettings({
   environment,
   active,
   onBack,
+  onDismiss,
   onChanged,
   onUnbound,
   onOpenIntegrations,
@@ -111,6 +114,12 @@ export function ProjectSettings({
   /** Whether the tab holding this screen is the visible one; it stays mounted while hidden. */
   active: boolean;
   onBack: () => void;
+  /**
+   * The app switched to another tab while nothing here was unsaved or running: close this
+   * screen quietly, so the tab reopens on the list. Not `onBack`, which also moves focus —
+   * into a tab that is no longer on show.
+   */
+  onDismiss?: (() => void) | undefined;
   /** A pin was set or released: the list's record for this project is now stale. */
   onChanged: () => void;
   /** The project was unbound and its dialog dismissed: leave this screen and refresh the list. */
@@ -334,6 +343,11 @@ export function ProjectSettings({
   const unsavedTotal = dirtyCount + pluginDirty + integrationDirty;
   const runningTotal = pluginRunning + integrationRunning;
 
+  // Same rule as the back button: what would make it ask keeps the screen open instead.
+  useOnDeactivate(active, () => {
+    if (unsavedTotal === 0 && runningTotal === 0) onDismiss?.();
+  });
+
   function requestBack() {
     if (unsavedTotal > 0 || runningTotal > 0) setConfirmLeave(true);
     else onBack();
@@ -348,12 +362,7 @@ export function ProjectSettings({
 
   const header = (
     <header className="space-y-3">
-      <nav aria-label="Breadcrumb">
-        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={requestBack}>
-          <ArrowLeft aria-hidden="true" />
-          Projects
-        </Button>
-      </nav>
+      <BackNav to="Projects" onBack={requestBack} />
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h2 id="settings-heading" ref={headingRef} tabIndex={-1} className="text-base font-semibold outline-none">

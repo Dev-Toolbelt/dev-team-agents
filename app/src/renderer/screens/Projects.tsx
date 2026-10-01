@@ -23,6 +23,7 @@ import { ProjectList, useProjectSyncs } from './ProjectList.js';
 import { basename, displayName, settingsButtonId } from './ProjectRow.js';
 import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
+import { toastFailure, toastPartialFailure, toastResult } from '../toasts.js';
 import { Notice, WriteButton } from '../WriteButton.js';
 import type {
   BindMode,
@@ -240,6 +241,11 @@ export function Projects({
             setDeferredOpen(null);
             reload();
           }}
+          onDismiss={() => {
+            // Like Back: a project a notification is waiting to open is what the tab shows next.
+            setOpenSettings(waiting !== undefined ? waiting.project_id : null);
+            setDeferredOpen(null);
+          }}
           onChanged={reload}
           onUnbound={() => {
             // The project is gone, so there is no row to return focus to.
@@ -317,12 +323,6 @@ export function Projects({
         </div>
       </header>
 
-      {syncAll.state.phase === 'done' && !syncAll.state.result.ok ? <Problem problem={syncAll.state.result} /> : null}
-      {syncAll.state.phase === 'done' && syncAll.state.result.ok ? (
-        <SyncAllSummary report={syncAll.state.result.data} />
-      ) : null}
-      {syncAll.state.phase === 'done' ? <Notice result={syncAll.state.result} /> : null}
-
       {projects.length === 0 ? (
         <Empty>Nothing is bound yet. Use New project above to choose a project directory.</Empty>
       ) : (
@@ -365,7 +365,13 @@ export function Projects({
                   disabled={syncAll.state.phase === 'pending' || syncs.busy}
                   onClick={() => {
                     void syncAll.run().then((result) => {
-                      if (result.ok) reload();
+                      if (!result.ok) {
+                        toastFailure(result);
+                        return;
+                      }
+                      if (result.data.problems.length > 0) toastPartialFailure(syncAllSummary(result.data), result.notice);
+                      else toastResult(result, syncAllSummary(result.data));
+                      reload();
                     });
                   }}
                 >
@@ -393,12 +399,10 @@ export function Projects({
   );
 }
 
-function SyncAllSummary({ report }: { report: SyncAllReport }) {
+function syncAllSummary(report: SyncAllReport): string {
   return (
-    <p className="text-sm text-muted-foreground">
-      Synced {report.synced.length} project{report.synced.length === 1 ? '' : 's'}.
-      {report.problems.length > 0 ? ` ${report.problems.length} could not be synced.` : ''}
-    </p>
+    `Synced ${report.synced.length} project${report.synced.length === 1 ? '' : 's'}.` +
+    (report.problems.length > 0 ? ` ${report.problems.length} could not be synced.` : '')
   );
 }
 

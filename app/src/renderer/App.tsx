@@ -3,6 +3,7 @@ import { CircleAlert, Lock, ShieldAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Board } from './screens/Board.js';
@@ -200,7 +201,8 @@ export function App() {
                   />
                 </ErrorBoundary>
               </TabsContent>
-              {/* Kept mounted: the kanban's filters and selected project are view state. */}
+              {/* Kept mounted so the live feed keeps streaming; leaving the tab still returns
+                  it to the overview (see `Board`). */}
               <TabsContent value="board" forceMount className="pt-4 data-[state=inactive]:hidden">
                 <Board active={tab === 'board'} />
               </TabsContent>
@@ -229,6 +231,8 @@ export function App() {
           </>
         )}
       </main>
+      {/* Write results land here, outside every layout — see `toasts.tsx`. */}
+      <Toaster position="bottom-right" richColors />
     </div>
   );
 }

@@ -1,13 +1,10 @@
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
-  ArrowLeft,
   Bot,
-  Check,
   ChevronDown,
   CircleAlert,
   Clock,
-  Copy,
   Moon,
   Pause,
   RefreshCw,
@@ -26,7 +23,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { BackNav } from '../BackNav.js';
 import { Empty } from '../Problem.js';
+import { useOnDeactivate } from '../useOnDeactivate.js';
 import {
   PERIODS,
   basename,
@@ -58,8 +57,6 @@ import {
   type BoardSettings,
 } from '../../shared/api.js';
 
-/** How long "Resume command copied" stays on screen. */
-const COPIED_MESSAGE_MS = 3_000;
 const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] };
 const DEFAULT_SETTINGS: BoardSettings = {
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
@@ -81,6 +78,14 @@ const PROVIDER_ICONS: Readonly<Record<string, typeof Bot>> = {
   opencode: Braces,
 };
 
+/**
+ * The providers' own marks, by URL, imported from `../logo/providers/`. A provider listed
+ * here wins over its glyph in `PROVIDER_ICONS`, which stays as the fallback. The mark is
+ * drawn as a CSS mask filled with `currentColor`, so one monochrome file follows the text
+ * colour in both schemes.
+ */
+const PROVIDER_LOGOS: Readonly<Record<string, string>> = {};
+
 function providerLabel(provider: string): string {
   return PROVIDER_LABELS[provider] ?? provider;
 }
@@ -88,10 +93,20 @@ function providerLabel(provider: string): string {
 /** The provider's mark. Its name is always available as text: the icon is never the only cue. */
 export function ProviderIcon({ provider, withLabel = false }: { provider: string; withLabel?: boolean }) {
   const Icon = PROVIDER_ICONS[provider] ?? Bot;
+  const logo = PROVIDER_LOGOS[provider];
   const label = providerLabel(provider);
+  const a11y = { role: 'img', 'aria-label': withLabel ? undefined : label, 'aria-hidden': withLabel ? true : undefined } as const;
   return (
     <span className="inline-flex items-center gap-1" title={label}>
-      <Icon className="size-3.5 shrink-0" role="img" aria-label={withLabel ? undefined : label} aria-hidden={withLabel ? true : undefined} />
+      {logo !== undefined ? (
+        <span
+          {...a11y}
+          className="size-3.5 shrink-0 bg-current"
+          style={{ mask: `url("${logo}") center / contain no-repeat`, WebkitMask: `url("${logo}") center / contain no-repeat` }}
+        />
+      ) : (
+        <Icon className="size-3.5 shrink-0" {...a11y} />
+      )}
       {withLabel ? <span>{label}</span> : null}
     </span>
   );
@@ -188,6 +203,13 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
       unsubscribe();
     };
   }, []);
+
+  // Leaving the tab leaves the project: coming back shows the board, not the last kanban.
+  useOnDeactivate(active, () => {
+    setSelected(null);
+    setProjectGone(false);
+    setProblem(null);
+  });
 
   // Names can change on the Projects tab; re-read when this tab is shown again.
   useEffect(() => {
@@ -601,14 +623,10 @@ function Kanban({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" />
-          Back to the board
-        </Button>
+      <header className="space-y-3">
+        <BackNav to="Board" onBack={onBack} />
         <h3 className="text-base font-semibold">{name}</h3>
-        <span className="font-mono text-xs text-muted-foreground">{project.root}</span>
-      </div>
+      </header>
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm" htmlFor="kanban-session">
@@ -652,7 +670,7 @@ function Kanban({
         </span>
       </div>
 
-      <SessionStrip projectId={project.project_id} sessions={shownSessions} />
+      <SessionStrip sessions={shownSessions} />
 
       {unshown > 0 ? (
         <p role="status" className="text-xs text-muted-foreground">
@@ -671,6 +689,7 @@ function Kanban({
           <Column title="In Review" items={view.in_review} now={coarseNow} asOf={project.as_of} />
           <Column
             title="Done"
+            positive
             items={view.done}
             now={coarseNow}
             asOf={project.as_of}
@@ -802,49 +821,20 @@ function sessionLabel(session: BoardSession): string {
   return `${providerLabel(session.provider)} · ${where} · ${session.session_id.slice(0, 8)}`;
 }
 
-function SessionStrip({ projectId, sessions }: { projectId: string; sessions: readonly BoardSession[] }) {
+function SessionStrip({ sessions }: { sessions: readonly BoardSession[] }) {
   if (sessions.length === 0) return null;
   return (
     <ul aria-label="Sessions" className="space-y-2">
       {sessions.map((session) => (
-        <SessionRow key={session.session_id} projectId={projectId} session={session} />
+        <SessionRow key={session.session_id} session={session} />
       ))}
     </ul>
   );
 }
 
-function SessionRow({ projectId, session }: { projectId: string; session: BoardSession }) {
-  const [message, setMessage] = useState<{ readonly ok: boolean; readonly text: string } | null>(null);
-  const [copying, setCopying] = useState(false);
-  const inFlight = useRef(false);
+function SessionRow({ session }: { session: BoardSession }) {
   const StatusIcon = STATUS_ICON[session.status];
   const where = session.branch ?? 'no branch';
-
-  // A confirmation is about the command that was copied; it fades, and a new command voids it.
-  useEffect(() => {
-    if (message?.ok !== true) return;
-    const timer = setTimeout(() => setMessage(null), COPIED_MESSAGE_MS);
-    return () => clearTimeout(timer);
-  }, [message]);
-  useEffect(() => {
-    setMessage(null);
-  }, [session.resume_command]);
-
-  async function copy() {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setCopying(true);
-    try {
-      const answer = await window.devteam.copyResumeCommand({ projectId, sessionId: session.session_id });
-      setMessage(answer.copied ? { ok: true, text: 'Resume command copied' } : { ok: false, text: answer.message });
-    } catch (error) {
-      setMessage({ ok: false, text: `Nothing was copied: ${errorText(error)}` });
-    } finally {
-      inFlight.current = false;
-      setCopying(false);
-    }
-  }
-
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border bg-card px-3 py-2 text-sm">
       <span className="flex items-center gap-1.5 font-medium">
@@ -859,24 +849,6 @@ function SessionRow({ projectId, session }: { projectId: string; session: BoardS
         {session.counts.todo} to do · {session.counts.in_progress} in progress
         {session.counts.in_review > 0 ? ` · ${session.counts.in_review} in review` : ''} · {session.counts.done} done
       </span>
-      <span className="ml-auto flex items-center gap-2">
-        {message !== null ? (
-          <span role="status" className={`text-xs ${message.ok ? 'text-muted-foreground' : 'text-destructive'}`}>
-            {message.text}
-          </span>
-        ) : null}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={session.resume_command === null || copying}
-          title={session.resume_command === null ? 'No resume command is available for this session' : session.resume_command}
-          aria-label={`Copy resume command for the ${providerLabel(session.provider)} session on ${where}`}
-          onClick={() => void copy()}
-        >
-          {message?.ok === true ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          Copy resume command
-        </Button>
-      </span>
     </li>
   );
 }
@@ -887,22 +859,28 @@ function Column({
   now,
   asOf,
   note = null,
+  positive = false,
 }: {
   title: string;
   items: readonly KanbanItem[];
   now: number;
   asOf?: number | undefined;
   note?: string | null;
+  /** The finished column: a faint success tint, so the end of the flow reads as an arrival. */
+  positive?: boolean;
 }) {
   const headingId = useId();
   return (
     <section
       aria-labelledby={headingId}
-      className="flex max-h-[var(--kanban-column-max,calc(100vh-12rem))] min-h-40 min-w-72 flex-1 basis-72 shrink-0 snap-start flex-col rounded-lg bg-muted/40 p-3"
+      data-tone={positive ? 'positive' : undefined}
+      className={`flex max-h-[var(--kanban-column-max,calc(100vh-12rem))] min-h-40 min-w-72 flex-1 basis-72 shrink-0 snap-start flex-col rounded-lg p-3 ${
+        positive ? 'border border-success/25 bg-success/10' : 'bg-muted/40'
+      }`}
     >
       <h4 id={headingId} className="mb-3 flex shrink-0 items-center justify-between text-sm font-semibold">
         {title}
-        <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums">
+        <span className={`rounded-full px-2 text-xs font-medium tabular-nums ${positive ? 'bg-success/20' : 'bg-muted'}`}>
           <span aria-hidden="true">{items.length}</span>
           <span className="sr-only">{items.length === 1 ? '1 task' : `${items.length} tasks`}</span>
         </span>

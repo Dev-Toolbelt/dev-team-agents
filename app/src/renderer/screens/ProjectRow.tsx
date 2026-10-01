@@ -24,18 +24,14 @@ import { Loading, Problem } from '../Problem.js';
 import { useAction } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
 import type {
-  BindReport,
   EnvironmentReport,
-  OperationResult,
   ProjectRecord,
   UpgradePlan,
   UpgradeReport,
 } from '../../shared/api.js';
 
-export type RowSyncState =
-  | { readonly phase: 'idle' }
-  | { readonly phase: 'pending' }
-  | { readonly phase: 'done'; readonly result: OperationResult<BindReport> };
+/** Only whether a sync is running: its result is a toast, never written into the row. */
+export type RowSyncState = { readonly phase: 'idle' } | { readonly phase: 'pending' };
 
 /**
  * The last path segment, POSIX or Windows — the picker can hand back either. Falls back
@@ -301,12 +297,6 @@ export function ProjectRow({
             <span className="inline-flex">{moveMenu}</span>
           </Hint>
         </div>
-        {syncState.phase === 'done' && !syncState.result.ok ? (
-          <div className="pt-2">
-            <Problem problem={syncState.result} />
-          </div>
-        ) : null}
-        {syncState.phase === 'done' ? <Notice result={syncState.result} /> : null}
       </TableCell>
 
       <UpgradeDialog

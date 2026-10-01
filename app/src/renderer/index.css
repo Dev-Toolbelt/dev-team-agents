@@ -14,6 +14,13 @@
  */
 
 @import 'tailwindcss';
+/*
+ * The toast host's own stylesheet, bundled. sonner also injects these rules at runtime
+ * through a `<style>` tag, which the production CSP (`style-src 'self'`, no
+ * `'unsafe-inline'`) refuses — so without this import the toasts would render unstyled in a
+ * packaged build while looking right in development.
+ */
+@import 'sonner/dist/styles.css';
 
 /*
  * The kit components are outside Vite's `root`, so they have to be named.

@@ -6,7 +6,7 @@
  * everything about how the rows are arranged and acted on in bulk.
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, FolderInput, FolderPlus } from 'lucide-react';
+import { AlertTriangle, FolderInput, FolderPlus } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Empty } from '../Problem.js';
+import { toastBatch, toastResult } from '../toasts.js';
 import { unreachable } from '../useOperation.js';
 import {
   BulkActionBar,
@@ -66,7 +67,7 @@ function newFolderId(): string {
  * Every sync the screen can start, in one place, so none runs beside another: each takes the
  * store lock, and two at once would report contention as a failure. Row state lives here
  * rather than in the row, so a row that remounts — because it moved to another folder —
- * keeps its in-flight state and its result.
+ * keeps its in-flight state. Results are reported as toasts, never written into the table.
  */
 export function useProjectSyncs(onChanged: () => void) {
   const [rows, setRows] = useState<ReadonlyMap<string, RowSyncState>>(new Map());
@@ -87,10 +88,11 @@ export function useProjectSyncs(onChanged: () => void) {
     setRows((previous) => new Map(previous).set(id, state));
   }
 
-  async function runRow(id: string): Promise<void> {
+  async function runRow(id: string, name: string): Promise<void> {
     setRow(id, { phase: 'pending' });
     const result = await window.devteam.syncProject(id).catch(unreachable);
-    setRow(id, { phase: 'done', result });
+    setRow(id, IDLE_ROW);
+    toastResult(result, `Synced ${name}`, `sync-${id}`);
     if (result.ok && mounted.current) changed.current();
   }
 
@@ -107,21 +109,27 @@ export function useProjectSyncs(onChanged: () => void) {
       done += 1;
       if (mounted.current) setBulk({ phase: 'running', done, total: targets.length, failures: [...failures], stopped: false });
     }
+    // Before the mount check: a toast is app-wide, so the result is still worth reporting
+    // when the screen that started the run is gone.
+    const stopped = done < targets.length;
+    toastBatch(
+      `Synced ${done - failures.length} of ${projectCount(targets.length)}.${stopped ? ` Stopped before the other ${targets.length - done}.` : ''}`,
+      failures,
+    );
     if (!mounted.current) return;
-    setBulk({ phase: 'done', done, total: targets.length, failures, stopped: done < targets.length });
+    setBulk(IDLE_BULK);
     changed.current();
   }
 
   const rowPending = [...rows.values()].some((state) => state.phase === 'pending');
   return {
     rowState: (id: string): RowSyncState => rows.get(id) ?? IDLE_ROW,
-    runRow: (id: string) => void runRow(id),
+    runRow: (id: string, name: string) => void runRow(id, name),
     bulk,
     runBulk: (targets: readonly { readonly id: string; readonly name: string }[]) => void runBulk(targets),
     stopBulk: () => {
       stop.current = true;
     },
-    dismissBulk: () => setBulk(IDLE_BULK),
     /** Any sync this hook started is still running. */
     busy: rowPending || bulk.phase === 'running',
   };
@@ -381,7 +389,7 @@ export function ProjectList({
         }}
         syncState={syncs.rowState(id)}
         syncBlocked={syncBlocked && syncs.rowState(id).phase !== 'pending'}
-        onSync={() => syncs.runRow(id)}
+        onSync={() => syncs.runRow(id, nameOf(id))}
         moveMenu={
           <MoveToMenu
             tree={tree}
@@ -452,29 +460,6 @@ export function ProjectList({
           <AlertDescription>
             <p>{error}</p>
             <Button variant="outline" size="xs" className="mt-2" onClick={dismissError}>
-              Dismiss
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {bulk.phase === 'done' ? (
-        <Alert role="status" variant={bulk.failures.length > 0 ? 'destructive' : 'default'}>
-          {bulk.failures.length > 0 ? <AlertTriangle aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
-          <AlertTitle>
-            Synced {bulk.done - bulk.failures.length} of {projectCount(bulk.total)}.
-            {bulk.stopped ? ` Stopped before the other ${bulk.total - bulk.done}.` : ''}
-          </AlertTitle>
-          <AlertDescription>
-            {bulk.failures.length > 0 ? (
-              <ul className="list-disc pl-4">
-                {bulk.failures.map((failure) => (
-                  <li key={failure.id}>
-                    <span className="font-medium">{failure.name}</span>: {failure.message}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <Button variant="outline" size="xs" className="mt-2" onClick={syncs.dismissBulk}>
               Dismiss
             </Button>
           </AlertDescription>
