@@ -24,10 +24,10 @@ afterEach(() => {
 });
 
 const FIELDS: IntegrationField[] = [
-  { key: 'api_url', scope: 'account', type: 'string', label: 'API URL', help: null, required: true, default: 'https://api.github.com', placeholder: null, options: [], resource: null, visible_when: null },
-  { key: 'deployment', scope: 'account', type: 'enum', label: 'Deployment', help: null, required: false, default: 'cloud', placeholder: null, options: [{ value: 'cloud', label: 'Cloud' }, { value: 'data_center', label: 'Data Center' }], resource: null, visible_when: null },
-  { key: 'email', scope: 'account', type: 'string', label: 'Email', help: null, required: true, default: null, placeholder: null, options: [], resource: null, visible_when: { key: 'deployment', equals: 'cloud' } },
-  { key: 'repository', scope: 'project', type: 'string', label: 'Repository', help: null, required: false, default: null, placeholder: 'owner/name', options: [], resource: 'repos', visible_when: null },
+  { key: 'api_url', scope: 'account', type: 'string', label: 'API URL', help: null, required: true, default: 'https://api.github.com', placeholder: null, options: [], resource: null, visible_when: null, binds_token: true },
+  { key: 'deployment', scope: 'account', type: 'enum', label: 'Deployment', help: null, required: false, default: 'cloud', placeholder: null, options: [{ value: 'cloud', label: 'Cloud' }, { value: 'data_center', label: 'Data Center' }], resource: null, visible_when: null, binds_token: false },
+  { key: 'email', scope: 'account', type: 'string', label: 'Email', help: null, required: true, default: null, placeholder: null, options: [], resource: null, visible_when: { key: 'deployment', equals: 'cloud' }, binds_token: false },
+  { key: 'repository', scope: 'project', type: 'string', label: 'Repository', help: null, required: false, default: null, placeholder: 'owner/name', options: [], resource: 'repos', visible_when: null, binds_token: false },
 ];
 
 function view(overrides: Partial<IntegrationView> = {}): IntegrationView {
@@ -40,6 +40,7 @@ function view(overrides: Partial<IntegrationView> = {}): IntegrationView {
     fields: FIELDS,
     account: { api_url: 'https://api.github.com', email: 'me@example.com' },
     project: { repository: 'acme/app' },
+    project_problem: null,
     detected: {},
     connected: true,
     project_configured: true,
@@ -120,7 +121,7 @@ describe('account mode', () => {
     expect(connect).toHaveBeenCalledWith('github', {}, 'ghp_secret', null);
     // Cleared while the call is still in flight, not after it lands.
     expect(document.body.innerHTML).not.toContain('ghp_secret');
-    release(ok({ integration: view(), test: testOf() }));
+    release(ok({ integration: view(), test: testOf(), warning: null }));
     expect(await screen.findByText('Signed in as octocat', { selector: '[role="status"]' })).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain('ghp_secret');
   });
@@ -136,32 +137,52 @@ describe('account mode', () => {
   });
 
   it('sends a null token and no fields when only the token store is untouched', async () => {
-    const connect = vi.fn(() => Promise.resolve(ok({ integration: view({ connected: false, auth: { kind: 'token', label: 'T', help: null, has_token: false, stale: false, backend: null } }), test: testOf() })));
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view({ connected: false, auth: { kind: 'token', label: 'T', help: null, has_token: false, stale: false, backend: null } }), test: testOf(), warning: null })));
     const { user } = await openAccount({ integrationConnect: connect, integrationList: vi.fn(() => Promise.resolve(listOf([view({ connected: false, auth: { kind: 'token', label: 'Personal access token', help: null, has_token: false, stale: false, backend: null } })]))) });
     await user.type(screen.getByLabelText('Personal access token'), 'ghp_x');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(connect).toHaveBeenCalledWith('github', {}, 'ghp_x', null);
   });
 
-  it('requires re-entering the token before an account field change can be saved', async () => {
-    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf() })));
+  it('requires re-entering the token before the address can be changed', async () => {
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf(), warning: null })));
     const { user } = await openAccount({ integrationConnect: connect });
     const url = screen.getByLabelText(/API URL/);
     await user.clear(url);
     await user.type(url, 'https://ghe.example/api/v3');
-    expect(screen.getAllByText('Changing the account settings requires re-entering the token').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Changing the address requires re-entering the token').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: /Replace/ }));
     await user.type(screen.getByLabelText('Personal access token'), 'ghp_new');
-    expect(screen.queryByText('Changing the account settings requires re-entering the token')).not.toBeInTheDocument();
+    expect(screen.queryByText('Changing the address requires re-entering the token')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(connect).toHaveBeenCalledWith('github', { api_url: 'https://ghe.example/api/v3' }, 'ghp_new', null);
   });
 
+  it('saves a field that does not bind the token without asking for it again', async () => {
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf(), warning: null })));
+    const { user } = await openAccount({ integrationConnect: connect });
+    const email = screen.getByLabelText(/Email/);
+    await user.clear(email);
+    await user.type(email, 'other@example.com');
+    expect(screen.queryByText('Changing the address requires re-entering the token')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(connect).toHaveBeenCalledWith('github', { email: 'other@example.com' }, null, null);
+  });
+
+  it('shows the warning a connect returns when the token went to the unencrypted store', async () => {
+    const fresh = view({ connected: false, auth: { kind: 'token', label: 'Personal access token', help: null, has_token: false, stale: false, backend: null } });
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf(), warning: 'the token is in a mode-600 file' })));
+    const { user } = await openAccount({ integrationConnect: connect, integrationList: vi.fn(() => Promise.resolve(listOf([fresh]))) });
+    await user.type(screen.getByLabelText('Personal access token'), 'ghp_fresh');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('the token is in a mode-600 file');
+  });
+
   it('shows a stale token as a standing badge, offers the token input and blocks Save until one is typed', async () => {
     const stale = view({ connected: false, auth: { kind: 'token', label: 'Personal access token', help: null, has_token: true, stale: true, backend: 'keychain' }, status: { state: 'not_connected', checked_at: null, summary: '', facts: [] } });
-    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf() })));
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf(), warning: null })));
     const { user } = await openAccount({ integrationConnect: connect, integrationList: vi.fn(() => Promise.resolve(listOf([stale]))) });
     expect(within(card()).getByText('Token needs reconnecting', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
     expect(screen.getByLabelText('Personal access token')).toHaveAttribute('type', 'password');
@@ -173,7 +194,7 @@ describe('account mode', () => {
   });
 
   it('says "Settings saved." when the connect succeeded but the test failed', async () => {
-    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf({ ok: false, summary: 'Token rejected' }) })));
+    const connect = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf({ ok: false, summary: 'Token rejected' }), warning: null })));
     const { user } = await openAccount({ integrationConnect: connect });
     await user.click(screen.getByRole('button', { name: /Replace/ }));
     await user.type(screen.getByLabelText('Personal access token'), 'ghp_bad');
@@ -205,7 +226,7 @@ describe('account mode', () => {
   });
 
   it('tests the connection and shows the result', async () => {
-    const test = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf({ summary: 'Token works' }) })));
+    const test = vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf({ summary: 'Token works' }), warning: null })));
     const { user } = await openAccount({ integrationTest: test });
     await user.click(screen.getByRole('button', { name: 'Test connection' }));
     expect(test).toHaveBeenCalledWith('github', null);
@@ -268,6 +289,17 @@ describe('project mode', () => {
     await user.clear(screen.getByLabelText('Repository'));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(unset).toHaveBeenCalledWith('github', 'repository', 'proj-1');
+  });
+
+  it('says why the committed binding reads as empty when it cannot be parsed', async () => {
+    await openProject({ integrationList: vi.fn(() => Promise.resolve(listOf([view({ project: {}, project_problem: 'bad JSON' })], 'proj-1'))) });
+    expect(screen.getByText(/could not be read, so it is treated as empty: bad JSON/)).toBeInTheDocument();
+  });
+
+  it('keeps Load options disabled while the account token needs reconnecting', async () => {
+    const stale = view({ connected: false, auth: { kind: 'token', label: 'Personal access token', help: null, has_token: true, stale: true, backend: 'keychain' } });
+    await openProject({ integrationList: vi.fn(() => Promise.resolve(listOf([stale], 'proj-1'))) });
+    expect(screen.getByRole('button', { name: 'Load options' })).toBeDisabled();
   });
 
   it('loads options for a resource field and fills the draft from the pick', async () => {
@@ -396,7 +428,7 @@ describe('keeping the project list current', () => {
 
   it('tells the owner when an account write succeeds', async () => {
     const onAccountChanged = vi.fn();
-    installBridge(fakeBridge({ integrationList: vi.fn(() => Promise.resolve(listOf([view()]))), integrationTest: vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf() }))) }));
+    installBridge(fakeBridge({ integrationList: vi.fn(() => Promise.resolve(listOf([view()]))), integrationTest: vi.fn(() => Promise.resolve(ok({ integration: view(), test: testOf(), warning: null }))) }));
     render(<Integrations environment={environment()} onAccountChanged={onAccountChanged} />);
     await screen.findByRole('heading', { name: 'GitHub' });
     await expand();

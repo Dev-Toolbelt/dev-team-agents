@@ -217,7 +217,7 @@ export function App() {
               {/* Kept mounted: a typed token or an edited account field is a draft. */}
               <TabsContent value="integrations" forceMount className="pt-4 data-[state=inactive]:hidden">
                 <ErrorBoundary label="The Integrations screen">
-                  <Integrations environment={environment} onAccountChanged={onAccountChanged} />
+                  <Integrations environment={environment} active={tab === 'integrations'} onAccountChanged={onAccountChanged} />
                 </ErrorBoundary>
               </TabsContent>
               <TabsContent value="doctor" className="pt-4">

@@ -724,6 +724,11 @@ export interface IntegrationField {
   /** Name of a `resources` kind that can fill this field (a picker), or `null`. */
   readonly resource: string | null;
   readonly visible_when: { readonly key: string; readonly equals: string } | null;
+  /**
+   * The stored token is bound to this field's origin: changing it leaves the token stale, so
+   * a save that changes it must carry a new token. `false` from a CLI that predates the key.
+   */
+  readonly binds_token: boolean;
 }
 
 export interface IntegrationFact {
@@ -762,6 +767,8 @@ export interface IntegrationView {
   readonly account: Readonly<Record<string, string>>;
   /** `null` when no bound project was resolved. */
   readonly project: Readonly<Record<string, string>> | null;
+  /** Why the committed project binding could not be read (it then reads as unset), or `null`. */
+  readonly project_problem: string | null;
   /** Values inferred without the user (e.g. a repository from `git remote`). Empty when none. */
   readonly detected: Readonly<Record<string, string>>;
   readonly connected: boolean;
@@ -788,12 +795,16 @@ export interface IntegrationList {
 export interface IntegrationConnectReport {
   readonly integration: IntegrationView;
   readonly test: IntegrationTestResult;
+  /** Set when the new token went to the unencrypted fallback store; `null` otherwise. */
+  readonly warning: string | null;
 }
 
 /** `integration test --json`. A failed test is `test.ok: false`, not an error. */
 export interface IntegrationTestReport {
   readonly integration: IntegrationView;
   readonly test: IntegrationTestResult;
+  /** Only `connect` sets it; always `null` for `test`. */
+  readonly warning: string | null;
 }
 
 /** `integration disconnect --json`. */

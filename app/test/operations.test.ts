@@ -1146,6 +1146,27 @@ describe('what an integration payload must contain', () => {
     expect(list.integrations[0]?.auth.help).toBeNull();
   });
 
+  it('reads binds_token, project_problem and a connect warning, defaulting them for an older CLI', () => {
+    const fields = [
+      { key: 'api_url', scope: 'account', type: 'string', label: 'U', binds_token: true },
+      { key: 'email', scope: 'account', type: 'string', label: 'E' },
+    ];
+    const report = asIntegrationTestReport({
+      integration: integrationRaw({ fields, project_problem: 'bad JSON' }),
+      test: { ok: true, state: 'connected' },
+      warning: 'mode-600 file',
+    });
+    if (typeof report === 'string') throw new Error(report);
+    expect(report.integration.fields.map((f) => f.binds_token)).toEqual([true, false]);
+    expect(report.integration.project_problem).toBe('bad JSON');
+    expect(report.warning).toBe('mode-600 file');
+
+    const older = asIntegrationTestReport({ integration: integrationRaw(), test: { ok: true, state: 'connected' } });
+    if (typeof older === 'string') throw new Error(older);
+    expect(older.integration.project_problem).toBeNull();
+    expect(older.warning).toBeNull();
+  });
+
   it('refuses documents the UI cannot render', () => {
     expect(asIntegrationList({})).toContain('integrations');
     expect(asIntegrationList({ integrations: [integrationRaw({ name: 'Bad Name' })] })).toContain('name');

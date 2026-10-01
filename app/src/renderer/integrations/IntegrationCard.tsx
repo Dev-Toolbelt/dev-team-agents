@@ -84,6 +84,7 @@ export function IntegrationCard({
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [lastTest, setLastTest] = useState<IntegrationTestResult | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [partial, setPartial] = useState<WriteOutcome['failed']>(null);
 
   const connector = useAction(
@@ -131,10 +132,12 @@ export function IntegrationCard({
   const testGate = gateFor(environment, [INTEGRATION_COMMANDS.test]);
   const disconnectGate = gateFor(environment, [INTEGRATION_COMMANDS.disconnect]);
 
-  // A stored token was issued for the account as saved: any account edit, or a base URL that
-  // changed under it, means the old token must not travel to the new address.
+  // The stored token is bound to the origin of the field(s) the descriptor marks `binds_token`:
+  // changing one, or an origin that already changed under it, means the old token must not
+  // travel to the new address. Other account fields save without it, as on the CLI.
   const staleToken = view.auth.stale;
-  const retypeToken = isAccount && view.auth.has_token && !tokenTyped && (staleToken || changedCount > 0);
+  const bindingChanged = states.some((state) => state.field.binds_token && state.field.key in changes);
+  const retypeToken = isAccount && view.auth.has_token && !tokenTyped && (staleToken || bindingChanged);
   const needsToken = isAccount && !view.auth.has_token && !tokenTyped;
   const projectUnbound = !isAccount && view.project === null;
   const canSave = dirtyCount > 0 && invalid === 0 && !needsToken && !retypeToken && !saveGate.withheld && !running && !projectUnbound;
@@ -144,7 +147,7 @@ export function IntegrationCard({
       : needsToken
         ? 'Enter a token to connect'
         : retypeToken
-          ? 'Changing the account settings requires re-entering the token'
+          ? 'Changing the address requires re-entering the token'
           : dirtyCount > 0
           ? `${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}`
           : '';
@@ -160,6 +163,7 @@ export function IntegrationCard({
   async function save() {
     if (!canSave) return;
     setSaved(null);
+    setWarning(null);
     setPartial(null);
     setLastTest(null);
     if (isAccount) {
@@ -173,6 +177,7 @@ export function IntegrationCard({
       onView(result.data.integration);
       reportTest(result.data.test);
       setSaved('Settings saved.');
+      setWarning(result.data.warning);
       return;
     }
     const outcome = await writer.run(changes);
@@ -303,6 +308,12 @@ export function IntegrationCard({
             </p>
           ) : null}
           {projectUnbound ? <p className="pt-1 text-xs text-muted-foreground">This project is not bound, so it has no project settings to edit.</p> : null}
+          {!isAccount && view.project_problem !== null ? (
+            <div className={`${BAD} mt-2`} role="status">
+              <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+              <span>The committed settings file could not be read, so it is treated as empty: {view.project_problem}</span>
+            </div>
+          ) : null}
         </div>
         <fieldset disabled={running} aria-busy={saving} className="min-w-0 divide-y px-5">
           <legend className="sr-only">
@@ -333,7 +344,7 @@ export function IntegrationCard({
               disabled={running || projectUnbound}
               detected={isAccount ? undefined : view.detected[state.field.key]}
               loadOptions={isAccount ? undefined : (kind) => window.devteam.integrationResources(name, kind, projectId)}
-              loadDisabledReason={view.auth.has_token ? null : 'Connect the account first.'}
+              loadDisabledReason={view.connected ? null : 'Connect the account first.'}
               onDraft={(value) => {
                 setSaved(null);
                 setDrafts((previous) => ({ ...previous, [state.field.key]: value }));
@@ -347,6 +358,12 @@ export function IntegrationCard({
             <div role="status" className={GOOD}>
               <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
               {saved}
+            </div>
+          ) : null}
+          {warning !== null ? (
+            <div role="alert" className={BAD}>
+              <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+              {warning}
             </div>
           ) : null}
           {lastSave !== null && !lastSave.ok ? <Problem problem={lastSave} /> : null}

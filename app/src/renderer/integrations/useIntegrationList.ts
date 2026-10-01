@@ -19,8 +19,17 @@ export function useIntegrationList(
   /** Bumped by the owner whenever an account write succeeded elsewhere; a change reloads. */
   refreshNonce = 0,
 ) {
-  const { state, refreshing, reload } = useOperation(() => window.devteam.integrationList(projectId), [projectId]);
-  const [patches, setPatches] = useState<Readonly<Record<string, IntegrationView>>>({});
+  const { state, refreshing, reload: rawReload } = useOperation(() => window.devteam.integrationList(projectId), [projectId]);
+  // Each patch carries the write's sequence number, and each reload remembers the number it
+  // started at: a reload that began before a write cannot know about it, so it only drops
+  // the patches it can vouch for.
+  const [patches, setPatches] = useState<Readonly<Record<string, { readonly view: IntegrationView; readonly seq: number }>>>({});
+  const writeSeq = useRef(0);
+  const reloadFrom = useRef(0);
+  const reload = useCallback(() => {
+    reloadFrom.current = writeSeq.current;
+    rawReload();
+  }, [rawReload]);
   const lastGood = useRef<IntegrationList | null>(null);
   const seen = useRef<unknown>(null);
   const subject = useRef(projectId);
@@ -44,10 +53,19 @@ export function useIntegrationList(
     lastGood.current = state.result.data;
   }
   useEffect(() => {
-    if (state.phase === 'done' && state.result.ok) setPatches({});
+    if (state.phase !== 'done' || !state.result.ok) return;
+    const covered = reloadFrom.current;
+    setPatches((previous) => {
+      const kept = Object.fromEntries(Object.entries(previous).filter(([, patch]) => patch.seq > covered));
+      return Object.keys(kept).length === Object.keys(previous).length ? previous : kept;
+    });
   }, [state]);
 
-  const replace = useCallback((view: IntegrationView) => setPatches((previous) => ({ ...previous, [view.name]: view })), []);
+  const replace = useCallback((view: IntegrationView) => {
+    writeSeq.current += 1;
+    const seq = writeSeq.current;
+    setPatches((previous) => ({ ...previous, [view.name]: { view, seq } }));
+  }, []);
 
   const [openCards, setOpenCards] = useState<Readonly<Record<string, boolean>>>({});
   const setCardOpen = useCallback((name: string, open: boolean) => {
@@ -77,7 +95,7 @@ export function useIntegrationList(
   useEffect(() => onRunningChange?.(runningTotal), [runningTotal, onRunningChange]);
 
   const list = lastGood.current;
-  const views = list === null ? [] : list.integrations.map((view) => patches[view.name] ?? view);
+  const views = list === null ? [] : list.integrations.map((view) => patches[view.name]?.view ?? view);
   const reloadProblem = state.phase === 'done' && !state.result.ok ? state.result : null;
   const lockedReason = (name: string): string | null =>
     (dirty[name] ?? 0) > 0 ? 'Save or discard changes first' : (running[name] ?? 0) > 0 ? 'An operation is running' : null;

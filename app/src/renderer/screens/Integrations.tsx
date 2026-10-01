@@ -7,9 +7,12 @@ import { IntegrationCards } from '../integrations/IntegrationList.js';
  */
 export function Integrations({
   environment,
+  active = true,
   onAccountChanged,
 }: {
   environment: EnvironmentReport | null;
+  /** The tab is showing; the list reloads on each return to it. */
+  active?: boolean;
   /** An account write or test succeeded: the project screens' account readouts are now stale. */
   onAccountChanged?: (() => void) | undefined;
 }) {
@@ -18,7 +21,7 @@ export function Integrations({
       <p className="text-sm text-muted-foreground">
         Connect an account once; every project on this machine can then use it. Tokens are kept in the OS keychain and are never shown again.
       </p>
-      <IntegrationCards mode="account" projectId={null} environment={environment} onAccountChanged={onAccountChanged} />
+      <IntegrationCards mode="account" projectId={null} environment={environment} active={active} onAccountChanged={onAccountChanged} />
     </section>
   );
 }

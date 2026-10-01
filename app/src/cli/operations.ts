@@ -1243,10 +1243,10 @@ export function asPluginRunResult(body: Record<string, unknown>): PluginRunResul
 // ── integrations (ADR-0023) ──────────────────────────────────────────────────────────
 
 /**
- * A read-only network call is bounded by the CLI's own 10 s HTTP timeout; this is the margin
+ * A read-only network call is bounded by the CLI's own 20 s total HTTP deadline; this is the margin
  * around it. Gated commands (connect, test) take `run`'s long write deadline instead.
  */
-export const INTEGRATION_NETWORK_TIMEOUT_MS = 30_000;
+export const INTEGRATION_NETWORK_TIMEOUT_MS = 45_000;
 export const INTEGRATION_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 export const INTEGRATION_KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 export const INTEGRATION_KIND = INTEGRATION_NAME;
@@ -1470,6 +1470,7 @@ function asIntegrationField(raw: unknown): IntegrationField | string {
       isRecord(when) && typeof when['key'] === 'string' && typeof when['equals'] === 'string'
         ? { key: when['key'], equals: when['equals'] }
         : null,
+    binds_token: raw['binds_token'] === true,
   };
 }
 
@@ -1534,6 +1535,7 @@ export function asIntegrationView(raw: unknown): IntegrationView | string {
     fields,
     account: asStringRecord(raw['account']),
     project: isRecord(raw['project']) ? asStringRecord(raw['project']) : null,
+    project_problem: nonEmpty(asNullableString(raw['project_problem'])),
     detected: asStringRecord(raw['detected']),
     connected: raw['connected'] as boolean,
     project_configured: raw['project_configured'] as boolean,
@@ -1579,7 +1581,7 @@ export function asIntegrationTestReport(body: Record<string, unknown>): Integrat
   if (typeof integration === 'string') return `\`integration\`: ${integration}`;
   const test = asIntegrationTestResult(body['test']);
   if (typeof test === 'string') return test;
-  return { integration, test };
+  return { integration, test, warning: nonEmpty(asNullableString(body['warning'])) };
 }
 
 /** `integration disconnect --json`. */
