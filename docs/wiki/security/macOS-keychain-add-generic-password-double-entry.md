@@ -1,7 +1,7 @@
 # macOS Keychain add-generic-password Double-Entry Trap
 
 **Origin:** Credentials backend implementation (M3) | 2026-09-28
-**Tags:** macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag
+**Tags:** macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag, readpassphrase, 128 characters, truncation, tty, security -i
 
 > `security add-generic-password -w <value>` prompts for confirmation (double-entry) when called with a literal value; if the two entries mismatch, it exits 0 while silently storing an **empty** password.
 
@@ -43,6 +43,21 @@ The implementation works around this by:
 5. Failing loudly if the values don't match (the user gets an error, not a silently-broken keychain entry)
 
 This transforms the exit-0-on-mismatch silent failure into an explicit, auditable error.
+
+## Update 2026-09-30: the stdin prompt has two more traps
+
+- **It cuts at 128 characters.** The prompt goes through readpassphrase with a 128-byte buffer:
+  a 129-character value reads back as 128, still with exit 0. GitHub tokens fit; an Atlassian API
+  token (~190) does not.
+- **It reads `/dev/tty`, not stdin, when there is a controlling terminal.** Under a terminal the
+  command prints `password data for new item:` there and ignores the piped value until it times out.
+  That includes any child of a desktop app launched from a terminal.
+
+The adapter now avoids the prompt: it sends the whole command to `security -i` on stdin, with the
+value double-quoted in that command language (escape `\` and `"`; spaces, `$` and backticks pass
+through), runs every `security` call with `start_new_session=True`, and keeps the read-back.
+`security -i` reads one line of ~4 KiB, so values above 3072 bytes are refused. Measured on macOS
+with a throwaway item: 199 characters with quotes, backslashes, `$` and backticks round-trip intact.
 
 ## References
 

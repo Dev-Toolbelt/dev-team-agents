@@ -82,6 +82,18 @@ Split reference from value.
 > characters break the two-line stdin framing and reach the same silent-empty-write path. A
 > multi-line secret must be split by the caller; it is refused rather than mangled.
 >
+> **Amendment (2026-09-30): the write goes through `security -i`, not the `-w` prompt.** The prompt
+> reads through readpassphrase, which cuts a value at **128 characters** (an Atlassian API token is
+> ~190; the read-back caught it), and which reads from `/dev/tty`, not stdin, whenever the process has
+> a controlling terminal — so a desktop app started from a terminal, or `devteam cred set` run in one,
+> hung until the timeout. `_keychain_put` now sends the whole `add-generic-password … -w "<value>"`
+> command to `security -i` on stdin, the value double-quoted in that command language (backslash and
+> `"` escaped), and every `security` call runs in a new session with no controlling terminal. The
+> value still never reaches argv, the item is still created by `/usr/bin/security` (so its access list
+> — and every existing item — keeps trusting the same binary; calling Security.framework from python
+> was rejected for that reason), and the read-back stays. `security -i` reads one ~4 KiB line, so a
+> keychain value is capped at `KEYCHAIN_VALUE_MAX_BYTES` (3072) and refused above it.
+>
 > **Where a backend that must keep bytes on disk keeps them: `data/machines/<machine-id>/secrets/`**
 > (`paths.secrets_dir()`), machine-local, deliberately **not** beside the portable
 > `data/credentials/`. The reference layer is portable *precisely because* it holds no value — and
