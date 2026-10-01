@@ -260,7 +260,7 @@ the hand-backs **before** it expires a window, so one handed back within the win
 however late the `Stop` comes (one timestamped after the wait still expires), and a background
 result is dated at its hand-back: `result_at` and `fix_after` take that time, and only tasks created
 by then are excluded from the fix list (a live result keeps every task it can see). The fix rule
-resolves no earlier than the last fix finished, and a background agent task ends at its hand-back.
+resolves no earlier than the last fix ended (completed or cancelled), and a background agent task ends at its hand-back.
 
 A Codex `wait_agent` that returns after `Stop` already settled its launch as unread reattaches to
 the most recent window that is unresolved and closed unread (only that one, only within
