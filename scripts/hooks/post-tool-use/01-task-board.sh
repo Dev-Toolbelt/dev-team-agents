@@ -2,8 +2,8 @@
 # PostToolUse sub-script: feed the task board (ADR-0018).
 #   todo tools (Claude Code)  TodoWrite, TaskCreate, TaskUpdate        → record
 #   an agent's end            Claude Code `Agent`/`Task` (tool_response),
-#                             Codex `spawn_agent` (the spawned agent id) and `wait_agent`
-#                             (tool_response), opencode `task` (the plugin adds "output")
+#                             Codex `spawn_agent` (the spawned agent id), `wait_agent`
+#                             (tool_response) and `close_agent`, opencode `task` (the plugin adds "output")
 #                                                                          → the agent task, and a
 #                                                                            review result when it carries one
 #   a subagent launch that failed  Claude Code `PostToolUseFailure` on `Agent`/`Task`
@@ -16,13 +16,18 @@ set -uo pipefail
 INPUT="$(cat)"
 TODO_RE='"tool_name"[[:space:]]*:[[:space:]]*"(TodoWrite|TaskCreate|TaskUpdate)"'
 SUBAGENT_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(Agent|Task|task)"'
-WAIT_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?(wait_agent|spawn_agent)"'
+SPAWN_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?spawn_agent"'
+WAIT_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?(wait_agent|close_agent)"'
 REVIEW_TYPE_RE='"(subagent_type|agent_type)"[[:space:]]*:[[:space:]]*"([^"]*:)?(qa-specialist|code-reviewer|backend-reviewer|frontend-reviewer)"'
 
 MODE=""
 if [[ "$INPUT" =~ $TODO_RE ]]; then
     MODE="todo"
-elif [[ "$INPUT" =~ $SUBAGENT_RE ]] || [[ "$INPUT" =~ $WAIT_RE ]]; then
+elif [[ "$INPUT" =~ $SUBAGENT_RE ]] || [[ "$INPUT" =~ $SPAWN_RE ]]; then
+    # A spawn that names no agent type is the provider's default agent: nothing to settle.
+    [[ "$INPUT" == *'"subagent_type"'* || "$INPUT" == *'"agent_type"'* ]] || exit 0
+    MODE="agent"
+elif [[ "$INPUT" =~ $WAIT_RE ]]; then
     MODE="agent"
 else
     exit 0

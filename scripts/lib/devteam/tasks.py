@@ -61,7 +61,7 @@ RESUME = {
 
 _CLAUDE_TOOLS = ("TodoWrite", "TaskCreate", "TaskUpdate")
 _CLAUDE_AGENT_TOOLS = ("Agent", "Task")
-_CODEX_AGENT_TOOLS = ("spawn_agent", "wait_agent")
+_CODEX_AGENT_TOOLS = ("spawn_agent", "wait_agent", "close_agent")
 #: Longest first line of a Codex spawn message kept as a task's description.
 AGENT_TEXT = 120
 PLAN_STEP_RE = re.compile(r"^Step \d+:")
@@ -292,6 +292,10 @@ def _agent_op(payload, provider, bare):
     if bare == "wait_agent":
         results = _wait_results(payload.get("tool_response"))
         return ("agent_wait", results) if results else None
+    if bare == "close_agent":
+        # An agent the session closed ahead of its result will never report one.
+        ident = _id_text(inp.get("target") or inp.get("id") or inp.get("agent_id"))
+        return ("agent_wait", [(ident, "cancelled", False)]) if ident else None
     name = review_triggers.spawn_name(_first_text(inp, "subagent_type", "agent_type"))
     if not name or review_triggers.agent_name(name) or review_triggers.is_builtin(provider, name):
         return None
@@ -310,7 +314,10 @@ def _agent_op(payload, provider, bare):
         return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
     if bare == "spawn_agent":
         ref = _spawned_agent_id(payload.get("tool_response"))
-        return ("agent_ref", {"id": use_id, "ref": ref}) if use_id and ref else None
+        if ref:
+            return ("agent_ref", {"id": use_id, "ref": ref}) if use_id else None
+        # The spawn answered with no agent id: no agent exists, and no wait can ever settle it.
+        return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
     if background or _async_launch(payload):
         return ("agent_bg", {"id": use_id, "agent": name, "transcript": transcript})
     return ("agent_end", {"id": use_id, "agent": name, "status": "completed", "failed": False})
@@ -632,6 +639,28 @@ def _agent_scan(record, path, opened_at):
     return scan
 
 
+def _follow_background(record, task, path, opened_at):
+    """Start the background hand-back cursor for ``task`` where the transcript ends now.
+
+    The cursor is shared by every background agent of the record. While another one is still
+    running it keeps its place (its hand-back may sit anywhere after it); with none running it
+    is stale, so it restarts at the transcript's end — a hand-back cannot precede the launch.
+    """
+    others = any(
+        t is not task and _is_agent(t) and t.get("background") and t["status"] == "in_progress"
+        for t in record["tasks"]
+    )
+    scan = _agent_scan(record, path, opened_at)
+    if others or not (isinstance(path, str) and path and os.path.isfile(path)):
+        return
+    try:
+        scan["tx_offset"] = os.path.getsize(path)
+        scan["tx_path"] = path
+        scan["opened_at"] = opened_at
+    except OSError:
+        pass
+
+
 def _end_agent(task, status, failed, now):
     if failed:
         task["failed"] = True
@@ -642,14 +671,23 @@ def _apply_agent(record, call, now):
     """Fold an agent event into the record. Returns True when it changed something."""
     kind, body = call["op"]
     if kind == "agent_spawn":
-        if body["id"] and any(_is_agent(t) and t.get("id") == body["id"] for t in record["tasks"]):
+        if body["id"]:
+            replayed = any(_is_agent(t) and t.get("id") == body["id"] for t in record["tasks"])
+        else:
+            # No id to match: a replay is the same agent, text and owner still open without one.
+            replayed = any(
+                _is_agent(t) and not t.get("id") and t["status"] == "in_progress" and t["owner"] == call["owner"]
+                and t.get("agent_type") == body["agent"] and t["content"] == body["content"]
+                for t in record["tasks"]
+            )
+        if replayed:
             return False  # a replayed spawn names a task that exists
         task = _add_task(
             record, call, {"id": body["id"] or None, "content": body["content"], "status": "in_progress"}, now
         )
         task.update(kind="agent", agent_type=body["agent"], background=bool(body["background"]), failed=False)
         if body["background"]:
-            _agent_scan(record, body.get("transcript"), now)
+            _follow_background(record, task, body.get("transcript"), now)
         return True
     if kind == "agent_wait":
         changed = False
@@ -668,7 +706,7 @@ def _apply_agent(record, call, now):
         return True
     if kind == "agent_bg":
         task["background"] = True
-        _agent_scan(record, body.get("transcript"), task["created_at"])
+        _follow_background(record, task, body.get("transcript"), now)
         return True
     _end_agent(task, body["status"], body["failed"], now)
     return True
@@ -730,6 +768,13 @@ def _open_count(record):
 def _all_done(record, members):
     shown = _visible(record)
     return bool(shown) and all(_task_column(t, members) == "done" for t in shown)
+
+
+def _cleanly_done(record, members):
+    """``_all_done`` with no task that failed or was cut off: those are not a finished session."""
+    return _all_done(record, members) and not any(
+        t.get("failed") or t.get("interrupted") for t in _visible(record)
+    )
 
 
 # ── review windows (In Review column) ────────────────────────────────────────
@@ -1347,7 +1392,7 @@ def review_result(root, payload, now=None):
         if outcome is None:
             return None
         done = outcome.pop("_all_done_now")
-        outcome.update(all_done=done, became_all_done=done and not was_done)
+        outcome.update(all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec)))
         return outcome
 
     result = {
@@ -1420,10 +1465,13 @@ def last_assistant_text(payload):
 
 #: Bytes of transcript read per `Stop` for background hand-backs; the rest waits for the next one.
 BACKGROUND_SCAN_BYTES = 2 * 1024 * 1024
+#: One Stop reads this much of the transcript at most (in chunks of ``BACKGROUND_SCAN_BYTES``), so a
+#: long gap is caught up in one go and a runaway transcript still cannot stall the hook.
+BACKGROUND_SCAN_CAP = 64 * 1024 * 1024
 
 _TAG_RE = {
     name: re.compile(r"<{0}>(.*?)</{0}>".format(name), re.DOTALL)
-    for name in ("tool-use-id", "task-id")
+    for name in ("tool-use-id", "task-id", "status")
 }
 #: The agent's own answer: from the first ``<result>`` to the last ``</result>``. A notification
 #: with no such section (a Bash background task reports a ``<summary>``) carries no report.
@@ -1436,6 +1484,12 @@ QUEUE_IDS_KEPT = 64
 def _notification_ids(text):
     found = {name: (rx.search(text).group(1).strip() if rx.search(text) else "") for name, rx in _TAG_RE.items()}
     return found["tool-use-id"], found["task-id"]
+
+
+def _notification_status(text):
+    """The hand-back's own ``<status>`` word, lowercased, else ``""``."""
+    found = _TAG_RE["status"].search(text)
+    return found.group(1).strip().lower() if found else ""
 
 
 def _entry_text(entry, queued=()):
@@ -1481,12 +1535,24 @@ def _entry_epoch(entry):
 def _background_reports(window, path):
     """New background hand-backs in the transcript since the window's offset.
 
-    Yields ``{"id", "markers"}`` per notification, and advances ``window["tx_offset"]`` past the
-    complete lines read. The same notification appears as a queue entry and as a user entry, and
-    a resumed agent may notify twice: the caller dedupes on ``id``. A notification with no
-    ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line longer than the read
-    cap is skipped, not waited for: the scan resumes at the next line.
+    Yields ``{"id", "markers", "status"}`` per notification (``status`` is the hand-back's own
+    ``<status>``, else ``""``), and advances ``window["tx_offset"]`` past the complete lines read,
+    chunk by chunk up to ``BACKGROUND_SCAN_CAP``. The same notification appears as a queue entry
+    and as a user entry, and a resumed agent may notify twice: the caller dedupes on ``id``. A
+    notification with no ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line
+    longer than the read cap is skipped, not waited for: the scan resumes at the next line.
     """
+    reports = []
+    for _ in range(max(1, BACKGROUND_SCAN_CAP // BACKGROUND_SCAN_BYTES)):
+        found, more = _scan_chunk(window, path)
+        reports.extend(found)
+        if not more:
+            break
+    return reports
+
+
+def _scan_chunk(window, path):
+    """One read of at most ``BACKGROUND_SCAN_BYTES``: ``(reports, more)``, ``more`` when text remains."""
     try:
         size = os.path.getsize(path)
         offset = window.get("tx_offset")
@@ -1502,12 +1568,13 @@ def _background_reports(window, path):
             handle.seek(offset)
             chunk = handle.read(BACKGROUND_SCAN_BYTES)
     except OSError:
-        return []
+        return [], False
     end = chunk.rfind(b"\n") + 1
     if end == 0 and len(chunk) < BACKGROUND_SCAN_BYTES:
         window["tx_offset"] = offset
-        return []
+        return [], False
     window["tx_offset"] = offset + (end or len(chunk))
+    more = window["tx_offset"] < size
     queued = window.setdefault("queue_ids", [])
     reports = []
     for line in chunk[:end].decode("utf-8", "replace").splitlines():
@@ -1537,8 +1604,9 @@ def _background_reports(window, path):
         reports.append({
             "id": use_id or task_id,
             "markers": review_triggers.markers(section.group(1)) [-1:] if section else [],
+            "status": _notification_status(text),
         })
-    return reports
+    return reports, more
 
 
 def _scan_background(rec, payload, now):
@@ -1570,6 +1638,10 @@ def _scan_background(rec, payload, now):
     return outcomes
 
 
+#: A hand-back ``<status>`` that means the background agent did not finish its work.
+_HANDBACK_FAILED = ("failed", "killed", "error")
+
+
 def _scan_agent_tasks(rec, payload, now):
     """Complete the background agent tasks whose hand-back is in the transcript. True when it looked.
 
@@ -1588,8 +1660,30 @@ def _scan_agent_tasks(rec, payload, now):
     for report in _background_reports(scan, path):
         task = pending.get(report["id"])
         if task is not None and task["status"] == "in_progress":
-            _end_agent(task, "completed", False, now)
+            if report["status"] in _HANDBACK_FAILED:
+                _end_agent(task, "cancelled", True, now)
+            else:
+                _end_agent(task, "completed", False, now)
     return True
+
+
+def _interrupt_agents(rec, now):
+    """Settle the foreground agent tasks a finished turn left open as cancelled and ``interrupted``.
+
+    A turn that ended cannot have a foreground agent running in front of it (the call was
+    interrupted, or its end never reached a hook). A background agent survives, and so does a
+    Codex agent whose spawn answered with an id: its ``wait_agent`` may come in a later turn.
+    """
+    changed = False
+    for task in rec["tasks"]:
+        if (
+            _is_agent(task) and task["status"] == "in_progress"
+            and not task.get("background") and not task.get("agent_ref")
+        ):
+            task["interrupted"] = True
+            _push(task, "cancelled", now)
+            changed = True
+    return changed
 
 
 def _retire_at_stop(rec, payload, now):
@@ -1706,15 +1800,26 @@ def record(root, payload, provider="auto", now=None):
             rec["last_seen_at"] = now
             # A call proves the session is alive, even one resumed after `SessionEnd`.
             _alive(rec, now)
+            members = _review_members(rec)
+            done = _all_done(rec, members)
+            # Dropping an unfinished task is abandonment, not completion: the transition counts
+            # only when a task that was open is now actually completed or cancelled.
+            finished = any(
+                t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+            )
+            clean = _cleanly_done(rec, members)
+            # An agent's end is raised at `Stop` (`mark`), never mid-turn: more agents may follow
+            # it. The debt is kept on the record for that Stop to pay.
+            mid_turn = call["op"][0].startswith("agent_")
+            if not done:
+                rec["done_pending"] = False
+            elif finished and mid_turn and clean:
+                rec["done_pending"] = True
             jsonio.write_json_atomic(path, rec)
-        members = _review_members(rec)
-        done = _all_done(rec, members)
-        # Dropping an unfinished task is abandonment, not completion: the transition counts
-        # only when a task that was open is now actually completed or cancelled.
-        finished = any(
-            t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+        result.update(
+            recorded=True, session=call["session_id"], all_done=done,
+            became_all_done=done and finished and not mid_turn and clean,
         )
-        result.update(recorded=True, session=call["session_id"], all_done=done, became_all_done=done and finished)
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
     return result
@@ -1745,11 +1850,13 @@ def mark(root, payload, state, now=None):
             if state == "idle":
                 rec["idle_at"] = now
                 _alive(rec, now)
-                was_done = _all_done(rec, _review_members(rec))
+                was_done = _all_done(rec, _review_members(rec)) and not rec.get("done_pending")
                 for outcomes in (_expire(rec, now), _scan_background(rec, payload, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
-                done_now = _all_done(rec, _review_members(rec))
+                _interrupt_agents(rec, now)
+                done_now = _cleanly_done(rec, _review_members(rec))
+                rec["done_pending"] = False
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
@@ -1815,6 +1922,7 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "agent_type": task.get("agent_type"),
         "kind": "agent" if _is_agent(task) else "todo",
         "failed": bool(task.get("failed")),
+        "interrupted": bool(task.get("interrupted")),
         "status": task["status"],
         "column": column,
         "created_at": task["created_at"],

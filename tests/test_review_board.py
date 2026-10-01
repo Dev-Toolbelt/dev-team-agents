@@ -1250,8 +1250,8 @@ class WiringTest(tt.BoardCase):
             self.assertIn(script, ours[0]["hooks"][0]["command"])
         self.assertEqual(data["PostToolUse"][0]["hooks"][0]["command"], "mine")
         (post,) = [g for g in data["PostToolUse"] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
-        self.assertEqual(post["matcher"], ".*(wait_agent|spawn_agent)")
-        for tool in ("wait_agent", "agents.wait_agent", "spawn_agent"):
+        self.assertEqual(post["matcher"], ".*(wait_agent|spawn_agent|close_agent)")
+        for tool in ("wait_agent", "agents.wait_agent", "spawn_agent", "close_agent"):
             self.assertTrue(re.search(post["matcher"], tool), tool)
         self.assertFalse(re.search(post["matcher"], "update_plan"))
         self.assertFalse(re.search(post["matcher"], "shell") or re.search(post["matcher"], "update_plan"))

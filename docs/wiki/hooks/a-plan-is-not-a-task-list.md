@@ -26,4 +26,4 @@ provider — nothing rewrites them at render time — so the section names each 
 - A renamed or renumbered step shows twice on a whole-list tool (`TodoWrite`, `update_plan`,
   `todowrite`): the board matches those by exact text, or by `id` on opencode.
 - Commands that never plan (`/devteam:status`, a quick question) may still appear on the board if they spawn agents; only commands with no work and no agent spawns correctly stay off the board.
-- Built-in agents (`general-purpose`, `claude`) and review/QA agents (`qa-specialist`, `code-reviewer`, `backend-reviewer`, `frontend-reviewer`) do not appear as tasks — they are internal infrastructure or handled separately through review windows.
+- Built-in agents (Claude Code: `Explore`, `Plan`, `general-purpose`, `claude-code-guide`, `statusline-setup`, `claude`; one list per provider in `review_triggers.BUILTIN_AGENTS`) and review/QA agents (`qa-specialist`, `code-reviewer`, `backend-reviewer`, `frontend-reviewer`) do not appear as tasks — they are internal infrastructure or handled separately through review windows.

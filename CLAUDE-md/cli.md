@@ -257,13 +257,13 @@ Nothing deletes a record or a task: a task a replace-style call omits gets `remo
   reopen) and the derived `column: "in_review"`, task `review`, `counts.in_review`, project
   `with_findings` and `durations.in_review` — all additive to the `--json` contract. `session_done`
   requires every task in the Done column, so it waits for the review to resolve.
-- **Agent spawns are tasks.** `record` also takes an agent call (Claude `Agent`/`Task`, Codex `spawn_agent`/`wait_agent`,
+- **Agent spawns are tasks.** `record` also takes an agent call (Claude `Agent`/`Task`, Codex `spawn_agent`/`wait_agent`/`close_agent`,
   opencode `task`): a spawn is an `in_progress` task with `kind: "agent"` (text `<agent>: <description>`, id = the spawn's
   own id, owner = the spawning agent); its result completes it, Claude `PostToolUseFailure` cancels it with `failed: true`,
   a background launch stays open until its transcript hand-back at `Stop` (`tasks mark --state idle`), and a Codex
   `wait_agent` settles each agent id it reports, matched through the `agent_ref` the `spawn_agent` response gave. A result
   never starts a record. Built-ins (`review_triggers.BUILTIN_AGENTS`, one list keyed by provider) and review/QA agents are
-  no tasks. A task's `kind` and `failed` are additive in `--json`; an agent task is hidden on read (columns, counts,
+  no tasks. `tasks mark --state idle` settles a foreground agent task left open as `cancelled` + `interrupted: true`, and a background hand-back's `<status>` of `failed`/`killed`/`error` fails the task. `became_all_done` for an agent's end is raised only at `Stop`, never with a `failed`/`interrupted` task visible. A task's `kind`, `failed` and `interrupted` are additive in `--json`; an agent task is hidden on read (columns, counts,
   `all_done`) when its owner also keeps `Step N:` plan tasks.
 - `sessions_active` counts sessions whose status is not `ended` (active **or** idle).
 - `tasks watch` is excluded from the bulk contract sweep and pinned by `tests/test_tasks.py`.

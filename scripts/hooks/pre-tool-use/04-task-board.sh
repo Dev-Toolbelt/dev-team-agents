@@ -28,6 +28,9 @@ MODE=""
 if [[ "$INPUT" =~ $CODEX_RE ]] || [[ "$INPUT" =~ $OPENCODE_RE ]]; then
     MODE="todo"
 elif [[ "$INPUT" =~ $SPAWN_RE ]]; then
+    # A spawn that names no agent type is the provider's default agent: no task, no review. Free to
+    # skip here, so the common unnamed spawn forks nothing.
+    [[ "$INPUT" == *'"subagent_type"'* || "$INPUT" == *'"agent_type"'* ]] || exit 0
     MODE="spawn"
 else
     exit 0

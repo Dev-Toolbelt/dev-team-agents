@@ -23,7 +23,7 @@ REVIEW_AGENTS = ("qa-specialist", "code-reviewer", "backend-reviewer", "frontend
 #: subagents. One list; keyed by provider so a provider added to ``providers.ALL_PROVIDERS`` must
 #: decide its own.
 BUILTIN_AGENTS = {
-    "claude": ("explore", "plan", "general-purpose", "claude-code-guide", "statusline-setup"),
+    "claude": ("explore", "plan", "general-purpose", "claude-code-guide", "statusline-setup", "claude"),
     "codex": ("default", "explorer", "worker"),
     "opencode": ("general", "explore"),
 }

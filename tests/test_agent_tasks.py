@@ -267,6 +267,159 @@ class AgentTaskTest(BoardCase):
         self.assertEqual(self.view(now=T0 + 3)[0]["sessions"][0]["tasks"][0]["column"], "in_review")
 
 
+STAMP = "2023-11-14T22:30:00Z"  # T0 + 1000s: after every spawn these tests make
+
+
+def hand_back(call, status=None, stamp=STAMP):
+    body = "<tool-use-id>{}</tool-use-id>".format(call)
+    if status:
+        body += "<status>{}</status>".format(status)
+    return json.dumps({
+        "type": "queue-operation", "timestamp": stamp,
+        "content": "<task-notification>{}<result>report</result></task-notification>".format(body),
+    }) + "\n"
+
+
+class SettlementTest(BoardCase):
+    """Finding rounds: how an agent task ends when its end is not a plain success."""
+
+    def agents(self, session="s1"):
+        return {t["id"]: t for t in self.load(session)["tasks"] if t.get("kind") == "agent"}
+
+    def background(self, call, transcript, now=T0):
+        spawn, (end,) = claude_cycle("s1", AGENT, call, input={"run_in_background": True},
+                                     transcript_path=str(transcript))
+        tasks.record(self.root, spawn, now=now)
+        tasks.record(self.root, dict(end, tool_response={"isAsync": True, "status": "async_launched"}), now=now + 1)
+
+    def stop(self, transcript=None, now=T0 + 2000):
+        payload = {"session_id": "s1"}
+        if transcript is not None:
+            payload["transcript_path"] = str(transcript)
+        return tasks.mark(self.root, payload, "idle", now=now)
+
+    def test_a_background_hand_back_status_decides_completed_or_failed(self):
+        cases = {"completed": ("completed", False), "failed": ("cancelled", True), "killed": ("cancelled", True),
+                 "error": ("cancelled", True), "FAILED": ("cancelled", True), "stopped": ("completed", False),
+                 "": ("completed", False)}
+        for status, expected in cases.items():
+            with self.subTest(status=status):
+                transcript = self.tmp / "t-{}.jsonl".format(status or "none")
+                transcript.write_text("", encoding="utf-8")
+                self.background("bg-" + (status or "none"), transcript)
+                transcript.write_text(hand_back("bg-" + (status or "none"), status or None), encoding="utf-8")
+                self.stop(transcript)
+                task = self.agents()["bg-" + (status or "none")]
+                self.assertEqual((task["status"], bool(task.get("failed"))), expected)
+
+    def test_the_cursor_restarts_at_the_transcript_end_when_no_other_background_agent_runs(self):
+        transcript = self.tmp / "t.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        self.background("bg-a", transcript)
+        transcript.write_text(hand_back("bg-a"), encoding="utf-8")
+        self.stop(transcript)
+        self.assertEqual(self.agents()["bg-a"]["status"], "completed")
+        # A long stretch with no background agent running passes the stale cursor by far more than one read.
+        with transcript.open("a", encoding="utf-8") as handle:
+            for _ in range(3 * 1024):
+                handle.write(json.dumps({"type": "assistant", "text": "x" * 1000}) + "\n")
+        self.background("bg-b", transcript, now=T0 + 100)
+        with transcript.open("a", encoding="utf-8") as handle:
+            handle.write(hand_back("bg-b"))
+        self.stop(transcript)
+        self.assertEqual(self.agents()["bg-b"]["status"], "completed")
+
+    def test_one_stop_catches_up_across_a_gap_wider_than_one_read(self):
+        transcript = self.tmp / "t.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        self.background("bg-a", transcript)
+        self.background("bg-b", transcript, now=T0 + 10)  # b runs, so the cursor keeps its place
+        with transcript.open("a", encoding="utf-8") as handle:
+            for _ in range(5 * 1024):  # > 2 MiB
+                handle.write(json.dumps({"type": "assistant", "text": "x" * 1000}) + "\n")
+            handle.write(hand_back("bg-a"))
+        self.stop(transcript)
+        self.assertEqual(self.agents()["bg-a"]["status"], "completed")
+        self.assertEqual(self.agents()["bg-b"]["status"], "in_progress")
+
+    def test_a_foreground_agent_left_open_at_stop_is_cancelled_as_interrupted(self):
+        for provider in ("claude", "opencode"):
+            with self.subTest(provider=provider):
+                session = "i-" + provider
+                spawn, _ = CYCLES[provider](session, AGENT, "c1")
+                tasks.record(self.root, spawn, now=T0)
+                marked = tasks.mark(self.root, {"session_id": session}, "idle", now=T0 + 9)
+                (task,) = [t for t in self.load(session)["tasks"] if t.get("kind") == "agent"]
+                self.assertEqual((task["status"], task["interrupted"], bool(task.get("failed"))), ("cancelled", True, False))
+                shown = self.view(now=T0 + 10)
+                mine = [s for s in shown[0]["sessions"] if s["session_id"] == session][0]["tasks"][0]
+                self.assertEqual((mine["interrupted"], mine["column"]), (True, "done"))
+                self.assertFalse(marked["became_all_done"])
+
+    def test_a_background_agent_and_an_acknowledged_codex_agent_survive_stop(self):
+        transcript = self.tmp / "t.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        self.background("bg-a", transcript)
+        spawn, (ack, _) = codex_cycle("s1", AGENT, "cx")
+        tasks.record(self.root, spawn, now=T0 + 5)
+        tasks.record(self.root, ack, now=T0 + 6)
+        unacked, _ = codex_cycle("s1", AGENT, "cy")
+        tasks.record(self.root, unacked, now=T0 + 7)
+        self.stop(transcript)
+        got = {k: (v["status"], bool(v.get("interrupted"))) for k, v in self.agents().items()}
+        self.assertEqual(got, {"bg-a": ("in_progress", False), "cx": ("in_progress", False), "cy": ("cancelled", True)})
+
+    def test_a_codex_spawn_that_answers_with_no_agent_id_fails(self):
+        spawn, (ack, _) = codex_cycle("s1", AGENT, "c1")
+        tasks.record(self.root, spawn, now=T0)
+        tasks.record(self.root, dict(ack, tool_response={"error": "no capacity"}), now=T0 + 1)
+        task = self.agents()["c1"]
+        self.assertEqual((task["status"], task["failed"]), ("cancelled", True))
+
+    def test_a_codex_close_agent_cancels_the_agent_without_failing_it(self):
+        spawn, (ack, _) = codex_cycle("s1", AGENT, "c1")
+        tasks.record(self.root, spawn, now=T0)
+        tasks.record(self.root, ack, now=T0 + 1)
+        for namespaced in ("close_agent", "agents.close_agent"):
+            self.assertIsNone(tasks.normalize({"tool_name": namespaced, "session_id": "s1", "tool_input": {}}, "codex"))
+        close = {"session_id": "s1", "tool_use_id": "k1", "hook_event_name": "PostToolUse", "tool_name": "close_agent",
+                 "tool_input": {"target": "ag-c1"}, "tool_response": {"previous_status": "running"}}
+        self.assertTrue(tasks.record(self.root, close, now=T0 + 5)["recorded"])
+        task = self.agents()["c1"]
+        self.assertEqual((task["status"], task["failed"]), ("cancelled", False))
+
+    def test_an_agent_end_never_raises_session_done_mid_turn_but_the_stop_does(self):
+        spawn, (end,) = claude_cycle("s1", AGENT, "c1")
+        tasks.record(self.root, spawn, now=T0)
+        done = tasks.record(self.root, end, now=T0 + 1)
+        self.assertEqual((done["all_done"], done["became_all_done"]), (True, False))
+        self.assertTrue(self.stop(now=T0 + 2)["became_all_done"])
+        self.assertFalse(self.stop(now=T0 + 3)["became_all_done"])  # paid once
+
+    def test_a_failed_agent_task_never_raises_session_done(self):
+        spawn, (end,) = claude_cycle("s1", AGENT, "c1")
+        tasks.record(self.root, spawn, now=T0)
+        failed = dict(end, hook_event_name="PostToolUseFailure", tool_response=None, error="boom")
+        self.assertFalse(tasks.record(self.root, failed, now=T0 + 1)["became_all_done"])
+        self.assertFalse(self.stop(now=T0 + 2)["became_all_done"])
+        # A todo that completes beside a failed agent task is not a finished session either.
+        tasks.record(self.root, todo_write("s1", [todo("Plan", "in_progress")]), now=T0 + 3)
+        self.assertFalse(tasks.record(self.root, todo_write("s1", [todo("Plan", "completed")]), now=T0 + 4)["became_all_done"])
+
+    def test_a_replayed_spawn_with_no_id_does_not_duplicate_while_the_first_is_open(self):
+        spawn, _ = claude_cycle("s1", AGENT, "")
+        tasks.record(self.root, spawn, now=T0)
+        tasks.record(self.root, spawn, now=T0 + 1)
+        self.assertEqual(len(self.load("s1")["tasks"]), 1)
+        tasks.record(self.root, dict(spawn, tool_input=dict(spawn["tool_input"], description="other")), now=T0 + 2)
+        self.assertEqual(len(self.load("s1")["tasks"]), 2)
+
+    def test_the_claude_catch_all_agent_is_a_built_in(self):
+        self.assertTrue(review_triggers.is_builtin("claude", "claude"))
+        spawn, _ = claude_cycle("s1", "claude", "c1")
+        self.assertFalse(tasks.record(self.root, spawn, now=T0)["recorded"])
+
+
 class CodexWaitTest(BoardCase):
     def wait(self, statuses, call="w1"):
         return {
@@ -392,6 +545,16 @@ class AgentHookTest(tt.HookTest):
                 self.assertEqual((result.stdout, result.stderr), (b"", b""))
         # `TaskCreate` is a todo tool: only the post hook records it, the pre hook ignores it.
         self.run_script(PRE_TOOL_USE, {"tool_name": "TaskCreate", "session_id": "s1", "tool_input": {"subject": "backend-developer"}})
+        self.assertEqual(self.python_calls(), 0)
+
+    def test_a_spawn_with_no_agent_type_forks_no_python(self):
+        for payload in (
+            {"tool_name": "Agent", "session_id": "s1", "tool_use_id": "c1", "tool_input": {"description": "d", "prompt": "p"}},
+            {"tool_name": "spawn_agent", "session_id": "s1", "tool_input": {"message": "m"}},
+            {"tool": "task", "sessionID": "s1", "args": {"description": "d"}},
+        ):
+            for script in (PRE_TOOL_USE, POST_TOOL_USE):
+                self.assertEqual(self.run_script(script, payload).stdout, b"")
         self.assertEqual(self.python_calls(), 0)
 
     def test_a_result_forks_no_python_in_a_session_without_a_record(self):
