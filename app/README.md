@@ -190,6 +190,10 @@ reach the CLI, `project.json` or the store. They are per machine.
   projects). Bulk actions act only on rows on screen: never on rows a filter hides or a collapsed
   folder holds — selecting a collapsed folder opens it. While any sync runs, every other sync
   button waits.
+- A sync's result — a row's, the selection's or **Sync all** — is a toast at the bottom right,
+  never text inside the table. A failure stays until it is closed; a success that reported a
+  notice keeps it for a while.
+- Leaving the Projects tab closes an open project's settings unless they hold unsaved changes.
 - A collapsed folder stays collapsed across restarts; a text filter opens it while it has matches,
   and hides folders that have none.
 
@@ -219,8 +223,8 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
   Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. Filter by
   session or period, hide done tasks older than the retention, and show/hide tasks with findings.
-  Each session has a status (active, idle, ended) and a **Copy resume command** button; the text
-  copied is the command the CLI sent for that session, never a string the window supplies.
+  Each session shows its provider, branch, status (active, idle, ended) and task counts. The Done
+  column is tinted green. **← Board** returns to the overview, and so does leaving the tab.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.

@@ -519,7 +519,7 @@ bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 
 The script prints existing ADR titles and auto-numbers the file — see `skills/shared/adr/SKILL.md` § Check Before Creating before running it, so a decision doesn't get a second, duplicate ADR. Fill in the generated template and change the status from `Proposed` to `Accepted`.
 
-**Automated gap detection.** `scripts/hooks/stop/03e-adr-gap-check.sh` is a heuristic, non-blocking safety net for this rule: it warns when a session touched a dependency manifest, a schema migration, or a provider config file but added no new file under `docs/development/adrs/`. It never decides whether an ADR is actually warranted — that judgment stays with the triggers above — it only prevents the signal from being silently missed.
+**Automated gap detection.** `scripts/hooks/stop/03e-adr-gap-check.sh` is a heuristic, non-blocking safety net for this rule: it warns when a session touched a dependency manifest, a schema migration, or a provider config file but added no new file under `docs/development/adrs/`. It never decides whether an ADR is actually warranted — that judgment stays with the triggers above — it only prevents the signal from being silently missed. It warns **once per distinct set of signals** (signature kept as `.adr-gap-warned` in the machine-local state dir): a Stop exit 2 makes Claude Code continue the turn, so a warning nothing in the turn can clear would otherwise repeat after every reply.
 
 ### Learn Trigger Rule
 

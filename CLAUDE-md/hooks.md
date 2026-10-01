@@ -38,6 +38,7 @@ Each sub-script must:
 - Reuse `DEVTEAM_TOUCHED_PATHS` / `DEVTEAM_TOUCHED_COMPUTED` (exported by `stop.sh` via `scripts/hooks/lib/touched-paths.sh`) instead of re-running `git status`/`git log`, while still working standalone when they are unset
 - Exit with code `0` when nothing is wrong
 - Exit non-zero only when action is required from the user
+- A Stop exit 2 makes Claude Code continue the turn, so a warning the turn cannot clear must not exit 2 on every Stop: `03e-adr-gap-check.sh` remembers the signature it warned about (`<state-dir>/.adr-gap-warned`, never written through a symlink) and stays quiet until the signals change. Its stderr reaches Claude Code and Codex; the opencode plugin ignores Stop stderr, and the marker is per project, so an opencode Stop can record a signature unseen — accepted, see the script header
 
 Prefix `00-` is reserved for future preconditions. When adding a new sub-script, choose the correct tier and pick a number within that tier (e.g. `02-new-check.sh`). When the tier's number is already taken and the new script must run adjacent to the existing one, append a **lowercase letter suffix** instead of claiming a new number — `02b-`, `02c-`, … — which sorts immediately after `02-` and keeps the tier boundaries intact.
 
