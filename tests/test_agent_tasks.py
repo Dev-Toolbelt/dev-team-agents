@@ -9,6 +9,7 @@ is not an agent forks no python.
 
 import datetime
 import json
+import subprocess
 import unittest
 
 from devteam_support import requires_bash
@@ -597,3 +598,52 @@ class AgentHookTest(tt.HookTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@requires_bash()
+class WorktreeTest(BoardCase):
+    """A task records the linked worktree it was started in, on every provider."""
+
+    def setUp(self):
+        super().setUp()
+        self.worktree = self.root / ".worktrees" / "feat" / "ping"
+        subprocess.run(
+            ["git", "-C", str(self.root), "worktree", "add", "-q", str(self.worktree), "-b", "feat/ping"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        (self.worktree / "apps" / "api").mkdir(parents=True)
+
+    def task_view(self, session):
+        for project in self.view(now=T0 + 10):
+            for item in project["sessions"]:
+                if item["session_id"] == session:
+                    return item["tasks"][0]
+        return None
+
+    def test_a_task_started_in_a_worktree_names_it_on_every_provider(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "wt-" + provider
+                spawn, _ = CYCLES[provider](session, AGENT, "c-" + provider, cwd=str(self.worktree / "apps" / "api"))
+                tasks.record(self.root, spawn, now=T0)
+                self.assertEqual(self.task_view(session)["worktree"], {"path": ".worktrees/feat/ping", "branch": "feat/ping"})
+
+    def test_a_task_started_in_the_main_checkout_has_no_worktree(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "main-" + provider
+                spawn, _ = CYCLES[provider](session, AGENT, "m-" + provider, cwd=str(self.root))
+                tasks.record(self.root, spawn, now=T0)
+                self.assertIsNone(self.task_view(session)["worktree"])
+
+    def test_the_worktree_is_fixed_when_the_task_is_created(self):
+        spawn, (end,) = claude_cycle("s1", AGENT, "c1", cwd=str(self.worktree))
+        tasks.record(self.root, spawn, now=T0)
+        # The session moves back to the main checkout; the task still says where it started.
+        tasks.record(self.root, dict(end, cwd=str(self.root)), now=T0 + 5)
+        self.assertEqual(self.task_view("s1")["worktree"]["path"], ".worktrees/feat/ping")
+
+    def test_a_malformed_stored_worktree_reads_as_null(self):
+        for stored in ("x", {"path": ""}, {"path": 3}, None):
+            self.assertIsNone(tasks._worktree_view(stored))
+        self.assertEqual(tasks._worktree_view({"path": "/abs/wt", "branch": ""}), {"path": "/abs/wt", "branch": None})
