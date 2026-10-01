@@ -114,7 +114,6 @@ Configure estas preferências (veja [Onde ficam as preferências](#onde-ficam-as
   "context_window_percent_warning": 55,
   "context_window_percent_limit": 60,
   "suppress_notifications": false,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000
 }
 ```
@@ -124,12 +123,11 @@ Configure estas preferências (veja [Onde ficam as preferências](#onde-ficam-as
 | `context_window_percent_warning` | `55` | % a partir da qual um warning é emitido |
 | `context_window_percent_limit` | `60` | % a partir da qual um alerta crítico é emitido |
 | `suppress_notifications` | `false` | `false` / `true` / `["info"]` |
-| `transcript_multiplier` | `1.8` | Descontinuado, não é mais aplicado (veja abaixo) |
 | `model_max_tokens` | `200000` | Janela de contexto do modelo ativo |
 
 Defina `suppress_notifications` como `true` para silenciar todas as notificações, ou como `["info"]` para suprimir apenas as dicas.
 
-Os warnings de janela de contexto lêem a contagem de tokens de cache/input da última entrada de uso do transcript (do payload do hook Stop) — o tamanho exato do contexto enviado na última chamada à API, sem necessidade de multiplicador. `transcript_multiplier` permanece no schema por compatibilidade retroativa, mas não tem mais efeito. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso troque por um modelo não-200k.
+Os warnings de janela de contexto lêem a contagem de tokens de cache/input da última entrada de uso do transcript (do payload do hook Stop) — o tamanho exato do contexto enviado na última chamada à API, sem necessidade de multiplicador. A chave aposentada `transcript_multiplier` não faz mais parte do schema; se ainda estiver num `preferences.json` antigo, é ignorada. Defina `model_max_tokens` para corresponder à janela de contexto real do seu modelo caso troque por um modelo não-200k.
 
 ### Worktree e isolamento Docker
 

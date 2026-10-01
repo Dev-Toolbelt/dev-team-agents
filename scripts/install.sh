@@ -1336,7 +1336,6 @@ else
   "docs_stale_after_days": 30,
   "auto_update": $AUTO_UPDATE_VALUE,
   "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "session_no_commit_turns": 8,
   "telemetry": $TELEMETRY_VALUE,

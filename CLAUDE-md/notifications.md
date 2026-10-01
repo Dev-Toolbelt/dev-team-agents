@@ -85,8 +85,9 @@ turn, so reading it is inherent — everything else in the script is bash):
    Compared to `model_max_tokens`. Scanned incrementally from a cached byte offset.
 2. **Turn-count heuristic** (fallback): `100% ≈ 45 turns`, scaled linearly.
 
-Each level fires **once per session** and expires after 2 hours. `transcript_multiplier` is
-deprecated and not applied.
+Each level fires **once per session** and expires after 2 hours. The retired
+`transcript_multiplier` key is no longer in the schema (see `RETIRED_KEYS` in
+`scripts/lib/devteam/prefs.py`).
 
 ### Health Check Staleness
 

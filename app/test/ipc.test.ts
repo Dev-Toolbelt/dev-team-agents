@@ -506,6 +506,7 @@ describe('project preferences are written to the project layer only, for keys th
       { key: 'worktree_commit_action', action: 'set', value: 'push' },
       { key: 'language', action: 'set', value: null },
       { key: 'worktree_path', action: 'set', value: '../outside' },
+      // Retired from the schema: not a preference the app edits, either way.
       { key: 'transcript_multiplier', action: 'set', value: 2 },
       { key: 'transcript_multiplier', action: 'unset' },
     ]) {

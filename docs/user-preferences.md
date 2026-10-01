@@ -60,7 +60,6 @@ scripts/lib/preferences-defaults.json
   "docs_stale_after_days": 30,
   "auto_update": true,
   "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "session_no_commit_turns": 8,
   "telemetry": true,
@@ -89,7 +88,6 @@ scripts/lib/preferences-defaults.json
 | `docs_stale_after_days` | `30` | number | Staleness threshold for maintained project docs |
 | `auto_update` | `true` | bool | Whether update checks may auto-apply updates |
 | `update_check_interval_hours` | `24` | number | Delay between update checks |
-| `transcript_multiplier` | `1.8` | number | Deprecated compatibility field; no longer applied |
 | `model_max_tokens` | `200000` | number | Assumed context window size for warning calculations |
 | `session_no_commit_turns` | `8` | number | Turns before warning about long dirty sessions with no commit |
 | `telemetry` | `true` | bool | Anonymous telemetry opt-in flag |

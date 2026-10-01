@@ -59,7 +59,6 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
   "docs_stale_after_days": 30,
   "auto_update": true,
   "update_check_interval_hours": 24,
-  "transcript_multiplier": 1.8,
   "model_max_tokens": 200000,
   "session_no_commit_turns": 8,
   "telemetry": true,
@@ -89,7 +88,6 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 | `docs_stale_after_days` | number | `30` | Days before project.md, session-summary.md, and the last health check are considered stale |
 | `auto_update` | bool | `true` | Auto-update dev-team-agents when a new version is detected (consent key) |
 | `update_check_interval_hours` | number | `24` | Hours between update checks |
-| `transcript_multiplier` | number | `1.8` | Deprecated, no longer applied — context is read directly from the transcript's last usage entry |
 | `model_max_tokens` | number | `200000` | Context window for the active model |
 | `session_no_commit_turns` | number | `8` | Turns of work with a dirty tree and no commit before a one-time-per-session warning |
 | `telemetry` | bool | `true` | Anonymous usage telemetry (opt out with `false`) (consent key) |
