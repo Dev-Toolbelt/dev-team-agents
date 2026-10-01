@@ -259,7 +259,8 @@ transcript line longer than the per-`Stop` read cap is skipped rather than waite
 the hand-backs **before** it expires a window, so one handed back within the window's wait counts
 however late the `Stop` comes (one timestamped after the wait still expires), and a background
 result is dated at its hand-back: `result_at` and `fix_after` take that time, and only tasks created
-by then are excluded from the fix list.
+by then are excluded from the fix list (a live result keeps every task it can see). The fix rule
+resolves no earlier than the last fix finished, and a background agent task ends at its hand-back.
 
 A Codex `wait_agent` that returns after `Stop` already settled its launch as unread reattaches to
 the most recent window that is unresolved and closed unread (only that one, only within
@@ -388,4 +389,4 @@ findings.
 | 2026-10-01 | The project kanban is one horizontally scrolling row of columns with a minimum width, each scrolling its own cards, instead of a responsive grid | The grid stacked the columns 2×2 or 1×4 in a narrower window, which no longer read as a kanban |
 | 2026-10-01 | The per-session **Copy resume command** button and the project's path beside its name are removed from the kanban; its way back is the shared breadcrumb (`← Board`) the project settings use; the Done column is tinted; leaving the tab returns the Board to its overview. The CLI still emits `resume_command` | UI decluttering requested by the user; the resume command stays in the `tasks` contract, so no consumer breaks |
 | 2026-10-01 | The app's `copyResumeCommand` IPC (channel `devteam:copy-resume-command`, its preload method and the supervisor's `resumeCommand` lookup) is removed with the button it served. `resume_command` stays in the CLI's `tasks` output and is still validated on parse | No caller was left; an unused privileged channel that writes the clipboard is attack surface with no use |
-| 2026-10-01 | A background hand-back's `<result>` is HTML-unescaped before its marker is read; `Stop` scans hand-backs before expiring a window, and a hand-back timestamped after the window's wait still expires; a background result is dated at its hand-back, and the fix list excludes only tasks created by then | Claude Code escapes the notification's result, and a turn that waits hours on a question made in-time results look late and the fixes look older than the result |
+| 2026-10-01 | A background hand-back's `<result>` is HTML-unescaped before its marker is read; `Stop` scans hand-backs before expiring a window, and a hand-back timestamped after the window's wait still expires; a background result is dated at its hand-back, and the fix list excludes only tasks created by then; the fix rule resolves no earlier than the last fix finished; a background agent task ends at its hand-back | Claude Code escapes the notification's result, and a turn that waits hours on a question made in-time results look late and the fixes look older than the result |

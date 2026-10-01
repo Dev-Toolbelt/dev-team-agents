@@ -1,7 +1,7 @@
 # A background hand-back is HTML-escaped, and read late
 
 **Origin:** a live `/devteam:backend` run left its two tasks in In Review as "result not read" although both reviewers ended with a marker | 2026-10-01
-**Tags:** task board, review window, background agent, task-notification, hand-back, html escape, &lt;, marker, review-result, Stop, expiry, fix rule, result not read
+**Tags:** task board, review window, background agent, task-notification, hand-back, html escape, escaped marker, marker, review-result, Stop, expiry, fix rule, result not read
 
 > Claude Code escapes the `<result>` of a `<task-notification>`, and the Stop that reads it can come hours after it arrived.
 
@@ -30,12 +30,15 @@ Three things went wrong at once in the session that found this:
 3. A result read at a late `Stop` was dated at that `Stop`, so the fix agents started meanwhile
    looked older than the result and the fix rule never released the tasks. A background result now
    counts from its hand-back's own timestamp, and only tasks created by then are excluded from the
-   fix list.
+   fix list. The fix rule still resolves no earlier than the last fix finished, and a background
+   agent task likewise ends at its hand-back, not at the Stop that reads it.
 
 ## Gotchas
 
 - Only the Claude background path is escaped. A foreground `Agent` result (PostToolUse), Codex
   `wait_agent` and opencode `tool.execute.after` all carry the report as plain text.
+- One scan can read several hand-backs: each in-time one restarts the window's wait, as any other
+  activity does, so a second answer is measured from the first, not from the window's opening.
 - To diagnose, grep the session transcript for `review-result` and compare the record's
   `reviews[].markers`, `queue_ids` and `consumed` with the notifications' `<tool-use-id>`.
 - A record whose transcript cursor already passed the hand-backs is not repaired by the fix: the
