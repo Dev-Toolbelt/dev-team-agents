@@ -7,8 +7,15 @@ import type { BoardCounts, BoardProject, BoardSession, BoardTask } from '../../s
 
 export const NOW = 1_790_000_000;
 
-export function counts(todo: number, inProgress: number, done: number, inReview = 0): BoardCounts {
-  return { todo, in_progress: inProgress, in_review: inReview, done, total: todo + inProgress + inReview + done };
+export function counts(todo: number, inProgress: number, done: number, inReview = 0, prCreated = 0): BoardCounts {
+  return {
+    todo,
+    in_progress: inProgress,
+    in_review: inReview,
+    pr_created: prCreated,
+    done,
+    total: todo + inProgress + inReview + prCreated + done,
+  };
 }
 
 export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
@@ -30,6 +37,8 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     review: null,
     worktree: null,
     turns: [],
+    pr: null,
+    refs: [],
     ...overrides,
   };
 }
@@ -42,6 +51,7 @@ export function boardSession(overrides: Partial<BoardSession> & { tasks?: readon
     tasks.filter((t) => t.column === 'in_progress').length,
     tasks.filter((t) => t.column === 'done').length,
     tasks.filter((t) => t.column === 'in_review').length,
+    tasks.filter((t) => t.column === 'pr_created').length,
   );
   return {
     session_id: 'session-aaaaaaaa',
@@ -55,6 +65,7 @@ export function boardSession(overrides: Partial<BoardSession> & { tasks?: readon
     ended_at: null,
     resume_command: "cd '/repo/storefront' && claude --resume 'session-aaaaaaaa'",
     counts: derived,
+    prs: [],
     ...overrides,
     tasks,
   };
@@ -68,6 +79,7 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
     sessions.reduce((n, s) => n + s.counts.in_progress, 0),
     sessions.reduce((n, s) => n + s.counts.done, 0),
     sessions.reduce((n, s) => n + s.counts.in_review, 0),
+    sessions.reduce((n, s) => n + s.counts.pr_created, 0),
   );
   const tasks = sessions.flatMap((s) => s.tasks);
   return {
@@ -81,6 +93,7 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
     abandoned: tasks.filter((t) => t.abandoned).length,
     with_findings: tasks.filter((t) => t.review?.state === 'findings').length,
     last_activity_at: Math.max(0, ...sessions.map((s) => s.last_activity_at)),
+    link_hosts: [],
     ...overrides,
     sessions,
   };
@@ -90,7 +103,7 @@ export function boardProject(overrides: Partial<BoardProject> & { sessions?: rea
 export function tasksOf(prefix: string, todo: number, inProgress: number, done: number, inReview = 0): BoardTask[] {
   const out: BoardTask[] = [];
   let index = 0;
-  const make = (column: 'todo' | 'in_progress' | 'in_review' | 'done', status: string) => {
+  const make = (column: 'todo' | 'in_progress' | 'in_review' | 'pr_created' | 'done', status: string) => {
     index += 1;
     out.push(
       boardTask({

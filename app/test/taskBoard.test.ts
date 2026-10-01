@@ -189,7 +189,7 @@ describe('asBoardProject', () => {
     for (const task of raw.sessions[0]!.tasks) delete task.review;
     const parsed = asBoardProject(raw) as BoardProject;
     expect(parsed.as_of).toBeUndefined();
-    expect(parsed.counts).toEqual({ todo: 1, in_progress: 0, in_review: 0, done: 1, total: 2 });
+    expect(parsed.counts).toEqual({ todo: 1, in_progress: 0, in_review: 0, pr_created: 0, done: 1, total: 2 });
     expect(parsed.sessions[0]?.tasks.map((t) => t.review)).toEqual([null, null]);
   });
 
@@ -913,6 +913,9 @@ describe('task board IPC', () => {
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
       boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7 }),
       saveBoardSettings: (settings) => Promise.resolve(settings),
+      linkFor: () => null,
+      openExternal: () => Promise.resolve(),
+      appWindowFocused: () => true,
       ...overrides,
     };
   }

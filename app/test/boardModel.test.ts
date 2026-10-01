@@ -75,28 +75,29 @@ describe('percentLabels', () => {
     todo,
     in_progress,
     in_review,
+    pr_created: 0,
     done,
     total: todo + in_progress + in_review + done,
   });
 
   it('always sums to 100 (largest remainder), where independent rounding gave 99', () => {
-    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 0, 33]);
+    expect(percentLabels(c(1, 1, 1))).toEqual([34, 33, 0, 0, 33]);
     for (const counts of [c(1, 1, 1), c(1, 2, 4), c(3, 3, 1), c(7, 11, 13), c(1, 0, 6), c(5, 0, 0)]) {
       expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
     }
   });
 
   it('keeps exact shares exact, and is all zero for an empty board', () => {
-    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 0, 50]);
-    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0, 0]);
+    expect(percentLabels(c(3, 2, 5))).toEqual([30, 20, 0, 0, 50]);
+    expect(percentLabels(c(0, 0, 0))).toEqual([0, 0, 0, 0, 0]);
   });
 
   it('splits four parts by largest remainder and still sums to 100', () => {
-    expect(percentLabels(c(1, 1, 1, 1))).toEqual([25, 25, 25, 25]);
+    expect(percentLabels(c(1, 1, 1, 1))).toEqual([25, 25, 25, 0, 25]);
     for (const counts of [c(1, 1, 1, 2), c(1, 2, 4, 1), c(3, 3, 1, 7), c(7, 11, 13, 5), c(0, 0, 1, 2)]) {
       expect(percentLabels(counts).reduce((a, b) => a + b, 0), JSON.stringify(counts)).toBe(100);
     }
-    expect(percentLabels({ todo: 1, in_progress: 1, in_review: 1, done: 0, total: 3 })).toEqual([34, 33, 33, 0]);
+    expect(percentLabels({ todo: 1, in_progress: 1, in_review: 1, pr_created: 0, done: 0, total: 3 })).toEqual([34, 33, 33, 0, 0]);
   });
 });
 
@@ -257,7 +258,7 @@ describe('viewProject', () => {
 
   it('a narrower period recomputes from the sessions that remain', () => {
     const view = viewProject(project, '7d', NOW)!;
-    expect(view.counts).toEqual({ todo: 1, in_progress: 1, in_review: 0, done: 1, total: 3 });
+    expect(view.counts).toEqual({ todo: 1, in_progress: 1, in_review: 0, pr_created: 0, done: 1, total: 3 });
     expect(view.sessionsTotal).toBe(1);
     expect(view.providers).toEqual(['claude']);
     expect(view.stale).toBe(0);

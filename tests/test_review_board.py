@@ -1227,9 +1227,12 @@ class WiringTest(tt.BoardCase):
         (prompt_entry,) = [e for e in settings["hooks"]["UserPromptSubmit"] if hooks._is_devteam_entry(e, "user-prompt-submit.sh")]
         self.assertNotIn("matcher", prompt_entry)
         (post,) = [e for e in settings["hooks"]["PostToolUse"] if hooks._is_devteam_entry(e, "post-tool-use.sh")]
-        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task")
+        self.assertEqual(
+            post["matcher"],
+            "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request",
+        )
         (failure,) = [e for e in settings["hooks"]["PostToolUseFailure"] if hooks._is_devteam_entry(e, "post-tool-use.sh")]
-        self.assertEqual(failure["matcher"], "Agent|Task")
+        self.assertEqual(failure["matcher"], "Agent|Task|Bash|mcp__.*create_pull_request")
         self.assertEqual(set(hooks.registered_events(self.root)), {e for e, _ in hooks.EVENTS})
 
     def test_the_new_dispatcher_and_sub_script_exist_and_share_the_naming_convention(self):
@@ -1250,7 +1253,10 @@ class WiringTest(tt.BoardCase):
             self.assertIn(script, ours[0]["hooks"][0]["command"])
         self.assertEqual(data["PostToolUse"][0]["hooks"][0]["command"], "mine")
         (post,) = [g for g in data["PostToolUse"] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
-        self.assertEqual(post["matcher"], ".*(wait_agent|spawn_agent|close_agent)")
+        self.assertEqual(
+            post["matcher"],
+            ".*(wait_agent|spawn_agent|close_agent|Bash|mcp__.*(create_pull_request|merge_pull_request))",
+        )
         for tool in ("wait_agent", "agents.wait_agent", "spawn_agent", "close_agent"):
             self.assertTrue(re.search(post["matcher"], tool), tool)
         self.assertFalse(re.search(post["matcher"], "update_plan"))
@@ -1950,7 +1956,7 @@ class RoundThreePluginTest(tt.BoardCase):
 
     def test_call_ids_are_forwarded_and_the_subagent_type_is_remembered_by_call_id(self):
         text = self.text()
-        self.assertEqual(text.count("tool_use_id"), 2)
+        self.assertEqual(text.count("tool_use_id"), 3)
         self.assertIn("subagentByCall", text)
         self.assertIn("SUBAGENT_CALLS_KEPT", text)
         self.assertIn("args.subagent_type = subagentByCall.get(callID)", text)

@@ -281,7 +281,7 @@ describe('Board — accessibility and overflow', () => {
 
   // jsdom does no layout, so how the row looks is checked in a real window; these pin the
   // structure and the measured behaviour the layout depends on.
-  it('puts the four columns, in order, in one named group', async () => {
+  it('puts the five columns, in order, in one named group', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
     const row = screen.getByRole('group', { name: 'Kanban columns' });
     const columns = within(row).getAllByRole('region');
@@ -289,6 +289,7 @@ describe('Board — accessibility and overflow', () => {
       'To do',
       'In progress',
       'In Review',
+      'PR/MR Created',
       'Done',
     ]);
     // A group, not a landmark: one widget does not add five entries to the landmark list.

@@ -169,7 +169,7 @@ describe('Board overview', () => {
     expect(within(c).getByText('In Review').closest('div')?.textContent).toContain('3');
     expect(within(c).getByText('In Review').closest('div')?.textContent).toContain('(75%)');
     const bar = within(c).getByRole('img', { name: '1 to do, 0 in progress, 3 in review, 0 done' });
-    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '0', '3', '0']);
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '0', '3', '0', '0']);
     expect(within(c).getByText('2 with findings')).toBeInTheDocument();
   });
 
@@ -678,6 +678,6 @@ describe('Board — one period, honest percentages', () => {
     });
     expect(shares.reduce((a, b) => a + b, 0)).toBe(100);
     const bar = within(c).getByRole('img', { name: '1 to do, 1 in progress, 0 in review, 1 done' });
-    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '0', '1']);
+    expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['1', '1', '0', '0', '1']);
   });
 });
