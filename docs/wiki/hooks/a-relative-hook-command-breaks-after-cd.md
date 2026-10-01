@@ -26,8 +26,9 @@ The provider records the failure as a **non-blocking** hook error in the transcr
 Nothing reaches the screen, so every hook stops at once — the task board, the credential guard, the
 full-suite guard, the Stop lint and the session-summary check — and the session looks normal.
 
-The registered commands now enter the project root first; the per-provider command is in
-`CLAUDE-md/hooks.md` § Hook Commands Run From the Project Root.
+The registered commands now walk up from the current directory to the nearest one holding the
+hooks before running anything; the per-provider command is in `CLAUDE-md/hooks.md` § Hook Commands
+Run From the Project Root.
 
 ## Gotchas
 
@@ -37,4 +38,8 @@ The registered commands now enter the project root first; the per-provider comma
   sub-scripts already treat `$PWD` as the root.
 - A test that runs a hook from the root proves nothing here; run it from a subdirectory
   (`tests/test_hook_project_root.py`).
+- `git rev-parse --show-toplevel` is the wrong root: a package with its own install inside a
+  monorepo is not the repository root, so a hook would `cd` away from its own scripts.
+- Codex on Windows runs the command through `cmd.exe`, where single quotes do not quote; it keeps
+  the plain relative command and must be started at the project root.
 - An existing project keeps the old command until `devteam sync` rewrites it.

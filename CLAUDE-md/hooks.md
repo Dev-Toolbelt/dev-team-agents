@@ -75,19 +75,21 @@ The spawn branch of the same script has a second gate: the tool key must be `Age
 
 ### Hook Commands Run From the Project Root
 
-A provider runs a hook in the session's **current** directory, and that is not always the project root: a Claude Code session keeps the directory a Bash call `cd`-ed into, and Codex can be started in a subdirectory. Every hook, and every sub-script that reads `$PWD` or calls `git`, assumes the root, so the registered command enters it first:
+A provider runs a hook in the session's **current** directory, and that is not always the project root: a Claude Code session keeps the directory a Bash call `cd`-ed into, and Codex can be started in a subdirectory. Every hook, and every sub-script that reads `$PWD` or calls `git`, assumes the root, so the registered command finds it first. It walks up from the current directory to the nearest one holding `.dev-team-agents/scripts/hooks` (`ROOT_WALK` in `scripts/lib/devteam/hooks.py`):
 
-| Provider | Registered by | Command |
-|----------|---------------|---------|
-| Claude Code | `scripts/lib/devteam/hooks.py:command_for` (v3), `scripts/install.sh` `_hook_cmd` (v2) — the two must stay equal | `env -u BASH_ENV -u ENV bash -c 'cd "${CLAUDE_PROJECT_DIR:-.}" && exec bash .dev-team-agents/scripts/hooks/<x>.sh'` |
-| Codex | `scripts/install-codex.sh` `cmd()` | `bash -c 'cd "$(git rev-parse --show-toplevel 2>/dev/null \|\| echo .)" && exec bash .dev-team-agents/scripts/hooks/<x>.sh'` |
-| opencode | the plugin spawns the dispatcher itself | `spawn("bash", [script], { cwd: directory, … })` |
+| Provider | Registered by | Root | When no ancestor has the hooks |
+|----------|---------------|------|--------------------------------|
+| Claude Code | `scripts/lib/devteam/hooks.py:command_for` (v3), `scripts/install.sh` `_hook_cmd` (v2) — the two must stay equal | `env -u BASH_ENV -u ENV bash -c '<ROOT_WALK>'` | `$CLAUDE_PROJECT_DIR`, then `.` |
+| Codex | `scripts/install-codex.sh` `cmd()` — same walk | `bash -c '<ROOT_WALK>'` | `.` |
+| opencode | the plugin spawns the dispatcher itself | `spawn("bash", [script], { cwd: directory, … })` | — |
 
+- **Walk up, not `git rev-parse --show-toplevel`.** The project root is not always the repository root (a package with its own install inside a monorepo), and a worktree may or may not carry its own hooks: the nearest ancestor is right in each case. A worktree with only a partial `.dev-team-agents/` runs the hooks of the checkout that holds it.
 - **`bash -c '…'`**, not bare shell syntax: Claude Code and Codex run the command through a shell that is not ours to choose (Codex uses the user's `$SHELL`, which may be zsh or fish), and single quotes are literal in all of them. `env -u` comes before it so that bash does not source `BASH_ENV`.
+- **Codex on Windows keeps the plain `bash .dev-team-agents/scripts/hooks/<x>.sh`.** Codex runs the command through `cmd.exe /C` there, where single quotes do not quote; such a session must start at the project root.
 - **Still relative.** `settings.json` is committed, so an absolute path would break every other clone.
-- **`exec bash <script>`**, so a copy that lost its mode bits still runs.
-- A relative command run from a subdirectory fails as a *non-blocking error* the provider does not surface: the board stays empty and the credential guard does not run, with nothing on screen. `tests/test_hook_project_root.py` runs the real registered command from `apps/api` on every provider.
-- `devteam sync` rewrites an entry carrying the earlier relative command in place (our entries are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command), keeps a matcher the user chose, and leaves every other hook alone.
+- **`exec bash <script>`**, so stdin, the exit status (PreToolUse exit 2 blocks) and a copy that lost its mode bits all work.
+- A relative command run from a subdirectory fails as a *non-blocking error* the provider does not surface: the board stays empty and the credential guard does not run, with nothing on screen. `tests/test_hook_project_root.py` runs the real registered command from `apps/api` on every provider, plus nested roots and worktrees.
+- `devteam sync` rewrites an entry carrying the earlier relative command in place (our entries are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command), keeps a matcher the user chose, and leaves every other hook alone. The v2 `install.sh` rewrites only a command that is exactly one it shipped, so a user's own wrapper around our script is kept.
 
 ### Hook Files Map
 
