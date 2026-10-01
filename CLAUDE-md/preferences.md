@@ -1,3 +1,4 @@
+<!-- last-updated: 2026-10-01 -->
 ## User Preferences
 
 On a v2 install that is not bound yet, all user-level preferences are stored in `.dev-team-agents/user-data/preferences.json` (gitignored). In a bound project the cascade (defaults → global → the store's project layer) replaces it and `devteam bind` imports the file into the project layer, moving it to quarantine — see `CLAUDE-md/cli.md` § Layout, memory and preferences. The file is created by `install.sh` on first install and validated/migrated by the health check. The authoritative static default schema lives in `scripts/lib/preferences-defaults.json` — the single source of truth read by both `install.sh` (on install/update) and the `session-start.sh` health-check backfill (on every session).
@@ -32,6 +33,21 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
 **These are the values a preferences.json gets when it does not exist yet.** They are never applied to a file that already exists: `install.sh` merges with existing values winning, and the backfill only adds absent keys. The same holds for `credentials.local.json` — created only when absent, never rewritten.
 
 **Consent keys — `telemetry` and `auto_update`.** Both are `true` in the schema, which is the value a *fresh* file gets (for `telemetry`, still subject to the install prompt below). Neither is ever written as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key means "no". Both `install.sh` and the session-start backfill write `false` in that case.
+
+### Retiring a key
+
+When a key is no longer read by any code, retire it rather than only deleting it: files written before the change still hold the key, and without the retirement steps the CLI would report it as an unknown key in every one of them. Follow this checklist:
+
+1. **Remove from `scripts/lib/preferences-defaults.json`** — the canonical schema
+2. **Remove from all mirrors** listed in CLAUDE.md § User Preferences (the install.sh heredoc, this file, `skills/shared/user-preferences/SKILL.md`, `README.md` worktree table if listed)
+3. **Add to `RETIRED_KEYS` in `scripts/lib/devteam/prefs.py`** — resolution skips it with no error, `prefs set` refuses it, `prefs unset` still removes it, a v2 import lists it as ignored
+4. **Add to `RETIRED_KEYS` in `app/src/renderer/preferences/schema.ts`** — the app never lists it, even from older CLIs
+5. **Drop from `PREFERENCE_RULES` in `app/src/shared/preferenceRules.ts`** — app/test/preferences.test.ts enforces that app fields and rules match defaults exactly
+6. **Do NOT delete from existing `preferences.json` files** — the No-Destruction Rule forbids it
+
+Existing preferences.json files keep the key forever; the backfill does not reintroduce it.
+
+**Example:** `transcript_multiplier` retired 2026-10-01.
 
 | Field | Default | Purpose | Consumed at (read → applied) |
 |-------|---------|---------|-------------------------------|
