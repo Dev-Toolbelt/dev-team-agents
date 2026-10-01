@@ -151,7 +151,7 @@ Wrapped in the CLI's usual `--json` envelope. `data`:
       "as_of": 1759200000,
       "sessions": [
         {
-          "session_id": "…", "provider": "claude", "branch": "feat/login", "cwd": "…",
+          "session_id": "…", "title": "Notificações do app", "provider": "claude", "branch": "feat/login", "cwd": "…",
           "status": "active|idle|ended",
           "created_at": 0, "last_activity_at": 0, "ended_at": null,
           "resume_command": "cd '/abs/path' && claude --resume '…'",
@@ -321,7 +321,7 @@ findings.
   this app version does not know. A "with findings" filter
   shows only tasks in review that have findings. Card: task text, session chip (provider icon + branch), time in
   current column; on hover/focus, time per step. Filters: session, period, show/hide done older than
-  the retention setting. Per-session header with provider, branch, status and counts. The Done
+  the retention setting. Per-session header with provider, session title (when the provider has one; cut by width, full text on hover), branch, status and counts; the session filter names a session by its title (40 characters), or by its short id when it has none. The Done
   column carries a faint success tint. Leaving the Board tab returns it to the overview.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
   (days, default 7). Not preferences.json keys.
@@ -399,3 +399,4 @@ findings.
 | 2026-10-01 | The app's `copyResumeCommand` IPC (channel `devteam:copy-resume-command`, its preload method and the supervisor's `resumeCommand` lookup) is removed with the button it served. `resume_command` stays in the CLI's `tasks` output and is still validated on parse | No caller was left; an unused privileged channel that writes the clipboard is attack surface with no use |
 | 2026-10-01 | A background hand-back's `<result>` is HTML-unescaped before its marker is read; `Stop` scans hand-backs before expiring a window, and a hand-back timestamped after the window's wait still expires; a background result is dated at its hand-back, and the fix list excludes only tasks created by then; the fix rule resolves no earlier than the last fix finished; a background agent task ends at its hand-back | Claude Code escapes the notification's result, and a turn that waits hours on a question made in-time results look late and the fixes look older than the result |
 | 2026-10-01 | Task `worktree` (`{path, branch}` or null) captured at creation from the hook call's `cwd` with one `git rev-parse` (branch, git dir, common dir, toplevel); the opencode plugin now sends `cwd`; the card shows a worktree mark with a tooltip only when set | Requested: see at a glance which work ran in an isolated worktree |
+| 2026-10-01 | Each session in the `tasks` view carries `title` (string or null): the title its provider shows — Claude Code's last transcript `custom-title`, Codex's `session_index.jsonl` `thread_name`, opencode's `session.get` title sent as `session_title`. The kanban shows it in the session strip and the session filter; task-board notifications already quote it cut to 15 characters | A session id names nothing the user recognizes; the title is what the provider's own UI shows. Additive to the contract: an older CLI omits it and the app reads null |
