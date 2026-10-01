@@ -1197,14 +1197,29 @@ describe('Projects — folders (ADR-0021)', () => {
   const SITES = { id: 'sites', name: 'Sites', parentId: null, collapsed: false };
   const APPS = { id: 'apps', name: 'Apps', parentId: null, collapsed: false };
 
+  /**
+   * The folders load only once the list has rendered, and every folder control is disabled
+   * (and the rows ungrouped) until they arrive. They resolve a little late here on purpose:
+   * a test that acts as soon as a project name shows would otherwise pass on an idle
+   * machine and fail on a loaded one — the click lands on a disabled menu trigger, or on a
+   * row the regrouping is about to replace. Late every time makes that mistake fail every
+   * time; `foldersReady` is the wait that avoids it.
+   */
+  const FOLDERS_DELAY_MS = 30;
+
   function withFolders(folders: ProjectFolders, overrides: Partial<DevteamBridge> = {}) {
     const bridge = fakeBridge({
       listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: PROJECTS }))),
-      projectFolders: vi.fn(() => Promise.resolve(folders)),
+      projectFolders: vi.fn(() => new Promise<ProjectFolders>((resolve) => setTimeout(() => resolve(folders), FOLDERS_DELAY_MS))),
       ...overrides,
     });
     installBridge(bridge);
     return bridge;
+  }
+
+  /** The folders have loaded: "New folder" is enabled only once they are read. */
+  async function foldersReady() {
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /new folder/i })).toBeEnabled());
   }
 
   /** The `<tbody>` a folder's header row sits in: the group, and the drop target. */
@@ -1227,7 +1242,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [], membership: {} });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     expect(screen.queryByText('No folder')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /new folder/i }));
@@ -1243,7 +1258,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES], membership: {} });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.click(screen.getByRole('button', { name: /new folder/i }));
     await user.type(screen.getByLabelText('Name'), 'sites');
     expect(screen.getByText(/already exists/)).toBeInTheDocument();
@@ -1255,7 +1270,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES, APPS], membership: { p1: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     expect(within(group('Sites')).getByText('acme-site')).toBeInTheDocument();
     expect(within(root()).getByText('mobile-app')).toBeInTheDocument();
 
@@ -1271,7 +1286,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES], membership: {} });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select shop-front' }));
@@ -1289,7 +1304,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES], membership: {} });
     const { container } = render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
 
@@ -1308,7 +1323,7 @@ describe('Projects — folders (ADR-0021)', () => {
   it('ignores a drop with no drag in progress', async () => {
     const bridge = withFolders({ folders: [SITES], membership: {} });
     render(<Projects environment={environment()} />);
-    await screen.findByRole('button', { name: /^Sites/ });
+    await foldersReady();
     fireEvent.drop(group('Sites'));
     await Promise.resolve();
     expect(bridge.saveProjectFolders).not.toHaveBeenCalled();
@@ -1318,7 +1333,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', p2: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     await user.click(screen.getByRole('button', { name: 'Folder actions for Sites' }));
     await user.click(await screen.findByRole('menuitem', { name: /delete folder/i }));
@@ -1338,7 +1353,7 @@ describe('Projects — folders (ADR-0021)', () => {
       { saveProjectFolders: vi.fn(() => Promise.resolve({ ok: false as const, message: 'The folders could not be saved: disk full' })) },
     );
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
     await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
 
@@ -1351,7 +1366,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     await user.click(screen.getByRole('button', { name: /^Sites/, expanded: true }));
     expect(screen.queryByText('acme-site')).not.toBeInTheDocument();
@@ -1365,7 +1380,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     withFolders({ folders: [SITES, APPS], membership: { p1: 'sites', p3: 'apps' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.type(screen.getByLabelText(/filter by name or path/i), 'mobile');
     expect(screen.queryByRole('button', { name: /^Sites/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Apps/ })).toBeInTheDocument();
@@ -1379,7 +1394,7 @@ describe('Projects — folders (ADR-0021)', () => {
       .mockResolvedValueOnce(fail('the store is locked'));
     withFolders({ folders: [], membership: {} }, { syncProject });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
     await user.click(screen.getByRole('button', { name: 'Sync selected' }));
@@ -1392,7 +1407,7 @@ describe('Projects — folders (ADR-0021)', () => {
   it('drops membership of a project that is no longer bound', async () => {
     const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', gone: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await vi.waitFor(() => expect(bridge.saveProjectFolders).toHaveBeenCalled());
     expect(lastSaved(bridge).membership).toEqual({ p1: 'sites' });
   });
@@ -1421,7 +1436,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const user = userEvent.setup();
     const bridge = withFolders({ folders: [{ ...SITES, collapsed: true }], membership: { p1: 'sites', p2: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('mobile-app');
+    await foldersReady();
 
     await user.click(screen.getByRole('checkbox', { name: 'Select every project shown' }));
     expect(screen.getByRole('region', { name: /selected projects/i })).toHaveTextContent('1 selected');
@@ -1438,7 +1453,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const syncProject = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(ok(bindReport()));
     withFolders({ folders: [], membership: {} }, { syncProject });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     await user.click(screen.getByRole('checkbox', { name: 'Select acme-site' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select mobile-app' }));
     await user.click(screen.getByRole('button', { name: 'Sync selected' }));
@@ -1460,7 +1475,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const saveProjectFolders = vi.fn<DevteamBridge['saveProjectFolders']>().mockReturnValueOnce(firstSave.promise);
     withFolders({ folders: [SITES, APPS], membership: {} }, { saveProjectFolders });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
     await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
@@ -1485,7 +1500,7 @@ describe('Projects — folders (ADR-0021)', () => {
       .mockImplementation((folders) => Promise.resolve({ ok: true, folders }));
     withFolders({ folders: [SITES], membership: { p3: 'sites' } }, { listProjects, saveProjectFolders });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     await user.click(screen.getByRole('button', { name: 'Move acme-site to a folder' }));
     await user.click(await screen.findByRole('menuitem', { name: /Sites/ }));
@@ -1502,7 +1517,7 @@ describe('Projects — folders (ADR-0021)', () => {
     const pending = deferred<OperationResult<ReturnType<typeof bindReport>>>();
     withFolders({ folders: [SITES], membership: {} }, { syncProject: vi.fn(() => pending.promise) });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
 
     const row = () => screen.getByText('acme-site').closest('tr')!;
     await user.click(within(row()).getByRole('button', { name: /^sync/i }));
@@ -1521,7 +1536,7 @@ describe('Projects — folders (ADR-0021)', () => {
   it('lists projects in no folder at the top level, indented less than those inside a folder', async () => {
     withFolders({ folders: [SITES], membership: { p1: 'sites' } });
     render(<Projects environment={environment()} />);
-    await screen.findByText('acme-site');
+    await foldersReady();
     expect(screen.queryByText('No folder')).not.toBeInTheDocument();
     expect(within(root()).queryAllByRole('row', { name: /folder/i }).filter((row) => row.hasAttribute('data-folder-header'))).toHaveLength(0);
     expect(within(root()).getByText('mobile-app')).toBeInTheDocument();
@@ -1533,7 +1548,7 @@ describe('Projects — folders (ADR-0021)', () => {
   it('offers a drop strip only while a filed project is dragged and nothing sits at the top level', async () => {
     const bridge = withFolders({ folders: [SITES], membership: { p1: 'sites', p2: 'sites', p3: 'sites' } });
     const { container } = render(<Projects environment={environment()} />);
-    await screen.findByRole('button', { name: /^Sites/ });
+    await foldersReady();
     expect(root()).toBeNull();
 
     fireEvent.dragStart(container.querySelector('[data-drag-handle="p1"]')!);
