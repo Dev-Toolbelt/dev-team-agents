@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -682,8 +682,18 @@ function Kanban({
   );
 }
 
-/** The row's bottom padding (`pb-2`), which sits below the columns inside the same viewport. */
-const KANBAN_ROW_PADDING = 8;
+/** Padding, in pixels, read from the element's computed style; 0 when unset. */
+function paddingOf(style: CSSStyleDeclaration, side: 'paddingTop' | 'paddingBottom'): number {
+  return parseFloat(style[side]) || 0;
+}
+
+/**
+ * Overflow by more than a pixel: fractional widths at some zoom levels leave the scroll and
+ * client sizes 1px apart with nothing to scroll.
+ */
+function overflows(scroll: number, client: number): boolean {
+  return scroll - client > 1;
+}
 
 /** The nearest ancestor that scrolls vertically: the app shell's `<main>`, or null for the window. */
 function verticalScroller(element: HTMLElement): HTMLElement | null {
@@ -713,20 +723,23 @@ function KanbanRow({ children }: { children: ReactNode }) {
   const row = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [columnMax, setColumnMax] = useState<number | null>(null);
-  useEffect(() => {
+  // A layout effect, so the first paint (and the one after a remount) already has the measured
+  // cap instead of jumping from the fallback.
+  useLayoutEffect(() => {
     const element = row.current;
     if (element === null) return undefined;
     const viewport = verticalScroller(element);
     const measure = () => {
-      setOverflowing(element.scrollWidth > element.clientWidth);
+      setOverflowing(overflows(element.scrollWidth, element.clientWidth));
       let visible = window.innerHeight;
       if (viewport !== null) {
         const style = getComputedStyle(viewport);
-        visible = viewport.clientHeight - parseFloat(style.paddingTop || '0') - parseFloat(style.paddingBottom || '0');
+        visible = viewport.clientHeight - paddingOf(style, 'paddingTop') - paddingOf(style, 'paddingBottom');
       }
-      // The horizontal scrollbar, when shown, takes height from the same viewport.
+      // The row's own bottom padding and its horizontal scrollbar, when shown, take height from
+      // the same viewport.
       const scrollbar = element.offsetHeight - element.clientHeight;
-      const max = Math.floor(visible - KANBAN_ROW_PADDING - Math.max(scrollbar, 0));
+      const max = Math.floor(visible - paddingOf(getComputedStyle(element), 'paddingBottom') - Math.max(scrollbar, 0));
       setColumnMax(max > 0 ? max : null);
     };
     measure();
@@ -750,6 +763,37 @@ function KanbanRow({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * A column's cards, scrolling inside the column. A tab stop only while it overflows, so the arrow
+ * keys reach cards that hold nothing focusable themselves; measured after every render because a
+ * new card changes the scroll height without resizing the capped list.
+ */
+function CardList({ label, children }: { label: string; children: ReactNode }) {
+  const list = useRef<HTMLUListElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const element = list.current;
+    if (element !== null) setOverflowing(overflows(element.scrollHeight, element.clientHeight));
+  });
+  useEffect(() => {
+    const element = list.current;
+    if (element === null) return undefined;
+    const observer = new ResizeObserver(() => setOverflowing(overflows(element.scrollHeight, element.clientHeight)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <ul
+      ref={list}
+      aria-label={label}
+      tabIndex={overflowing ? 0 : undefined}
+      className="relative -mx-1 min-h-0 flex-1 space-y-2 overflow-y-auto px-1 focus-visible:rounded-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+    >
+      {children}
+    </ul>
   );
 }
 
@@ -867,8 +911,9 @@ function Column({
         <p className="py-2 text-xs text-muted-foreground">Nothing here.</p>
       ) : (
         // The cards scroll inside their column, so a long column does not stretch the board and
-        // the heading with its count stays in view (`relative` for the same reason as the row).
-        <ul className="relative -mx-1 min-h-0 flex-1 space-y-2 overflow-y-auto px-1">
+        // the heading with its count stays in view (`relative` on the list for the same reason as
+        // the row).
+        <CardList label={`${title} tasks`}>
           {items.map((item) => (
             <TaskCard
               key={`${item.session.session_id}:${item.task.key}`}
@@ -877,7 +922,7 @@ function Column({
               asOf={asOf}
             />
           ))}
-        </ul>
+        </CardList>
       )}
       {note !== null ? <p className="mt-2 shrink-0 text-xs text-muted-foreground">{note}</p> : null}
     </section>
