@@ -44,6 +44,7 @@ export function boardSession(overrides: Partial<BoardSession> & { tasks?: readon
   );
   return {
     session_id: 'session-aaaaaaaa',
+    title: null,
     provider: 'claude',
     branch: 'feat/login',
     cwd: '/repo/storefront',

@@ -102,6 +102,7 @@ switch (scenario) {
           sessions: [
             {
               session_id: 's1',
+              title: 'Fake session',
               provider: 'claude',
               branch: 'main',
               cwd: '/repo/a',

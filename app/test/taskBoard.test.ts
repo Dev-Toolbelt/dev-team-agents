@@ -311,6 +311,23 @@ describe('asBoardProject', () => {
     }
   });
 
+  it('reads a session title, and null when absent (an older CLI), empty, oversized or not text', () => {
+    const cases: [unknown, string | null][] = [
+      ['Notificações do app', 'Notificações do app'],
+      [undefined, null],
+      ['', null],
+      ['x'.repeat(513), null],
+      [42, null],
+    ];
+    for (const [title, expected] of cases) {
+      const raw = JSON.parse(JSON.stringify(boardSession())) as Record<string, unknown>;
+      if (title === undefined) delete raw['title'];
+      else raw['title'] = title;
+      const parsed = asBoardProject({ ...JSON.parse(JSON.stringify(boardProject())), sessions: [raw] }) as BoardProject;
+      expect(parsed.sessions[0]?.title, String(title)).toBe(expected);
+    }
+  });
+
   it('clamps an oversized task text', () => {
     const task = asBoardTask({ ...boardTask(), content: 'x'.repeat(10_000) });
     expect(task?.content.length).toBe(2_000);

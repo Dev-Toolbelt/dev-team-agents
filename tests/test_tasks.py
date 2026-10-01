@@ -416,6 +416,12 @@ class SessionTitleTest(BoardCase):
         # tool.execute.before, tool.execute.after and both session.idle payload shapes.
         self.assertEqual(source.count("session_title: await sessionTitle("), 4)
 
+    def test_the_board_view_carries_the_full_title_or_none(self):
+        self.rec(dict(opencode_todos("o1", [("a", "A", "pending")]), session_title="Notificações do app"))
+        self.rec(opencode_todos("o2", [("a", "A", "pending")]))
+        titles = {s["session_id"]: s["title"] for s in self.view()[0]["sessions"]}
+        self.assertEqual(titles, {"o1": "Notificações do app", "o2": None})
+
     def test_title_short_cuts_and_cleans(self):
         self.assertEqual(tasks.title_short("Notificações do app"), "Notificações do\u2026")
         self.assertEqual(tasks.title_short("Short one"), "Short one")
@@ -527,8 +533,8 @@ class CollectTest(BoardCase):
         session = project["sessions"][0]
         self.assertEqual(
             set(session),
-            {"session_id", "provider", "branch", "cwd", "status", "created_at", "last_activity_at", "ended_at",
-             "resume_command", "counts", "tasks"},
+            {"session_id", "title", "provider", "branch", "cwd", "status", "created_at", "last_activity_at",
+             "ended_at", "resume_command", "counts", "tasks"},
         )
         self.assertEqual(
             set(session["tasks"][0]),

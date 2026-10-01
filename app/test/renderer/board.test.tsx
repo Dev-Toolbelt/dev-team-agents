@@ -374,6 +374,21 @@ describe('Project kanban', () => {
     expect(item).toHaveTextContent('6m');
   });
 
+  it('names a session by its title in the strip and the selector, and by its short id without one', async () => {
+    const long = 'Refactor the checkout flow and its payment retries end to end';
+    const titled = boardSession({ session_id: 'titled-session', title: long, branch: 'feat/checkout' });
+    const plain = boardSession({ session_id: 'plain1234-session', title: null, branch: 'fix/cart', provider: 'codex' });
+    await openKanban(boardProject({ sessions: [titled, plain] }));
+    const rows = within(screen.getByRole('list', { name: 'Sessions' })).getAllByRole('listitem');
+    const shown = within(rows[0]!).getByText(long);
+    expect(shown).toHaveAttribute('title', long);
+    expect(shown).toHaveClass('truncate');
+    expect(rows[1]).not.toHaveTextContent('plain1234');
+    const options = within(screen.getByLabelText('Session')).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toContain('Refactor the checkout flow and its payme… · Claude Code · feat/checkout');
+    expect(options).toContain('Codex · fix/cart · plain123');
+  });
+
   it('filters to one session', async () => {
     const { user } = await openKanban();
     await user.selectOptions(screen.getByLabelText('Session'), 'a3');
