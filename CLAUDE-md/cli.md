@@ -263,7 +263,7 @@ Nothing deletes a record or a task: a task a replace-style call omits gets `remo
   a background launch stays open until its transcript hand-back at `Stop` (`tasks mark --state idle`), and a Codex
   `wait_agent` settles each agent id it reports, matched through the `agent_ref` the `spawn_agent` response gave. A result
   never starts a record. Built-ins (`review_triggers.BUILTIN_AGENTS`, one list keyed by provider) and review/QA agents are
-  no tasks. `tasks mark --state idle` settles a foreground agent task left open as `cancelled` + `interrupted: true`, and a background hand-back's `<status>` of `failed`/`killed`/`error` fails the task. `became_all_done` for an agent's end is raised only at `Stop`, never with a `failed`/`interrupted` task visible. A task's `kind`, `failed` and `interrupted` are additive in `--json`; an agent task is hidden on read (columns, counts,
+  no tasks. `tasks mark --state idle` settles a foreground agent task left open as `cancelled` + `interrupted: true`, and a background hand-back's `<status>` of `failed`/`killed`/`error` fails the task. `became_all_done` for an agent's end is raised only at `Stop`, never with a `failed`/`interrupted` task visible. A task's `kind`, `failed`, `interrupted` and `worktree` (`{path, branch}` of the linked worktree it was started in, else null) are additive in `--json`; an agent task is hidden on read (columns, counts,
   `all_done`) when its owner also keeps `Step N:` plan tasks.
 - `sessions_active` counts sessions whose status is not `ended` (active **or** idle).
 - `tasks watch` is excluded from the bulk contract sweep and pinned by `tests/test_tasks.py`.
