@@ -319,16 +319,16 @@ class UpgradeTest(StoreTestCase):
         after = sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
         self.assertEqual(before, after)
         self.assertEqual(preview["from_layout"], 1)
-        self.assertEqual(preview["files"], 5)
-        self.assertEqual(
-            preview["machine_local"], [".notifier-state", "credentials.local.json", "state.json"]
-        )
+        # ADR-0024: credentials.local.json is relocated to the root, never inventoried
+        # for the store, so 4 of the 5 files are transferable.
+        self.assertEqual(preview["files"], 4)
+        self.assertEqual(preview["machine_local"], [".notifier-state", "state.json"])
 
     def test_apply_copies_verifies_and_leaves_the_project_clean(self):
         root, pid = self._v2_bound()
         result = upgrade.apply(root)
 
-        self.assertEqual(result["copied"], 5)
+        self.assertEqual(result["copied"], 4)
         self.assertEqual(project.layout(root), project.CURRENT_LAYOUT)
         self.assertFalse(project.legacy_memory_dir(root).exists())
         # Two pointers, not one: layout 2 splits a project's own state into a
@@ -336,7 +336,7 @@ class UpgradeTest(StoreTestCase):
         # and the upgrade writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
+            ["credentials.local.json", "memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
         )
 
         destination = Path(result["destination"])
@@ -351,7 +351,9 @@ class UpgradeTest(StoreTestCase):
         state_destination = Path(result["state_destination"])
         self.assertEqual(jsonio.read_json(state_destination / "state.json")["session_id"], 42)
         self.assertTrue((state_destination / ".notifier-state").is_file())
-        self.assertTrue((state_destination / "credentials.local.json").is_file())
+        # ADR-0024: the credentials file stays in the project, in neither store subtree.
+        self.assertFalse((state_destination / "credentials.local.json").exists())
+        self.assertTrue((root / project.PROJECT_DIR / "credentials.local.json").is_file())
         for machine_local in ("state.json", ".notifier-state", "credentials.local.json"):
             self.assertFalse((destination / machine_local).exists(), machine_local)
 

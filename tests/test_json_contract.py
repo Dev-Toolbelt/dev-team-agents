@@ -641,7 +641,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "path_exists",
             "preferences",
         },
-        "doctor": {"status", "findings", "actions"},
+        "doctor": {"status", "findings", "actions", "credentials_local"},
         "bind": {
             "project_id",
             "path",
@@ -702,6 +702,12 @@ class AppFacingKeySetContractTest(StoreTestCase):
         "cred list": {"project_id", "credentials", "count"},
         "cred list.record": {"key", "purpose", "source", "ref", "scope", "layer"},
         "cred backends": {"available", "default", "probed"},
+        # ADR-0024: the desktop app's only window onto credentials.local.json. All three
+        # leaves return the same document; `error` is null or {message, line, column}.
+        "cred local show": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
+        "cred local init": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
+        "cred local patch": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
+        "cred local error": {"message", "line", "column"},
         # `problems` is unconditional. This pin caught it appearing only on the
         # findings branch, which made the payload's shape depend on the data — a
         # client doing `payload.problems.length` would have worked until the day
@@ -773,6 +779,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "quarantined",
             "quarantine_dir",
             "retired_links",
+            "credentials_local",
             "git_tracked",
             "git_tracked_artifacts",
             "untracked",
@@ -1178,6 +1185,33 @@ class AppFacingKeySetContractTest(StoreTestCase):
 
         payload = self._run_ok("integration", "disconnect", "github", "--path", str(self.project_root), "--json")
         self._assert_exact_keys("integration disconnect", payload, self.EXPECTED["integration disconnect"])
+
+    def test_cred_local(self):
+        # No `_assert_no_secret_like_keys` here: it inspects top-level payload keys, and
+        # these payloads carry the secret *names* only inside `data`, as redaction markers.
+        shown = self._run_ok("cred", "local", "show", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("cred local show", shown, self.EXPECTED["cred local show"])
+        self.assertFalse(shown["exists"])
+
+        created = self._run_ok("cred", "local", "init", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("cred local init", created, self.EXPECTED["cred local init"])
+        self.assertTrue(created["valid"])
+
+        ops = json.dumps([{"op": "set", "pointer": "/app/staging/password", "value": "s3cr3t-value"}])
+        code, out, err = self.run_cli(
+            "cred", "local", "patch", "--expect-hash", created["hash"],
+            "--path", str(self.project_root), "--json", input_text=ops,
+        )
+        self.assertEqual(code, 0, err)
+        patched = json.loads(out)
+        self._assert_exact_keys("cred local patch", patched, self.EXPECTED["cred local patch"])
+        self.assertNotIn("s3cr3t-value", json.dumps(patched))
+
+        # An invalid file is data for `show` (exit 0), with the error shape pinned.
+        (self.project_root / ".dev-team-agents" / "credentials.local.json").write_text("{ x")
+        broken = self._run_ok("cred", "local", "show", "--path", str(self.project_root), "--json")
+        self.assertFalse(broken["valid"])
+        self._assert_record_keys("cred local error", broken["error"], self.EXPECTED["cred local error"])
 
     def test_cred_backends(self):
         # Unlike every other `cred` subcommand, `backends` takes no `--path` --

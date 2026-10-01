@@ -160,6 +160,17 @@ class BindTest(StoreTestCase):
         # The entries that are not about the legacy directory are still written.
         self.assertIn(".dev-team-agents/resolved/", entries)
 
+    def test_gitignore_block_ignores_the_local_credentials_file_on_both_layouts(self):
+        """ADR-0024: one location, ignored whichever layout the project records."""
+        root = self.new_project()
+        bind.bind(root, provider_names=["claude"])
+        entry = ".dev-team-agents/credentials.local.json"
+        for layout in (project.LAYOUT_MEMORY_IN_PROJECT, project.CURRENT_LAYOUT):
+            project.set_layout(root, layout)
+            self.assertIn(entry, bind.project_gitignore_entries(root), layout)
+        self.assertIn(entry, gitignore.read_managed_entries(root / ".gitignore"))
+        self.assertIn(entry + ".*", gitignore.read_managed_entries(root / ".gitignore"))
+
     def test_gitignore_block_ignores_the_memory_directory_on_layout_1(self):
         """The other direction, so the fix above cannot become "never write them": while a
         project's memory is still inside it, the directory line and the negation that keeps

@@ -391,6 +391,67 @@ switch (command) {
     break;
   }
 
+  // ADR-0024. `patch` reads its ops from stdin and reports each pointer back in `unknown_paths`, so a test
+  // can see that stdin (not argv) carried them. A hash of 64 `f` is the exit-4 conflict, 64 `e` is a
+  // refusal whose message echoes the first op's value, to prove the app redacts it.
+  case 'cred': {
+    const view = (extra = {}) => ({
+      ok: true,
+      path: `${PROJECT_PATH}/.dev-team-agents/credentials.local.json`,
+      exists: true,
+      valid: true,
+      error: null,
+      hash: 'a'.repeat(64),
+      data: { jira: { baseUrl: 'https://x.test', token: { secret: true, set: true } } },
+      unknown_paths: [],
+      ...extra,
+    });
+    const verb = args[2];
+    if (args[1] !== 'local') process.exit(64);
+    if (verb === 'show') {
+      emit(view());
+      process.exit(0);
+    }
+    if (verb === 'init') {
+      if (flagValue('--path') === '/repo/exists') {
+        emit({ ok: false, error: 'already exists', exit_code: 4, details: { reason: 'exists' } });
+        process.exit(4);
+      }
+      emit(view({ data: {} }));
+      process.exit(0);
+    }
+    if (verb === 'patch') {
+      const expected = flagValue('--expect-hash');
+      const ops = (() => {
+        try {
+          return JSON.parse(readFileSync(0, 'utf8'));
+        } catch {
+          return [];
+        }
+      })();
+      if (expected === 'f'.repeat(64)) {
+        emit({ ok: false, error: 'the file changed on disk', exit_code: 4, details: { reason: 'hash-conflict', expected_hash: expected, actual_hash: 'b'.repeat(64) } });
+        process.exit(4);
+      }
+      if (expected === 'd'.repeat(64)) {
+        emit({ ok: false, error: 'the credentials file is locked', exit_code: 4 });
+        process.exit(4);
+      }
+      if (expected === 'b'.repeat(64)) {
+        process.stdout.write('written, but not JSON\n');
+        process.exit(0);
+      }
+      if (expected === 'e'.repeat(64)) {
+        emit({ ok: false, error: `cannot set ${JSON.stringify(ops[0]?.value)}`, exit_code: 3 });
+        process.exit(3);
+      }
+      emit(view({ hash: 'c'.repeat(64), unknown_paths: ops.map((entry) => entry.pointer) }));
+      process.exit(0);
+    }
+    process.exit(64);
+    break;
+  }
+
   case 'skills': {
     const verb = args[1];
     const SKILL = (name, root, extra = {}) => ({

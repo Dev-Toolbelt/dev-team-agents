@@ -606,6 +606,8 @@ describe('buildInfo reports write actions honestly', () => {
     expect([...info.mutatingCommandsRun].sort()).toEqual(
       [
         'bind',
+        'cred local init',
+        'cred local patch',
         'doctor',
         'integration config set',
         'integration config unset',
@@ -656,6 +658,8 @@ describe('environment withholds every gated command when the declaration could n
       expect([...report.withheld.map((w) => w.command)].sort()).toEqual(
         [
           'bind',
+          'cred local init',
+          'cred local patch',
           'doctor',
           'integration config set',
           'integration config unset',
@@ -1246,6 +1250,151 @@ describe('migrate holds the bind provenance rule', () => {
     };
     expect(pinned.kind).toBe('refused');
     expect(pinned.message).toContain('pin');
+  });
+});
+
+// ── local credentials file (ADR-0024) ────────────────────────────────────────────────────
+
+describe('the local credentials file is three named operations', () => {
+  type Failure = {
+    readonly ok: false;
+    readonly kind: string;
+    readonly message: string;
+    readonly reason?: string;
+    readonly durationMs: number;
+    readonly command: string;
+  };
+  const HASH = 'a'.repeat(64);
+  const OPS = [
+    { op: 'set', pointer: '/jira/baseUrl', value: 'https://y.test' },
+    { op: 'unset', pointer: '/jira/token' },
+  ];
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('shows and inits through the project id, never a renderer path', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const shown = (await handlers.get(CHANNELS.credentialsLocalShow)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.CredentialsLocalView>;
+    expect(shown.command).toContain('cred local show --path /repo/project-1 --json');
+    if (!shown.ok) throw new Error(shown.message);
+    expect(shown.data.hash).toBe(HASH);
+    expect(shown.data.data).toEqual({ jira: { baseUrl: 'https://x.test', token: { secret: true, set: true } } });
+
+    const init = (await handlers.get(CHANNELS.credentialsLocalInit)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.CredentialsLocalView>;
+    expect(init.command).toContain('cred local init --path /repo/project-1 --json');
+    expect(init.ok).toBe(true);
+
+    for (const channel of [CHANNELS.credentialsLocalShow, CHANNELS.credentialsLocalInit]) {
+      expect(((await handlers.get(channel)?.(TRUSTED, 'nope')) as Failure).kind).toBe('refused');
+      expect(((await handlers.get(channel)?.(TRUSTED, 7)) as Failure).durationMs).toBe(0);
+    }
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('sends the ops over stdin and the hash as a flag, never the ops in argv', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const patched = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', HASH, OPS)) as ApiModule.OperationResult<ApiModule.CredentialsLocalView>;
+    expect(patched.command).toContain(`cred local patch --path /repo/project-1 --expect-hash ${HASH} --json`);
+    expect(patched.command).not.toContain('https://y.test');
+    expect(patched.command).not.toContain('/jira/baseUrl');
+    if (!patched.ok) throw new Error(patched.message);
+    // The fixture reads the pointers back from stdin.
+    expect(patched.data.unknown_paths).toEqual(['/jira/baseUrl', '/jira/token']);
+    expect(patched.data.hash).toBe('c'.repeat(64));
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('names a hash conflict and an init-when-exists so the UI can say reload', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const conflict = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', 'f'.repeat(64), OPS)) as Failure;
+    expect(conflict.ok).toBe(false);
+    expect(conflict.kind).toBe('conflict');
+    expect(conflict.reason).toBe('hash-conflict');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('does not call a busy-lock conflict a hash conflict, and flags an unreadable answer after exit 0', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const busy = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', 'd'.repeat(64), OPS)) as Failure;
+    expect(busy.kind).toBe('conflict');
+    expect(busy.reason).toBeUndefined();
+
+    const unreadable = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', 'b'.repeat(64), OPS)) as Failure;
+    expect(unreadable.ok).toBe(false);
+    expect(unreadable.kind).toBe('contract-breach');
+    expect(unreadable.reason).toBe('saved-unreadable');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses ops that cannot be serialized', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const result = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', HASH, [
+      { op: 'set', pointer: '/a', value: 10n },
+    ])) as Failure;
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('refused');
+    expect(result.durationMs).toBe(0);
+  });
+
+  it('exposes the exit-4 reason constants the renderer matches on', async () => {
+    const api = await import('../src/shared/api.js');
+    expect(api.CREDENTIALS_HASH_CONFLICT).toBe('hash-conflict');
+    expect(api.CREDENTIALS_ALREADY_EXISTS).toBe('exists');
+    expect(api.CREDENTIALS_SAVED_UNREADABLE).toBe('saved-unreadable');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('redacts a secret value from an error the CLI echoes back', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const secret = 'ghp_super_secret_value';
+    const failed = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', 'e'.repeat(64), [
+      { op: 'set', pointer: '/jira/token', value: secret },
+    ])) as Failure;
+    expect(failed.ok).toBe(false);
+    expect(JSON.stringify(failed)).not.toContain(secret);
+    expect(failed.message).toContain('[redacted]');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('redacts a password inside an appended database row', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const secret = 'db_row_secret_value';
+    const failed = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, 'proj-1', 'e'.repeat(64), [
+      { op: 'set', pointer: '/devops/staging/database/-', value: { type: 'pg', password: secret } },
+    ])) as Failure;
+    expect(failed.ok).toBe(false);
+    expect(JSON.stringify(failed)).not.toContain(secret);
+  });
+
+  it('refuses malformed patch arguments before anything is spawned', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const cases: readonly (readonly unknown[])[] = [
+      [9, HASH, OPS],
+      ['proj-1', 'nothex', OPS],
+      ['proj-1', HASH.toUpperCase(), OPS],
+      ['proj-1', '--expect-hash', OPS],
+      ['proj-1', HASH, 'not an array'],
+      ['proj-1', HASH, []],
+      ['proj-1', HASH, [null]],
+      ['proj-1', HASH, [{ op: 'replace', pointer: '/a', value: 1 }]],
+      ['proj-1', HASH, [{ op: 'set', pointer: 'a', value: 1 }]],
+      ['proj-1', HASH, [{ op: 'set', pointer: '/a' }]],
+      ['proj-1', HASH, [{ op: 'unset', pointer: '/a', value: 1 }]],
+      ['proj-1', HASH, [{ op: 'set', pointer: 5, value: 1 }]],
+      ['proj-1', HASH, Array.from({ length: 65 }, () => ({ op: 'unset', pointer: '/a' }))],
+    ];
+    for (const args of cases) {
+      const result = (await handlers.get(CHANNELS.credentialsLocalPatch)?.(TRUSTED, ...args)) as Failure;
+      expect(result.ok, JSON.stringify(args)).toBe(false);
+      expect(result.kind, JSON.stringify(args)).toBe('refused');
+      expect(result.durationMs, JSON.stringify(args)).toBe(0);
+    }
   });
 });
 

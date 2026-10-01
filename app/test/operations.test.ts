@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALLOWED_COMMANDS,
+  secretValuesOf,
   asIntegrationList,
   asIntegrationTestReport,
   integrationConfigSet,
@@ -189,6 +190,9 @@ describe('what this slice is allowed to run', () => {
       'integration config set',
       'integration config unset',
       'integration test',
+      // ADR-0024: the local credentials file's two writes; `cred local show` is read-only.
+      'cred local init',
+      'cred local patch',
       // Acknowledging a notification writes that project's seen marks — admitted as a
       // write rather than dressed up as a read.
       'notifications ack',
@@ -227,7 +231,21 @@ describe('what this slice is allowed to run', () => {
     // app's memory, its logs or its renderer. The app shows references only.
     const flat = ALLOWED_COMMANDS.map((command) => command.join(' '));
     expect(flat).not.toContain('cred get');
-    expect(flat.some((command) => command.startsWith('cred'))).toBe(false);
+    // ADR-0024 § 5: the allowlist widens to exactly the local-file leaves, nothing else.
+    expect(flat.filter((command) => command.startsWith('cred')).sort()).toEqual([
+      'cred local init',
+      'cred local patch',
+      'cred local show',
+    ]);
+  });
+
+  it('classifies `cred local show` read-only and init/patch gated, patch needing a hash and no value flags', () => {
+    expect(READ_ONLY_COMMANDS.map((c) => c.join(' '))).toContain('cred local show');
+    expect(GATED_COMMANDS.map((c) => c.join(' '))).toEqual(expect.arrayContaining(['cred local init', 'cred local patch']));
+    expect(argvProblem(['cred', 'local', 'patch', '--path', '/p', '--expect-hash', 'a'.repeat(64)])).toBeNull();
+    expect(argvProblem(['cred', 'local', 'patch', '--path', '/p', '--ops', '[]'])).not.toBeNull();
+    expect(argvProblem(['cred', 'local', 'show', 'extra'])).not.toBeNull();
+    expect(argvProblem(['cred', 'local'])).not.toBeNull();
   });
 
   it('keeps COMMAND_SHAPES and ALLOWED_COMMANDS the same set, so neither can drift', () => {
@@ -1223,5 +1241,29 @@ describe.skipIf(skipWithoutShebang)('the integration operations against the fixt
     const resources = await integrationResources(context, '/p', 'demo', 'repos');
     if (!resources.ok) throw new Error(resources.message);
     expect(resources.data).toEqual({ items: [{ value: 'o/r', label: 'o/r' }], truncated: false });
+  });
+});
+
+describe('secretValuesOf — what a credentials patch redacts', () => {
+  it('collects a value set at a secret-named pointer', () => {
+    expect(secretValuesOf([{ op: 'set', pointer: '/app/staging/password', value: 'p4ssword' }])).toEqual(['p4ssword']);
+  });
+
+  it('collects every string inside an appended database row, whatever its key', () => {
+    const found = secretValuesOf([
+      { op: 'set', pointer: '/devops/staging/database/-', value: { type: 'pg', host: 'db.test', password: 'row-secret' } },
+    ]);
+    expect(found.sort()).toEqual(['db.test', 'pg', 'row-secret']);
+  });
+
+  it('collects strings at any depth and in arrays, including keys no list names as secret', () => {
+    const found = secretValuesOf([
+      { op: 'set', pointer: '/app/staging', value: { dbPassphrase: 'created-secret', nested: [{ registryAuth: 'k-12345' }], port: 5432 } },
+    ]);
+    expect(found.sort()).toEqual(['created-secret', 'k-12345']);
+  });
+
+  it('ignores unset ops and empty strings', () => {
+    expect(secretValuesOf([{ op: 'unset', pointer: '/a/password' }, { op: 'set', pointer: '/a/host', value: '' }])).toEqual([]);
   });
 });

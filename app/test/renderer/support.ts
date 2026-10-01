@@ -37,6 +37,7 @@ import type {
   MigrationReport,
   UpgradePlan,
   UpgradeReport,
+  CredentialsLocalView,
 } from '../../src/shared/api.js';
 
 /** A successful `OperationResult`, `notice` omitted unless given — matches the real shape. */
@@ -416,6 +417,9 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     updateProjectPreferences: vi.fn((_projectId: string, changes: readonly PreferenceChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
+    credentialsLocalShow: vi.fn(() => Promise.resolve(ok(credentialsView()))),
+    credentialsLocalInit: vi.fn(() => Promise.resolve(ok(credentialsView()))),
+    credentialsLocalPatch: vi.fn(() => Promise.resolve(ok(credentialsView()))),
     projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList()))),
     setPluginEnabled: vi.fn((_projectId: string, name: string, enabled: boolean) =>
       Promise.resolve(ok({ plugin: pluginView({ name, enabled }), changed: true, seeded: false })),
@@ -506,4 +510,30 @@ export function deferred<T>(): {
     reject = rej;
   });
   return { promise, resolve, reject };
+}
+
+export function credentialsView(overrides: Partial<CredentialsLocalView> = {}): CredentialsLocalView {
+  const environment = {
+    ssh: { user: '', host: '', privateKeyPath: '', path: '' },
+    database: [{ type: '', host: '', port: '', database: '', username: '', password: { secret: true, set: false } }],
+  };
+  return {
+    path: '/repo/project-1/.dev-team-agents/credentials.local.json',
+    exists: true,
+    valid: true,
+    error: null,
+    hash: 'hash-1',
+    data: {
+      work_feedback_active: true,
+      work_feedback_interval_minutes: 5,
+      devops: { agents: ['devops-specialist'], staging: environment, production: { ...environment, docker: {} } },
+      app: {
+        agents: ['frontend-developer'],
+        staging: { appUrl: '', username: '', password: { secret: true, set: false } },
+        production: { appUrl: '', username: '', password: { secret: true, set: false } },
+      },
+    },
+    unknown_paths: [],
+    ...overrides,
+  };
 }

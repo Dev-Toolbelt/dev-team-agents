@@ -265,6 +265,7 @@ class IncompatibleDeclarationRefusesEveryMutatingCommandTest(ClientGateTestCase)
             ("integration", "config", "unset"): ("probe", "key"),
             ("cred", "set"): ("probe-key", "--purpose", "gate probe"),
             ("cred", "unset"): ("probe-key",),
+            ("cred", "local", "patch"): ("--expect-hash", "probe"),
             ("cred", "import"): (str(self.tmp / "no-such-credentials.local.json"),),
             ("import",): (str(self.tmp / "no-such-archive.tar.gz"),),
             ("update",): ("--ref", "not-a-version"),

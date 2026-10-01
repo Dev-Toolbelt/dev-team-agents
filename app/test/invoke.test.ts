@@ -429,5 +429,8 @@ describe('secret stdin', () => {
     expect(redactSecret('abc', undefined)).toBe('abc');
     expect(redactSecret('abc', '')).toBe('abc');
     expect(redactSecret('a SECRET b SECRET', 'SECRET')).toBe('a [redacted] b [redacted]');
+    // Too short to redact without mangling the text around it.
+    expect(redactSecret('{"a":"ab","b":"ab"}', 'ab')).toBe('{"a":"ab","b":"ab"}');
+    expect(redactSecret('x abcd y', 'abcd')).toBe('x [redacted] y');
   });
 });
