@@ -316,12 +316,49 @@ describe('Board — accessibility and overflow', () => {
   it('caps a column at the visible height so its heading stays on screen and its cards scroll', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
     const row = screen.getByRole('group', { name: 'Kanban columns' });
-    // No scrolling ancestor here, so the window's height less the row's bottom padding.
-    expect(row.style.getPropertyValue('--kanban-column-max')).toBe(`${window.innerHeight - 8}px`);
+    // No scrolling ancestor and no stylesheet here: the window's height.
+    expect(row.style.getPropertyValue('--kanban-column-max')).toBe(`${window.innerHeight}px`);
     const todo = within(row).getByRole('region', { name: /^To do/ });
     const list = within(todo).getByRole('list');
     expect(list).not.toContainElement(todo.querySelector('h4'));
     expect(list).toHaveClass('relative');
+  });
+
+  it('caps a column at the scroller it sits in, less that scroller\'s padding and the row\'s', async () => {
+    // The app's <main>: the nearest ancestor that scrolls vertically.
+    document.body.style.overflowY = 'auto';
+    document.body.style.paddingTop = '20px';
+    document.body.style.paddingBottom = '20px';
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this === document.body ? 700 : 0;
+    });
+    try {
+      await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+      const row = screen.getByRole('group', { name: 'Kanban columns' });
+      expect(row.style.getPropertyValue('--kanban-column-max')).toBe('660px');
+    } finally {
+      height.mockRestore();
+      document.body.removeAttribute('style');
+    }
+  });
+
+  it('makes a column\'s card list a named tab stop only while its cards overflow it', async () => {
+    const tall = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.tagName === 'UL' ? 900 : 0;
+    });
+    const capped = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.tagName === 'UL' ? 600 : 0;
+    });
+    try {
+      await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+      expect(screen.getByRole('list', { name: 'To do tasks' })).toHaveAttribute('tabindex', '0');
+    } finally {
+      tall.mockRestore();
+      capped.mockRestore();
+    }
+    cleanup();
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+    expect(screen.getByRole('list', { name: 'To do tasks' })).not.toHaveAttribute('tabindex');
   });
 
   it('shows no column row when the findings filter leaves nothing', async () => {
@@ -340,6 +377,10 @@ describe('Board — accessibility and overflow', () => {
     push(boardFeed({ projects: [boardProject({ sessions: [boardSession({ tasks: [plain] })] })] }));
     expect(await screen.findByText('No tasks with findings')).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Kanban columns' })).not.toBeInTheDocument();
+    // New findings bring the row back, measured again on its new mount.
+    push(boardFeed({ projects: [boardProject({ sessions: [boardSession({ tasks: [withFindings, plain] })] })] }));
+    const row = await screen.findByRole('group', { name: 'Kanban columns' });
+    expect(row.style.getPropertyValue('--kanban-column-max')).toBe(`${window.innerHeight}px`);
   });
 
   it('lets an unbroken task text wrap instead of overflowing the column', async () => {
