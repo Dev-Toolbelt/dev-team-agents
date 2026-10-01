@@ -3,6 +3,7 @@
 **Date:** 2026-09-27  
 **Status:** Accepted  
 **Deciders:** Repository owner, software-architect
+**Amended by:** ADR-0024 (`credentials.local.json` is machine-local by classification but lives in the project tree, not the store)
 
 ## Context
 

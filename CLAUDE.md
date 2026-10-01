@@ -363,7 +363,7 @@ When a rule or script path references "helpers", state which of the two it means
 
 `skills/shared/project-context/SKILL.md` and `skills/shared/setup-health-check/references/checks-list.md` **read the canonical file** instead of mirroring it — keep them that way.
 
-**Defaults apply only to a file that does not exist.** `preferences.json` and `credentials.local.json` are both created when absent and never rewritten: install merges with existing values winning, and the session-start backfill only adds missing keys. **`telemetry` and `auto_update` are `CONSENT_KEYS`** — both default to `true` in a fresh file, but are backfilled as `false` into a pre-existing one, because that file's owner never saw a prompt for a field added after they installed. The lists live in `scripts/install.sh` and `scripts/hooks/session-start.sh`; keep them in sync.
+**Defaults apply only to a file that does not exist.** `preferences.json` is created when absent and never rewritten: install merges with existing values winning, and the session-start backfill only adds missing keys. `credentials.local.json` is not created implicitly; see [Credentials Reference](docs/credentials.local.md) for creation methods. **`telemetry` and `auto_update` are `CONSENT_KEYS`** — both default to `true` in a fresh file, but are backfilled as `false` into a pre-existing one, because that file's owner never saw a prompt for a field added after they installed. The lists live in `scripts/install.sh` and `scripts/hooks/session-start.sh`; keep them in sync.
 
 ### Machine-Local Records
 
@@ -376,7 +376,7 @@ When a rule or script path references "helpers", state which of the two it means
 | `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
 | `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
 
-The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`, `credentials.local.json`** (values, not references), **`audit.log`**, **`notifications.jsonl`** and **`notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), **`integrations-status.json`** (the last GitHub/Jira connection test), plus every dot-prefixed name (cache, ETag, marker file). When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`** (all in the store's machine-local folder), **`audit.log`, `notifications.jsonl`, `notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), **`integrations-status.json`** (the last GitHub/Jira connection test), plus every dot-prefixed name (cache, ETag, marker file). **`credentials.local.json`** is a special case: machine-local by classification (ADR-0024) but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store, and is ignored by the bind-managed `.gitignore` block. When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
 
 ---
 

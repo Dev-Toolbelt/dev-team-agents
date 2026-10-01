@@ -3,6 +3,7 @@
 **Date:** 2026-09-28
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
+**Amended by:** ADR-0024 (app runs `devteam cred local` commands for credentials editing)
 
 ## Context
 

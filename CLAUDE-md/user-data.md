@@ -11,7 +11,7 @@
 
 | Pointer | Resolves to | Holds |
 |---------|-------------|-------|
-| `.dev-team-agents/state-dir` | `data/machines/<machine-id>/projects/<project_id>/` | Machine-local state: `state.json`, dot-markers, caches, `telemetry-queue.json`, `credentials.local.json`, `audit.log`, `notifications.jsonl`, `notifications-seen.json`, `task-board/` |
+| `.dev-team-agents/state-dir` | `data/machines/<machine-id>/projects/<project_id>/` | Machine-local state: `state.json`, dot-markers, caches, `telemetry-queue.json`, `audit.log`, `notifications.jsonl`, `notifications-seen.json`, `task-board/` |
 | `.dev-team-agents/memory-dir` | `data/projects/<project_id>/` | Portable memory: `preferences.json`, `session-summary.md` |
 
 On layout 1, both pointers resolve to `.dev-team-agents/user-data/` for backward compatibility.
@@ -34,7 +34,6 @@ Machine-local (migrated to `data/machines/<machine-id>/projects/<project_id>/` o
 - `.notifier-state` — notifier turn counter and tip-shown flag (**gitignored** by installer)
 - `.context-cache.json` — short-lived current-context detection cache, TTL 300s (**gitignored** by installer)
 - `telemetry-queue.json` — anonymous telemetry buffer; contains the installation's anonymous ID, last flush timestamp, and pending events. Only written when `preferences.json` carries `"telemetry": true` — the gate in `scripts/lib/telemetry-guard.sh` fails closed (**gitignored** by installer)
-- `credentials.local.json` — v2 plaintext credentials file (remote environment credentials: SSH, database, app URLs, tokens). Created by installer with empty defaults. Migrated to the reference + secret-store model via `devteam cred import`. (**gitignored** by installer — **NEVER commit this file**)
 - `audit.log` — append-only JSONL audit trail of credential reads (who, when, which key — never the value). Machine-local because two machines appending to one portable log would need merge semantics this design does not have (ADR-0010)
 - `notifications.jsonl` — the notification queue: one JSON line per notice a hook raised through `scripts/hooks/lib/notify.sh`, capped at 200 lines by that writer. Read by `devteam notifications list|watch`, shown by the desktop app (ADR-0017). Machine-local: a context warning from this machine's session means nothing on another
 - `notifications-seen.json` — which of those this machine's app has shown; written only by `devteam notifications ack`, under a lock. Separate from the queue so the CLI never rewrites a file a hook is appending to
@@ -48,7 +47,7 @@ Other directories under `.claude/` created by agents:
 
 **Rule:** any file that must survive an update must live in `.dev-team-agents/user-data/`, not inside `.dev-team-agents/`. Never store user config or state inside the package directory. Plugin settings are the exception: they live in `.dev-team-agents/plugin-settings/` and are committed (see § Plugin settings below).
 
-**Under v3 layout 2 this directory's contents are split three ways** (ADR-0013). `devteam upgrade` copies `preferences.json` and `session-summary.md` into the portable subtree (`data/projects/<project_id>/`), and `state.json`, every dot-marker, `telemetry-queue.json` and `credentials.local.json` into the machine subtree (`data/machines/<machine-id>/projects/<project_id>/`). **No legacy graphify.json migration happens on upgrade** — instead, `bind` and `sync` detect the old location and move it to the new one (ADR-0019): they read `.dev-team-agents/user-data/graphify.json` if the new settings file does not exist, create `.dev-team-agents/plugin-settings/graphify.json` with the content, and unlink the old file. The new file is written first, then the old one is removed, so the content is never held in one place only.
+**Under v3 layout 2 this directory's contents are split two ways** (ADR-0013). `devteam upgrade` copies `preferences.json` and `session-summary.md` into the portable subtree (`data/projects/<project_id>/`), and `state.json`, every dot-marker, and `telemetry-queue.json` into the machine subtree (`data/machines/<machine-id>/projects/<project_id>/`). `credentials.local.json` stays in the project tree at `.dev-team-agents/credentials.local.json` (ADR-0024); legacy copies are relocated there byte-for-byte by `doctor`, `sync`, `migrate`, and `upgrade`. **No legacy graphify.json migration happens on upgrade** — instead, `bind` and `sync` detect the old location and move it to the new one (ADR-0019): they read `.dev-team-agents/user-data/graphify.json` if the new settings file does not exist, create `.dev-team-agents/plugin-settings/graphify.json` with the content, and unlink the old file. The new file is written first, then the old one is removed, so the content is never held in one place only.
 
 ### Integration settings
 
@@ -77,7 +76,7 @@ The rule for adding a file therefore has three answers, not two, and `scripts/li
 | something **this machine observed or built** | machine subtree | add it to `paths.MACHINE_LOCAL_RECORDS`, or give it a leading dot, which classifies it machine-local as a class |
 | something the **user authored** | portable subtree | nothing — portable is the default |
 
-A file that is none of the three is a sign it does not belong in memory at all. `credentials.local.json` is machine-local because it holds values; the references that replace it (ADR-0010) are portable precisely because they do not.
+A file that is none of the three is a sign it does not belong in memory at all. `credentials.local.json` is machine-local by classification because it holds values (ADR-0024), but its location is the project tree (`.dev-team-agents/credentials.local.json`), not the portable or machine-local store subtrees. The references that replace it via `devteam cred import` (ADR-0010) are portable precisely because they do not hold values.
 
 **Package exclusions:** The following are stripped from the extracted tarball before it is placed in the project:
 

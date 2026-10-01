@@ -62,11 +62,10 @@ data/machines/<machine-id>/projects/<id>/…         MACHINE-LOCAL — bind-mani
 built.** `paths.is_machine_local_record(name)` is the single answer to which side a per-project
 record belongs on — dot-prefixed names are machine-local as a class, and so are `state.json`,
 `bind-manifest.json`, `telemetry-queue.json`, `audit.log` (this machine's own reads, and a growing
-record that two machines appending to would need merge semantics for), the v2
-`credentials.local.json` (values, not references), and the notification queue
+record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
-machine's app has shown), and the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine). Never re-derive that rule at a call site.
+machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -184,6 +183,7 @@ mode.
 | `devteam plugin list \| show <name> \| enable <name> [--force] \| disable <name> \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| run <name> <action>` | Manage plugins; see § Plugins below |
 | `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind>` | Account-level GitHub and Jira connections; see § Integrations below |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
+| `devteam cred local show \| init \| patch --expect-hash <H>` | Manage `.dev-team-agents/credentials.local.json` for agents and the app; see § Local Credentials File below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command** |
 | `devteam export [--to <path>] [--all]` / `devteam import <archive> [--force]` | Move the data store to another machine; portable by default, `--all` includes this machine's registry and manifests |
 | `devteam uninstall [--purge --yes]` | Remove the core; `--purge` also deletes the data store and needs `--yes` |
@@ -656,6 +656,26 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 **Scope field:** `--scope` restricts which agents can read the value via `devteam cred get --agent <name>`. Agents not listed get a clear error; comma-separated, no spaces. The scope is **hygiene and auditability, not a sandbox** — an agent with Bash can read anything the user can read. Its value is auditing read paths and reporting scope violations in the audit log.
 
 **`credentials.local.json` migration:** The v2 plaintext file is opt-in, never scanned for. `devteam cred import /path/to/credentials.local.json` reads it, migrates values to the secret store, writes references to the reference layer, and moves the original file to quarantine — a one-way, confirmed operation. Non-secret fields (TTL thresholds, notification prefs) are kept as plain values in the reference layer.
+
+## Local Credentials File
+
+`.dev-team-agents/credentials.local.json` is a plaintext file for staging and production access (see [docs/credentials.local.md](../docs/credentials.local.md) for the schema and [ADR-0024](../docs/development/adrs/0024-the-local-credentials-file-lives-at-the-dev-team-agents-root-and-the-app-edits-it-through-the-cli.md)). One file, shared by every linked worktree of the checkout: developers edit it by hand, agents read it with the Read tool (they get its path from `devteam cred local show`), and the desktop app edits it only through `devteam cred local`.
+
+### Commands
+
+| Command | What it does | Output (success, `ok: true`) |
+|---------|------|-------|
+| `devteam cred local show` | Read the file; never prints a secret value | `{path, exists, valid, error, hash, data, unknown_paths}` |
+| `devteam cred local init` | Write the canonical template; refuses (exit 4) if the file exists | same as `show` |
+| `devteam cred local patch --expect-hash <H>` | Apply JSON Pointer ops from stdin atomically; refuses (exit 4) on hash conflict | same as `show` |
+
+**Redaction is default-deny** (ADR-0024 § 5): `data` keeps a value only for the two `work_feedback_*` keys, `agents` string arrays and the leaves named in `credentials_local.SAFE_LEAF_NAMES`, and hides even those when the value looks secret (URL userinfo, a URL query or fragment, pasted key material). Everything else becomes `{"secret": true, "set": <boolean>}`. On `patch`, every value travels on stdin; argv never carries one.
+
+**Hash conflict:** `hash` is an HMAC of the file's bytes keyed with a machine-local key, not a plain digest. If it differs from `--expect-hash`, no change is made and exit 4 is returned with `details.reason: "hash-conflict"`; `init` on an existing file returns exit 4 with `details.reason: "exists"`.
+
+**Relocation:** `doctor`, `sync`, `migrate --apply` and `upgrade --apply` move a legacy copy (`user-data/`, or the store copy of a project the registry binds here) to the root byte-for-byte, after making sure git ignores the target, and report it in an additive `credentials_local` key `{path, changed, moved, quarantined, conflicts}`. Symlinks are reported, never followed; a file at the project's own root is never scanned for; `upgrade` refuses while two different copies exist.
+
+**The app's allowlist:** `devteam cred local show`, `devteam cred local init`, and `devteam cred local patch` are the only `cred` commands the desktop app is allowed to run. `devteam cred get` stays forbidden, as it prints secret values.
 
 ## Integrations
 

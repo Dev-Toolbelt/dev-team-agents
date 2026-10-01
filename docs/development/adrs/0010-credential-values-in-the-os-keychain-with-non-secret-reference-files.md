@@ -3,6 +3,7 @@
 **Date:** 2026-09-27
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
+**Amended by:** ADR-0024 (the plaintext file location and creation flow)
 
 ## Context
 

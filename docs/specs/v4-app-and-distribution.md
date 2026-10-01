@@ -533,9 +533,11 @@ installs before anyone merges**
     the defect is now the regression that asserts the notice survives — plus a second one asserting the
     table stays mounted mid-reload and the refresh is announced.
 - And no bind rule, preference merge or credential resolution exists in the app's own code
-  - **[MET] for credential resolution, by non-invocation.** `app/test/operations.test.ts` · *never runs
-    `cred get` — a value must not enter this app* asserts no allowed command so much as **starts**
-    with `cred`, so no credential value can enter the process by any route the app has.
+  - **[MET] for credential resolution, by non-invocation.** `app/test/operations.test.ts` asserts the
+    only allowed `cred` commands are exactly `cred local show`, `cred local init` and
+    `cred local patch` (ADR-0024), and that `cred get` and `cred list` are refused. None of those
+    three prints a secret value: `show` redacts default-deny, and `patch` takes values on stdin
+    only. No credential value can enter the process through any command the app has.
   - **Not asserted for the other two, unchanged by this round.** No `prefs` command is wired, so no
     merge can be reached — still an absence inferred from the command list rather than a test, and
     ADR-0015's second amendment now records *why* `prefs set`/`prefs unset` stay unwired: the cascade has
@@ -704,6 +706,7 @@ installs before anyone merges**
 - **Blocks**: the desktop app (M4.3), and both publication pipelines
 
 ### Amendment Log
+- 2026-10-01 | technical-writer | ADR-0024 resolves the app's need for credentials editing: `devteam cred local {show,init,patch}` let the app read and write `.dev-team-agents/credentials.local.json` while respecting the rule that `cred get` (which prints secret values) is never called. The [MET] verdicts for credential resolution were re-annotated in place: the app runs the three `cred local` leaves and no other `cred` command.
 - 2026-09-28 | software-architect | Spec created after M4.1 and M4.2 landed, with every scenario
   marked `[MET]`, `[UNVERIFIABLE HERE]` or `[UNBUILT]` rather than written as uniform criteria. |
   Milestone M4 was split, so a single unmarked spec would have read as one delivered feature and
@@ -861,7 +864,8 @@ installs before anyone merges**
   that earns it, and each clause with no test says so. Moved to met: the invocation half of "invokes
   `devteam <command> --json`" (`invoke.test.ts` · *appends --json itself…*, plus the closed
   `ALLOWED_COMMANDS` list asserted against `compat`'s tables); credential resolution, by the app never
-  running any `cred` command at all (`operations.test.ts` · *never runs `cred get`…*); and reading the
+  running a `cred` command that resolves a value (`operations.test.ts`; since ADR-0024 the three
+  `cred local` leaves are the only `cred` commands allowed); and reading the
   `compat` block, degrading to read-only **and saying so**, which is asserted against both a fake and the
   real CLI (`handshake.test.ts`, `real-cli.test.ts` · *…refused with exit 4 on a mutating command when the
   declaration is behind*). **Explicitly not moved:** "renders the result" (no test opens a window), the

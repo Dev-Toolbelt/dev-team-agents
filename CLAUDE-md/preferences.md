@@ -30,7 +30,7 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
 }
 ```
 
-**These are the values a preferences.json gets when it does not exist yet.** They are never applied to a file that already exists: `install.sh` merges with existing values winning, and the backfill only adds absent keys. The same holds for `credentials.local.json` — created only when absent, never rewritten.
+**These are the values a preferences.json gets when it does not exist yet.** They are never applied to a file that already exists: `install.sh` merges with existing values winning, and the backfill only adds absent keys. `credentials.local.json` is not created implicitly; see [Credentials Reference](../docs/credentials.local.md) for creation methods.
 
 **Consent keys — `telemetry` and `auto_update`.** Both are `true` in the schema, which is the value a *fresh* file gets (for `telemetry`, still subject to the install prompt below). Neither is ever written as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key means "no". Both `install.sh` and the session-start backfill write `false` in that case.
 

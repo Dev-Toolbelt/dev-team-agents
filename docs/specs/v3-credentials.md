@@ -140,6 +140,9 @@ the milestone `v3-global-install.md` listed as "credentials — later milestone"
 - Then no command discovers, offers, reads or moves that file
 - And importing it requires naming its path explicitly
 - And the file is still readable at its original path afterwards
+- *Still holds under ADR-0024:* the relocation that `doctor`, `sync`, `migrate` and `upgrade` run
+  never lists the project's own root as a candidate (`tests/test_credentials_local.py` ·
+  *a file at the project's own root is never a candidate*)
 
 **Scenario: `unset` does not take the value with it**
 - Given a registered credential with a stored value
@@ -224,9 +227,11 @@ the milestone `v3-global-install.md` listed as "credentials — later milestone"
 ### Dependencies
 - **Depends on**: `v3-global-install.md` (the store, the bind, `machine-id`, quarantine, the lock and
   atomic-write helpers), ADR-0010, ADR-0013
-- **Blocks**: the desktop app, which needs a place to put the credentials it collects
+- **Blocks**: the desktop app, which needs a place to put the credentials it collects — resolved by
+  ADR-0024 (`devteam cred local {show,init,patch}`)
 
 ### Amendment Log
+- 2026-10-01 | technical-writer | Resolved the "Blocks: the desktop app" dependency: ADR-0024 introduces `devteam cred local {show,init,patch}` for the app to read and write `.dev-team-agents/credentials.local.json` without calling the forbidden `cred get` command. The never-scans scenario and the out-of-scope line about this repository's root file are unchanged: ADR-0024's relocation excludes the project root, and a test pins it.
 - 2026-09-28 | software-architect | Spec written from the M3 implementation, recording four
   decisions ADR-0010 did not cover: the audit log and the value store are machine-local (ADR-0013's
   inventory classified neither); the `age`/`sops` backend is deferred and absent from `BACKENDS`

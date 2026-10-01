@@ -1,6 +1,6 @@
 # Credentials Reference
 
-Reference for `.dev-team-agents/user-data/credentials.local.json`: what each section is for, who uses it, and how to fill it safely.
+Reference for `.dev-team-agents/credentials.local.json`: what each section is for, who uses it, how to create and edit it, and how to fill it safely.
 
 ---
 
@@ -8,7 +8,7 @@ Reference for `.dev-team-agents/user-data/credentials.local.json`: what each sec
 
 - [Summary](#summary)
 - [File Location](#file-location)
-- [Full Template](#full-template)
+- [Creating and Editing](#creating-and-editing)
 - [Top-Level Structure](#top-level-structure)
 - [DevOps Section](#devops-section)
 - [App Section](#app-section)
@@ -20,7 +20,7 @@ Reference for `.dev-team-agents/user-data/credentials.local.json`: what each sec
 
 ## Summary
 
-`credentials.local.json` is the local, gitignored credential and environment reference file created by the installer. It gives selected agents enough structured information to access staging or production systems when a task requires operational validation or deployment support.
+`credentials.local.json` is the local, gitignored credential and environment reference file. It gives selected agents enough structured information to access staging or production systems when a task requires operational validation or deployment support.
 
 It is not a secret manager. It is a local convenience file with a predictable schema.
 
@@ -29,84 +29,37 @@ It is not a secret manager. It is a local convenience file with a predictable sc
 ## File Location
 
 ```text
-.dev-team-agents/user-data/credentials.local.json
+.dev-team-agents/credentials.local.json
 ```
 
-The installer creates it on first install and sets restrictive permissions with `chmod 600`.
+The file is machine-local (never exported or committed) and ignored by the bind-managed `.gitignore` block. It lives in the main checkout's `.dev-team-agents/`; every linked git worktree shares it, and a monorepo subproject keeps its own.
 
 ---
 
-## Full Template
+## Creating and Editing
 
-```json
-{
-  "work_feedback_active": true,
-  "work_feedback_interval_minutes": 5,
-  "devops": {
-    "agents": ["software-architect", "devops-specialist", "security-specialist"],
-    "staging": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    },
-    "production": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "docker": {},
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    }
-  },
-  "app": {
-    "agents": [
-      "software-architect",
-      "backend-developer",
-      "frontend-developer",
-      "code-reviewer",
-      "backend-reviewer",
-      "frontend-reviewer",
-      "qa-specialist",
-      "security-specialist",
-      "backend-test-specialist",
-      "frontend-test-specialist"
-    ],
-    "staging": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    },
-    "production": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    }
-  }
-}
+The file does not exist by default. Create it in one of three ways:
+
+### Via the Desktop App
+
+Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the standard layout and open a form. Edit fields directly, with automatic validation and JSON error reporting.
+
+Secrets are write-only: only known non-secret fields (hosts, users, URLs, ports, paths) are ever shown, and every other value appears as set / not set, with Replace and Remove.
+
+### Via the CLI
+
+```bash
+devteam cred local init
+```
+
+Creates the file with the canonical template. Exits with error (code 4) if the file already exists.
+
+### By Hand
+
+Run `devteam cred local init` and edit the result, or write the file yourself following the structure below, then run:
+
+```bash
+chmod 600 .dev-team-agents/credentials.local.json
 ```
 
 ---

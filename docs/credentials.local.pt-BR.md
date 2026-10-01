@@ -1,6 +1,6 @@
 # Referência de Credentials
 
-Referência de `.dev-team-agents/user-data/credentials.local.json`: para que serve cada seção, quem a utiliza e como preenchê-la com segurança.
+Referência de `.dev-team-agents/credentials.local.json`: para que serve cada seção, quem a utiliza, como criar e editar o arquivo, e como preenchê-lo com segurança.
 
 ---
 
@@ -8,7 +8,7 @@ Referência de `.dev-team-agents/user-data/credentials.local.json`: para que ser
 
 - [Resumo](#resumo)
 - [Local do Arquivo](#local-do-arquivo)
-- [Template Completo](#template-completo)
+- [Criando e Editando](#criando-e-editando)
 - [Estrutura de Topo](#estrutura-de-topo)
 - [Seção DevOps](#seção-devops)
 - [Seção App](#seção-app)
@@ -20,7 +20,7 @@ Referência de `.dev-team-agents/user-data/credentials.local.json`: para que ser
 
 ## Resumo
 
-`credentials.local.json` é o arquivo local, ignorado pelo git, de credenciais e referências de ambiente criado pelo instalador. Ele dá a agentes selecionados informação estruturada suficiente para acessar staging ou produção quando uma task exige validação operacional ou suporte a deploy.
+`credentials.local.json` é o arquivo local, ignorado pelo git, de credenciais e referências de ambiente. Ele dá a agentes selecionados informação estruturada suficiente para acessar staging ou produção quando uma task exige validação operacional ou suporte a deploy.
 
 Ele não é um gerenciador de segredos. É um arquivo local de conveniência com schema previsível.
 
@@ -29,84 +29,37 @@ Ele não é um gerenciador de segredos. É um arquivo local de conveniência com
 ## Local do Arquivo
 
 ```text
-.dev-team-agents/user-data/credentials.local.json
+.dev-team-agents/credentials.local.json
 ```
 
-O instalador o cria na primeira instalação e aplica permissões restritivas com `chmod 600`.
+O arquivo é específico da máquina (nunca exportado ou commitado) e ignorado pelo bloco `.gitignore` gerenciado pelo bind. Ele fica no `.dev-team-agents/` do checkout principal; todas as worktrees do git compartilham o mesmo arquivo, e um subprojeto de monorepo tem o seu.
 
 ---
 
-## Template Completo
+## Criando e Editando
 
-```json
-{
-  "work_feedback_active": true,
-  "work_feedback_interval_minutes": 5,
-  "devops": {
-    "agents": ["software-architect", "devops-specialist", "security-specialist"],
-    "staging": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    },
-    "production": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "docker": {},
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    }
-  },
-  "app": {
-    "agents": [
-      "software-architect",
-      "backend-developer",
-      "frontend-developer",
-      "code-reviewer",
-      "backend-reviewer",
-      "frontend-reviewer",
-      "qa-specialist",
-      "security-specialist",
-      "backend-test-specialist",
-      "frontend-test-specialist"
-    ],
-    "staging": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    },
-    "production": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    }
-  }
-}
+O arquivo não existe por padrão. Crie-o de uma das três formas:
+
+### Via Aplicativo Desktop
+
+Abra a aba **Credentials** na visão do projeto. Clique em **Create file** para criar o `credentials.local.json` com o layout padrão e abrir um formulário. Edite campos diretamente, com validação automática e relatório de erros JSON.
+
+Segredos são somente escrita: só campos conhecidos e não secretos (hosts, usuários, URLs, portas, caminhos) são exibidos; qualquer outro valor aparece como definido / não definido, com Substituir e Remover.
+
+### Via CLI
+
+```bash
+devteam cred local init
+```
+
+Cria o arquivo com o template canônico. Sai com erro (código 4) se o arquivo já existe.
+
+### Manualmente
+
+Rode `devteam cred local init` e edite o resultado, ou escreva o arquivo seguindo a estrutura abaixo, e depois execute:
+
+```bash
+chmod 600 .dev-team-agents/credentials.local.json
 ```
 
 ---

@@ -100,7 +100,9 @@ devteam integration config set github repository owner/repo-name
 devteam integration config set jira project_key PROJ
 ```
 
-Ou descubra de forma interativa na aba Integrações do app desktop, ou com `devteam integration resources github repos` e `devteam integration resources jira projects`.
+Ou descubra de forma interativa na aba **Integrações** do app desktop, ou com `devteam integration resources github repos` e `devteam integration resources jira projects`.
+
+O app desktop também tem uma aba **Credentials** (Credenciais) em cada tela de projeto para criar e editar `.dev-team-agents/credentials.local.json` — ou use `devteam cred local init`, `show` e `patch` da CLI.
 
 ---
 
