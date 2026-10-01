@@ -36,6 +36,7 @@ import type {
   BoardSession,
   BoardSessionStatus,
   BoardTask,
+  BoardWorktree,
   BindMode,
   BindProvider,
   BindReport,
@@ -2244,6 +2245,8 @@ const COLUMN_FOR_STATUS: Readonly<Record<string, BoardColumn>> = {
 const SESSION_STATUSES: readonly BoardSessionStatus[] = ['active', 'idle', 'ended'];
 const MAX_TASK_TEXT = 2_000;
 const MAX_ID = 512;
+/** A worktree path from the CLI: relative to the checkout, or absolute; no real path is longer. */
+const MAX_PATH = 4_096;
 const MAX_TASKS_PER_SESSION = 2_000;
 /**
  * One shell operand exactly as python's `shlex.quote` (the CLI's own quoting) writes it: a
@@ -2351,7 +2354,17 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     kind: raw['kind'] === 'agent' ? 'agent' : 'todo',
     failed: raw['failed'] === true,
     review,
+    worktree: asBoardWorktree(raw['worktree']),
   };
+}
+
+/** Null for anything but `{path: non-empty string, branch?: string}`; text is bounded. */
+function asBoardWorktree(raw: unknown): BoardWorktree | null {
+  if (!isRecord(raw)) return null;
+  const path = boundedString(raw['path'], MAX_PATH);
+  if (path === null || path === '') return null;
+  const branch = boundedString(raw['branch'], MAX_ID);
+  return { path, branch: branch === '' ? null : branch };
 }
 
 function asBoardSession(raw: unknown): BoardSession | null {

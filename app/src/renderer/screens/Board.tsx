@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleAlert,
   Clock,
+  FolderGit2,
   Moon,
   Pause,
   RefreshCw,
@@ -23,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@/components/ui/tooltip';
 import { BackNav } from '../BackNav.js';
 import { Empty } from '../Problem.js';
 import { useOnDeactivate } from '../useOnDeactivate.js';
@@ -55,6 +57,7 @@ import {
   type BoardSession,
   type BoardSessionStatus,
   type BoardSettings,
+  type BoardWorktree,
 } from '../../shared/api.js';
 
 const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] };
@@ -457,6 +460,26 @@ function AgentBadge({ name }: { name: string | null }) {
       <Bot aria-hidden="true" />
       Agent{name === null ? '' : `: ${name}`}
     </Badge>
+  );
+}
+
+/**
+ * Shown only when the task was started in a linked worktree. A focusable mark, so the tooltip opens
+ * from the keyboard as well as on hover; its accessible name carries the same text.
+ */
+function WorktreeMark({ worktree }: { worktree: BoardWorktree }) {
+  const text = `Worktree: ${worktree.path}${worktree.branch !== null ? ` (branch ${worktree.branch})` : ''}`;
+  return (
+    <Hint content={text}>
+      <span
+        role="img"
+        tabIndex={0}
+        aria-label={text}
+        className="inline-flex items-center rounded-sm text-info focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+      >
+        <FolderGit2 className="size-3.5" aria-hidden="true" />
+      </span>
+    </Hint>
   );
 }
 
@@ -953,6 +976,7 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
             <span className="sr-only">Time in this column: </span>
             {format(inColumn)}
           </span>
+          {task.worktree !== null ? <WorktreeMark worktree={task.worktree} /> : null}
           {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
           {task.failed ? <FailedBadge /> : null}
           {task.review !== null && task.column === 'in_review' ? <ReviewBadge review={task.review} /> : null}
