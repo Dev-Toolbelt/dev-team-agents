@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import datetime
 import hashlib
+import html
 import json
 import os
 import re
@@ -923,7 +924,9 @@ def _finalize(record, window, now):
         _resolve(window, now, "unread-dismissed")
     else:
         window["fix_after"] = now
-        window["known_keys"] = [t["key"] for t in record["tasks"]]
+        # Tasks that existed when the result arrived. `now` is the hand-back's own time for a
+        # background report read at a later Stop, so a task created after it is a fix candidate.
+        window["known_keys"] = [t["key"] for t in record["tasks"] if (t.get("created_at") or 0) <= now]
     _sweep_reviews(record, now)
 
 
@@ -1477,6 +1480,13 @@ _TAG_RE = {
 #: with no such section (a Bash background task reports a ``<summary>``) carries no report.
 _RESULT_RE = re.compile(r"<result>(.*)</result>", re.DOTALL)
 
+def _result_text(section):
+    """The agent's answer as it wrote it. Claude Code HTML-escapes the ``<result>`` of a
+    notification, so its closing ``<!-- review-result: findings=N -->`` arrives as
+    ``&lt;!-- … --&gt;``; unescaped here, it is read by the same last-line rule as any report."""
+    return html.unescape(section)
+
+
 #: Task ids of the queue entries seen, kept per window so a later user entry can mirror one.
 QUEUE_IDS_KEPT = 64
 
@@ -1603,7 +1613,8 @@ def _scan_chunk(window, path):
         section = _RESULT_RE.search(text)
         reports.append({
             "id": use_id or task_id,
-            "markers": review_triggers.markers(section.group(1)) [-1:] if section else [],
+            "at": int(at),
+            "markers": review_triggers.markers(_result_text(section.group(1)))[-1:] if section else [],
             "status": _notification_status(text),
         })
     return reports, more
@@ -1629,9 +1640,17 @@ def _scan_background(rec, payload, now):
             break
         if report["id"] in window.get("consumed", []) or report["id"] not in _tokens(window)[1]:
             continue
+        last = window.get("last_at")
+        if report["at"] - (window["opened_at"] if last is None else last) > PENDING_MAX_AGE:
+            # Handed back after the window's wait ran out: `_expire` settles it as unread, the
+            # same as if this Stop had come in time.
+            continue
         window.setdefault("consumed", []).append(report["id"])
+        # The result counts from when it was handed back, not from this Stop: a turn that sat on
+        # a question for hours must not make the fixes started meanwhile look older than it.
+        at = min(now, max(report["at"], window.get("last_at") or window["opened_at"]))
         applied = _apply_result(
-            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, now
+            rec, {"markers": report["markers"], "agent": True, "slot_id": report["id"], "slot_kind": "bg"}, at
         )
         if applied is not None and applied["result"]:
             outcomes.append(applied)
@@ -1851,7 +1870,10 @@ def mark(root, payload, state, now=None):
                 rec["idle_at"] = now
                 _alive(rec, now)
                 was_done = _all_done(rec, _review_members(rec)) and not rec.get("done_pending")
-                for outcomes in (_expire(rec, now), _scan_background(rec, payload, now), _retire_at_stop(rec, payload, now)):
+                # Hand-backs first: one that arrived within the window's wait counts even when this
+                # Stop comes hours later (the turn sat on a question), and only then does the wait
+                # expire what is still missing.
+                for outcomes in (_scan_background(rec, payload, now), _expire(rec, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
                 _interrupt_agents(rec, now)
