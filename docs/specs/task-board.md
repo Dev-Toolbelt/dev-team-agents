@@ -58,7 +58,10 @@ JSON (additive): task `kind` (`"agent"` | `"todo"`), `failed` (bool) and `interr
 Task `worktree` (additive, every provider): `{"path", "branch"}` when the hook call that created the task ran
 inside a linked worktree (its git dir differs from the repository's common dir; `path` is relative to the main
 checkout when under it, e.g. `.worktrees/feat/x`, else absolute), else `null`. Fixed at creation — the session
-may move afterwards. The opencode plugin sends `cwd` (its `directory`) for this. The kanban card shows a
+may move afterwards. Claude Code and Codex report the session's current directory, so a session that
+`cd`s into a worktree marks what it starts there; the opencode plugin sends its `directory` (where
+opencode was started), so opencode marks only sessions started inside a worktree. A detached HEAD gives
+`branch: null`. The kanban card shows a
 worktree mark, only when set, whose tooltip (hover and keyboard focus) names the path and branch.
 
 #### Capture per provider
