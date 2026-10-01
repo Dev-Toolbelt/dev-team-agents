@@ -83,13 +83,15 @@ A provider runs a hook in the session's **current** directory, and that is not a
 | Codex | `scripts/install-codex.sh` `cmd()` — same walk | `bash -c '<ROOT_WALK>'` | `.` |
 | opencode | the plugin spawns the dispatcher itself | `spawn("bash", [script], { cwd: directory, … })` | — |
 
+- **The nearest ancestor wins, even over `$CLAUDE_PROJECT_DIR`.** A session opened at a bound repository that `cd`s into a bound sub-project runs the sub-project's hooks and feeds its board — the same rule that makes a package installed below the repository root work. `$CLAUDE_PROJECT_DIR` is only the fallback when no ancestor has the hooks.
+- **The logical path is walked first, then the physical one** (`pwd -P`), so a directory entered through a symlink from outside the project still finds it. A step that cannot shorten the path ends the walk rather than spinning.
 - **Walk up, not `git rev-parse --show-toplevel`.** The project root is not always the repository root (a package with its own install inside a monorepo), and a worktree may or may not carry its own hooks: the nearest ancestor is right in each case. A worktree with only a partial `.dev-team-agents/` runs the hooks of the checkout that holds it.
 - **`bash -c '…'`**, not bare shell syntax: Claude Code and Codex run the command through a shell that is not ours to choose (Codex uses the user's `$SHELL`, which may be zsh or fish), and single quotes are literal in all of them. `env -u` comes before it so that bash does not source `BASH_ENV`.
 - **Codex on Windows keeps the plain `bash .dev-team-agents/scripts/hooks/<x>.sh`.** Codex runs the command through `cmd.exe /C` there, where single quotes do not quote; such a session must start at the project root.
 - **Still relative.** `settings.json` is committed, so an absolute path would break every other clone.
 - **`exec bash <script>`**, so stdin, the exit status (PreToolUse exit 2 blocks) and a copy that lost its mode bits all work.
 - A relative command run from a subdirectory fails as a *non-blocking error* the provider does not surface: the board stays empty and the credential guard does not run, with nothing on screen. `tests/test_hook_project_root.py` runs the real registered command from `apps/api` on every provider, plus nested roots and worktrees.
-- `devteam sync` rewrites an entry carrying the earlier relative command in place (our entries are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command), keeps a matcher the user chose, and leaves every other hook alone. The v2 `install.sh` rewrites only a command that is exactly one it shipped, so a user's own wrapper around our script is kept.
+- `devteam sync` rewrites the earlier relative command in place (ours are recognised by `.dev-team-agents/scripts/hooks/<script>` in the command): only that hook's `command` changes, so a sibling hook in the same entry, a key such as `timeout` on ours, and a matcher the user chose are all kept. The v2 `install.sh` rewrites only a command that is exactly one it shipped, so a user's own wrapper around our script is kept.
 
 ### Hook Files Map
 
