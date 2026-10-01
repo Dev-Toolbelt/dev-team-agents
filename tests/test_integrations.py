@@ -1256,3 +1256,35 @@ class DescriptorAndCliTest(IntegrationTestCase):
         result = integrations.test("github")
         self.assertEqual(result["state"], "unreachable")
         self.assertIn("redirect", result["summary"])
+
+
+class JiraSiteUrlTest(IntegrationTestCase):
+    """The adapter appends `/rest/api/<n>` itself; a URL naming an API path would 404."""
+
+    def normalize(self, value):
+        return integrations.get_adapter("jira").normalize("site_url", value)
+
+    def test_an_api_path_is_refused_with_the_site_root_as_the_hint(self):
+        for value, root in (
+            ("https://acme.atlassian.net/rest/api/3", "https://acme.atlassian.net"),
+            ("https://jira.acme.example/jira/rest/api/2", "https://jira.acme.example/jira"),
+            ("https://jira.acme.example/rest", "https://jira.acme.example"),
+        ):
+            with self.assertRaises(UsageError) as caught:
+                self.normalize(value)
+            self.assertIn(root, caught.exception.hint)
+
+    def test_a_cloud_site_takes_no_path_but_data_center_keeps_its_context_path(self):
+        with self.assertRaises(UsageError):
+            self.normalize("https://acme.atlassian.net/jira")
+        self.assertEqual(self.normalize("https://acme.atlassian.net/"), "https://acme.atlassian.net")
+        self.assertEqual(self.normalize("https://jira.acme.example/jira"), "https://jira.acme.example/jira")
+
+    def test_connect_with_an_api_path_stores_nothing(self):
+        code, _b, out, err = self.cli(
+            "connect", "jira", "--field", "site_url=https://acme.atlassian.net/rest/api/3",
+            "--field", "email=me@example.com", input_text=TOKEN,
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("not an API path", out + err)
+        self.assertIsNone(integrations.token_reference("jira"))

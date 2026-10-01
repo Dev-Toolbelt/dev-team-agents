@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import re
+import urllib.parse
 
 from ..errors import UsageError
 from . import http
@@ -11,6 +12,25 @@ from .base import check_token, fact, field
 
 _KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,49}$")
 
+
+def _site_url(value):
+    """The site root. The adapter appends ``/rest/api/<n>`` itself, so a URL that
+    already names an API path would be called twice over and answer 404. A Cloud
+    site is always its host's root; a Data Center one may sit under a context path
+    (``https://host/jira``), which is kept."""
+    url = http.validate_base_url(value, "site_url")
+    parsed = urllib.parse.urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    cloud = host.endswith(".atlassian.net")
+    path = parsed.path + "/"
+    if "/rest/" in path or (cloud and parsed.path):
+        context = "" if cloud else path.split("/rest/")[0].rstrip("/")
+        root = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, context, "", ""))
+        raise UsageError(
+            "site_url must be the Jira site, not an API path",
+            hint="use {}".format(root),
+        )
+    return url
 
 class Jira:
     name = "jira"
@@ -42,7 +62,7 @@ class Jira:
     def normalize(self, key, value):
         value = value.strip()
         if key == "site_url":
-            return http.validate_base_url(value, "site_url")
+            return _site_url(value)
         if key == "deployment":
             if value not in ("cloud", "data_center"):
                 raise UsageError("deployment must be 'cloud' or 'data_center'")
