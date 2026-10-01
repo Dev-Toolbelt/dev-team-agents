@@ -75,10 +75,33 @@ class ProviderParityTest(unittest.TestCase):
             self.assertIn("cwd: directory", options)
 
 
+class CodexCommandTest(unittest.TestCase):
+    """`install-codex.sh` `cmd()`, run as the installer runs it, on each platform it branches on."""
+
+    def _cmd(self, platform):
+        import types
+        text = (REPO_ROOT / "scripts" / "install-codex.sh").read_text(encoding="utf-8")
+        start = text.index("ROOT_WALK = (")
+        end = text.index("\n# Each managed hook carries", start)
+        namespace = {"sys": types.SimpleNamespace(platform=platform), "hooks_dir": hooks.HOOK_DIR}
+        exec(text[start:end], namespace)
+        return namespace["cmd"]
+
+    def test_posix_gets_the_root_walk(self):
+        for platform in ("linux", "darwin"):
+            self.assertEqual(self._cmd(platform)("stop.sh"), _command("codex", "stop.sh"))
+
+    def test_windows_keeps_the_plain_command_cmd_exe_can_parse(self):
+        for platform in ("win32", "msys", "cygwin"):
+            command = self._cmd(platform)("stop.sh")
+            self.assertEqual(command, "bash .dev-team-agents/scripts/hooks/stop.sh")
+            self.assertNotIn("'", command)
+
+
 class ClaudeCommandTest(unittest.TestCase):
     def test_the_v2_installer_writes_the_same_command_as_the_bind(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
-        start = text.index("_hook_cmd() {")
+        start = text.index("_HOOK_TEMPLATE=")
         end = text.index("\nPRE_TOOL_USE_HOOK=", start)
         functions = text[start:end]
         for _event, script in hooks.EVENTS:
@@ -169,6 +192,22 @@ class RootWalkTest(unittest.TestCase):
         result, ran_in = self.run_from("claude", elsewhere, {"CLAUDE_PROJECT_DIR": str(root)})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(ran_in, str(root.resolve()))
+
+    def test_a_directory_entered_through_a_symlink_finds_the_real_root(self):
+        root = self.root(self.tmp / "proj")
+        (root / "apps" / "api").mkdir(parents=True)
+        link = self.tmp / "shortcut"
+        link.symlink_to(root / "apps" / "api")
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                env = dict(os.environ, PROBE_EXIT="0")
+                env.pop("CLAUDE_PROJECT_DIR", None)
+                # `cd` through the link so the logical $PWD is the link, not the target.
+                subprocess.run(
+                    ["/bin/sh", "-c", 'cd "{}" && {}'.format(link, _command(provider, "probe.sh"))],
+                    input=b"", stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, timeout=30, check=True,
+                )
+                self.assertEqual((self.out / "pwd").read_text(encoding="utf-8").strip(), str(root.resolve()))
 
     def test_stdin_and_a_blocking_exit_reach_the_provider(self):
         root = self.root(self.tmp / "proj")
@@ -268,9 +307,20 @@ class RewriteTest(StoreTestCase):
         (stop,) = data["hooks"]["Stop"]
         self.assertEqual(stop["hooks"][0]["command"], hooks.command_for("stop.sh"))
 
+    def test_wire_rewrites_only_our_command_and_keeps_siblings_and_keys(self):
+        root = self.tmp / "siblings"
+        (root / ".claude").mkdir(parents=True)
+        settings = root / hooks.SETTINGS_FILE
+        ours = {"type": "command", "command": self.OLD.format("stop.sh"), "timeout": 5}
+        sibling = {"type": "command", "command": "./mine.sh"}
+        settings.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [ours, sibling]}]}}), encoding="utf-8")
+        hooks.wire(root)
+        (stop,) = json.loads(settings.read_text(encoding="utf-8"))["hooks"]["Stop"]
+        self.assertEqual(stop["hooks"], [dict(ours, command=hooks.command_for("stop.sh")), sibling])
+
     def test_the_v2_installer_rewrites_the_relative_command_and_keeps_the_rest(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
-        functions = text[text.index("_hook_cmd() {"):text.index("\nif [ ! -f \"$SETTINGS_FILE\" ]")]
+        functions = text[text.index("_HOOK_TEMPLATE="):text.index("\nif [ ! -f \"$SETTINGS_FILE\" ]")]
         start = text.index("    # An entry written before the command found the project root")
         end = text.index("PYEOF\n    fi\n", start) + len("PYEOF\n    fi\n")
         settings = self.tmp / "settings.json"
