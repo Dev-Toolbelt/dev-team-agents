@@ -299,8 +299,9 @@ findings.
   when no task is in review. The columns sit side by side in one row that never stacks: they share
   the width when it fits and the row scrolls horizontally when it does not (mouse, trackpad, or the
   arrow keys — the row is a tab stop only while it overflows). A column is at most as tall as the
-  visible part of the page, measured, so its heading stays on screen and its cards scroll inside it;
-  columns are as tall as their cards up to that cap.
+  visible part of the page, measured, so its heading stays on screen and its cards scroll inside it
+  (a column's card list is a tab stop too while it overflows); columns are as tall as their cards up
+  to that cap.
   Tasks in review carry a badge: **N findings**, **result not read**
   (`unread`), **pending** (the review has not answered yet) or a neutral **In review** for a state
   this app version does not know. A "with findings" filter
