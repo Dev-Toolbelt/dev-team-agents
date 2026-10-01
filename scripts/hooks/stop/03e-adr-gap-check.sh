@@ -2,7 +2,22 @@
 # Stop sub-script: warns (non-blocking) when the session touched a
 # hard-to-reverse signal (new dependency, schema migration, new provider
 # config) but added no new ADR file — see CLAUDE.md § ADR Trigger Rule.
-# Heuristic only: false positives are expected and this never blocks Stop.
+# Heuristic only: false positives are expected.
+#
+# Exit 2 is how a Stop sub-script reaches the agent in the same session. Claude
+# Code answers a Stop exit 2 by continuing the turn, so a warning nothing in the
+# turn can clear (the user decided no ADR is warranted, and the change stays
+# uncommitted) fired after every reply. It now fires once per distinct set of
+# signals: the signature is remembered in the machine-local state dir, and the
+# same set stays quiet until the signals change.
+#
+# Who sees it: Claude Code and Codex surface a Stop hook's stderr; the opencode
+# plugin ignores it (opencode/plugin/dev-team-agents.ts). The marker is per
+# project, not per provider — no provider variable reaches the Stop environment —
+# so a Stop in an opencode session records the signature without showing the
+# warning, and a later Claude or Codex session on the same change stays quiet.
+# Accepted: the check is a nudge, and the same signal reappears on the next
+# dependency change.
 set -euo pipefail
 
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
@@ -49,6 +64,46 @@ NEW_PROVIDER_CONFIG=0
 printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE '(^|/)(providers?|integrations?)/[^/]+/(config|client)\.[a-z]+$' && NEW_PROVIDER_CONFIG=1
 
 if [ "$NEW_DEP" = 1 ] || [ "$NEW_MIGRATION" = 1 ] || [ "$NEW_PROVIDER_CONFIG" = 1 ]; then
+    # The signature covers what triggered the warning — the signal paths and the
+    # manifests' added lines against HEAD, so staging the same change does not
+    # count as a new one — and a further dependency warns again while an
+    # unrelated edit elsewhere does not.
+    SIGNATURE="$(
+        {
+            printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -E "$DEP_MANIFESTS|(^|/)(migrations?|db/migrate)/|(^|/)(providers?|integrations?)/" || true
+            printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -E "$DEP_MANIFESTS" | while IFS= read -r manifest; do
+                git -C "$REPO_ROOT" diff HEAD --unified=0 -- "$manifest" 2>/dev/null | grep -E '^\+[^+]' || true
+            done
+        } | git hash-object --stdin 2>/dev/null || true
+    )"
+    MARKER=""
+    if [ -n "$SIGNATURE" ]; then
+        # shellcheck source=scripts/hooks/lib/data-dirs.sh
+        . "$LIB_DIR/data-dirs.sh"
+        MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)" || MAIN_REPO_ROOT="$REPO_ROOT"
+        STATE_DIR="$(devteam_state_dir "${MAIN_REPO_ROOT:-$REPO_ROOT}" 2>/dev/null || true)"
+        [ -n "$STATE_DIR" ] && MARKER="$STATE_DIR/.adr-gap-warned"
+    fi
+    # A symlinked marker is never read or written: a cloned repository could commit one
+    # pointing at a file of the user's. Without a usable marker the hook simply warns.
+    if [ -n "$MARKER" ] && [ -L "$MARKER" ]; then
+        MARKER=""
+    fi
+    if [ -n "$MARKER" ] && [ -f "$MARKER" ] && [ "$(cat "$MARKER" 2>/dev/null)" = "$SIGNATURE" ]; then
+        exit 0
+    fi
+    if [ -n "$MARKER" ] && mkdir -p "$(dirname "$MARKER")" 2>/dev/null; then
+        # Written beside the marker and renamed over it: `mv` replaces the entry itself,
+        # so even a symlink planted between the check and the write is not followed.
+        TMP_MARKER="$(mktemp "$MARKER.XXXXXX" 2>/dev/null || true)"
+        if [ -n "$TMP_MARKER" ]; then
+            if printf '%s\n' "$SIGNATURE" 2>/dev/null >"$TMP_MARKER"; then
+                mv -f "$TMP_MARKER" "$MARKER" 2>/dev/null || rm -f "$TMP_MARKER"
+            else
+                rm -f "$TMP_MARKER"
+            fi
+        fi
+    fi
     cat >&2 <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
