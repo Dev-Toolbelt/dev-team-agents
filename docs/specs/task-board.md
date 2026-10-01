@@ -26,6 +26,30 @@ reaches it: every approved plan's Steps table becomes native tasks per
 `skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Sessions that never plan and whose
 provider never opens a list — a quick question, a `/devteam:status` — correctly stay off the board.
 
+#### Agent spawns are tasks (amendment 2026-09-30)
+
+The framework's commands delegate straight to agents without presenting a plan, so plan mirroring
+alone leaves their sessions off the board. Every agent a session spawns is therefore recorded as a
+task by the hooks, with no agent cooperation:
+
+| Moment | Claude Code | Codex | opencode | Task |
+|---|---|---|---|---|
+| Spawn | `PreToolUse` `Agent`/`Task` | `PreToolUse` `spawn_agent` | `tool.execute.before` `task` | created `in_progress`, `kind: "agent"` |
+| Result | `PostToolUse` (foreground); transcript hand-back at `Stop` (background) | `PostToolUse` `wait_agent`, matched by the agent id `spawn_agent` returned | `tool.execute.after` `task` (same `callID`) | `completed` |
+| Failure / interrupt | `PostToolUseFailure` | — | — | `cancelled`, `failed: true` |
+
+- **Identity** — the spawn's own id (`tool_use_id`; opencode `callID`; Codex the spawned agent id),
+  never the text, so a task cannot duplicate. **Text** — `<agent>: <description>`.
+- **Owner** — the spawning agent (`main`, or the subagent id for nested spawns).
+- **Excluded** — provider built-ins (one list, `BUILTIN_AGENTS` in `review_triggers.py`) and the
+  review/QA agents (their effect is the In Review column; a task of their own would count as finished
+  work in the next review).
+- **Hidden on read** — when the same owner also keeps a mirrored plan list (`Step N:` tasks), its
+  agent tasks are kept in the record but omitted from columns and counts: the plan is the better grain.
+- A spawn with no result when its session ends is `abandoned`, like any open task.
+
+JSON (additive): task `kind` (`"agent"` | `"todo"`) and `failed` (bool), both optional for clients.
+
 #### Capture per provider
 
 | Provider | Hook point | Tool | Replace or incremental | Task id |
@@ -338,3 +362,4 @@ findings.
 | 2026-09-30 | In Review round-2 review fixes: (1) a keyword-only window (`strong` false: no agent, no review command ever joined) that closes without a marker resolves immediately as `unread-dismissed` — nothing is held; command/agent windows keep the hold. "Completed since the last review" with no earlier window starts at the later of the session's `created_at` and `resumed_at`. (2) A foreground `Agent` whose `PostToolUse` is an async-launch ack moves its token `fg` -> `bg`. (3) Codex `wait_agent` takes one slot and one marker per marker returned (summed); `Agent`/`Task`/opencode `task` keep last-marker-per-report, and a wait's own tool-use id retires no launch by id. (4) A real result id the window never launched retires no token; only a missing or synthetic (`anon:`, `off:`) id falls back to the oldest token of its kind. (5) Background-report fallback ids are `off:{offset}:{line}`. (6) Every project object in `tasks list` and each `tasks watch` snapshot gains `as_of`, the epoch its view was computed (additive; `watch` ignores it when deciding whether the view changed). (7) Any transition out of `in_progress`/`completed` inside a window records `left`. (8) The fix list is `created_at >= fix_after`, excluding tasks known at result time and the window's members. (9) `hooks.wire` rewrites an entry's matcher only from a value a previous release shipped (`TodoWrite\|TaskCreate\|TaskUpdate`), otherwise keeps it and warns (as `install.sh` does). (10) Spec accuracy: `launch_ids` became the `fg`/`bg` token model; only a live background token receives a late result; the legacy `pending` migration applies only to unreleased branch-local records | Findings of the second review of the In Review column |
 | 2026-09-30 | In Review round-3 review fixes: (1) a result from `Agent`/`Task`/opencode `task` needs a known review agent (`subagent_type`); marker-only acceptance stays for Codex `wait_agent` only. (2) Background hand-backs: only a known `bg` token of the open window, marker only from `<result>`; an entry without `tool-use-id` and `task-id` is dropped (the `off:` fallback ids are gone from the scan); a user-role notification counts only when it mirrors a queue entry (task ids kept per window in `queue_ids`, at most 64) and opens the entry's text. (3) A late Codex `wait_agent` result reattaches to the latest unresolved, unread window within `PENDING_MAX_AGE` of its result and recomputes it; `review.state` is `pending\|findings\|unread` only, and a window with a zero result left unresolved holds nothing. (4) The marker is the last non-empty line of a report/final message, alone on it, after fenced and inline code are removed. (5) `session_id` in the bash gates is the FIRST session key of the payload (the opencode plugin now puts `sessionID` first). (6) `skip` is no longer a negation; `qa` next to `/ \ _ @ # -` (or after `.`) is a path/identifier, not a request. (7) `tasks mark --state idle` gains `review_results: [{window, findings}]` (one per window closed by that Stop; `review_window`/`review_findings` mirror the last), `became_all_done` is computed after every outcome, and the hook raises one `tasks.review_findings` per window with findings. (8) opencode plugin: `callID` forwarded as `tool_use_id`, `subagent_type` remembered from `before` by `callID` (256 entries) for `after`; task-board hooks get a 12 s timeout (the record lock waits up to 10 s, so a shorter kill would lose the write; other hooks keep 5 s); a slash command is detected from the raw text, or rebuilt from `input.command`/`input.arguments` when opencode supplies them (whether it delivers `/devteam:review` raw or expanded is unverified: see `docs/providers.md`). (9) Desktop app section updated to the four-column board, badges and findings filter; acceptance criteria 12-15. | Findings of the third review of the In Review column |
 | 2026-09-30 | Approved plans become native tasks per `plan-mode` § Task List Mirroring | A live session planned a whole feature without one task-list call, so the board stayed empty |
+| 2026-09-30 | Agent spawns are tasks: every non-built-in, non-review agent a session spawns is recorded by the hooks (`kind: "agent"`, `failed` on failure), hidden when the owner keeps a mirrored plan | A live `/devteam:backend` run delegated to two agents without a plan and the board stayed empty |
