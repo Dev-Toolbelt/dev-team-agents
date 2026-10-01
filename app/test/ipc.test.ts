@@ -596,6 +596,11 @@ describe('buildInfo reports write actions honestly', () => {
       [
         'bind',
         'doctor',
+        'integration config set',
+        'integration config unset',
+        'integration connect',
+        'integration disconnect',
+        'integration test',
         'migrate',
         'notifications ack',
         'pin',
@@ -641,6 +646,11 @@ describe('environment withholds every gated command when the declaration could n
         [
           'bind',
           'doctor',
+          'integration config set',
+          'integration config unset',
+          'integration connect',
+          'integration disconnect',
+          'integration test',
           'migrate',
           'notifications ack',
           'pin',
@@ -1225,5 +1235,95 @@ describe('migrate holds the bind provenance rule', () => {
     };
     expect(pinned.kind).toBe('refused');
     expect(pinned.message).toContain('pin');
+  });
+});
+
+// ── integrations (ADR-0023) ──────────────────────────────────────────────────────────────
+
+describe('integrations are named operations with validated arguments', () => {
+  type Failure = { readonly ok: false; readonly kind: string; readonly message: string; readonly durationMs: number };
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('resolves a project id to its registered path, and null to the app directory', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const bound = (await handlers.get(CHANNELS.integrationList)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.IntegrationList>;
+    expect(bound.command).toContain('integration list --path /repo/project-1 --json');
+    if (!bound.ok) throw new Error(bound.message);
+    expect(bound.data.integrations.map((entry) => entry.name)).toEqual(['demo']);
+
+    const unbound = (await handlers.get(CHANNELS.integrationList)?.(TRUSTED, null)) as ApiModule.OperationResult<ApiModule.IntegrationList>;
+    expect(unbound.command).not.toContain('/repo/project-1');
+    if (!unbound.ok) throw new Error(unbound.message);
+    expect(unbound.data.project_id).toBeNull();
+
+    const unknown = (await handlers.get(CHANNELS.integrationList)?.(TRUSTED, 'nope')) as Failure;
+    expect(unknown.kind).toBe('refused');
+    const bad = (await handlers.get(CHANNELS.integrationList)?.(TRUSTED, 7)) as Failure;
+    expect(bad.durationMs).toBe(0);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('forwards the token over stdin and never returns or echoes it', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    const secret = 'jira_api_token_0123456789';
+    const connect = (await handlers.get(CHANNELS.integrationConnect)?.(TRUSTED, 'demo', { api_url: 'https://x.test' }, secret, 'proj-1')) as ApiModule.OperationResult<ApiModule.IntegrationConnectReport>;
+    expect(connect.command).toContain('integration connect demo --field api_url=https://x.test --path /repo/project-1 --json');
+    expect(JSON.stringify(connect)).not.toContain(secret);
+    if (!connect.ok) throw new Error(connect.message);
+    expect(connect.data.integration.status.summary).toBe(`stdin_bytes=${secret.length}`);
+
+    const kept = (await handlers.get(CHANNELS.integrationConnect)?.(TRUSTED, 'demo', {}, null, null)) as ApiModule.OperationResult<ApiModule.IntegrationConnectReport>;
+    if (!kept.ok) throw new Error(kept.message);
+    expect(kept.data.integration.status.summary).toBe('stdin_bytes=0');
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('runs test, disconnect, config and resources by exact command', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const call = async (channel: string, ...args: unknown[]) =>
+      (await handlers.get(channel)?.(TRUSTED, ...args)) as ApiModule.OperationResult<unknown>;
+
+    expect((await call(CHANNELS.integrationTest, 'demo', 'proj-1')).command).toContain('integration test demo --path /repo/project-1 --json');
+    expect((await call(CHANNELS.integrationDisconnect, 'demo', true)).command).toContain('integration disconnect demo --keep-token --json');
+    expect((await call(CHANNELS.integrationConfigSet, 'demo', 'repository', 'o/r', 'proj-1')).command).toContain(
+      'integration config set demo repository o/r --path /repo/project-1 --json',
+    );
+    expect((await call(CHANNELS.integrationConfigUnset, 'demo', 'repository', 'proj-1')).command).toContain(
+      'integration config unset demo repository --path /repo/project-1 --json',
+    );
+    expect((await call(CHANNELS.integrationResources, 'demo', 'repos', 'proj-1')).command).toContain(
+      'integration resources demo repos --path /repo/project-1 --json',
+    );
+  });
+
+  it('refuses malformed arguments before anything is spawned', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const cases: readonly (readonly [string, readonly unknown[]])[] = [
+      [CHANNELS.integrationConnect, [5, {}, null, null]],
+      [CHANNELS.integrationConnect, ['demo', [], null, null]],
+      [CHANNELS.integrationConnect, ['demo', { 'bad key': 'v' }, null, null]],
+      [CHANNELS.integrationConnect, ['demo', { k: 1 }, null, null]],
+      [CHANNELS.integrationConnect, ['demo', {}, 42, null]],
+      [CHANNELS.integrationConnect, ['demo', {}, 'line\nbreak', null]],
+      [CHANNELS.integrationConnect, ['demo', {}, null, 9]],
+      [CHANNELS.integrationTest, ['demo', 9]],
+      [CHANNELS.integrationTest, [{}, null]],
+      [CHANNELS.integrationDisconnect, ['demo', 'yes']],
+      [CHANNELS.integrationDisconnect, ['--all', false]],
+      [CHANNELS.integrationConfigSet, ['demo', 'key', 5, null]],
+      [CHANNELS.integrationConfigSet, ['demo', 'bad-key', 'v', null]],
+      [CHANNELS.integrationConfigSet, ['demo', 'key', '--flag', null]],
+      [CHANNELS.integrationConfigUnset, ['demo', '--x', null]],
+      [CHANNELS.integrationResources, ['demo', 'Repos', null]],
+      [CHANNELS.integrationResources, ['../demo', 'repos', null]],
+    ];
+    for (const [channel, args] of cases) {
+      const refused = (await handlers.get(channel)?.(TRUSTED, ...args)) as Failure;
+      expect(refused.ok, JSON.stringify([channel, args])).toBe(false);
+      expect(refused.durationMs, JSON.stringify([channel, args])).toBe(0);
+    }
   });
 });

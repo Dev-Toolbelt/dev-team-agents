@@ -109,6 +109,8 @@ export function Projects({
   environment,
   active = true,
   openRequest = null,
+  onOpenIntegrations,
+  integrationsNonce = 0,
 }: {
   environment: EnvironmentReport | null;
   /** Whether this tab is the visible one. The tab stays mounted (see `App.tsx`), so it refetches on return. */
@@ -118,6 +120,10 @@ export function Projects({
    * same project a new request rather than an unchanged prop.
    */
   openRequest?: { readonly projectId: string; readonly nonce: number } | null;
+  /** A project's Integrations tab asked to go to the top-level Integrations tab. */
+  onOpenIntegrations?: (() => void) | undefined;
+  /** Bumped when an account write made each project's Integrations tab stale. */
+  integrationsNonce?: number;
 }) {
   const { state, refreshing, reload: reloadList } = useOperation((): ReturnType<typeof window.devteam.listProjects> => window.devteam.listProjects());
   const [bindOpen, setBindOpen] = useState(false);
@@ -222,6 +228,8 @@ export function Projects({
           name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
           environment={environment}
           active={active}
+          onOpenIntegrations={onOpenIntegrations}
+          integrationsNonce={integrationsNonce}
           onBack={() => {
             if (waiting !== undefined) {
               setOpenSettings(waiting.project_id);

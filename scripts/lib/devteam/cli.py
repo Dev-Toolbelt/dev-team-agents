@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, global_skills, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import catalog, compat, creds, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -1044,6 +1044,142 @@ def cmd_plugin_run(args, emitter):
     return result, "\n".join(lines)
 
 
+def _integration_project(args):
+    """``(root, project_id)``; ``project_id`` is ``None`` when the path is not bound."""
+    return _bound_project(getattr(args, "path", None), required=False)
+
+
+def _integration_view(name, args):
+    root, project_id = _integration_project(args)
+    return integrations.build_view(integrations.get_adapter(name), root, project_id)
+
+
+def _integration_line(view):
+    notes = view["status"]["summary"]
+    if view["project"] is not None and view["project_configured"]:
+        notes += "; project: " + ", ".join("{}={}".format(k, v) for k, v in sorted(view["project"].items()))
+    return (view["name"], view["status"]["state"], notes)
+
+
+def _integration_human(view):
+    lines = [
+        "{} ({})".format(view["title"], view["name"]),
+        "  {}".format(view["description"]),
+        "  status    {} - {}".format(view["status"]["state"], view["status"]["summary"]),
+        "  token     {}".format(
+            "stored in {}".format(view["auth"]["backend"]) if view["auth"]["has_token"] else "none"
+        ),
+    ]
+    for key in sorted(view["account"]):
+        lines.append("  account   {} = {}".format(key, json.dumps(view["account"][key])))
+    if view["project"] is None:
+        lines.append("  project   (not a bound project)")
+    for key in sorted(view["project"] or {}):
+        lines.append("  project   {} = {}".format(key, json.dumps(view["project"][key])))
+    for key in sorted(view["detected"]):
+        lines.append("  detected  {} = {}".format(key, json.dumps(view["detected"][key])))
+    for fact in view["status"]["facts"]:
+        lines.append("            {}: {}".format(fact["label"], fact["value"]))
+    return "\n".join(lines)
+
+
+def _integration_test_human(view, result):
+    return "{}\n  test      {} - {}".format(
+        _integration_human(view), "ok" if result["ok"] else "FAILED", result["summary"]
+    )
+
+
+def cmd_integration_list(args, emitter):
+    root, project_id = _integration_project(args)
+    views = integrations.list_views(root, project_id)
+    payload = {"project_id": project_id, "integrations": views}
+    return payload, _table([_integration_line(v) for v in views], ["INTEGRATION", "STATE", "NOTES"])
+
+
+def cmd_integration_show(args, emitter):
+    view = _integration_view(args.name, args)
+    return {"integration": view}, _integration_human(view)
+
+
+def _read_token_from_stdin():
+    """The token, or ``None`` for an empty stdin. Never from argv."""
+    import getpass
+    import sys as _sys
+
+    if _sys.stdin is not None and _sys.stdin.isatty():
+        value = getpass.getpass("token (not echoed; empty keeps the stored one): ")
+    elif _sys.stdin is None:
+        value = ""
+    else:
+        value = _sys.stdin.read()
+    value = value.rstrip("\r\n")
+    return value or None
+
+
+def cmd_integration_connect(args, emitter):
+    adapter = integrations.get_adapter(args.name)
+    fields = integrations.parse_field_args(adapter, args.field)
+    integrations.check_connect_fields(args.name, fields)
+    token = _read_token_from_stdin()
+    result, backend = integrations.connect(args.name, fields, token)
+    view = _integration_view(args.name, args)
+    payload = {"integration": view, "test": result}
+    # Derived from where the new token actually went, like `cred set`.
+    if backend == "insecure":
+        payload["warning"] = (
+            "this machine has no secret store, so the token is in a mode-600 file: {}. "
+            "It is not encrypted - treat the machine as the boundary.".format(paths.secrets_dir())
+        )
+        emitter.warn(payload["warning"])
+    return payload, _integration_test_human(view, result)
+
+
+def cmd_integration_test(args, emitter):
+    result = integrations.test(args.name)
+    view = _integration_view(args.name, args)
+    return {"integration": view, "test": result}, _integration_test_human(view, result)
+
+
+def cmd_integration_disconnect(args, emitter):
+    _adapter, changed = integrations.disconnect(args.name, keep_token=args.keep_token)
+    view = _integration_view(args.name, args)
+    human = "{} {}".format("disconnected" if changed else "was not connected:", args.name)
+    return {"integration": view, "changed": changed}, human
+
+
+def cmd_integration_config_get(args, emitter):
+    root, project_id = _integration_project(args)
+    result = integrations.config_get(args.name, args.key, root, project_id)
+    if args.key:
+        return result, "{} = {}".format(args.key, json.dumps(result["value"]))
+    lines = ["{} = {}".format(k, json.dumps(v)) for k, v in sorted(result["account"].items())]
+    lines += ["project.{} = {}".format(k, json.dumps(v)) for k, v in sorted((result["project"] or {}).items())]
+    return result, "\n".join(lines)
+
+
+def cmd_integration_config_set(args, emitter):
+    root, project_id = _integration_project(args)
+    integrations.config_set(args.name, args.key, args.value, root, project_id)
+    view = _integration_view(args.name, args)
+    return {"integration": view, "key": args.key}, "set {}.{}".format(args.name, args.key)
+
+
+def cmd_integration_config_unset(args, emitter):
+    root, project_id = _integration_project(args)
+    _adapter, removed = integrations.config_unset(args.name, args.key, root, project_id)
+    view = _integration_view(args.name, args)
+    human = "{} {}.{}".format("removed" if removed else "was not set:", args.name, args.key)
+    return {"integration": view, "key": args.key, "removed": removed}, human
+
+
+def cmd_integration_resources(args, emitter):
+    result = integrations.resources(args.name, args.kind)
+    human = "\n".join("{}\t{}".format(i["value"], i["label"]) for i in result["items"]) or "no items"
+    if result["truncated"]:
+        human += "\n(more exist than were listed)"
+    return result, human
+
+
 def _cred_project_id(args):
     """``None`` for the global layer, this project's id otherwise."""
     if getattr(args, "global_layer", False):
@@ -1566,6 +1702,62 @@ def build_parser():
     prefs_unset.add_argument("--path")
     prefs_unset.set_defaults(func=cmd_prefs_unset)
 
+    integration_parser = leaf(
+        sub, "integration", help="account-level connections to GitHub and Jira (token in the secret store)"
+    ).add_subparsers(dest="integration_cmd")
+
+    def integration_leaf(name, **kwargs):
+        leafp = leaf(integration_parser, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        return leafp
+
+    integration_list = integration_leaf("list", help="every integration, its state and this project's binding")
+    integration_list.set_defaults(func=cmd_integration_list)
+    integration_show = integration_leaf("show", help="one integration")
+    integration_show.add_argument("name")
+    integration_show.set_defaults(func=cmd_integration_show)
+    integration_connect = integration_leaf(
+        "connect", help="store the token (read from stdin) and account fields, then test"
+    )
+    integration_connect.add_argument("name")
+    integration_connect.add_argument(
+        "--field", action="append", default=[], metavar="KEY=VALUE", help="an account-scope field; repeatable"
+    )
+    integration_connect.set_defaults(func=cmd_integration_connect)
+    integration_test = integration_leaf("test", help="check the stored token against the API")
+    integration_test.add_argument("name")
+    integration_test.set_defaults(func=cmd_integration_test)
+    integration_disconnect = integration_leaf("disconnect", help="forget the token, keep the account config")
+    integration_disconnect.add_argument("name")
+    integration_disconnect.add_argument(
+        "--keep-token", action="store_true", help="keep the stored token, only clear the test result"
+    )
+    integration_disconnect.set_defaults(func=cmd_integration_disconnect)
+    integration_config = leaf(
+        integration_parser, "config", help="read and write an integration's fields"
+    ).add_subparsers(dest="integration_config_cmd")
+
+    def integration_config_leaf(name, **kwargs):
+        leafp = leaf(integration_config, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        leafp.add_argument("name")
+        return leafp
+
+    integration_config_get = integration_config_leaf("get", help="every field, or one key")
+    integration_config_get.add_argument("key", nargs="?")
+    integration_config_get.set_defaults(func=cmd_integration_config_get)
+    integration_config_set = integration_config_leaf("set", help="write one field to the scope it declares")
+    integration_config_set.add_argument("key")
+    integration_config_set.add_argument("value")
+    integration_config_set.set_defaults(func=cmd_integration_config_set)
+    integration_config_unset = integration_config_leaf("unset", help="drop one field")
+    integration_config_unset.add_argument("key")
+    integration_config_unset.set_defaults(func=cmd_integration_config_unset)
+    integration_resources = integration_leaf("resources", help="list what a field picker can offer")
+    integration_resources.add_argument("name")
+    integration_resources.add_argument("kind", help="github: repos; jira: projects")
+    integration_resources.set_defaults(func=cmd_integration_resources)
+
     cred_parser = leaf(
         sub, "cred", help="declare credentials as references; values go to the OS secret store"
     ).add_subparsers(dest="cred_cmd")
@@ -1908,6 +2100,12 @@ def main(argv=None, stdout=None, stderr=None):
         if getattr(args, "command", None) == "plugin":
             return emitter.fail(
                 UsageError("plugin needs a subcommand: list, show, enable, disable, config, run")
+            )
+        if getattr(args, "command", None) == "integration":
+            return emitter.fail(
+                UsageError(
+                    "integration needs a subcommand: list, show, connect, test, disconnect, config, resources"
+                )
             )
         if getattr(args, "command", None) == "cred":
             return emitter.fail(

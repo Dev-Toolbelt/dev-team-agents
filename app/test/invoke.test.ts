@@ -17,6 +17,7 @@ import {
   childEnvironment,
   hasPendingWrites,
   invokeDevteam,
+  redactSecret,
   settleInFlight,
   terminateInFlight,
 } from '../src/cli/invoke.js';
@@ -370,5 +371,63 @@ describe('quitting the app with CLI children in flight', () => {
     await settleInFlight(80);
     expect(Date.now() - began).toBeLessThan(500);
     await pending;
+  });
+});
+
+describe('secret stdin', () => {
+  const SECRET = 'tok_s3cr3t-"quoted"-value';
+
+  function withStdin(scenario: string, secretStdin?: string, extraEnv: Record<string, string> = {}) {
+    return invokeDevteam({
+      ...fakeCli(['integrations', 'connect']),
+      env: { FAKE_DEVTEAM_SCENARIO: scenario, ...extraEnv },
+      ...(secretStdin !== undefined ? { secretStdin } : {}),
+    });
+  }
+
+  it('delivers the value to the child on stdin and closes it', async () => {
+    const result = await withStdin('echo-stdin', SECRET);
+    if (!ranAndAnswered(result)) throw new Error('expected a document');
+    if (result.document.kind !== 'payload') throw new Error('expected a payload');
+    // The child only reaches `end` if stdin was closed; the length proves the bytes arrived.
+    expect(result.document.body['stdin_length']).toBe(SECRET.length);
+  });
+
+  it('never puts the value in argv or the described command', async () => {
+    const result = await withStdin('echo-stdin', SECRET);
+    if (!ranAndAnswered(result)) throw new Error('expected a document');
+    expect(JSON.stringify(result.command)).not.toContain('s3cr3t');
+    if (result.document.kind !== 'payload') throw new Error('expected a payload');
+    expect(result.document.body['argv']).toEqual(['integrations', 'connect', '--json']);
+  });
+
+  it('scrubs the value from stdout and stderr when the child echoes it', async () => {
+    const result = await withStdin('echo-stdin', SECRET, { FAKE_DEVTEAM_ECHO: '1' });
+    if (!ranAndAnswered(result)) throw new Error('expected a document');
+    if (result.document.kind !== 'payload') throw new Error('expected a payload');
+    expect(result.document.body['stdin']).toBe('[redacted]');
+    expect(result.stderr).toBe('got [redacted]\n');
+    expect(JSON.stringify(result)).not.toContain('s3cr3t');
+  });
+
+  it('survives a child that exits without reading stdin (EPIPE)', async () => {
+    const big = 'y'.repeat(4 * 1024 * 1024);
+    const result = await withStdin('no-read-exit', big);
+    expect(result.outcome).toBe('success');
+    expect(JSON.stringify(result)).not.toContain('yyyyyyyy');
+  });
+
+  it('leaves existing calls without a secret unchanged', async () => {
+    const result = await withStdin('echo-stdin');
+    // stdin is `ignore` (the null device): the child sees EOF immediately and nothing.
+    if (!ranAndAnswered(result)) throw new Error('expected a document');
+    if (result.document.kind !== 'payload') throw new Error('expected a payload');
+    expect(result.document.body['stdin_length']).toBe(0);
+  });
+
+  it('redactSecret handles empty and absent secrets as no-ops', () => {
+    expect(redactSecret('abc', undefined)).toBe('abc');
+    expect(redactSecret('abc', '')).toBe('abc');
+    expect(redactSecret('a SECRET b SECRET', 'SECRET')).toBe('a [redacted] b [redacted]');
   });
 });

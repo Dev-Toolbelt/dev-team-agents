@@ -256,6 +256,13 @@ class IncompatibleDeclarationRefusesEveryMutatingCommandTest(ClientGateTestCase)
             ("plugin", "config", "set"): ("probe", "key", "value"),
             ("plugin", "config", "unset"): ("probe", "key"),
             ("plugin", "run"): ("probe", "action"),
+            # `probe` is no integration, so a gate that let these through fails validation
+            # (exit 2) before any write or network call.
+            ("integration", "connect"): ("probe",),
+            ("integration", "disconnect"): ("probe",),
+            ("integration", "test"): ("probe",),
+            ("integration", "config", "set"): ("probe", "key", "value"),
+            ("integration", "config", "unset"): ("probe", "key"),
             ("cred", "set"): ("probe-key", "--purpose", "gate probe"),
             ("cred", "unset"): ("probe-key",),
             ("cred", "import"): (str(self.tmp / "no-such-credentials.local.json"),),

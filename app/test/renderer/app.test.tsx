@@ -90,3 +90,25 @@ describe('App — a failing screen', () => {
     await waitFor(() => expect(fallback).toHaveFocus());
   });
 });
+
+describe('App — the Integrations tab', () => {
+  it('keeps a typed token while another tab is shown', async () => {
+    state.doctorThrows = false;
+    const user = userEvent.setup();
+    const notConnected = {
+      name: 'github', title: 'GitHub', description: '', homepage: null,
+      auth: { kind: 'token', label: 'Personal access token', help: null, has_token: false, stale: false, backend: null },
+      fields: [], account: {}, project: null, detected: {}, connected: false, project_configured: false,
+      status: { state: 'not_connected', checked_at: null, summary: '', facts: [] },
+    };
+    const integrationList = vi.fn(() => Promise.resolve({ ok: true as const, data: { project_id: null, integrations: [notConnected] }, command: 'devteam integration list', durationMs: 0 }));
+    installBridge(fakeBridge({ integrationList } as never));
+    render(<App />);
+    await user.click(await screen.findByRole('tab', { name: 'Integrations' }));
+    await user.click(await screen.findByRole('button', { name: 'Show GitHub details' }));
+    await user.type(await screen.findByLabelText('Personal access token'), 'ghp_draft');
+    await user.click(screen.getByRole('tab', { name: 'Diagnosis' }));
+    await user.click(screen.getByRole('tab', { name: 'Integrations' }));
+    expect(screen.getByLabelText('Personal access token')).toHaveValue('ghp_draft');
+  });
+});

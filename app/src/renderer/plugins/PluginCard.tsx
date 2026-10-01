@@ -1,35 +1,26 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronRight, GitBranch, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, GitBranch, Info } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
 import { Hint } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import type {
   EnvironmentReport,
   PluginConfigUpdateReport,
-  PluginFactTone,
   PluginView,
   ProjectRecord,
 } from '../../shared/api.js';
 import { Problem } from '../Problem.js';
 import { SaveBar } from '../SaveBar.js';
 import { useAction } from '../useOperation.js';
-import { PLUGIN_COMMANDS, isAnyWithheld, type Withheld } from '../writeActionGating.js';
+import { PLUGIN_COMMANDS } from '../writeActionGating.js';
+import { CardShell, type Standing } from '../cards/CardShell.js';
+import { gateFor } from '../cards/gate.js';
+import { StatusFacts } from '../cards/StatusFacts.js';
 import { ActionRow } from './ActionRow.js';
 import { ConfigField } from './ConfigField.js';
 import { draftBatch, fieldDraftState, proposalToDrafts, type Drafts } from './drafts.js';
-
-const FACT_TONE_CLASS: Record<PluginFactTone, string> = {
-  positive: 'border-green-600 bg-green-50 text-green-900 dark:border-green-500 dark:bg-green-950 dark:text-green-200',
-  warning: 'border-amber-500/50 text-amber-700 dark:text-amber-400',
-  neutral: '',
-};
-
-type Standing = { readonly label: string; readonly variant: 'default' | 'secondary' | 'destructive' | 'outline'; readonly className?: string };
 
 /** The one badge a card leads with. Missing requirements outrank everything: nothing else can be acted on. */
 export function standingOf(plugin: PluginView): Standing {
@@ -39,12 +30,6 @@ export function standingOf(plugin: PluginView): Standing {
     return { label: 'Needs setup', variant: 'outline', className: 'border-amber-500/60 text-amber-800 dark:text-amber-300' };
   }
   return { label: 'Enabled', variant: 'outline', className: 'border-green-600 text-green-800 dark:text-green-300' };
-}
-
-const NOT_CHECKED: Withheld = { withheld: true, reason: 'the app has not finished checking its own preconditions' };
-
-function gateFor(environment: EnvironmentReport | null, commands: readonly string[]): Withheld {
-  return environment === null ? NOT_CHECKED : isAnyWithheld(environment.withheld, commands);
 }
 
 /**
@@ -235,56 +220,8 @@ export function PluginCard({
     />
   );
 
-  const expanded = open || lockedReason !== null;
-  const trigger = (
-    <CollapsibleTrigger asChild disabled={lockedReason !== null}>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${expanded ? 'Hide' : 'Show'} ${plugin.title} details`}
-        title={lockedReason ?? undefined}
-      >
-        <ChevronRight className={cn('transition-transform', expanded && 'rotate-90')} aria-hidden="true" />
-      </Button>
-    </CollapsibleTrigger>
-  );
-
-  return (
-    <section aria-labelledby={titleId} className="rounded-xl border bg-card text-card-foreground shadow-sm" data-plugin={plugin.name}>
-      <Collapsible open={expanded} onOpenChange={(next) => onOpenChange(plugin.name, next)}>
-      <header className="px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 id={titleId} className="font-semibold">
-                {plugin.title}
-              </h3>
-              <Badge variant={standing.variant} className={cn('font-normal', standing.className)}>
-                {standing.label}
-              </Badge>
-              {plugin.source === 'legacy' ? (
-                <Badge variant="outline" className="font-normal text-muted-foreground">
-                  legacy config
-                </Badge>
-              ) : null}
-            </div>
-            <p className="text-sm text-muted-foreground">{plugin.description}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {lockedReason !== null ? <Hint content={lockedReason}><span className="inline-flex">{trigger}</span></Hint> : trigger}
-            <label htmlFor={`${uid}-enabled`} className="text-sm font-medium">
-              Enable<span className="sr-only"> {plugin.title}</span>
-            </label>
-            {switchReason !== null ? (
-              <Hint content={switchReason}>
-                <span className="inline-flex">{switchNode}</span>
-              </Hint>
-            ) : (
-              switchNode
-            )}
-          </div>
-        </div>
-      </header>
+  const notices = (
+    <>
       <p aria-live="polite" className="sr-only">
         {toggling ? 'Updating…' : saving ? 'Saving…' : unconfirmed ? 'Saved; the list could not be reloaded.' : (toggleNote ?? status)}
       </p>
@@ -306,8 +243,42 @@ export function PluginCard({
         ) : null}
         </div>
       ) : null}
+    </>
+  );
 
-      <CollapsibleContent forceMount hidden={!expanded} className="data-[state=closed]:hidden">
+  return (
+    <CardShell
+      titleId={titleId}
+      title={plugin.title}
+      description={plugin.description}
+      standing={standing}
+      badges={
+        plugin.source === 'legacy' ? (
+          <Badge variant="outline" className="font-normal text-muted-foreground">
+            legacy config
+          </Badge>
+        ) : null
+      }
+      headerEnd={
+        <>
+          <label htmlFor={`${uid}-enabled`} className="text-sm font-medium">
+            Enable<span className="sr-only"> {plugin.title}</span>
+          </label>
+          {switchReason !== null ? (
+            <Hint content={switchReason}>
+              <span className="inline-flex">{switchNode}</span>
+            </Hint>
+          ) : (
+            switchNode
+          )}
+        </>
+      }
+      notices={notices}
+      dataAttr={{ 'data-plugin': plugin.name }}
+      open={open}
+      onOpenChange={(next) => onOpenChange(plugin.name, next)}
+      lockedReason={lockedReason}
+    >
       <div className="space-y-3 border-t px-5 py-4">
         <p id={`${uid}-commit`} className="flex items-start gap-2 text-xs text-muted-foreground">
           <GitBranch className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -354,25 +325,7 @@ export function PluginCard({
         {plugin.status !== null ? (
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Status</h4>
-            <p className="text-sm text-muted-foreground">{plugin.status.summary}</p>
-            {plugin.status.facts.length > 0 ? (
-              <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
-                {plugin.status.facts.map((fact) => (
-                  <div key={fact.label} className="contents">
-                    <dt className="text-muted-foreground">{fact.label}</dt>
-                    <dd className={cn('min-w-0 break-words text-xs leading-5', fact.tone === null && 'font-mono')}>
-                      {fact.tone !== null ? (
-                        <Badge variant="outline" className={FACT_TONE_CLASS[fact.tone]}>
-                          {fact.value}
-                        </Badge>
-                      ) : (
-                        fact.value
-                      )}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
+            <StatusFacts summary={plugin.status.summary} facts={plugin.status.facts} />
           </div>
         ) : null}
       </div>
@@ -481,8 +434,6 @@ export function PluginCard({
           While enabled, this plugin also runs at: {plugin.hooks.join(', ')}.
         </p>
       ) : null}
-      </CollapsibleContent>
-      </Collapsible>
-    </section>
+    </CardShell>
   );
 }

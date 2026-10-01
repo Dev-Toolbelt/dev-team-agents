@@ -69,7 +69,7 @@ import json
 import stat
 from pathlib import Path
 
-from . import bind, creds, plugins, project, registry
+from . import bind, creds, integrations, plugins, project, registry
 from .errors import ConflictError, EnvError, UsageError
 
 #: Bumped when a released app version stops being able to write this store safely.
@@ -97,6 +97,8 @@ def store_schemas():
         "bind_manifest": bind.MANIFEST_SCHEMA,
         "credentials": creds.SCHEMA,
         "plugin_settings": plugins.SCHEMA,
+        "integrations": integrations.SCHEMA,
+        "integration_settings": integrations.SETTINGS_SCHEMA,
     }
 
 
@@ -413,6 +415,14 @@ MUTATING = {
     ("plugin", "config", "unset"): "drops a key from plugin-settings/<name>.json",
     ("plugin", "run"): "runs a script the manifest declares, and most actions write "
     "(graph output, caches). Classified per command, not per action",
+    ("integration", "connect"): "writes data/integrations/<name>.json, a credential reference and "
+    "its value, and the machine-local test result; then calls the integration's API",
+    ("integration", "disconnect"): "removes the token's reference and value, and the test result",
+    ("integration", "test"): "writes the machine-local test result after calling the API",
+    ("integration", "config", "set"): "writes a field into data/integrations/<name>.json or "
+    "integration-settings/<name>.json",
+    ("integration", "config", "unset"): "drops a field from data/integrations/<name>.json or "
+    "integration-settings/<name>.json",
     ("cred", "set"): "writes a credential reference and a value into a secret backend",
     ("cred", "unset"): "removes a reference, and the value with --forget-value",
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
@@ -457,6 +467,12 @@ READ_ONLY = {
     ("plugin", "list"): "reads manifests and settings; runs only the cheap status scripts",
     ("plugin", "show"): "reads one manifest and its settings",
     ("plugin", "config", "get"): "reads the effective config",
+    ("integration", "list"): "reads integration config, bindings and the last test result; "
+    "never a token",
+    ("integration", "show"): "reads one integration's config, binding and last test result",
+    ("integration", "config", "get"): "reads the effective fields",
+    ("integration", "resources"): "reads from the integration's API with the stored token "
+    "(an audited read, like `cred get`); writes no shape",
     ("cred", "list"): "reference layer only — never a value",
     ("cred", "get"): "reads one value. It appends an audit line, so it is not literally "
     "side-effect-free — but that line is the framework's own record *about* the caller, "

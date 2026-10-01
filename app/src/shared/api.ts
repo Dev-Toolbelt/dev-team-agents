@@ -695,6 +695,137 @@ export interface PluginConfigUpdateReport {
   } | null;
 }
 
+// ── integrations ─────────────────────────────────────────────────────────────
+
+export type IntegrationFieldScope = 'account' | 'project';
+export type IntegrationFieldType = 'string' | 'enum' | (string & {});
+export type IntegrationStatusState =
+  | 'not_connected'
+  | 'connected'
+  | 'invalid_token'
+  | 'rate_limited'
+  | 'unreachable'
+  | 'unknown'
+  | (string & {});
+export type IntegrationFactTone = 'positive' | 'warning' | 'neutral';
+
+/** One field an integration declares; `scope` decides where a write lands (account store or project binding). */
+export interface IntegrationField {
+  readonly key: string;
+  readonly scope: IntegrationFieldScope;
+  readonly type: IntegrationFieldType;
+  readonly label: string;
+  readonly help: string | null;
+  readonly required: boolean;
+  readonly default: string | null;
+  readonly placeholder: string | null;
+  /** Present for `type: "enum"`; empty otherwise. */
+  readonly options: readonly { readonly value: string; readonly label: string }[];
+  /** Name of a `resources` kind that can fill this field (a picker), or `null`. */
+  readonly resource: string | null;
+  readonly visible_when: { readonly key: string; readonly equals: string } | null;
+  /**
+   * The stored token is bound to this field's origin: changing it leaves the token stale, so
+   * a save that changes it must carry a new token. `false` from a CLI that predates the key.
+   */
+  readonly binds_token: boolean;
+}
+
+export interface IntegrationFact {
+  readonly label: string;
+  readonly value: string;
+  readonly tone: IntegrationFactTone | null;
+}
+
+/** The last test result of one integration; `checked_at` is `null` while it was never tested. */
+export interface IntegrationStatus {
+  readonly state: IntegrationStatusState;
+  readonly checked_at: string | null;
+  readonly summary: string;
+  readonly facts: readonly IntegrationFact[];
+}
+
+/** Alias kept for callers that name the state rather than the record. */
+export type IntegrationState = IntegrationStatusState;
+
+/** `integration list`'s `integrations[]`, and `integration show`. The token value is never part of it. */
+export interface IntegrationView {
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly homepage: string | null;
+  readonly auth: {
+    readonly kind: string;
+    readonly label: string;
+    readonly help: string | null;
+    readonly has_token: boolean;
+    /** A token is stored but the account's base URL origin changed since; it must be re-entered. */
+    readonly stale: boolean;
+    readonly backend: string | null;
+  };
+  readonly fields: readonly IntegrationField[];
+  readonly account: Readonly<Record<string, string>>;
+  /** `null` when no bound project was resolved. */
+  readonly project: Readonly<Record<string, string>> | null;
+  /** Why the committed project binding could not be read (it then reads as unset), or `null`. */
+  readonly project_problem: string | null;
+  /** Values inferred without the user (e.g. a repository from `git remote`). Empty when none. */
+  readonly detected: Readonly<Record<string, string>>;
+  readonly connected: boolean;
+  readonly project_configured: boolean;
+  readonly status: IntegrationStatus;
+}
+
+/** `test` inside a connect/test report. */
+export interface IntegrationTestResult {
+  readonly ok: boolean;
+  readonly state: IntegrationStatusState;
+  readonly summary: string;
+  readonly facts: readonly IntegrationFact[];
+  readonly checked_at: string | null;
+}
+
+/** `integration list --json`. */
+export interface IntegrationList {
+  readonly project_id: string | null;
+  readonly integrations: readonly IntegrationView[];
+}
+
+/** `integration connect --json`. */
+export interface IntegrationConnectReport {
+  readonly integration: IntegrationView;
+  readonly test: IntegrationTestResult;
+  /** Set when the new token went to the unencrypted fallback store; `null` otherwise. */
+  readonly warning: string | null;
+}
+
+/** `integration test --json`. A failed test is `test.ok: false`, not an error. */
+export interface IntegrationTestReport {
+  readonly integration: IntegrationView;
+  readonly test: IntegrationTestResult;
+  /** Only `connect` sets it; always `null` for `test`. */
+  readonly warning: string | null;
+}
+
+/** `integration disconnect --json`. */
+export interface IntegrationDisconnectReport {
+  readonly integration: IntegrationView;
+  readonly changed: boolean;
+}
+
+/** `integration config set --json` and `integration config unset --json`. */
+export interface IntegrationConfigWrite {
+  readonly integration: IntegrationView;
+  readonly key: string;
+  readonly removed?: boolean;
+}
+
+/** `integration resources --json`. */
+export interface IntegrationResources {
+  readonly items: readonly { readonly value: string; readonly label: string }[];
+  readonly truncated: boolean;
+}
+
 // ── the bridge ───────────────────────────────────────────────────────────────
 
 /** Static facts about the build, so the UI can be honest about what it is. */
@@ -1024,6 +1155,37 @@ export interface DevteamBridge {
    * and anything under `.git` / `.dev-team-agents`. Spawns nothing.
    */
   readonly pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) => Promise<ProjectPathPick>;
+  /**
+   * Integrations (ADR-0023). Every operation is a named CLI command; `projectId` is resolved to a
+   * registered project path in the main process, `null` meaning no project. The token travels
+   * to the CLI over stdin only and is never returned, logged or stored by this app.
+   */
+  readonly integrationList: (projectId: ProjectId | null) => Promise<OperationResult<IntegrationList>>;
+  /** `token: null` (or empty) keeps an existing token; `fields` are account-scope values only. */
+  readonly integrationConnect: (
+    name: string,
+    fields: Readonly<Record<string, string>>,
+    token: string | null,
+    projectId: ProjectId | null,
+  ) => Promise<OperationResult<IntegrationConnectReport>>;
+  readonly integrationTest: (name: string, projectId: ProjectId | null) => Promise<OperationResult<IntegrationTestReport>>;
+  readonly integrationDisconnect: (name: string, keepToken: boolean) => Promise<OperationResult<IntegrationDisconnectReport>>;
+  readonly integrationConfigSet: (
+    name: string,
+    key: string,
+    value: string,
+    projectId: ProjectId | null,
+  ) => Promise<OperationResult<IntegrationConfigWrite>>;
+  readonly integrationConfigUnset: (
+    name: string,
+    key: string,
+    projectId: ProjectId | null,
+  ) => Promise<OperationResult<IntegrationConfigWrite>>;
+  readonly integrationResources: (
+    name: string,
+    kind: string,
+    projectId: ProjectId | null,
+  ) => Promise<OperationResult<IntegrationResources>>;
   // Notifications. The main process owns the stream (`devteam notifications watch`) and
   // shows each one natively, so they arrive with the window closed; the renderer only
   // reads the feed for the bell. Spawns nothing from the renderer's side.
@@ -1284,6 +1446,13 @@ export const CHANNELS = {
   updatePluginConfig: 'devteam:update-plugin-config',
   runPluginAction: 'devteam:run-plugin-action',
   pickProjectPath: 'devteam:pick-project-path',
+  integrationList: 'devteam:integration-list',
+  integrationConnect: 'devteam:integration-connect',
+  integrationTest: 'devteam:integration-test',
+  integrationDisconnect: 'devteam:integration-disconnect',
+  integrationConfigSet: 'devteam:integration-config-set',
+  integrationConfigUnset: 'devteam:integration-config-unset',
+  integrationResources: 'devteam:integration-resources',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

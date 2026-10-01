@@ -30,6 +30,18 @@ export const PLUGIN_COMMANDS = {
   run: 'plugin run',
 } as const;
 
+/**
+ * The exact subcommand keys the Integrations screens' write buttons run. Saving account
+ * fields may run `connect` or `config set`/`config unset`, so callers gate with `isAnyWithheld`.
+ */
+export const INTEGRATION_COMMANDS = {
+  connect: 'integration connect',
+  disconnect: 'integration disconnect',
+  configSet: 'integration config set',
+  configUnset: 'integration config unset',
+  test: 'integration test',
+} as const;
+
 /** The first of `commands` that is withheld, so one reason is reported when several are. */
 export function isAnyWithheld(entries: EnvironmentReport['withheld'], commands: readonly string[]): Withheld {
   for (const command of commands) {

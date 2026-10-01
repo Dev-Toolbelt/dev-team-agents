@@ -64,6 +64,7 @@ Help me set up this project with dev-team-agents
 | Bind a project | `devteam bind /path/to/project` |
 | List what's available | `devteam catalog agents|skills|commands` |
 | Manage your global Claude / Codex / opencode skills | `devteam skills list\|show\|install\|remove` |
+| Connect GitHub and Jira accounts | `devteam integration connect github\|jira`, test, disconnect, config |
 | See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
@@ -76,6 +77,30 @@ On Windows, call the CLI as `py -3 scripts\cli\devteam …` — the extensionles
 `devteam bind` defaults to `--mode=auto`, which resolves to **`link`** (symlinks into the store) on any filesystem that supports it — the recommended mode, since a later `devteam update` reaches every project bound this way with no further step. `copy` (the Windows fallback when symlinks aren't available) and the opt-in `vendored` mode both need an explicit `devteam sync` per project after each update to pick up the change.
 
 > Store layout, bind modes, hook wiring, the `--json` contract and exit codes: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
+
+### Integrations — GitHub and Jira
+
+Connect your GitHub and Jira accounts once; every project on your machine can then use them. Tokens are stored securely in the OS keychain and never displayed again. Project-specific bindings (which repository, which Jira project) are committed to each project so your team stays in sync.
+
+**Create tokens:**
+- **GitHub**: [Personal access tokens (fine-grained)](https://github.com/settings/personal-access-tokens/new) — select **Repository access: Public repositories (read-only)** and permissions **Metadata (read-only)**, or for private repos grant **Contents (read-only)** + **Metadata (read-only)**.
+- **Jira Cloud**: API tokens at [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens). You'll also need your email address. For self-hosted Jira Data Center, use a Personal Access Token (PAT) instead.
+
+Connect them with:
+```bash
+devteam integration connect github
+devteam integration connect jira --field site_url=https://acme.atlassian.net --field email=me@example.com
+```
+
+Each prompt reads the token from stdin only — never from the command line, which would leave it in your shell history. The token is sent only to the configured origin over HTTPS and stored in your machine's keychain.
+
+Then, in each project, bind the integration to your repository or project:
+```bash
+devteam integration config set github repository owner/repo-name
+devteam integration config set jira project_key PROJ
+```
+
+Or discover them interactively from the desktop app's Integrations tab, or with `devteam integration resources github repos` and `devteam integration resources jira projects`.
 
 ---
 

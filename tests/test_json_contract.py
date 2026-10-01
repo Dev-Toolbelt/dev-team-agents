@@ -30,7 +30,7 @@ from devteam_support import CLI, StoreTestCase, make_git_project
 
 from devteam import bind as bind_module
 from devteam import cli as devteam_cli
-from devteam import compat, creds, errors, paths, plugins, project, registry
+from devteam import compat, creds, errors, integrations, paths, plugins, project, registry
 
 
 VALID_EXIT_CODES = {
@@ -501,6 +501,8 @@ class CompatContractTest(StoreTestCase):
             "bind_manifest": bind_module.MANIFEST_SCHEMA,
             "credentials": creds.SCHEMA,
             "plugin_settings": plugins.SCHEMA,
+            "integrations": integrations.SCHEMA,
+            "integration_settings": integrations.SETTINGS_SCHEMA,
         }
         self.assertEqual(compat.store_schemas(), expected)
         for value in expected.values():
@@ -778,6 +780,27 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "preserved",
             "unrecognised",
         },
+        # The integrations screens bind to these (app/src/cli/operations.ts).
+        "integration list": {"project_id", "integrations"},
+        "integration.view": {
+            "name", "title", "description", "homepage", "auth", "fields", "account",
+            "project", "project_problem", "detected", "connected", "project_configured",
+            "status",
+        },
+        "integration.auth": {"kind", "label", "help", "has_token", "stale", "backend"},
+        "integration.field": {
+            "key", "scope", "type", "label", "help", "required", "default", "placeholder",
+            "options", "resource", "visible_when", "binds_token",
+        },
+        "integration.status": {"state", "checked_at", "summary", "facts"},
+        # `connect` may add a top-level `warning` (token in the insecure backend); the
+        # test pops it after checking its type, so the pinned set is the stable part.
+        "integration connect": {"integration", "test"},
+        "integration test": {"integration", "test"},
+        "integration.test": {"ok", "state", "summary", "facts", "checked_at"},
+        "integration disconnect": {"integration", "changed"},
+        "integration config set": {"integration", "key"},
+        "integration config unset": {"integration", "key", "removed"},
     }
 
     # A key whose name alone suggests it might carry an actual secret value,
@@ -1109,6 +1132,52 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # Belt and suspenders: the value itself must not appear anywhere in the
         # serialized payload, not just be absent from the key names.
         self.assertNotIn("s3cr3t-value", json.dumps(payload))
+
+    def test_integration_list(self):
+        payload = self._run_ok("integration", "list", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("integration list", payload, self.EXPECTED["integration list"])
+        self._assert_no_secret_like_keys("integration list", payload)
+        self.assertEqual({v["name"] for v in payload["integrations"]}, {"github", "jira"})
+        for view in payload["integrations"]:
+            self._assert_record_keys("integration.view", view, self.EXPECTED["integration.view"])
+            self._assert_record_keys("integration.auth", view["auth"], self.EXPECTED["integration.auth"])
+            self._assert_record_keys("integration.status", view["status"], self.EXPECTED["integration.status"])
+            for declared in view["fields"]:
+                self._assert_record_keys("integration.field", declared, self.EXPECTED["integration.field"])
+
+    def test_integration_writes(self):
+        # Port 1 on loopback refuses the connection: connect and test answer with an
+        # `unreachable` TestResult and exit 0, which is the shape the app binds to.
+        url = "https://127.0.0.1:1"
+        code, out, err = self.run_cli(
+            "integration", "connect", "github", "--field", "api_url=" + url,
+            "--path", str(self.project_root), "--json", input_text="contract-token\n",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        warning = payload.pop("warning", None)
+        self.assertTrue(warning is None or isinstance(warning, str))
+        self._assert_exact_keys("integration connect", payload, self.EXPECTED["integration connect"])
+        self._assert_record_keys("integration.test", payload["test"], self.EXPECTED["integration.test"])
+        self.assertNotIn("contract-token", out + err)
+
+        payload = self._run_ok("integration", "test", "github", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("integration test", payload, self.EXPECTED["integration test"])
+        self._assert_record_keys("integration.test", payload["test"], self.EXPECTED["integration.test"])
+
+        payload = self._run_ok(
+            "integration", "config", "set", "github", "repository", "acme/widgets",
+            "--path", str(self.project_root), "--json",
+        )
+        self._assert_exact_keys("integration config set", payload, self.EXPECTED["integration config set"])
+        payload = self._run_ok(
+            "integration", "config", "unset", "github", "repository",
+            "--path", str(self.project_root), "--json",
+        )
+        self._assert_exact_keys("integration config unset", payload, self.EXPECTED["integration config unset"])
+
+        payload = self._run_ok("integration", "disconnect", "github", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("integration disconnect", payload, self.EXPECTED["integration disconnect"])
 
     def test_cred_backends(self):
         # Unlike every other `cred` subcommand, `backends` takes no `--path` --

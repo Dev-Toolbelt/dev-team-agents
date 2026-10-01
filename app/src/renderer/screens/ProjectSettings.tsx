@@ -23,6 +23,7 @@ import { SaveBar } from '../SaveBar.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import { Loading, Problem } from '../Problem.js';
 import { PinDialog, UnbindDialog } from './ProjectDialogs.js';
+import { ProjectIntegrations } from './ProjectIntegrations.js';
 import { ProjectPlugins } from './ProjectPlugins.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
@@ -101,6 +102,8 @@ export function ProjectSettings({
   onBack,
   onChanged,
   onUnbound,
+  onOpenIntegrations,
+  integrationsNonce = 0,
 }: {
   project: ProjectRecord;
   name: string;
@@ -112,6 +115,10 @@ export function ProjectSettings({
   onChanged: () => void;
   /** The project was unbound and its dialog dismissed: leave this screen and refresh the list. */
   onUnbound: () => void;
+  /** The Integrations tab's "connect" hint: switch the app to its top-level Integrations tab. */
+  onOpenIntegrations?: (() => void) | undefined;
+  /** Bumped when an account write made the account readouts in the Integrations tab stale. */
+  integrationsNonce?: number;
 }) {
   const [dialog, setDialog] = useState<'pin' | 'unbind' | null>(null);
   const projectId = project.project_id;
@@ -119,7 +126,7 @@ export function ProjectSettings({
   const [drafts, setDrafts] = useState<Drafts>({});
   const [resets, setResets] = useState<ReadonlySet<string>>(new Set());
   const [confirmLeave, setConfirmLeave] = useState(false);
-  const [tab, setTab] = useState<'preferences' | 'plugins'>('preferences');
+  const [tab, setTab] = useState<'preferences' | 'plugins' | 'integrations'>('preferences');
   // The Plugins tab loads (and runs each plugin's status script) on first visit, then stays
   // mounted so switching tabs never discards a half-edited config form.
   const [pluginsVisited, setPluginsVisited] = useState(false);
@@ -127,6 +134,11 @@ export function ProjectSettings({
   const onPluginDirty = useCallback((count: number) => setPluginDirty(count), []);
   const [pluginRunning, setPluginRunning] = useState(0);
   const onPluginRunning = useCallback((count: number) => setPluginRunning(count), []);
+  const [integrationsVisited, setIntegrationsVisited] = useState(false);
+  const [integrationDirty, setIntegrationDirty] = useState(0);
+  const onIntegrationDirty = useCallback((count: number) => setIntegrationDirty(count), []);
+  const [integrationRunning, setIntegrationRunning] = useState(0);
+  const onIntegrationRunning = useCallback((count: number) => setIntegrationRunning(count), []);
   const [saved, setSaved] = useState<PreferenceUpdateReport | null>(null);
   const [awaiting, setAwaiting] = useState<AwaitingReload | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -319,10 +331,11 @@ export function ProjectSettings({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const unsavedTotal = dirtyCount + pluginDirty;
+  const unsavedTotal = dirtyCount + pluginDirty + integrationDirty;
+  const runningTotal = pluginRunning + integrationRunning;
 
   function requestBack() {
-    if (unsavedTotal > 0 || pluginRunning > 0) setConfirmLeave(true);
+    if (unsavedTotal > 0 || runningTotal > 0) setConfirmLeave(true);
     else onBack();
   }
 
@@ -397,8 +410,9 @@ export function ProjectSettings({
       <Tabs
         value={tab}
         onValueChange={(next) => {
-          setTab(next as 'preferences' | 'plugins');
+          setTab(next as 'preferences' | 'plugins' | 'integrations');
           if (next === 'plugins') setPluginsVisited(true);
+          if (next === 'integrations') setIntegrationsVisited(true);
         }}
       >
         <TabsList aria-label="Project settings sections">
@@ -409,6 +423,10 @@ export function ProjectSettings({
           <TabsTrigger value="plugins">
             Plugins
             <TabCount count={pluginDirty} />
+          </TabsTrigger>
+          <TabsTrigger value="integrations">
+            Integrations
+            <TabCount count={integrationDirty} />
           </TabsTrigger>
         </TabsList>
 
@@ -598,6 +616,20 @@ export function ProjectSettings({
             />
           ) : null}
         </TabsContent>
+        {/* Mounted on first visit, then kept (`forceMount`) like the other panels. */}
+        {integrationsVisited ? (
+          <TabsContent value="integrations" forceMount className="mt-3 data-[state=inactive]:hidden">
+            <ProjectIntegrations
+              project={project}
+              environment={environment}
+              onDirtyChange={onIntegrationDirty}
+              onRunningChange={onIntegrationRunning}
+              onConnectAccount={onOpenIntegrations}
+              active={active && tab === 'integrations'}
+              refreshNonce={integrationsNonce}
+            />
+          </TabsContent>
+        ) : null}
       </Tabs>
 
       <Dialog open={confirmLeave} onOpenChange={setConfirmLeave}>
@@ -610,11 +642,11 @@ export function ProjectSettings({
                   {unsavedTotal} change{unsavedTotal === 1 ? '' : 's'} to {name} will be lost.
                 </>
               ) : null}
-              {unsavedTotal > 0 && pluginRunning > 0 ? ' ' : null}
-              {pluginRunning > 0 ? (
+              {unsavedTotal > 0 && runningTotal > 0 ? ' ' : null}
+              {runningTotal > 0 ? (
                 <>
-                  {pluginRunning === 1 ? 'A plugin action is' : `${pluginRunning} plugin actions are`} still running. Leaving does not
-                  stop {pluginRunning === 1 ? 'it' : 'them'}: {pluginRunning === 1 ? 'it keeps' : 'they keep'} running in the
+                  {runningTotal === 1 ? 'An action is' : `${runningTotal} actions are`} still running. Leaving does not
+                  stop {runningTotal === 1 ? 'it' : 'them'}: {runningTotal === 1 ? 'it keeps' : 'they keep'} running in the
                   background and its result will not be shown here.
                 </>
               ) : null}

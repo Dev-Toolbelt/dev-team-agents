@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, Lock, ShieldAlert } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Board } from './screens/Board.js';
 import { Catalog } from './screens/Catalog.js';
 import { Doctor } from './screens/Doctor.js';
+import { Integrations } from './screens/Integrations.js';
 import { Projects } from './screens/Projects.js';
 import { NotificationBell } from './NotificationBell.js';
 import { Skills } from './screens/Skills.js';
@@ -49,6 +50,10 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadErrorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState('projects');
+  // Bumped whenever an account-level integration write succeeds, so each project's
+  // Integrations tab (kept mounted) reloads its account readout.
+  const [integrationsNonce, setIntegrationsNonce] = useState(0);
+  const onAccountChanged = useCallback(() => setIntegrationsNonce((n) => n + 1), []);
   const [openRequest, setOpenRequest] = useState<{ projectId: string; nonce: number } | null>(null);
 
   function openProject(projectId: string) {
@@ -179,13 +184,20 @@ export function App() {
                 <TabsTrigger value="board">Board</TabsTrigger>
                 <TabsTrigger value="catalog">Catalog</TabsTrigger>
                 <TabsTrigger value="skills">Global Skills</TabsTrigger>
+                <TabsTrigger value="integrations">Integrations</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
               </TabsList>
               {/* Kept mounted while another tab is shown: the project settings screen lives
                   inside this tab, and unmounting it would silently drop unsaved edits. */}
               <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
                 <ErrorBoundary label="The Projects screen" resetKey={tab}>
-                  <Projects environment={environment} active={tab === 'projects'} openRequest={openRequest} />
+                  <Projects
+                    environment={environment}
+                    active={tab === 'projects'}
+                    openRequest={openRequest}
+                    onOpenIntegrations={() => setTab('integrations')}
+                    integrationsNonce={integrationsNonce}
+                  />
                 </ErrorBoundary>
               </TabsContent>
               {/* Kept mounted: the kanban's filters and selected project are view state. */}
@@ -200,6 +212,12 @@ export function App() {
               <TabsContent value="skills" className="pt-4">
                 <ErrorBoundary label="The Global Skills screen">
                   <Skills environment={environment} />
+                </ErrorBoundary>
+              </TabsContent>
+              {/* Kept mounted: a typed token or an edited account field is a draft. */}
+              <TabsContent value="integrations" forceMount className="pt-4 data-[state=inactive]:hidden">
+                <ErrorBoundary label="The Integrations screen">
+                  <Integrations environment={environment} active={tab === 'integrations'} onAccountChanged={onAccountChanged} />
                 </ErrorBoundary>
               </TabsContent>
               <TabsContent value="doctor" className="pt-4">

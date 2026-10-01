@@ -22,6 +22,7 @@ from pathlib import Path
 from . import bind as bind_module
 from . import paths, versions
 from .errors import EnvError, UsageError
+from .redirects import RestrictedRedirects
 
 GITHUB_OWNER = "Dev-Toolbelt"
 GITHUB_REPO = "dev-team-agents"
@@ -63,14 +64,11 @@ def _check_url(url):
     return url
 
 
-class _RestrictedRedirects(urllib.request.HTTPRedirectHandler):
+class _RestrictedRedirects(RestrictedRedirects):
     """Follow redirects only to an allowed https host."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        _check_url(newurl)
-        return urllib.request.HTTPRedirectHandler.redirect_request(
-            self, req, fp, code, msg, headers, newurl
-        )
+    def __init__(self):
+        super().__init__(_check_url)
 
 
 def _opener():
