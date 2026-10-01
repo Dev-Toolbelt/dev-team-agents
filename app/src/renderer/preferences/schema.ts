@@ -174,13 +174,6 @@ export const FIELDS: readonly Field[] = [
     help: 'Turns of work on a dirty tree with no commit before a one-time reminder.',
     control: { type: 'integer', ...integerRange('session_no_commit_turns'), unit: 'turns' },
   },
-  {
-    key: 'transcript_multiplier',
-    group: 'context',
-    label: 'Transcript multiplier',
-    help: 'Context is now read from the transcript’s last usage entry, so this value is ignored.',
-    control: { type: 'readonly', reason: 'Deprecated — no longer applied' },
-  },
 
   // Memory & docs
   {

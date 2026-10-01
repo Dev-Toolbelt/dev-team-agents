@@ -91,7 +91,6 @@ export const PREFERENCE_RULES: Readonly<Record<string, PreferenceRule>> = Object
   context_window_percent_warning: { kind: 'integer', min: 1, max: 100 },
   context_window_percent_limit: { kind: 'integer', min: 1, max: 100 },
   session_no_commit_turns: { kind: 'integer', min: 1, max: 200 },
-  transcript_multiplier: { kind: 'readonly' },
   session_summary_max_days: { kind: 'integer', min: 1, max: 3650 },
   session_summary_max_entries: { kind: 'integer', min: 1, max: 1000 },
   docs_stale_after_days: { kind: 'integer', min: 1, max: 3650 },
