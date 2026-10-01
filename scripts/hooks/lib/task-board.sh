@@ -4,7 +4,7 @@
 # Not a hook. Source it, then:
 #   devteam_task_board_init                      resolve root, state dir, CLI; 1 when not in a project
 #   devteam_task_board_session_id <payload>      the payload's session id ("" when absent or unsafe)
-#   devteam_task_board_record <payload>          fold a todo-tool call into its record; raise session_done
+#   devteam_task_board_record <payload>          fold a todo-tool or agent call into its record; raise session_done
 #   devteam_task_board_mark <idle|ended> <payload>   mark a session; raise session_abandoned on `ended`;
 #                                                on `idle` also settles a command/prompt review window
 #   devteam_task_board_review_open <payload>     open or join a review window (In Review column)
@@ -129,6 +129,10 @@ devteam_task_board_mark() {
     printf '%s' "$out" | grep -q '"marked": true' || return 0
     if [ "$state" = "idle" ]; then
         _tb_review_outcome "$out" review_result review_window review_findings "$payload"
+        # A background agent's hand-back can finish the last task with no review window involved.
+        if ! printf '%s' "$out" | grep -q '"review_result": true' && printf '%s' "$out" | grep -q '"became_all_done": true'; then
+            _tb_notify_done "$(devteam_task_board_session_id "$payload")"
+        fi
         return 0
     fi
     open="$(printf '%s' "$out" | sed -n 's/.*"open": \([0-9]*\).*/\1/p' | head -1)"

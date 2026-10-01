@@ -16,6 +16,18 @@ import re
 #: Agents that review or test other agents' work. Their final report ends with the marker.
 REVIEW_AGENTS = ("qa-specialist", "code-reviewer", "backend-reviewer", "frontend-reviewer")
 
+#: Agents each provider ships itself: spawning one is plumbing, not a unit of work the board shows
+#: (docs/specs/task-board.md § Agent spawns are tasks). Compared case-insensitively. Claude Code:
+#: its documented built-in subagents; Codex: the built-in roles of `codex-rs/core/src/agent/role.rs`
+#: (`default` is also what an omitted `agent_type` resolves to); opencode: its `general` and `explore`
+#: subagents. One list; keyed by provider so a provider added to ``providers.ALL_PROVIDERS`` must
+#: decide its own.
+BUILTIN_AGENTS = {
+    "claude": ("explore", "plan", "general-purpose", "claude-code-guide", "statusline-setup"),
+    "codex": ("default", "explorer", "worker"),
+    "opencode": ("general", "explore"),
+}
+
 #: Slash commands (Claude Code, opencode) and the Codex skill aliases that run a review.
 COMMANDS = ("/devteam:review", "/devteam:qa", "/review", "$devteam-review", "$devteam-qa")
 
@@ -61,6 +73,19 @@ def agent_name(value):
         return None
     name = value.strip().rsplit(":", 1)[-1].strip().lower()
     return name if name in REVIEW_AGENTS else None
+
+
+def spawn_name(value):
+    """The bare agent name of a ``subagent_type``/``agent_type`` (plugin namespace dropped), else ``None``."""
+    if not isinstance(value, str):
+        return None
+    name = value.strip().rsplit(":", 1)[-1].strip()
+    return name or None
+
+
+def is_builtin(provider, name):
+    """True when ``name`` is one of ``provider``'s own agents. An unknown provider has none."""
+    return isinstance(name, str) and name.strip().lower() in BUILTIN_AGENTS.get(provider, ())
 
 
 def _is_question(text, start):

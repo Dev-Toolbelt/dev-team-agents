@@ -137,6 +137,18 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 | Agent result (marker) | `PostToolUse` on `Agent`/`Task`, `tool_response` | `PostToolUse` on `wait_agent` (maybe `<ns>.wait_agent`), `tool_response` | `tool.execute.after` on `task`, `output.output` → `{tool, args, output, sessionID}` |
 | Final message (Stop scan) | `Stop`: last assistant text in `transcript_path` | `Stop`: `last_assistant_message` | `session.idle`: plugin adds `last_assistant_message` |
 
+**Agent-spawn capture per provider** (spec § Agent spawns are tasks; the tasks the hooks record for every non-built-in, non-review agent):
+
+| Signal | Claude Code | Codex | opencode |
+| --- | --- | --- | --- |
+| Spawn → task `in_progress` | `PreToolUse` on `Agent`/`Task` (`tool_use_id`, `tool_input.description`) | `PreToolUse` on `spawn_agent` (`tool_use_id`, `tool_input.message` first line) | `tool.execute.before` on `task` (`callID` → `tool_use_id`, `args.description`) |
+| Agent id (match key) | the spawn's `tool_use_id` | `PostToolUse` on `spawn_agent`: `tool_response.agent_id`, kept as the task's `agent_ref` | the spawn's `callID` |
+| Result → `completed` | `PostToolUse` (foreground); transcript hand-back at `Stop` (background) | `PostToolUse` on `wait_agent`: each id in `tool_response.status` that is final | `tool.execute.after` on `task` (same `callID`) |
+| Failure | `PostToolUseFailure` → `cancelled`, `failed: true` | `wait_agent` reporting `errored`/`not_found` → `cancelled`, `failed: true` (`shutdown` → `cancelled`) | none |
+| Built-ins (no task) | `Explore`, `Plan`, `general-purpose`, `claude-code-guide`, `statusline-setup` | `default`, `explorer`, `worker` (`codex-rs/core/src/agent/role.rs`) | `general`, `explore` |
+
+The built-in list is `review_triggers.BUILTIN_AGENTS`; a spawn with no agent type is the provider's default agent and is no task either. Codex needs `PostToolUse` on `spawn_agent` (a widened matcher, `.*(wait_agent|spawn_agent)`), because its `PreToolUse` fires before the agent id exists.
+
 Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, so its result is read from the transcript hand-back at a later `Stop` (the window shows *pending* until then); Codex `spawn_agent`'s `PostToolUse` carries an agent id, not a report, and is ignored; a Codex `wait_agent` without a marker is ignored because it does not say which agent it waited on — the launch it should have retired is settled as *unread* at the turn's `Stop`, as is any foreground launch whose result never arrived. A window with no activity for 6 hours is settled as unread.
 
 opencode notes (unverified against a live session): `tool.execute.before`/`after` forward `callID` as `tool_use_id`, and the plugin keeps the `task` call's `subagent_type` (keyed by `callID`, 256 entries) for the matching `after`, since `after` may not repeat the args. Whether `chat.message` delivers a slash command raw (`/devteam:review`) or already expanded into its template is not confirmed: the plugin detects the command from the raw text of the parts, or rebuilds it from `input.command`/`input.arguments` if opencode provides them; if it delivers only the expanded template, a review command is still caught when the template text carries a review keyword, but not as a command (a keyword-only window that closes unread is dismissed). The task-board hooks run with a 12 s timeout instead of 5 s because the session record lock waits up to 10 s; a shorter kill would lose the write.

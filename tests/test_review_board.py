@@ -1045,16 +1045,22 @@ class ReviewHookTest(tt.HookTest):
         for sid in ("s1", "c1", "o1"):
             self.assertEqual(self.window(sid)["trigger"], "agent")
 
-    def test_pre_tool_use_forks_no_python_for_other_agents_or_a_command_that_merely_names_one(self):
+    def test_pre_tool_use_forks_no_python_for_a_command_that_merely_names_an_agent(self):
         base = self.start()
         for payload in (
-            claude_spawn("s1", "Explore"), codex_spawn("s1", "backend-developer"), opencode_spawn("s1", "explore"),
             {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "echo qa-specialist spawn_agent"}},
             {"tool_name": "Read", "session_id": "s1", "tool_input": {"file_path": "agents/qa-specialist.md"}},
             {"tool_name": "TaskCreate", "session_id": "s1", "tool_input": {"subject": "qa-specialist"}},
         ):
             self.run_script(PRE_TOOL_USE, payload)
         self.assertEqual(self.python_calls(), base)
+
+    def test_a_built_in_agent_opens_no_window_and_is_no_task(self):
+        self.start()
+        for payload in (claude_spawn("s1", "Explore"), codex_spawn("s1", "worker"), opencode_spawn("s1", "explore")):
+            self.run_script(PRE_TOOL_USE, payload)
+        self.assertEqual(self.load("s1").get("reviews", []), [])
+        self.assertEqual([t for t in self.load("s1")["tasks"] if t.get("kind") == "agent"], [])
 
     def test_pre_tool_use_forks_no_python_for_a_review_agent_in_a_session_without_a_record(self):
         self.run_script(PRE_TOOL_USE, claude_spawn("ghost"))
@@ -1104,14 +1110,11 @@ class ReviewHookTest(tt.HookTest):
         self.assertEqual(self.window("c1")["findings"], 4)
         self.assertEqual(self.window("o1")["resolution"], "passed")
 
-    def test_post_tool_use_forks_no_python_for_other_tools_or_agents_without_the_marker_words(self):
+    def test_post_tool_use_forks_no_python_for_other_tools_without_the_marker_words(self):
         base = self.start()
         for payload in (
             {"tool_name": "Edit", "session_id": "s1", "tool_input": {}},
-            claude_return("s1", "text", agent="Explore"),
             {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "echo review-result"}},
-            {"tool_name": "spawn_agent", "session_id": "s1", "tool_response": {"agent_id": "a"}},
-            codex_wait("s1", "nothing to see"),
             {"tool": "bash", "session_id": "s1", "output": "review-result"},
         ):
             self.run_script(POST_TOOL_USE, payload)
@@ -1247,8 +1250,10 @@ class WiringTest(tt.BoardCase):
             self.assertIn(script, ours[0]["hooks"][0]["command"])
         self.assertEqual(data["PostToolUse"][0]["hooks"][0]["command"], "mine")
         (post,) = [g for g in data["PostToolUse"] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
-        self.assertEqual(post["matcher"], ".*wait_agent")
-        self.assertTrue(re.search(post["matcher"], "wait_agent") and re.search(post["matcher"], "agents.wait_agent"))
+        self.assertEqual(post["matcher"], ".*(wait_agent|spawn_agent)")
+        for tool in ("wait_agent", "agents.wait_agent", "spawn_agent"):
+            self.assertTrue(re.search(post["matcher"], tool), tool)
+        self.assertFalse(re.search(post["matcher"], "update_plan"))
         self.assertFalse(re.search(post["matcher"], "shell") or re.search(post["matcher"], "update_plan"))
         for event in ("UserPromptSubmit", "SessionEnd", "Stop"):
             (group,) = [g for g in data[event] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
