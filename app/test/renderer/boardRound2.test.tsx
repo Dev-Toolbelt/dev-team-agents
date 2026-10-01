@@ -637,8 +637,16 @@ describe('Board kanban — the worktree mark', () => {
     const tasks = [boardTask({ key: 'w', content: 'In the worktree', worktree: { path: '/abs/wt', branch: null } })];
     const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
     const mark = within(card('In the worktree')).getByRole('button', { name: 'Worktree: /abs/wt' });
+    const steps = within(card('In the worktree')).getByRole('button', { name: /^Time per step/ });
+    // Reached before the step times in tab order.
+    expect(mark.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (let step = 0; step < 50 && document.activeElement !== mark; step += 1) await user.tab();
     expect(mark).toHaveFocus();
     expect((await screen.findByRole('tooltip')).textContent).toContain('Worktree: /abs/wt');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // Pressing it changes nothing on the card.
+    await user.click(mark);
+    expect(steps).toHaveAttribute('aria-expanded', 'false');
   });
 });

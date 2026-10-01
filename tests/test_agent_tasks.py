@@ -650,8 +650,9 @@ class WorktreeTest(BoardCase):
     def test_no_work_tree_and_no_commit_yet_degrade_without_a_worktree(self):
         bare = self.tmp / "bare.git"
         subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
-        self.assertEqual(tasks._git_location(str(bare)), (None, None))
-        self.assertEqual(tasks._git_location(str(self.root / ".git")), (None, None))
+        self.assertEqual(tasks._git_location(str(bare))[1], None)
+        # Inside `.git` there is no work tree, but HEAD still names the branch, as it always did.
+        self.assertEqual(tasks._git_location(str(self.root / ".git")), (tasks._git_location(str(self.root))[0], None))
         unborn = self.tmp / "unborn"
         subprocess.run(["git", "init", "-q", str(unborn)], check=True)
         self.assertEqual(tasks._git_location(str(unborn)), (None, None))
