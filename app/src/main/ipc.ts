@@ -33,6 +33,12 @@ import {
   catalogSummary,
   doctor,
   installSkill,
+  credentialsLocalInit,
+  credentialsLocalPatch,
+  credentialsLocalShow,
+  credentialsOpsProblem,
+  isCredentialsOps,
+  CREDENTIALS_HASH,
   integrationConfigSet,
   integrationConfigUnset,
   integrationConnect,
@@ -97,6 +103,7 @@ import {
   type IntegrationConfigWrite,
   type IntegrationConnectReport,
   type IntegrationDisconnectReport,
+  type CredentialsLocalView,
   type IntegrationList,
   type IntegrationResources,
   type IntegrationTestReport,
@@ -1254,6 +1261,47 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       const ctx = await context();
       if (ctx === null) return NO_CLI;
       return integrationResources(ctx, resolved.path, name, kind);
+    },
+  );
+
+  // ── local credentials file (ADR-0024) ──────────────────────────────────────────────
+  //
+  // The project is named by id and resolved against the registry; the renderer never supplies
+  // a path. Edits travel to the CLI over stdin and the response carries no secret value.
+
+  handle(CHANNELS.credentialsLocalShow, async (_event, projectId: unknown): Promise<OperationResult<CredentialsLocalView>> => {
+    if (typeof projectId !== 'string') return refusedBadArgument('cred local show');
+    const resolved = await resolveProject(projectId);
+    if (!('path' in resolved)) return resolved;
+    const ctx = await context();
+    if (ctx === null) return NO_CLI;
+    return credentialsLocalShow(ctx, resolved.path);
+  });
+
+  handle(CHANNELS.credentialsLocalInit, async (_event, projectId: unknown): Promise<OperationResult<CredentialsLocalView>> => {
+    if (typeof projectId !== 'string') return refusedBadArgument('cred local init');
+    const resolved = await resolveProject(projectId);
+    if (!('path' in resolved)) return resolved;
+    const gated = await gatedContext('cred local init');
+    if (!gated.ready) return gated.problem;
+    return credentialsLocalInit(gated.ctx, resolved.path);
+  });
+
+  handle(
+    CHANNELS.credentialsLocalPatch,
+    async (_event, projectId: unknown, expectHash: unknown, ops: unknown): Promise<OperationResult<CredentialsLocalView>> => {
+      if (typeof projectId !== 'string') return refusedBadArgument('cred local patch');
+      if (typeof expectHash !== 'string' || !CREDENTIALS_HASH.test(expectHash)) {
+        return refusedRequest('cred local patch', '`devteam cred local patch` was refused: the expected hash is 64 hex characters');
+      }
+      if (!isCredentialsOps(ops)) {
+        return refusedRequest('cred local patch', `\`devteam cred local patch\` was refused: ${credentialsOpsProblem(ops) ?? 'invalid edits'}`);
+      }
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('cred local patch');
+      if (!gated.ready) return gated.problem;
+      return credentialsLocalPatch(gated.ctx, resolved.path, expectHash, ops);
     },
   );
 

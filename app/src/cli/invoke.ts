@@ -98,13 +98,21 @@ export interface InvokeOptions {
    * When absent, the child's stdin is `ignore`, exactly as before.
    */
   readonly secretStdin?: string;
+  /**
+   * Further values to redact from everything this function returns, in addition to
+   * `secretStdin` as a whole. For a structured stdin payload (ADR-0024's patch ops) where a
+   * single secret inside it could be echoed on its own in an error message.
+   */
+  readonly redactAlso?: readonly string[];
 }
 
 export const REDACTED = '[redacted]';
+const MIN_REDACTABLE = 4;
 
 /** Replace every occurrence of `secret` (raw and JSON-escaped) in `text`. */
 export function redactSecret(text: string, secret: string | undefined): string {
-  if (secret === undefined || secret === '') return text;
+  // A value this short would also match inside unrelated text and mangle the JSON around it.
+  if (secret === undefined || secret.length < MIN_REDACTABLE) return text;
   const escaped = JSON.stringify(secret).slice(1, -1);
   let out = text.split(secret).join(REDACTED);
   if (escaped !== secret) out = out.split(escaped).join(REDACTED);
@@ -349,8 +357,10 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
   }
 
   const durationMs = Date.now() - startedAt;
-  const stdout = redactSecret(Buffer.concat(stdoutChunks).toString('utf8'), options.secretStdin);
-  const stderr = redactSecret(Buffer.concat(stderrChunks).toString('utf8'), options.secretStdin);
+  const redactAll = (text: string): string =>
+    (options.redactAlso ?? []).reduce(redactSecret, redactSecret(text, options.secretStdin));
+  const stdout = redactAll(Buffer.concat(stdoutChunks).toString('utf8'));
+  const stderr = redactAll(Buffer.concat(stderrChunks).toString('utf8'));
 
   if (spawnError !== null) {
     // ENOENT is the first-run state a real user hits: no `devteam` where we looked.

@@ -42,6 +42,12 @@ export const INTEGRATION_COMMANDS = {
   test: 'integration test',
 } as const;
 
+/** The exact subcommand keys the Credentials tab's write buttons run. */
+export const CREDENTIALS_COMMANDS = {
+  init: 'cred local init',
+  patch: 'cred local patch',
+} as const;
+
 /** The first of `commands` that is withheld, so one reason is reported when several are. */
 export function isAnyWithheld(entries: EnvironmentReport['withheld'], commands: readonly string[]): Withheld {
   for (const command of commands) {

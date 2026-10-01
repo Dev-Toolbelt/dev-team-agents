@@ -826,6 +826,49 @@ export interface IntegrationResources {
   readonly truncated: boolean;
 }
 
+// ── local credentials file (ADR-0024) ────────────────────────────────────────
+
+/** A secret leaf in `CredentialsLocalView.data`: the value is never sent, only whether one is stored. */
+export interface CredentialsSecretLeaf {
+  readonly secret: true;
+  readonly set: boolean;
+}
+
+/** Where a parse failure sits in the file on disk (1-based, as the CLI reports it). */
+export interface CredentialsLocalParseError {
+  readonly message: string;
+  readonly line: number | null;
+  readonly column: number | null;
+}
+
+/** `cred local show`, `cred local init` and `cred local patch`: one view of the file. */
+export interface CredentialsLocalView {
+  readonly path: string;
+  readonly exists: boolean;
+  readonly valid: boolean;
+  readonly error: CredentialsLocalParseError | null;
+  /** sha256 of the raw bytes, `null` when the file does not exist. Pass it back as `expectHash`. */
+  readonly hash: string | null;
+  /** The parsed file with every secret replaced by a `CredentialsSecretLeaf`; `null` unless `valid`. */
+  readonly data: Readonly<Record<string, unknown>> | null;
+  /** JSON pointers outside the template's known shape, to be shown read-only. */
+  readonly unknown_paths: readonly string[];
+}
+
+/** One edit for `cred local patch`; `pointer` is an RFC 6901 JSON pointer, `value` is required for `set`. */
+export interface CredentialsPatchOp {
+  readonly op: 'set' | 'unset';
+  readonly pointer: string;
+  readonly value?: unknown;
+}
+
+/** `reason` on a refused `credentialsLocalPatch` when the file changed since it was read (exit 4). */
+export const CREDENTIALS_HASH_CONFLICT = 'hash-conflict';
+/** `reason` on a refused `credentialsLocalInit` when the file already exists (exit 4). */
+export const CREDENTIALS_ALREADY_EXISTS = 'exists';
+/** `reason` on a failed `credentialsLocalPatch` when the CLI exited 0 but its answer was unreadable: the save happened. */
+export const CREDENTIALS_SAVED_UNREADABLE = 'saved-unreadable';
+
 // ── the bridge ───────────────────────────────────────────────────────────────
 
 /** Static facts about the build, so the UI can be honest about what it is. */
@@ -1186,6 +1229,19 @@ export interface DevteamBridge {
     kind: string,
     projectId: ProjectId | null,
   ) => Promise<OperationResult<IntegrationResources>>;
+  /**
+   * The project's local credentials file (ADR-0024). Secret values never come back: a secret
+   * leaf is `{secret: true, set}`. `credentialsLocalPatch` sends `ops` over stdin and is
+   * refused with `reason: 'hash-conflict'` (kind `conflict`) when the file changed on disk
+   * since `expectHash` was read; `credentialsLocalInit` is refused with `reason: 'exists'`.
+   */
+  readonly credentialsLocalShow: (projectId: ProjectId) => Promise<OperationResult<CredentialsLocalView>>;
+  readonly credentialsLocalInit: (projectId: ProjectId) => Promise<OperationResult<CredentialsLocalView>>;
+  readonly credentialsLocalPatch: (
+    projectId: ProjectId,
+    expectHash: string,
+    ops: readonly CredentialsPatchOp[],
+  ) => Promise<OperationResult<CredentialsLocalView>>;
   // Notifications. The main process owns the stream (`devteam notifications watch`) and
   // shows each one natively, so they arrive with the window closed; the renderer only
   // reads the feed for the bell. Spawns nothing from the renderer's side.
@@ -1458,6 +1514,9 @@ export const CHANNELS = {
   integrationConfigSet: 'devteam:integration-config-set',
   integrationConfigUnset: 'devteam:integration-config-unset',
   integrationResources: 'devteam:integration-resources',
+  credentialsLocalShow: 'devteam:credentials-local-show',
+  credentialsLocalInit: 'devteam:credentials-local-init',
+  credentialsLocalPatch: 'devteam:credentials-local-patch',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

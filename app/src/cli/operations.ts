@@ -25,6 +25,7 @@
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
+import { CREDENTIALS_SAVED_UNREADABLE } from '../shared/api.js';
 import { textProblem } from '../shared/preferenceRules.js';
 import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/pluginRules.js';
 import type {
@@ -53,6 +54,8 @@ import type {
   NotificationLevel,
   OperationResult,
   PinReport,
+  CredentialsLocalView,
+  CredentialsPatchOp,
   IntegrationConfigWrite,
   IntegrationConnectReport,
   IntegrationDisconnectReport,
@@ -134,6 +137,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['integration', 'list'],
   ['integration', 'show'],
   ['integration', 'resources'],
+  // ADR-0024. Reads the local credentials file; secret values are masked by the CLI itself.
+  ['cred', 'local', 'show'],
   ['notifications', 'list'],
   ['notifications', 'watch'],
   ['skills', 'list'],
@@ -171,6 +176,9 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
  * `chooseProjectDirectory`. Widening this list without that resolution in place would be
  * the defect the whole design exists to prevent.
  *
+ * ADR-0024 § 5 widens the list by exactly two leaves, `cred local init` and `cred local
+ * patch` (ops on stdin, `--expect-hash` required); `cred get` and `cred list` stay refused.
+ *
  * Adding a further entry is again a decision to widen what this app can change. Make it
  * explicitly; `test/operations.test.ts` fails on an unreviewed addition.
  */
@@ -202,6 +210,11 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['integration', 'config', 'set'],
   ['integration', 'config', 'unset'],
   ['integration', 'test'],
+  // ADR-0024 § 5: the app's only window onto the local credentials file. `init` writes the
+  // template, `patch` applies edits read from stdin. The allowlist widens to exactly these
+  // two leaves plus `cred local show`; `cred get` and `cred list` stay forbidden.
+  ['cred', 'local', 'init'],
+  ['cred', 'local', 'patch'],
   // Writes `notifications-seen.json` in one project's machine-local state directory —
   // the smallest write this app makes, and still a write, so it is declared and gated
   // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
@@ -320,6 +333,11 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'integration config set': { operands: 3, flags: { '--path': 'value' } },
   'integration config unset': { operands: 2, flags: { '--path': 'value' } },
   'integration resources': { operands: 2, flags: { '--path': 'value' } },
+  // ADR-0024. `patch` takes its ops as JSON on stdin, never argv, and `--expect-hash` is
+  // mandatory (checked in `credentialsLocalPatch`) so a stale form cannot overwrite a hand edit.
+  'cred local show': { operands: 0, flags: { '--path': 'value' } },
+  'cred local init': { operands: 0, flags: { '--path': 'value' } },
+  'cred local patch': { operands: 0, flags: { '--path': 'value', '--expect-hash': 'value' } },
   // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
   // — an ack the user did not see happen is a notification they never got.
   'notifications list': { operands: 0, flags: { '--unseen': 'bare' } },
@@ -453,7 +471,9 @@ function toOperationResult<T>(result: CliResult, validate: (body: Record<string,
       kind: PROBLEM_KIND_BY_OUTCOME[result.outcome],
       message: result.document.error,
       ...(result.document.hint !== undefined ? { hint: result.document.hint } : {}),
-      ...(typeof result.document.details?.['reason'] === 'string' ? { reason: result.document.details['reason'] } : {}),
+      ...(typeof result.document.details?.['reason'] === 'string'
+        ? { reason: result.document.details['reason'] }
+        : {}),
       exitCode: result.exitCode,
       command: result.command.display,
       durationMs: result.durationMs,
@@ -513,6 +533,7 @@ export async function run<T>(
   args: readonly string[],
   validate: (body: Record<string, unknown>) => T | string,
   secretStdin?: string,
+  redactAlso?: readonly string[],
 ): Promise<OperationResult<T>> {
   const problem = argvProblem(args);
   if (problem !== null) {
@@ -536,6 +557,7 @@ export async function run<T>(
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       // For this one call only; a `CliContext` is reused and may be logged.
       ...(secretStdin !== undefined ? { secretStdin } : {}),
+      ...(redactAlso !== undefined && redactAlso.length > 0 ? { redactAlso } : {}),
     }),
     validate,
   );
@@ -1312,6 +1334,137 @@ export function integrationTokenProblem(token: unknown): string | null {
   // eslint-disable-next-line no-control-regex
   if (/[\r\n\u0000]/.test(token)) return 'a token cannot contain a line break';
   return null;
+}
+
+// ── local credentials file (ADR-0024) ────────────────────────────────────────────────
+
+export const CREDENTIALS_HASH = /^[0-9a-f]{64}$/;
+export const CREDENTIALS_MAX_OPS = 64;
+export const CREDENTIALS_MAX_POINTER = 512;
+export const CREDENTIALS_MAX_STDIN = 256 * 1024;
+
+function refusedCredentials(command: string, message: string): OperationResult<never> {
+  return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
+}
+
+/** Why `ops` cannot be sent to `cred local patch`, or `null`. Exported for `main/ipc.ts`. */
+export function credentialsOpsProblem(ops: unknown): string | null {
+  if (!Array.isArray(ops)) return 'ops must be an array';
+  if (ops.length === 0) return 'ops must not be empty';
+  if (ops.length > CREDENTIALS_MAX_OPS) return `at most ${CREDENTIALS_MAX_OPS} edits can be sent at once`;
+  for (const entry of ops) {
+    if (!isRecord(entry)) return 'an edit is not an object';
+    const { op, pointer } = entry;
+    if (op !== 'set' && op !== 'unset') return 'an edit\'s op is `set` or `unset`';
+    if (typeof pointer !== 'string' || !pointer.startsWith('/') || pointer.length > CREDENTIALS_MAX_POINTER) {
+      return 'an edit\'s pointer is a JSON pointer starting with "/"';
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(pointer)) return 'a pointer cannot contain control characters';
+    if (op === 'set' && (!('value' in entry) || entry['value'] === undefined)) return 'a `set` edit needs a value';
+    if (op === 'unset' && 'value' in entry) return 'an `unset` edit takes no value';
+  }
+  return null;
+}
+
+/** Narrowing form of {@link credentialsOpsProblem}, for callers holding untrusted input. */
+export function isCredentialsOps(ops: unknown): ops is readonly CredentialsPatchOp[] {
+  return credentialsOpsProblem(ops) === null;
+}
+
+/** `[{op, pointer, value?}]` rebuilt from validated input, with only the three known keys. */
+function normalizeOps(ops: readonly CredentialsPatchOp[]): CredentialsPatchOp[] {
+  return ops.map((entry) =>
+    entry.op === 'set' ? { op: 'set', pointer: entry.pointer, value: entry.value } : { op: 'unset', pointer: entry.pointer },
+  );
+}
+
+/**
+ * Every string value a set of ops writes, at any depth. Redacted from any captured output:
+ * which fields are secret is the CLI's default-deny decision (ADR-0024), so the app does not
+ * keep a second, narrower list of secret names.
+ */
+export function secretValuesOf(ops: readonly CredentialsPatchOp[]): string[] {
+  const found = new Set<string>();
+  const collect = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (value !== '') found.add(value);
+    } else if (Array.isArray(value)) value.forEach(collect);
+    else if (isRecord(value)) Object.values(value).forEach(collect);
+  };
+  for (const entry of ops) if (entry.op === 'set') collect(entry.value);
+  return [...found];
+}
+
+/** `cred local show|init|patch --json`. */
+export function asCredentialsLocalView(body: Record<string, unknown>): CredentialsLocalView | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  if (typeof body['exists'] !== 'boolean') return 'no boolean `exists`';
+  if (typeof body['valid'] !== 'boolean') return 'no boolean `valid`';
+  const rawError = body['error'];
+  let error: CredentialsLocalView['error'] = null;
+  if (rawError !== null && rawError !== undefined) {
+    if (!isRecord(rawError) || typeof rawError['message'] !== 'string') return '`error` is neither null nor {message,line,column}';
+    error = {
+      message: rawError['message'],
+      line: typeof rawError['line'] === 'number' ? rawError['line'] : null,
+      column: typeof rawError['column'] === 'number' ? rawError['column'] : null,
+    };
+  }
+  const data = body['data'];
+  if (data !== null && data !== undefined && (!isRecord(data) || Array.isArray(data))) return '`data` is neither an object nor null';
+  return {
+    path: body['path'],
+    exists: body['exists'],
+    valid: body['valid'],
+    error,
+    hash: asNullableString(body['hash']),
+    data: isRecord(data) ? { ...data } : null,
+    unknown_paths: asStringArray(body['unknown_paths']),
+  };
+}
+
+export function credentialsLocalShow(context: CliContext, path: string): Promise<OperationResult<CredentialsLocalView>> {
+  return run(context, ['cred', 'local', 'show', '--path', path], asCredentialsLocalView);
+}
+
+/** An existing file is refused with `details.reason: 'exists'`, which the CLI itself sets. */
+export function credentialsLocalInit(context: CliContext, path: string): Promise<OperationResult<CredentialsLocalView>> {
+  return run(context, ['cred', 'local', 'init', '--path', path], asCredentialsLocalView);
+}
+
+/** `ops` travel as JSON on stdin; no value ever reaches argv or `command.display`. */
+export async function credentialsLocalPatch(
+  context: CliContext,
+  path: string,
+  expectHash: string,
+  ops: readonly CredentialsPatchOp[],
+): Promise<OperationResult<CredentialsLocalView>> {
+  const problem =
+    (typeof expectHash === 'string' && CREDENTIALS_HASH.test(expectHash) ? null : 'the expected hash is 64 hex characters') ??
+    credentialsOpsProblem(ops);
+  if (problem !== null) return refusedCredentials('cred local patch', problem);
+  const normalized = normalizeOps(ops);
+  let payload: string;
+  try {
+    payload = JSON.stringify(normalized);
+  } catch {
+    return refusedCredentials('cred local patch', 'the edits cannot be serialized');
+  }
+  if (Buffer.byteLength(payload, 'utf8') > CREDENTIALS_MAX_STDIN) return refusedCredentials('cred local patch', 'the edits are too large');
+  const result = await run(
+    context,
+    ['cred', 'local', 'patch', '--path', path, '--expect-hash', expectHash],
+    asCredentialsLocalView,
+    payload,
+    secretValuesOf(normalized),
+  );
+  // Exit 0 followed by a document this app cannot read: the write happened, the answer did not
+  // arrive. Said apart so the UI reloads instead of presenting a failed save.
+  if (!result.ok && result.kind === 'contract-breach' && result.exitCode === 0 && result.reason === undefined) {
+    return { ...result, reason: CREDENTIALS_SAVED_UNREADABLE };
+  }
+  return result;
 }
 
 export function integrationList(context: CliContext, path: string | null): Promise<OperationResult<IntegrationList>> {

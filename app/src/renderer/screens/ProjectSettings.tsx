@@ -25,6 +25,7 @@ import { Loading, Problem } from '../Problem.js';
 import { PinDialog, UnbindDialog } from './ProjectDialogs.js';
 import { ProjectIntegrations } from './ProjectIntegrations.js';
 import { ProjectPlugins } from './ProjectPlugins.js';
+import { ProjectCredentials } from '../credentials/ProjectCredentials.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { isWithheld, type Withheld } from '../writeActionGating.js';
 import { BackNav } from '../BackNav.js';
@@ -136,7 +137,7 @@ export function ProjectSettings({
   const [drafts, setDrafts] = useState<Drafts>({});
   const [resets, setResets] = useState<ReadonlySet<string>>(new Set());
   const [confirmLeave, setConfirmLeave] = useState(false);
-  const [tab, setTab] = useState<'preferences' | 'plugins' | 'integrations'>('preferences');
+  const [tab, setTab] = useState<'preferences' | 'plugins' | 'integrations' | 'credentials'>('preferences');
   // The Plugins tab loads (and runs each plugin's status script) on first visit, then stays
   // mounted so switching tabs never discards a half-edited config form.
   const [pluginsVisited, setPluginsVisited] = useState(false);
@@ -149,6 +150,11 @@ export function ProjectSettings({
   const onIntegrationDirty = useCallback((count: number) => setIntegrationDirty(count), []);
   const [integrationRunning, setIntegrationRunning] = useState(0);
   const onIntegrationRunning = useCallback((count: number) => setIntegrationRunning(count), []);
+  const [credentialsVisited, setCredentialsVisited] = useState(false);
+  const [credentialsDirty, setCredentialsDirty] = useState(0);
+  const onCredentialsDirty = useCallback((count: number) => setCredentialsDirty(count), []);
+  const [credentialsRunning, setCredentialsRunning] = useState(0);
+  const onCredentialsRunning = useCallback((count: number) => setCredentialsRunning(count), []);
   const [saved, setSaved] = useState<PreferenceUpdateReport | null>(null);
   const [awaiting, setAwaiting] = useState<AwaitingReload | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -341,8 +347,8 @@ export function ProjectSettings({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const unsavedTotal = dirtyCount + pluginDirty + integrationDirty;
-  const runningTotal = pluginRunning + integrationRunning;
+  const unsavedTotal = dirtyCount + pluginDirty + integrationDirty + credentialsDirty;
+  const runningTotal = pluginRunning + integrationRunning + credentialsRunning;
 
   // Same rule as the back button: what would make it ask keeps the screen open instead.
   useOnDeactivate(active, () => {
@@ -420,9 +426,10 @@ export function ProjectSettings({
       <Tabs
         value={tab}
         onValueChange={(next) => {
-          setTab(next as 'preferences' | 'plugins' | 'integrations');
+          setTab(next as 'preferences' | 'plugins' | 'integrations' | 'credentials');
           if (next === 'plugins') setPluginsVisited(true);
           if (next === 'integrations') setIntegrationsVisited(true);
+          if (next === 'credentials') setCredentialsVisited(true);
         }}
       >
         <TabsList aria-label="Project settings sections">
@@ -437,6 +444,10 @@ export function ProjectSettings({
           <TabsTrigger value="integrations">
             Integrations
             <TabCount count={integrationDirty} />
+          </TabsTrigger>
+          <TabsTrigger value="credentials">
+            Credentials
+            <TabCount count={credentialsDirty} />
           </TabsTrigger>
         </TabsList>
 
@@ -637,6 +648,17 @@ export function ProjectSettings({
               onConnectAccount={onOpenIntegrations}
               active={active && tab === 'integrations'}
               refreshNonce={integrationsNonce}
+            />
+          </TabsContent>
+        ) : null}
+        {credentialsVisited ? (
+          <TabsContent value="credentials" forceMount className="mt-3 data-[state=inactive]:hidden">
+            <ProjectCredentials
+              project={project}
+              environment={environment}
+              onDirtyChange={onCredentialsDirty}
+              onRunningChange={onCredentialsRunning}
+              active={active && tab === 'credentials'}
             />
           </TabsContent>
         ) : null}

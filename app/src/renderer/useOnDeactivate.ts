@@ -17,3 +17,17 @@ export function useOnDeactivate(active: boolean, callback: () => void): void {
     wasActive.current = active;
   }, [active]);
 }
+
+/**
+ * Runs `callback` once each time `active` goes from false to true — the tab holding a screen
+ * was shown again. The mirror of {@link useOnDeactivate}, read through a ref the same way.
+ */
+export function useOnActivate(active: boolean, callback: () => void): void {
+  const wasActive = useRef(active);
+  const latest = useRef(callback);
+  latest.current = callback;
+  useEffect(() => {
+    if (active && !wasActive.current) latest.current();
+    wasActive.current = active;
+  }, [active]);
+}

@@ -22,6 +22,7 @@ import {
   type BoardFeed,
   type BoardSettings,
   type CatalogKind,
+  type CredentialsPatchOp,
   type MigrateRequest,
   type DevteamBridge,
   type PluginConfigChange,
@@ -163,6 +164,21 @@ const bridge: DevteamBridge = {
       String(name),
       String(kind),
       projectId === null ? null : String(projectId),
+    ),
+  // Local credentials file (ADR-0024). Ops are copied to plain data here; main validates and
+  // forwards them over stdin.
+  credentialsLocalShow: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.credentialsLocalShow, String(projectId)),
+  credentialsLocalInit: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.credentialsLocalInit, String(projectId)),
+  credentialsLocalPatch: (projectId: ProjectId, expectHash: string, ops: readonly CredentialsPatchOp[]) =>
+    ipcRenderer.invoke(
+      CHANNELS.credentialsLocalPatch,
+      String(projectId),
+      String(expectHash),
+      ops.map((entry) => ({
+        op: entry.op,
+        pointer: String(entry.pointer),
+        ...('value' in entry ? { value: entry.value } : {}),
+      })),
     ),
   pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) =>
     ipcRenderer.invoke(CHANNELS.pickProjectPath, String(projectId), String(picker)),
