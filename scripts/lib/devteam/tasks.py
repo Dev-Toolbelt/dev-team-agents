@@ -1762,21 +1762,39 @@ def _retire_at_stop(rec, payload, now):
     return outcomes
 
 
-def _git_branch(cwd):
+def _git_location(cwd):
+    """``(branch, worktree)`` for a working directory, from one ``git`` call.
+
+    ``worktree`` is ``{"path", "branch"}`` when ``cwd`` is inside a linked worktree (its git dir is
+    not the repository's common dir), else ``None``. ``path`` is the worktree's root relative to
+    the main checkout when it lives under it (``.worktrees/feat/x``), else absolute.
+    """
     if not cwd or not os.path.isdir(cwd):
-        return None
+        return None, None
     try:
         result = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD", "--git-dir", "--git-common-dir", "--show-toplevel"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=3,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return None
-    branch = result.stdout.decode("utf-8", "replace").strip()
-    return branch if result.returncode == 0 and branch else None
+        return None, None
+    lines = result.stdout.decode("utf-8", "replace").splitlines()
+    if result.returncode != 0 or len(lines) < 4:
+        return None, None
+    branch, git_dir, common_dir, toplevel = (line.strip() for line in lines[:4])
+    branch = branch or None
+    # `--git-dir`/`--git-common-dir` are relative to `cwd` outside a worktree.
+    git_dir = os.path.realpath(os.path.join(cwd, git_dir))
+    common_dir = os.path.realpath(os.path.join(cwd, common_dir))
+    if git_dir == common_dir or not toplevel:
+        return branch, None
+    main = os.path.dirname(common_dir)
+    top = os.path.realpath(toplevel)
+    path = os.path.relpath(top, main) if top.startswith(main + os.sep) else top
+    return branch, {"path": path.replace(os.sep, "/"), "branch": branch}
 
 
 #: Long enough to outlast a concurrent hook's whole critical section (a read, a diff and an
@@ -1813,7 +1831,7 @@ def record(root, payload, provider="auto", now=None):
         # Resolved before the lock: `git` can take seconds, and holding the lock across it
         # made a concurrent hook time out and its call vanish for good.
         stored = _load(path)
-        branch = _git_branch(call["cwd"] or (stored or {}).get("cwd"))
+        branch, worktree = _git_location(call["cwd"] or (stored or {}).get("cwd"))
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -1833,6 +1851,10 @@ def record(root, payload, provider="auto", now=None):
                 # the record is not touched, so a stray call cannot keep a session looking alive.
                 return result
             _reopen(rec, before, now)
+            # Where a task was started is fixed at its creation: the session may `cd` on later.
+            for task in rec["tasks"]:
+                if task["key"] not in before and worktree is not None:
+                    task["worktree"] = dict(worktree)
             _sweep_reviews(rec, now)
             rec["provider"] = call["provider"]
             if call["cwd"]:
@@ -1954,6 +1976,14 @@ def _durations(history, until, review_spans=()):
     return totals
 
 
+def _worktree_view(value):
+    """A stored worktree as the JSON contract shows it; anything malformed is null."""
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"]:
+        return None
+    branch = value.get("branch")
+    return {"path": value["path"], "branch": branch if isinstance(branch, str) and branch else None}
+
+
 def _task_view(task, session_status, now, stale_after, until, member=None, review_spans=()):
     history = [h for h in task.get("history", []) if isinstance(h, dict) and _number(h.get("at"))]
     if not history:
@@ -1971,6 +2001,8 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "kind": "agent" if _is_agent(task) else "todo",
         "failed": bool(task.get("failed")),
         "interrupted": bool(task.get("interrupted")),
+        # Additive: the linked worktree the task was started in (`{"path", "branch"}`), else null.
+        "worktree": _worktree_view(task.get("worktree")),
         "status": task["status"],
         "column": column,
         "created_at": task["created_at"],

@@ -229,10 +229,13 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       if (input.tool === "task") rememberSubagent((input as any).callID, output.args?.subagent_type)
       // `sessionID` first: the bash gates take the first session key in the payload, and
       // `args` is whatever the model or the user put there.
+      // `cwd`: the board records the worktree a task was started in, as Claude Code and Codex
+      // payloads already allow (their hooks carry the session's working directory).
       const payload = JSON.stringify({
         sessionID: input.sessionID,
         tool: input.tool,
         tool_use_id: (input as any).callID,
+        cwd: directory,
         args: output.args,
       })
       await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
@@ -253,6 +256,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         sessionID: input.sessionID,
         tool: input.tool,
         tool_use_id: callID,
+        cwd: directory,
         args,
         output: output.output,
       })
