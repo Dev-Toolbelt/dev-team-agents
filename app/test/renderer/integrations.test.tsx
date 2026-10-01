@@ -274,6 +274,41 @@ describe('project mode', () => {
     expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
   });
 
+  it('identifies the GitHub account on one line — signed in and name — and nothing else', async () => {
+    const facts = [
+      { label: 'Account', value: 'octocat', tone: 'positive' as const },
+      { label: 'Name', value: 'The Octocat', tone: null },
+      { label: 'Token scopes', value: 'repo', tone: null },
+      { label: 'Rate limit', value: '4999 / 5000 remaining', tone: 'neutral' as const },
+    ];
+    await openProject({}, view({ status: { state: 'connected', checked_at: '2026-09-30T12:00:00Z', summary: 'Signed in as octocat', facts } }));
+    const readout = screen.getByText('Signed in as octocat').closest('[data-layout="inline"]') as HTMLElement;
+    expect(within(readout).getByText('The Octocat')).toBeInTheDocument();
+    for (const gone of ['Token scopes', 'Rate limit', 'Account']) expect(within(readout).queryByText(gone)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last checked/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/connected once, in the Integrations tab/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the Jira account, email and sign-in on one line, without the site', async () => {
+    const facts = [
+      { label: 'Account', value: 'Ada Lovelace', tone: 'positive' as const },
+      { label: 'Email', value: 'ada@example.com', tone: null },
+      { label: 'Site', value: 'https://acme.atlassian.net', tone: null },
+    ];
+    await openProject({}, view({ name: 'jira', title: 'GitHub', status: { state: 'connected', checked_at: null, summary: 'Signed in as Ada Lovelace', facts } }));
+    const readout = screen.getByText('Signed in as Ada Lovelace').closest('[data-layout="inline"]') as HTMLElement;
+    expect(within(readout).getByText('ada@example.com')).toBeInTheDocument();
+    expect(within(readout).getByText('Account')).toBeInTheDocument();
+    expect(within(readout).queryByText('Site')).not.toBeInTheDocument();
+  });
+
+  it('has no Project settings heading, and puts each field under its label', async () => {
+    await openProject();
+    expect(screen.queryByRole('heading', { name: 'Project settings' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/committed to the repository and apply to everyone/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Repository').closest('[data-layout]')).toHaveAttribute('data-layout', 'stacked');
+  });
+
   it('saves a project field through config set, and unsets it when emptied', async () => {
     const set = vi.fn(() => Promise.resolve(ok({ integration: view({ project: { repository: 'acme/other' } }), key: 'repository' })));
     const unset = vi.fn(() => Promise.resolve(ok({ integration: view({ project: {} }), key: 'repository', removed: true })));
