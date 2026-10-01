@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { CheckCircle2, CircleAlert, GitBranch, Info } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Info } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,6 +27,15 @@ interface WriteOutcome {
 }
 
 /** A timestamp in the reader's locale; the ISO value stays machine-readable in the element. */
+/**
+ * The account facts a project's readout keeps, by integration: the ones that say who is
+ * signed in. Token scopes, rate limits and the site belong to the account screen.
+ */
+const PROJECT_ACCOUNT_FACTS: Readonly<Record<string, readonly string[]>> = {
+  github: ['Name'],
+  jira: ['Account', 'Email'],
+};
+
 function CheckedAt({ iso }: { iso: string }) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return <time dateTime={iso}>{iso}</time>;
@@ -215,6 +224,13 @@ export function IntegrationCard({
   const standing = standingOf(view);
   const shownResult = lastTest;
   const accountReadout = view.status.checked_at !== null || view.status.facts.length > 0 || view.status.summary !== '';
+  // In a project, the account is only identified, not managed: the summary ("Signed in as …")
+  // and the facts that name the person, on one line. An integration this map does not know
+  // keeps every fact rather than losing one silently.
+  const projectFacts = PROJECT_ACCOUNT_FACTS[name];
+  const shownFacts =
+    isAccount || projectFacts === undefined ? view.status.facts : view.status.facts.filter((fact) => projectFacts.includes(fact.label));
+  const settingsNotes = projectUnbound || (!isAccount && view.project_problem !== null);
 
   const notices = (
     <p aria-live="polite" className="sr-only">
@@ -252,8 +268,8 @@ export function IntegrationCard({
     >
       <div className="space-y-2 border-t px-5 py-4">
         <h4 className="text-sm font-medium">{isAccount ? 'Connection' : 'Account'}</h4>
-        {accountReadout ? <StatusFacts summary={view.status.summary} facts={view.status.facts} /> : null}
-        {view.status.checked_at !== null ? (
+        {accountReadout ? <StatusFacts summary={view.status.summary} facts={shownFacts} inline={!isAccount} /> : null}
+        {isAccount && view.status.checked_at !== null ? (
           <p className="text-xs text-muted-foreground">
             Last checked <CheckedAt iso={view.status.checked_at} />.
           </p>
@@ -264,14 +280,12 @@ export function IntegrationCard({
             <span>The account address changed since the token was stored. Enter a new token to reconnect.</span>
           </div>
         ) : null}
-        <p className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span>
-            {isAccount
-              ? 'The token and these settings belong to you and apply to every project on this machine.'
-              : 'The account is connected once, in the Integrations tab, and shared by every project.'}
-          </span>
-        </p>
+        {isAccount ? (
+          <p className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>The token and these settings belong to you and apply to every project on this machine.</span>
+          </p>
+        ) : null}
         {!isAccount && (!view.connected || staleToken) ? (
           <div className={BAD} role="status">
             <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
@@ -299,22 +313,18 @@ export function IntegrationCard({
       </div>
 
       <div className="border-t">
-        <div className="px-5 pt-4">
-          <h4 className="text-sm font-medium">{isAccount ? 'Account settings' : 'Project settings'}</h4>
-          {!isAccount ? (
-            <p className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
-              <GitBranch className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              <span>These settings are committed to the repository and apply to everyone on the project.</span>
-            </p>
-          ) : null}
-          {projectUnbound ? <p className="pt-1 text-xs text-muted-foreground">This project is not bound, so it has no project settings to edit.</p> : null}
-          {!isAccount && view.project_problem !== null ? (
-            <div className={`${BAD} mt-2`} role="status">
-              <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
-              <span>The committed settings file could not be read, so it is treated as empty: {view.project_problem}</span>
-            </div>
-          ) : null}
-        </div>
+        {isAccount || settingsNotes ? (
+          <div className="px-5 pt-4">
+            {isAccount ? <h4 className="text-sm font-medium">Account settings</h4> : null}
+            {projectUnbound ? <p className="pt-1 text-xs text-muted-foreground">This project is not bound, so it has no project settings to edit.</p> : null}
+            {!isAccount && view.project_problem !== null ? (
+              <div className={`${BAD} mt-2`} role="status">
+                <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+                <span>The committed settings file could not be read, so it is treated as empty: {view.project_problem}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <fieldset disabled={running} aria-busy={saving} className="min-w-0 divide-y px-5">
           <legend className="sr-only">
             {view.title} {isAccount ? 'account' : 'project'} settings
@@ -349,6 +359,7 @@ export function IntegrationCard({
                 setSaved(null);
                 setDrafts((previous) => ({ ...previous, [state.field.key]: value }));
               }}
+              stacked={!isAccount}
               onUndo={() => setDrafts((previous) => Object.fromEntries(Object.entries(previous).filter(([key]) => key !== state.field.key)))}
             />
           ))}

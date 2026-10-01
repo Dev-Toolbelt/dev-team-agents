@@ -26,6 +26,7 @@ export function FieldRow({
   loadDisabledReason,
   onDraft,
   onUndo,
+  stacked = false,
 }: {
   idPrefix: string;
   state: FieldState;
@@ -37,6 +38,8 @@ export function FieldRow({
   loadDisabledReason?: string | null | undefined;
   onDraft: (value: string) => void;
   onUndo: () => void;
+  /** The control under its label rather than beside it — where the form belongs to the label above it. */
+  stacked?: boolean;
 }) {
   const { field, display, changed, error } = state;
   const id = `${idPrefix}-${field.key}`;
@@ -62,7 +65,11 @@ export function FieldRow({
   }
 
   return (
-    <div className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:gap-6" data-changed={changed || undefined}>
+    <div
+      className={stacked ? 'grid gap-2 py-4' : 'grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:gap-6'}
+      data-changed={changed || undefined}
+      data-layout={stacked ? 'stacked' : undefined}
+    >
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           {changed ? <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" title="Changed" /> : null}
