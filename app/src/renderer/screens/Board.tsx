@@ -464,21 +464,21 @@ function AgentBadge({ name }: { name: string | null }) {
 }
 
 /**
- * Shown only when the task was started in a linked worktree. A focusable mark, so the tooltip opens
- * from the keyboard as well as on hover; its accessible name carries the same text.
+ * Shown only when the task was started in a linked worktree. A button rather than a focusable
+ * image, so the tooltip opens from the keyboard on an element whose role says it can take focus;
+ * it does nothing when pressed. Its name carries the same text as the tooltip.
  */
 function WorktreeMark({ worktree }: { worktree: BoardWorktree }) {
   const text = `Worktree: ${worktree.path}${worktree.branch !== null ? ` (branch ${worktree.branch})` : ''}`;
   return (
     <Hint content={text}>
-      <span
-        role="img"
-        tabIndex={0}
+      <button
+        type="button"
         aria-label={text}
         className="inline-flex items-center rounded-sm text-info focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
       >
         <FolderGit2 className="size-3.5" aria-hidden="true" />
-      </span>
+      </button>
     </Hint>
   );
 }
