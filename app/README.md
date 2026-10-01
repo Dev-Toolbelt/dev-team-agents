@@ -50,6 +50,11 @@ Finding a file named `devteam` is not enough: the app runs `devteam version --js
 each candidate and rejects anything that answers without a `compat` block, so another
 program with the same name cannot be mistaken for the CLI.
 
+The header shows the app's own version (`app 0.0.0`, from `app/package.json`) beside the
+store's (`store 2.48.900`). While the app version is a pre-release — `0.x`, or any version
+with a suffix such as `-beta.1` — a **beta** badge sits next to it; the first stable
+version the release step stamps drops it with no other change (`src/shared/appVersion.ts`).
+
 ## Verify
 
 ```bash
