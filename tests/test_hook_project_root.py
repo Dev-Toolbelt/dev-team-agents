@@ -96,6 +96,90 @@ class ClaudeCommandTest(unittest.TestCase):
             self.assertIn("{}/{}".format(hooks.HOOK_DIR, script), command)
 
 
+def _command(provider, script):
+    """The command each provider registers, built from the one walk both share."""
+    if provider == "claude":
+        return hooks.command_for(script)
+    return "bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, fallback=".", script=script))
+
+
+@requires_bash()
+class RootWalkTest(unittest.TestCase):
+    """Where the command lands, on trees a bind does not build: nested roots, worktrees."""
+
+    PROBE = 'pwd -P > "{out}/pwd"; cat > "{out}/stdin"; exit "${{PROBE_EXIT:-0}}"\n'
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp(prefix="hook-root-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.out = self.tmp / "out"
+        self.out.mkdir()
+
+    def root(self, path):
+        hooks_dir = path / hooks.HOOK_DIR
+        hooks_dir.mkdir(parents=True)
+        (hooks_dir / "probe.sh").write_text(self.PROBE.format(out=self.out), encoding="utf-8")
+        return path
+
+    def run_from(self, provider, cwd, env_extra=None, exit_code=0):
+        env = dict(os.environ)
+        env.pop("CLAUDE_PROJECT_DIR", None)
+        env.update(env_extra or {})
+        env["PROBE_EXIT"] = str(exit_code)
+        cwd.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            ["/bin/sh", "-c", _command(provider, "probe.sh")], cwd=str(cwd), input=b'{"x": 1}',
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, timeout=30, check=False,
+        )
+        ran_in = (self.out / "pwd").read_text(encoding="utf-8").strip() if (self.out / "pwd").exists() else None
+        return result, ran_in
+
+    def test_a_project_below_the_git_toplevel_is_found_from_its_subdirectory(self):
+        outer = self.tmp / "monorepo"
+        outer.mkdir()
+        subprocess.run(["git", "init", "-q", str(outer)], check=True)
+        package = self.root(outer / "packages" / "svc")
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                result, ran_in = self.run_from(provider, package / "src" / "deep")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(ran_in, str(package.resolve()))
+
+    def test_a_worktree_without_hooks_runs_them_from_the_checkout_holding_it(self):
+        main = self.root(self.tmp / "main")
+        worktree = main / ".worktrees" / "feat" / "x"
+        (worktree / ".dev-team-agents").mkdir(parents=True)  # a partial one: no hooks
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                _result, ran_in = self.run_from(provider, worktree / "apps" / "api")
+                self.assertEqual(ran_in, str(main.resolve()))
+
+    def test_a_worktree_with_its_own_hooks_runs_them_there(self):
+        self.root(self.tmp / "main")
+        worktree = self.root(self.tmp / "main" / ".worktrees" / "y")
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                _result, ran_in = self.run_from(provider, worktree / "apps")
+                self.assertEqual(ran_in, str(worktree.resolve()))
+
+    def test_claude_falls_back_to_the_project_dir_when_no_ancestor_has_hooks(self):
+        root = self.root(self.tmp / "opened-here")
+        elsewhere = self.tmp / "elsewhere"
+        result, ran_in = self.run_from("claude", elsewhere, {"CLAUDE_PROJECT_DIR": str(root)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(ran_in, str(root.resolve()))
+
+    def test_stdin_and_a_blocking_exit_reach_the_provider(self):
+        root = self.root(self.tmp / "proj")
+        for provider in ("claude", "codex"):
+            with self.subTest(provider=provider):
+                result, _ran_in = self.run_from(provider, root / "a", exit_code=2)
+                # PreToolUse exit 2 is how the credential guard blocks a call.
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual((self.out / "stdin").read_text(encoding="utf-8"), '{"x": 1}')
+
+
 @requires_bash()
 class HookFromSubdirectoryTest(StoreTestCase):
     def setUp(self):
@@ -135,6 +219,7 @@ class HookFromSubdirectoryTest(StoreTestCase):
                 continue
             root, project_id = self._bound(provider)
             command = case["command"](root)
+            self.assertEqual(command, _command(provider, "pre-tool-use.sh"))
             for shell in SHELLS:
                 with self.subTest(provider=provider, shell=shell):
                     session = "s-{}-{}".format(provider, Path(shell).name)
@@ -183,11 +268,10 @@ class RewriteTest(StoreTestCase):
         (stop,) = data["hooks"]["Stop"]
         self.assertEqual(stop["hooks"][0]["command"], hooks.command_for("stop.sh"))
 
-
     def test_the_v2_installer_rewrites_the_relative_command_and_keeps_the_rest(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
         functions = text[text.index("_hook_cmd() {"):text.index("\nif [ ! -f \"$SETTINGS_FILE\" ]")]
-        start = text.index("    # An entry written before the command entered the project root")
+        start = text.index("    # An entry written before the command found the project root")
         end = text.index("PYEOF\n    fi\n", start) + len("PYEOF\n    fi\n")
         settings = self.tmp / "settings.json"
         settings.write_text(json.dumps({"hooks": {
