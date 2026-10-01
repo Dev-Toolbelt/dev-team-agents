@@ -221,7 +221,7 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   column scrolls its own cards under a heading that stays in view. Each task shows its session
   (provider and branch) and the time it has spent in its column,
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
-  Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. A worktree mark appears only on a task started in a linked worktree; its tooltip (hover or keyboard focus) names the worktree path and branch. Filter by
+  Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. Filter by
   session or period, hide done tasks older than the retention, and show/hide tasks with findings.
   Each session shows its provider, branch, status (active, idle, ended) and task counts. The Done
   column is tinted green. **← Board** returns to the overview, and so does leaving the tab.
