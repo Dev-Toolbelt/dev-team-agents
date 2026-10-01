@@ -261,8 +261,8 @@ describe('ProjectSettings — grouping and origin', () => {
     }
     expect(screen.getAllByText('Not opted in').length).toBe(2);
     expect(screen.getAllByLabelText(/^This project:/)).toHaveLength(2);
-    // The deprecated key is shown but cannot be edited.
-    expect(screen.getByText('Deprecated — no longer applied')).toBeInTheDocument();
+    // The retired key is not offered at all — not as a field, not under "other keys".
+    expect(screen.queryByText(/transcript/i)).not.toBeInTheDocument();
   });
 
   it('masks the context window with digit grouping and draws both thresholds in tokens', async () => {

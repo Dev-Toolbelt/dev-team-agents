@@ -9,14 +9,38 @@ const FACT_TONE_CLASS: Record<Tone, string> = {
   neutral: '',
 };
 
-/** A status summary and its labelled facts; a fact with a tone is drawn as a badge. */
+/**
+ * A status summary and its labelled facts; a fact with a tone is drawn as a badge.
+ *
+ * `inline` sets the summary and the facts side by side on one wrapping line — for a readout
+ * that only identifies who is signed in and should not take a block of the screen.
+ */
 export function StatusFacts({
   summary,
   facts,
+  inline = false,
 }: {
   summary: string;
   facts: readonly { readonly label: string; readonly value: string; readonly tone: Tone | null }[];
+  inline?: boolean;
 }) {
+  if (inline) {
+    return (
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 text-sm" data-layout="inline">
+        {summary !== '' ? <p>{summary}</p> : null}
+        {facts.length > 0 ? (
+          <dl className="contents">
+            {facts.map((fact) => (
+              <div key={fact.label} className="flex min-w-0 items-baseline gap-2">
+                <dt className="text-muted-foreground">{fact.label}</dt>
+                <dd className="min-w-0 break-words">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <>
       <p className="text-sm text-muted-foreground">{summary}</p>

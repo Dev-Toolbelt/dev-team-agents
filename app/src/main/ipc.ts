@@ -19,7 +19,7 @@
 import { realpath } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, sep } from 'node:path';
 
-import { dialog, ipcMain } from 'electron';
+import { dialog, ipcMain, type NativeImage } from 'electron';
 
 import { DECLARATION_FILE_NAME, performHandshakeCall, writeDeclarationFile } from '../cli/declaration.js';
 import {
@@ -285,6 +285,8 @@ export interface IpcDependencies {
   readonly trustedRenderer: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>;
   /** Told every time the renderer re-resolves the CLI — the About panel shows the answer. */
   readonly onResolved?: (resolution: CliResolution) => void;
+  /** The icon native dialogs show; `null` (or absent) leaves the platform's default. */
+  readonly dialogIcon?: NativeImage | null;
 }
 
 const NO_CLI: OperationResult<never> = {
@@ -998,7 +1000,7 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       const consenting = parsed.filter(
         (change) => change.action === 'set' && CONSENT_KEYS.has(change.key) && change.value === true,
       );
-      if (consenting.length > 0 && !(await confirmConsent(consenting.map((change) => change.key)))) {
+      if (consenting.length > 0 && !(await confirmConsent(consenting.map((change) => change.key), deps.dialogIcon ?? null))) {
         return refusedPreferences('Turning on a consent setting was not confirmed, so nothing was saved.');
       }
 
@@ -1352,9 +1354,10 @@ const CONSENT_LABELS: Readonly<Record<string, string>> = {
  * keys default to off until someone opts in; without this, anything able to call the bridge
  * could opt in silently — `auto_update` decides whether new framework code is applied.
  */
-async function confirmConsent(keys: readonly string[]): Promise<boolean> {
+async function confirmConsent(keys: readonly string[], icon: NativeImage | null): Promise<boolean> {
   const names = keys.map((key) => CONSENT_LABELS[key] ?? key).join(' and ');
   const { response } = await dialog.showMessageBox({
+    ...(icon !== null ? { icon } : {}),
     type: 'question',
     buttons: ['Turn on', 'Cancel'],
     defaultId: 1,

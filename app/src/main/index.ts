@@ -11,12 +11,13 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, session } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, screen, session } from 'electron';
 
 import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
+import { windowSize } from './windowSize.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
 import { createFileLog, describeError, type FileLog } from './logFile.js';
 import { CODE_SIGNED } from './build-info.js';
@@ -289,10 +290,8 @@ function launchedAtLogin(): boolean {
 function createWindow(): BrowserWindow {
   const icon = developmentIcon();
   const window = new BrowserWindow({
-    width: 1080,
-    height: 760,
-    minWidth: 720,
-    minHeight: 520,
+    ...windowSize(screen.getPrimaryDisplay().workAreaSize),
+    center: true,
     // macOS convention: the traffic lights sit over the app's own header row.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     title: DISPLAY_NAME,
@@ -448,6 +447,9 @@ function onReady(): void {
     electronVersion: facts.electronVersion,
     packaged: facts.packaged,
     trustedRenderer: RENDERER_TARGET,
+    // macOS draws a message box with the running bundle's icon, which in development is
+    // Electron's; a packaged build has its own and needs nothing here.
+    dialogIcon: developmentIcon(),
     onResolved: (resolution) => {
       setAbout(resolution);
       // A different CLI may mean a different store: start the stream again against it.

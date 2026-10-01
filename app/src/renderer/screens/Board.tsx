@@ -853,39 +853,52 @@ function sessionLabel(session: BoardSession): string {
   return `${title} · ${provider} · ${where}`;
 }
 
+/**
+ * The sessions in view, one compact chip each. A project routinely has several sessions, and
+ * a full-width row per session pushed the columns below the fold; a chip carries what tells
+ * them apart at a glance — provider, title or branch, status — and the rest (branch beside a
+ * title, the per-session counts) is in its tooltip and, for a screen reader, in its text.
+ */
 function SessionStrip({ sessions }: { sessions: readonly BoardSession[] }) {
   if (sessions.length === 0) return null;
   return (
-    <ul aria-label="Sessions" className="space-y-2">
+    <ul aria-label="Sessions" className="flex flex-wrap gap-2">
       {sessions.map((session) => (
-        <SessionRow key={session.session_id} session={session} />
+        <SessionChip key={session.session_id} session={session} />
       ))}
     </ul>
   );
 }
 
-function SessionRow({ session }: { session: BoardSession }) {
+function SessionChip({ session }: { session: BoardSession }) {
   const StatusIcon = STATUS_ICON[session.status];
   const where = session.branch ?? 'no branch';
+  const counts = `${session.counts.todo} to do · ${session.counts.in_progress} in progress${
+    session.counts.in_review > 0 ? ` · ${session.counts.in_review} in review` : ''
+  } · ${session.counts.done} done`;
+  const provider = providerLabel(session.provider);
+  const details = [provider, session.title, where, STATUS_WORD[session.status], counts].filter((each) => each !== null).join(' — ');
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border bg-card px-3 py-2 text-sm">
-      <span className="flex items-center gap-1.5 font-medium">
-        <ProviderIcon provider={session.provider} withLabel />
-      </span>
-      {session.title !== null && (
-        <span className="max-w-[32ch] truncate font-medium" title={session.title}>
-          {session.title}
-        </span>
+    <li
+      className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border bg-card py-1 pr-3 pl-2 text-xs"
+      data-status={session.status}
+      title={details}
+    >
+      <ProviderIcon provider={session.provider} />
+      <span className="sr-only">{provider}</span>
+      {session.title !== null ? (
+        <>
+          <span className="max-w-[28ch] truncate font-medium" title={session.title}>
+            {session.title}
+          </span>
+          <span className="sr-only">{where}</span>
+        </>
+      ) : (
+        <span className="max-w-[36ch] truncate font-mono">{where}</span>
       )}
-      <span className="font-mono text-xs">{where}</span>
-      <span className="flex items-center gap-1 text-xs" data-status={session.status}>
-        <StatusIcon className="size-3.5" aria-hidden="true" />
-        {STATUS_WORD[session.status]}
-      </span>
-      <span className="text-xs text-muted-foreground">
-        {session.counts.todo} to do · {session.counts.in_progress} in progress
-        {session.counts.in_review > 0 ? ` · ${session.counts.in_review} in review` : ''} · {session.counts.done} done
-      </span>
+      <StatusIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="sr-only">{STATUS_WORD[session.status]}</span>
+      <span className="sr-only">{counts}</span>
     </li>
   );
 }

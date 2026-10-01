@@ -439,6 +439,16 @@ describe('Project kanban', () => {
     expect(sessions[1]).toHaveTextContent('1 to do · 1 in progress · 3 done');
   });
 
+  it('lays the sessions out as compact chips, the counts in each chip’s tooltip', async () => {
+    await openKanban();
+    const list = screen.getByRole('list', { name: 'Sessions' });
+    expect(list).toHaveClass('flex', 'flex-wrap');
+    const codex = within(list).getAllByRole('listitem')[1]!;
+    expect(codex).toHaveAttribute('title', expect.stringContaining('1 to do · 1 in progress · 3 done'));
+    // The counts are not drawn on screen: they are text for a screen reader only.
+    expect(within(codex).getByText('1 to do · 1 in progress · 3 done')).toHaveClass('sr-only');
+  });
+
   it('offers no resume-command button on a session', async () => {
     await openKanban();
     expect(screen.queryByRole('button', { name: /resume/i })).not.toBeInTheDocument();

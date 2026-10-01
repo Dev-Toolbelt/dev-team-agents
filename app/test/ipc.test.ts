@@ -520,6 +520,16 @@ describe('project preferences are written to the project layer only, for keys th
     }
   });
 
+  it.skipIf(skipOnWindowsWithoutLauncher)('shows the app icon on the consent dialog when one is given, and the default otherwise', async () => {
+    const { handlers, registerIpc, showMessageBox, CHANNELS } = await loadIpc();
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE_BINARY }), 'utf8');
+    const icon = { isEmpty: () => false } as unknown as Electron.NativeImage;
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER, dialogIcon: icon });
+    const batch = [{ key: 'telemetry', action: 'set', value: true }];
+    await handlers.get(CHANNELS.updateProjectPreferences)?.(TRUSTED, 'proj-1', batch);
+    expect(showMessageBox).toHaveBeenCalledWith(expect.objectContaining({ icon }));
+  });
+
   it.skipIf(skipOnWindowsWithoutLauncher)('asks natively before turning a consent key on, and writes nothing on cancel', async () => {
     const { handlers, registerIpc, showMessageBox, CHANNELS } = await loadIpc();
     await registerAgainstFake(registerIpc);

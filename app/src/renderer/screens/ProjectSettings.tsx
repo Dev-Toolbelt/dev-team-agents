@@ -34,6 +34,7 @@ import {
   BOOLEAN_SELECT_KEYS,
   FIELD_BY_KEY,
   FIELDS,
+  RETIRED_KEYS,
   GROUPS,
   crossFieldErrors,
   formatInteger,
@@ -401,7 +402,7 @@ export function ProjectSettings({
 
   const problem = state.phase === 'done' && !state.result.ok ? state.result : null;
   const others = (loaded === null ? [] : Object.keys(loaded.values))
-    .filter((key) => !FIELD_BY_KEY.has(key) && !key.startsWith('_'))
+    .filter((key) => !FIELD_BY_KEY.has(key) && !RETIRED_KEYS.has(key) && !key.startsWith('_'))
     .sort();
   const groups = GROUPS.map((group) => ({
     group,

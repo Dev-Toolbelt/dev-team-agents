@@ -174,13 +174,6 @@ export const FIELDS: readonly Field[] = [
     help: 'Turns of work on a dirty tree with no commit before a one-time reminder.',
     control: { type: 'integer', ...integerRange('session_no_commit_turns'), unit: 'turns' },
   },
-  {
-    key: 'transcript_multiplier',
-    group: 'context',
-    label: 'Transcript multiplier',
-    help: 'Context is now read from the transcript’s last usage entry, so this value is ignored.',
-    control: { type: 'readonly', reason: 'Deprecated — no longer applied' },
-  },
 
   // Memory & docs
   {
@@ -306,6 +299,13 @@ export const FIELDS: readonly Field[] = [
 ];
 
 /** `ci_cd_detected` is the one select whose stored values are booleans, not strings. */
+/**
+ * Keys the framework still writes into `preferences.json` but no longer reads. Not shown at
+ * all: listing them under "other keys" would offer a setting that does nothing. The main
+ * process keeps refusing writes to them (`PREFERENCE_RULES` marks them `readonly`).
+ */
+export const RETIRED_KEYS: ReadonlySet<string> = new Set(['transcript_multiplier']);
+
 export const BOOLEAN_SELECT_KEYS: ReadonlySet<string> = new Set(['ci_cd_detected']);
 
 export const FIELD_BY_KEY: ReadonlyMap<string, Field> = new Map(FIELDS.map((field) => [field.key, field]));

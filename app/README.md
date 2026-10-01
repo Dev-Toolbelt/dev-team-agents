@@ -72,6 +72,13 @@ is missing — locally. Under `CI=true` a missing CLI fails the file instead, so
 cannot go untested behind a green run. The CI gate (`.github/scripts/ci/05-app.sh`) also runs
 `npm run build` and checks the three entry points it must emit.
 
+## The window
+
+The window opens at about 85% × 88% of the screen's work area (capped at 1600 × 1000), centred,
+and does not shrink below 1024 × 680 — the size the kanban and the project table are laid out
+for. Each figure is clamped to the work area, so a small display still gets a window that fits
+(`src/main/windowSize.ts`).
+
 ## The Integrations screens
 
 A top-level **Integrations** tab lists every integration the CLI knows about (GitHub, Jira) in
@@ -81,8 +88,9 @@ generically from the adapter's descriptor in the CLI, so adding a new integratio
 one Python adapter to `scripts/lib/devteam/integrations/`.
 
 Per-project bindings (which repository, which Jira project) appear in an **Integrations** tab
-alongside Preferences on each project's screen, showing the read-only account status and the
-project-specific fields. A `connect-here` hint appears when an integration is not yet connected
+alongside Preferences on each project's screen. It identifies the account on one line — "Signed in
+as …" and the person's name (GitHub) or account and email (Jira) — and lists the project fields
+with each control under its label. A `connect-here` hint appears when an integration is not yet connected
 at the account level.
 
 **Token input via stdin only.** When connecting an account, the app prompts for the token in a
@@ -228,7 +236,7 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
   Task badges show its origin (a plan step, a spawned agent with an **Agent** badge, or a built-in tool list) and review state; tasks in review show a findings badge (count of issues found, or **result not read**). A **Failed** badge marks a spawned agent run that failed. Filter by
   session or period, hide done tasks older than the retention, and show/hide tasks with findings.
-  Each session shows its provider, branch, status (active, idle, ended) and task counts. The Done
+  Sessions are compact chips — provider, title or branch, status icon — with the counts in the chip's tooltip. The Done
   column is tinted green. **← Board** returns to the overview, and so does leaving the tab.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
