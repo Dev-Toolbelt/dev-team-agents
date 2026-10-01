@@ -11,8 +11,8 @@ import os
 from pathlib import Path
 
 from . import bind as bind_module
-from .errors import EnvError
-from . import creds, hooks, migrate, paths, prefs, project, registry, versions
+from .errors import ConflictError, EnvError
+from . import creds, credentials_local, hooks, migrate, paths, prefs, project, registry, versions
 
 OK = "ok"
 WARN = "warn"
@@ -565,6 +565,65 @@ def check_project(project_root):
     return findings, actions
 
 
+def check_credentials_local(root):
+    """ADR-0024 relocation as a doctor check. A conflict is a finding, never a failure."""
+    if project.load(root) is None:
+        return [], [], None
+    findings, actions = [], []
+    try:
+        report = credentials_local.relocate(root)
+    except (EnvError, ConflictError, OSError) as exc:
+        findings.append(
+            _finding(WARN, "credentials", "cannot relocate credentials.local.json: {}".format(exc))
+        )
+        return findings, actions, None
+    for item in report["moved"]:
+        actions.append({"action": "credentials_relocated", "from": item["from"], "to": item["to"]})
+        findings.append(
+            _finding(OK, "credentials", "credentials.local.json moved to {}".format(item["to"]))
+        )
+    for item in report["quarantined"]:
+        actions.append(
+            {"action": "credentials_quarantined", "path": item["path"], "to": item["to"], "reason": item["reason"]}
+        )
+        findings.append(
+            _finding(
+                OK,
+                "credentials",
+                "{} copy of credentials.local.json quarantined: {}".format(item["reason"], item["path"]),
+            )
+        )
+    for item in report["conflicts"]:
+        if item.get("reason") == "symlink":
+            message = "a credentials.local.json symlink is involved ({} / {})".format(
+                item["legacy"], item["root"]
+            )
+            hint = "dev-team-agents never reads or moves credentials through a link; replace it with a regular file. Nothing was changed."
+        else:
+            message = "{} and {} hold different credentials.local.json content".format(
+                item["legacy"], item["root"]
+            )
+            hint = "Merge them by hand into {} and delete the legacy copy; nothing was changed.".format(
+                item["root"]
+            )
+        findings.append(_finding(WARN, "credentials", message, hint))
+    target = Path(report["path"])
+    try:
+        mode = target.stat().st_mode & 0o777 if target.is_file() else None
+    except OSError:
+        mode = None
+    if mode is not None and mode & 0o077:
+        findings.append(
+            _finding(
+                WARN,
+                "credentials",
+                "{} is readable by other users (mode {:04o})".format(target, mode),
+                "chmod 600 {}".format(target),
+            )
+        )
+    return findings, actions, report
+
+
 def run(project_root=None, reassign_identity=False):
     findings = list(check_store())
     findings.extend(check_machine())
@@ -572,6 +631,7 @@ def run(project_root=None, reassign_identity=False):
     findings.extend(registry_findings)
 
     actions = []
+    credentials_report = None
     if project_root is not None:
         root = project.resolve_root(project_root)
         if reassign_identity:
@@ -589,6 +649,9 @@ def run(project_root=None, reassign_identity=False):
         project_findings, project_actions = check_project(root)
         findings.extend(project_findings)
         actions.extend(project_actions)
+        cred_findings, cred_actions, credentials_report = check_credentials_local(root)
+        findings.extend(cred_findings)
+        actions.extend(cred_actions)
 
     worst = OK
     for item in findings:
@@ -597,4 +660,9 @@ def run(project_root=None, reassign_identity=False):
             break
         if item["level"] == WARN:
             worst = WARN
-    return {"status": worst, "findings": findings, "actions": actions}
+    return {
+        "status": worst,
+        "findings": findings,
+        "actions": actions,
+        "credentials_local": credentials_report,
+    }

@@ -28,7 +28,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import gitignore, jsonio, paths, project, quarantine, registry
+from . import credentials_local, gitignore, jsonio, paths, project, quarantine, registry
 from .errors import ConflictError, EnvError, UsageError
 
 #: Entries the managed `.gitignore` block no longer needs once memory has left
@@ -57,7 +57,11 @@ def _inventory(root):
     found = {}
     for path in sorted(source.rglob("*")):
         if path.is_file() and not path.is_symlink():
-            found[str(path.relative_to(source))] = _digest(path)
+            rel = str(path.relative_to(source))
+            if rel == credentials_local.FILE_NAME:
+                # ADR-0024: never copied into the store; `apply` relocates it to the root.
+                continue
+            found[rel] = _digest(path)
     return found
 
 
@@ -201,6 +205,19 @@ def apply(root=None, emitter=None):
             details={"collisions": preview["collisions"][:20]},
         )
 
+    # ADR-0024: the credentials file stays in the project. It must leave `user-data/`
+    # before that directory is quarantined, so the real file never lands in quarantine.
+    early_credentials = credentials_local.relocate(project_root, project_id)
+    if early_credentials["conflicts"]:
+        raise ConflictError(
+            "two different credentials.local.json copies exist; nothing was upgraded",
+            hint=(
+                "Resolve the two credentials.local.json copies first (run `devteam doctor` "
+                "to see them), keep one at {} and retry.".format(early_credentials["path"])
+            ),
+            details={"conflicts": early_credentials["conflicts"]},
+        )
+
     source = project.legacy_memory_dir(project_root)
     destination = Path(preview["destination"])
     state_destination = Path(preview["state_destination"])
@@ -321,6 +338,15 @@ def apply(root=None, emitter=None):
         else:
             exclude_action = "unchanged"
 
+    final_credentials = credentials_local.relocate(project_root, project_id)
+    credentials_report = {
+        "path": final_credentials["path"],
+        "changed": early_credentials["changed"] or final_credentials["changed"],
+        "moved": early_credentials["moved"] + final_credentials["moved"],
+        "quarantined": early_credentials["quarantined"] + final_credentials["quarantined"],
+        "conflicts": final_credentials["conflicts"] or early_credentials["conflicts"],
+    }
+
     if emitter is not None and preview["git_tracked"]:
         emitter.warn(
             "the old memory directory was tracked by git — commit its removal: "
@@ -342,6 +368,7 @@ def apply(root=None, emitter=None):
         "gitignore": ignore_action,
         "git_exclude": exclude_action,
         "git_tracked": preview["git_tracked"],
+        "credentials_local": credentials_report,
     }
 
 

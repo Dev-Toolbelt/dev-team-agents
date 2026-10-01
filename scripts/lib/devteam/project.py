@@ -17,6 +17,7 @@ restored on a second machine usable.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import uuid
@@ -260,6 +261,64 @@ def set_layout(root, value):
 def legacy_memory_dir(root):
     """The in-project memory directory, whether or not it is still in use."""
     return Path(root) / PROJECT_DIR / LEGACY_MEMORY_DIR
+
+
+#: Variables that would point git at another repository than the one ``root`` is in.
+_GIT_ENV_OVERRIDES = ("GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+
+
+def git_lines(root, *args):
+    """Run ``git -C root <args>`` and return its stdout lines, or ``None`` on any failure.
+
+    The repository is always the one ``root`` sits in: inherited ``GIT_DIR``-style
+    variables (set inside a git hook, for instance) are dropped.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_ENV_OVERRIDES}
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root)] + list(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=env,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout.decode("utf-8", "replace").splitlines()
+
+
+def git_common_dir(root):
+    """The shared git directory for ``root``, resolved, or ``None`` outside a repository."""
+    lines = git_lines(root, "rev-parse", "--git-common-dir")
+    if not lines or not lines[0].strip():
+        return None
+    return Path(os.path.realpath(os.path.join(str(root), lines[0].strip())))
+
+
+def main_checkout(root):
+    """``root`` as seen from the main checkout when it sits inside a linked git worktree.
+
+    A project bound in a subdirectory (``repo/apps/x``) keeps that offset: the answer for
+    ``repo-wt/apps/x`` is ``repo/apps/x``, never the repository top. Falls back to
+    ``root`` outside git, in a bare repository, or in the main checkout itself.
+    """
+    root = Path(root)
+    lines = git_lines(root, "rev-parse", "--git-common-dir", "--git-dir", "--show-toplevel")
+    if not lines or len(lines) < 3:
+        return root
+    common, git_dir, top = (
+        Path(os.path.realpath(os.path.join(str(root), line.strip()))) for line in lines[:3]
+    )
+    if common == git_dir or common.name != ".git":
+        return root
+    try:
+        offset = Path(os.path.realpath(str(root))).relative_to(top)
+    except ValueError:
+        return root
+    return common.parent / offset
 
 
 def _require_id(root, project_id):

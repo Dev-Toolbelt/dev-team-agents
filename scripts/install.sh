@@ -425,6 +425,12 @@ if [ -d "$USER_DATA_DIR" ]; then
     rm -rf "$NEW_DIR/user-data"
     cp -R "$USER_DATA_DIR" "$NEW_DIR/user-data"
 fi
+# ADR-0024: the local credentials file lives at the install root, beside user-data/,
+# so it is carried the same way — otherwise the swap below would discard it.
+if [ -f "$INSTALL_DIR/credentials.local.json" ] && [ ! -L "$INSTALL_DIR/credentials.local.json" ]; then
+    cp -p "$INSTALL_DIR/credentials.local.json" "$NEW_DIR/credentials.local.json"
+    chmod 600 "$NEW_DIR/credentials.local.json"
+fi
 
 if [ -d "$INSTALL_DIR" ]; then
     [ -d "$INSTALL_DIR/.git" ] && echo "→ Legacy git-based installation detected. Converting to tarball install..."
@@ -458,134 +464,13 @@ NEW_DIR=""
 # OLD_DIR (if any) is now just a spare copy, not a safety net — leave it for
 # _cleanup() on EXIT to remove, which warns instead of swallowing a failure.
 
-# ── Step 2b: Create credentials.local.json if missing ─────────────
-# The distributed tarball carries no user-data/ (it is runtime state, and the
-# KEEP_ROOT allowlist strips it), so on a first install this directory does not
-# exist yet and the heredoc below would fail with "No such file or directory".
+# ── Step 2b: user-data dir and legacy marker migration ────────────
+# The distributed tarball carries no user-data/ (runtime state, stripped by the
+# KEEP_ROOT allowlist), so a first install must create it.
 mkdir -p "$USER_DATA_DIR"
 
 # One-shot, idempotent migration of legacy dotfile markers into state.json.
 [ -d "$USER_DATA_DIR" ] && state_migrate_legacy "$USER_DATA_DIR"
-
-CREDENTIALS_FILE="$USER_DATA_DIR/credentials.local.json"
-if [ ! -f "$CREDENTIALS_FILE" ]; then
-    cat > "$CREDENTIALS_FILE" <<'JSONEOF'
-{
-  "work_feedback_active": true,
-  "work_feedback_interval_minutes": 5,
-  "devops": {
-    "agents": ["software-architect", "devops-specialist", "security-specialist"],
-    "staging": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    },
-    "production": {
-      "ssh": {
-        "user": "",
-        "host": "",
-        "privateKeyPath": "",
-        "path": ""
-      },
-      "docker": {},
-      "database": [
-        {
-          "type": "",
-          "host": "",
-          "port": "",
-          "database": "",
-          "username": "",
-          "password": ""
-        }
-      ]
-    }
-  },
-  "app": {
-    "agents": ["software-architect", "backend-developer", "frontend-developer", "code-reviewer", "backend-reviewer", "frontend-reviewer", "qa-specialist", "security-specialist", "backend-test-specialist", "frontend-test-specialist"],
-    "staging": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    },
-    "production": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    }
-  }
-}
-JSONEOF
-    chmod 600 "$CREDENTIALS_FILE"
-    echo "→ Credentials template: $CREDENTIALS_FILE"
-else
-    echo "→ Credentials file exists: $CREDENTIALS_FILE (kept)"
-    # Additive-only backfill: an install predating work_feedback_* never had
-    # a chance to see these keys. Never rewrite devops/app or any existing
-    # value — only insert the two keys if they are absent.
-    if command -v python3 >/dev/null 2>&1; then
-        python3 - "$CREDENTIALS_FILE" <<'PYEOF'
-import sys, json
-path = sys.argv[1]
-with open(path) as f:
-    data = json.load(f)
-changed = False
-if "work_feedback_active" not in data:
-    data["work_feedback_active"] = True
-    changed = True
-if "work_feedback_interval_minutes" not in data:
-    data["work_feedback_interval_minutes"] = 5
-    changed = True
-if changed:
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
-        f.write('\n')
-PYEOF
-    else
-        # No python3: text-based additive insert, only when both keys are absent
-        # from the raw file content. Mirrors the preferences.json no-python3
-        # fallback — hand-maintained, keep in sync with the heredoc above.
-        if ! grep -q '"work_feedback_active"' "$CREDENTIALS_FILE" && \
-           ! grep -q '"work_feedback_interval_minutes"' "$CREDENTIALS_FILE"; then
-            TMP_CREDS="$(mktemp)"
-            awk '
-                NR==1 && /^\{[[:space:]]*$/ {
-                    print
-                    print "  \"work_feedback_active\": true,"
-                    print "  \"work_feedback_interval_minutes\": 5,"
-                    next
-                }
-                { print }
-            ' "$CREDENTIALS_FILE" > "$TMP_CREDS"
-            mv "$TMP_CREDS" "$CREDENTIALS_FILE"
-            chmod 600 "$CREDENTIALS_FILE"
-        fi
-    fi
-fi
-
-# ── Step 2c: Migrate root-level credentials.local.json if present ──
-if [ -f "$PROJECT_ROOT/credentials.local.json" ]; then
-    if [ ! -f "$CREDENTIALS_FILE" ]; then
-        mv "$PROJECT_ROOT/credentials.local.json" "$CREDENTIALS_FILE"
-        chmod 600 "$CREDENTIALS_FILE"
-        echo "→ Migrated credentials.local.json from project root to $CREDENTIALS_FILE"
-    else
-        echo "→ WARNING: credentials.local.json found at project root AND at $CREDENTIALS_FILE"
-        echo "  The root file will be ignored. Delete it: rm $PROJECT_ROOT/credentials.local.json"
-    fi
-fi
 
 # ── Step 3: Create target directories ────────────────────────────
 COMMANDS_TARGET="$PROJECT_ROOT/.claude/commands"
@@ -1094,6 +979,8 @@ _add_gitignore() {
 _add_gitignore ".dev-team-agents/user-data/"
 _add_gitignore "!.dev-team-agents/user-data/graphify.json"
 _add_gitignore ".dev-team-agents/user-data/credentials.local.json"
+_add_gitignore ".dev-team-agents/credentials.local.json"
+_add_gitignore ".dev-team-agents/credentials.local.json.*"
 _add_gitignore ".dev-team-agents/.worktree-session"
 _add_gitignore ".dev-team-agents/.learn-last-run"
 # Where install-opencode.sh / install-codex.sh --adopt move the files they replace.
@@ -1101,6 +988,22 @@ _add_gitignore ".dev-team-agents/quarantine/"
 _add_gitignore ".worktrees/"
 
 echo "→ .gitignore updated (user-data dir pattern + credentials + worktree-session + learn-last-run + worktrees dir)"
+
+# ── Step 10a: Relocate credentials.local.json to the .dev-team-agents root ──
+# ADR-0024: install never creates or rewrites this file; the user owns it.
+# Move only when the destination is absent (never clobber, never delete), never
+# through a symlink, and only after the .gitignore lines above cover the target.
+_CRED_NEW="$PROJECT_ROOT/.dev-team-agents/credentials.local.json"
+for _CRED_OLD in "$USER_DATA_DIR/credentials.local.json" "$PROJECT_ROOT/credentials.local.json"; do
+    [ -f "$_CRED_OLD" ] && [ ! -L "$_CRED_OLD" ] || continue
+    if [ ! -e "$_CRED_NEW" ] && [ ! -L "$_CRED_NEW" ]; then
+        mv "$_CRED_OLD" "$_CRED_NEW"
+        chmod 600 "$_CRED_NEW"
+        echo "→ Moved credentials.local.json to $_CRED_NEW"
+    else
+        echo "→ WARNING: credentials.local.json exists at both $_CRED_OLD and $_CRED_NEW; both kept — run 'devteam doctor'"
+    fi
+done
 
 # ── Step 10b: Ensure project .gitattributes enforces LF for shell scripts ─────
 # Prevents Windows Git (core.autocrlf=true) from converting hook scripts to

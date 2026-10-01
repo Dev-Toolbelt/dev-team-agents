@@ -34,7 +34,7 @@ import time
 from pathlib import Path
 
 from . import bind as bind_module
-from . import project, providers, quarantine, registry, versions
+from . import credentials_local, project, providers, quarantine, registry, versions
 from .errors import ConflictError, UsageError
 
 #: Everything a v2 install placed under ``.dev-team-agents/`` that a bind
@@ -540,6 +540,8 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
             project_root, preview["git_tracked"] + tracked_links + retired_links
         )
 
+    credentials_report = credentials_local.relocate_safely(project_root, bind_result["project_id"])
+
     return {
         "path": str(project_root),
         "layout": preview["layout"],
@@ -555,6 +557,7 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         if quarantined
         else None,
         "retired_links": retired_links,
+        "credentials_local": credentials_report,
         "git_tracked": preview["git_tracked"],
         "git_tracked_artifacts": tracked_links,
         "untracked": untracked,

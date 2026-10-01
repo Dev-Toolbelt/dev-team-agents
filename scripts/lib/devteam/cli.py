@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from . import bind as bind_module
-from . import catalog, compat, creds, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -1290,6 +1290,59 @@ def cmd_cred_unset(args, emitter):
     return result, "\n".join(lines)
 
 
+def _cred_local_root(args):
+    root, _project_id = _bound_project(getattr(args, "path", None))
+    return root
+
+
+def _cred_local_human(state):
+    lines = ["{}".format(state["path"])]
+    if not state["exists"]:
+        lines.append("  file     not created yet - `devteam cred local init` creates it")
+        return "\n".join(lines)
+    lines.append("  valid    {}".format("yes" if state["valid"] else "no"))
+    if state["error"]:
+        err = state["error"]
+        lines.append(
+            "  error    line {}, column {}: {}".format(err["line"], err["column"], err["message"])
+        )
+    lines.append("  hash     {}".format(state["hash"][:12]))
+    if state["valid"]:
+        lines.append("  unknown  {} path(s) outside the template".format(len(state["unknown_paths"])))
+    return "\n".join(lines)
+
+
+def cmd_cred_local_show(args, emitter):
+    state = credentials_local.show(_cred_local_root(args))
+    return state, _cred_local_human(state)
+
+
+def cmd_cred_local_init(args, emitter):
+    state = credentials_local.init(_cred_local_root(args))
+    return state, "created " + _cred_local_human(state)
+
+
+def cmd_cred_local_patch(args, emitter):
+    import sys as _sys
+
+    if _sys.stdin is None or _sys.stdin.isatty():
+        raise UsageError(
+            "the operations are read from stdin",
+            hint='Pipe a JSON array: [{"op":"set","pointer":"/app/staging/appUrl","value":"..."}]',
+        )
+    text = _sys.stdin.read()
+    if not text.strip():
+        raise UsageError("no operations were given on stdin")
+    try:
+        ops = json.loads(text)
+    except ValueError as exc:
+        raise UsageError("the operations on stdin are not valid JSON: {}".format(exc)) from exc
+    except RecursionError as exc:
+        raise UsageError("the operations on stdin are nested too deeply") from exc
+    state = credentials_local.apply_patch(_cred_local_root(args), ops, args.expect_hash)
+    return state, "patched " + _cred_local_human(state)
+
+
 def cmd_cred_import(args, emitter):
     project_id = _cred_project_id(args)
     result = creds.import_file(args.file, project_id)
@@ -1807,6 +1860,30 @@ def build_parser():
     cred_check = cred_leaf("check", help="report references with no value, or an insecure backend")
     cred_check.set_defaults(func=cmd_cred_check)
 
+    cred_local = leaf(
+        cred_parser, "local", help="the plaintext credentials.local.json - the desktop app's editor"
+    ).add_subparsers(dest="cred_local_cmd")
+
+    def cred_local_leaf(name, **kwargs):
+        leafp = leaf(cred_local, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        return leafp
+
+    cred_local_leaf(
+        "show", help="read the file with every secret value replaced by a marker"
+    ).set_defaults(func=cmd_cred_local_show)
+    cred_local_leaf(
+        "init", help="create the file from the canonical template; refuses if it exists"
+    ).set_defaults(func=cmd_cred_local_init)
+    cred_local_patch = cred_local_leaf(
+        "patch", help="apply set/unset operations read from stdin, atomically"
+    )
+    cred_local_patch.add_argument(
+        "--expect-hash", dest="expect_hash", required=True,
+        help="the hash `show` returned; the patch is refused if the file changed since",
+    )
+    cred_local_patch.set_defaults(func=cmd_cred_local_patch)
+
     cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
     cred_backends.set_defaults(func=cmd_cred_backends)
 
@@ -2109,7 +2186,7 @@ def main(argv=None, stdout=None, stderr=None):
             )
         if getattr(args, "command", None) == "cred":
             return emitter.fail(
-                UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends")
+                UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends, local")
             )
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))

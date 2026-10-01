@@ -425,6 +425,9 @@ MUTATING = {
     "integration-settings/<name>.json",
     ("cred", "set"): "writes a credential reference and a value into a secret backend",
     ("cred", "unset"): "removes a reference, and the value with --forget-value",
+    ("cred", "local", "init"): "creates .dev-team-agents/credentials.local.json from the "
+    "canonical template (ADR-0024)",
+    ("cred", "local", "patch"): "rewrites .dev-team-agents/credentials.local.json (ADR-0024)",
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
     ("notifications", "ack"): "writes notifications-seen.json in each project's machine-local "
     "state directory",
@@ -483,6 +486,8 @@ READ_ONLY = {
     "(ADR-0010), and leaving it ungated is what keeps that refusal the answer a client "
     "gets on this command",
     ("cred", "check"): "reports references with no value or an insecure backend",
+    ("cred", "local", "show"): "reads credentials.local.json with every secret replaced by a "
+    "marker; never a value (ADR-0024)",
     ("notifications", "list"): "reads each project's queue and seen marks",
     ("notifications", "watch"): "stats each project's queue and streams new records; writes "
     "nothing — acknowledging is `notifications ack`",

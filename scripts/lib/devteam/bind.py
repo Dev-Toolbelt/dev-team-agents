@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 from . import plugins as plugins_module
-from . import gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
+from . import credentials_local, gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
 from .errors import ConflictError, EnvError, UsageError
 
 MODES = ("auto", "link", "copy", "vendored")
@@ -40,6 +40,9 @@ PROJECT_GITIGNORE_ENTRIES = (
     ".dev-team-agents/VERSION",
     ".dev-team-agents/.worktree-session",
     ".dev-team-agents/.learn-last-run",
+    # ADR-0024: the one location of the local credentials file, on both layouts.
+    ".dev-team-agents/credentials.local.json",
+    ".dev-team-agents/credentials.local.json.*",
     ".worktrees/",
     # `devteam export` defaults to the cache directory, but `--to .` is one keystroke
     # away and the archive can hold credential references and a quarantined
@@ -546,28 +549,7 @@ def _other_checkouts_bound(project_id, project_root):
 
 def _git_common_dir(path):
     """The shared git directory for ``path``, or ``None`` outside a repository."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            cwd=str(path),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    except OSError:
-        return None
-    if result.returncode != 0:
-        return None
-    raw = result.stdout.decode("utf-8", "replace").strip()
-    if not raw:
-        return None
-    candidate = Path(raw)
-    if not candidate.is_absolute():
-        candidate = Path(path) / candidate
-    try:
-        return Path(os.path.realpath(str(candidate)))
-    except OSError:
-        return None
+    return project.git_common_dir(path)
 
 
 def _same_git_repository(path_a, path_b):
@@ -986,6 +968,7 @@ def sync_project(project_id, emitter=None):
         )
         refreshed.append(worktree)
     result["worktrees"] = refreshed
+    result["credentials_local"] = credentials_local.relocate_safely(root, project_id)
     registry.touch_sync(project_id, result["version"])
     return result
 

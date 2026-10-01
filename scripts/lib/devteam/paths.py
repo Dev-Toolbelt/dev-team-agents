@@ -456,7 +456,10 @@ def locks_dir():
 #: Everything else in a project's memory is portable.
 #:
 #: `credentials.local.json` is here on purpose: its **values** are secrets, and a
-#: secret that travels with a portable export is a secret in one more place. ADR-0010
+#: secret that travels with a portable export is a secret in one more place. Its
+#: location is the project tree, `.dev-team-agents/credentials.local.json`, on every
+#: layout (ADR-0024); the entry stays so the export filter and the legacy store copy
+#: are still classified machine-local. ADR-0010
 #: replaces the file with non-secret references in `data/credentials/`, which are
 #: portable precisely because they hold no value.
 #:
