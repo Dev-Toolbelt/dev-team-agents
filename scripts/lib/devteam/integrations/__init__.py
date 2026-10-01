@@ -290,6 +290,26 @@ def token_reference(name):
     return entry
 
 
+def link_config(project_root, name):
+    """``{"account", "project"}`` for a connected integration, else ``None``; the token is never read.
+
+    The non-secret facts a link builder needs (the site or API URL, the project's key or
+    repository). "Connected" is the same test the settings view uses: a token reference exists, it
+    was issued for the configured origin, and no required account field is blank. No network, no
+    keychain value, no audit line: only references and config files are read.
+    """
+    adapter = get_adapter(name)
+    try:
+        raw = _read_account_raw(name)
+        account = effective_account(adapter, raw)
+        if token_reference(name) is None or is_stale(adapter, raw, account) or missing_fields(adapter, account):
+            return None
+        project = valid_project_values(adapter, read_project(project_root, name))
+    except (EnvError, UsageError, OSError):
+        return None
+    return {"account": account, "project": project}
+
+
 class TokenMissing(Exception):
     """The reference exists but this machine holds no value for it (ADR-0010: references
     are portable, values are not)."""

@@ -761,11 +761,12 @@ def cmd_tasks_list(args, emitter):
     for item in board["projects"]:
         counts = item["counts"]
         lines.append(
-            "{}  todo {} · in progress {} · in review {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
+            "{}  todo {} · in progress {} · in review {} · pr/mr created {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
                 _short(item["project_id"]),
                 counts["todo"],
                 counts["in_progress"],
                 counts["in_review"],
+                counts["pr_created"],
                 counts["done"],
                 item["sessions_total"],
                 item["stale"],

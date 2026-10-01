@@ -36,12 +36,17 @@ import threading
 import time
 from pathlib import Path
 
-from . import jsonio, lock, project, review_triggers
+from . import jsonio, lock, pr_refs, project, review_triggers
 from .errors import DevteamError
 
 SCHEMA = 1
 TASKS_DIR = "task-board"
 HISTORY_CAP = 50
+#: Most PR/MR marks, issue references and observed merges one session record keeps (ADR-0018,
+#: PR/MR Created amendment): a runaway loop must not grow a record without bound.
+MAX_PRS = 20
+MAX_REFS = 50
+MAX_MERGES = 50
 
 PROVIDERS = ("claude", "codex", "opencode")
 STATUSES = ("pending", "in_progress", "completed", "cancelled")
@@ -725,6 +730,13 @@ def _new_record(call, project_id, now):
     }
 
 
+def _empty_record(session_id, project_id, cwd, now):
+    """A record with no task yet: what a session's first prompt starts when it carries an issue reference."""
+    return dict(
+        _new_record({"session_id": session_id, "provider": None, "cwd": cwd if isinstance(cwd, str) else ""}, project_id, now)
+    )
+
+
 def _load(path):
     """The record at ``path``, or ``None`` if absent, unreadable or of another schema."""
     try:
@@ -762,9 +774,14 @@ def _valid_record(data):
             return False
         if not _optional_number(task["removed_at"]) or not isinstance(task.get("history", []), list):
             return False
+        if not isinstance(task.get("refs", []), list):
+            return False
     reviews = data.get("reviews", [])
     if not isinstance(reviews, list):
         return False
+    for name in ("prs", "merges", "refs"):
+        if not isinstance(data.get(name, []), list):
+            return False
     for window in reviews:
         if not isinstance(window, dict) or not isinstance(window.get("id"), str):
             return False
@@ -2249,13 +2266,18 @@ def _bound_id(root):
 def record(root, payload, provider="auto", now=None):
     """Fold one hook payload into its session record. Never raises.
 
-    Returns ``{"recorded", "session", "all_done", "became_all_done", "title_short"}``.
+    Returns ``{"recorded", "session", "all_done", "became_all_done", "title_short", "event"}``;
+    ``event`` names a PR/MR creation or merge, or an issue reference, folded in from a payload that
+    is not a todo call (:func:`_record_event`), else ``None``.
     """
-    result = {"recorded": False, "session": None, "all_done": False, "became_all_done": False, "title_short": None}
+    result = {
+        "recorded": False, "session": None, "all_done": False, "became_all_done": False,
+        "title_short": None, "event": None,
+    }
     try:
         call = normalize(payload, provider)
         if call is None:
-            return result
+            return _record_event(root, payload, now, result)
         project_id = _bound_id(root)
         path = record_path(root, project_id, call["session_id"]) if project_id else None
         if path is None:
@@ -2269,6 +2291,7 @@ def record(root, payload, provider="auto", now=None):
         title = (stored or {}).get("title") or session_title(payload, call["provider"])
         direct = call["op"][0] == "direct"
         turn = _turn(path) if direct else (None, "")
+        found_refs = _prefetch_refs(root, call, stored, branch)
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -2299,6 +2322,7 @@ def record(root, payload, provider="auto", now=None):
                 if task["key"] not in before and worktree is not None:
                     task["worktree"] = dict(worktree)
             _sweep_reviews(rec, now)
+            _apply_refs(rec, found_refs, before, now)
             if not (call.get("provider_guessed") and rec.get("provider") in PROVIDERS):
                 rec["provider"] = call["provider"]
             if call["cwd"]:
@@ -2346,7 +2370,7 @@ def mark(root, payload, state, now=None):
     result = {
         "marked": False, "open": 0,
         "review_result": False, "review_window": None, "review_findings": None,
-        "review_results": [], "became_all_done": False, "title_short": None,
+        "review_results": [], "became_all_done": False, "title_short": None, "pr_marks": [],
     }
     try:
         if state not in ("idle", "ended") or not isinstance(payload, dict):
@@ -2358,7 +2382,14 @@ def mark(root, payload, state, now=None):
             return result
         now = int(time.time() if now is None else now)
         # Read before the lock, like `git` in `record`: the transcript tail is file I/O.
-        title = session_title(payload, (_load(path) or {}).get("provider"))
+        stored = _load(path) or {}
+        title = session_title(payload, stored.get("provider"))
+        # The marks fixed at this Stop are checked against the project's remotes and integration
+        # config, which are read here, outside the lock.
+        unfixed = state == "idle" and any(
+            isinstance(p, dict) and p.get("fixed_at") is None for p in _list_of(stored, "prs")
+        )
+        links = pr_refs.load_context(root) if unfixed else None
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -2382,12 +2413,15 @@ def mark(root, payload, state, now=None):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
                 _interrupt_agents(rec, now)
+                pr_marks = _fix_prs(rec, now, links) if links is not None else []
                 done_now = _cleanly_done(rec, _review_members(rec), skip_direct=True)
                 rec["done_pending"] = False
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
         result.update(marked=True, open=_open_count(rec), title_short=title_short(rec.get("title")))
+        if state == "idle":
+            result["pr_marks"] = pr_marks
         if state == "idle" and done_now and not was_done:
             # A background agent's hand-back can finish the last task with no review window involved.
             result["became_all_done"] = True
@@ -2403,6 +2437,344 @@ def mark(root, payload, state, now=None):
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["marked"] = False
     return result
+
+
+# ── PR/MR marks, merges and issue references (PR/MR Created column) ──────────
+
+
+def _list_of(rec, name):
+    value = rec.get(name)
+    return value if isinstance(value, list) else []
+
+
+def _inside(path, base):
+    """True when the real path ``path`` is ``base`` or below it."""
+    return path == base or path.startswith(base.rstrip(os.sep) + os.sep)
+
+
+def _linked_worktrees(root):
+    """Real paths of the worktrees the project's own git directory lists; ``[]`` on any failure.
+
+    Run against the project root, never a payload's directory.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "-C", str(root), "worktree", "list", "--porcelain"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [
+        os.path.realpath(line[len("worktree "):].strip())
+        for line in result.stdout.decode("utf-8", "replace").splitlines() if line.startswith("worktree ")
+    ]
+
+
+def _branch_in_project(cwd, root):
+    """The branch checked out in ``cwd`` when ``cwd`` belongs to the project at ``root``, else ``None``.
+
+    A payload's directory is untrusted: it must resolve inside the project root or inside a worktree
+    the project's own git directory lists BEFORE any git runs there, and its git directory must be
+    the project's own. A detached ``HEAD`` is no branch.
+    """
+    if not cwd or not os.path.isdir(cwd):
+        return None
+    real_cwd = os.path.realpath(cwd)
+    if not _inside(real_cwd, os.path.realpath(str(root))) and not any(
+        _inside(real_cwd, wt) for wt in _linked_worktrees(root)
+    ):
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "-C", cwd, "rev-parse", "--git-common-dir", "--abbrev-ref", "HEAD"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    lines = [line.strip() for line in result.stdout.decode("utf-8", "replace").splitlines()]
+    if result.returncode != 0 or len(lines) < 2:
+        return None
+    common = os.path.realpath(os.path.join(cwd, lines[0]))
+    if common != os.path.realpath(os.path.join(str(root), ".git")):
+        return None
+    return pr_refs.clean_branch(lines[1]) if lines[1] != "HEAD" else None
+
+
+def _strip_remote(branch, remotes):
+    """``branch`` without a leading remote name (``origin/feat/x`` is ``feat/x``)."""
+    if branch and "/" in branch:
+        first, rest = branch.split("/", 1)
+        if first in {r["name"] for r in remotes} and rest:
+            return rest
+    return branch
+
+
+def _mark_identity(entry):
+    return (entry.get("kind"), entry.get("host"), str(entry.get("repo")).lower(), entry.get("number"))
+
+
+KIND_OF_LINK = {"github_pr": pr_refs.KIND_PR, "gitlab_mr": pr_refs.KIND_MR}
+
+
+def _pr_marks_from(event, root, ctx):
+    """The mark parts (and head) a command or MCP create event confirms, else ``None``."""
+    if event["event"] == "mcp_create":
+        parts, head = event["created"]
+        kind, source = KIND_OF_LINK[parts["kind"]], "mcp"
+        head = head or event.get("head")
+    else:
+        action = next((a for a in event["actions"] if a["op"] == "create"), None)
+        if action is None:
+            return None
+        parts = pr_refs.created_link(event["output"])
+        if parts is None or KIND_OF_LINK.get(parts["kind"]) != action["kind"]:
+            return None
+        kind, source = action["kind"], action["tool"]
+        head = action["head"] or _branch_in_project(event.get("cwd"), root)
+    mark = {"kind": kind, "host": parts["host"], "repo": parts["repo"], "number": parts["number"]}
+    if not pr_refs.mark_valid(mark, ctx):
+        return None
+    return {"op": "pr", "mark": mark, "head": head, "source": source}
+
+
+def _repo_host(repo, remotes):
+    """The host of the one remote naming ``repo``, else ``None``."""
+    hosts = {r["host"] for r in remotes if repo and r["repo"] == repo.lower()}
+    return next(iter(hosts)) if len(hosts) == 1 else None
+
+
+def _merges_from(event, root, ctx):
+    """The merge entries a command or MCP merge event confirms; ``[]`` when none is confirmed."""
+    remotes = ctx["remotes"]
+    if event["event"] == "mcp_merge":
+        merged = event["merged"]
+        host = _repo_host(merged["repo"], remotes)
+        if host is None:
+            return []
+        return [{"kind": pr_refs.KIND_PR, "number": merged["number"], "host": host, "repo": merged["repo"], "branch": None}]
+    found = []
+    for action in event["actions"]:
+        if action["op"] == "git_merge":
+            if pr_refs.merge_confirmed(action, event["output"]):
+                branch = _strip_remote(action["branch"], remotes)
+                found.append({"kind": "git", "number": None, "host": None, "repo": None, "branch": branch})
+            continue
+        if action["op"] != "merge":
+            continue
+        confirmed = pr_refs.merge_confirmed(action, event["output"])
+        if confirmed is None:
+            continue
+        target = action["target"] or {}
+        link = target.get("link")
+        number = link["number"] if link else target.get("number")
+        if number is None and isinstance(confirmed, int) and not isinstance(confirmed, bool):
+            number = confirmed
+        branch = target.get("branch")
+        if number is None and branch is None:
+            branch = _branch_in_project(event.get("cwd"), root)
+        if number is None and branch is None:
+            continue
+        if link:
+            host, repo = link["host"], link["repo"].lower()
+            if not pr_refs.remote_matches(link, remotes):
+                continue
+        elif action["repo"]:
+            repo = action["repo"]
+            host = _repo_host(repo, remotes)
+            if host is None:
+                continue
+        else:
+            unique = pr_refs.unique_repo(remotes)
+            host, repo = unique if unique else (None, None)
+        found.append({"kind": action["kind"], "number": number, "host": host, "repo": repo, "branch": branch})
+    return found
+
+
+def _prepare_event(root, event):
+    """The operations an event stands for, resolved before the lock (git and configuration are read here)."""
+    kind = event["event"]
+    if kind == "prompt":
+        ctx = pr_refs.load_context(root, with_remotes=False)
+        refs = pr_refs.extract_refs(event["text"], ctx, "prompt")
+        return [{"op": "refs", "refs": refs}] if refs else []
+    ctx = pr_refs.load_context(root)
+    ops = []
+    if kind == "mcp_create" or (kind == "command" and any(a["op"] == "create" for a in event["actions"])):
+        prepared = _pr_marks_from(event, root, ctx)
+        if prepared is not None:
+            ops.append(prepared)
+    if kind == "mcp_merge" or (kind == "command" and not event.get("failed")):
+        merges = _merges_from(event, root, ctx)
+        if merges:
+            ops.append({"op": "merges", "merges": merges})
+    return ops
+
+
+def _apply_event(rec, ops, now):
+    """Fold prepared operations into ``rec``. Returns the first event name that changed it, else ``None``."""
+    names = [name for name in (_apply_op(rec, op, now) for op in ops) if name]
+    return names[0] if names else None
+
+
+def _apply_op(rec, prepared, now):
+    op = prepared["op"]
+    if op == "pr":
+        prs = _list_of(rec, "prs")
+        mark = prepared["mark"]
+        if len(prs) >= MAX_PRS or any(isinstance(p, dict) and _mark_identity(p) == _mark_identity(mark) for p in prs):
+            return None
+        rec.setdefault("prs", prs)
+        prs.append(dict(
+            mark, id="p{}".format(len(prs) + 1), head=prepared["head"], source=prepared["source"],
+            seen_at=now, fixed_at=None, task_keys=[],
+        ))
+        return "pr_created"
+    if op == "merges":
+        merges = _list_of(rec, "merges")
+        rec.setdefault("merges", merges)
+        for merge in prepared["merges"]:
+            merges.append(dict(merge, at=now))
+        del merges[: max(0, len(merges) - MAX_MERGES)]
+        return "pr_merged"
+    refs = _list_of(rec, "refs")
+    known = {pr_refs.ref_identity(r) for r in refs}
+    added = False
+    for ref in prepared["refs"]:
+        if len(refs) >= MAX_REFS:
+            break
+        if pr_refs.ref_identity(ref) in known:
+            continue
+        known.add(pr_refs.ref_identity(ref))
+        rec.setdefault("refs", refs)
+        refs.append(dict(ref, seen_at=now))
+        added = True
+    return "refs" if added else None
+
+
+def _record_event(root, payload, now, result):
+    """The non-todo payloads ``record`` understands: a PR/MR creation or merge, or a prompt's issue refs.
+
+    A PR/MR event only touches a session that already has a record. A prompt that carries a valid
+    issue reference may start one: a session's first prompt comes before any todo, and the
+    reference is the main thing to keep. That record holds no task, so no board shows it; the
+    first task recorded later joins it and inherits the reference. Everything goes through
+    :func:`pr_refs.classify`, the single authority for what such a payload means.
+    """
+    event = pr_refs.classify(payload)
+    if event is None:
+        return result
+    session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
+    project_id = _bound_id(root)
+    path = record_path(root, project_id, session_id) if project_id and session_id else None
+    if path is None or (event["event"] != "prompt" and not path.is_file()):
+        return result
+    now = int(time.time() if now is None else now)
+    # Git and the integration files are read before the lock, like everywhere else in this module.
+    prepared = _prepare_event(root, event)
+    if not prepared:
+        return result
+    with _session_lock(path):
+        rec = _load(path)
+        if rec is None:
+            if path.exists():
+                # Present but unreadable, or a schema this build does not know: never overwrite it.
+                return result
+            rec = _empty_record(session_id, project_id, payload.get("cwd"), now)
+        name = _apply_event(rec, prepared, now)
+        if name is None:
+            return result
+        rec["updated_at"] = max(rec["updated_at"], now)
+        rec["last_seen_at"] = now
+        rec["idle_at"] = None
+        _alive(rec, now)
+        jsonio.write_json_atomic(path, rec)
+    result.update(recorded=True, session=session_id, event=name)
+    return result
+
+
+def _call_texts(call):
+    """The task texts a todo/agent call carries, for the issue references in them."""
+    kind, body = call["op"]
+    if kind == "replace":
+        return [item["content"] for item in body]
+    if kind in ("create", "update"):
+        return [body["content"]] if body.get("content") else []
+    if kind == "agent_spawn":
+        return [body["content"]]
+    return []
+
+
+def _prefetch_refs(root, call, stored, branch):
+    """Issue references in a call's task texts and in a branch that just changed, read before the lock."""
+    known = {t.get("content") for t in (stored or {}).get("tasks", []) if isinstance(t, dict)}
+    texts = [t for t in _call_texts(call) if t not in known and pr_refs.maybe_ref(t)]
+    branch_changed = bool(branch) and branch != (stored or {}).get("branch") and pr_refs.maybe_ref(branch)
+    if not texts and not branch_changed:
+        return {"branch": [], "texts": {}}
+    ctx = pr_refs.load_context(root, with_remotes=False)
+    if not ctx["github"] and not ctx["jira"]:
+        return {"branch": [], "texts": {}}
+    if ctx["github"] and texts:
+        ctx["remotes"] = pr_refs.git_remotes(root)
+    return {
+        "branch": pr_refs.extract_refs(branch, ctx, "branch") if branch_changed else [],
+        "texts": {t: pr_refs.extract_refs(t, ctx, "task") for t in texts},
+    }
+
+
+def _apply_refs(rec, prefetched, before, now):
+    """Attach the prefetched references: the branch's to the session, a new task's text to that task."""
+    if prefetched["branch"]:
+        refs = _list_of(rec, "refs")
+        known = {pr_refs.ref_identity(r) for r in refs}
+        for ref in prefetched["branch"]:
+            if len(refs) < MAX_REFS and pr_refs.ref_identity(ref) not in known:
+                rec.setdefault("refs", refs)
+                refs.append(dict(ref, seen_at=now))
+    for task in rec["tasks"]:
+        found = prefetched["texts"].get(task["content"])
+        if found and task["key"] not in before and not task.get("refs"):
+            task["refs"] = [dict(ref) for ref in found]
+
+
+def _fix_prs(rec, now, ctx):
+    """Fix the membership of every unfixed PR/MR mark at this Stop. Returns the marks fixed (valid ones).
+
+    Members: every completed, visible task of the session completed since the previous mark's
+    ``fixed_at`` (else since the session began or last resumed), up to now, not already a member of
+    another mark. The first mark in the Stop takes them; a later one in the same Stop has none.
+    """
+    prs = [p for p in _list_of(rec, "prs") if isinstance(p, dict)]
+    pending = [p for p in prs if p.get("fixed_at") is None]
+    if not pending:
+        return []
+    claimed = {k for p in prs for k in (p.get("task_keys") or []) if isinstance(k, str)}
+    fixed = [p["fixed_at"] for p in prs if _number(p.get("fixed_at"))]
+    since = max(fixed) if fixed else None
+    floor = max(rec.get("created_at") or 0, rec.get("resumed_at") or 0)
+    hidden = _hidden_keys(rec)
+    keys = []
+    for task in sorted(rec["tasks"], key=_task_order):
+        if not _shown(task) or task["key"] in hidden or task["key"] in claimed or task["status"] != "completed":
+            continue
+        done_at = _completed_at(task)
+        if done_at is None or done_at > now:
+            continue
+        if (done_at > since) if since is not None else (done_at >= floor):
+            keys.append(task["key"])
+    marks = []
+    for index, pr in enumerate(pending):
+        pr["task_keys"] = list(keys) if index == 0 else []
+        pr["fixed_at"] = now
+        parts = pr_refs.mark_parts(pr)
+        if parts and pr_refs.mark_valid(parts, ctx):
+            marks.append({
+                "kind": parts["kind"], "number": parts["number"],
+                "url": pr_refs.build_link(pr_refs.LINK_KIND[parts["kind"]], parts["host"], parts["repo"], parts["number"]),
+            })
+    return marks
 
 
 # ── derived state ────────────────────────────────────────────────────────────
@@ -2441,12 +2813,47 @@ def _worktree_view(value):
     return {"path": value["path"], "branch": branch if isinstance(branch, str) and branch else None}
 
 
-def _task_view(task, session_status, now, stale_after, until, member=None, review_spans=()):
+def _minus(start, end, spans):
+    """``[(start, end)]`` with every span in ``spans`` cut out of it."""
+    pieces = [(start, end)]
+    for a, b in spans:
+        cut = []
+        for lo, hi in pieces:
+            if b <= lo or a >= hi:
+                cut.append((lo, hi))
+                continue
+            if a > lo:
+                cut.append((lo, a))
+            if b < hi:
+                cut.append((b, hi))
+        pieces = cut
+    return pieces
+
+
+def _pr_spans(history, pr, until, review_spans):
+    """Where a task sat in the PR/MR Created column: from its mark's fix until the merge, the task
+    leaving ``completed`` or ``until``, with any review window cut out (In Review wins)."""
+    if pr is None or not _number(pr.get("fixed_at")):
+        return []
+    start = pr["fixed_at"]
+    end = min(until, pr["merged_at"]) if _number(pr.get("merged_at")) else until
+    for entry in history:
+        if entry["at"] > start and entry["status"] != "completed":
+            end = min(end, entry["at"])
+            break
+    return _minus(start, end, review_spans) if end > start else []
+
+
+def _task_view(task, session_status, now, stale_after, until, member=None, review_spans=(), pr=None, refs=()):
     history = [h for h in task.get("history", []) if isinstance(h, dict) and _number(h.get("at"))]
     if not history:
         history = [{"status": task["status"], "at": task["created_at"]}]
     since = history[-1]["at"]
     column = "in_review" if member else _column(task["status"])
+    if (column == "done" and task["status"] == "completed" and pr is not None and pr["state"] == "open"
+            and _number(pr.get("fixed_at")) and since <= pr["fixed_at"]):
+        column = "pr_created"
+    pr_spans = _pr_spans(history, pr, until, review_spans)
     completed_at = None
     if task["status"] == "completed":
         completed_at = since
@@ -2468,15 +2875,20 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "status_since": since,
         "completed_at": completed_at,
         "durations": dict(
-            _durations(history, until, review_spans),
+            _durations(history, until, list(review_spans) + pr_spans),
             in_review=int(sum(end - start for start, end in review_spans)),
+            pr_created=int(sum(end - start for start, end in pr_spans)),
         ),
         "review": dict(member) if member else None,
         "stale": task["status"] == "in_progress"
         and not member
         and session_status != "ended"
         and now - since > stale_after,
-        "abandoned": column != "done" and session_status == "ended",
+        "abandoned": column not in ("done", "pr_created") and session_status == "ended",
+        # Additive: the PR/MR the task shipped in (`{"kind", "number", "url", "state"}`), else null.
+        "pr": {k: pr[k] for k in ("kind", "number", "url", "state")} if pr is not None else None,
+        # Additive: the issue references that apply to the task (`{"system", "key", "url"}`).
+        "refs": list(refs),
     }
 
 
@@ -2503,15 +2915,101 @@ def resume_command(root, provider, session_id, cwd=None):
 
 
 def _counts(views):
-    counts = {"todo": 0, "in_progress": 0, "done": 0, "in_review": 0}
+    counts = {"todo": 0, "in_progress": 0, "done": 0, "in_review": 0, "pr_created": 0}
     for view in views:
         counts[view["column"]] += 1
     counts["total"] = len(views)
     return counts
 
 
-def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DEFAULT_ENDED_AFTER):
-    """One session as the board shows it, or ``None`` when it has no task to show."""
+def _merge_entries(rec):
+    """The well-formed merge entries of a record (malformed ones are skipped, never repaired)."""
+    found = []
+    for entry in _list_of(rec, "merges"):
+        if not isinstance(entry, dict) or entry.get("kind") not in ("pr", "mr", "git") or not _number(entry.get("at")):
+            continue
+        number = entry.get("number")
+        number = number if isinstance(number, int) and not isinstance(number, bool) else None
+        text = lambda name: entry[name] if isinstance(entry.get(name), str) else None  # noqa: E731
+        found.append({
+            "kind": entry["kind"], "number": number, "host": text("host"), "repo": text("repo"),
+            "branch": pr_refs.clean_branch(entry.get("branch")), "at": entry["at"],
+        })
+    return found
+
+
+def _view_context(root, records):
+    """What a view derives PR/MR state from: the links context and every merge of every session of the project."""
+    return {
+        "links": pr_refs.load_context(root),
+        "merges": [m for rec in records for m in _merge_entries(rec)],
+    }
+
+
+def _merged_at(pr, merges):
+    """When a merge of ``pr`` was observed in any session of the project, else ``None``.
+
+    A merge matches by repository and number, or by the branch the mark was created from when the
+    merge was seen after the mark.
+    """
+    times = []
+    for merge in merges:
+        by_number = (
+            merge["number"] == pr["number"] and merge["kind"] == pr["kind"] and merge["repo"] is not None
+            and merge["repo"].lower() == pr["repo"].lower() and merge["host"] in (None, pr["host"])
+        )
+        by_branch = bool(merge["branch"]) and merge["branch"] == pr.get("head") and merge["at"] >= pr["seen_at"]
+        if by_number or by_branch:
+            times.append(merge["at"])
+    return min(times) if times else None
+
+
+def _session_prs(rec, context):
+    """The session's PR/MR marks that still validate, URLs rebuilt from their parts, with merge state.
+
+    A mark whose host, repository or shape no longer passes (the record is hand-editable JSON, the
+    remotes and integrations change) is omitted from every view; the record keeps it.
+    """
+    found = []
+    for entry in _list_of(rec, "prs"):
+        parts = pr_refs.mark_parts(entry)
+        seen = entry.get("seen_at") if isinstance(entry, dict) else None
+        if parts is None or not _number(seen) or not pr_refs.mark_valid(parts, context["links"]):
+            continue
+        head = pr_refs.clean_branch(entry.get("head"))
+        mark = dict(parts, head=head, seen_at=seen)
+        merged_at = _merged_at(mark, context["merges"])
+        keys = [k for k in (entry.get("task_keys") or []) if isinstance(k, str)]
+        found.append(dict(
+            parts, head=head, fixed_at=entry.get("fixed_at"), task_keys=keys, merged_at=merged_at,
+            state="merged" if merged_at is not None else "open",
+            url=pr_refs.build_link(pr_refs.LINK_KIND[parts["kind"]], parts["host"], parts["repo"], parts["number"]),
+        ))
+    return found
+
+
+def _task_refs(rec, task, context):
+    """Issue references for a task: the session's seen at or before its creation, then its own, de-duplicated."""
+    stored = [r for r in _list_of(rec, "refs") if isinstance(r, dict) and _number(r.get("seen_at"))]
+    stored.sort(key=lambda r: r["seen_at"])
+    entries = [r for r in stored if r["seen_at"] <= task["created_at"]]
+    entries += [r for r in task.get("refs") or [] if isinstance(r, dict)]
+    out, seen = [], set()
+    for entry in entries:
+        view = pr_refs.ref_view(entry, context["links"])
+        if view is not None and view["url"] not in seen:
+            seen.add(view["url"])
+            out.append(view)
+    return out
+
+
+def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DEFAULT_ENDED_AFTER, context=None):
+    """One session as the board shows it, or ``None`` when it has no task to show.
+
+    ``context`` is :func:`_view_context`; a caller showing a whole project builds it once. Alone, a
+    session derives merge state from its own record only.
+    """
+    context = context or _view_context(root, [rec])
     status = _session_status(rec, now, ended_after)
     until = now
     if status == "ended":
@@ -2524,8 +3022,16 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     members = _review_members(rec)
     spans = _review_spans(rec, until)
     shown = {t["key"] for t in _visible(rec)}
+    prs = _session_prs(rec, context)
+    pr_of = {}
+    for pr in prs:
+        for key in pr["task_keys"]:
+            pr_of.setdefault(key, pr)
     views = [
-        _task_view(task, status, now, stale_after, until, members.get(task["key"]), spans.get(task["key"], ()))
+        _task_view(
+            task, status, now, stale_after, until, members.get(task["key"]), spans.get(task["key"], ()),
+            pr_of.get(task["key"]), _task_refs(rec, task, context),
+        )
         for task in sorted(rec["tasks"], key=_task_order)
         if isinstance(task, dict) and task["key"] in shown
     ]
@@ -2546,6 +3052,8 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
         "ended_at": rec.get("ended_at"),
         "resume_command": resume_command(root, rec.get("provider"), rec["session_id"], rec.get("cwd")),
         "counts": _counts(views),
+        # Additive: the session's PR/MR marks (`{"kind", "number", "url", "state", "head"}`).
+        "prs": [{k: pr[k] for k in ("kind", "number", "url", "state", "head")} for pr in prs],
         "tasks": views,
     }
 
@@ -2567,9 +3075,11 @@ def _project_records(root, project_id):
 def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AFTER, ended_after=DEFAULT_ENDED_AFTER):
     """One project as the board shows it, or ``None`` when no session has a task."""
     sessions = []
-    for rec in _project_records(root, project_id):
+    records = _project_records(root, project_id)
+    context = _view_context(root, records) if records else None
+    for rec in records:
         try:
-            view = session_view(rec, root, now, stale_after, ended_after)
+            view = session_view(rec, root, now, stale_after, ended_after, context)
         except (KeyError, TypeError, ValueError, AttributeError):
             continue
         if view is None:
@@ -2589,6 +3099,8 @@ def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AF
         "sessions_total": len(sessions),
         "sessions_active": sum(1 for s in sessions if s["status"] != "ended"),
         "counts": _counts(all_tasks),
+        # Additive: the hosts this project's links may point at, per link kind (`{"host", "kinds"}`).
+        "link_hosts": pr_refs.link_hosts(context["links"]),
         "with_findings": sum(1 for t in all_tasks if (t["review"] or {}).get("state") == "findings"),
         "stale": sum(1 for t in all_tasks if t["stale"]),
         "abandoned": sum(1 for t in all_tasks if t["abandoned"]),

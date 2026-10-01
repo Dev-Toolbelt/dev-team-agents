@@ -60,19 +60,23 @@ EVENTS = (
 #: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
 #: (its sub-scripts filter cheaply themselves); `PostToolUse` is narrowed to the todo
 #: tools and the subagent tool (`Agent`, `Task` in older builds — where a review agent's
-#: report comes back) so no other tool call forks the dispatcher at all; `PostToolUseFailure` is
-#: narrowed to the subagent tool for the same reason.
+#: report comes back), `Bash` and the pull-request MCP tools (where a PR/MR creation or merge is
+#: confirmed — the sub-script gates on the command before forking anything) so no other tool call
+#: forks the dispatcher at all; `PostToolUseFailure` is
+#: narrowed to the subagent tool, `Bash` and the create tool (`gh pr create` exits non-zero when the PR
+#: already exists, and its output then arrives on this event) for the same reason.
 MATCHERS = {
     "PreToolUse": ".*",
-    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task",
-    "PostToolUseFailure": "Agent|Task",
+    "PostToolUse": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request",
+    "PostToolUseFailure": "Agent|Task|Bash|mcp__.*create_pull_request",
 }
 
 
 #: Matchers a previous release of ours wrote, per event. Only these are rewritten to the current
 #: one; any other matcher on our entry is the user's own choice and is left alone.
 PREVIOUS_MATCHERS = {
-    "PostToolUse": ("TodoWrite|TaskCreate|TaskUpdate",),
+    "PostToolUse": ("TodoWrite|TaskCreate|TaskUpdate", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task"),
+    "PostToolUseFailure": ("Agent|Task",),
 }
 
 
