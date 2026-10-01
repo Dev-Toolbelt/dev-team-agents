@@ -44,7 +44,7 @@ The task board's optional **In Review** column exists only when a review is acti
 
 ## References
 
-- `docs/specs/task-board.md` § "In Review — an optional fourth column" — the full spec with JSON schema and behavior rules
+- `docs/specs/task-board.md` § "In Review — the fourth column" — the full spec with JSON schema and behavior rules
 - `skills/shared/review-result/SKILL.md` — the marker template agents load and emit
 - `scripts/hooks/pre-tool-use/01-task-board.sh` — Claude Code review trigger detection
 - `scripts/lib/devteam/review_triggers.py` — centralized trigger matcher for all providers
