@@ -30,6 +30,14 @@ CONSENT_KEYS = ("telemetry", "auto_update")
 
 SCOPES = ("global", "project")
 
+#: Keys the schema used to carry and nothing reads any more. They are gone from
+#: `preferences-defaults.json`, but files written before that still hold them, and the
+#: No-Destruction Rule leaves those files alone. So a retired key is skipped when the
+#: layers are merged — neither a value in the projection nor an "unknown key" warning
+#: about a file the user never touched — and writing one is refused by name. `unset`
+#: still removes it, which is how a user cleans a layer up.
+RETIRED_KEYS = ("transcript_multiplier",)
+
 
 def defaults_file(version):
     return versions.require(version) / "scripts" / "lib" / "preferences-defaults.json"
@@ -78,6 +86,8 @@ def resolve(project_id, version):
     origin = {}
     for name, layer in layers:
         for key, value in layer.items():
+            if key in RETIRED_KEYS:
+                continue
             if name != "defaults" and key not in base:
                 # An unknown key is kept, not dropped — a newer CLI may own it —
                 # but it is reported so a typo does not masquerade as a setting.
@@ -135,6 +145,11 @@ def get(project_id, version, key=None):
 
 def _coerce(key, raw, base):
     """Parse a command-line string against the type the default declares."""
+    if key in RETIRED_KEYS:
+        raise UsageError(
+            "{!r} is retired: nothing reads it any more, so setting it would change nothing".format(key),
+            hint="Remove it from a layer with `devteam prefs unset {}`.".format(key),
+        )
     if key not in base:
         raise UsageError(
             "unknown preference {!r}".format(key),
@@ -276,7 +291,9 @@ def import_legacy(project_root, project_id, version, emitter=None):
     layer = _layer(target)
     for key in sorted(legacy):
         value = legacy[key]
-        if key not in base:
+        if key in RETIRED_KEYS:
+            report["ignored"].append({"key": key, "reason": "retired"})
+        elif key not in base:
             report["ignored"].append({"key": key, "reason": "unknown"})
         elif not _fits_default(key, value, base[key]):
             report["ignored"].append({"key": key, "reason": "invalid"})
