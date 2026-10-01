@@ -1358,6 +1358,8 @@ export interface BoardWorktree {
 
 export interface BoardSession {
   readonly session_id: string;
+  /** The title the provider shows for the session; `null` when it has none or the CLI predates it. */
+  readonly title: string | null;
   /** `claude`, `codex` or `opencode` today; kept open so a new provider degrades to a generic icon. */
   readonly provider: string;
   readonly branch: string | null;

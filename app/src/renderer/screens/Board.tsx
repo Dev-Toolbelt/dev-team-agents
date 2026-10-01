@@ -841,9 +841,16 @@ function CardList({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A native `<option>` cannot truncate with CSS, and a long title would widen the whole select. */
+const OPTION_TITLE_CHARS = 40;
+
 function sessionLabel(session: BoardSession): string {
   const where = session.branch ?? (session.cwd !== '' ? basename(session.cwd) : 'no branch');
-  return `${providerLabel(session.provider)} · ${where} · ${session.session_id.slice(0, 8)}`;
+  const provider = providerLabel(session.provider);
+  if (session.title === null) return `${provider} · ${where} · ${session.session_id.slice(0, 8)}`;
+  const title =
+    session.title.length > OPTION_TITLE_CHARS ? `${session.title.slice(0, OPTION_TITLE_CHARS).trimEnd()}…` : session.title;
+  return `${title} · ${provider} · ${where}`;
 }
 
 function SessionStrip({ sessions }: { sessions: readonly BoardSession[] }) {
@@ -865,6 +872,11 @@ function SessionRow({ session }: { session: BoardSession }) {
       <span className="flex items-center gap-1.5 font-medium">
         <ProviderIcon provider={session.provider} withLabel />
       </span>
+      {session.title !== null && (
+        <span className="max-w-[32ch] truncate font-medium" title={session.title}>
+          {session.title}
+        </span>
+      )}
       <span className="font-mono text-xs">{where}</span>
       <span className="flex items-center gap-1 text-xs" data-status={session.status}>
         <StatusIcon className="size-3.5" aria-hidden="true" />
