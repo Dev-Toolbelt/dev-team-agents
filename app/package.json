@@ -24,7 +24,7 @@
     "start": "npm run build && electron .",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:all": "npm run build && electron-builder --mac --win --publish never",
+    "dist:all": "npm run build && electron-builder --mac --win --publish never && node scripts/zip-release.mjs",
     "build:preload": "vite build -c vite.preload.config.mts"
   },
   "devDependencies": {

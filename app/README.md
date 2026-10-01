@@ -140,7 +140,9 @@ simulated OS. What only a packaged build on a real desktop can show is checked b
 Every `dist:*` script starts with `clean`, which empties `release/`: running `dist:win` after
 `dist:mac` deletes the `.dmg`. To get both, run `npm run dist:all` — one build, one
 `electron-builder --mac --win` pass. It needs a macOS host, since a `.dmg` cannot be built
-elsewhere.
+elsewhere. It ends by zipping the four installers into
+`release/dev-team-agents-<version>-unsigned.zip` (`scripts/zip-release.mjs`), the single file
+to copy to a test machine.
 
 | # | Do | Expect |
 |---|----|--------|
