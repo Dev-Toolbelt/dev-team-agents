@@ -279,6 +279,36 @@ describe('Board — accessibility and overflow', () => {
     expect(screen.queryByText('1 tasks')).not.toBeInTheDocument();
   });
 
+  it('lays the four columns out in one row that scrolls sideways instead of stacking', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+    const row = screen.getByRole('region', { name: 'Kanban columns' });
+    // `relative`: the cards' absolutely positioned sr-only text must not escape the scroller and
+    // widen the page (seen in a real window before the fix).
+    expect(row).toHaveClass('relative', 'flex', 'overflow-x-auto');
+    expect(row.className).not.toMatch(/grid-cols/);
+    // Focusable, so the arrow keys scroll it when the columns do not fit.
+    expect(row).toHaveAttribute('tabindex', '0');
+    const columns = within(row).getAllByRole('region');
+    expect(columns.map((column) => column.querySelector('h4')?.firstChild?.textContent)).toEqual([
+      'To do',
+      'In progress',
+      'In Review',
+      'Done',
+    ]);
+    for (const column of columns) {
+      // A minimum width that never shrinks: below it, the row scrolls rather than squeezing.
+      expect(column).toHaveClass('min-w-72', 'shrink-0', 'flex-col');
+    }
+  });
+
+  it('scrolls the cards inside their column and keeps the heading out of the scroll', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'a' })] })] }));
+    const todo = screen.getByRole('region', { name: /^To do/ });
+    const list = within(todo).getByRole('list');
+    expect(list).toHaveClass('relative', 'overflow-y-auto', 'min-h-0');
+    expect(list).not.toContainElement(todo.querySelector('h4'));
+  });
+
   it('lets an unbroken task text wrap instead of overflowing the column', async () => {
     const content = 'x'.repeat(300);
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ content })] })] }));
