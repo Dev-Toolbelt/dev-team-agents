@@ -11,7 +11,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/renderer/App.js';
-import { cliResolutionFound, fakeBridge, installBridge } from './support.js';
+import { isPrerelease } from '../../src/shared/appVersion.js';
+import { buildInfo, cliResolutionFound, fakeBridge, installBridge } from './support.js';
 
 const state = vi.hoisted(() => ({ doctorThrows: true }));
 
@@ -47,6 +48,32 @@ describe('App — start-up', () => {
 
     expect(await screen.findByRole('tab', { name: 'Projects' })).toBeInTheDocument();
     expect(screen.queryByText(/could not finish its start-up checks/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('App — the header names this app’s version', () => {
+  it('shows the app version before the store’s, with a beta badge while it is a pre-release', async () => {
+    installBridge(fakeBridge({ buildInfo: vi.fn(() => Promise.resolve(buildInfo({ appVersion: '0.0.0' }))) }));
+    render(<App />);
+    const version = await screen.findByText('app 0.0.0');
+    expect(version).toHaveTextContent('beta');
+    const store = screen.getByText(/^store /);
+    expect(version.compareDocumentPosition(store) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('drops the badge at a stable version', async () => {
+    installBridge(fakeBridge({ buildInfo: vi.fn(() => Promise.resolve(buildInfo({ appVersion: '1.2.0' }))) }));
+    render(<App />);
+    expect(await screen.findByText('app 1.2.0')).not.toHaveTextContent('beta');
+  });
+
+  it('calls 0.x, suffixed and unparseable versions pre-releases, and plain ≥1 versions stable', () => {
+    for (const version of ['0.0.0', '0.9.3', '1.0.0-beta.1', 'v2.0.0-rc.1', 'dev', '']) {
+      expect(isPrerelease(version), version).toBe(true);
+    }
+    for (const version of ['1.0.0', 'v1.4.2', '2.0.0+build.7']) {
+      expect(isPrerelease(version), version).toBe(false);
+    }
   });
 });
 
