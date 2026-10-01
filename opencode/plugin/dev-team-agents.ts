@@ -54,6 +54,8 @@ const TASK_BOARD_HOOK_TIMEOUT_MS = 12000
 // `tool.execute.before` remembers a `task` call's `subagent_type` here, keyed by callID, for the
 // matching `after` when opencode does not repeat the args. Bounded: an unmatched call is evicted.
 const SUBAGENT_CALLS_KEPT = 256
+// Session titles the plugin has looked up, for the task board's notifications. Bounded likewise.
+const SESSION_TITLES_KEPT = 256
 
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // One path for both layouts: a v2 install vendors `scripts/` here and a v3 bind
@@ -170,6 +172,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
           stdin: JSON.stringify({
             transcript_path: file,
             session_id: sessionID,
+            session_title: await sessionTitle(sessionID),
             last_assistant_message: lastText,
           }),
           cleanup: () => rm(dir, { recursive: true, force: true }),
@@ -180,7 +183,13 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // turn-count heuristic, same as it does today.
     }
     // No token usage yet: still name the session, so stop/04b-task-board.sh can mark it idle.
-    return { stdin: JSON.stringify({ session_id: sessionID, last_assistant_message: lastText }) }
+    return {
+      stdin: JSON.stringify({
+        session_id: sessionID,
+        session_title: await sessionTitle(sessionID),
+        last_assistant_message: lastText,
+      }),
+    }
   }
 
   const subagentByCall = new Map<string, string>()
@@ -191,6 +200,33 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       const oldest = subagentByCall.keys().next().value
       if (oldest === undefined) break
       subagentByCall.delete(oldest)
+    }
+  }
+
+  // The title opencode shows for a session, sent to the hooks as `session_title` so a task-board
+  // notification can name the session rather than its id. Claude Code and Codex keep theirs where
+  // the CLI can read it (transcript, session index); opencode only has it through the SDK.
+  // Looked up once per session and refreshed by `session.updated`; "" when unavailable.
+  const titleBySession = new Map<string, string>()
+  const rememberTitle = (sessionID: unknown, title: unknown) => {
+    if (typeof sessionID !== "string" || !sessionID || typeof title !== "string") return
+    titleBySession.delete(sessionID)
+    titleBySession.set(sessionID, title)
+    while (titleBySession.size > SESSION_TITLES_KEPT) {
+      const oldest = titleBySession.keys().next().value
+      if (oldest === undefined) break
+      titleBySession.delete(oldest)
+    }
+  }
+  const sessionTitle = async (sessionID: string): Promise<string> => {
+    if (titleBySession.has(sessionID)) return titleBySession.get(sessionID) ?? ""
+    try {
+      const res = await client.session.get({ path: { id: sessionID } })
+      const title = typeof res.data?.title === "string" ? res.data.title : ""
+      rememberTitle(sessionID, title)
+      return title
+    } catch {
+      return ""
     }
   }
 
@@ -210,6 +246,10 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
 
   return {
     event: async ({ event }) => {
+      if (event.type === "session.updated") {
+        const info: any = (event as any).properties?.info
+        rememberTitle(info?.id, info?.title)
+      }
       if (event.type === "session.created") {
         await safe("session-start", () => runHook(`${HOOKS}/session-start.sh`))
       }
@@ -236,6 +276,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         tool: input.tool,
         tool_use_id: (input as any).callID,
         cwd: directory,
+        session_title: await sessionTitle(input.sessionID),
         args: output.args,
       })
       await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
@@ -257,6 +298,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         tool: input.tool,
         tool_use_id: callID,
         cwd: directory,
+        session_title: await sessionTitle(input.sessionID),
         args,
         output: output.output,
       })

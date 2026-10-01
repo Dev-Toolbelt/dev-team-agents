@@ -41,6 +41,8 @@ hook ──devteam_notify──▶ <state-dir>/notifications.jsonl ──devteam
 | `tasks.review_findings` | warning | `post-tool-use/01-task-board.sh` (agent result), `stop/04b-task-board.sh` (command/prompt review) | review window |
 | `tasks.session_abandoned` | warning | `session-end.sh` | session |
 
+The three `tasks.*` messages name the session by its provider title, quoted and cut to 15 characters (`Sessão "Notificações do…": …`), or by the first 8 characters of its id when it has no title. Where each provider keeps the title: `docs/providers.md`.
+
 Thresholds come from preferences: `context_window_percent_warning`, `context_window_percent_limit`, `model_max_tokens`, `session_no_commit_turns`, `docs_stale_after_days`. Messages are rendered by the hook in `language`.
 
 ## Suppression

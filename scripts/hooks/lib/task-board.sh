@@ -87,20 +87,34 @@ _tb_notify() {  # _tb_notify <level> <code> <session> <en> <pt-BR> <es> [dedupe-
     devteam_notify "$level" "$code" "$(devteam_msg "$lang" "$4" "$5" "$6")" 86400 "$key"
 }
 
-_tb_notify_done() {  # _tb_notify_done <session>
-    local short="${1:0:8}"
-    _tb_notify info "tasks.session_done" "$1" \
-        "Session ${short}: every task is done." \
-        "Sessão ${short}: todas as tarefas foram concluídas." \
-        "Sesión ${short}: todas las tareas están completas."
+# How a message names the session: its title as the provider shows it, quoted and already cut
+# by the CLI (`title_short`, free of quotes and backslashes), else the first 8 characters of its id.
+_tb_label() {  # _tb_label <session> <cli-json>
+    local title
+    title="$(_tb_str "$2" title_short)"
+    if [ -n "$title" ]; then
+        printf '"%s"' "$title"
+    else
+        printf '%s' "${1:0:8}"
+    fi
 }
 
-_tb_notify_findings() {  # _tb_notify_findings <session> <window> <count>
-    local short="${1:0:8}"
+_tb_notify_done() {  # _tb_notify_done <session> <cli-json>
+    local label
+    label="$(_tb_label "$1" "$2")"
+    _tb_notify info "tasks.session_done" "$1" \
+        "Session ${label}: every task is done." \
+        "Sessão ${label}: todas as tarefas foram concluídas." \
+        "Sesión ${label}: todas las tareas están completas."
+}
+
+_tb_notify_findings() {  # _tb_notify_findings <session> <window> <count> <cli-json>
+    local label
+    label="$(_tb_label "$1" "$4")"
     _tb_notify warning "tasks.review_findings" "$1" \
-        "Session ${short}: the review found ${3} issue(s); the tasks stay in review." \
-        "Sessão ${short}: a revisão encontrou ${3} problema(s); as tarefas continuam em revisão." \
-        "Sesión ${short}: la revisión encontró ${3} problema(s); las tareas siguen en revisión." \
+        "Session ${label}: the review found ${3} issue(s); the tasks stay in review." \
+        "Sessão ${label}: a revisão encontrou ${3} problema(s); as tarefas continuam em revisão." \
+        "Sesión ${label}: la revisión encontró ${3} problema(s); las tareas siguen en revisión." \
         "$2"
 }
 
@@ -118,7 +132,7 @@ devteam_task_board_record() {
     out="$(printf '%s' "$payload" | python3 "$TB_CLI" tasks record --project-root "$TB_ROOT" --json 2>/dev/null)" || return 0
     printf '%s' "$out" | grep -q '"became_all_done": true' || return 0
     session="$(_tb_str "$out" session)"
-    _tb_notify_done "$session"
+    _tb_notify_done "$session" "$out"
     return 0
 }
 
@@ -131,18 +145,19 @@ devteam_task_board_mark() {
         _tb_review_outcome "$out" review_result review_window review_findings "$payload"
         # A background agent's hand-back can finish the last task with no review window involved.
         if ! printf '%s' "$out" | grep -q '"review_result": true' && printf '%s' "$out" | grep -q '"became_all_done": true'; then
-            _tb_notify_done "$(devteam_task_board_session_id "$payload")"
+            _tb_notify_done "$(devteam_task_board_session_id "$payload")" "$out"
         fi
         return 0
     fi
     open="$(printf '%s' "$out" | sed -n 's/.*"open": \([0-9]*\).*/\1/p' | head -1)"
     [ "${open:-0}" -gt 0 ] 2>/dev/null || return 0
     session="$(devteam_task_board_session_id "$payload")"
-    local short="${session:0:8}"
+    local label
+    label="$(_tb_label "$session" "$out")"
     _tb_notify warning "tasks.session_abandoned" "$session" \
-        "Session ${short} ended with ${open} task(s) still open." \
-        "A sessão ${short} terminou com ${open} tarefa(s) em aberto." \
-        "La sesión ${short} terminó con ${open} tarea(s) abierta(s)."
+        "Session ${label} ended with ${open} task(s) still open." \
+        "A sessão ${label} terminou com ${open} tarefa(s) em aberto." \
+        "La sesión ${label} terminó con ${open} tarea(s) abierta(s)."
     return 0
 }
 
@@ -169,11 +184,11 @@ for r in json.load(sys.stdin).get("review_results") or []:
     fi
     while read -r window findings; do
         if [ "${findings:-0}" -gt 0 ] 2>/dev/null; then
-            _tb_notify_findings "$session" "${window:-w}" "$findings"
+            _tb_notify_findings "$session" "${window:-w}" "$findings" "$out"
         fi
     done <<< "$pairs"
     if printf '%s' "$out" | grep -q '"became_all_done": true'; then
-        _tb_notify_done "$session"
+        _tb_notify_done "$session" "$out"
     fi
     return 0
 }

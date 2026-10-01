@@ -1403,7 +1403,7 @@ def review_result(root, payload, now=None):
     """Fold a finished review agent's output into the open window.
 
     Returns ``{"recorded", "session", "window", "result", "findings", "resolved",
-    "all_done", "became_all_done"}``; ``result`` is true when this call completed the window.
+    "all_done", "became_all_done", "title_short"}``; ``result`` is true when this call completed the window.
     """
     def apply(rec, call, at):
         if call["kind"] == "backgrounded":
@@ -1415,12 +1415,16 @@ def review_result(root, payload, now=None):
         if outcome is None:
             return None
         done = outcome.pop("_all_done_now")
-        outcome.update(all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec)))
+        outcome.update(
+            all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec)),
+            title_short=title_short(rec.get("title")),
+        )
         return outcome
 
     result = {
         "recorded": False, "session": None, "window": None, "result": False,
         "findings": None, "resolved": False, "all_done": False, "became_all_done": False,
+        "title_short": None,
     }
     result.update(_review_store(root, payload, now, apply) or {})
     return result
@@ -1778,6 +1782,103 @@ def _git_head(cwd):
     return branch if result.returncode == 0 and branch else None
 
 
+#: How much of a transcript's end is read for its title: the provider re-appends the line often.
+_TITLE_TAIL_BYTES = 1024 * 1024
+#: The notification shows this many characters of a title, then an ellipsis.
+TITLE_SHORT_CHARS = 15
+_TITLE_UNSAFE = re.compile(r'["\\\x00-\x1f\x7f]')
+
+
+def _transcript_title(transcript_path):
+    """The last ``custom-title`` in a Claude Code transcript's tail, or ``""``.
+
+    Claude Code re-appends the line on every write and a rename appends the new value,
+    so the last one wins. Only the tail is read: this runs on every Stop.
+    """
+    if not transcript_path:
+        return ""
+    try:
+        with open(transcript_path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - _TITLE_TAIL_BYTES))
+            tail = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    for line in reversed(tail.splitlines()):
+        if '"custom-title"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "custom-title":
+            title = _text(entry.get("customTitle"))
+            if title:
+                return title
+    return ""
+
+
+def _codex_title(session_id):
+    """A Codex thread's name from ``$CODEX_HOME/session_index.jsonl`` (last entry wins), or ``""``.
+
+    The rollout transcript does not carry the name; the index is append-only.
+    """
+    if not session_id:
+        return ""
+    home = os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex")
+    title = ""
+    try:
+        with open(os.path.join(home, "session_index.jsonl"), encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if session_id not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(entry, dict) and entry.get("id") == session_id:
+                    title = _text(entry.get("thread_name")) or title
+    except OSError:
+        return ""
+    return title
+
+
+def session_title(payload, provider):
+    """The title the provider's UI shows for this session, or ``""`` when it has none.
+
+    opencode's plugin sends it as ``session_title``; Claude Code keeps it in the transcript;
+    Codex keeps it in its session index. Never raises.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    try:
+        title = _first_text(payload, "session_title")
+        if not title and provider in ("claude", None, ""):
+            title = _transcript_title(_first_text(payload, "transcript_path"))
+        if not title and provider == "codex":
+            title = _codex_title(_first_text(payload, "session_id", "sessionID", "sessionId"))
+        return title
+    except (OSError, ValueError, TypeError):
+        return ""
+
+
+def title_short(title):
+    """``title`` cut to :data:`TITLE_SHORT_CHARS` with an ellipsis; ``None`` when empty.
+
+    Quotes, backslashes and control characters are dropped, so the hook can read the value
+    out of the JSON line with a plain pattern and put it inside quotes in a message.
+    """
+    if not isinstance(title, str):
+        return None
+    clean = " ".join(_TITLE_UNSAFE.sub(" ", title).split())
+    if not clean:
+        return None
+    if len(clean) <= TITLE_SHORT_CHARS:
+        return clean
+    return clean[:TITLE_SHORT_CHARS].rstrip() + "\u2026"
+
+
 def _git_location(cwd):
     """``(branch, worktree)`` for a working directory, from one ``git`` call.
 
@@ -1843,9 +1944,9 @@ def _bound_id(root):
 def record(root, payload, provider="auto", now=None):
     """Fold one hook payload into its session record. Never raises.
 
-    Returns ``{"recorded", "session", "all_done", "became_all_done"}``.
+    Returns ``{"recorded", "session", "all_done", "became_all_done", "title_short"}``.
     """
-    result = {"recorded": False, "session": None, "all_done": False, "became_all_done": False}
+    result = {"recorded": False, "session": None, "all_done": False, "became_all_done": False, "title_short": None}
     try:
         call = normalize(payload, provider)
         if call is None:
@@ -1859,6 +1960,8 @@ def record(root, payload, provider="auto", now=None):
         # made a concurrent hook time out and its call vanish for good.
         stored = _load(path)
         branch, worktree = _git_location(call["cwd"] or (stored or {}).get("cwd"))
+        # Looked up once per session here; Stop and SessionEnd (`mark`) refresh it after a rename.
+        title = (stored or {}).get("title") or session_title(payload, call["provider"])
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -1887,6 +1990,8 @@ def record(root, payload, provider="auto", now=None):
             if call["cwd"]:
                 rec["cwd"] = call["cwd"]
             rec["branch"] = branch or rec.get("branch")
+            if title:
+                rec["title"] = title
             rec["updated_at"] = now
             # Activity after the last idle mark means the session is working again; without
             # this a same-second tie kept showing it idle.
@@ -1913,6 +2018,7 @@ def record(root, payload, provider="auto", now=None):
         result.update(
             recorded=True, session=call["session_id"], all_done=done,
             became_all_done=done and finished and not mid_turn and clean,
+            title_short=title_short(rec.get("title")),
         )
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
@@ -1924,7 +2030,7 @@ def mark(root, payload, state, now=None):
     result = {
         "marked": False, "open": 0,
         "review_result": False, "review_window": None, "review_findings": None,
-        "review_results": [], "became_all_done": False,
+        "review_results": [], "became_all_done": False, "title_short": None,
     }
     try:
         if state not in ("idle", "ended") or not isinstance(payload, dict):
@@ -1935,10 +2041,14 @@ def mark(root, payload, state, now=None):
         if path is None or not path.is_file():
             return result
         now = int(time.time() if now is None else now)
+        # Read before the lock, like `git` in `record`: the transcript tail is file I/O.
+        title = session_title(payload, (_load(path) or {}).get("provider"))
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
                 return result
+            if title:
+                rec["title"] = title
             rec["last_seen_at"] = now
             done = []
             if state == "idle":
@@ -1957,7 +2067,7 @@ def mark(root, payload, state, now=None):
             else:
                 rec["ended_at"] = now
             jsonio.write_json_atomic(path, rec)
-        result.update(marked=True, open=_open_count(rec))
+        result.update(marked=True, open=_open_count(rec), title_short=title_short(rec.get("title")))
         if state == "idle" and done_now and not was_done:
             # A background agent's hand-back can finish the last task with no review window involved.
             result["became_all_done"] = True
