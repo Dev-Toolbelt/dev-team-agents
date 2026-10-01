@@ -89,7 +89,7 @@ Connect your GitHub and Jira accounts once; every project on your machine can th
 Connect them with:
 ```bash
 devteam integration connect github
-devteam integration connect jira
+devteam integration connect jira --field site_url=https://acme.atlassian.net --field email=me@example.com
 ```
 
 Each prompt reads the token from stdin only — never from the command line, which would leave it in your shell history. The token is sent only to the configured origin over HTTPS and stored in your machine's keychain.

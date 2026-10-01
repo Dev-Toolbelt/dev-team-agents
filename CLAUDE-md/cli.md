@@ -25,7 +25,7 @@ The desktop app, signed release channels (Homebrew, winget), and full M4 are not
 | Store | Holds | Lifetime |
 |-------|-------|----------|
 | **core** | `versions/<X.Y.Z>/` (agents, commands, skills, scripts, templates) + the `current` pointer | Disposable — an uninstall may remove it, `devteam update` rebuilds it |
-| **data** | `machine-id`, `preferences.json`, `credentials/` (references only), `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` (registry, locks, per-project state, `secrets/`, `audit.log`) | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
+| **data** | `machine-id`, `preferences.json`, `credentials/` (references only), `integrations/` (account config), `projects/<project_id>/`, `quarantine/`, `machines/<machine-id>/` (registry, locks, per-project state, `secrets/`, `audit.log`) | Survives uninstall; on Windows it is in the roaming profile, so profile backup covers it |
 
 ```
 macOS    core  ~/Library/Application Support/dev-team-agents/core
@@ -50,6 +50,7 @@ data/preferences.json                              PORTABLE — the global prefe
 data/projects/<project_id>/preferences.json        PORTABLE — the project preference layer
 data/projects/<project_id>/session-summary.md      PORTABLE — the user's own memory
 data/credentials/                                  PORTABLE — references only, no values
+data/integrations/<name>.json                      PORTABLE — integration account config, no token
 data/quarantine/<date>/<project_id>/               PORTABLE
 data/machines/<machine-id>/registry.json           MACHINE-LOCAL — absolute paths
 data/machines/<machine-id>/locks/                  MACHINE-LOCAL — a lock names a pid
@@ -659,13 +660,15 @@ resource — and the `IntegrationView` in `--json` carries it, so a client rende
 |---|---|
 | token | secret store, `creds` key `integration.<name>.token`, global layer; read through `creds.get_value` (audited), never in a payload, exception or log |
 | account config | `data/integrations/<name>.json` — `{"schema":1,"config":{…}}` (portable) |
-| project binding | `<project>/.dev-team-agents/integration-settings/<name>.json` (committed) |
+| project binding | `<project>/.dev-team-agents/integration-settings/<name>.json` (committed); a file that cannot be read is treated as unset and reported in the view's `project_problem` |
 | last test result | `data/machines/<machine-id>/integrations-status.json` (machine-local) |
 
 `connect` reads the token from **stdin** (empty stdin keeps the stored one) and `--field key=value` sets
 account-scope fields. A failing test (bad token, unreachable, rate-limited) is a result — exit `0`,
 `test.ok=false` — not a CLI error. `resources` failures are an environment error (exit `3`).
-The store schema is `integrations` (`compat.store_schemas()`): a client must declare it to write.
+Two store schemas (`compat.store_schemas()`), each declared by a client before it writes:
+`integrations` (the account file) and `integration_settings` (the committed binding). The
+machine-local status file is a CLI-only cache with its own number, outside the declaration.
 HTTP policy (`integrations/http.py`): https only, the token goes only to the configured origin and
 a redirect elsewhere is refused, 10 s socket timeout, 20 s total deadline, 2 MB response cap. The
 test suite alone can allow loopback http through `DEVTEAM_INTEGRATIONS_TEST_ALLOW_LOOPBACK_HTTP`; it
@@ -679,8 +682,14 @@ token **stale**: the keychain value stays (No-Destruction), `auth.stale` is `tru
 `false`, `status.state` is `not_connected` with a summary asking for a new token, and `test` /
 `resources` fail with a usage error until `connect` supplies one. `connect` adds a top-level
 `warning` string to its payload only when the token landed in the `insecure` backend.
-Read-modify-write of the account and binding files holds the `integrations` lock (outer; `creds`'
-lock nests inside it); no lock is held across a network call.
+Each descriptor field carries `binds_token` (true on the origin field), so a client knows which edit
+needs a new token. Storing a token writes, under the lock, the account file without `token_origin`,
+then the token, then the new origin and a fresh `token_generation`: a failure in between leaves the
+token stale. `test` and `resources` re-read the account file after reading the token and refuse when
+it changed. A reference whose value is not on this machine makes `test` answer `not_connected`.
+`connect` checks the required account fields before it prompts for a token.
+Read-modify-write of the account and binding files, and `disconnect`, hold the `integrations` lock
+(outer; `creds`' lock nests inside it); no lock is held across a network call.
 
 ## Plugins
 

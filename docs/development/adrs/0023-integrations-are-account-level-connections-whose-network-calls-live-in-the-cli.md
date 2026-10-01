@@ -32,7 +32,7 @@ and every record is either portable or machine-local
 
 ### 1. An integration is a python adapter in the CLI that declares a descriptor
 
-v1 ships two adapters, `github` and `jira`, in `scripts/lib/devteam/`. Each declares a descriptor —
+v1 ships two adapters, `github` and `jira`, in `scripts/lib/devteam/integrations/`. Each declares a descriptor —
 title, auth kind and help text, and `fields[]` with `key`, `scope` (`account` | `project`), `type`
 (`string` | `enum`), `required`, `default`, an optional `resource` (a list the CLI can fetch to fill
 the field as a picker) and an optional `visible_when` condition. The app renders the Integrations
@@ -49,8 +49,10 @@ plugins. Adding a third integration means adding one adapter.
 | Last test result | `data/machines/<machine-id>/integrations-status.json` → `{"schema":1,"status":{…}}` | Machine-local — added to `paths.MACHINE_LOCAL_RECORDS` |
 
 The field's declared `scope` decides which file `config set` writes; a project-scope write with no
-bound project is a usage error. Every write is locked and atomic. Reading the token goes through
-`creds.get_value(..., agent=None)`, so the ADR-0010 audit trail records each use.
+bound project is a usage error. Every write is locked and atomic. Reading a *stored* token goes
+through `creds.get_value(..., agent=None)`, so the ADR-0010 audit trail records each use. A token
+typed into `connect` is used for that call's own test straight from stdin, without a read line: it
+was just written, and the write is recorded by `creds.set_entry`.
 
 ### 3. All network I/O is in the CLI, under one HTTP policy
 
@@ -64,7 +66,7 @@ request goes through one shared HTTP module:
 | Scheme | `https` only. Loopback `http` is allowed only under `DEVTEAM_INTEGRATIONS_TEST_ALLOW_LOOPBACK_HTTP=1`, for tests |
 | Token destination | Only the exact scheme + host + port of the configured base URL |
 | Redirects | Same origin only; anything else is refused. The redirect guard is extracted from `update.py`'s `_RestrictedRedirects`, not duplicated |
-| Limits | 10 s timeout, 2 MB response body cap |
+| Limits | 10 s socket timeout, 20 s total deadline per request (the socket timeout is shrunk to what is left of it), 2 MB response body cap |
 | Error → state | 401, or 403 without a rate-limit signal → `invalid_token`; 403/429 with `X-RateLimit-Remaining: 0` or `Retry-After` → `rate_limited`; URL, DNS, TLS, timeout or undecodable JSON → `unreachable` |
 | Secrecy | The token and the `Authorization` header never appear in an exception message, payload, log or audit detail |
 
@@ -108,6 +110,31 @@ records `token_origin` (`scheme://host:port` of `api_url` / `site_url`) in the a
 any request whose current origin differs, or that finds none recorded, is refused. Editing the URL
 therefore cannot redirect a stored token to another host; it leaves the token stale (`auth.stale`)
 until the user reconnects with a new one. The keychain value is kept, per the No-Destruction Rule.
+
+## Amendment — review round two (2026-09-30)
+
+The binding above held per request but not across two processes. These close the gaps:
+
+- **Storing a token is three ordered writes under the integrations lock:** drop `token_origin`
+  from the account file, write the token, then write the new origin plus a fresh
+  `token_generation`. A failure between any two leaves the token stale, never bound to the
+  previous host.
+- **A reader re-checks after reading the token.** `test` and `resources` read the token outside the
+  lock (an OS keychain prompt must not block every other command) and then re-read the account file;
+  if it changed, nothing is sent. `token_generation` makes a token replaced on the same origin count
+  as a change, so an in-flight result for the old token is not recorded over the new one.
+- **The descriptor says which field binds the token.** Each field carries `binds_token`; it is true
+  on the adapter's origin field. The app asks for the token again only when such a field changes or
+  `auth.stale` is set, matching the CLI instead of guessing.
+- **A reference without a value on this machine** (references are portable, values are not,
+  ADR-0010) makes `test` answer `not_connected` with a reconnect message instead of an error.
+- **A committed binding that cannot be read** no longer breaks `integration list`: it reads as unset
+  and the view reports it in `project_problem`.
+- **Two schema numbers, not one.** `integrations` versions the account file and
+  `integration_settings` the committed binding; a client declares each before writing it. The
+  machine-local status file is a CLI-only cache with its own number, outside the declaration.
+- `connect` reports a `warning` when the token went to the unencrypted fallback store; the app shows
+  it.
 
 ## Provider Parity
 

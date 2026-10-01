@@ -183,6 +183,21 @@ A consequence that is part of the decision: the app's subprocess logging is **pe
 allow-listed**, never a generic "log every subprocess's stdout." A blanket logger is how a value would
 reach a log file the day a command like `cred get` is wired by someone who did not read this section.
 
+**Amendment (2026-09-30, ADR-0023): a write-only path for a secret the user types.** Connecting an
+integration needs a token the user pastes into the app, so "a value never enters the app's process"
+now holds for *reading* only. The narrower rule: the app may carry a value the user typed, one way,
+to the CLI, and never anything else. That path has fixed properties:
+
+- It reaches the CLI on **stdin only** (`secretStdin` in `invoke.ts`), never in argv, so it is not
+  in `ps` output or the command shown in the UI.
+- It is **redacted** from the child's stdout and stderr, raw and JSON-escaped, before anything is
+  parsed, returned or logged.
+- It is **never part of a reusable context** (`CliContext`): it exists for one call.
+- The renderer holds it only in the input's state, clears it on submit (success or failure), and
+  **never receives a value back**: views report `has_token` and the backend's name, nothing else.
+
+`cred get` stays uncalled; nothing here reads a value out of the secret store.
+
 ### 8. The first slice is read-only, and no mutating command is wired
 
 The first app slice wires **nothing** from `compat.MUTATING`. Not `bind`, not `prefs set`, not
