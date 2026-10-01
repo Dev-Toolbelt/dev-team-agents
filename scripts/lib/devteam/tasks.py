@@ -2210,8 +2210,11 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     if not views:
         return None
     activity = max(v for v in (rec.get("updated_at"), rec.get("last_seen_at"), 0) if _number(v))
+    title = rec.get("title")
     return {
         "session_id": rec["session_id"],
+        # The title the provider shows for the session (see `session_title`); None until one is seen.
+        "title": title if isinstance(title, str) and title else None,
         "provider": rec.get("provider"),
         "branch": rec.get("branch"),
         "cwd": rec.get("cwd"),
