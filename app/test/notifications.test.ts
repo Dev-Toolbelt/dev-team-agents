@@ -252,8 +252,7 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
     await h.flush();
     expect(h.center.snapshot().status).toBe('live');
     expect(h.shown).toHaveLength(1);
-    expect(h.shown[0]?.title).toContain('Storefront');
-    expect(h.shown[0]?.title).not.toContain('proj-1');
+    expect(h.shown[0]?.title).toBe('Storefront');
     expect(h.shown[0]?.persistent).toBe(true);
     expect(h.acked).toEqual(['1-1-1']);
     expect(h.center.snapshot().unread).toBe(1);
@@ -311,6 +310,31 @@ describe('NotificationCenter — show, acknowledge, and never twice', () => {
     expect(h.opened).toEqual(['proj-2']); // the newest
     expect(h.center.snapshot().items.map((i) => i.id)).toEqual(['5-0-0', '4-0-0', '3-0-0', '2-0-0', '1-0-0']);
     expect(h.acked).toEqual(['1-0-0', '2-0-0', '3-0-0', '4-0-0', '5-0-0']);
+  });
+
+  it('a backlog summary leads with a critical record, since its title carries no level', async () => {
+    const h = harness();
+    await h.center.start();
+    const backlog = [1, 2, 3, 4].map((n) =>
+      notification(`${n}-0-0`, n === 2 ? { level: 'critical', message: 'links are broken' } : { level: 'info' }),
+    );
+    for (const record of backlog) h.emit({ event: 'notification', notification: record });
+    h.emit({ event: 'ready', projects: 1 });
+    await h.flush();
+    expect(h.shown).toHaveLength(1);
+    expect(h.shown[0]?.title).toBe('4 notifications');
+    expect(h.shown[0]?.body.split('\n')[0]).toBe('links are broken');
+    expect(h.shown[0]?.persistent).toBe(true);
+  });
+
+  it('a backlog summary without a critical record is not persistent and has no lead message', async () => {
+    const h = harness();
+    await h.center.start();
+    for (const n of [1, 2, 3, 4]) h.emit({ event: 'notification', notification: notification(`${n}-0-0`) });
+    h.emit({ event: 'ready', projects: 1 });
+    await h.flush();
+    expect(h.shown[0]?.body.startsWith('From ')).toBe(true);
+    expect(h.shown[0]?.persistent).toBe(false);
   });
 
   it('a short backlog still gets one banner per record', async () => {
