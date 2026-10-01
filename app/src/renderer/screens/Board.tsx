@@ -665,7 +665,17 @@ function Kanban({
           No tasks with findings
         </p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        // One row, like a kanban: the columns never stack. They share the width when it fits
+        // and scroll sideways when it does not; the region is focusable so the arrow keys
+        // scroll it too. `relative` makes it the containing block of the cards' `sr-only` text,
+        // which is absolutely positioned: without it that text escapes the scroller and widens
+        // the whole page.
+        <div
+          role="region"
+          aria-label="Kanban columns"
+          tabIndex={0}
+          className="relative flex max-w-full min-w-0 snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 focus-visible:rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+        >
           <Column title="To do" items={view.todo} now={coarseNow} asOf={project.as_of} />
           <Column title="In progress" items={view.in_progress} now={tick} asOf={project.as_of} />
           <Column title="In Review" items={view.in_review} now={coarseNow} asOf={project.as_of} />
@@ -781,8 +791,11 @@ function Column({
 }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="min-w-0 rounded-lg bg-muted/40 p-3">
-      <h4 id={headingId} className="mb-3 flex items-center justify-between text-sm font-semibold">
+    <section
+      aria-labelledby={headingId}
+      className="flex max-h-[calc(100vh-12rem)] min-h-40 min-w-72 flex-1 basis-72 shrink-0 snap-start flex-col rounded-lg bg-muted/40 p-3"
+    >
+      <h4 id={headingId} className="mb-3 flex shrink-0 items-center justify-between text-sm font-semibold">
         {title}
         <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums">
           <span aria-hidden="true">{items.length}</span>
@@ -792,7 +805,9 @@ function Column({
       {items.length === 0 ? (
         <p className="py-2 text-xs text-muted-foreground">Nothing here.</p>
       ) : (
-        <ul className="space-y-2">
+        // The cards scroll inside their column, so a long column does not stretch the board and
+        // the heading with its count stays in view (`relative` for the same reason as the row).
+        <ul className="relative -mx-1 min-h-0 flex-1 space-y-2 overflow-y-auto px-1">
           {items.map((item) => (
             <TaskCard
               key={`${item.session.session_id}:${item.task.key}`}
@@ -803,7 +818,7 @@ function Column({
           ))}
         </ul>
       )}
-      {note !== null ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
+      {note !== null ? <p className="mt-2 shrink-0 text-xs text-muted-foreground">{note}</p> : null}
     </section>
   );
 }
