@@ -367,8 +367,106 @@ def _v2_runtime_tree_error(dest, rel):
     )
 
 
+def _v2_copy_error(dest, rel):
+    return ConflictError(
+        "{} is a copy of a v2 install's {}, where this bind links it".format(dest, rel),
+        hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+        "copy into a dated quarantine rather than deleting it.",
+        details={"path": str(dest), "reason": V2_INSTALL_REASON},
+    )
+
+
+#: A Windows checkout without symlink support writes a link as a text file holding
+#: its target. Anything larger than this is not one.
+_LINK_FILE_MAX = 4096
+
+
+def _v2_link_file(path):
+    """True when ``path`` is a v2 symlink that a checkout wrote as a plain file."""
+    try:
+        if path.stat().st_size > _LINK_FILE_MAX:
+            return False
+        text = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not text or "\n" in text:
+        return False
+    # `.dev-team-agents/` for a root install, `.claude/dev-team-agents/` before v2.1.0.
+    parts = Path(text.replace("\\", "/")).parts
+    return project.PROJECT_DIR in parts or Path(project.PRE_ROOT_DIR).name in parts
+
+
+def _frontmatter_name(skill_file):
+    try:
+        with open(str(skill_file), encoding="utf-8") as stream:
+            if stream.readline().strip() != "---":
+                return None
+            for _ in range(50):
+                line = stream.readline()
+                if not line or line.strip() == "---":
+                    return None
+                key, _, value = line.partition(":")
+                if key.strip() == "name":
+                    return value.strip().strip("\"'")
+    except (OSError, UnicodeDecodeError):
+        return None
+    return None
+
+
+def v2_copy(rel, dest, version_dir):
+    """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
+
+    v2 committed relative links (`.claude/agents/dev-team -> ../../.dev-team-agents/
+    agents`, one per skill). A tool that copies a project dereferencing links, or a
+    checkout without symlink support, turns them into real directories or text files,
+    which `_is_managed_path` cannot vouch for. Only content that is recognisably the
+    framework's counts — the agents or commands directory holding nothing but `.md`
+    files, at least one named like the framework's own; a skill whose frontmatter
+    `name` is the framework skill's — so a project's own directory at the same path is
+    still refused as foreign.
+    """
+    dest = Path(dest)
+    if dest.is_symlink() or not dest.exists():
+        return False
+    if dest.is_file():
+        return _v2_link_file(dest)
+    parts = Path(rel).parts
+    if len(parts) != 3 or parts[0] != ".claude":
+        return False
+    if parts[1] in ("agents", "commands"):
+        known = {item.name for item in (Path(version_dir) / parts[1]).glob("*.md")}
+        entries = list(dest.iterdir())
+        return (
+            bool(entries)
+            and all(
+                item.is_file() and not item.is_symlink() and item.suffix == ".md" for item in entries
+            )
+            and any(item.name in known for item in entries)
+        )
+    if parts[1] == "skills":
+        return _frontmatter_name(dest / "SKILL.md") == parts[2]
+    return False
+
+
+def v2_copies(version_dir, project_root):
+    """Every Claude artifact path holding a materialized v2 copy, project-relative."""
+    root = Path(project_root)
+    return [
+        rel_path.as_posix()
+        for rel_path, _source in providers.claude_artifacts(version_dir)
+        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir)
+    ]
+
+
 def _preflight(
-    version_dir, project_root, mode, selected, previous_paths, previous_copies, previous_artifacts=()
+    version_dir,
+    project_root,
+    mode,
+    selected,
+    previous_paths,
+    previous_copies,
+    previous_artifacts=(),
+    vacated=frozenset(),
 ):
     """Refuse a bind that would collide, before anything is written.
 
@@ -393,15 +491,21 @@ def _preflight(
     # Vendored links the Claude tree whatever the selection (`_vendored_tree`).
     if "claude" in selected or mode == "vendored":
         for rel_path, _source in providers.claude_artifacts(version_dir):
+            rel = rel_path.as_posix()
             dest = root / rel_path
-            if (dest.exists() or dest.is_symlink()) and not _is_managed_path(
-                rel_path.as_posix(), dest, previous_paths, project_root
-            ):
-                raise _foreign_path_error(dest)
+            if rel in vacated or not (dest.exists() or dest.is_symlink()):
+                continue
+            if _is_managed_path(rel, dest, previous_paths, project_root):
+                continue
+            if v2_copy(rel, dest, version_dir):
+                raise _v2_copy_error(dest, rel)
+            raise _foreign_path_error(dest)
     # Vendored mode puts real trees at these paths on purpose; it has no runtime links.
     for name in RUNTIME_TREES if mode != "vendored" else ():
         rel = (Path(project.PROJECT_DIR) / name).as_posix()
         dest = root / rel
+        if rel in vacated:
+            continue
         if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
             raise _v2_runtime_tree_error(dest, rel)
         if name == "plugins" and not (Path(version_dir) / name).exists():
@@ -632,8 +736,13 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
     return created
 
 
-def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
-    """Bind ``root`` to the store. Idempotent, and safe to re-run."""
+def _prepare(root, provider_names, mode, pin, emitter, vacated=frozenset()):
+    """Every check that can refuse a bind, run before its first write.
+
+    ``vacated`` names project-relative paths the caller moves away before binding —
+    `migrate` quarantines the v2 install first, and checks the bind with this before
+    it moves anything, so a refused bind can no longer leave a half-migrated project.
+    """
     project_root = project.resolve_root(root)
     if not project_root.is_dir():
         raise UsageError("not a directory: {}".format(project_root))
@@ -712,7 +821,49 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         previous_paths,
         previous_copies,
         previous.get("artifacts", []),
+        vacated=vacated,
     )
+
+    return {
+        "project_root": project_root,
+        "fallback_reason": fallback_reason,
+        "selected": selected,
+        "resolved_mode": resolved_mode,
+        "known_id": known_id,
+        "effective_pin": effective_pin,
+        "is_worktree_of_bound": is_worktree_of_bound,
+        "version": version,
+        "version_dir": version_dir,
+        "previous": previous,
+        "previous_paths": previous_paths,
+        "previous_copies": previous_copies,
+        "delegated_targets": delegated_targets,
+        "delegated_owned": delegated_owned,
+    }
+
+
+def check(root=None, provider_names=None, mode="auto", pin=None, vacated=frozenset()):
+    """Raise what :func:`bind` would refuse with, writing nothing."""
+    _prepare(root, provider_names, mode, pin, None, vacated=frozenset(vacated))
+
+
+def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
+    """Bind ``root`` to the store. Idempotent, and safe to re-run."""
+    ready = _prepare(root, provider_names, mode, pin, emitter)
+    project_root = ready["project_root"]
+    selected = ready["selected"]
+    resolved_mode = ready["resolved_mode"]
+    fallback_reason = ready["fallback_reason"]
+    known_id = ready["known_id"]
+    effective_pin = ready["effective_pin"]
+    is_worktree_of_bound = ready["is_worktree_of_bound"]
+    version = ready["version"]
+    version_dir = ready["version_dir"]
+    previous = ready["previous"]
+    previous_paths = ready["previous_paths"]
+    previous_copies = ready["previous_copies"]
+    delegated_targets = ready["delegated_targets"]
+    delegated_owned = ready["delegated_owned"]
 
     # The first write.
     data, created_identity = project.ensure(project_root, project_id=known_id)
