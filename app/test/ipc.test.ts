@@ -1278,7 +1278,7 @@ describe('the local credentials file is three named operations', () => {
     expect(shown.command).toContain('cred local show --path /repo/project-1 --json');
     if (!shown.ok) throw new Error(shown.message);
     expect(shown.data.hash).toBe(HASH);
-    expect(shown.data.data).toEqual({ jira: { baseUrl: 'https://x.test', token: { secret: true, set: true } } });
+    expect(shown.data.data).toEqual({ jira: { baseUrl: 'https://x.test', token: { secret: true, set: true, marked: true }, $secrets: ['token'] } });
 
     const init = (await handlers.get(CHANNELS.credentialsLocalInit)?.(TRUSTED, 'proj-1')) as ApiModule.OperationResult<ApiModule.CredentialsLocalView>;
     expect(init.command).toContain('cred local init --path /repo/project-1 --json');
@@ -1300,7 +1300,7 @@ describe('the local credentials file is three named operations', () => {
     expect(patched.command).not.toContain('/jira/baseUrl');
     if (!patched.ok) throw new Error(patched.message);
     // The fixture reads the pointers back from stdin.
-    expect(patched.data.unknown_paths).toEqual(['/jira/baseUrl', '/jira/token']);
+    expect(patched.data.data?.['received']).toEqual(['/jira/baseUrl', '/jira/token']);
     expect(patched.data.hash).toBe('c'.repeat(64));
   });
 

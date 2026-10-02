@@ -513,10 +513,6 @@ export function deferred<T>(): {
 }
 
 export function credentialsView(overrides: Partial<CredentialsLocalView> = {}): CredentialsLocalView {
-  const environment = {
-    ssh: { user: '', host: '', privateKeyPath: '', path: '' },
-    database: [{ type: '', host: '', port: '', database: '', username: '', password: { secret: true, set: false } }],
-  };
   return {
     path: '/repo/project-1/.dev-team-agents/credentials.local.json',
     exists: true,
@@ -526,14 +522,23 @@ export function credentialsView(overrides: Partial<CredentialsLocalView> = {}): 
     data: {
       work_feedback_active: true,
       work_feedback_interval_minutes: 5,
-      devops: { agents: ['devops-specialist'], staging: environment, production: { ...environment, docker: {} } },
-      app: {
-        agents: ['frontend-developer'],
-        staging: { appUrl: '', username: '', password: { secret: true, set: false } },
-        production: { appUrl: '', username: '', password: { secret: true, set: false } },
+      example: {
+        staging: {
+          url: 'https://staging.test',
+          username: 'bot',
+          password: { secret: true, set: false, marked: true },
+          $secrets: ['password'],
+        },
+        production: {
+          $production: true,
+          url: 'https://prod.test',
+          password: { secret: true, set: true, marked: true },
+          token: { secret: true, set: true, marked: false },
+          $secrets: ['password'],
+          db: { host: 'db.prod.test' },
+        },
       },
     },
-    unknown_paths: [],
     ...overrides,
   };
 }

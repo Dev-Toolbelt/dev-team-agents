@@ -391,7 +391,7 @@ switch (command) {
     break;
   }
 
-  // ADR-0024. `patch` reads its ops from stdin and reports each pointer back in `unknown_paths`, so a test
+  // ADR-0024. `patch` reads its ops from stdin and echoes their pointers back under `data.received`, so a test
   // can see that stdin (not argv) carried them. A hash of 64 `f` is the exit-4 conflict, 64 `e` is a
   // refusal whose message echoes the first op's value, to prove the app redacts it.
   case 'cred': {
@@ -402,8 +402,7 @@ switch (command) {
       valid: true,
       error: null,
       hash: 'a'.repeat(64),
-      data: { jira: { baseUrl: 'https://x.test', token: { secret: true, set: true } } },
-      unknown_paths: [],
+      data: { jira: { baseUrl: 'https://x.test', token: { secret: true, set: true, marked: true }, $secrets: ['token'] } },
       ...extra,
     });
     const verb = args[2];
@@ -445,7 +444,7 @@ switch (command) {
         emit({ ok: false, error: `cannot set ${JSON.stringify(ops[0]?.value)}`, exit_code: 3 });
         process.exit(3);
       }
-      emit(view({ hash: 'c'.repeat(64), unknown_paths: ops.map((entry) => entry.pointer) }));
+      emit(view({ hash: 'c'.repeat(64), data: { received: ops.map((entry) => entry.pointer) } }));
       process.exit(0);
     }
     process.exit(64);

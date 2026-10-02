@@ -28,6 +28,13 @@ PLANTED = "pl4nted-S3CR3T-9d2e"
 CONTENT = '{"custom": {"password": "%s"}, "app": {"staging": {"appUrl": "u"}}}\n' % PLANTED
 
 
+#: The shape the template had before ADR-0024 made the file free-form; patch tests run on it
+#: because it exercises nested objects, lists and secret-named keys in one document.
+SAMPLE = json.loads(cl.LEGACY_BLANKS_FILE.read_text(encoding="utf-8"))["templates"][0]
+HIDDEN = {"secret": True, "set": True, "marked": False}
+MARKED = {"secret": True, "set": True, "marked": True}
+
+
 def _mode(path):
     return stat.S_IMODE(os.stat(str(path)).st_mode)
 
@@ -69,15 +76,22 @@ class LocalCredsCase(StoreTestCase):
 
 
 class TemplateTest(LocalCredsCase):
-    def test_template_has_the_complete_structure(self):
+    def test_template_is_lean_and_free_form(self):
         template = cl.load_template()
-        self.assertEqual(
-            set(template), {"work_feedback_active", "work_feedback_interval_minutes", "devops", "app"}
-        )
+        self.assertEqual(set(template), {"work_feedback_active", "work_feedback_interval_minutes", "example"})
         self.assertIs(template["work_feedback_active"], True)
         self.assertEqual(template["work_feedback_interval_minutes"], 5)
-        self.assertEqual(set(template["devops"]), {"agents", "staging", "production"})
-        self.assertIn("docker", template["devops"]["production"])
+        self.assertNotIn('"agents"', cl.TEMPLATE_FILE.read_text())
+        production = template["example"]["production"]
+        self.assertIs(production[cl.PRODUCTION_KEY], True)
+        self.assertEqual(production[cl.SECRETS_KEY], ["password"])
+        self.assertNotIn(cl.PRODUCTION_KEY, template["example"]["staging"])
+
+    def test_blank_copies_an_earlier_release_wrote_still_count_as_blank(self):
+        for blank in json.loads(cl.LEGACY_BLANKS_FILE.read_text())["templates"]:
+            with self.subTest(keys=sorted(blank)):
+                self.assertTrue(cl.is_blank_template(json.dumps(blank, indent=4).encode()))
+        self.assertFalse(cl.is_blank_template(json.dumps(SAMPLE | {"x": 1}).encode()))
 
     def test_blank_template_detection_ignores_formatting(self):
         self.assertTrue(cl.is_blank_template(self.blank_text().encode()))
@@ -197,7 +211,6 @@ class ShowTest(LocalCredsCase):
                 "error": None,
                 "hash": None,
                 "data": None,
-                "unknown_paths": [],
             },
         )
 
@@ -228,54 +241,31 @@ class ShowTest(LocalCredsCase):
         self.assertEqual(_mode(key_file), 0o600)
         self.assertTrue(paths.is_machine_local_record(key_file.name))
 
-    def test_every_secret_key_is_redacted_case_insensitively_and_nested(self):
+    def test_secret_looking_keys_are_hidden_case_insensitively_and_nested(self):
         doc = {
             "a": {"Password": PLANTED, "TOKEN": PLANTED, "secret": PLANTED},
             "b": {"apikey": PLANTED, "PrivateKey": PLANTED, "privateKeyPath": "/k/id"},
-            "devops": {"staging": {"database": [{"password": PLANTED}, {"password": ""}]}},
+            "c": {"staging": {"database": [{"password": PLANTED}, {"password": ""}]}},
         }
         self.put(self.target, json.dumps(doc))
         state = cl.show(self.root)
         self.assertNotIn(PLANTED, json.dumps(state))
-        self.assertEqual(state["data"]["a"]["Password"], {"secret": True, "set": True})
-        self.assertEqual(state["data"]["a"]["TOKEN"], {"secret": True, "set": True})
-        self.assertEqual(state["data"]["b"]["PrivateKey"], {"secret": True, "set": True})
+        self.assertEqual(state["data"]["a"]["Password"], HIDDEN)
+        self.assertEqual(state["data"]["a"]["TOKEN"], HIDDEN)
+        self.assertEqual(state["data"]["b"]["PrivateKey"], HIDDEN)
         self.assertEqual(state["data"]["b"]["privateKeyPath"], "/k/id")
-        db = state["data"]["devops"]["staging"]["database"]
-        self.assertEqual(db[0]["password"], {"secret": True, "set": True})
-        self.assertEqual(db[1]["password"], {"secret": True, "set": False})
+        db = state["data"]["c"]["staging"]["database"]
+        self.assertEqual(db[0]["password"], HIDDEN)
+        self.assertEqual(db[1]["password"], {"secret": True, "set": False, "marked": False})
 
-    def test_template_has_no_unknown_paths(self):
-        self.put(self.target, json.dumps(cl.load_template()))
-        self.assertEqual(cl.show(self.root)["unknown_paths"], [])
-
-    def test_unknown_paths(self):
-        doc = cl.load_template()
-        doc["monitoring"] = {"token": PLANTED}
-        doc["app"]["qa"] = {"appUrl": "x"}
-        doc["app"]["staging"]["extra"] = 1
-        doc["devops"]["staging"]["database"].append({"host": "h", "weird": 1})
-        doc["devops"]["production"]["docker"] = {"anything": {"goes": True}}
+    def test_unmarked_plain_values_are_shown_whatever_their_names(self):
+        doc = {"jira": {"site": "acme.atlassian.net", "port": 443, "on": True, "none": None}, "list": ["a", 1]}
         self.put(self.target, json.dumps(doc))
-        state = cl.show(self.root)
-        self.assertEqual(
-            sorted(state["unknown_paths"]),
-            sorted(
-                [
-                    "/monitoring",
-                    "/app/qa",
-                    "/app/staging/extra",
-                    "/devops/staging/database/1/weird",
-                ]
-            ),
-        )
-        self.assertNotIn(PLANTED, json.dumps(state))
+        self.assertEqual(cl.show(self.root)["data"], doc)
 
-    def test_pointer_escaping(self):
-        doc = cl.load_template()
-        doc["a/b~c"] = 1
-        self.put(self.target, json.dumps(doc))
-        self.assertIn("/a~1b~0c", cl.show(self.root)["unknown_paths"])
+    def test_a_key_with_slash_and_tilde_is_data_like_any_other(self):
+        self.put(self.target, json.dumps({"a/b~c": 1}))
+        self.assertEqual(cl.show(self.root)["data"], {"a/b~c": 1})
 
 
 class InitTest(LocalCredsCase):
@@ -285,7 +275,7 @@ class InitTest(LocalCredsCase):
         self.assertEqual(_mode(self.target), 0o600)
         self.assertEqual(json.loads(self.target.read_text()), cl.load_template())
         self.assertEqual(self.target.read_bytes(), cl.TEMPLATE_FILE.read_bytes())
-        self.assertEqual(state["unknown_paths"], [])
+        self.assertEqual(state["data"]["example"]["production"]["password"], {"secret": True, "set": False, "marked": True})
 
     def test_refuses_when_the_file_exists_and_leaves_it_alone(self):
         self.put(self.target, CONTENT)
@@ -302,7 +292,7 @@ class InitTest(LocalCredsCase):
 class PatchTest(LocalCredsCase):
     def setUp(self):
         super().setUp()
-        cl.init(self.root)
+        self.put(self.target, json.dumps(SAMPLE, indent=2) + "\n")
         self.hash = cl.show(self.root)["hash"]
 
     def patch(self, ops, expect=None):
@@ -334,7 +324,7 @@ class PatchTest(LocalCredsCase):
 
     def test_unset_of_a_missing_path_is_a_no_op(self):
         self.patch([{"op": "unset", "pointer": "/nope/deeper"}])
-        self.assertEqual(self.on_disk(), cl.load_template())
+        self.assertEqual(self.on_disk(), SAMPLE)
 
     def test_array_append_index_set_and_unset(self):
         self.patch([{"op": "set", "pointer": "/devops/agents/-", "value": "qa-specialist"}])
@@ -359,7 +349,7 @@ class PatchTest(LocalCredsCase):
         )
         self.assertEqual(self.on_disk()["app"]["staging"]["password"], PLANTED)
         self.assertNotIn(PLANTED, json.dumps(state))
-        self.assertEqual(state["data"]["app"]["staging"]["password"], {"secret": True, "set": True})
+        self.assertEqual(state["data"]["app"]["staging"]["password"], HIDDEN)
 
     def test_unknown_keys_are_preserved(self):
         doc = self.on_disk()
@@ -371,7 +361,7 @@ class PatchTest(LocalCredsCase):
         data = self.on_disk()
         self.assertEqual(data["monitoring"], {"url": "m", "token": PLANTED})
         self.assertEqual(data["app"]["qa"], {"appUrl": "q"})
-        self.assertIn("/monitoring", state["unknown_paths"])
+        self.assertEqual(state["data"]["monitoring"]["token"], HIDDEN)
 
     def test_key_order_is_preserved(self):
         before = list(self.on_disk())
@@ -407,7 +397,7 @@ class PatchTest(LocalCredsCase):
 
     def test_placeholder_values_are_refused(self):
         before = self.target.read_bytes()
-        for value in ({"secret": True, "set": True}, {"nested": {"secret": True, "set": False}}):
+        for value in ({"secret": True, "set": True}, MARKED, {"nested": {"secret": True, "set": False}}):
             with self.assertRaises(UsageError):
                 self.patch([{"op": "set", "pointer": "/app/staging/password", "value": value}])
         self.assertEqual(self.target.read_bytes(), before)
@@ -435,6 +425,41 @@ class PatchTest(LocalCredsCase):
             with self.subTest(ops=ops), self.assertRaises(UsageError):
                 self.patch(ops)
 
+    def test_move_renames_a_key_keeping_its_value_and_its_place_in_the_tree(self):
+        state = self.patch([{"op": "move", "from": "/app/staging/password", "pointer": "/app/staging/pass"}])
+        staging = self.on_disk()["app"]["staging"]
+        self.assertNotIn("password", staging)
+        self.assertEqual(staging["pass"], "")
+        self.assertEqual(state["data"]["app"]["staging"]["pass"], {"secret": True, "set": False, "marked": False})
+
+    def test_move_nests_a_value_under_a_new_group(self):
+        self.put(self.target, json.dumps({"token": PLANTED, "$secrets": ["token"]}))
+        fresh = cl.show(self.root)["hash"]
+        state = cl.apply_patch(
+            self.root,
+            [
+                {"op": "move", "from": "/token", "pointer": "/jira/token"},
+                {"op": "unset", "pointer": "/$secrets"},
+                {"op": "set", "pointer": "/jira/$secrets", "value": ["token"]},
+            ],
+            fresh,
+        )
+        self.assertEqual(self.on_disk(), {"jira": {"token": PLANTED, "$secrets": ["token"]}})
+        self.assertEqual(state["data"]["jira"]["token"], MARKED)
+        self.assertNotIn(PLANTED, json.dumps(state))
+
+    def test_move_refuses_a_missing_source_an_existing_target_and_its_own_subtree(self):
+        before = self.target.read_bytes()
+        for op in (
+            {"op": "move", "from": "/nope", "pointer": "/x"},
+            {"op": "move", "from": "/app/staging/password", "pointer": "/app/staging/username"},
+            {"op": "move", "from": "/app", "pointer": "/app/inner"},
+            {"op": "move", "pointer": "/x"},
+        ):
+            with self.subTest(op=op), self.assertRaises(UsageError):
+                self.patch([op])
+        self.assertEqual(self.target.read_bytes(), before)
+
     def test_tmp_files_do_not_linger(self):
         self.patch([{"op": "set", "pointer": "/app/staging/appUrl", "value": "s"}])
         leftovers = [p.name for p in self.target.parent.iterdir() if p.name.endswith(".tmp")]
@@ -461,7 +486,7 @@ class CliTest(LocalCredsCase):
         self.assertNotIn(PLANTED, json.dumps(patched))
         self.assertEqual(
             set(patched),
-            {"ok", "path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
+            {"ok", "path", "exists", "valid", "error", "hash", "data"},
         )
         code, conflict, _ = self.run_json(
             "cred", "local", "patch", "--expect-hash", body["hash"], input_text=ops
@@ -621,66 +646,51 @@ def _git(cwd, *args):
     )
 
 
-class DefaultDenyRedactionTest(LocalCredsCase):
+class MarkedSecretsRedactionTest(LocalCredsCase):
+    """What ``$secrets`` marks is hidden; what looks secret is hidden too; the rest is shown."""
+
     def shown(self, doc):
         self.put(self.target, json.dumps(doc))
         state = cl.show(self.root)
         self.assertNotIn(PLANTED, json.dumps(state))
         return state["data"]
 
-    def test_free_form_and_hand_added_keys_are_redacted(self):
-        doc = {
-            "devops": {
-                "production": {
-                    "docker": {"env": {"DB_PASSWORD": PLANTED, "NAME": PLANTED}},
-                    "ssh": {"passphrase": PLANTED, "host": "h"},
-                }
-            },
-            "oauth": {"clientSecret": PLANTED, "accessToken": PLANTED, "api_key": PLANTED},
-            "tokens": [PLANTED, PLANTED],
-            "objs": [{"x": PLANTED}],
-        }
-        data = self.shown(doc)
-        hidden = {"secret": True, "set": True}
-        self.assertEqual(data["devops"]["production"]["docker"]["env"]["DB_PASSWORD"], hidden)
-        self.assertEqual(data["devops"]["production"]["docker"]["env"]["NAME"], hidden)
-        self.assertEqual(data["devops"]["production"]["ssh"]["passphrase"], hidden)
-        self.assertEqual(data["devops"]["production"]["ssh"]["host"], "h")
-        self.assertEqual(data["oauth"], {"clientSecret": hidden, "accessToken": hidden, "api_key": hidden})
-        self.assertEqual(data["tokens"], [hidden, hidden])
-        self.assertEqual(data["objs"], [{"x": hidden}])
+    def test_a_marked_key_hides_its_value_under_any_name(self):
+        data = self.shown({"svc": {"conn": PLANTED, "host": "h", "$secrets": ["conn"]}})
+        self.assertEqual(data["svc"], {"conn": MARKED, "host": "h", "$secrets": ["conn"]})
 
-    def test_url_userinfo_is_redacted_in_app_url_and_host(self):
-        doc = {"app": {"staging": {"appUrl": "https://u:%s@x.test/" % PLANTED, "username": "u"},
-                       "production": {"appUrl": "https://x.test/"}},
-               "devops": {"staging": {"ssh": {"host": "u:%s@h" % PLANTED, "user": "u"}}}}
-        data = self.shown(doc)
-        self.assertEqual(data["app"]["staging"]["appUrl"], {"secret": True, "set": True})
-        self.assertEqual(data["app"]["staging"]["username"], "u")
-        self.assertEqual(data["app"]["production"]["appUrl"], "https://x.test/")
-        self.assertEqual(data["devops"]["staging"]["ssh"]["host"], {"secret": True, "set": True})
+    def test_a_marked_container_is_hidden_whole(self):
+        data = self.shown({"svc": {"env": {"A": PLANTED, "B": [PLANTED]}, "$secrets": ["env"]}})
+        self.assertEqual(data["svc"]["env"], MARKED)
 
-    def test_known_non_secret_shapes_survive(self):
-        data = self.shown(cl.load_template())
-        template = cl.load_template()
-        self.assertIs(data["work_feedback_active"], True)
-        self.assertEqual(data["work_feedback_interval_minutes"], 5)
-        self.assertEqual(data["app"]["agents"], template["app"]["agents"])
-        self.assertEqual(data["devops"]["staging"]["ssh"]["privateKeyPath"], "")
-        self.assertEqual(data["devops"]["production"]["docker"], {})
-        db = data["devops"]["staging"]["database"][0]
-        self.assertEqual(db["type"], "")
-        self.assertEqual(db["password"], {"secret": True, "set": False})
+    def test_marks_apply_to_their_own_object_only(self):
+        data = self.shown({"a": {"conn": "visible", "inner": {"conn": PLANTED, "$secrets": ["conn"]}}})
+        self.assertEqual(data["a"]["conn"], "visible")
+        self.assertEqual(data["a"]["inner"]["conn"], MARKED)
 
-    def test_unknown_agents_key_with_non_strings_is_redacted(self):
-        data = self.shown({"x": {"agents": [{"k": PLANTED}]}})
-        self.assertEqual(data["x"]["agents"], [{"k": {"secret": True, "set": True}}])
+    def test_secret_looking_values_are_hidden_even_unmarked(self):
+        data = self.shown({
+            "db": {"url": "postgres://u:%s@h/db" % PLANTED, "cb": "https://h/cb?token=%s" % PLANTED},
+            "ssh": {"key": "-----BEGIN OPENSSH PRIVATE KEY-----\n%s" % PLANTED},
+            "list": ["ok", "u:%s@h" % PLANTED],
+        })
+        self.assertEqual(data["db"], {"url": HIDDEN, "cb": HIDDEN})
+        self.assertEqual(data["ssh"]["key"], HIDDEN)
+        self.assertEqual(data["list"], ["ok", HIDDEN])
 
-    def test_secretish_key_with_a_safe_name_is_redacted(self):
-        data = self.shown({"app": {"staging": {"database": [{"host": "h", "dsn": PLANTED}]}}})
-        item = data["app"]["staging"]["database"][0]
-        self.assertEqual(item["host"], "h")
-        self.assertEqual(item["dsn"], {"secret": True, "set": True})
+    def test_a_secret_looking_key_stays_hidden_after_unmarking(self):
+        data = self.shown({"svc": {"password": PLANTED, "$secrets": []}})
+        self.assertEqual(data["svc"]["password"], HIDDEN)
+
+    def test_production_flag_is_returned_only_as_a_boolean(self):
+        data = self.shown({"p": {"$production": True}, "q": {"$production": "yes"}})
+        self.assertIs(data["p"]["$production"], True)
+        self.assertEqual(data["q"]["$production"], "yes")
+
+    def test_a_malformed_secrets_list_marks_nothing_and_is_itself_hidden(self):
+        data = self.shown({"svc": {"conn": "c", "$secrets": "conn"}, "t": {"$secrets": ["u:%s@h" % PLANTED]}})
+        self.assertEqual(data["svc"], {"conn": "c", "$secrets": HIDDEN})
+        self.assertEqual(data["t"]["$secrets"], [HIDDEN])
 
 
 class UpgradeConflictTest(LocalCredsCase):
@@ -976,41 +986,12 @@ class ReviewHardeningTest(LocalCredsCase):
             self.assertNotIn(self.store_copy, cl.legacy_paths(self.root, self.pid))
         self.assertIn(self.store_copy, cl.legacy_paths(self.root, self.pid))
 
-    def test_safe_leaf_names_are_exactly_the_templates_non_secret_nested_leaves(self):
-        names = set()
-
-        def walk(node, depth):
-            if isinstance(node, dict):
-                for key, item in node.items():
-                    if isinstance(item, (dict, list)):
-                        walk(item, depth + 1)
-                    elif depth > 0 and not cl._secret_ish(key):
-                        names.add(key.lower())
-            elif isinstance(node, list):
-                for item in node:
-                    walk(item, depth)
-
-        walk(cl.load_template(), 0)
-        self.assertEqual(names, set(cl.SAFE_LEAF_NAMES))
-
-    def test_secret_looking_values_are_hidden_under_safe_names(self):
-        self.put(self.target, json.dumps({
-            "work_feedback_active": "yes-token",
-            "work_feedback_interval_minutes": True,
-            "devops": {"staging": {
-                "ssh": {"privateKeyPath": "-----BEGIN OPENSSH PRIVATE KEY-----\nAAA"},
-                "database": [{"database": "postgres://u:%s@h/db" % PLANTED, "host": "db"}],
-            }},
-            "app": {"staging": {"appUrl": "https://h/cb?token=%s" % PLANTED}},
-        }))
-        state = cl.show(self.root)
-        dumped = json.dumps(state)
-        self.assertNotIn(PLANTED, dumped)
-        self.assertNotIn("BEGIN OPENSSH", dumped)
-        self.assertNotIn("yes-token", dumped)
-        data = state["data"]
-        self.assertEqual(data["work_feedback_interval_minutes"], {"secret": True, "set": True})
-        self.assertEqual(data["devops"]["staging"]["database"][0]["host"], "db")
+    def test_the_human_summary_counts_hidden_and_marked_secrets(self):
+        self.put(self.target, json.dumps({"a": {"conn": PLANTED, "password": PLANTED, "$secrets": ["conn"]}}))
+        code, out, _ = self.run_cli("cred", "local", "show", "--path", str(self.root))
+        self.assertEqual(code, 0)
+        self.assertIn("2 hidden (1 marked in $secrets)", out)
+        self.assertNotIn(PLANTED, out)
 
 
 class MonorepoWorktreeTest(StoreTestCase):

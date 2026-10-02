@@ -704,9 +704,9 @@ class AppFacingKeySetContractTest(StoreTestCase):
         "cred backends": {"available", "default", "probed"},
         # ADR-0024: the desktop app's only window onto credentials.local.json. All three
         # leaves return the same document; `error` is null or {message, line, column}.
-        "cred local show": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
-        "cred local init": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
-        "cred local patch": {"path", "exists", "valid", "error", "hash", "data", "unknown_paths"},
+        "cred local show": {"path", "exists", "valid", "error", "hash", "data"},
+        "cred local init": {"path", "exists", "valid", "error", "hash", "data"},
+        "cred local patch": {"path", "exists", "valid", "error", "hash", "data"},
         "cred local error": {"message", "line", "column"},
         # `problems` is unconditional. This pin caught it appearing only on the
         # findings branch, which made the payload's shape depend on the data — a

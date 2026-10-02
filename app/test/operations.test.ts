@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALLOWED_COMMANDS,
+  credentialsOpsProblem,
   secretValuesOf,
   asIntegrationList,
   asIntegrationTestReport,
@@ -1265,5 +1266,27 @@ describe('secretValuesOf — what a credentials patch redacts', () => {
 
   it('ignores unset ops and empty strings', () => {
     expect(secretValuesOf([{ op: 'unset', pointer: '/a/password' }, { op: 'set', pointer: '/a/host', value: '' }])).toEqual([]);
+  });
+});
+
+describe('credentialsOpsProblem — what `cred local patch` may be sent', () => {
+  it('accepts set, unset and move, each with only the keys it defines', () => {
+    expect(
+      credentialsOpsProblem([
+        { op: 'set', pointer: '/a', value: 'x' },
+        { op: 'unset', pointer: '/b' },
+        { op: 'move', from: '/c', pointer: '/d' },
+      ]),
+    ).toBeNull();
+  });
+
+  it('refuses a move without a from pointer, or one that carries a value', () => {
+    expect(credentialsOpsProblem([{ op: 'move', pointer: '/d' }])).toMatch(/JSON pointer/);
+    expect(credentialsOpsProblem([{ op: 'move', from: 'c', pointer: '/d' }])).toMatch(/JSON pointer/);
+    expect(credentialsOpsProblem([{ op: 'move', from: '/c', pointer: '/d', value: 1 }])).toMatch(/takes no value/);
+  });
+
+  it('refuses an unknown op', () => {
+    expect(credentialsOpsProblem([{ op: 'copy', from: '/c', pointer: '/d' }])).toMatch(/`set`, `unset` or `move`/);
   });
 });
