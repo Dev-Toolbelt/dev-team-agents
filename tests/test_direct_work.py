@@ -81,11 +81,23 @@ WRITE_COMMANDS = (
     "echo a >> log", "cmd 2> err.log", "sed -i '' s/a/b/ f", "perl -pi -e s/a/b/ f", "npm install", "npm i x",
     "go get x", "cat a | tee b", "FOO=1 rm -rf x", "python3 -m pip install x", "mkdir -p d && ls",
     "echo hi\nmkdir foo", "bash -lc 'git commit -m x'", "bash -lc 'mv a b && echo ok'",
+    # Remote, container, cluster and service changes.
+    "ssh jornalimpactopress-vps 'docker rm -f jornalimpactocotia-wpcli-run-15ef08b9b9e8'",
+    "ssh -o ConnectTimeout=10 -p 22 host 'rm -f /tmp/a'", "ssh host docker exec c wp cache flush",
+    "bash -lc 'ssh host \"docker restart c\"'", "docker rm -f x", "docker compose up -d",
+    "docker compose -f a.yml restart web", "docker-compose down", "docker container prune -f", "podman run x",
+    "kubectl apply -f a.yml", "kubectl -n prod rollout restart deploy/x", "helm upgrade x chart",
+    "systemctl restart nginx", "sudo systemctl reload nginx", "service nginx restart", "scp a host:/b",
+    "rsync -a a host:b",
 )
 #: Read-only shapes common enough that the bash gate must not fork python for them either.
 READ_COMMANDS = (
     "ls -la", "grep -r foo . 2>/dev/null", "git status", "git log --oneline -5", "git -c a=b diff", "npm test",
     "cmd 2>&1", "cmd 2>&1 | head", "cat f > /dev/null", "sed -n 1,5p f", "git log --grep=reset", "pytest -k update",
+    "ssh host 'docker ps'", "ssh -i key host", "ssh -o ConnectTimeout=10 host 'docker ps -a --filter name=cotia'",
+    "docker ps -a", "docker logs -f x", "docker inspect x", "docker compose ps", "docker compose logs web",
+    "docker image ls", "kubectl get pods", "kubectl -n x describe pod y", "kubectl rollout status deploy/x",
+    "helm list", "systemctl status nginx", "service nginx status",
 )
 
 
@@ -268,13 +280,48 @@ class DirectWorkTest(BoardCase):
         finished = self.rec(todo_write("s2", [todo("Step 1: do it", "completed")]), now=T0 + 3)
         self.assertTrue(finished["became_all_done"])
 
-    def test_without_a_prompt_file_one_turn_is_one_entry(self):
-        for at in (T0, T0 + 1, T0 + 2):
-            self.rec(claude_edit("s1"), now=at)
-        self.assertEqual(len(self.directs("s1")[0]["turns"]), 1)
-        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 3)
+    def test_without_a_prompt_file_the_work_continues_the_last_turn(self):
+        # A Stop hook asked the model to go on (session summary) after the prompt file was cleared.
+        self.prompt("s1", "translate the packages", T0)
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 2)
+        tasks._prompt_path(tasks.record_path(self.root, self.project_id, "s1")).unlink()
+        self.rec(claude_read("s1"), now=T0 + 3)
+        self.assertEqual(self.directs("s1")[0]["status"], "completed")
         self.rec(claude_edit("s1"), now=T0 + 4)
-        self.assertEqual(len(self.directs("s1")[0]["turns"]), 2)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 5)
+        (card,) = self.directs("s1")
+        self.assertEqual(card["turns"], [{"text": "translate the packages", "at": T0}])
+        self.assertEqual([h["status"] for h in card["history"]], ["in_progress", "completed", "in_progress", "completed"])
+
+    def test_a_continuation_that_only_reads_opens_no_card(self):
+        self.assertFalse(self.rec(claude_read("s1"), now=T0)["recorded"])
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        (card,) = self.directs("s1")
+        self.assertEqual((card["status"], card["turns"]), ("in_progress", []))
+
+    def test_a_background_agents_report_is_not_a_turn_on_every_provider(self):
+        # Replays the shape of a real session: work done, then agents report back while idle.
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                edit, _, read = CALLS[provider]
+                session = "n-" + provider
+                self.prompt(session, "translate the Cusco packages", T0)
+                self.rec(edit(session), now=T0 + 1)
+                tasks.mark(self.root, {"session_id": session, "sessionID": session}, "idle", now=T0 + 2)
+                for n, injected in enumerate(tasks._INJECTED_PROMPTS):
+                    at = T0 + 10 * (n + 1)
+                    self.prompt(session, injected + "\n<task-id>x</task-id>", at)
+                    self.rec(read(session), now=at + 1)
+                    tasks.mark(self.root, {"session_id": session, "sessionID": session}, "idle", now=at + 2)
+                (card,) = self.directs(session)
+                self.assertEqual(card["status"], "completed")
+                self.assertEqual([t["text"] for t in card["turns"]], ["translate the Cusco packages"])
+                # Acting on the report is work: it moves the card, still without a turn of its own.
+                self.prompt(session, "<task-notification>done", T0 + 100)
+                self.rec(edit(session), now=T0 + 101)
+                self.assertEqual(self.directs(session)[0]["status"], "in_progress")
+                self.assertEqual(len(self.directs(session)[0]["turns"]), 1)
 
     def test_stop_completes_the_card_without_a_session_done_and_the_next_turn_revives_it(self):
         self.prompt("s1", "one", T0)
@@ -388,6 +435,14 @@ class DirectHookTest(tt.HookTest):
         self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "again"})
         self.run_script(tt.SESSION_END, {"session_id": "s1"})
         self.assertFalse(prompt.exists())
+
+    def test_the_prompt_file_skips_leading_blank_lines(self):
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "\n \n\tfix the hero image\nmore"})
+        raw = (self.board() / ".prompt-s1").read_text(encoding="utf-8")
+        self.assertEqual(tasks._excerpt(tasks._decode_prompt(raw)), "fix the hero image")
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "plain"})
+        raw = (self.board() / ".prompt-s1").read_text(encoding="utf-8")
+        self.assertEqual(tasks._excerpt(tasks._decode_prompt(raw)), "plain")
 
     def test_a_prompt_forks_no_python_and_clears_the_marker(self):
         self.board().mkdir(parents=True, exist_ok=True)
