@@ -38,6 +38,10 @@
 
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 PROJECT_ROOT="$(pwd)"
 DRY_RUN=0
 SOURCE_ARG=""

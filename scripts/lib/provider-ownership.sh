@@ -12,6 +12,10 @@
 # it, unless --adopt was passed — then the path is MOVED to a dated quarantine
 # under .dev-team-agents/quarantine/ before being replaced. Nothing is deleted.
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 PO_CONFLICT_EXIT=4
 
 # po_native_path <path>

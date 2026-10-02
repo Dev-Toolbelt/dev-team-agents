@@ -4,6 +4,10 @@
 # the opencode plugin and by Codex hooks.json via project-relative paths) are
 # resolvable at runtime.
 #
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
   # Strategy: copy the framework's runtime subset (agents/, commands/, skills/,
 # scripts/, templates/, VERSION if present) into <project>/.dev-team-agents/.
 # This mirrors the slim Claude install, and is what the opencode plugin's

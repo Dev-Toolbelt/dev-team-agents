@@ -13,6 +13,10 @@
 #                                              # legacy dotfiles into state.json
 set -uo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 # Resolution order: an explicit STATE_FILE, then USER_DATA_DIR, then the project's
 # recorded state directory, then the v2 in-project location.
 #

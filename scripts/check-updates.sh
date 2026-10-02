@@ -12,6 +12,10 @@
 # The session-start hook is the scheduled check; this is the one a user asks for.
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 STATE_FILE="$INSTALL_DIR/user-data/state.json"

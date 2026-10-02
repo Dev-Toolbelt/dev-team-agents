@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -103,6 +104,10 @@ _HINT_MAX = 2000
 def _installer_env():
     env = {key: os.environ[key] for key in _ENV_PASSTHROUGH if key in os.environ}
     env.setdefault("PATH", os.defpath)
+    # The installers' `python3` resolves through scripts/lib/python.sh, which tries this
+    # interpreter first: the one running the CLI is known to work.
+    if sys.executable:
+        env["DEVTEAM_PYTHON"] = sys.executable
     return env
 
 
@@ -158,12 +163,23 @@ def _run_installer(script, version_dir, project_root, extra_args=None):
     return result.stdout.decode("utf-8", "replace")
 
 
+#: `python3` is satisfied by any of these: scripts/lib/python.sh resolves the
+#: installers' `python3` to whichever works (Windows often has only `python`/`py`).
+_PYTHON_NAMES = ("python3", "python", "py")
+
+
+def _tool_available(tool):
+    if tool == "python3":
+        return bool(sys.executable) or any(shutil.which(name) for name in _PYTHON_NAMES)
+    return shutil.which(tool) is not None
+
+
 def require_tools(provider):
     """Fail early with a readable message instead of deep inside a bash script."""
     needed = {"opencode": ("bash", "python3", "jq"), "codex": ("bash", "python3")}.get(
         provider, ()
     )
-    missing = [tool for tool in needed if shutil.which(tool) is None]
+    missing = [tool for tool in needed if not _tool_available(tool)]
     if missing:
         raise EnvError(
             "provider {} needs {} on PATH".format(provider, ", ".join(missing)),

@@ -9,6 +9,10 @@ unset BASH_ENV ENV
 
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/../lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # Skip if this project's memory directory is not set up yet.
