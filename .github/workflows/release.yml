@@ -22,10 +22,16 @@ name: Release
 #
 # What this workflow does NOT do (see packaging/README.md for the manual
 # steps and why they cannot be automated here):
-#   - publish to a Homebrew tap (no `homebrew-devteam` repository exists yet)
+#   - publish to the Homebrew tap without HOMEBREW_TAP_TOKEN — the
+#     `publish-homebrew-tap` job below skips itself, loudly, when that secret
+#     is absent
 #   - touch packaging/homebrew/devteam-app.rb (the app has no build/release)
-#   - touch packaging/winget/ (no Windows installer exists to hash, and
-#     winget publication is itself a reviewed PR to microsoft/winget-pkgs)
+#   - touch packaging/winget/ (winget publication is itself a reviewed PR to
+#     microsoft/winget-pkgs; the Windows installers' digests are in the
+#     release's SHA256SUMS.txt, for whoever opens that PR)
+#
+# It DOES build the Windows CLI installers (ADR-0028) in its own job,
+# `windows-cli-installer`, and attaches them to the tag's release.
 #
 # It opens a PR in THIS repository with the formula's url/sha256 updated, so a
 # maintainer reviews the diff before it lands — never pushes to main directly.
@@ -197,8 +203,9 @@ jobs:
             printf '%s\n' "- \`sha256\` → computed from that exact downloaded artifact, never hand-written"
             printf '\n'
             printf '%s\n' "Still manual after this merges (see packaging/README.md):"
-            printf '%s\n' "- publishing this formula to a \`homebrew-devteam\` tap (no tap repo exists yet)"
-            printf '%s\n' "- everything winget (no Windows installer artifact exists to hash)"
+            printf '%s\n' "- winget: a PR to microsoft/winget-pkgs, with the digests from this release's SHA256SUMS.txt"
+            printf '\n'
+            printf '%s\n' "The \`publish-homebrew-tap\` job has already copied the verified formula to Dev-Toolbelt/homebrew-devteam (when HOMEBREW_TAP_TOKEN is set). Merge this PR so the source of truth matches the tap."
             printf '%s\n' "- everything for \`devteam-app.rb\` (no app build exists yet)"
           } > "$PR_BODY_FILE"
 
@@ -366,3 +373,130 @@ jobs:
             --tag "${{ needs.bump-homebrew-formula.outputs.tag }}" \
             --url "${{ needs.bump-homebrew-formula.outputs.url }}" \
             --sha256 "${{ needs.bump-homebrew-formula.outputs.sha256 }}"
+
+  # ── The Windows CLI installers (ADR-0028) ────────────────────────────────────
+  # Built on Windows from the tag's own tree, installed silently on this runner as a
+  # smoke test, uninstalled, then attached to the tag's GitHub release with their
+  # SHA256SUMS.txt — the asset names the app's "Install the CLI" action and the winget
+  # manifest look for. The release is created when the tag has none: a tag need not
+  # have one, and the app's lookup only sees releases. What this does NOT cover: the
+  # interactive wizard and its Git for Windows prompt, which a silent install skips.
+  windows-cli-installer:
+    name: Build, smoke-test and attach the Windows CLI installers
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate tag matches vX.Y.Z
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' does not match ^v[0-9]+\.[0-9]+\.[0-9]+$ — refusing to build installers."
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Make sure makensis is available
+        run: |
+          set -euo pipefail
+          if ! command -v makensis >/dev/null 2>&1; then
+            choco install nsis -y --no-progress
+          fi
+          NSIS_DIR="/c/Program Files (x86)/NSIS"
+          [ -d "$NSIS_DIR" ] && echo "$NSIS_DIR" >> "$GITHUB_PATH"
+
+      - name: Build the installers
+        run: python packaging/windows-cli/build.py --version "$VERSION" --out dist
+
+      - name: Smoke-test a silent install of the x64 installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:DEVTEAM_HOME = Join-Path $env:RUNNER_TEMP 'devteam-home'
+          $installer = Start-Process -FilePath "dist\devteam-setup-$env:VERSION-x64.exe" -ArgumentList '/S' -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "installer exited with $($installer.ExitCode)" }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\devteam\bin\devteam.exe'
+          if (-not (Test-Path $exe)) { throw "$exe was not written" }
+          & $exe version --json
+          if ($LASTEXITCODE -ne 0) { throw "devteam version exited with $LASTEXITCODE" }
+          $listed = & $exe store list --json | ConvertFrom-Json
+          if ($listed.current -ne $env:VERSION) {
+            throw "the bundled framework $env:VERSION is not the store's current version"
+          }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -notlike '*Programs\devteam\bin*') { throw 'bin was not added to the user PATH' }
+          $uninstaller = Start-Process -FilePath (Join-Path $env:LOCALAPPDATA 'Programs\devteam\uninstall.exe') -ArgumentList '/S' -Wait -PassThru
+          Start-Sleep -Seconds 5  # the NSIS uninstaller re-launches itself from %TEMP% and returns early
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -like '*Programs\devteam\bin*') { throw 'uninstall left bin on the user PATH' }
+          if (-not (Test-Path (Join-Path $env:DEVTEAM_HOME 'core'))) { throw 'uninstall removed the store, which it must never touch' }
+
+      - name: Attach the installers to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md). Windows: devteam-setup-${VERSION}-<arch>.exe installs the devteam CLI with its own Python (ADR-0028); check it against SHA256SUMS.txt."
+          fi
+          gh release upload "$TAG" \
+            "dist/devteam-setup-${VERSION}-x64.exe" \
+            "dist/devteam-setup-${VERSION}-arm64.exe" \
+            dist/SHA256SUMS.txt \
+            --clobber
+
+  # ── Publish the verified formula to the tap ──────────────────────────────────
+  # Runs only after the macOS job installed the rewritten formula from the real
+  # tarball and passed its own test, so the tap never receives a formula nothing
+  # installed. Copies exactly the bytes the bump job produced (its artifact), not
+  # the tag's file, which still carries the placeholders.
+  #
+  # Needs HOMEBREW_TAP_TOKEN: a fine-grained token with Contents read/write on
+  # Dev-Toolbelt/homebrew-devteam only. GITHUB_TOKEN cannot push to another
+  # repository. Without the secret the job says so and succeeds, so a release is
+  # never blocked by it; the formula is then copied by hand (packaging/README.md).
+  publish-homebrew-tap:
+    name: Publish the verified formula to Dev-Toolbelt/homebrew-devteam
+    needs: [bump-homebrew-formula, verify-formula-against-the-real-tarball]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the rewritten formula
+        uses: actions/download-artifact@v4
+        with:
+          name: bumped-homebrew-formula
+          path: bumped-formula
+
+      - name: Push it to the tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.bump-homebrew-formula.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set — the tap was NOT updated. Copy bumped-formula/devteam.rb to Dev-Toolbelt/homebrew-devteam/Formula/ by hand."
+            exit 0
+          fi
+          git clone --quiet "https://x-access-token:${TAP_TOKEN}@github.com/Dev-Toolbelt/homebrew-devteam.git" tap
+          mkdir -p tap/Formula
+          cp bumped-formula/devteam.rb tap/Formula/devteam.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/devteam.rb
+          if git diff --cached --quiet; then
+            echo "The tap already carries the ${TAG} formula."
+            exit 0
+          fi
+          git commit --quiet -m "devteam ${TAG#v}"
+          git push --quiet origin HEAD
+          echo "Published devteam ${TAG} to Dev-Toolbelt/homebrew-devteam."
