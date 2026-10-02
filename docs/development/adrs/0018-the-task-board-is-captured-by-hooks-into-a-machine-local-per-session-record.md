@@ -129,6 +129,33 @@ the same owner hides them on read. Full rules: `docs/specs/task-board.md` § Age
 **Why.** It restores Decision 1 for the dominant path: capture is automatic again, needing nothing from
 the agent. Plan mirroring stays for sessions that do present a plan.
 
+## Amendment — 2026-10-01: direct work is a task
+
+**Context.** With plans mirrored and agents recorded, one kind of work still never reached the board:
+what the main session does itself — a one-line fix that needs no plan, an inline edit, a commit. The
+user's goal is that everything done in a session is followed there.
+
+**Decision.** The hooks record the main session's own changes — an edit tool, or a shell call that
+`tasks.writes()` reads as write-shaped — on **one `Direct work` card per session**, in progress while a
+turn works and completed at `Stop`, keeping a redacted ≤100-character excerpt of each turn's prompt.
+Work a plan step or an agent of the same turn already covers is not recorded; a subagent's never is.
+Full rules: `docs/specs/task-board.md` § Direct work.
+
+**Why.** It keeps Decision 1: capture stays automatic and asks nothing of the agent. The cost stays off
+the hot path — python forks once per turn at most (a `.direct-<session>` marker), and a prompt forks
+none (bash writes its slice beside the record).
+
+**Consequences.** The shell heuristic can miss a write or count a harmless command; either costs a
+card, never a wrong Done. Prompt text now reaches the record, so only a redacted first line is kept.
+Codex's edit and shell tool names rest on its source, like `update_plan`; if they differ, Codex
+sessions simply lack the card.
+
+| Alternative | Why rejected |
+|---|---|
+| One card per turn | A long session of small fixes becomes a wall of cards; the turns are listed on one card instead |
+| A card on every prompt | Questions would fill the board, and python would fork on every prompt |
+| Diff the working tree at `Stop` | Misses commits, pushes and anything that leaves the tree clean |
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |

@@ -29,6 +29,7 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     failed: false,
     review: null,
     worktree: null,
+    turns: [],
     ...overrides,
   };
 }
@@ -109,4 +110,21 @@ export function tasksOf(prefix: string, todo: number, inProgress: number, done: 
   for (let i = 0; i < inReview; i += 1) make('in_review', 'in_progress');
   for (let i = 0; i < done; i += 1) make('done', 'completed');
   return out;
+}
+
+/** The one "Direct work" card of a session, with the prompts behind it (oldest first). */
+export function directTask(overrides: Partial<BoardTask> = {}): BoardTask {
+  return boardTask({
+    key: 'direct',
+    content: 'Direct work',
+    kind: 'direct',
+    status: 'in_progress',
+    column: 'in_progress',
+    turns: [
+      { text: 'rename the helper', at: NOW - 300 },
+      { text: '', at: NOW - 200 },
+      { text: 'fix the typo in the readme', at: NOW - 100 },
+    ],
+    ...overrides,
+  });
 }

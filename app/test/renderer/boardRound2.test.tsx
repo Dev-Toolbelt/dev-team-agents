@@ -15,7 +15,7 @@ import type * as BoardModel from '../../src/renderer/boardModel.js';
 import * as boardModel from '../../src/renderer/boardModel.js';
 import { Board } from '../../src/renderer/screens/Board.js';
 import type { BoardFeed, BoardProject } from '../../src/shared/api.js';
-import { NOW, boardProject, boardSession, boardTask } from '../fixtures/board.js';
+import { NOW, boardProject, boardSession, boardTask, directTask } from '../fixtures/board.js';
 import { boardFeed, fakeBridge, installBridge } from './support.js';
 
 vi.mock('../../src/renderer/boardModel.js', async (importOriginal) => {
@@ -648,5 +648,30 @@ describe('Board kanban — the worktree mark', () => {
     // Pressing it changes nothing on the card.
     await user.click(mark);
     expect(steps).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('Board kanban — a direct card', () => {
+  const card = (text: string) => screen.getByText(text).closest('article')!;
+
+  it('shows the Direct badge and the prompts newest first, with an em dash for an uncaptured one', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [directTask(), boardTask({ key: 'p', content: 'Plain' })] })] }));
+    const direct = card('Direct work');
+    expect(within(direct).getByText('Direct')).toBeInTheDocument();
+    const items = within(within(direct).getByRole('list', { name: /Prompts behind this work/ })).getAllByRole('listitem');
+    expect(items.map((li) => li.textContent)).toEqual(['fix the typo in the readme', '\u2014', 'rename the helper']);
+    expect(within(card('Plain')).queryByText('Direct')).not.toBeInTheDocument();
+  });
+
+  it('folds turns beyond the latest three behind a keyboard-operable button', async () => {
+    const turns = Array.from({ length: 5 }, (_, i) => ({ text: `prompt ${i}`, at: 1_000 + i }));
+    const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks: [directTask({ turns })] })] }));
+    const direct = card('Direct work');
+    expect(within(direct).queryByText('prompt 0')).not.toBeInTheDocument();
+    const more = within(direct).getByRole('button', { name: '+2 more' });
+    more.focus();
+    await user.keyboard('{Enter}');
+    expect(within(direct).getByText('prompt 0')).toBeInTheDocument();
+    expect(within(direct).getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true');
   });
 });

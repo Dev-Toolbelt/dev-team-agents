@@ -66,6 +66,21 @@ _CODEX_AGENT_TOOLS = ("spawn_agent", "wait_agent", "close_agent")
 #: Longest first line of a Codex spawn message kept as a task's description.
 AGENT_TEXT = 120
 PLAN_STEP_RE = re.compile(r"^Step \d+:")
+
+#: The one card a session's own work lands on when no plan step or agent covers it.
+DIRECT_CONTENT = "Direct work"
+#: Turns kept on that card, oldest dropped first.
+DIRECT_TURNS_CAP = 20
+#: Longest prompt excerpt kept per turn.
+DIRECT_EXCERPT = 100
+#: The tools that change something by definition, per provider; a shell call is read by
+#: :func:`writes` first. Codex names come from its source, like ``update_plan`` (ADR-0018).
+_DIRECT_EDIT_TOOLS = {
+    "claude": ("Edit", "Write", "MultiEdit", "NotebookEdit"),
+    "codex": ("apply_patch",),
+    "opencode": ("edit", "write", "patch", "multiedit"),
+}
+_DIRECT_SHELL_TOOLS = {"claude": ("Bash",), "codex": ("Bash", "shell", "exec_command"), "opencode": ("bash",)}
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -350,6 +365,8 @@ def normalize(payload, provider="auto"):
         detected = "codex"
     elif bare_tool.lower() == "task":
         detected = "opencode"
+    else:
+        return _normalize_direct(payload, provider, tool_name, bare_tool)
     if detected is None or provider not in ("auto", detected):
         return None
 
@@ -402,6 +419,290 @@ def normalize(payload, provider="auto"):
     if call["op"] is None or not call["session_id"]:
         return None
     return call
+
+
+# ── direct work ──────────────────────────────────────────────────────────────
+
+#: A shell command that changes something: the verbs, git subcommands and package-manager
+#: actions below, an in-place edit, or a redirect to a file. A heuristic, documented as one in
+#: docs/specs/task-board.md § Direct work: a miss costs a card, never a wrong Done.
+_WRITE_VERBS = frozenset(
+    ("mv", "rm", "cp", "mkdir", "rmdir", "touch", "ln", "chmod", "chown", "tee", "truncate", "patch", "install", "dd")
+)
+_GIT_WRITES = frozenset((
+    "add", "am", "apply", "checkout", "cherry-pick", "commit", "merge", "mv", "pull", "push", "rebase",
+    "reset", "restore", "revert", "rm", "stash", "switch", "tag", "worktree",
+))
+_PACKAGE_TOOLS = frozenset((
+    "npm", "pnpm", "yarn", "bun", "pip", "pip3", "poetry", "uv", "cargo", "go", "bundle", "gem", "composer", "brew",
+))
+_PACKAGE_WRITES = frozenset(("install", "i", "add", "remove", "rm", "uninstall", "update", "upgrade", "get"))
+_COMMAND_PREFIXES = frozenset(("sudo", "rtk", "command", "env", "time", "nohup", "exec"))
+_OPERATORS = frozenset(("&&", "||", ";", "|", "&", "(", ")", ";;", "|&"))
+_REDIRECTS = frozenset((">", ">>", ">|", "&>", "&>>"))
+_SINKS = frozenset(("/dev/null", "/dev/stdout", "/dev/stderr"))
+_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def _shell_text(command):
+    if isinstance(command, list):
+        return " ".join(shlex.quote(str(part)) for part in command)
+    return command if isinstance(command, str) else ""
+
+
+def _shell_tokens(text):
+    """Shell words and operators, quotes respected; ``None`` when the quoting does not close."""
+    lexer = shlex.shlex(text.replace("\n", ";\n"), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        return list(lexer)
+    except ValueError:
+        return None
+
+
+def _segments(tokens):
+    """``(words, wrote)`` per simple command: ``wrote`` when it redirects output into a file."""
+    words, wrote = [], False
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token in _OPERATORS or set(token) <= set(";&|()"):
+            yield words, wrote
+            words, wrote = [], False
+        elif token in _REDIRECTS:
+            target = tokens[index + 1] if index + 1 < len(tokens) else ""
+            if target and target not in _SINKS and not target.startswith("&"):
+                wrote = True
+            index += 1
+        elif token.startswith((">", "<")) or token in ("<", "<<", "<<<", ">&", "<&"):
+            index += 1  # an input redirect, or a descriptor copy (`2>&1`): its operand is no word
+        else:
+            words.append(token)
+        index += 1
+    yield words, wrote
+
+
+def _segment_writes(words):
+    while words and (words[0] in _COMMAND_PREFIXES or _ASSIGNMENT.match(words[0])):
+        words = words[1:]
+    # A descriptor number left in front of a redirect (`cmd 2>/dev/null`) is not part of the command.
+    if not words:
+        return False
+    verb = os.path.basename(words[0])
+    rest = [w for w in words[1:] if not w.isdigit()] if verb not in _WRITE_VERBS else words[1:]
+    if verb in _WRITE_VERBS:
+        return True
+    if verb in ("bash", "sh", "zsh") and len(rest) >= 2 and rest[0] in ("-c", "-lc"):
+        # Codex wraps every command as `bash -lc '<command>'`: read the wrapped one.
+        return writes(rest[1])
+    if verb in ("sed", "perl") and any(w.startswith("--in-place") or (w.startswith("-") and not w.startswith("--") and "i" in w) for w in rest):
+        return True
+    if verb == "git":
+        args = list(rest)
+        while args and args[0].startswith("-"):
+            # `-C <dir>` and `-c <key=value>` take the next word: it is not the subcommand.
+            args = args[2:] if args[0] in ("-C", "-c") else args[1:]
+        return bool(args) and args[0] in _GIT_WRITES
+    if verb in _PACKAGE_TOOLS and rest and rest[0] in _PACKAGE_WRITES:
+        return True
+    return verb in ("python", "python3") and rest[:3] == ["-m", "pip", "install"]
+
+
+def writes(command):
+    """True when a shell command, by its text, changes files or repository state.
+
+    The text is tokenized as a whole first, so an operator inside quotes (`bash -lc 'mv a b && x'`,
+    `grep '=>'`, `jq '.a > 1'`) is part of a word, never a split or a redirect.
+    """
+    text = _shell_text(command)
+    if not text.strip():
+        return False
+    tokens = _shell_tokens(text)
+    if tokens is None:
+        tokens = text.split()
+    return any(wrote or _segment_writes(words) for words, wrote in _segments(tokens))
+
+
+def _normalize_direct(payload, provider, tool_name, bare_tool):
+    """A call of the session's own that changes something, as a ``("direct", {})`` op, else ``None``.
+
+    Only the main session's work: a subagent's (``agent_id``; opencode ``parent_id``, a child
+    session) is its agent task's. ``Bash`` is named the same by Claude Code and Codex; Codex's
+    ``turn_id`` or its transcript path tells them apart, and the stored record's provider wins.
+    """
+    if _first_text(payload, "agent_id", "parent_id"):
+        return None
+    detected, shell = None, False
+    for name, tools in _DIRECT_EDIT_TOOLS.items():
+        if name == "opencode":
+            if bare_tool.lower() in tools:
+                detected, shell = name, False
+        elif tool_name in tools:
+            detected, shell = name, False
+        if detected:
+            break
+    if detected is None:
+        if bare_tool.lower() in _DIRECT_SHELL_TOOLS["opencode"]:
+            detected, shell = "opencode", True
+        elif tool_name in _DIRECT_SHELL_TOOLS["codex"] or tool_name in _DIRECT_SHELL_TOOLS["claude"]:
+            transcript = _first_text(payload, "transcript_path")
+            codex = tool_name != "Bash" or "turn_id" in payload or "/.codex/" in transcript.replace("\\", "/")
+            detected, shell = ("codex" if codex else "claude"), True
+    if detected is None or provider not in ("auto", detected):
+        return None
+    if shell:
+        args = _dict(payload.get("args")) if detected == "opencode" else _dict(payload.get("tool_input"))
+        if not writes(args.get("command") or args.get("cmd")):
+            return None
+    session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
+    if not session_id:
+        return None
+    return {
+        "provider": detected,
+        # A guess for `Bash` only: the record's own provider is kept when it has one.
+        "provider_guessed": shell and detected in ("claude", "codex") and tool_name == "Bash",
+        "session_id": session_id,
+        "cwd": _first_text(payload, "cwd"),
+        "owner": MAIN_OWNER,
+        "agent_type": None,
+        "op": ("direct", {}),
+    }
+
+
+_KEYWORD = r"(?:[A-Za-z0-9]+_)*(?:api_?key|access_key|private_key|secret_key|secret|token|password|passwd|pwd|pass|senha|credentials?)(?:_[A-Za-z0-9]+)*"
+#: ``(pattern, replacement)``, applied in order. Shapes of real credentials, then a value after a
+#: secret-named key (``NAME=v``, ``"name": "v"``, ``NAME v`` for an env-style name, ``password is v``),
+#: then any long mixed token. A path is never one token (``/`` and ``.`` end it), and a 40-hex git
+#: commit id is not a secret.
+_SECRET_PATTERNS = (
+    (re.compile(r"(?i)\bBearer\s+\S+"), "Bearer [redacted]"),
+    (re.compile(r"://[^\s/:@]+:[^\s/@]+@"), "://[redacted]@"),
+    (re.compile(r"\b(?:sk|pk|rk)[-_](?:live_|test_|proj-)?[A-Za-z0-9_-]{8,}"), "[redacted]"),
+    (re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr|github_pat|glpat|xox[abprs])[-_][A-Za-z0-9_-]{8,}"), "[redacted]"),
+    (re.compile(r"\bAKIA[0-9A-Z]{12,}\b"), "[redacted]"),
+    (re.compile(r"\bAIza[A-Za-z0-9_-]{30,}"), "[redacted]"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?"), "[redacted]"),
+    (re.compile(r"(?i)\b(" + _KEYWORD + r")([\"']?\s*[=:]\s*[\"']?)[^\s\"',;]+"), r"\1\2[redacted]"),
+    (re.compile(r"\b((?:[A-Z0-9]+_)+(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD)(?:_[A-Z0-9]+)*|[a-z0-9]+(?:_[a-z0-9]+)*_(?:key|token|secret|password))\s+(?![=:])[^\s\"',;]+"), r"\1 [redacted]"),
+    (re.compile(r"(?i)\b(password|passwd|senha)\s+(is|é|eh)\s+\S+"), r"\1 \2 [redacted]"),
+    (re.compile(r"(?<![\w/.-])(?![0-9a-f]{40}(?![\w/.]))(?=[A-Za-z0-9+_-]*\d)(?=[A-Za-z0-9+_-]*[A-Za-z])[A-Za-z0-9+_-]{32,}={0,2}(?![\w/.])"), "[redacted]"),
+)
+#: Control and format characters (bidi overrides, zero-width): a card must read as it is stored.
+_INVISIBLE = re.compile("[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]")
+
+
+def redact(text):
+    """``text`` with anything shaped like a secret replaced by ``[redacted]``."""
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _prompt_path(path):
+    """The turn's prompt file the ``UserPromptSubmit`` hook writes beside the record."""
+    return path.parent / ".prompt-{}".format(path.name[: -len(".json")])
+
+
+def direct_marker(path):
+    """The marker that tells the PreToolUse gate this turn's direct work is already settled."""
+    return path.parent / ".direct-{}".format(path.name[: -len(".json")])
+
+
+def _decode_prompt(raw):
+    """The prompt's first line from the hook's raw slice: JSON-escaped, maybe cut mid-escape."""
+    raw = raw.lstrip()
+    if raw.startswith(":"):
+        raw = raw[1:].lstrip()
+    if raw.startswith('"'):
+        raw = raw[1:]
+    end, escaped = len(raw), False
+    for index, char in enumerate(raw):
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            end = index
+            break
+    body = raw[:end]
+    # A slice can end inside an escape: drop the dangling part rather than refuse the line.
+    for cut in range(0, 7):
+        try:
+            text = json.loads('"{}"'.format(body[: len(body) - cut] if cut else body))
+            break
+        except ValueError:
+            continue
+    else:
+        text = ""
+    return text
+
+
+def _excerpt(text):
+    line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    line = " ".join(redact(_INVISIBLE.sub(" ", line)).split())
+    if len(line) > DIRECT_EXCERPT:
+        line = line[: DIRECT_EXCERPT - 1].rstrip() + "\u2026"
+    return line
+
+
+def _turn(path):
+    """``(started_at, excerpt)`` of the session's current turn, from its prompt file; ``(None, "")``."""
+    prompt = _prompt_path(path)
+    try:
+        started = int(prompt.stat().st_mtime)
+        with open(str(prompt), "r", encoding="utf-8", errors="replace") as handle:
+            raw = handle.read(4096)
+    except OSError:
+        return None, ""
+    return started, _excerpt(_decode_prompt(raw))
+
+
+def _is_direct(task):
+    return task.get("kind") == "direct"
+
+
+def _is_native(task):
+    """A task from the provider's own list, not one the hooks made (agent spawn, direct work)."""
+    return task.get("kind") not in ("agent", "direct")
+
+
+def _apply_direct(record, call, now, turn):
+    """Fold the session's own work into its one direct card. Returns True when it changed something.
+
+    Covered work is not counted twice: nothing is recorded while the main session has a native task
+    in progress (a plan step, its own list) or spawned an agent in this turn.
+    """
+    started, excerpt = turn
+    for task in record["tasks"]:
+        if task["owner"] != MAIN_OWNER or not _shown(task) or _is_direct(task):
+            continue
+        if _is_native(task) and task["status"] == "in_progress":
+            return False
+        if _is_agent(task) and started is not None and task["created_at"] >= started:
+            return False
+    card = next((t for t in record["tasks"] if _is_direct(t) and t["owner"] == MAIN_OWNER), None)
+    opened = card is None or card["status"] != "in_progress"
+    if card is None:
+        card = _add_task(record, call, {"id": None, "content": DIRECT_CONTENT, "status": "in_progress"}, now)
+        card.update(kind="direct", turns=[])
+    elif opened:
+        card["removed_at"] = None
+        _push(card, "in_progress", now)
+    turns = card.setdefault("turns", [])
+    at = started if started is not None else now
+    # A new turn is a newer prompt, or — with no prompt file — the card opening again after a Stop.
+    if not turns or (turns[-1].get("at", 0) < started if started is not None else opened):
+        turns.append({"text": excerpt, "at": at})
+        del turns[: max(0, len(turns) - DIRECT_TURNS_CAP)]
+    return True
+
+
+def _settle_direct(record, now):
+    """A finished turn finishes its direct work: the card goes ``completed``."""
+    for task in record["tasks"]:
+        if _is_direct(task) and task["status"] == "in_progress":
+            _push(task, "completed", now)
 
 
 # ── the record ───────────────────────────────────────────────────────────────
@@ -529,7 +830,7 @@ def _apply_replace(record, call, items, now):
     another owner is not even a candidate. A task absent from the new list is marked
     removed, not deleted. Duplicates are paired in order, live before removed.
     """
-    mine = [t for t in record["tasks"] if t["owner"] == call["owner"] and not _is_agent(t)]
+    mine = [t for t in record["tasks"] if t["owner"] == call["owner"] and _is_native(t)]
     # A task removed after it finished is history: a new item that reads the same is a
     # new task, not that one coming back to life as pending.
     revivable = [t for t in mine if t["removed_at"] is not None and t["status"] not in ("completed", "cancelled")]
@@ -563,7 +864,7 @@ def _apply_create(record, call, item, now):
         # The tool output named no id: assume the session assigned the next integer.
         item = dict(item, id=_next_sequential_id(record))
     for task in record["tasks"]:
-        if task.get("id") == item["id"] and task["owner"] == call["owner"] and not _is_agent(task):
+        if task.get("id") == item["id"] and task["owner"] == call["owner"] and _is_native(task):
             # A replayed create names a task that exists: refresh its text only, so a
             # started or finished task is never pushed back to pending.
             if item.get("content"):
@@ -574,7 +875,7 @@ def _apply_create(record, call, item, now):
 
 
 def _apply_update(record, call, item, now):
-    same_id = [t for t in record["tasks"] if t.get("id") == item["id"] and not _is_agent(t)]
+    same_id = [t for t in record["tasks"] if t.get("id") == item["id"] and _is_native(t)]
     # Same owner first; another owner's task only when this owner has none with that id
     # (Claude's task ids are shared by a session's main agent and its subagents).
     found = next((t for t in same_id if t["owner"] == call["owner"]), None) or (same_id[0] if same_id else None)
@@ -713,8 +1014,10 @@ def _apply_agent(record, call, now):
     return True
 
 
-def _apply(record, call, now):
+def _apply(record, call, now, turn=(None, "")):
     kind, body = call["op"]
+    if kind == "direct":
+        return _apply_direct(record, call, now, turn)
     if kind.startswith("agent_"):
         return _apply_agent(record, call, now)
     if kind == "replace":
@@ -746,7 +1049,7 @@ def _hidden_keys(record):
     """
     owners = {
         t["owner"] for t in record["tasks"]
-        if not _is_agent(t) and _shown(t) and PLAN_STEP_RE.match(t["content"])
+        if _is_native(t) and _shown(t) and PLAN_STEP_RE.match(t["content"])
     }
     if not owners:
         return set()
@@ -766,14 +1069,16 @@ def _open_count(record):
     return len(_open_keys(record, _review_members(record)))
 
 
-def _all_done(record, members):
-    shown = _visible(record)
+def _all_done(record, members, skip_direct=False):
+    """Every visible task is Done. ``skip_direct`` leaves the direct card out: it is the session's
+    own work, never a task to finish, so it neither withholds nor raises ``tasks.session_done``."""
+    shown = [t for t in _visible(record) if not (skip_direct and _is_direct(t))]
     return bool(shown) and all(_task_column(t, members) == "done" for t in shown)
 
 
-def _cleanly_done(record, members):
+def _cleanly_done(record, members, skip_direct=False):
     """``_all_done`` with no task that failed or was cut off: those are not a finished session."""
-    return _all_done(record, members) and not any(
+    return _all_done(record, members, skip_direct) and not any(
         t.get("failed") or t.get("interrupted") for t in _visible(record)
     )
 
@@ -1962,6 +2267,8 @@ def record(root, payload, provider="auto", now=None):
         branch, worktree = _git_location(call["cwd"] or (stored or {}).get("cwd"))
         # Looked up once per session here; Stop and SessionEnd (`mark`) refresh it after a rename.
         title = (stored or {}).get("title") or session_title(payload, call["provider"])
+        direct = call["op"][0] == "direct"
+        turn = _turn(path) if direct else (None, "")
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
@@ -1975,7 +2282,13 @@ def record(root, payload, provider="auto", now=None):
                 rec = _new_record(call, project_id, now)
             open_before = _open_keys(rec, _review_members(rec))
             before = {t["key"]: t["status"] for t in rec["tasks"]}
-            changed = _apply(rec, call, now)
+            changed = _apply(rec, call, now, turn)
+            if direct:
+                # Settled for this turn either way: the gate forks nothing more until the next prompt.
+                try:
+                    direct_marker(path).touch()
+                except OSError:
+                    pass
             if changed is False:
                 # An agent event that matched no task (a replayed spawn, a result nobody launched):
                 # the record is not touched, so a stray call cannot keep a session looking alive.
@@ -1986,7 +2299,8 @@ def record(root, payload, provider="auto", now=None):
                 if task["key"] not in before and worktree is not None:
                     task["worktree"] = dict(worktree)
             _sweep_reviews(rec, now)
-            rec["provider"] = call["provider"]
+            if not (call.get("provider_guessed") and rec.get("provider") in PROVIDERS):
+                rec["provider"] = call["provider"]
             if call["cwd"]:
                 rec["cwd"] = call["cwd"]
             rec["branch"] = branch or rec.get("branch")
@@ -2000,13 +2314,15 @@ def record(root, payload, provider="auto", now=None):
             # A call proves the session is alive, even one resumed after `SessionEnd`.
             _alive(rec, now)
             members = _review_members(rec)
-            done = _all_done(rec, members)
+            # The direct card is left out of the notification decision, both ways (`_all_done`).
+            done = _all_done(rec, members, skip_direct=True)
             # Dropping an unfinished task is abandonment, not completion: the transition counts
             # only when a task that was open is now actually completed or cancelled.
             finished = any(
-                t["key"] in open_before and _shown(t) and _task_column(t, members) == "done" for t in rec["tasks"]
+                t["key"] in open_before and _shown(t) and not _is_direct(t) and _task_column(t, members) == "done"
+                for t in rec["tasks"]
             )
-            clean = _cleanly_done(rec, members)
+            clean = _cleanly_done(rec, members, skip_direct=True)
             # An agent's end is raised at `Stop` (`mark`), never mid-turn: more agents may follow
             # it. The debt is kept on the record for that Stop to pay.
             mid_turn = call["op"][0].startswith("agent_")
@@ -2051,10 +2367,14 @@ def mark(root, payload, state, now=None):
                 rec["title"] = title
             rec["last_seen_at"] = now
             done = []
+            # The turn is over, and so is its direct work. The card never counts toward
+            # `tasks.session_done` (`skip_direct`): a turn of direct work alone finishes nothing,
+            # and a plan or agent finished beside it still notifies.
+            _settle_direct(rec, now)
             if state == "idle":
                 rec["idle_at"] = now
                 _alive(rec, now)
-                was_done = _all_done(rec, _review_members(rec)) and not rec.get("done_pending")
+                was_done = _all_done(rec, _review_members(rec), skip_direct=True) and not rec.get("done_pending")
                 # Hand-backs first: one that arrived within the window's wait counts even when this
                 # Stop comes hours later (the turn sat on a question), and only then does the wait
                 # expire what is still missing.
@@ -2062,7 +2382,7 @@ def mark(root, payload, state, now=None):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
                 _interrupt_agents(rec, now)
-                done_now = _cleanly_done(rec, _review_members(rec))
+                done_now = _cleanly_done(rec, _review_members(rec), skip_direct=True)
                 rec["done_pending"] = False
             else:
                 rec["ended_at"] = now
@@ -2135,7 +2455,9 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         "content": task["content"],
         "owner": task["owner"],
         "agent_type": task.get("agent_type"),
-        "kind": "agent" if _is_agent(task) else "todo",
+        "kind": "agent" if _is_agent(task) else "direct" if _is_direct(task) else "todo",
+        # Additive: a direct card's turns (`{"text", "at"}`, oldest first); empty on any other kind.
+        "turns": [dict(t) for t in task.get("turns") or [] if isinstance(t, dict)] if _is_direct(task) else [],
         "failed": bool(task.get("failed")),
         "interrupted": bool(task.get("interrupted")),
         # Additive: the linked worktree the task was started in (`{"path", "branch"}`), else null.

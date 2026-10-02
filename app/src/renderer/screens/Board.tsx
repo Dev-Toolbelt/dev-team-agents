@@ -8,6 +8,7 @@ import {
   FolderGit2,
   Moon,
   Pause,
+  Pencil,
   RefreshCw,
   Settings2,
   Sparkles,
@@ -57,6 +58,7 @@ import {
   type BoardSession,
   type BoardSessionStatus,
   type BoardSettings,
+  type BoardTurn,
   type BoardWorktree,
 } from '../../shared/api.js';
 
@@ -482,6 +484,53 @@ function WorktreeMark({ worktree }: { worktree: BoardWorktree }) {
         <FolderGit2 className="size-3.5" aria-hidden="true" />
       </button>
     </Hint>
+  );
+}
+
+function DirectBadge() {
+  return (
+    <Badge variant="outline" className="border-info text-foreground" title="Work the main session did itself, without a plan step or an agent">
+      <Pencil aria-hidden="true" />
+      Direct
+    </Badge>
+  );
+}
+
+const TURNS_SHOWN = 3;
+
+/**
+ * The prompts behind a direct card, newest first. Only the latest few are listed; the rest sit
+ * behind a button, so a long session does not stretch the card.
+ */
+function DirectTurns({ turns }: { turns: readonly BoardTurn[] }) {
+  const [all, setAll] = useState(false);
+  const id = useId();
+  const newest = [...turns].reverse();
+  const shown = all ? newest : newest.slice(0, TURNS_SHOWN);
+  const hidden = newest.length - TURNS_SHOWN;
+  return (
+    <div className="mt-2 text-xs text-muted-foreground">
+      <p className="sr-only" id={`${id}-label`}>
+        Prompts behind this work, newest first
+      </p>
+      <ul aria-labelledby={`${id}-label`} className="space-y-0.5">
+        {shown.map((turn, index) => (
+          <li key={`${turn.at}-${index}`} className="break-words [overflow-wrap:anywhere]">
+            {turn.text === '' ? <span title="The prompt was not captured">{'\u2014'}</span> : turn.text}
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          aria-expanded={all}
+          onClick={() => setAll((was) => !was)}
+          className="mt-1 rounded-sm underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+        >
+          {all ? 'Show fewer' : `+${hidden} more`}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -993,6 +1042,7 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
         <p id={contentId} className={`break-words [overflow-wrap:anywhere] ${task.column === 'done' ? 'text-muted-foreground' : ''}`}>
           {title}
         </p>
+        {task.kind === 'direct' && task.turns.length > 0 ? <DirectTurns turns={task.turns} /> : null}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1" title={`${providerLabel(session.provider)} session`}>
             <ProviderIcon provider={session.provider} />
@@ -1005,6 +1055,7 @@ const TaskCard = memo(function TaskCard({ item, now, asOf }: { item: KanbanItem;
           </span>
           {task.worktree !== null ? <WorktreeMark worktree={task.worktree} /> : null}
           {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
+          {task.kind === 'direct' ? <DirectBadge /> : null}
           {task.failed ? <FailedBadge /> : null}
           {task.review !== null && task.column === 'in_review' ? <ReviewBadge review={task.review} /> : null}
           {task.stale ? <StaleBadge /> : null}

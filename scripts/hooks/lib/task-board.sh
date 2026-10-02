@@ -10,6 +10,8 @@
 #   devteam_task_board_review_open <payload>     open or join a review window (In Review column)
 #   devteam_task_board_review_result <payload>   fold a review agent's output into its window
 #   devteam_task_board_has_record <payload>      0 when the payload's session has a task record
+#   devteam_task_board_clear_turn <session> [prompt]  end a turn of direct work: drop .direct-<session>,
+#                                                and with `prompt` also .prompt-<session>
 #
 # Two rules this file exists to keep:
 #   1. A hook never disturbs the provider — every function returns 0 and prints nothing.
@@ -61,6 +63,15 @@ devteam_task_board_has_record() {
     local session
     session="$(devteam_task_board_session_id "$1")"
     [ -n "$session" ] && [ -f "${TB_STATE_DIR}/task-board/${session}.json" ]
+}
+
+# The direct-work turn files beside the record (docs/specs/task-board.md § Direct work). They
+# are this hook set's own short-lived markers, never a record: removing them is how a turn ends.
+devteam_task_board_clear_turn() {
+    [ -n "$1" ] || return 0
+    rm -f "${TB_STATE_DIR}/task-board/.direct-$1" 2>/dev/null
+    [ "${2:-}" = "prompt" ] && rm -f "${TB_STATE_DIR}/task-board/.prompt-$1" 2>/dev/null
+    return 0
 }
 
 _tb_pref() {  # _tb_pref <key> <default>

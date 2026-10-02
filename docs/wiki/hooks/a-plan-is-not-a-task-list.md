@@ -1,7 +1,7 @@
 # A written plan never reaches the task board
 
 **Origin:** a live session planned a whole feature with no task-list call and the board stayed empty | 2026-09-30
-**Tags:** task board, plan, plan-mode, TaskCreate, update_plan, todowrite, native task list, empty board, Task List Mirroring, agent spawn
+**Tags:** task board, plan, plan-mode, TaskCreate, update_plan, todowrite, native task list, empty board, Task List Mirroring, agent spawn, direct work
 
 > The board reads only the provider's native task list. A plan in chat or in a `.md` file is invisible to it until its steps are mirrored as native tasks. Since agent spawns now appear as tasks automatically, an empty board after a command that delegated to agents means the capture hooks did not fire.
 
@@ -26,4 +26,5 @@ provider — nothing rewrites them at render time — so the section names each 
 - A renamed or renumbered step shows twice on a whole-list tool (`TodoWrite`, `update_plan`,
   `todowrite`): the board matches those by exact text, or by `id` on opencode.
 - Commands that never plan (`/devteam:status`, a quick question) may still appear on the board if they spawn agents; only commands with no work and no agent spawns correctly stay off the board.
+- Work the session does itself (an edit, a commit) lands on one **Direct work** card per session, but only when no plan step is `in_progress` and no agent was spawned in that turn — the plan or the agent is the better grain. A missing card after an edit is a gate question first: was it a subagent (`agent_id`, opencode `parent_id`), a read-only shell command (`tasks.writes()` decides), or did `.direct-<session>` already exist for that turn?
 - Built-in agents (Claude Code: `Explore`, `Plan`, `general-purpose`, `claude-code-guide`, `statusline-setup`, `claude`; one list per provider in `review_triggers.BUILTIN_AGENTS`) and review/QA agents (`qa-specialist`, `code-reviewer`, `backend-reviewer`, `frontend-reviewer`) do not appear as tasks — they are internal infrastructure or handled separately through review windows.

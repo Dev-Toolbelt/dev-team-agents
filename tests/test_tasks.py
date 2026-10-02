@@ -539,7 +539,7 @@ class CollectTest(BoardCase):
         self.assertEqual(
             set(session["tasks"][0]),
             {"key", "content", "owner", "agent_type", "kind", "failed", "interrupted", "status", "column", "created_at",
-             "status_since", "completed_at", "durations", "stale", "abandoned", "review", "worktree"},
+             "status_since", "completed_at", "durations", "stale", "abandoned", "review", "worktree", "turns"},
         )
         self.assertEqual(set(session["counts"]), {"todo", "in_progress", "done", "in_review", "total"})
         self.assertTrue(session["resume_command"].startswith("cd "))
