@@ -1,7 +1,7 @@
 {
   "name": "dev-team-agents-app",
   "productName": "dev-team-agents",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Desktop client for the dev-team-agents multi-agent development harness (ADR-0011)",
   "license": "MIT",
@@ -24,7 +24,9 @@
     "start": "npm run build && electron .",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:all": "npm run build && electron-builder --mac --win --publish never && node scripts/zip-release.mjs",
+    "dist:all": "npm run build && electron-builder --mac --win --publish never && node scripts/zip-release.mjs && node scripts/checksums.mjs",
+    "dist:beta": "node scripts/release-guard.mjs && npm run dist:all",
+    "checksums": "node scripts/checksums.mjs",
     "build:preload": "vite build -c vite.preload.config.mts"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 /**
  * Bundle the installers `dist:all` produced into one zip, for handing a test build to
- * another machine as a single file.
+ * another machine as a single file. Never published: ADR-0027 publishes the installers
+ * themselves, next to `SHA256SUMS.txt`, which does not cover this zip.
  *
  * Only the four installers go in — the `.blockmap` files and the `*-unpacked` /
  * `mac-universal*` directories are build by-products nobody installs from. A missing
@@ -10,33 +11,21 @@
  * build the `.dmg`.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { productName, version } = JSON.parse(readFileSync('package.json', 'utf8'));
-const releaseDir = 'release';
+import { readRelease, releaseDir, requireInstallers, runScript } from './release-artifacts.mjs';
 
-const installers = [
-  `${productName}-${version}.dmg`,
-  `${productName}-Setup-${version}.exe`,
-  `${productName}-Setup-${version}-x64.exe`,
-  `${productName}-Setup-${version}-arm64.exe`,
-];
+await runScript('zip-release', () => {
+  const { productName, version, installers } = readRelease();
+  requireInstallers(installers);
 
-const missing = installers.filter((name) => !existsSync(join(releaseDir, name)));
-if (missing.length > 0) {
-  process.stderr.write(`zip-release: missing in ${releaseDir}/: ${missing.join(', ')}\n`);
-  process.exit(1);
-}
+  const archive = `${productName}-${version}-unsigned.zip`;
+  rmSync(join(releaseDir, archive), { force: true });
 
-const archive = `${productName}-${version}-unsigned.zip`;
-rmSync(join(releaseDir, archive), { force: true });
+  const result = spawnSync('zip', ['-q', archive, ...installers], { cwd: releaseDir, stdio: 'inherit' });
+  if (result.error) throw new Error(`could not run zip: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`zip exited with ${result.status ?? 'a signal'}`);
 
-const result = spawnSync('zip', ['-q', archive, ...installers], { cwd: releaseDir, stdio: 'inherit' });
-if (result.error) {
-  process.stderr.write(`zip-release: could not run zip: ${result.error.message}\n`);
-  process.exit(1);
-}
-if (result.status !== 0) process.exit(result.status ?? 1);
-
-process.stdout.write(`zip-release: ${join(releaseDir, archive)}\n`);
+  process.stdout.write(`zip-release: ${join(releaseDir, archive)}\n`);
+});
