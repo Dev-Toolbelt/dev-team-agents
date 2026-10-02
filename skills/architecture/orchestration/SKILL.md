@@ -152,7 +152,7 @@ does not exist, or declaring the wrong tier, fails the lint.
 
 ## Spawn Integrity
 
-**A spawn that did not happen must never be reported as one that did.** Three checks, in order,
+**A spawn that did not happen must never be reported as one that did.** Six checks, in order,
 around every delegation round. They exist because the failure they prevent is silent: the user
 reads a completion report, the UI shows no running work, and nothing was written to disk.
 
@@ -223,6 +223,10 @@ every time. That burden belongs to the orchestrator, not the user.
 **Whenever a delegation round leaves any subagent without a returned banner and the orchestrator's
 own turn is about to end**, schedule a follow-up instead of ending silently:
 
+- **One owner per round.** When check 6's work-feedback gate is active, its loop owns all
+  rescheduling: schedule no separate wakeup here, and run the steps below on its ticks instead. This
+  check schedules its own wakeup only when that gate is off or does not apply.
+
 - If `ScheduleWakeup` is available, call it before ending the turn: `delaySeconds` in the 1200–1800s
   range for routine rounds (tighter, matched to expected duration, only for work with a known
   short bound — see the tool's own guidance), `reason` naming which agent(s) are still outstanding.
@@ -245,12 +249,13 @@ If `ScheduleWakeup` is not available in the current context, this check cannot b
 back to check 4's reactive behavior and say so if asked, rather than claiming a checkback is
 scheduled when none was.
 
-### 5. Periodic status table
+### 6. Periodic status table
 
 While background sub-agents are working, load `skills/shared/work-feedback/SKILL.md` and follow it
 for the check-in cadence and table format — gated entirely by `credentials.local.json`
 (`work_feedback_active`, `work_feedback_interval_minutes`). Do not restate its gate check, loop
-mechanics, or table format here.
+mechanics, or table format here. While its gate is active it is the round's only `ScheduleWakeup`
+loop (see check 5, *One owner per round*).
 
 ---
 

@@ -53,6 +53,10 @@ Applies only when sub-agents are running **in the background** and the task has 
 4. Emit **only** the table (see Format below) — no narration, no preamble, no trailing text in that turn.
 5. If any step is still not ✅, call `ScheduleWakeup` again with the same interval. If all steps are ✅, emit the final all-✅ table and stop scheduling (`stop: true`) — do not keep polling a finished task.
 
+6. **Cap it.** On each tick, apply `skills/architecture/orchestration/SKILL.md` § Spawn Integrity check 5 to any sub-agent that looks stalled (resume it with `SendMessage`, never re-spawn). After its two reactivation attempts for a sub-agent, emit the current table, stop scheduling, and surface that sub-agent to the user as a blocker — do not keep polling.
+
+While the gate above is active, this loop is the **only** `ScheduleWakeup` loop for the round — the orchestration skill's check 5 does not schedule its own wakeup alongside it.
+
 Never fire more than one wake-up cycle per interval, and never shorten the interval to "check sooner" — the interval is a user-controlled setting, not a suggestion.
 
 **Relationship to `skills/shared/plan-mode/SKILL.md`'s Progress Reporting**: the two report at different granularities and do not replace each other. This skill fires **within** a plan step, on its own interval, only while that step's work is delegated to background subagents — it says nothing about the plan's other steps. Progress Reporting fires **between** steps, once per step, when a step finishes. A single background step can produce several of this skill's tables before it completes and produces exactly one Progress Reporting update. Keep emitting this skill's table on schedule even if a Progress Reporting update was just sent for an adjacent step — they are separate messages for separate audiences of the same work.

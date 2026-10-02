@@ -26,6 +26,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Read `docs/development/database.md` and `tech-stack.md` for existing decisions
 - Check `.env`, `.env.local`, `docker-compose.yml` for connection strings and credentials
 - Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before adding a new table/column pattern
+- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation
 - Scan existing schema files and migrations for current state
 - Run `git log --oneline -10` to reveal recent migration history and schema changes in flight
 
@@ -37,9 +38,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial schema change o
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → Worktree Isolation: `.dev-team-agents/.worktree-session` → `worktree_active` in `.dev-team-agents/resolved/preferences.json` → ask once via `AskUserQuestion`.
-
-When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` and use the stored base branch. The session file makes the decision resolve exactly once per task.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

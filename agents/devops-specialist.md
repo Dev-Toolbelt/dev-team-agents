@@ -37,7 +37,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infra
 
 ## Worktree Isolation
 
-Resolve the worktree decision before editing any file, using the canonical cascade in `CLAUDE.md` → **Worktree Isolation** (`.worktree-session` → `worktree_active` in `preferences.json` → ask once). When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` and use the recorded base branch; otherwise work on the recorded branch and do not load the skill. The decision is resolved exactly once per task.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

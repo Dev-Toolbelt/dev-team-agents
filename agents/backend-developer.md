@@ -24,6 +24,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/development/api-contracts.md` and `docs/development/database.md` before touching endpoints, models, or queries
 - Load `skills/shared/reuse-guidelines/SKILL.md` and read the existing code in the target module — check `docs/development/reuse-guidelines.md` (when present) for a canonical implementation, then match its patterns exactly before writing anything new
+- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
@@ -62,9 +63,7 @@ Load the matching skill when the task context applies:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → Worktree Isolation: `.dev-team-agents/.worktree-session` → `worktree_active` in `.dev-team-agents/resolved/preferences.json` → ask once via `AskUserQuestion`.
-
-When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` and use the stored base branch. The session file makes the decision resolve exactly once per task.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
