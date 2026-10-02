@@ -81,11 +81,23 @@ WRITE_COMMANDS = (
     "echo a >> log", "cmd 2> err.log", "sed -i '' s/a/b/ f", "perl -pi -e s/a/b/ f", "npm install", "npm i x",
     "go get x", "cat a | tee b", "FOO=1 rm -rf x", "python3 -m pip install x", "mkdir -p d && ls",
     "echo hi\nmkdir foo", "bash -lc 'git commit -m x'", "bash -lc 'mv a b && echo ok'",
+    # Remote, container, cluster and service changes.
+    "ssh jornalimpactopress-vps 'docker rm -f jornalimpactocotia-wpcli-run-15ef08b9b9e8'",
+    "ssh -o ConnectTimeout=10 -p 22 host 'rm -f /tmp/a'", "ssh host docker exec c wp cache flush",
+    "bash -lc 'ssh host \"docker restart c\"'", "docker rm -f x", "docker compose up -d",
+    "docker compose -f a.yml restart web", "docker-compose down", "docker container prune -f", "podman run x",
+    "kubectl apply -f a.yml", "kubectl -n prod rollout restart deploy/x", "helm upgrade x chart",
+    "systemctl restart nginx", "sudo systemctl reload nginx", "service nginx restart", "scp a host:/b",
+    "rsync -a a host:b",
 )
 #: Read-only shapes common enough that the bash gate must not fork python for them either.
 READ_COMMANDS = (
     "ls -la", "grep -r foo . 2>/dev/null", "git status", "git log --oneline -5", "git -c a=b diff", "npm test",
     "cmd 2>&1", "cmd 2>&1 | head", "cat f > /dev/null", "sed -n 1,5p f", "git log --grep=reset", "pytest -k update",
+    "ssh host 'docker ps'", "ssh -i key host", "ssh -o ConnectTimeout=10 host 'docker ps -a --filter name=cotia'",
+    "docker ps -a", "docker logs -f x", "docker inspect x", "docker compose ps", "docker compose logs web",
+    "docker image ls", "kubectl get pods", "kubectl -n x describe pod y", "kubectl rollout status deploy/x",
+    "helm list", "systemctl status nginx", "service nginx status",
 )
 
 
