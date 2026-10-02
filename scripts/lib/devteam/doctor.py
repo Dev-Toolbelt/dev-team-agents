@@ -175,7 +175,8 @@ def check_registry():
                     WARN,
                     "registry",
                     "{} has no project.json but is registered".format(root),
-                    "Run `devteam bind` there to recreate it.",
+                    "Run `devteam bind` there (or `devteam migrate` over a v2 tree) — it restores "
+                    "project.json with this registered project_id.",
                 )
             )
         elif data["project_id"] != project_id:

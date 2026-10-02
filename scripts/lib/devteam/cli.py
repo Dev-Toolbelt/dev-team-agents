@@ -223,6 +223,7 @@ def cmd_bind(args, emitter):
                 "behind".format(root, ", ".join(leftover), project.PROJECT_DIR),
                 hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
                 "old tree into a dated quarantine rather than deleting it.",
+                details={"reason": bind_module.V2_INSTALL_REASON},
             )
     if args.pin is not None:
         paths.validate_version(args.pin)
@@ -383,7 +384,9 @@ def cmd_sync(args, emitter):
         data = project.load(root)
         if data is None:
             raise UsageError(
-                "{} is not a bound project".format(root), hint="Run `devteam bind` first."
+                "{} is not a bound project".format(root),
+                hint="Run `devteam bind` first.",
+                details={"reason": bind_module.NOT_BOUND_REASON},
             )
         result = bind_module.sync_project(data["project_id"], emitter=emitter)
     return result, "synced {} to {}".format(result["path"], result["version"])
@@ -523,7 +526,9 @@ def _bound_project(path=None, required=True):
     if data is None:
         if required:
             raise UsageError(
-                "{} is not a bound project".format(root), hint="Run `devteam bind` first."
+                "{} is not a bound project".format(root),
+                hint="Run `devteam bind` first.",
+                details={"reason": bind_module.NOT_BOUND_REASON},
             )
         return root, None
     return root, data["project_id"]
