@@ -144,7 +144,7 @@ jobs:
       # Uploaded straight after the rewrite and before anything else runs, so the
       # artifact is that step's output and not a later step's idea of it.
       - name: Upload the rewritten formula for the verify job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bumped-homebrew-formula
           path: packaging/homebrew/devteam.rb
