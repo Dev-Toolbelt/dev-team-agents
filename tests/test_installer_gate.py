@@ -125,17 +125,45 @@ class InstallerGateTest(AuthTestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertNotIn("blocked", result.stderr)
 
-    def test_a_tree_with_no_cli_skips_the_gate_instead_of_failing(self):
+    def _path_without_devteam(self, extra=None):
+        dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if not (Path(d) / "devteam").exists()]
+        return os.pathsep.join(([str(extra)] if extra else []) + dirs)
+
+    def test_enforce_blocks_when_no_cli_can_be_run(self):
         scripts = self._scripts("enforce", name="no-cli", drop_cli=True)
-        path = os.pathsep.join(
-            d for d in os.environ.get("PATH", "").split(os.pathsep) if not (Path(d) / "devteam").exists()
-        )
         for provider, case in self._cases():
             with self.subTest(provider=provider):
-                project = self.new_project("nocli-" + provider)
-                result = self._run(scripts, case, project, env={"PATH": path})
+                project = self.new_project("nocli-enforce-" + provider)
+                result = self._run(scripts, case, project, env={"PATH": self._path_without_devteam()})
+                self.assertEqual(result.returncode, BLOCKED, result.stderr)
+                self.assertIn("blocked", result.stderr)
+                self.assertFalse((project / case["written"]).exists())
+
+    def test_warn_skips_with_a_note_when_no_cli_can_be_run(self):
+        scripts = self._scripts("warn", name="no-cli-warn", drop_cli=True)
+        for provider, case in self._cases():
+            with self.subTest(provider=provider):
+                project = self.new_project("nocli-warn-" + provider)
+                result = self._run(scripts, case, project, env={"PATH": self._path_without_devteam()})
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("skipped", result.stderr)
+                self.assertTrue((project / case["written"]).exists())
+
+    def test_an_unexpected_cli_exit_code_blocks_under_enforce_and_skips_under_warn(self):
+        fake = self.tmp / "fake-bin"
+        fake.mkdir()
+        (fake / "devteam").write_text("#!/bin/sh\nexit 7\n")
+        (fake / "devteam").chmod(0o755)
+        for mode, expected in (("enforce", BLOCKED), ("warn", 0)):
+            scripts = self._scripts(mode, name="odd-" + mode, drop_cli=True)
+            for provider, case in self._cases():
+                with self.subTest(provider=provider, mode=mode):
+                    project = self.new_project("odd-{}-{}".format(mode, provider))
+                    result = self._run(
+                        scripts, case, project, env={"PATH": self._path_without_devteam(fake)}
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertFalse((project / case["written"]).exists() and expected == BLOCKED)
 
     def test_install_provider_gates_before_running_the_installer(self):
         scripts = self._scripts("enforce", name="staging/scripts")
@@ -242,8 +270,18 @@ class UpdateScriptGateTest(AuthTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(done, ["CORE-UPDATED", "RERENDERED"])
 
-    def test_a_tree_with_no_cli_notes_the_skip_and_re_renders(self):
+    def test_enforce_with_no_cli_withholds_the_re_render(self):
         root, scripts = self._install("enforce", drop_cli=True)
+        path = os.pathsep.join(
+            d for d in os.environ.get("PATH", "").split(os.pathsep) if not (Path(d) / "devteam").exists()
+        )
+        result, done = self._update(root, scripts, path=path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(done, ["CORE-UPDATED"])
+        self.assertIn("NOT re-rendered", result.stderr)
+
+    def test_warn_with_no_cli_notes_the_skip_and_re_renders(self):
+        root, scripts = self._install("warn", drop_cli=True)
         path = os.pathsep.join(
             d for d in os.environ.get("PATH", "").split(os.pathsep) if not (Path(d) / "devteam").exists()
         )

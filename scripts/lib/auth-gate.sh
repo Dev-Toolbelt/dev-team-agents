@@ -9,8 +9,9 @@
 # Mode comes from `gate_mode` in scripts/lib/auth-config.json: `warn` (also when the key is
 # absent) prints one notice on stderr and lets the install proceed; `enforce` refuses with
 # AG_BLOCKED_EXIT. Any other value reads as `enforce`, so a typo does not open the gate.
-# When no CLI can be run (a slim tree without scripts/cli, an older `devteam` with no `auth`)
-# the gate is skipped with a note: it cannot decide, and the install must not fail on that.
+# When no CLI can be run (a slim tree without scripts/cli, an older `devteam` with no `auth`),
+# or `auth check` answers with an unexpected exit code, the gate cannot decide: `warn` skips
+# with a note, `enforce` blocks (SR-42), so a missing or broken CLI never opens the gate.
 
 # `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
 _dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
@@ -33,6 +34,23 @@ print(value if value in ("warn", "enforce") else "enforce")
 PY
 }
 
+# ag_block <label> <message> -> prints the refusal and returns AG_BLOCKED_EXIT
+ag_block() {
+  echo "$1: blocked: $2." >&2
+  echo "  Run \`devteam auth login\`, then re-run. \`devteam doctor\`, \`unbind\` and \`uninstall\` always work." >&2
+  return "$AG_BLOCKED_EXIT"
+}
+
+# ag_undecided <label> <scripts-dir> <reason>
+# The gate could not get an answer: warn mode skips with a note, enforce mode blocks (SR-42).
+ag_undecided() {
+  if [ "$(ag_mode "$2")" = "warn" ]; then
+    echo "$1: account check skipped ($3)" >&2
+    return 0
+  fi
+  ag_block "$1" "the account check could not be made ($3)"
+}
+
 # ag_gate <label> <scripts-dir>
 # Returns 0 when the install may proceed, AG_BLOCKED_EXIT when it must not.
 ag_gate() {
@@ -43,14 +61,14 @@ ag_gate() {
   elif command -v devteam >/dev/null 2>&1; then
     cli=(devteam)
   else
-    echo "$label: account check skipped (no devteam CLI available)" >&2
-    return 0
+    ag_undecided "$label" "$scripts" "no devteam CLI available"
+    return $?
   fi
   out="$("${cli[@]}" auth check --json 2>/dev/null)" || rc=$?
   case "$rc" in
     0) return 0 ;;
     1|3|4) ;;
-    *) echo "$label: account check skipped (the CLI could not answer, exit $rc)" >&2; return 0 ;;
+    *) ag_undecided "$label" "$scripts" "the CLI could not answer, exit $rc"; return $? ;;
   esac
   msg="$(printf '%s' "$out" | python3 -c 'import json,sys
 try:
@@ -64,7 +82,5 @@ except Exception:
     echo "$label: $msg. This will be required in an upcoming release - run \`devteam auth login\`." >&2
     return 0
   fi
-  echo "$label: blocked: $msg." >&2
-  echo "  Run \`devteam auth login\`, then re-run. \`devteam doctor\`, \`unbind\` and \`uninstall\` always work." >&2
-  return "$AG_BLOCKED_EXIT"
+  ag_block "$label" "$msg"
 }
