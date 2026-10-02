@@ -116,6 +116,10 @@ class RedactTest(unittest.TestCase):
             "senha: xyz123": "xyz123",
             "my password is hunter2xyz": "hunter2xyz",
             "key 4f8a9b2c7d1e6f3a5b8c9d0e1f2a3b4c5d6e7f8a9b0aa": "4f8a9b2c7d1e6f3a5b8c9d0e1f2a3b4c5d6e7f8a9b0aa",
+            "curl -H 'Authorization: Basic dXNlcjpwYXNzd29yZA=='": "dXNlcjpwYXNzd29yZA",
+            "Authorization: token abcdef123": "abcdef123",
+            "curl -H 'X-Api-Key: 9f8e7d6c' https://x": "9f8e7d6c",
+            "mysql -uroot -pS3cretPass1 app": "S3cretPass1",
         }
         for text, secret in cases.items():
             self.assertNotIn(secret, tasks.redact(text), text)
@@ -128,6 +132,16 @@ class RedactTest(unittest.TestCase):
             "revert a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0 please",
         ):
             self.assertEqual(tasks.redact(text), text)
+
+    def test_every_task_text_is_redacted_and_cleaned_like_the_excerpt(self):
+        spawn = {"session_id": "s1", "tool_name": "Agent", "hook_event_name": "PreToolUse",
+                 "tool_input": {"subagent_type": "backend-developer", "description": "deploy with GITHUB_TOKEN=ghp_abcdefghijklmnop1234"}}
+        texts = [tasks.normalize(spawn, "claude")["op"][1]["content"], tasks._task_text("ship it API_KEY=hunter2\u202e")]
+        for text in texts:
+            self.assertIn("[redacted]", text)
+            self.assertNotIn("ghp_abcdefghijklmnop1234", text)
+            self.assertNotIn("hunter2", text)
+            self.assertNotIn("\u202e", text)
 
     def test_invisible_characters_are_dropped_from_the_excerpt(self):
         self.assertEqual(tasks._excerpt("abc\u202edef\u200b ghi"), "abc def ghi")

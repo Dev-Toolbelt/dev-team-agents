@@ -794,8 +794,8 @@ describe.skipIf(!available)('task board against the real hooks and CLI', () => {
 
     const pa = byRoot.get(roots[0] as string)!;
     const pb = byRoot.get(roots[1] as string)!;
-    expect(pa.counts).toEqual({ todo: 4, in_progress: 2, in_review: 0, done: 4, total: 10 });
-    expect(pb.counts).toEqual({ todo: 3, in_progress: 1, in_review: 0, done: 1, total: 5 });
+    expect(pa.counts).toEqual({ todo: 4, in_progress: 2, in_review: 0, pr_created: 0, done: 4, total: 10 });
+    expect(pb.counts).toEqual({ todo: 3, in_progress: 1, in_review: 0, pr_created: 0, done: 1, total: 5 });
     expect([pa.sessions_total, pb.sessions_total]).toEqual([3, 2]);
     expect([...pa.providers].sort()).toEqual(['claude', 'codex', 'opencode']);
     expect([...pb.providers].sort()).toEqual(['claude', 'opencode']);

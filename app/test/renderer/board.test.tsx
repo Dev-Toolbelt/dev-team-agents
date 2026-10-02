@@ -150,7 +150,7 @@ describe('Board overview', () => {
     expect(within(c).getByText('2 abandoned')).toBeInTheDocument();
   });
 
-  it('shows four counts, a four-segment bar and an N-with-findings badge', async () => {
+  it('shows the counts, a five-segment bar and an N-with-findings badge', async () => {
     const findings = { state: 'findings', findings: 2, since: NOW - 60 } as const;
     const project = boardProject({
       sessions: [
@@ -229,7 +229,7 @@ describe('Project kanban', () => {
     expect(within(done).getByText('a1- task 3')).toBeInTheDocument();
   });
 
-  it('lays tasks out in four columns, In Review between In progress and Done', async () => {
+  it('lays tasks out with In Review between In progress and Done', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: tasksOf('k-', 1, 1, 1, 2) })] }));
     const columns = [/^To do/, /^In progress/, /^In Review/, /^Done/].map((name) => screen.getByRole('region', { name }));
     columns.slice(1).forEach((column, i) => {

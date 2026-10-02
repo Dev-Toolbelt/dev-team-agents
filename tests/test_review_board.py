@@ -921,6 +921,14 @@ class DurationAndDoneTest(ReviewCase):
         passed = self.result(claude_return("s1", marker(0)), now=T0 + 30)
         self.assertEqual((passed["all_done"], passed["became_all_done"]), (True, True))
 
+    def test_a_direct_card_left_in_to_do_never_withholds_the_pass(self):
+        self.start(items=[todo("A", "completed")])
+        self.rec({"session_id": "s1", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, now=T0 + 5)
+        self.assertEqual([t["status"] for t in self.load("s1")["tasks"] if t.get("kind") == "direct"], ["pending"])
+        self.open(claude_spawn("s1"), now=T0 + 10)
+        passed = self.result(claude_return("s1", marker(0)), now=T0 + 30)
+        self.assertEqual((passed["all_done"], passed["became_all_done"]), (True, True))
+
     def test_findings_keep_the_session_open_until_the_fix_completes_it(self):
         self.start(items=[todo("A", "completed")])
         self.open(claude_spawn("s1"), now=T0 + 10)
@@ -1006,6 +1014,13 @@ class ReviewHookTest(tt.HookTest):
         self.run_script(POST_TOOL_USE, todo_write(session, [todo("A", "in_progress"), todo("B", "completed")], cwd=str(self.root)))
         return self.python_calls()
 
+    def start_turn(self, session="s1"):
+        # The first call of a turn is direct work and may fork once (acceptance criterion 9); the
+        # count that matters starts after it.
+        self.start(session)
+        self.run_script(PRE_TOOL_USE, {"tool_name": "Read", "session_id": session, "tool_input": {"file_path": "README.md"}})
+        return self.python_calls()
+
     def codes(self):
         return [r["code"] for r in self.queue()]
 
@@ -1046,7 +1061,7 @@ class ReviewHookTest(tt.HookTest):
             self.assertEqual(self.window(sid)["trigger"], "agent")
 
     def test_pre_tool_use_forks_no_python_for_a_command_that_merely_names_an_agent(self):
-        base = self.start()
+        base = self.start_turn()
         for payload in (
             {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "echo qa-specialist spawn_agent"}},
             {"tool_name": "Read", "session_id": "s1", "tool_input": {"file_path": "agents/qa-specialist.md"}},
@@ -1129,7 +1144,7 @@ class ReviewHookTest(tt.HookTest):
         self.assertEqual((window["pending"], window["unread"], window["findings"]), (0, 1, None))
 
     def test_a_big_payload_through_the_dispatchers_is_fast_silent_and_forks_nothing(self):
-        base = self.start()
+        base = self.start_turn()
         big = {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "x" * 1_000_000}}
         started = time.monotonic()
         for script in (PRE_TOOL_USE, POST_DISPATCHER):

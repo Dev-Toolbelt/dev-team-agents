@@ -9,6 +9,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { Toaster } from '../../src/components/ui/sonner.js';
 import { Board } from '../../src/renderer/screens/Board.js';
 import type { BoardFeed, BoardProject } from '../../src/shared/api.js';
 import { NOW, boardProject, boardSession, boardTask } from '../fixtures/board.js';
@@ -169,5 +170,33 @@ describe('Board overview — pr_created counts', () => {
     expect(within(card).getByText('PR/MR Created').closest('div')?.textContent).toContain('2');
     const bar = within(card).getByRole('img', { name: '0 to do, 0 in progress, 0 in review, 2 PR/MR created, 0 done' });
     expect([...bar.children].map((seg) => (seg as HTMLElement).style.flexGrow)).toEqual(['0', '0', '0', '2', '0']);
+  });
+});
+
+describe('Board — link failures and refresh failures', () => {
+  it('a rejected openTaskLink shows a generic toast, never the raw error or URL', async () => {
+    const openTaskLink = vi.fn(() => Promise.reject(new Error(`boom ${PR_URL}`)));
+    await openKanban(linkedProject(), { openTaskLink });
+    render(<Toaster />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open pull request #45 in browser' }));
+    expect(await screen.findByText('That link could not be opened.')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('boom');
+    expect(document.body.textContent).not.toContain(PR_URL);
+  });
+
+  it('an {ok:false} answer shows its message in a toast', async () => {
+    const openTaskLink = vi.fn(() => Promise.resolve({ ok: false, message: 'Refused by main.' } as const));
+    await openKanban(linkedProject(), { openTaskLink });
+    render(<Toaster />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open pull request #45 in browser' }));
+    expect(await screen.findByText('Refused by main.')).toBeInTheDocument();
+  });
+
+  it('a manual refresh the main process could not complete shows the problem alert', async () => {
+    const refreshTaskBoard = vi.fn(() => Promise.resolve(boardFeed({ refreshError: 'the CLI is unavailable' })));
+    renderBoard(boardFeed({ projects: [linkedProject()] }), { refreshTaskBoard });
+    await screen.findByText('storefront');
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    expect(await screen.findByText(/could not be refreshed: the CLI is unavailable/)).toBeInTheDocument();
   });
 });

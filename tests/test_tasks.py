@@ -993,6 +993,28 @@ class ReviewRegressionTest(BoardCase):
         tasks.watch(events.append, watch_stdin=False, stop=stop)
         self.assertEqual(events[-1]["event"], "end")
 
+    def test_watch_removes_a_project_that_leaves_the_bound_set(self):
+        self.rec(todo_write("s1", [todo("A")]))
+        bound = [[(self.project_id, self.root)]]
+        events = []
+        stop = tasks._Stop()
+
+        def emit(event):
+            events.append(event)
+            if event["event"] == "ready":
+                bound[0] = []  # unbound, or its folder deleted, while the app watches
+            if event.get("project", {}).get("removed"):
+                stop.set("test")
+
+        with mock.patch.object(tasks, "_bound", lambda _ids: bound[0]):
+            thread = threading.Thread(target=tasks.watch, args=(emit,), kwargs=dict(watch_stdin=False, stop=stop, interval=0.01, rescan=0))
+            thread.start()
+            thread.join(10)
+            stop.set("test")
+        snapshots = [e["project"] for e in events if e["event"] == "snapshot"]
+        self.assertEqual(snapshots[0]["project_id"], self.project_id)
+        self.assertEqual(snapshots[-1], {"project_id": self.project_id, "removed": True})
+
     def test_an_unreadable_record_is_never_overwritten_by_record(self):
         self.rec(todo_write("s1", [todo("A")]))
         path = tasks.record_path(self.root, self.project_id, "s1")
