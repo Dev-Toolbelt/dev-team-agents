@@ -2779,6 +2779,92 @@ def _strip_remote(branch, remotes):
     return branch
 
 
+def _other_projects(root):
+    """``[(project_id, real root)]`` of every other project bound on this machine; ``[]`` on any failure.
+
+    The registry is the trust anchor for a PR/MR in another repository: a repository counts only when
+    a git remote of a project the user bound names it, never because a command or an output does.
+    """
+    try:
+        from . import registry
+
+        own = os.path.realpath(str(root))
+        found = []
+        for project_id, entry in sorted(registry.entries().items()):
+            path = entry.get("path") if isinstance(entry, dict) else None
+            if isinstance(path, str) and os.path.isdir(path) and os.path.realpath(path) != own:
+                found.append((project_id, os.path.realpath(path)))
+        return found
+    except (DevteamError, OSError, ValueError, TypeError, AttributeError):
+        return []
+
+
+def _vouching_project(parts, ctx, root):
+    """The id of the other bound project whose remotes name the mark ``parts``, else ``None``."""
+    for project_id, path in _other_projects(root):
+        if pr_refs.mark_valid(parts, dict(ctx, remotes=list(ctx["remotes"]) + pr_refs.git_remotes(path))):
+            return project_id
+    return None
+
+
+def _action_dir(action, cwd):
+    """Where a command's action ran: the ``cd`` target resolved against the hook's ``cwd``, else ``cwd``.
+
+    ``None`` when a ``cd`` could not be resolved: the action ran somewhere unknown.
+    """
+    if "dir" not in action:
+        return cwd or None
+    target = action["dir"]
+    if not target:
+        return None
+    if not os.path.isabs(target):
+        if not cwd or not os.path.isabs(cwd):
+            return None
+        target = os.path.join(cwd, target)
+    return os.path.realpath(target)
+
+
+def _project_of(directory, root):
+    """``(project_id, real root)`` of the bound project ``directory`` is in: this project's id is
+    ``None``. ``(None, None)`` when it is in none."""
+    if not directory:
+        return None, None
+    real = os.path.realpath(directory)
+    own = os.path.realpath(str(root))
+    candidates = [(None, own)] + _other_projects(root)
+    inside = [(pid, path) for pid, path in candidates if _inside(real, path)]
+    if not inside:
+        return None, None
+    return max(inside, key=lambda item: len(item[1]))
+
+
+def _mark_ok(entry, parts, ctx, cache):
+    """True when a stored mark still validates: against this project's remotes, or, for a mark of
+    another bound project (``via``), against that project's current remotes while it stays bound."""
+    if pr_refs.mark_valid(parts, ctx):
+        return True
+    via = entry.get("via") if isinstance(entry, dict) else None
+    if not isinstance(via, str):
+        return False
+    if via not in cache:
+        cache[via] = _via_context(via, ctx)
+    return cache[via] is not None and pr_refs.mark_valid(parts, cache[via])
+
+
+def _via_context(project_id, ctx):
+    """``ctx`` widened with the remotes of the bound project ``project_id``, else ``None``."""
+    try:
+        from . import registry
+
+        entry = registry.get(project_id)
+    except (DevteamError, OSError, ValueError, TypeError):
+        return None
+    path = entry.get("path") if isinstance(entry, dict) else None
+    if not isinstance(path, str) or not os.path.isdir(path):
+        return None
+    return dict(ctx, remotes=list(ctx["remotes"]) + pr_refs.git_remotes(path))
+
+
 def _mark_identity(entry):
     return (entry.get("kind"), entry.get("host"), str(entry.get("repo")).lower(), entry.get("number"))
 
@@ -2800,11 +2886,20 @@ def _pr_marks_from(event, root, ctx):
         if parts is None or KIND_OF_LINK.get(parts["kind"]) != action["kind"]:
             return None
         kind, source = action["kind"], action["tool"]
-        head = action["head"] or _branch_in_project(event.get("cwd"), root)
+        head = action["head"] or _branch_at(_action_dir(action, event.get("cwd")), root)
     mark = {"kind": kind, "host": parts["host"], "repo": parts["repo"], "number": parts["number"]}
     if not pr_refs.mark_valid(mark, ctx):
-        return None
+        via = _vouching_project(mark, ctx, root)
+        if via is None:
+            return None
+        mark["via"] = via
     return {"op": "pr", "mark": mark, "head": head, "source": source}
+
+
+def _branch_at(directory, root):
+    """The branch checked out at ``directory`` when it is inside this or another bound project."""
+    _, project_root = _project_of(directory, root)
+    return _branch_in_project(directory, project_root or str(root))
 
 
 def _repo_host(repo, remotes):
@@ -2824,10 +2919,12 @@ def _merges_from(event, root, ctx):
         return [{"kind": pr_refs.KIND_PR, "number": merged["number"], "host": host, "repo": merged["repo"], "branch": None}]
     found = []
     for action in event["actions"]:
+        where = _action_dir(action, event.get("cwd"))
         if action["op"] == "git_merge":
             if pr_refs.merge_confirmed(action, event["output"]):
                 branch = _strip_remote(action["branch"], remotes)
-                into = _branch_in_project(event.get("cwd"), root)
+                # This project's checkout only: a branch name means nothing across repositories.
+                into = _branch_in_project(where, root)
                 # Catching a branch up with its own remote (`git merge origin/feat/x` on `feat/x`) is
                 # not a merge of that branch; neither is a merge whose target branch is unknown.
                 if into and into != branch:
@@ -2838,6 +2935,10 @@ def _merges_from(event, root, ctx):
         confirmed = pr_refs.merge_confirmed(action, event["output"])
         if confirmed is None:
             continue
+        # A merge run in another bound project's checkout is resolved against that project.
+        _, at_root = _project_of(where, root)
+        at_root = at_root or str(root)
+        at_remotes = ctx["remotes"] if at_root == os.path.realpath(str(root)) else pr_refs.git_remotes(at_root)
         target = action["target"] or {}
         link = target.get("link")
         number = link["number"] if link else target.get("number")
@@ -2845,20 +2946,25 @@ def _merges_from(event, root, ctx):
             number = confirmed
         branch = target.get("branch")
         if number is None and branch is None:
-            branch = _branch_in_project(event.get("cwd"), root)
+            branch = _branch_in_project(where, at_root)
         if number is None and branch is None:
             continue
         if link:
             host, repo = link["host"], link["repo"].lower()
-            if not pr_refs.remote_matches(link, remotes):
+            if not pr_refs.remote_matches(link, at_remotes) and _vouching_project(
+                dict(link, kind=action["kind"]), ctx, root
+            ) is None:
                 continue
         elif action["repo"]:
             repo = action["repo"]
-            host = _repo_host(repo, remotes)
+            host = _repo_host(repo, at_remotes)
             if host is None:
                 continue
+        elif "dir" in action and where is None:
+            # It ran somewhere only a shell could name: no repository to credit the number to.
+            continue
         else:
-            unique = pr_refs.unique_repo(remotes)
+            unique = pr_refs.unique_repo(at_remotes)
             host, repo = unique if unique else (None, None)
         found.append({"kind": action["kind"], "number": number, "host": host, "repo": repo, "branch": branch})
     return found
@@ -3036,12 +3142,12 @@ def _fix_prs(rec, now, ctx):
             continue
         if (done_at > since) if since is not None else (done_at >= floor):
             keys.append(task["key"])
-    marks = []
+    marks, vouched = [], {}
     for index, pr in enumerate(pending):
         pr["task_keys"] = list(keys) if index == 0 else []
         pr["fixed_at"] = now
         parts = pr_refs.mark_parts(pr)
-        if parts and pr_refs.mark_valid(parts, ctx):
+        if parts and _mark_ok(pr, parts, ctx, vouched):
             marks.append({
                 "kind": parts["kind"], "number": parts["number"],
                 "url": pr_refs.build_link(pr_refs.LINK_KIND[parts["kind"]], parts["host"], parts["repo"], parts["number"]),
@@ -3217,9 +3323,24 @@ def _merge_entries(rec):
 
 
 def _view_context(root, records):
-    """What a view derives PR/MR state from: the links context and every merge of every session of the project."""
+    """What a view derives PR/MR state from: the links context and every merge of every session of the project.
+
+    ``vouched`` holds, per other bound project a mark names (``via``), the links context widened with
+    that project's remotes (``None`` once it is unbound); ``hosts`` is the context ``link_hosts`` is
+    emitted from, so the app accepts a self-hosted GitLab of such a project too.
+    """
+    links = pr_refs.load_context(root)
+    vouched = {}
+    for rec in records:
+        for entry in _list_of(rec, "prs"):
+            via = entry.get("via") if isinstance(entry, dict) else None
+            if isinstance(via, str) and via not in vouched:
+                vouched[via] = _via_context(via, links)
+    extra = [r for ctx in vouched.values() if ctx for r in ctx["remotes"]]
     return {
-        "links": pr_refs.load_context(root),
+        "links": links,
+        "vouched": vouched,
+        "hosts": dict(links, remotes=list(links["remotes"]) + extra) if extra else links,
         "merges": [m for rec in records for m in _merge_entries(rec)],
     }
 
@@ -3252,7 +3373,7 @@ def _session_prs(rec, context):
     for entry in _list_of(rec, "prs"):
         parts = pr_refs.mark_parts(entry)
         seen = entry.get("seen_at") if isinstance(entry, dict) else None
-        if parts is None or not _number(seen) or not pr_refs.mark_valid(parts, context["links"]):
+        if parts is None or not _number(seen) or not _mark_ok(entry, parts, context["links"], context.setdefault("vouched", {})):
             continue
         head = pr_refs.clean_branch(entry.get("head"))
         mark = dict(parts, head=head, seen_at=seen)
@@ -3381,7 +3502,7 @@ def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AF
         "sessions_active": sum(1 for s in sessions if s["status"] != "ended"),
         "counts": _counts(all_tasks),
         # Additive: the hosts this project's links may point at, per link kind (`{"host", "kinds"}`).
-        "link_hosts": pr_refs.link_hosts(context["links"]),
+        "link_hosts": pr_refs.link_hosts(context.get("hosts") or context["links"]),
         "with_findings": sum(1 for t in all_tasks if (t["review"] or {}).get("state") == "findings"),
         "stale": sum(1 for t in all_tasks if t["stale"]),
         "abandoned": sum(1 for t in all_tasks if t["abandoned"]),
