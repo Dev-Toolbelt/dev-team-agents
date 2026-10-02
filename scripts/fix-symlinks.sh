@@ -27,6 +27,9 @@ unset BASH_ENV ENV
 
 set -uo pipefail
 
+# Git Bash/MSYS: without this, `ln -s` silently writes a copy instead of a link.
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;; esac
+
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$PROJECT_ROOT" || exit 1
 

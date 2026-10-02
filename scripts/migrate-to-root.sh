@@ -8,6 +8,14 @@
 # re-creates Claude Code symlinks, and updates hook paths in settings.json.
 set -euo pipefail
 
+# Git Bash/MSYS: without this, `ln -s` silently writes a copy instead of a link.
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;; esac
+
+_link() {
+  ln -s "$1" "$2"
+  [ -L "$2" ] || { echo "✗ Could not create a symlink at $2 (native symlinks unavailable; enable Developer Mode and re-run)." >&2; exit 1; }
+}
+
 PROJECT_ROOT="$(pwd)"
 OLD_DIR="$PROJECT_ROOT/.claude/dev-team-agents"
 NEW_DIR="$PROJECT_ROOT/.dev-team-agents"
@@ -32,13 +40,13 @@ echo "  ✔ Moved to .dev-team-agents/"
 # From .claude/agents/dev-team -> ../../.dev-team-agents/agents
 if [ -L "$PROJECT_ROOT/.claude/agents/dev-team" ]; then
   rm "$PROJECT_ROOT/.claude/agents/dev-team"
-  ln -s "../../.dev-team-agents/agents" "$PROJECT_ROOT/.claude/agents/dev-team"
+  _link "../../.dev-team-agents/agents" "$PROJECT_ROOT/.claude/agents/dev-team"
   echo "  ✔ Updated .claude/agents/dev-team symlink"
 fi
 
 if [ -L "$PROJECT_ROOT/.claude/commands/devteam" ]; then
   rm "$PROJECT_ROOT/.claude/commands/devteam"
-  ln -s "../../.dev-team-agents/commands" "$PROJECT_ROOT/.claude/commands/devteam"
+  _link "../../.dev-team-agents/commands" "$PROJECT_ROOT/.claude/commands/devteam"
   echo "  ✔ Updated .claude/commands/devteam symlink"
 fi
 
@@ -50,7 +58,7 @@ find "$PROJECT_ROOT/.claude/skills" -type l 2>/dev/null | while read -r link; do
   if [[ "$target" == "../dev-team-agents/skills/"* ]]; then
     new_target="${target/..\/dev-team-agents/../../.dev-team-agents}"
     rm "$link"
-    ln -s "$new_target" "$link"
+    _link "$new_target" "$link"
     echo "  ✔ Updated skill symlink: $(basename "$link")"
   fi
 done
@@ -58,7 +66,7 @@ done
 # 4. Update .claude/settings.json hook paths
 SETTINGS="$PROJECT_ROOT/.claude/settings.json"
 if [ -f "$SETTINGS" ]; then
-  sed -i '' 's|\.claude/dev-team-agents/scripts/hooks/|.dev-team-agents/scripts/hooks/|g' "$SETTINGS"
+  sed -i.bak 's|\.claude/dev-team-agents/scripts/hooks/|.dev-team-agents/scripts/hooks/|g' "$SETTINGS" && rm -f "$SETTINGS.bak"
   echo "  ✔ Updated hook paths in .claude/settings.json"
 fi
 

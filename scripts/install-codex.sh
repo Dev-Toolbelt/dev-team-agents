@@ -137,7 +137,10 @@ if [[ $LIST_TARGETS -eq 1 ]]; then
   cat "$TARGETS" >&3
   exit 0
 fi
+po_require_inside codex "$PROJECT_ROOT" .codex .codex/agents .codex/skills .codex/hooks.json
 po_guard "$PROJECT_ROOT" "$SOURCE_DIR" codex "$OWNED_FILE" "$TARGETS" "$ADOPT" "$DRY_RUN"
+# A hooks.json this installer cannot merge into is refused before anything is written.
+python3 "$(po_native_path "$SCRIPT_DIR/lib/codex_hooks_merge.py")" "$(po_native_path "$PROJECT_ROOT/.codex/hooks.json")" "" --check
 
 # Ensure project has a stable path to the framework's scripts/hooks/ (the
 # Claude installer normally creates this; we materialize it for codex-only
@@ -202,110 +205,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
   # then removed.
   HOOKS_DIR_REL=".dev-team-agents/scripts/hooks"
 
-  python3 - "$HOOKS_FILE" "$HOOKS_DIR_REL" <<'PY'
-import json, os, sys
-hooks_file, hooks_dir = sys.argv[1], sys.argv[2]
-
-# Per Codex spec (developers.openai.com/codex/hooks), the shape is:
-#   { "hooks": { "<Event>": [ { "matcher": "...", "hooks": [ { type, command, ... } ] } ] } }
-# — an OBJECT keyed by event name, each value an array of matcher groups.
-# Each hook `command` is a STRING, not an array.
-MANAGED_EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd")
-MANAGED_MARKER  = "_dev_team_agents_managed"
-
-# Codex runs a hook through the user's own shell (`$SHELL -lc`) in the session's working
-# directory, which is not the project root when Codex was started in a subdirectory: a relative
-# path then names nothing and every hook fails unseen. So the command walks up from there to the
-# nearest directory holding the hooks — the same walk as `scripts/lib/devteam/hooks.py`
-# (ROOT_WALK), with the working directory as its fallback. `bash -c '…'` because that shell may
-# be zsh or fish; single quotes are literal in all of them. Windows is the exception: Codex runs
-# the command through `cmd.exe /C`, where single quotes do not quote, so it keeps the plain form.
-ROOT_WALK = (
-    'for d in "$PWD" "$(pwd -P)"; do '
-    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
-    '[ -n "$d" ] && break; done; '
-    'cd "${{d:-.}}" && exec bash {hooks}/{script}'
-)
-WINDOWS = sys.platform.startswith(("win", "msys", "cygwin"))
-
-def cmd(script):
-    if WINDOWS:
-        return f"bash {hooks_dir}/{script}"
-    return "bash -c '{}'".format(ROOT_WALK.format(hooks=hooks_dir, script=script))
-
-# Each managed hook carries a statusMessage with the MANAGED_MARKER so we can
-# idempotently strip our own entries on re-install without touching user hooks.
-# (Codex spec does NOT define a per-hook id field — statusMessage is the
-# documented human-readable surface; we encode our marker there.)
-# PostToolUse is narrowed to `spawn_agent` (its response names the agent id a later wait settles),
-# `wait_agent` (the agents' final states, and a review agent's report) and `close_agent` (an agent
-# closed before it reported), `Bash` (an `exec_command` that finished: a PR/MR creation or merge is
-# confirmed from its output) and the pull-request MCP tools — the only Codex tools
-# whose result the task board reads. Codex feeds the todo list from PreToolUse (`update_plan`).
-MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent|Bash|mcp__.*(create_pull_request|merge_pull_request))"}
-
-managed_groups = {
-    event: [
-        {
-            "matcher": MATCHERS.get(event, "*"),
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": cmd({
-                        "SessionStart": "session-start.sh",
-                        "PreToolUse":   "pre-tool-use.sh",
-                        "PostToolUse":  "post-tool-use.sh",
-                        "UserPromptSubmit": "user-prompt-submit.sh",
-                        "PreCompact":   "pre-compact.sh",
-                        "Stop":         "stop.sh",
-                        "SessionEnd":   "session-end.sh",
-                    }[event]),
-                    "statusMessage": f"dev-team-agents {event.lower()} hook {MANAGED_MARKER}",
-                }
-            ],
-        }
-    ]
-    for event in MANAGED_EVENTS
-}
-
-existing = {"hooks": {}}
-if os.path.exists(hooks_file):
-    try:
-        existing = json.load(open(hooks_file))
-        if not isinstance(existing.get("hooks"), dict):
-            existing = {"hooks": {}}
-    except Exception:
-        existing = {"hooks": {}}
-
-# Strip any previously-managed entries (idempotent refresh) — detect ours by
-# the encoded marker in statusMessage.
-hooks_obj = existing["hooks"]
-for event in list(hooks_obj.keys()):
-    groups = hooks_obj[event]
-    if not isinstance(groups, list):
-        continue
-    kept = []
-    for grp in groups:
-        hook_list = grp.get("hooks", []) if isinstance(grp, dict) else []
-        is_managed = any(
-            isinstance(h, dict) and MANAGED_MARKER in (h.get("statusMessage", "") or "")
-            for h in hook_list
-        )
-        if not is_managed:
-            kept.append(grp)
-    if kept:
-        hooks_obj[event] = kept
-    else:
-        hooks_obj.pop(event, None)
-
-# Merge managed groups into existing (append into each event's array).
-for event, groups in managed_groups.items():
-    hooks_obj.setdefault(event, []).extend(groups)
-
-with open(hooks_file, "w") as f:
-    json.dump(existing, f, indent=2)
-print(f"  + wrote {len(MANAGED_EVENTS)} managed hook events to {os.path.relpath(hooks_file)}")
-PY
+  python3 "$(po_native_path "$SCRIPT_DIR/lib/codex_hooks_merge.py")" "$(po_native_path "$HOOKS_FILE")" "$HOOKS_DIR_REL"
 fi
 
 # ── project AGENTS.md rule for visible SessionStart banner in Codex ─────────
