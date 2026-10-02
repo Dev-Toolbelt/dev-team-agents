@@ -493,6 +493,8 @@ function InstallCliButton({ onInstalled }: { onInstalled: () => void }) {
       const outcome = await window.devteam.installCli();
       setResult(outcome);
       if (outcome.outcome === 'installed') onInstalled();
+    } catch (error) {
+      setResult({ outcome: 'failed', message: `The install could not be started: ${String(error)}` });
     } finally {
       setRunning(false);
     }
@@ -503,9 +505,13 @@ function InstallCliButton({ onInstalled }: { onInstalled: () => void }) {
       <Button size="sm" onClick={() => void install()} disabled={running}>
         {running ? 'Installing the CLI…' : 'Install the CLI'}
       </Button>
-      {result !== null && result.outcome !== 'installed' ? (
+      {/* Still on this screen after an install means the CLI was not found: say so, rather
+          than letting a successful install look like nothing happened. */}
+      {result !== null ? (
         <p role="status" className="basis-full">
-          {result.message}
+          {result.outcome === 'installed'
+            ? `${result.message} The app has not found it yet: choose Look again, or restart the app.`
+            : result.message}
         </p>
       ) : null}
     </>

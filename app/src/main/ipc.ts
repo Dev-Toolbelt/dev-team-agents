@@ -617,11 +617,18 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
 
   // The renderer calls `resolveCli` afterwards, which is the reset: a CLI that did not
   // exist a moment ago invalidates everything the empty resolution cached.
-  handle(CHANNELS.installCli, async (): Promise<CliInstallResult> =>
-    deps.installCli === undefined
-      ? { outcome: 'unsupported', message: 'This build cannot install the CLI on this platform.' }
-      : deps.installCli(),
-  );
+  // One install at a time: a second call (another window, a repeated click) joins the one
+  // running rather than opening a second wizard.
+  let installing: Promise<CliInstallResult> | null = null;
+  handle(CHANNELS.installCli, async (): Promise<CliInstallResult> => {
+    if (deps.installCli === undefined) {
+      return { outcome: 'unsupported', message: 'This build cannot install the CLI on this platform.' };
+    }
+    installing ??= deps.installCli().finally(() => {
+      installing = null;
+    });
+    return installing;
+  });
 
   handle(CHANNELS.handshake, async (): Promise<OperationResult<HandshakeView>> => {
     if (handshake !== null) return handshake;

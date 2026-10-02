@@ -349,8 +349,8 @@ app.enableSandbox();
  * The app's own directory, which must not be the CLI's store.
  *
  * Electron derives `userData` from the app's name, and an app named `dev-team-agents` —
- * the same string as `paths.py`'s `APP_NAME`, and this app's name until it was renamed —
- * resolves the default `userData` to exactly the store root: `~/Library/Application
+ * the same string as `paths.py`'s `APP_NAME` — resolves the default `userData` to exactly
+ * the store root: `~/Library/Application
  * Support/dev-team-agents` on macOS, holding the CLI's own `core/` and `data/`, and the
  * equivalent collision under `%APPDATA%` on Windows. Left alone, this app would write its
  * `settings.json` and its schema declaration *inside the user's store* — a second writer in

@@ -431,13 +431,12 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
 }
 
 /**
- * The remedy is the one thing on the no-CLI screen that used to be true on exactly one
- * platform: it opened with a `brew install` line and no branch. Each branch now names the
- * devteam installer for its platform (ADR-0028) — on Windows the NSIS installer, which the
- * screen's "Install the CLI" action fetches and checks; elsewhere `scripts/install-cli.sh`,
- * which installs into `~/.local/bin`, a directory step 4 searches. Neither names a
- * `brew install` or `winget install` line: no tap and no winget package is published yet,
- * and a line that cannot succeed is worse than none. The manual path stays as the fallback.
+ * The remedy is per platform, and each branch names that platform's devteam installer
+ * (ADR-0028): on Windows the NSIS installer, which the screen's "Install the CLI" action
+ * fetches and checks; elsewhere `scripts/install-cli.sh`, which installs into `~/.local/bin`,
+ * a directory step 4 searches. Neither names a `brew install` or `winget install` line until
+ * the tap holds a formula and winget a package: a line that cannot succeed is worse than
+ * none. The manual path stays as the fallback.
  */
 function remedyFor(platform: NodeJS.Platform): readonly string[] {
   const forbidden =
