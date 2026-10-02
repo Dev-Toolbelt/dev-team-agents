@@ -644,8 +644,10 @@ def check_credentials_local(root):
             )
         findings.append(_finding(WARN, "credentials", message, hint))
     target = Path(report["path"])
+    # Permission bits mean nothing on Windows (every file reads 0666), and `chmod 600` cannot
+    # clear the warning there: the check is POSIX-only, as secrets.py documents.
     try:
-        mode = target.stat().st_mode & 0o777 if target.is_file() else None
+        mode = target.stat().st_mode & 0o777 if os.name == "posix" and target.is_file() else None
     except OSError:
         mode = None
     if mode is not None and mode & 0o077:

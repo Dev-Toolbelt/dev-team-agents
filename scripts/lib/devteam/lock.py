@@ -25,6 +25,31 @@ DEFAULT_TIMEOUT = 15.0
 DEFAULT_STALE_AFTER = 300.0
 
 
+def _windows_pid_alive(pid):
+    """Whether ``pid`` is a running process, asked without touching it.
+
+    ``os.kill(pid, 0)`` is a probe only on POSIX; on Windows it calls TerminateProcess
+    and would kill the lock's holder.
+    """
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            # ERROR_ACCESS_DENIED means it exists; anything else, that it does not.
+            return ctypes.get_last_error() == 5
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    except (OSError, AttributeError):
+        return True
+
+
 class Lock:
     """Context manager holding ``<name>.lock`` under the data store."""
 
@@ -93,6 +118,8 @@ class Lock:
         pid = self._owner_field("pid")
         if not isinstance(pid, int):
             return False
+        if os.name == "nt":
+            return _windows_pid_alive(pid)
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
@@ -165,13 +192,28 @@ class Lock:
             self.lost = True
             self._held = False
             return
-        try:
-            if self._owner_file.exists():
-                self._owner_file.unlink()
-            self.path.rmdir()
-        except OSError:
-            pass
+        self._remove()
         self._held = False
+
+    def _remove(self):
+        """Delete the lock directory, retrying a Windows sharing violation.
+
+        On Windows a file another process has open cannot be deleted: a waiter reading
+        ``owner.json`` to age the lock at the instant we release made the delete fail, the
+        error was swallowed, and the directory stayed behind until every waiter timed out.
+        """
+        for _attempt in range(40):
+            try:
+                if self._owner_file.exists():
+                    self._owner_file.unlink()
+                self.path.rmdir()
+                return
+            except FileNotFoundError:
+                return
+            except PermissionError:
+                time.sleep(0.05)
+            except OSError:
+                return
 
     def check_still_held(self):
         """Raise when the lock was stolen mid-operation."""

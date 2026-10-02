@@ -232,7 +232,11 @@ def main(argv):
             )
     merged = merge(existing, managed_groups(hooks_dir, windows, bash_path))
     write_atomic(hooks_file, merged)
-    print("  + wrote {} managed hook events to {}".format(len(MANAGED_EVENTS), os.path.relpath(hooks_file)))
+    try:
+        shown = os.path.relpath(hooks_file)
+    except ValueError:  # Windows: the file and the working directory are on different drives
+        shown = hooks_file
+    print("  + wrote {} managed hook events to {}".format(len(MANAGED_EVENTS), shown))
     return 0
 
 

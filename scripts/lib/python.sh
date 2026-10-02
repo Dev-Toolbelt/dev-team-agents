@@ -90,4 +90,10 @@ dta_python_resolve() {
     return 1
 }
 
+# Windows' locale encoding (cp1252) cannot decode the UTF-8 the shipped files hold, and the
+# inline python in the installers reads them with the default: UTF-8 mode fixes every reader.
+if _dta_is_windows && [ -z "${PYTHONUTF8:-}" ]; then
+    export PYTHONUTF8=1
+fi
+
 dta_python_resolve || true

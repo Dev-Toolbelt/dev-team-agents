@@ -624,6 +624,18 @@ def _signal_group(proc, signum):
 
 
 def _kill_group(proc):
+    if os.name == "nt":
+        # TerminateProcess ends only the script itself: its children (a `sleep`, a build) keep
+        # the output pipes open and the run waits for them past its timeout. taskkill /T ends
+        # the tree; it is resolved from SystemRoot, never PATH.
+        taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "taskkill.exe")
+        try:
+            subprocess.run(
+                [taskkill, "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=KILL_GRACE_SECONDS, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
     _signal_group(proc, signal.SIGKILL if os.name == "posix" else signal.SIGTERM)
 
 

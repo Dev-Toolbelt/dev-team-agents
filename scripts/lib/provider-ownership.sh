@@ -144,7 +144,7 @@ po_link_skills() {
   else
     target="$source/skills"
   fi
-  local rel
+  local rel source_dir="$target"
   rel="$(python3 - "$(po_native_path "$root")" "$(po_native_path "$target")" "$(po_native_path "$link")" <<'PY'
 import os, sys
 root, target, link = (os.path.abspath(p) for p in sys.argv[1:4])
@@ -155,17 +155,20 @@ PY
   [[ -n "$rel" ]] && target="$rel"
   if [[ -L "$link" || -e "$link" ]]; then rm -rf "$link"; fi
   mkdir -p "$(dirname "$link")"
-  # Git Bash's `ln -s` silently COPIES unless native symlinks are requested, and a copy
-  # recorded as a link goes stale on the next update. Native or nothing.
+  # Git Bash's `ln -s` silently COPIES unless native symlinks are requested: ask for a native
+  # one, and when the OS refuses (Windows without Developer Mode) copy explicitly instead, the
+  # way bind's `copy` mode does. The installer runs again on every sync/update, which is what
+  # keeps a copy current.
   case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;;
   esac
-  if ! ln -s "$target" "$link" || [[ ! -L "$link" ]]; then
-    echo "install: ERROR: could not create the symlink ${link#"$root"/} -> $target." >&2
-    echo "  On Windows, enable Developer Mode (or run as administrator) so Git Bash can create symlinks." >&2
-    return 1
+  if ln -s "$target" "$link" 2>/dev/null && [[ -L "$link" ]]; then
+    echo "  + symlinked $target -> ${link#"$root"/}"
+    return 0
   fi
-  echo "  + symlinked $target -> ${link#"$root"/}"
+  rm -rf "$link"
+  cp -R "$source_dir" "$link" || return 1
+  echo "  + copied $source_dir -> ${link#"$root"/} (symlinks unavailable; refreshed on every sync)"
 }
 
 # po_rerender_providers

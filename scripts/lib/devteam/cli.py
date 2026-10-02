@@ -700,15 +700,56 @@ def cmd_notifications_watch(args, emitter):
 HOOK_STDIN_TIMEOUT = 5.0
 
 
+def _stdin_is_console():
+    """Whether stdin is an interactive console a prompt can wait on.
+
+    ``isatty()`` alone is not enough on Windows: the ``NUL`` device is a character device, so a
+    command run with stdin from ``NUL`` (a hook, a script, ``subprocess.DEVNULL``) reports a tty
+    and ``getpass`` then waits on a console that does not exist. Only a handle the console API
+    accepts is one.
+    """
+    stream = sys.stdin
+    if stream is None or not stream.isatty():
+        return False
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        import msvcrt
+
+        mode = ctypes.c_uint32()
+        handle = msvcrt.get_osfhandle(stream.fileno())
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def _read_hook_stdin(timeout=HOOK_STDIN_TIMEOUT):
     """Everything on stdin up to EOF, or what arrived before ``timeout``; never blocks longer."""
-    if os.name == "nt":  # select() does not take pipes there; Windows hooks pipe and close
-        return sys.stdin.read()
-    import select
-
     fd = sys.stdin.fileno()
     deadline = time.monotonic() + timeout
     chunks = []
+    if os.name == "nt":
+        # select() does not take pipes on Windows: read on a daemon thread and stop waiting at
+        # the deadline, keeping what arrived, so an open and silent stdin cannot hang the hook.
+        import threading
+
+        def pump():
+            try:
+                while True:
+                    chunk = os.read(fd, 65536)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+            except OSError:
+                pass
+
+        reader = threading.Thread(target=pump, daemon=True)
+        reader.start()
+        reader.join(timeout)
+        return b"".join(list(chunks)).decode("utf-8", "replace")
+    import select
+
     while True:
         left = deadline - time.monotonic()
         if left <= 0:
@@ -1132,7 +1173,7 @@ def _read_token_from_stdin():
     import getpass
     import sys as _sys
 
-    if _sys.stdin is not None and _sys.stdin.isatty():
+    if _stdin_is_console():
         value = getpass.getpass("token (not echoed; empty keeps the stored one): ")
     elif _sys.stdin is None:
         value = ""
@@ -1289,7 +1330,7 @@ def _read_secret_from_stdin(key):
     import getpass
     import sys as _sys
 
-    if _sys.stdin is not None and _sys.stdin.isatty():
+    if _stdin_is_console():
         value = getpass.getpass("value for {} (not echoed): ".format(key))
     else:
         value = _sys.stdin.read()
