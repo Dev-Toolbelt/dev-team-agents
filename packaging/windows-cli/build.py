@@ -101,6 +101,8 @@ def stage(arch, tree, pins, root):
         str(cli / "lib" / "devteam"),
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
+    # The compiled account identity; entitlement.py resolves it as a sibling of the package.
+    shutil.copy2(str(tree / "scripts" / "lib" / "auth-config.json"), str(cli / "lib" / "auth-config.json"))
 
     payload = root / "payload"
     payload.mkdir()

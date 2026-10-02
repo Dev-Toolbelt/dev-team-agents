@@ -79,6 +79,8 @@ class Devteam < Formula
     (libexec/"scripts/cli").install "scripts/cli/devteam"
     (libexec/"scripts/lib/devteam").install Dir["scripts/lib/devteam/*.py"]
     (libexec/"scripts/lib/devteam/integrations").install Dir["scripts/lib/devteam/integrations/*.py"]
+    # The compiled account identity; entitlement.py resolves it as a sibling of the package.
+    (libexec/"scripts/lib").install "scripts/lib/auth-config.json"
 
     inreplace libexec/"scripts/cli/devteam",
               "#!/usr/bin/env python3",

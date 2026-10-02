@@ -160,4 +160,56 @@ hint_current() {
     fi
 }
 
+if [ ! -f "$SOURCE/scripts/cli/devteam" ] || [ ! -d "$SOURCE/scripts/lib/devteam" ]; then
+    [ -n "$VERSION" ] && die "release $VERSION predates the devteam CLI, so there is nothing to install from it. Install from a clone of the main branch: bash scripts/install-cli.sh --from ."
+    die "$SOURCE is not a dev-team-agents tree (no scripts/cli/devteam)."
+fi
+
+# ── The CLI ───────────────────────────────────────────────────────────────────
+# Staged beside the target and swapped in, so a failed copy never leaves half a CLI.
+mkdir -p "$CLI_HOME" "$BIN_DIR"
+STAGE="$CLI_HOME/.scripts.new"
+rm -rf "$STAGE"
+mkdir -p "$STAGE/cli" "$STAGE/lib"
+cp "$SOURCE/scripts/cli/devteam" "$STAGE/cli/devteam"
+cp -R "$SOURCE/scripts/lib/devteam" "$STAGE/lib/devteam"
+# The compiled account identity (entitlement.py reads it as a sibling of the package).
+cp "$SOURCE/scripts/lib/auth-config.json" "$STAGE/lib/auth-config.json"
+find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
+# The interpreter verified above, by absolute path — as the Homebrew formula does. A GUI
+# app starts the CLI with a minimal PATH, where `env python3` could find another Python.
+"$PYTHON" - "$STAGE/cli/devteam" "$PYTHON" <<'PY'
+import sys
+path, python = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    lines = handle.read().split("\n")
+if lines and lines[0].startswith("#!"):
+    lines[0] = "#!" + python
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines))
+PY
+chmod 755 "$STAGE/cli/devteam"
+rm -rf "$CLI_HOME/scripts"
+mv "$STAGE" "$CLI_HOME/scripts"
+ln -sfn "$CLI_HOME/scripts/cli/devteam" "$BIN_DIR/devteam"
+say "Installed $BIN_DIR/devteam"
+
+# ── The framework ─────────────────────────────────────────────────────────────
+set +e
+OUTPUT="$("$BIN_DIR/devteam" store install --from "$SOURCE" 2>&1)"
+STATUS=$?
+set -e
+case "$STATUS" in
+    0) say "$OUTPUT" ;;
+    "$EXIT_CONFLICT") say "That framework version is already in the store; left as it is." ;;
+    *) printf '%s\n' "$OUTPUT" >&2; die "devteam store install failed (exit $STATUS)." ;;
+esac
+
+case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) say "Add $BIN_DIR to your PATH to run devteam from a terminal (the desktop app also searches ~/.local/bin):"
+       # shellcheck disable=SC2016  # `$PATH` is meant literally: the user's shell expands it.
+       printf '    echo '\''export PATH="%s:$PATH"'\'' >> ~/.zshrc\n' "$BIN_DIR" ;;
+esac
+say "Done. Run: devteam doctor"
 main "$@"
