@@ -57,9 +57,9 @@ MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent|Bash|mcp__.*(c
 # hook's output.
 ROOT_WALK = (
     'for d in "$PWD" "$(pwd -P)"; do '
-    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
+    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ] && [ ! -f "$d/{pointer}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
     '[ -n "$d" ] && break; done; '
-    'cd "${{d:-.}}" && exec bash {hooks}/{script}'
+    'cd "${{d:-.}}" && {{ [ -d {hooks} ] || [ ! -f {pointer} ] || {{ c=$(cat {pointer}) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" {script}; }}; exec bash {hooks}/{script}; }}'
 )
 ENV_PREFIX = "env -u BASH_ENV -u ENV"
 
@@ -70,13 +70,19 @@ ENV_PREFIX = "env -u BASH_ENV -u ENV"
 # command line that holds more than two, which would otherwise eat the quotes around the path.
 
 
+def core_pointer(hooks_dir):
+    """The `core-dir` pointer beside the hooks: `.dev-team-agents/scripts/hooks` → `.dev-team-agents/core-dir`."""
+    base = hooks_dir[: -len("/scripts/hooks")] if hooks_dir.endswith("/scripts/hooks") else ".dev-team-agents"
+    return base + "/core-dir"
+
+
 def unix_command(hooks_dir, script):
-    walk = ROOT_WALK.format(hooks=hooks_dir, script=script)
+    walk = ROOT_WALK.format(hooks=hooks_dir, pointer=core_pointer(hooks_dir), script=script)
     return "{} bash -c '{}'".format(ENV_PREFIX, walk)
 
 
 def windows_command(hooks_dir, script, bash_path):
-    walk = ROOT_WALK.format(hooks=hooks_dir, script=script)
+    walk = ROOT_WALK.format(hooks=hooks_dir, pointer=core_pointer(hooks_dir), script=script)
     return '""{}" -c "{}""'.format(bash_path, walk.replace('"', '\\"'))
 
 

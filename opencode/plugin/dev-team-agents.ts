@@ -24,6 +24,7 @@
  *     (the user's prompt text, for review commands and requests and issue references on the task board)
  *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh
  *   `session.idle` (event bus)        → scripts/hooks/stop.sh
+ *   `session.updated` (a rename)      → scripts/hooks/session-retitle.sh
  *     (stdin carries a synthetic transcript_path built from the SDK's
  *     per-message token usage — see buildContextPayload below — so the
  *     context-window notifier in stop/04-notifier.sh gets real numbers
@@ -47,9 +48,9 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { spawn } from "node:child_process"
 import { writeFile, mkdtemp, rm } from "node:fs/promises"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 
 // Hook timeout: 5 seconds max. Prevents slow/broken hooks from freezing opencode.
 const HOOK_TIMEOUT_MS = 5000
@@ -95,7 +96,29 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // not synced since, still has only the pointer — kept as the fallback.
   const SCRIPTS_HOOKS = `${directory}/.dev-team-agents/scripts/hooks`
   const CORE_POINTER_HOOKS = `${directory}/.dev-team-agents/core/scripts/hooks`
-  const HOOKS = existsSync(SCRIPTS_HOOKS) ? SCRIPTS_HOOKS : CORE_POINTER_HOOKS
+  // Looked up on every call, not once at load: the link can vanish mid-session (a `git rebase`
+  // onto a commit that still vendored `.dev-team-agents/scripts` deletes it) and come back.
+  const hooksDir = (): string => (existsSync(SCRIPTS_HOOKS) ? SCRIPTS_HOOKS : CORE_POINTER_HOOKS)
+
+  // With neither directory present, the `core-dir` pointer names the store, whose
+  // `scripts/hooks/lib/self-heal.sh` re-binds the project and runs the dispatcher (from the store
+  // when the re-bind cannot restore the link) — the same recovery the Claude and Codex wrappers do.
+  const selfHeal = (): string | null => {
+    try {
+      const core = readFileSync(join(directory, ".dev-team-agents", "core-dir"), "utf8").trim()
+      const current = readFileSync(join(core, "current"), "utf8").trim()
+      if (!core || !current) return null
+      const heal = join(core, "versions", current, "scripts", "hooks", "lib", "self-heal.sh")
+      return existsSync(heal) ? heal : null
+    } catch {
+      return null
+    }
+  }
+  const bashArgs = (script: string): string[] => {
+    if (existsSync(script)) return [script]
+    const heal = selfHeal()
+    return heal ? [heal, basename(script)] : [script]
+  }
 
   // `exec` has no stdin option (only the sync variants do), so the payload is written to a
   // spawned child; a hook that reads stdin would otherwise wait for it until the timeout.
@@ -106,7 +129,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<HookResult> =>
     new Promise((resolve, reject) => {
       const posix = process.platform !== "win32"
-      const child = spawn("bash", [script], { cwd: directory, stdio: ["pipe", "pipe", "pipe"], detached: posix })
+      const child = spawn("bash", bashArgs(script), { cwd: directory, stdio: ["pipe", "pipe", "pipe"], detached: posix })
       let stdout = ""
       let stderr = ""
       const timer = setTimeout(() => {
@@ -299,16 +322,25 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     event: async ({ event }) => {
       if (event.type === "session.updated") {
         const info: any = (event as any).properties?.info
+        const known = typeof info?.id === "string" && titleBySession.has(info.id)
+        const before = known ? titleBySession.get(info.id) : undefined
         rememberTitle(info?.id, info?.title, info?.parentID)
+        // A rename reaches the task board now, not at the next turn: opencode keeps the title in
+        // its own storage, out of the CLI's reach (Claude Code and Codex are read at view time).
+        // Only a change of a title already seen: the first sighting is the session being created.
+        if (known && typeof info?.title === "string" && info.title && info.title !== before) {
+          const payload = JSON.stringify({ session_id: info.id, sessionID: info.id, session_title: info.title })
+          await safe("session-retitle", () => runHook(`${hooksDir()}/session-retitle.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
+        }
       }
       if (event.type === "session.created") {
-        await safe("session-start", () => runHook(`${HOOKS}/session-start.sh`))
+        await safe("session-start", () => runHook(`${hooksDir()}/session-start.sh`))
       }
       if (event.type === "session.idle") {
         await safe("stop", async () => {
           const { stdin, cleanup } = await buildContextPayload(event.properties.sessionID)
           try {
-            const r = await runHook(`${HOOKS}/stop.sh`, stdin, TASK_BOARD_HOOK_TIMEOUT_MS)
+            const r = await runHook(`${hooksDir()}/stop.sh`, stdin, TASK_BOARD_HOOK_TIMEOUT_MS)
             // Exit 2 is a prompt for the model (session summary, ADR gap, agent lint). opencode's
             // idle event cannot continue the turn, so the message is logged rather than lost.
             const message = (r.stderr.trim() || r.stdout.trim()).slice(0, 4000)
@@ -353,7 +385,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       })
       // Outside `safe()`: a refusal must reach opencode. runHook never throws, so a broken or
       // timed-out hook still lets the call through.
-      const r = await runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS)
+      const r = await runHook(`${hooksDir()}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS)
       if (r.code === 2) throw new Error(r.stderr.trim() || r.stdout.trim() || "blocked by a dev-team-agents PreToolUse hook")
     },
 
@@ -375,7 +407,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
           args: known,
           output: text,
         })
-        await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
+        await safe("post-tool-use", () => runHook(`${hooksDir()}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
         return
       }
       // Only a subagent's report can carry a review result; every other tool stays free.
@@ -396,7 +428,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         args,
         output: output.output,
       })
-      await safe("post-tool-use", () => runHook(`${HOOKS}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
+      await safe("post-tool-use", () => runHook(`${hooksDir()}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
     },
 
     "chat.message": async (input, output) => {
@@ -416,12 +448,12 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // `prompt` last: the bash gate only looks at what follows that key.
       const payload = JSON.stringify({ session_id: input.sessionID, prompt: text })
       await safe("user-prompt-submit", () =>
-        runHook(`${HOOKS}/user-prompt-submit.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS),
+        runHook(`${hooksDir()}/user-prompt-submit.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS),
       )
     },
 
     "experimental.session.compacting": async (_input, output) => {
-      const r = await runHook(`${HOOKS}/pre-compact.sh`)
+      const r = await runHook(`${hooksDir()}/pre-compact.sh`)
       const text = r.stdout.trim() || r.stderr.trim()
       if (text) {
         output.context.push(`## dev-team-agents session summary\n${text}`)

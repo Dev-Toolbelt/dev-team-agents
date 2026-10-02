@@ -35,6 +35,7 @@ ENV_PREFIX = "env -u BASH_ENV -u ENV"
 #: settings.json requires. The same path a v2 install wrote, so the file does not
 #: differ between the two layouts.
 HOOK_DIR = "{}/scripts/hooks".format(project.PROJECT_DIR)
+CORE_POINTER = "{}/{}".format(project.PROJECT_DIR, project.CORE_DIR_POINTER)
 #: What binds wrote while the project carried one `core` pointer to the whole
 #: version. Still recognised as ours, so a sync rewrites such an entry in place
 #: instead of appending a second one beside it.
@@ -95,14 +96,14 @@ PREVIOUS_MATCHERS = {
 #: `install-codex.sh` `cmd()`; `scripts/install.sh` `_hook_cmd` writes this exact command.
 ROOT_WALK = (
     'for d in "$PWD" "$(pwd -P)"; do '
-    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
+    'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ] && [ ! -f "$d/{pointer}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
     '[ -n "$d" ] && break; done; '
-    'cd "${{d:-{fallback}}}" && exec bash {hooks}/{script}'
+    'cd "${{d:-{fallback}}}" && {{ [ -d {hooks} ] || [ ! -f {pointer} ] || {{ c=$(cat {pointer}) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" {script}; }}; exec bash {hooks}/{script}; }}'
 )
 
 
 def command_for(script):
-    body = ROOT_WALK.format(hooks=HOOK_DIR, fallback="${CLAUDE_PROJECT_DIR:-.}", script=script)
+    body = ROOT_WALK.format(hooks=HOOK_DIR, pointer=CORE_POINTER, fallback="${CLAUDE_PROJECT_DIR:-.}", script=script)
     return "{} bash -c '{}'".format(ENV_PREFIX, body)
 
 

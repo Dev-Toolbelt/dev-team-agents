@@ -597,11 +597,13 @@ fi
 # invocation (start-systemd-namespace is absent in many WSL setups).
 # The command finds the project root first: Claude Code runs a hook in the session's CURRENT
 # directory, which a Bash `cd` moves, and a relative path from a subdirectory names nothing. It
-# walks up to the nearest directory holding the hooks, then falls back to $CLAUDE_PROJECT_DIR.
+# walks up to the nearest directory holding the hooks (or the `core-dir` pointer, when the
+# scripts link is gone: then it runs `self-heal.sh` from the store), then falls back to
+# $CLAUDE_PROJECT_DIR.
 # `_HOOK_TEMPLATE` is that command with `@SCRIPT@` for the script name.
 # Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
 # shellcheck disable=SC2016 # the $ are literal here: the hook's own bash -c expands them
-_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && exec bash .dev-team-agents/scripts/hooks/@SCRIPT@'"'"''
+_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ] && [ ! -f "$d/.dev-team-agents/core-dir" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" @SCRIPT@; }; exec bash .dev-team-agents/scripts/hooks/@SCRIPT@; }'"'"''
 _hook_cmd() {
     printf '%s' "${_HOOK_TEMPLATE//@SCRIPT@/$1}"
 }

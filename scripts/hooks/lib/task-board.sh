@@ -161,6 +161,14 @@ devteam_task_board_record() {
     return 0
 }
 
+# devteam_task_board_retitle <payload> — write a renamed session's title into its record
+# (`tasks retitle`). Only the title changes. Silent, returns 0.
+devteam_task_board_retitle() {
+    [ -f "$TB_CLI" ] || return 0
+    printf '%s' "$1" | python3 "$TB_CLI" tasks retitle --project-root "$TB_ROOT" --json >/dev/null 2>&1 || true
+    return 0
+}
+
 devteam_task_board_mark() {
     local state="$1" payload="$2" out open session
     [ -f "$TB_CLI" ] || return 0
