@@ -1,0 +1,21 @@
+{
+  "_comment": "Every download build.sh makes, pinned by URL and SHA-256. Python digests were cross-checked against python.org's .sigstore bundle for each file (messageSignature.messageDigest); the distlib wheel digest is PyPI's. Bump a pin by replacing url and sha256 together, and re-check the digest against the publisher, never only against your own download.",
+  "python": {
+    "version": "3.14.8",
+    "x64": {
+      "url": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-embed-amd64.zip",
+      "sha256": "a93abe456ab01bd96d7a085b3cdb6566b3063f4241360d114142fbdb07f0a310"
+    },
+    "arm64": {
+      "url": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-embed-arm64.zip",
+      "sha256": "155be84ccb57c6331cf0e39001c78a1dfac3be62f403f3ff5f2e29b80dda7ebe"
+    }
+  },
+  "launcher": {
+    "distlib_version": "0.4.3",
+    "wheel_url": "https://files.pythonhosted.org/packages/02/08/9c41fb51ab5b43eb21674aff13df270e8ba6c4b29c8624e328dc7a9482af/distlib-0.4.3-py2.py3-none-any.whl",
+    "wheel_sha256": "4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b",
+    "x64": { "member": "distlib/t64.exe", "sha256": "81a618f21cb87db9076134e70388b6e9cb7c2106739011b6a51772d22cae06b7" },
+    "arm64": { "member": "distlib/t64-arm.exe", "sha256": "ebc4c06b7d95e74e315419ee7e88e1d0f71e9e9477538c00a93a9ff8c66a6cfc" }
+  }
+}

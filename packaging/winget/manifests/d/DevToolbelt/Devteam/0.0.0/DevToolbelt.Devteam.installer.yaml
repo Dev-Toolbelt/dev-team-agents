@@ -2,22 +2,27 @@
 
 # DevToolbelt.Devteam.installer.yaml — installer manifest for the `devteam` CLI.
 #
-# UNRELEASED SCAFFOLD — every value under Installers is a placeholder:
-#   InstallerUrl     points at a release asset that does not exist (no
-#                    Windows build has ever been produced).
+# UNRELEASED SCAFFOLD — every value naming a built artifact is a placeholder:
+#   InstallerUrl     points at a release asset that does not exist yet. The
+#                    filename shape is real: devteam-setup-<version>-<arch>.exe,
+#                    what packaging/windows-cli/build.py writes and what the
+#                    release workflow uploads. ${version} carries no `v` — only
+#                    the release tag in the URL path does.
 #   InstallerSha256  64 zeros — an obviously-fake digest, never a
 #                    plausible-looking fake one. winget refuses to install
 #                    against a hash that does not match the downloaded
 #                    bytes, so this value fails loudly, the same intent as
 #                    the Homebrew formula's REPLACE_WITH_SHA256 placeholder.
-#   InstallerType    "exe" assumes a signed installer executable wrapping the
-#                    python payload (the CLI needs a code-signing certificate
-#                    per packaging/README.md) — this is a design placeholder,
-#                    not a decided packaging tool. Whatever builds the .exe
-#                    (e.g. a PyInstaller/pynsist-produced bundle, or a thin
-#                    launcher requiring a system python3) is undecided; pick
-#                    it when the Windows build actually gets built and update
-#                    InstallerType/Switches/Dependencies together.
+#                    The real digest is in the release's SHA256SUMS.txt.
+#   InstallerType    "nullsoft" is a DECIDED shape (ADR-0028): a per-user NSIS
+#                    installer carrying the CLI, its own embedded CPython and a
+#                    distlib launcher as `devteam.exe`. See
+#                    packaging/windows-cli/devteam-cli.nsi.
+#
+# Dependencies: Git for Windows. The hooks run in Git Bash (ADR-0026). The
+# interactive installer offers to install it through winget; a silent install
+# (/S, which winget uses) skips that prompt, so winget installs it from here.
+# Python is NOT a dependency: the installer embeds its own.
 #
 # Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
 #   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.installer.1.12.0.json
@@ -27,19 +32,22 @@
 
 PackageIdentifier: DevToolbelt.Devteam
 PackageVersion: 0.0.0
-InstallerType: exe
+InstallerType: nullsoft
 InstallerSwitches:
   Silent: /S
   SilentWithProgress: /S
 Scope: user
 Commands:
   - devteam
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: Git.Git
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-x64.exe
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-X.Y.Z-x64.exe
     InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
   - Architecture: arm64
-    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-arm64.exe
+    InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/devteam-setup-X.Y.Z-arm64.exe
     InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
 ManifestType: installer
 ManifestVersion: 1.12.0
