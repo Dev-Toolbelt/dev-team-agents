@@ -397,7 +397,7 @@ The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`** (a
 
 ## Versioning
 
-→ See [`CLAUDE-md/versioning.md`](CLAUDE-md/versioning.md) for the semantic versioning policy.
+→ See [`CLAUDE-md/versioning.md`](CLAUDE-md/versioning.md) for the semantic versioning policy, including pre-release names for builds ahead of a release (`2.49.0-dev.1`, never an invented patch) and the desktop app's own version line in `app/package.json`.
 
 ---
 

@@ -112,6 +112,11 @@ The todo tools that only read or drive their own list (`TaskList`, `TaskGet`, `T
   any task, and leaves it when a later turn revives it.
 - **A card left in To Do is not abandoned work** — it neither counts toward `tasks.session_abandoned`
   nor shows the abandoned flag when its session ends.
+- **An ended session's card is never left In progress** — when the session is `ended` (`SessionEnd`, or
+  unseen past the ended threshold) and the card is still `in_progress`, the view settles it as `Stop`
+  would: Done, `completed_at` at the session's last activity, not abandoned. A Stop that never ran (the
+  hooks vanished mid-turn, a killed provider) no longer pins it there. View only: the stored record still
+  changes only through a hook call.
 - **A read-only turn the plan or agent took over is retired** — at `Stop`, a card still in To Do whose
   last turn also created a main-session task (a plan's steps, an agent) gets `removed_at`: the turn was
   planning that work, and the plan is its grain. Kept in the record, never deleted; a later turn
@@ -490,11 +495,15 @@ Implementation details:
   column is at most as tall as the visible part of the page, measured, so its heading stays on screen
   and its cards scroll inside it (a column's card list is a tab stop too while it overflows); columns
   are as tall as their cards up to that cap.
-  Card badges: task text, session chip (provider icon + branch), time in current column; PR/MR badges
+  Card badges: task text (a direct card shows its session's title instead, "Direct work" when it
+  has none, the **Direct** badge naming the kind), session chip (provider icon + branch), time in current column, creation date
+  and `HH:mm` (viewer's locale); a direct card numbers its prompts in the order sent; PR/MR badges
   (`#N` for GitHub PR, `!N` for GitLab MR, clickable to open in browser); issue badges (Jira `PROJ-12`,
   GitHub `owner/repo#45`, clickable); review status badges (**N findings**, **result not read**,
   **pending**, or neutral **In review**). Filters: session, period, show/hide done older than
-  the retention setting, show/hide tasks without findings in review. On hover/focus: time per step,
+  the retention setting, show/hide tasks without findings in review. *Time per step* (a disclosure
+  button) lists the time spent per step except Done, and a finished task's *Finished at* date and time;
+  on hover/focus:
   link destination (host + path). Sessions as compact chips on one wrapping line: provider, PR/MR
   badge if the session has PR marks, session title (when the provider has one; cut by width) or else
   branch, and status; the branch beside a title and the per-session counts are in the chip's tooltip
@@ -622,3 +631,5 @@ Implementation details:
 | 2026-10-01 | Audit fixes (`docs/audit/task-board-audit-2026-10-01.md`): (1) a payload that carries a tool result is never folded in as direct work — direct work is taken before the call runs; (2) a review result decides `tasks.session_done` with the direct card left out, as `record`/`mark` already did; (3) `tasks watch` emits `removed` for a project that left the bound set (unbound, folder gone), matching `tasks list`; (4) a stored GitHub issue ref is re-validated on read against the bound repository and the current remotes; (5) redaction covers every task text and `Authorization: Basic/Token`, hyphenated key names and `mysql -p<v>`; (6) the Settings bullet names the direct-work lifetime the app already had | Divergences found by the audit between the stated rules and the code |
 | 2026-10-02 | Only the user's prompt starts a direct-work turn: an injected prompt (`<task-notification>`, `<system-reminder>`, `<local-command-stdout>`) and a call with no prompt file continue the previous turn — no turn entry, a read never changes the status, a write still moves it to In progress; a continuation that only reads opens no card. The prompt file keeps the first non-blank line | A session whose background agents reported back after the work was done showed the reports as turns, an empty turn after each Stop-hook continuation, and ended in To Do with everything finished |
 | 2026-10-02 | Write-shaped shell widened: `ssh host '<cmd>'` is read through to its remote command; `docker`/`podman`/`docker compose`/`docker-compose`, `kubectl`, `helm`, `systemctl`/`service` count when their subcommand changes state, and `scp`/`rsync` always; the bash gate matches them too | A production fix run as `ssh host 'docker rm -f …'` left the card in To Do instead of moving it to In progress |
+| 2026-10-02 | An ended session's direct card still `in_progress` is shown Done at the session's last activity (view only); the kanban card shows its creation date and time, *Time per step* drops the Done row for a *Finished at* date and time, and a direct card's prompts are an ordered list in the order sent | A `git rebase` deleted a project's hook symlink mid-turn, no Stop ever ran, and the card sat In progress for good; user request for the card UI |
+| 2026-10-02 | A session's `title` follows renames with no turn in between: the view reads the provider's current title (`tasks.live_title`) — Claude Code's last transcript `custom-title` (the record now keeps `transcript_path`), Codex's `session_index.jsonl`, each cached by file mtime and size — and falls back to the stored one; opencode's plugin pushes a changed title on `session.updated` through `session-retitle.sh` → `tasks retitle` (title only). Ended sessions too; the view never writes. The kanban's direct card shows the session title | User request: a direct card named "Direct work" says nothing, and a rename in the provider never reached the board until the next turn |

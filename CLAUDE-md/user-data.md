@@ -13,6 +13,7 @@
 |---------|-------------|-------|
 | `.dev-team-agents/state-dir` | `data/machines/<machine-id>/projects/<project_id>/` | Machine-local state: `state.json`, dot-markers, caches, `telemetry-queue.json`, `audit.log`, `notifications.jsonl`, `notifications-seen.json`, `task-board/` |
 | `.dev-team-agents/memory-dir` | `data/projects/<project_id>/` | Portable memory: `preferences.json`, `session-summary.md` |
+| `.dev-team-agents/core-dir` | `core/` (the store's, forward-slashed) | Not a data directory: lets a hook wrapper find `scripts/hooks/lib/self-heal.sh` when the project's `scripts` link is gone |
 
 On layout 1, both pointers resolve to `.dev-team-agents/user-data/` for backward compatibility.
 

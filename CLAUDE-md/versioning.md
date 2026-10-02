@@ -11,3 +11,28 @@ Semantic versioning via git tags: `v1.0.0`, `v1.1.0`, `v2.0.0`.
 **"Agent behavior change" alone is not a major bump.** This line used to read *"Breaking changes (agent behavior changes, removed skills) → major"*, which taken literally made almost every release a major — the repo never applied it that way. `v2.20.2` added a mandatory new emission to all 17 agents as a **patch**, and `v2.21.0` changed how five specialists reason as a **minor**. The parenthetical meant *breaking* agent behavior changes; it is spelled out above so the next release does not have to re-litigate it.
 
 **The test that decides major:** does an existing installation behave differently after an update, without its user asking for it? If yes, major. Changed values in `scripts/lib/preferences-defaults.json` do **not** qualify on their own — an existing `preferences.json` is never rewritten, and consent keys are never backfilled as enabled (see [`preferences.md`](preferences.md)). If a future change does rewrite existing user state, that is a major regardless of how small the diff looks.
+
+### Builds ahead of a release are pre-releases
+
+A store version installed from a working tree that is ahead of the latest tag is a **semver
+pre-release of the next version**, never an invented patch number: `2.49.0-dev.1`, not `2.48.900`.
+Pick the next version by the table above from what `[Unreleased]` in `CHANGELOG.md` holds, and bump
+the trailing number for each new local install (`-dev.2`, `-dev.3`):
+
+```bash
+devteam store install --from . --version 2.49.0-dev.1 --activate && devteam sync --all
+```
+
+Precedence follows semver everywhere a version is compared — `versions.sort_key` in the CLI and
+`uc_is_newer` in `scripts/hooks/lib/update-check.sh`: `2.49.0-dev.1` sorts after `2.48.0` and before
+`2.49.0`, so the release is offered as an update to the pre-release and never the other way round.
+Two pre-releases of one version raise no update notice.
+
+### The desktop app has its own version line
+
+`app/package.json` carries the app's version, independent of the store's: the app is a client of the
+CLI's `--json` contract (ADR-0011), not part of the installed tree. It follows the same table, read for
+the app — a major when the app stops working against a CLI it used to accept, a minor for a new screen
+or feature, a patch for a fix. While it is `0.x` it is a pre-release and the header shows the **beta**
+badge (`app/src/shared/appVersion.ts`). Bump it in the same commit as the app change it describes, and
+keep `app/package-lock.json` in step.
