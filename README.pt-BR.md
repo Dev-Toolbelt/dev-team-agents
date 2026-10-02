@@ -27,7 +27,7 @@ Se estiver ausente, o instalador, o atualizador e o `/devteam:health-check` vão
 | macOS | `brew install python3` |
 | Linux (Debian/Ubuntu) | `sudo apt install python3` |
 | Linux (Fedora/RHEL) | `sudo dnf install python3` |
-| Windows | [python.org/downloads](https://www.python.org/downloads/) ou `winget install Python.Python.3` |
+| Windows | [python.org/downloads](https://www.python.org/downloads/) ou `winget install Python.Python.3` — no Git Bash, `python3`, `python` ou o launcher `py` funcionam: os scripts usam o que for Python 3.9+ (o stub da Microsoft Store é ignorado) |
 
 ---
 
