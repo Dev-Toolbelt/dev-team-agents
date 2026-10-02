@@ -24,11 +24,10 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/design/design-system.md` — colors, typography, spacing, component inventory
 - Load `skills/shared/reuse-guidelines/SKILL.md` and scan the existing component tree — check `docs/development/reuse-guidelines.md` (when present) for a canonical implementation before adding anything new
+- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation
 - Run `git log --oneline -10` to reveal recently introduced component patterns and the active UI surface
 
-Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
-
-Load `skills/shared/comments-policy/SKILL.md` — governs every comment you write in production code.
+Apply `skills/shared/token-efficiency/SKILL.md` (prefer `grep`/`head` over full reads) and load `skills/shared/comments-policy/SKILL.md` (governs every comment you write in production code).
 
 Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial implementation task — present a plan and wait for user approval before creating or modifying files.
 
@@ -36,7 +35,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial imple
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → *Worktree Isolation* (session file → `worktree_active` preference → ask once). When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` with the resolved base branch and follow it through finalization.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

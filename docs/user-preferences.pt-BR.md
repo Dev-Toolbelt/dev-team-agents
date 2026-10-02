@@ -66,6 +66,7 @@ scripts/lib/preferences-defaults.json
   "worktree_active": true,
   "worktree_base_branch": null,
   "worktree_commit_action": "ask",
+  "auto_learn_before_commit": true,
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
@@ -94,6 +95,7 @@ scripts/lib/preferences-defaults.json
 | `worktree_active` | `true` | bool | Se tasks de codificação devem usar worktree isolada por padrão |
 | `worktree_base_branch` | `null` | string ou null | Base branch preferida para novas worktrees |
 | `worktree_commit_action` | `"ask"` | string | Comportamento padrão do `/devteam:commit` dentro de worktree ativa |
+| `auto_learn_before_commit` | `true` | bool | Executa `/devteam:learn` automaticamente antes de todo `/devteam:commit` (`false` = pula por padrão) |
 | `worktree_path` | `".worktrees"` | string | Diretório-raiz onde as worktrees são criadas |
 | `worktree_docker_isolate` | `true` | bool | Se Docker Compose deve ser isolado por worktree |
 | `qa_browser` | `null` | string ou null | Navegador preferido para o agente de QA |
@@ -110,6 +112,7 @@ O comportamento de worktree é guiado principalmente por cinco preferências:
 | `worktree_active` | `true` | Cria uma worktree por task de codificação sem prompt nas instalações modernas |
 | `worktree_base_branch` | `null` | Usa uma base branch fixa ou detecta a branch padrão do repositório |
 | `worktree_commit_action` | `"ask"` | Controla se o fluxo de commit pergunta, faz rebase, finaliza ou apenas commita |
+| `auto_learn_before_commit` | `true` | Executa `/devteam:learn` automaticamente antes de cada commit; `false` pula por padrão |
 | `worktree_path` | `".worktrees"` | Define onde as worktrees geradas ficam |
 | `worktree_docker_isolate` | `true` | Cria namespace isolado para recursos Docker Compose por worktree quando houver Docker |
 

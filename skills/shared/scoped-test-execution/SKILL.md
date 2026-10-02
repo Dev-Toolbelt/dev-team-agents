@@ -58,6 +58,8 @@ No other signal authorizes it. Not a fast suite, not a wide refactor, not a chan
 
 When the project defines its own scoped script in `CLAUDE.md`, `package.json`, or a `Makefile`, that command wins over the table.
 
+Wrappers (`npm test`, `composer test`, `make test`) are scoped by passing a path, `--filter`, `--`, or `TESTPATH=`/`FILTER=` through. The full-suite guard (`02c-full-suite-guard.sh`) judges only the command actually invoked, so read-only commands that merely name a runner are never blocked.
+
 ---
 
 ## Run Independent Verification Commands in Parallel

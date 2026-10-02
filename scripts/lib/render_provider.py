@@ -101,6 +101,50 @@ def apply_path_rewrites(body, provider, tool_map):
     return result
 
 
+# ─── tool-name rewriting ─────────────────────────────────────────────
+_FENCE_RE = re.compile(r"(```.*?```)", re.DOTALL)
+
+
+def _is_camel_tool(name):
+    """True for multi-word identifiers (AskUserQuestion) that are never prose."""
+    return len(re.findall(r"[A-Z]", name)) >= 2
+
+
+def apply_tool_rewrites(body, provider, tool_map):
+    """Rename Claude Code tools in `body` using the provider's tool map.
+
+    `tool_rewrites` maps name -> native name; `tool_unavailable` maps a
+    Claude-only name -> a descriptive phrase (never a made-up tool name).
+    Multi-word names (AskUserQuestion, ScheduleWakeup) are replaced wherever
+    they appear. Single-word names (Task, Glob, Grep) double as English words,
+    so they are replaced only as an inline code span, and never inside fenced
+    code blocks. Replacement of a name already in backticks keeps one pair.
+    """
+    prov_entry = tool_map.get("providers", {}).get(provider, {})
+    renames = {k: v for k, v in (prov_entry.get("tool_rewrites", {}) or {}).items() if k != v}
+    phrases = prov_entry.get("tool_unavailable", {}) or {}
+    if not renames and not phrases:
+        return body
+
+    def _rewrite(chunk, in_fence):
+        for name, new in renames.items():
+            if _is_camel_tool(name):
+                chunk = re.sub(rf"`?\b{name}\b`?", f"`{new}`", chunk)
+            elif not in_fence:
+                chunk = chunk.replace(f"`{name}`", f"`{new}`")
+        for name, phrase in phrases.items():
+            chunk = re.sub(rf"`?\b{name}\b`?", lambda _m, p=phrase: p, chunk)
+        return chunk
+
+    parts = _FENCE_RE.split(body)
+    out = [_rewrite(part, part.startswith("```")) for part in parts]
+    result = "".join(out)
+    # `A`/`B`/`C` collapsed to the same phrase: keep one copy.
+    for phrase in set(phrases.values()):
+        result = re.sub(rf"({re.escape(phrase)})(?:/{re.escape(phrase)})+", r"\1", result)
+    return result
+
+
 # ─── plan gate softening ─────────────────────────────────────────────
 def soften_plan_gate(body, provider, plan_gate_setting):
     """Remove or soften the mandatory PLAN GATE section for non-Claude providers.
@@ -819,6 +863,7 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     fm_text = "\n".join(fm_lines) + "\n"
     # Apply only opencode-specific path rewrites to the agent body.
     body = apply_path_rewrites(body, "opencode", tool_map)
+    body = apply_tool_rewrites(body, "opencode", tool_map)
     # Last, so the banner's resolved values are authoritative over any rewrite.
     body = render_run_banner(body, model_id, effort, "opencode")
     note = tool_conventions_note("opencode", tool_map)
@@ -872,6 +917,7 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
     # Apply path rewrites and Codex body rewrites
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_body_rewrites(body, "optional")
+    body = apply_tool_rewrites(body, "codex", tool_map)
     # Last, so the banner's resolved values are authoritative over any rewrite.
     body = render_run_banner(body, model_id, effort, "codex")
     note = tool_conventions_note("codex", tool_map)
@@ -898,6 +944,7 @@ def render_command_claude(name, body, src_path):
 
 def render_command_opencode(name, meta, body, model_id, effort, tool_map):
     body = apply_path_rewrites(body, "opencode", tool_map)
+    body = apply_tool_rewrites(body, "opencode", tool_map)
     body = soften_plan_gate(body, "opencode", meta.get("plan_gate", "conditional"))
     snippet_entry = {
         "description": meta.get("description", ""),
@@ -920,6 +967,7 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_command_specialization(name, body)
     body = apply_codex_body_rewrites(body, interaction_mode)
+    body = apply_tool_rewrites(body, "codex", tool_map)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     desc = meta.get("description", "")
     skill_content = (

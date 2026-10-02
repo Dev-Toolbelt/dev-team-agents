@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop sub-script: hard-enforce docs/development/reuse-guidelines.csv against
+# Stop sub-script: hard-enforce docs/development/reuse-guidelines.md against
 # the session's diff. Degrades silently when the registry does not exist —
 # see skills/shared/reuse-guidelines/SKILL.md.
 set -euo pipefail
@@ -8,7 +8,7 @@ set -euo pipefail
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-REGISTRY="$REPO_ROOT/docs/development/reuse-guidelines.csv"
+REGISTRY="$REPO_ROOT/docs/development/reuse-guidelines.md"
 [ -f "$REGISTRY" ] || exit 0
 
 # No path gate here by design: any touched file can violate a registered

@@ -164,8 +164,6 @@ Reuse rule candidates identified this session:
 For each confirmed row, output: "Catalogado em docs/development/reuse-guidelines.md — regra <name> (<type>)."
 ```
 
-Record the run marker (any outcome): `echo "$(git log -1 --format=%ct 2>/dev/null || date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — lets `/devteam:commit`'s session guard skip re-gathering evidence.
-
 ## Step 5 — Auto-commit
 
 After all agents complete, execute the **Commit plan** declared in Step 3 — the plan approval (or `--auto`) already authorized these commits.
@@ -174,6 +172,7 @@ After all agents complete, execute the **Commit plan** declared in Step 3 — th
 2. For each manifest row, stage only that row's files (`git add …`) and commit it. One
    atomic commit per row; never mix layers; commit **locally only** — do not push.
 3. If a file in the manifest was not actually created/changed, skip its commit and note it.
+4. Record the run marker (any outcome, also on `--no-commit`) **after** the commits, so it holds the post-commit HEAD: `echo "$(date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — read by the `commands/merge.md` § Step 4 nudge and `/devteam:commit`'s session guard.
 
 Then output a summary:
 

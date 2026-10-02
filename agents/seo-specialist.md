@@ -33,7 +33,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision using the cascade in `CLAUDE.md` → *Canonical worktree decision cascade* (session file → `worktree_active` preference → ask once). When the resolved decision is `worktree=yes`, load `skills/shared/worktree/SKILL.md` with the resolved base branch and follow it through finalization.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

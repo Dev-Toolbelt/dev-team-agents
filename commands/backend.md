@@ -63,7 +63,7 @@ If both agents report no findings, output exactly:
 Post-implementation review: no issues found.
 ```
 
-**If findings exist**, use the `question` tool to ask the user what to do. Read `.dev-team-agents/resolved/preferences.json` → `language` (default: `en`) and present the quiz in that language:
+**If findings exist**, use `AskUserQuestion` to ask the user what to do. Read `.dev-team-agents/resolved/preferences.json` → `language` (default: `en`) and present the quiz in that language:
 
 ```json
 {

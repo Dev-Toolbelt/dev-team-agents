@@ -1,4 +1,4 @@
-<!-- last-updated: 2026-10-01 -->
+<!-- last-updated: 2026-10-02 -->
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -14,12 +14,15 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 |-------|----------|--------------|
 | `bash/empty-array-under-set-u.md` | bash, set -u, unbound variable, empty array, macOS, bash 3.2, KNOWN_DRIFT | A script with `set -u` and a deliberately empty array dies the first time it has something to report |
 | `bash/set-e-inside-a-cleanup-trap.md` | bash, set -e, errexit, pipefail, EXIT trap, cleanup, teardown, command substitution, brew uninstall, silent skip | An EXIT-trap teardown stops halfway and the checks that would have reported it are skipped too |
+| `bash/bash-source-under-curl-pipe.md` | bash, BASH_SOURCE, curl pipe, stdin, install script, cwd, dirname, relative path, set -u, unbound variable, safe fallback | A piped install script sources from the user's CWD instead of its own directory |
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
 | `electron/ipc-channels-need-the-trusted-sender-check.md` | electron, IPC, ipcMain.handle, security, trustedHandler, trustedRenderer, audit trail | After rebasing app work on main, grep for new `ipcMain.handle` calls |
 | `electron/project-naming-scope.md` | project, name, BindRequest, settings.json, app-local, not portable, machine-local, product naming | Deciding whether project names belong in the app-local settings or the CLI's committed record |
 | `electron/third-party-runtime-styles-and-csp.md` | sonner, CSP, content-security-policy, third-party, runtime styles, development vs production, __insertCSS, unsafe-inline | Libraries that inject `<style>` at module load render unstyled when CSP forbids `'unsafe-inline'` |
 | `electron/userdata-collides-with-the-cli-store.md` | electron, userData, getPath, productName, APP_NAME, Application Support, APPDATA, second writer, setPath | An Electron app is named after a CLI whose data directory follows the same convention, or a store-wide operation reports a size that makes no sense |
 | `git/worktree-exclude-scope.md` | worktree, info/exclude, gitignore, GIT_DIR, GIT_COMMON_DIR, untracked | Keeping generated files out of git in a repository that uses linked worktrees |
+| `git/worktree-session-lives-in-the-main-checkout.md` | worktree, git-common-dir, .worktree-session, linked worktree, untracked, relative path, session protocol, commands/merge, finalization | Resolving the session file location when code runs in a linked worktree |
+| `hooks/an-early-exit-sub-script-masks-a-block.md` | hook, dispatcher, pre-tool-use, post-tool-use, user-prompt-submit, stdin, pipe, SIGPIPE, exit 2, block code, full-suite guard, credential guard, payload | A sub-script that exits without reading stdin masks a later exit 2 block |
 | `hooks/a-relative-hook-command-breaks-after-cd.md` | hook, settings.json, hooks.json, relative path, cwd, cd, subdirectory, monorepo, CLAUDE_PROJECT_DIR, non-blocking error, empty board | Hooks stop working, or the board stays empty, after a session `cd`-ed into a subdirectory |
 | `hooks/a-background-hand-back-is-html-escaped-and-read-late.md` | task board, review window, background agent, task-notification, hand-back, html escape, marker, review-result, Stop, expiry, fix rule, result not read | Tasks stay in In Review as "result not read" although the reviewers ended with a marker |
 | `hooks/a-finished-merge-is-not-direct-work.md` | task board, merge, direct work, precedence, PreToolUse, PostToolUse, pr_refs.classify, tool output, payload | Merges are never recorded and a PR stays open, or a new reader of shell payloads is added to the task board |
@@ -32,6 +35,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `python/exclusive-create-instead-of-a-lock.md` | O_EXCL, os.open, machine-id, circular dependency, lock, os.link, Windows, race, singleton | Creating a file exactly once from concurrent callers, especially when the lock would depend on the file |
 | `python/path-containment-and-symlinks.md` | realpath, symlink, containment, relative_to, startswith, /private/var, path traversal | Deciding whether a path stays inside a directory before writing to or removing it |
 | `python/tarfile-extraction-filter.md` | tarfile, extractall, filter, data, tarslip, linkname, symlink, CVE, python 3.14 | Extracting an archive you did not create, or pinning which interpreter CI tests |
+| `render/rendered-paths-must-match-shipped-scripts.md` | render, path rewrite, tool-map.json, adr, script, render_provider.py, opencode, codex, tool_unavailable, docs/development | A path rewrite in tool-map.json breaks commands when shipped scripts don't follow it |
 | `security/credential-guard-heredocs.md` | credential-guard, heredoc, credentials.local.json, session-summary, false positive, false negative, newline, segment, refuse | The credential guard blocks a heredoc that only mentions a credential file, or lets a dump on the line after a heredoc through |
 | `security/macOS-keychain-add-generic-password-double-entry.md` | macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag, readpassphrase, 128 characters, truncation, tty, security -i | Writing a value to the macOS keychain via `security add-generic-password` in a non-interactive context |
 | `store/bind-over-a-v2-install.md` | v2, vendored, bind, migrate, doctor, git, tracked, info/exclude, symlink, leftover | A project that used the v2 install was bound instead of migrated, or `git status` shows framework links as modified after a bind |

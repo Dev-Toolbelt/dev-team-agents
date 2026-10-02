@@ -40,7 +40,7 @@ Before proposing or writing any markup, locate this project's design context so 
 
 ## 2. Worktree / Branch
 
-Resolve per the canonical worktree decision cascade in root `CLAUDE.md` and `skills/shared/worktree/SKILL.md` — do not restate it here. If a worktree is set up, isolate any project-specific infra (Docker stack, ports, seeded volumes) per that skill; never touch shared/main infra.
+Resolve per `skills/shared/worktree/SKILL.md` § Decision Cascade — do not restate it here. If a worktree is set up, isolate any project-specific infra (Docker stack, ports, seeded volumes) per that skill; never touch shared/main infra.
 
 ---
 

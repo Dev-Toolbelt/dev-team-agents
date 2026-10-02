@@ -139,17 +139,7 @@ After `gh pr create` succeeds, apply the Session Summary Rule from `CLAUDE.md` r
 
 ## Post-create — Nudge `/devteam:learn` if not run this session
 
-Check for the marker `/devteam:learn` writes:
-
-```bash
-cat .dev-team-agents/.learn-last-run 2>/dev/null
-```
-
-If the marker is absent, or its recorded commit hash is not an ancestor of the current `HEAD` (i.e. commits landed since the last learn run), tell the user before finishing:
-
-> "This session hasn't run `/devteam:learn` since its last recorded commit — consider running it to capture decisions from this branch before they're lost. Run `/devteam:learn` now?"
-
-Ask via `AskUserQuestion` (Yes / No). If yes, hand off by telling the user to invoke `/devteam:learn` (do not spawn it inline — it is a separate command with its own plan gate).
+Run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip. Hand off as that step says — never spawn `/devteam:learn` inline.
 
 ---
 

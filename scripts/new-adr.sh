@@ -95,9 +95,12 @@ if [ ! -f "$TEMPLATE" ]; then
     exit 1
 fi
 
+# Escape the characters special in a sed replacement (\, &) and our delimiter (|).
+TITLE_ESCAPED=$(printf '%s' "$TITLE" | sed -e 's/[\&|]/\\&/g')
+
 sed \
     -e "s/\[NUMBER\]/$NEXT/g" \
-    -e "s|\[Title\]|$TITLE|g" \
+    -e "s|\[Title\]|$TITLE_ESCAPED|g" \
     -e "s/\[YYYY-MM-DD\]/$TODAY/g" \
     "$TEMPLATE" > "$FILENAME"
 

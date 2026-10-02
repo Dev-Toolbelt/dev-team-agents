@@ -80,9 +80,14 @@ Use the `AskUserQuestion` tool with options [Yes, No]:
 
 ---
 
-## Cleanup
+## Lifecycle
 
-The session file is ephemeral — remove it after the task is finalized (merged) and cleaned up:
+The session file is scoped to one session:
+
+- **Created** by the first agent that resolves the decision (see above).
+- **Kept** across agents, `resume` and `compact` — the `SessionStart` hook leaves it alone.
+- **Moved aside** at a fresh session start (`startup`, `clear`, or no payload): `scripts/hooks/session-start.sh` renames it to `worktree-session.stale` in the machine-local state dir. It is never deleted, so a stale decision is never silently reused and stays recoverable.
+- **Removed** after the task is finalized (merged) and cleaned up:
 
 ```bash
 rm -f .dev-team-agents/.worktree-session

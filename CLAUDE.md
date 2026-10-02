@@ -99,7 +99,7 @@ The test for adding an agent there is recorded in `tiers.json` (`_why_qa_special
 - Every agent must include: **Foundational Rule** (load context first) + **Immutability Warning** + a **`## Model Identity`** section carrying the `<!-- run-banner -->` block (see the Run Banner rule below)
 - Stack-agnostic: no hardcoded framework, language, or tool references in agent core behavior
 - No plain-text `(yes/no)` prompts in the body — `agent-lint.sh` fails on them; use `AskUserQuestion` (see the Quiz-first Rule below)
-- Max ~200 lines of content per agent; move reference material to skills. `helpers/size-limits.sh` enforces 205 — the extra 5 lines are the fixed-size run-banner block every agent carries, not content budget. Do not raise that ceiling again to make a long agent fit.
+- Max ~200 lines of content per agent; move reference material to skills. `helpers/size-limits.sh` enforces 211 — the extra lines are the fixed-size run-banner block and the `## Before You Finish` section every agent carries, not content budget. Do not raise that ceiling again to make a long agent fit.
 
 **Run Banner Rule.** Every agent prints a model-identity table — agent, tier, model, effort — twice: opening its first response, and closing the summary it hands back. On every provider. The second emission is the load-bearing one: only an agent's **final** message reaches the main conversation, so a subagent running in the background would otherwise show its banner to nobody.
 
@@ -116,7 +116,7 @@ The rule and the table format live in `skills/shared/model-identity/SKILL.md`; e
 
 The source copy holds Claude's values because Claude is the identity case; `render_run_banner()` in `scripts/lib/render_provider.py` rewrites the **Model** and **Effort** cells for opencode and Codex (Agent and Tier are provider-agnostic and pass through). Resolving the banner at render time — rather than having the agent read `tiers.json` and sniff the provider at runtime — is deliberate: it costs no tool call per invocation, and it cannot report the wrong provider in a project that has more than one installed.
 
-**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section. That section **delegates** — it points at the canonical cascade below and at `skills/shared/worktree/SKILL.md` for the `worktree=yes` path, in two or three lines. **Do not restate the cascade in an agent body.** It used to be inlined in all eight agents (~15 lines each) and drifted between them; the cascade has exactly one copy, and it is here.
+**Coding agents** (`backend-developer`, `frontend-developer`, `mobile-developer`, `database-specialist`, `devops-specialist`, `ui-ux-designer`, `backend-test-specialist`, `frontend-test-specialist`) must also include a **`## Worktree Isolation`** section. That section **delegates** — in two or three lines it points at `skills/shared/worktree/SKILL.md` § Decision Cascade, the canonical home that ships to installed projects (this `CLAUDE.md` does not — `install.sh`'s KEEP_ROOT drops it). **Do not restate the cascade in an agent body.** It used to be inlined in all eight agents (~15 lines each) and drifted between them. The block below is contributor documentation of the same rule; when the two disagree, the skill wins and this block is patched to match.
 
 **Canonical worktree decision cascade** (resolve top-down, stop at the first match):
 
@@ -169,7 +169,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Project rules override these base standards | `skills/shared/project-context/SKILL.md` | Say nothing — loading the skill is the enforcement |
 | SonarQube detection signals | `skills/devops/sonarqube/SKILL.md` (detection table) | Route to the table; never restate a subset of the signals |
 | Comments policy, including TODO/FIXME handling | `skills/shared/comments-policy/SKILL.md` (Conditional Section Loading table) | Load it; the routing parenthetical belongs to the skill |
-| Worktree decision cascade | `CLAUDE.md` → *Canonical worktree decision cascade* + `skills/shared/worktree/SKILL.md` | Delegate from `## Worktree Isolation` (see Agents above) |
+| Worktree decision cascade | `skills/shared/worktree/SKILL.md` § Decision Cascade (shipped); `CLAUDE.md` → *Canonical worktree decision cascade* is the contributor-facing summary | Delegate from `## Worktree Isolation` (see Agents above) |
 | Layered-commit table and commit message format | `skills/shared/conventional-commits/SKILL.md` | Load it; commands must not carry a second copy of the table |
 | Plan document format | `templates/plan-template.md`, loaded via `skills/shared/plan-mode/SKILL.md` | Load the template; never ship a second rendering of the format |
 | Spawn integrity — no Task tool means stop and say so; `subagent_type` must come from the roster; a returned run banner is the only proof an agent ran | `skills/architecture/orchestration/SKILL.md` § Spawn Integrity | Load it and delegate. Never write a second "verify the spawn" rule, and never let a summary template ask for a list of agents from memory — the table is filled from returned banners |
@@ -181,7 +181,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Spec layer — per-feature `docs/specs/<feature>.md` (Given/When/Then, `touches`/`depends_on`), auto-contract gate, execution scope-lock, living-spec Amendment Log, and the end-of-work Spec Sync Gate (`[SPEC-DRIFT]` blocks deploy) | `skills/shared/spec-gate/SKILL.md`, `templates/spec-template.md` | Load it wherever the table applies — product-analyst (Step 5b), software-architect (contract/amendment), coding agents (scope-lock, business amendments), qa-specialist (sync gate). Never restate the format, gate condition, or amendment rules |
 | Task List Mirroring — an approved plan's Steps become each provider's native task list, moved in step with Progress Reporting; the only way a plan reaches the task board | `skills/shared/plan-mode/SKILL.md` § Task List Mirroring | Nothing — loading plan-mode is the enforcement; `agent-lint.sh` (`PLAN_MODE_LOADERS`, `PLAN_MODE_COMMAND_EXEMPT`) fails when the section, an agent's plan-mode load or a plan-gated command's pointer disappears |
 | Review result marker — every review or QA pass ends with `<!-- review-result: findings=N -->`, the only way the task board learns a review's outcome | `skills/shared/review-result/SKILL.md` | Name it from `## Before You Finish` in one sentence; `agent-lint.sh` (`REVIEW_RESULT_AGENTS`) fails a reviewer or QA agent that omits it |
-| Periodic status-table check-in while background sub-agents work — table format, `ScheduleWakeup` cadence, and the `credentials.local.json` gate (`work_feedback_active`, `work_feedback_interval_minutes`) | `skills/shared/work-feedback/SKILL.md` | Orchestrators load it from `skills/architecture/orchestration/SKILL.md` § Spawn Integrity, check 5. Never restate the gate check, loop mechanics, or table format |
+| Periodic status-table check-in while background sub-agents work — table format, `ScheduleWakeup` cadence, and the `credentials.local.json` gate (`work_feedback_active`, `work_feedback_interval_minutes`) | `skills/shared/work-feedback/SKILL.md` | Orchestrators load it from `skills/architecture/orchestration/SKILL.md` § Spawn Integrity, check 6. Never restate the gate check, loop mechanics, or table format |
 
 When a duplicated rule is found, delete the copy — do not "reconcile" the two wordings.
 
@@ -276,7 +276,7 @@ dev-team-agents/
 │   │                                model↔tiers.json↔run-banner drift + skill
 │   │                                identity (name == dir, unique) + quiz-first +
 │   │                                orchestration roster ↔ agents/ (name + tier, both ways)
-│   ├── size-limits.sh             ← agents 205 (200 content + 5 run-banner) · commands 200 · skills 500
+│   ├── size-limits.sh             ← agents 211 (200 content + run-banner + Before You Finish) · commands 200 · skills 500
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
 │   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
@@ -361,7 +361,7 @@ When a rule or script path references "helpers", state which of the two it means
 | `scripts/install.sh` — no-python3 fallback heredoc | No JSON parser available on that path |
 | `CLAUDE-md/preferences.md` — schema block + field table | Documentation |
 | `skills/shared/user-preferences/SKILL.md` — schema block + field table | Documentation read by agents |
-| `README.md` / `README.pt-BR.md` — worktree preference table | Documentation |
+| `docs/user-preferences.md` / `docs/user-preferences.pt-BR.md` — schema block, key table and effects table | Documentation |
 
 `skills/shared/project-context/SKILL.md` and `skills/shared/setup-health-check/references/checks-list.md` **read the canonical file** instead of mirroring it — keep them that way.
 

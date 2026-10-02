@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: error
 
       - name: Set up Ruby (formula syntax check)
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: "3.3"
 
