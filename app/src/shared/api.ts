@@ -1375,7 +1375,15 @@ export interface BoardReview {
   readonly since: number;
 }
 
-export type BoardTaskKind = 'agent' | 'todo';
+export type BoardTaskKind = 'agent' | 'todo' | 'direct';
+
+/** One turn of a `direct` task: an excerpt of the prompt that triggered the work. */
+export interface BoardTurn {
+  /** At most 100 characters, secret-redacted by the CLI; empty when the prompt was not captured. */
+  readonly text: string;
+  /** Epoch seconds. */
+  readonly at: number;
+}
 
 /** One task, as `devteam tasks list|watch --json` derives it. Epoch fields are seconds. */
 export interface BoardTask {
@@ -1393,7 +1401,10 @@ export interface BoardTask {
   readonly durations: Readonly<Record<string, number>>;
   readonly stale: boolean;
   readonly abandoned: boolean;
-  /** `agent` for a spawned sub-agent run, `todo` otherwise (and for a CLI that predates the field). */
+  /**
+   * `agent` for a spawned sub-agent run, `direct` for the one card of work the main session did
+   * itself, `todo` otherwise (and for a CLI that predates the field or sends an unknown kind).
+   */
   readonly kind: BoardTaskKind;
   /** An agent task whose run failed; false for a CLI that predates the field. */
   readonly failed: boolean;
@@ -1404,6 +1415,8 @@ export interface BoardTask {
    * predates the field).
    */
   readonly worktree: BoardWorktree | null;
+  /** The prompts behind a `direct` task, oldest first (at most 20); empty for other kinds and older CLIs. */
+  readonly turns: readonly BoardTurn[];
 }
 
 export interface BoardWorktree {

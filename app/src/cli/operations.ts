@@ -37,6 +37,7 @@ import type {
   BoardSession,
   BoardSessionStatus,
   BoardTask,
+  BoardTurn,
   BoardWorktree,
   BindMode,
   BindProvider,
@@ -2506,11 +2507,28 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     durations,
     stale: raw['stale'] === true,
     abandoned: raw['abandoned'] === true,
-    kind: raw['kind'] === 'agent' ? 'agent' : 'todo',
+    kind: raw['kind'] === 'agent' || raw['kind'] === 'direct' ? raw['kind'] : 'todo',
     failed: raw['failed'] === true,
     review,
     worktree: asBoardWorktree(raw['worktree']),
+    turns: asBoardTurns(raw['turns']),
   };
+}
+
+const MAX_TURNS = 20;
+const MAX_TURN_TEXT = 100;
+
+/** The newest `MAX_TURNS` well-formed turns, oldest first; malformed entries are dropped. */
+function asBoardTurns(raw: unknown): BoardTurn[] {
+  if (!Array.isArray(raw)) return [];
+  const turns: BoardTurn[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry) || typeof entry['text'] !== 'string') continue;
+    const at = nonNegative(entry['at']);
+    if (at === null) continue;
+    turns.push({ text: entry['text'].slice(0, MAX_TURN_TEXT), at });
+  }
+  return turns.slice(-MAX_TURNS);
 }
 
 /** Null for anything but `{path: non-empty string, branch?: string}`; text is bounded. */
