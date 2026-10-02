@@ -86,6 +86,9 @@ _DIRECT_EDIT_TOOLS = {
     "opencode": ("edit", "write", "patch", "multiedit"),
 }
 _DIRECT_SHELL_TOOLS = {"claude": ("Bash",), "codex": ("Bash", "shell", "exec_command"), "opencode": ("bash",)}
+#: Tools that are never the session's own work: the todo tools that read or drive a list of
+#: their own (the ones that write it are recorded as native tasks before this is consulted).
+_DIRECT_SKIP_TOOLS = ("TaskList", "TaskGet", "TaskOutput", "TaskStop", "todoread")
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -530,48 +533,57 @@ def writes(command):
 
 
 def _normalize_direct(payload, provider, tool_name, bare_tool):
-    """A call of the session's own that changes something, as a ``("direct", {})`` op, else ``None``.
+    """Any call of the session's own, as ``("direct", {"write": bool})``, else ``None``.
 
+    ``write`` is an edit tool or a write-shaped shell command (:func:`writes`); anything else —
+    a read, a search, a fetch, an MCP tool — is still the session's work, only not a change.
     Only the main session's work: a subagent's (``agent_id``; opencode ``parent_id``, a child
-    session) is its agent task's. ``Bash`` is named the same by Claude Code and Codex; Codex's
-    ``turn_id`` or its transcript path tells them apart, and the stored record's provider wins.
+    session) is its agent task's. A tool name shared by Claude Code and Codex is told apart by
+    Codex's ``turn_id`` or its transcript path, and the stored record's provider wins.
     """
     if _first_text(payload, "agent_id", "parent_id"):
         return None
-    detected, shell = None, False
-    for name, tools in _DIRECT_EDIT_TOOLS.items():
-        if name == "opencode":
-            if bare_tool.lower() in tools:
-                detected, shell = name, False
-        elif tool_name in tools:
-            detected, shell = name, False
-        if detected:
-            break
-    if detected is None:
-        if bare_tool.lower() in _DIRECT_SHELL_TOOLS["opencode"]:
-            detected, shell = "opencode", True
-        elif tool_name in _DIRECT_SHELL_TOOLS["codex"] or tool_name in _DIRECT_SHELL_TOOLS["claude"]:
-            transcript = _first_text(payload, "transcript_path")
-            codex = tool_name != "Bash" or "turn_id" in payload or "/.codex/" in transcript.replace("\\", "/")
-            detected, shell = ("codex" if codex else "claude"), True
-    if detected is None or provider not in ("auto", detected):
+    name = bare_tool or tool_name
+    if not name or name in _DIRECT_SKIP_TOOLS or name.split(".")[-1] in _DIRECT_SKIP_TOOLS:
         return None
+    edit, shell, distinct = False, False, True
+    if bare_tool:
+        detected = "opencode"
+        edit = bare_tool.lower() in _DIRECT_EDIT_TOOLS["opencode"]
+        shell = bare_tool.lower() in _DIRECT_SHELL_TOOLS["opencode"]
+    elif tool_name in _DIRECT_EDIT_TOOLS["claude"]:
+        detected, edit = "claude", True
+    elif tool_name in _DIRECT_EDIT_TOOLS["codex"]:
+        detected, edit = "codex", True
+    else:
+        transcript = _first_text(payload, "transcript_path")
+        codex = (
+            tool_name in _DIRECT_SHELL_TOOLS["codex"] and tool_name != "Bash"
+            or "turn_id" in payload
+            or "/.codex/" in transcript.replace("\\", "/")
+        )
+        detected = "codex" if codex else "claude"
+        shell = tool_name in _DIRECT_SHELL_TOOLS[detected]
+        # A name both providers could send (`Bash`, `Read`, an MCP tool) is a guess.
+        distinct = tool_name in ("shell", "exec_command")
+    if provider not in ("auto", detected):
+        return None
+    write = edit
     if shell:
         args = _dict(payload.get("args")) if detected == "opencode" else _dict(payload.get("tool_input"))
-        if not writes(args.get("command") or args.get("cmd")):
-            return None
+        write = writes(args.get("command") or args.get("cmd"))
     session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
     if not session_id:
         return None
     return {
         "provider": detected,
-        # A guess for `Bash` only: the record's own provider is kept when it has one.
-        "provider_guessed": shell and detected in ("claude", "codex") and tool_name == "Bash",
+        # A guess for a shared name only: the record's own provider is kept when it has one.
+        "provider_guessed": detected in ("claude", "codex") and not distinct,
         "session_id": session_id,
         "cwd": _first_text(payload, "cwd"),
         "owner": MAIN_OWNER,
         "agent_type": None,
-        "op": ("direct", {}),
+        "op": ("direct", {"write": bool(write)}),
     }
 
 
@@ -609,9 +621,13 @@ def _prompt_path(path):
     return path.parent / ".prompt-{}".format(path.name[: -len(".json")])
 
 
-def direct_marker(path):
-    """The marker that tells the PreToolUse gate this turn's direct work is already settled."""
-    return path.parent / ".direct-{}".format(path.name[: -len(".json")])
+def direct_marker(path, write=False):
+    """The markers that tell the PreToolUse gate this turn's direct work is already recorded.
+
+    ``.direct-<session>`` once any call of the turn is, ``.directw-<session>`` once a write is: a
+    read after either forks nothing, a write only until the first one is recorded.
+    """
+    return path.parent / ".direct{}-{}".format("w" if write else "", path.name[: -len(".json")])
 
 
 def _decode_prompt(raw):
@@ -675,10 +691,13 @@ def _is_native(task):
 def _apply_direct(record, call, now, turn):
     """Fold the session's own work into its one direct card. Returns True when it changed something.
 
+    The card follows the latest turn: a turn that only reads leaves it in To Do (``pending``), the
+    first write of a turn moves it to In progress, and Stop finishes that (:func:`_settle_direct`).
     Covered work is not counted twice: nothing is recorded while the main session has a native task
     in progress (a plan step, its own list) or spawned an agent in this turn.
     """
     started, excerpt = turn
+    write = bool(call["op"][1].get("write"))
     for task in record["tasks"]:
         if task["owner"] != MAIN_OWNER or not _shown(task) or _is_direct(task):
             continue
@@ -687,27 +706,58 @@ def _apply_direct(record, call, now, turn):
         if _is_agent(task) and started is not None and task["created_at"] >= started:
             return False
     card = next((t for t in record["tasks"] if _is_direct(t) and t["owner"] == MAIN_OWNER), None)
-    opened = card is None or card["status"] != "in_progress"
+    status = "in_progress" if write else "pending"
     if card is None:
-        card = _add_task(record, call, {"id": None, "content": DIRECT_CONTENT, "status": "in_progress"}, now)
+        card = _add_task(record, call, {"id": None, "content": DIRECT_CONTENT, "status": status}, now)
         card.update(kind="direct", turns=[])
-    elif opened:
+        new_turn = True
+    else:
+        turns = card.get("turns") or []
+        # A new turn is a newer prompt, or — with no prompt file — the first call after a Stop.
+        if started is not None:
+            new_turn = not turns or turns[-1].get("at", 0) < started
+        else:
+            new_turn = not card.get("open_turn")
         card["removed_at"] = None
-        _push(card, "in_progress", now)
+        # A write promotes the card; a read restarts it only on a new turn, never demoting a
+        # write already made in this one.
+        if card["status"] != status and (write or new_turn):
+            _push(card, status, now)
+    card["open_turn"] = True
     turns = card.setdefault("turns", [])
-    at = started if started is not None else now
-    # A new turn is a newer prompt, or — with no prompt file — the card opening again after a Stop.
-    if not turns or (turns[-1].get("at", 0) < started if started is not None else opened):
-        turns.append({"text": excerpt, "at": at})
+    if new_turn:
+        turns.append({"text": excerpt, "at": started if started is not None else now})
         del turns[: max(0, len(turns) - DIRECT_TURNS_CAP)]
     return True
 
 
 def _settle_direct(record, now):
-    """A finished turn finishes its direct work: the card goes ``completed``."""
+    """A finished turn finishes its direct work.
+
+    A card In progress goes ``completed``. A card left in To Do stays there — a question asked is
+    still something to do — unless the turn was covered after all: a plan or an agent that started
+    after the card's last turn is that turn's work, and the card is retired, never deleted.
+    """
     for task in record["tasks"]:
-        if _is_direct(task) and task["status"] == "in_progress":
+        # A card In progress with no `open_turn` predates the flag: it is still this turn's.
+        if not _is_direct(task) or not (task.get("open_turn") or task["status"] == "in_progress"):
+            continue
+        task["open_turn"] = False
+        if task["status"] == "in_progress":
             _push(task, "completed", now)
+        elif task["status"] == "pending":
+            since = (task.get("turns") or [{}])[-1].get("at", task["created_at"])
+            if any(
+                not _is_direct(other) and other["owner"] == MAIN_OWNER
+                and other["created_at"] >= since
+                for other in record["tasks"]
+            ):
+                task["removed_at"] = now
+
+
+def _is_waiting_direct(task):
+    """A direct card in To Do: a turn that only read. Never abandoned work — see :func:`_open_count`."""
+    return _is_direct(task) and task["status"] == "pending"
 
 
 # ── the record ───────────────────────────────────────────────────────────────
@@ -1083,7 +1133,9 @@ def _open_keys(record, members):
 
 
 def _open_count(record):
-    return len(_open_keys(record, _review_members(record)))
+    """Open tasks for ``tasks.session_abandoned``: a direct card left in To Do does not count."""
+    waiting = {t["key"] for t in record["tasks"] if _is_waiting_direct(t)}
+    return len(_open_keys(record, _review_members(record)) - waiting)
 
 
 def _all_done(record, members, skip_direct=False):
@@ -2312,6 +2364,8 @@ def record(root, payload, provider="auto", now=None):
                 # Settled for this turn either way: the gate forks nothing more until the next prompt.
                 try:
                     direct_marker(path).touch()
+                    if call["op"][1].get("write"):
+                        direct_marker(path, write=True).touch()
                 except OSError:
                     pass
             if changed is False:
@@ -2890,7 +2944,8 @@ def _task_view(task, session_status, now, stale_after, until, member=None, revie
         and not member
         and session_status != "ended"
         and now - since > stale_after,
-        "abandoned": column not in ("done", "pr_created") and session_status == "ended",
+        "abandoned": column not in ("done", "pr_created") and session_status == "ended"
+        and not _is_waiting_direct(task),
         # Additive: the PR/MR the task shipped in (`{"kind", "number", "url", "state"}`), else null.
         "pr": {k: pr[k] for k in ("kind", "number", "url", "state")} if pr is not None else None,
         # Additive: the issue references that apply to the task (`{"system", "key", "url"}`).
