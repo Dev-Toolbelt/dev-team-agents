@@ -1,6 +1,6 @@
 # Credentials Reference
 
-Reference for `.dev-team-agents/credentials.local.json`: what each section is for, who uses it, how to create and edit it, and how to fill it safely.
+Reference for `.dev-team-agents/credentials.local.json`: how to create and edit it, the two reserved keys, and how to fill it safely.
 
 ---
 
@@ -9,10 +9,7 @@ Reference for `.dev-team-agents/credentials.local.json`: what each section is fo
 - [Summary](#summary)
 - [File Location](#file-location)
 - [Creating and Editing](#creating-and-editing)
-- [Top-Level Structure](#top-level-structure)
-- [DevOps Section](#devops-section)
-- [App Section](#app-section)
-- [Field-by-Field Reference](#field-by-field-reference)
+- [Structure](#structure)
 - [Usage Notes](#usage-notes)
 - [Security Guidance](#security-guidance)
 
@@ -22,7 +19,7 @@ Reference for `.dev-team-agents/credentials.local.json`: what each section is fo
 
 `credentials.local.json` is the local, gitignored credential and environment reference file. It gives selected agents enough structured information to access staging or production systems when a task requires operational validation or deployment support.
 
-It is not a secret manager. It is a local convenience file with a predictable schema.
+It is not a secret manager. It is a local convenience file whose shape you choose.
 
 ---
 
@@ -42,9 +39,9 @@ The file does not exist by default. Create it in one of three ways:
 
 ### Via the Desktop App
 
-Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the standard layout and open a form. Edit fields directly, with automatic validation and JSON error reporting.
+Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the starter example. The tab is a tree editor: add, rename, nest and remove groups and fields, mark a field secret or a group production, and search keys and visible values.
 
-Secrets are write-only: only known non-secret fields (hosts, users, URLs, ports, paths) are ever shown, and every other value appears as set / not set, with Replace and Remove.
+Secrets are write-only: a value marked in `$secrets`, or one that looks secret, appears only as set / not set, with Replace.
 
 ### Via the CLI
 
@@ -64,229 +61,52 @@ chmod 600 .dev-team-agents/credentials.local.json
 
 ---
 
-## Top-Level Structure
+## Structure
 
-| Key | Purpose |
-|-----|---------|
-| `work_feedback_active` | Enables/disables the periodic status-table check-in while background sub-agents work (`skills/shared/work-feedback/SKILL.md`). Default `true` |
-| `work_feedback_interval_minutes` | Interval, in minutes, between status-table check-ins. Default `5` |
-| `devops` | Infrastructure-level access for servers, databases, and operational tasks |
-| `app` | Application-level access for logging into staging or production environments |
+The file is free-form. Name, nest and remove groups and fields however suits the project: there is no fixed category, environment or agent list. `devteam cred local init` writes a small `example` group to start from; edit it or delete it.
 
-Each section defines:
+Two reserved keys may appear in **any** object. Every other key is yours:
 
-- Which agents are allowed to use that block
-- Separate staging and production environments
-- Structured credentials instead of free-form notes
+| Key | Value | Meaning |
+|-----|-------|---------|
+| `$production` | `true` | The object and everything nested below it is production. Agents ask before every state-changing action there, one action at a time |
+| `$secrets` | list of sibling key names | Those keys hold secrets. The app keeps them write-only, and `devteam cred local show` never prints them |
 
----
-
-## DevOps Section
-
-`devops` is intended for infrastructure-facing tasks.
-
-### Summary
-
-| Key | Meaning |
-|-----|---------|
-| `agents` | Agent allowlist for infrastructure credentials |
-| `staging.ssh` | SSH access data for staging |
-| `staging.database` | One or more staging databases |
-| `production.ssh` | SSH access data for production |
-| `production.docker` | Optional provider-specific Docker metadata |
-| `production.database` | One or more production databases |
-
-### Intended use
-
-This block is most relevant when tasks involve:
-
-- deploy diagnostics
-- server inspection
-- operational reviews
-- database validation
-- security audits
-
----
-
-## App Section
-
-`app` is intended for browser or application-login scenarios.
-
-### Summary
-
-| Key | Meaning |
-|-----|---------|
-| `agents` | Agent allowlist for application credentials |
-| `staging.appUrl` | Base URL for the staging app |
-| `staging.username` | Login username for staging |
-| `staging.password` | Login password for staging |
-| `production.appUrl` | Base URL for the production app |
-| `production.username` | Login username for production |
-| `production.password` | Login password for production |
-
-### Intended use
-
-This block is most relevant when tasks involve:
-
-- QA validation in staging
-- review agents checking live behavior
-- security validation of accessible environments
-- reproducing a bug in a deployed environment
-
----
-
-## Field-by-Field Reference
-
-### `devops.agents`
-
-List of agent names allowed to consume infrastructure credentials.
-
-Use it to limit high-risk access to the smallest set of roles that actually need it.
-
-### `devops.staging.ssh.user`
-
-SSH username for the staging server.
+Two top-level keys are settings, not credentials: `work_feedback_active` (default `true`) and `work_feedback_interval_minutes` (default `5`), read by the agents' periodic progress check-ins.
 
 Example:
 
 ```json
-"user": "deploy"
+{
+  "work_feedback_active": true,
+  "work_feedback_interval_minutes": 5,
+  "api": {
+    "staging": {
+      "url": "https://staging.example.com",
+      "username": "qa@example.com",
+      "password": "...",
+      "$secrets": ["password"]
+    },
+    "production": {
+      "$production": true,
+      "url": "https://example.com",
+      "db": { "host": "db.internal", "dsn": "...", "$secrets": ["dsn"] }
+    }
+  },
+  "jira": { "site": "acme.atlassian.net", "token": "...", "$secrets": ["token"] }
+}
 ```
 
-### `devops.staging.ssh.host`
-
-Hostname or IP address of the staging server.
-
-Example:
-
-```json
-"host": "staging.example.com"
-```
-
-### `devops.staging.ssh.privateKeyPath`
-
-Absolute or user-relative path to the SSH private key used for staging access.
-
-Example:
-
-```json
-"privateKeyPath": "~/.ssh/id_ed25519"
-```
-
-### `devops.staging.ssh.path`
-
-Remote application path after login.
-
-Example:
-
-```json
-"path": "/var/www/my-app"
-```
-
-### `devops.staging.database[]`
-
-Array because staging may have more than one database or service.
-
-Each entry contains:
-
-| Field | Meaning |
-|-------|---------|
-| `type` | Database engine such as `postgres`, `mysql`, `mongodb` |
-| `host` | Database host |
-| `port` | Database port |
-| `database` | Database name |
-| `username` | Database login user |
-| `password` | Database password |
-
-### `devops.production.ssh.*`
-
-Same schema and meaning as staging SSH, but for production.
-
-Use with stricter discipline and only when the task really requires production access.
-
-### `devops.production.docker`
-
-Open object reserved for deployment-specific Docker metadata.
-
-Because infrastructure layouts differ, this block is intentionally flexible. Common uses might include:
-
-- compose project names
-- container labels
-- service names
-- registry references
-
-If unused, leave it as `{}`.
-
-### `devops.production.database[]`
-
-Same schema as staging databases, but for production systems.
-
-If production has read replicas, analytics databases, or multiple services, add multiple array entries.
-
-### `app.agents`
-
-List of agent names allowed to consume application login credentials.
-
-This is separate from `devops.agents` because browser-level access and server-level access are not the same trust boundary.
-
-### `app.staging.appUrl`
-
-Base URL used to open the staging environment.
-
-Example:
-
-```json
-"appUrl": "https://staging.example.com"
-```
-
-### `app.staging.username`
-
-Username or email used to log into staging.
-
-### `app.staging.password`
-
-Password for the staging account.
-
-### `app.production.appUrl`
-
-Base URL of the production application.
-
-### `app.production.username`
-
-Username or email used to log into production.
-
-### `app.production.password`
-
-Password for the production account.
+A value stays hidden even without a `$secrets` entry when its key looks secret (`password`, `token`, `secret`, `apiKey`…) or the value does (a URL with `user:password@`, a URL with a query string, pasted key material). That is a safety net, not a substitute: mark your secrets so a value under an innocent name (`conn`, `dsn2`) is protected too.
 
 ---
 
 ## Usage Notes
 
-- Fill only the sections you actually use.
-- You can keep unused fields as empty strings.
+- Keep only what the agents actually need.
+- Mark every production group with `$production`. A group named `production` without the flag is not marked.
 - Prefer staging credentials whenever the task does not explicitly require production.
-- If multiple environments exist, keep the schema consistent rather than adding ad-hoc notes.
-
-Minimal staging-only example:
-
-```json
-{
-  "app": {
-    "agents": ["qa-specialist"],
-    "staging": {
-      "appUrl": "https://staging.example.com",
-      "username": "qa@example.com",
-      "password": "..."
-    },
-    "production": {
-      "appUrl": "",
-      "username": "",
-      "password": ""
-    }
-  }
-}
-```
+- Renaming a secret in the app keeps its value: the rename happens in the file, and the value never reaches the app.
 
 ---
 

@@ -667,11 +667,11 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 
 | Command | What it does | Output (success, `ok: true`) |
 |---------|------|-------|
-| `devteam cred local show` | Read the file; never prints a secret value | `{path, exists, valid, error, hash, data, unknown_paths}` |
+| `devteam cred local show` | Read the file; never prints a secret value | `{path, exists, valid, error, hash, data}` |
 | `devteam cred local init` | Write the canonical template; refuses (exit 4) if the file exists | same as `show` |
-| `devteam cred local patch --expect-hash <H>` | Apply JSON Pointer ops from stdin atomically; refuses (exit 4) on hash conflict | same as `show` |
+| `devteam cred local patch --expect-hash <H>` | Apply `set`/`unset`/`move` JSON Pointer ops from stdin atomically; refuses (exit 4) on hash conflict | same as `show` |
 
-**Redaction is default-deny** (ADR-0024 § 5): `data` keeps a value only for the two `work_feedback_*` keys, `agents` string arrays and the leaves named in `credentials_local.SAFE_LEAF_NAMES`, and hides even those when the value looks secret (URL userinfo, a URL query or fragment, pasted key material). Everything else becomes `{"secret": true, "set": <boolean>}`. On `patch`, every value travels on stdin; argv never carries one.
+**The file is free-form** (ADR-0024 § 6): the user's own groups and fields, plus two reserved keys valid in any object — `$production: true` (that object and everything below it is production) and `$secrets: [names]` (those sibling keys are secret). **Redaction follows the marks with a safety net** (§ 5): a marked value becomes `{"secret": true, "set": <boolean>, "marked": true}` (a marked container is hidden whole); an unmarked scalar whose key or value looks secret is hidden with `"marked": false`; everything else is shown. `move` renames or re-nests a value without the app ever holding it. On `patch`, every value travels on stdin; argv never carries one.
 
 **Hash conflict:** `hash` is an HMAC of the file's bytes keyed with a machine-local key, not a plain digest. If it differs from `--expect-hash`, no change is made and exit 4 is returned with `details.reason: "hash-conflict"`; `init` on an existing file returns exit 4 with `details.reason: "exists"`.
 

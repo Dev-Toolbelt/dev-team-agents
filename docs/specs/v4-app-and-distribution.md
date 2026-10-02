@@ -706,6 +706,7 @@ installs before anyone merges**
 - **Blocks**: the desktop app (M4.3), and both publication pipelines
 
 ### Amendment Log
+- 2026-10-01 | software-architect | ADR-0024 § 6 makes the credentials file free-form: the Credentials tab is a tree editor with per-field `$secrets`, a per-group `$production` flag and search, and `cred local patch` gains a `move` op. `cred local show` drops `unknown_paths` (unreleased, so no deprecation). The credential-resolution [MET] verdict is unchanged: the app still runs only the three `cred local` leaves and no value-resolving command.
 - 2026-10-01 | technical-writer | ADR-0024 resolves the app's need for credentials editing: `devteam cred local {show,init,patch}` let the app read and write `.dev-team-agents/credentials.local.json` while respecting the rule that `cred get` (which prints secret values) is never called. The [MET] verdicts for credential resolution were re-annotated in place: the app runs the three `cred local` leaves and no other `cred` command.
 - 2026-09-28 | software-architect | Spec created after M4.1 and M4.2 landed, with every scenario
   marked `[MET]`, `[UNVERIFIABLE HERE]` or `[UNBUILT]` rather than written as uniform criteria. |
