@@ -1541,8 +1541,12 @@ export interface OpenTaskLinkRequest {
   readonly session_id: string;
   /** `null` for a link on a session chip (`type: 'pr'` indexes `session.prs`). */
   readonly task_key: string | null;
-  /** `pr`: the task's own PR/MR (index 0) or a session PR; `ref`: `task.refs[index]`. */
-  readonly link: { readonly type: 'pr' | 'ref'; readonly index: number };
+  /**
+   * `pr`: the task's own PR/MR (index 0) or a session PR; `ref`: `task.refs[index]`. `expect` is
+   * the number (`"12"`) or key (`"PROJ-3"`, `"o/r#4"`) the badge showed: a snapshot that moved
+   * between render and click resolves to another link, and that one is refused, never opened.
+   */
+  readonly link: { readonly type: 'pr' | 'ref'; readonly index: number; readonly expect: string };
 }
 
 export type OpenTaskLinkAnswer = { readonly ok: true } | { readonly ok: false; readonly message: string };

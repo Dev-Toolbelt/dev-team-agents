@@ -60,12 +60,14 @@ export function parseOpenTaskLink(raw: unknown): OpenTaskLinkRequest | null {
   if (typeof link !== 'object' || link === null || Array.isArray(link)) return null;
   const linkBody = link as Record<string, unknown>;
   const linkKeys = Object.keys(linkBody);
-  if (linkKeys.length !== 2 || !Object.hasOwn(linkBody, 'type') || !Object.hasOwn(linkBody, 'index')) return null;
+  if (linkKeys.length !== 3 || !['type', 'index', 'expect'].every((key) => Object.hasOwn(linkBody, key))) return null;
   const type = linkBody['type'];
   const index = linkBody['index'];
+  const expect = linkBody['expect'];
   if (type !== 'pr' && type !== 'ref') return null;
   if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index > 63) return null;
-  return { project_id: projectId, session_id: sessionId, task_key: taskKey, link: { type, index } };
+  if (!idOk(expect) || expect.length > 128) return null;
+  return { project_id: projectId, session_id: sessionId, task_key: taskKey, link: { type, index, expect } };
 }
 
 export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
@@ -87,7 +89,10 @@ export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
     if (link === null) return refused('no such link in the snapshot');
     const verdict = validateTrackerLink(link);
     if (!verdict.ok) return refused(`${link.kind}: ${verdict.reason}`);
-    if (!mayOpen()) return refused('rate limited');
+    if (!mayOpen()) {
+      deps.log?.('task link refused: rate limited');
+      return { ok: false, message: 'Links are opening too fast. Wait a moment and try again.' };
+    }
     try {
       await deps.openExternal(verdict.canonical);
       deps.log?.(`task link opened: ${link.kind} on ${verdict.host}`);

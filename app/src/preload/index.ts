@@ -243,7 +243,7 @@ const bridge: DevteamBridge = {
       project_id: String(request.project_id),
       session_id: String(request.session_id),
       task_key: request.task_key === null ? null : String(request.task_key),
-      link: { type: request.link.type, index: Number(request.link.index) },
+      link: { type: request.link.type, index: Number(request.link.index), expect: String(request.link.expect) },
     }),
 };
 

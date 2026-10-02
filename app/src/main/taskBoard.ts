@@ -322,6 +322,11 @@ export interface ResolvedTaskLink {
  * the snapshot holds. `null` when anything named is missing or the index is out of range.
  */
 export function resolveTaskLink(project: BoardProject | undefined, request: OpenTaskLinkRequest): ResolvedTaskLink | null {
+  const link = resolveByIndex(project, request);
+  return link !== null && link.identity.toLowerCase() === request.link.expect.toLowerCase() ? link : null;
+}
+
+function resolveByIndex(project: BoardProject | undefined, request: OpenTaskLinkRequest): ResolvedTaskLink | null {
   const session = project?.sessions.find((each) => each.session_id === request.session_id);
   if (project === undefined || session === undefined) return null;
   const { type, index } = request.link;

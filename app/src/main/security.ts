@@ -364,8 +364,9 @@ export function validateTrackerLink(input: TrackerLinkInput): TrackerLinkVerdict
   if (url !== canonical) return refuse('not canonical');
   if (!HOSTNAME.test(host)) return refuse('hostname shape');
   const allowed = linkHosts.some((entry) => entry.host.toLowerCase() === host && entry.kinds.includes(kind));
+  // A punycode host passes only when the CLI listed it: the CLI never derives one from a git
+  // remote (`pr_refs._self_hosted_gitlab_candidate`), so only a configured integration can.
   if (!allowed) return refuse('host not allowed for this kind');
-  if (/(^|\.)xn--/.test(host) && !linkHosts.some((entry) => entry.host === host)) return refuse('punycode');
   const path = parsed.pathname;
   if (path.includes('%')) return refuse('percent-encoding');
 
@@ -375,7 +376,8 @@ export function validateTrackerLink(input: TrackerLinkInput): TrackerLinkVerdict
       const match = GITHUB_PATH.exec(path);
       if (match === null) return refuse('path shape');
       const [, owner, repo, segment, number] = match;
-      if (repo === '.' || repo === '..') return refuse('path shape');
+      // Mirrors `pr_refs._repo_segments_ok`: the CLI never builds a link to a `*.git` repository.
+      if (repo === '.' || repo === '..' || repo!.startsWith('-') || repo!.endsWith('.git')) return refuse('path shape');
       if (segment !== (kind === 'github_pr' ? 'pull' : 'issues')) return refuse('path shape');
       const expected = kind === 'github_pr' ? number : `${owner}/${repo}#${number}`;
       if (expected!.toLowerCase() !== identity.toLowerCase()) return refuse('identity mismatch');

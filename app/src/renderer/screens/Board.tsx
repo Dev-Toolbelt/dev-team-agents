@@ -1010,9 +1010,14 @@ function SessionChip({ projectId, session }: { projectId: string; session: Board
       <span className="sr-only">{counts}</span>
       {session.prs.map((pr, index) => (
         <PrBadge
-          key={pr.url}
+          key={`${pr.url}:${index}`}
           pr={pr}
-          request={{ project_id: projectId, session_id: session.session_id, task_key: null, link: { type: 'pr', index } }}
+          request={{
+            project_id: projectId,
+            session_id: session.session_id,
+            task_key: null,
+            link: { type: 'pr', index, expect: String(pr.number) },
+          }}
         />
       ))}
     </li>
@@ -1137,14 +1142,24 @@ const TaskCard = memo(function TaskCard({
           {task.pr !== null ? (
             <PrBadge
               pr={task.pr}
-              request={{ project_id: projectId, session_id: session.session_id, task_key: task.key, link: { type: 'pr', index: 0 } }}
+              request={{
+                project_id: projectId,
+                session_id: session.session_id,
+                task_key: task.key,
+                link: { type: 'pr', index: 0, expect: String(task.pr.number) },
+              }}
             />
           ) : null}
           {task.refs.map((issue, index) => (
             <IssueBadge
-              key={issue.url}
+              key={`${issue.url}:${index}`}
               issue={issue}
-              request={{ project_id: projectId, session_id: session.session_id, task_key: task.key, link: { type: 'ref', index } }}
+              request={{
+                project_id: projectId,
+                session_id: session.session_id,
+                task_key: task.key,
+                link: { type: 'ref', index, expect: issue.key },
+              }}
             />
           ))}
           {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
