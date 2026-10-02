@@ -58,16 +58,56 @@ class InstallCliTest(unittest.TestCase):
     def test_installs_the_cli_and_the_framework_into_the_store(self):
         result = self._install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(self.bin.is_symlink())
+        self.assertTrue(os.access(str(self.bin), os.X_OK))
         listed = self._devteam("store", "list", "--json")
         self.assertEqual(listed.returncode, 0, listed.stderr)
         self.assertIn('"current"', listed.stdout)
 
-    def test_the_shebang_names_the_verified_interpreter_by_absolute_path(self):
+    def test_the_launcher_names_the_verified_interpreter_by_absolute_path(self):
         self.assertEqual(self._install().returncode, 0)
-        first = (self.tmp / "cli" / "scripts" / "cli" / "devteam").read_text(encoding="utf-8").splitlines()[0]
-        self.assertTrue(first.startswith("#!/"), first)
-        self.assertNotIn("env", first)
+        launcher = self.bin.read_text(encoding="utf-8")
+        self.assertTrue(launcher.startswith("#!/bin/sh\n"), launcher)
+        self.assertNotIn("env python3", launcher)
+
+    def test_a_space_in_the_install_paths_does_not_break_the_launcher(self):
+        spaced = self.tmp / "Ana Maria"
+        self.env.update(DEVTEAM_CLI_HOME=str(spaced / "cli"), DEVTEAM_BIN_DIR=str(spaced / "bin"))
+        self.bin = spaced / "bin" / "devteam"
+        result = self._install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._devteam("store", "list", "--json").returncode, 0)
+
+    def test_a_relative_bin_dir_still_gives_a_working_launcher(self):
+        self.env.update(DEVTEAM_BIN_DIR="relative-bin")
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--from", str(REPO_ROOT)], cwd=str(self.tmp),
+            env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=300,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.bin = self.tmp / "relative-bin" / "devteam"
+        self.assertEqual(self._devteam("store", "list", "--json").returncode, 0)
+
+    def test_the_newest_release_is_picked_by_version_and_bare_tags_are_ignored(self):
+        # A fake curl: the releases listing, then a failed download that names the tag.
+        stubs = self.tmp / "stubs"
+        stubs.mkdir()
+        listing = (
+            '[{"tag_name": "app-v9.0.0"}, {"tag_name": "v2.10.0"}, {"tag_name": "v2.9.0"},'
+            ' {"tag_name": "v3.0.0", "draft": true}, {"tag_name": "v2.11.0", "prerelease": true}]'
+        )
+        curl = stubs / "curl"
+        curl.write_text(
+            '#!/bin/sh\ncase "$*" in *api.github.com*releases*) echo \'{}\' ;; *) echo "$*" >&2; exit 22 ;; esac\n'.format(listing)
+        )
+        curl.chmod(0o755)
+        self.env["PATH"] = str(stubs) + os.pathsep + self.env["PATH"]
+        result = subprocess.run(
+            ["bash", str(SCRIPT)], env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=60,
+        )
+        self.assertIn("Downloading v2.10.0", result.stdout)
+        self.assertIn("archive/refs/tags/v2.10.0.tar.gz", result.stderr)
+        self.assertNotEqual(result.returncode, 0)
 
     def test_a_second_run_succeeds_and_leaves_the_store_alone(self):
         self.assertEqual(self._install().returncode, 0)

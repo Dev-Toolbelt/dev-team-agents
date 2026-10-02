@@ -7,6 +7,7 @@ wizard, the registry write and the distlib stub itself — the release workflow 
 silently on a Windows runner for those.
 """
 
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -77,9 +78,108 @@ class LauncherPayloadTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("ok", json.loads(result.stdout))
 
+    def test_the_payload_runs_under_an_isolated_interpreter_like_the_embeddable_one(self):
+        # The embeddable distribution's `._pth` gives an isolated sys.path with no `site`
+        # and no script directory. `-I -S` is the closest a non-Windows host gets to it.
+        tmp = Path(tempfile.mkdtemp(prefix="win-launcher-isolated-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        exe = tmp / "devteam.exe"
+        cli = REPO_ROOT / "scripts" / "cli" / "devteam"
+        exe.write_bytes(postinstall.launcher_bytes(b"MZ", sys.executable, str(cli)))
+        result = subprocess.run(
+            [sys.executable, "-I", "-S", str(exe), "version", "--json"],
+            env=dict(os.environ, DEVTEAM_HOME=str(tmp / "home")),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("compat", json.loads(result.stdout))
+
     def test_the_shebang_quotes_an_interpreter_path_with_spaces(self):
         data = postinstall.launcher_bytes(b"STUB", r"C:\Users\Ana Maria\python\python.exe", "cli")
         self.assertTrue(data.startswith(b'STUB#!"C:\\Users\\Ana Maria\\python\\python.exe"\r\n'))
+
+
+class FakeWinreg:
+    """The slice of `winreg` postinstall uses, over one in-memory value."""
+
+    HKEY_CURRENT_USER = "HKCU"
+    KEY_READ, KEY_WRITE = 1, 2
+    REG_SZ, REG_EXPAND_SZ, REG_DWORD = 1, 2, 4
+
+    def __init__(self, value=None, kind=2):
+        self.value, self.kind, self.writes = value, kind, []
+
+    def OpenKey(self, root, path, reserved, access):
+        return contextlib.nullcontext(self)
+
+    def QueryValueEx(self, key, name):
+        if self.value is None:
+            raise FileNotFoundError(name)
+        return self.value, self.kind
+
+    def SetValueEx(self, key, name, reserved, kind, value):
+        self.writes.append((kind, value))
+        self.value, self.kind = value, kind
+
+
+class EditUserPathTest(unittest.TestCase):
+    BIN = r"C:\Users\Ana\AppData\Local\Programs\devteam\bin"
+
+    def _edit(self, fake, transform):
+        with mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(postinstall, "_broadcast_environment_change") as broadcast:
+            changed = postinstall._edit_user_path(transform)
+        return changed, broadcast
+
+    def test_appends_and_keeps_the_value_type(self):
+        fake = FakeWinreg(r"%USERPROFILE%\bin", kind=FakeWinreg.REG_EXPAND_SZ)
+        changed, broadcast = self._edit(fake, lambda cur: postinstall.path_with(cur, self.BIN))
+        self.assertTrue(changed)
+        self.assertEqual(fake.writes, [(FakeWinreg.REG_EXPAND_SZ, r"%USERPROFILE%\bin;" + self.BIN)])
+        broadcast.assert_called_once()
+
+    def test_creates_the_value_when_the_user_has_no_path(self):
+        fake = FakeWinreg(None)
+        self._edit(fake, lambda cur: postinstall.path_with(cur, self.BIN))
+        self.assertEqual(fake.writes, [(FakeWinreg.REG_EXPAND_SZ, self.BIN)])
+
+    def test_writes_nothing_and_broadcasts_nothing_when_unchanged(self):
+        fake = FakeWinreg(self.BIN, kind=FakeWinreg.REG_SZ)
+        changed, broadcast = self._edit(fake, lambda cur: postinstall.path_with(cur, self.BIN))
+        self.assertFalse(changed)
+        self.assertEqual(fake.writes, [])
+        broadcast.assert_not_called()
+
+    def test_an_unexpected_value_type_is_rewritten_as_expandable(self):
+        fake = FakeWinreg(r"C:\tools", kind=FakeWinreg.REG_DWORD)
+        self._edit(fake, lambda cur: postinstall.path_with(cur, self.BIN))
+        self.assertEqual(fake.writes[0][0], FakeWinreg.REG_EXPAND_SZ)
+
+
+class WriteLauncherTest(unittest.TestCase):
+    def test_an_existing_launcher_is_moved_aside_then_replaced(self):
+        tmp = Path(tempfile.mkdtemp(prefix="win-write-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        exe = tmp / "devteam.exe"
+        exe.write_bytes(b"old")
+        postinstall.write_launcher(str(exe), b"new")
+        postinstall.write_launcher(str(exe), b"newer")
+        self.assertEqual(exe.read_bytes(), b"newer")
+        self.assertEqual((tmp / "devteam.exe.old").read_bytes(), b"new")
+
+
+class StoreInstallTest(unittest.TestCase):
+    def _run(self, returncode, output=""):
+        completed = subprocess.CompletedProcess([], returncode, stdout=output)
+        with mock.patch.object(postinstall.subprocess, "run", return_value=completed):
+            return postinstall.store_install(postinstall.paths(r"C:\devteam"))
+
+    def test_success_and_already_installed_both_pass(self):
+        self.assertEqual(self._run(0, "installed 3.0.0"), 0)
+        self.assertEqual(self._run(postinstall.EXIT_CONFLICT), 0)
+
+    def test_any_other_exit_is_returned(self):
+        self.assertEqual(self._run(3, "no store"), 3)
 
 
 def _zip(members):
