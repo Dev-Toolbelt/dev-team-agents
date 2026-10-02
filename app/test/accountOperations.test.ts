@@ -56,10 +56,10 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-const context = (scenario = 'entitled'): CliContext => ({
+const context = (scenario = 'entitled', gateMode?: string): CliContext => ({
   binary: FAKE,
   cwd: dir,
-  env: { FAKE_AUTH_LOG: logPath, FAKE_AUTH_SCENARIO: scenario },
+  env: { FAKE_AUTH_LOG: logPath, FAKE_AUTH_SCENARIO: scenario, ...(gateMode === undefined ? {} : { FAKE_AUTH_GATE_MODE: gateMode }) },
 });
 
 interface Logged {
@@ -90,6 +90,13 @@ describe.skipIf(skipOnWindows)('reads', () => {
       gate_mode: 'warn',
     });
     expect(JSON.stringify(result.data)).not.toMatch(/token|secret_backend\b/);
+  });
+
+  it('reads gate_mode from the status and check documents', async () => {
+    const status = await authStatus(context('entitled', 'enforce'));
+    expect(status.ok && status.data.gate_mode).toBe('enforce');
+    const check = await authCheck(context('trial_expired', 'enforce'));
+    expect(check.ok && check.data.gate_mode).toBe('enforce');
   });
 
   it('returns a not-entitled `auth check` (exit 1) as ok data with entitled: false', async () => {
@@ -235,74 +242,67 @@ describe.skipIf(skipOnWindows)('refusals happen before anything is spawned', () 
   });
 });
 
-describe.skipIf(skipOnWindows)('SignUpFlow: one held password sign-up', () => {
+describe.skipIf(skipOnWindows)('SignUpFlow: a two-stage password sign-up', () => {
   const start = (flow: SignUpFlow, password = GOOD_PASSWORD) =>
     flow.start(context(), 'ana@example.com', password, 'Ana');
 
-  it('writes the password at start, the code at finish, and signs in', async () => {
-    const flow = new SignUpFlow(300);
+  it('sends the password at start, the code at finish, in two runs, and signs in', async () => {
+    const flow = new SignUpFlow();
     const started = await start(flow);
     expect(started.ok && started.data).toEqual({ pending: true });
-    const finished = await flow.finish('1234 5678');
+    const finished = await flow.finish(context(), '1234 5678');
     expect(finished.ok && finished.data.signed_in).toBe(true);
-    const [call] = await invocations();
-    expect(call?.argv).toEqual(['auth', 'login', '--email', 'ana@example.com', '--password', '--signup', '--name', 'Ana']);
-    expect(call?.stdin).toEqual([GOOD_PASSWORD, GOOD_CODE]);
-    expect(JSON.stringify(finished)).not.toContain(GOOD_PASSWORD);
+    const [first, second] = await invocations();
+    expect(first?.argv).toEqual([
+      'auth', 'login', '--email', 'ana@example.com', '--password', '--signup', '--send-code', '--name', 'Ana',
+    ]);
+    expect(first?.stdin).toEqual([GOOD_PASSWORD]);
+    expect(second?.argv).toEqual(['auth', 'login', '--email', 'ana@example.com', '--password', '--signup', '--finish']);
+    expect(second?.stdin).toEqual([GOOD_CODE]);
+    expect(JSON.stringify([started, finished])).not.toContain(GOOD_PASSWORD);
   });
 
-  it('reports an early failure from start itself, and holds nothing', async () => {
-    const flow = new SignUpFlow(5_000);
+  it('reports a failure from start itself, and holds nothing', async () => {
+    const flow = new SignUpFlow();
     const started = await flow.start(context('signup_unreachable'), 'ana@example.com', GOOD_PASSWORD, null);
     expect(started.ok).toBe(false);
     if (started.ok) throw new Error('unreachable');
     expect(started.reason).toBe('unreachable');
     expect(JSON.stringify(started)).not.toContain(GOOD_PASSWORD);
-    expect((await flow.finish(GOOD_CODE)).ok).toBe(false);
+    expect((await flow.finish(context(), GOOD_CODE)).ok).toBe(false);
   });
 
   it('refuses a malformed code without sending it, so the sign-up survives a typo', async () => {
-    const flow = new SignUpFlow(300);
+    const flow = new SignUpFlow();
     await start(flow);
-    const bad = await flow.finish('12ab');
+    const bad = await flow.finish(context(), '12ab');
     expect(bad.ok).toBe(false);
     if (bad.ok) throw new Error('unreachable');
     expect(bad.kind).toBe('refused');
-    const good = await flow.finish(GOOD_CODE);
-    expect(good.ok).toBe(true);
+    expect(await invocations()).toHaveLength(1);
+    expect((await flow.finish(context(), GOOD_CODE)).ok).toBe(true);
   });
 
-  it('finish with nothing pending is refused', async () => {
-    const flow = new SignUpFlow(300);
-    const result = await flow.finish(GOOD_CODE);
-    expect(result.ok).toBe(false);
+  it('finish with nothing pending is refused and spawns nothing', async () => {
+    const flow = new SignUpFlow();
+    expect((await flow.finish(context(), GOOD_CODE)).ok).toBe(false);
+    expect(await invocations()).toEqual([]);
   });
 
-  it('cancel ends the child with no code', async () => {
-    const flow = new SignUpFlow(300);
+  it('cancel forgets the pending sign-up', async () => {
+    const flow = new SignUpFlow();
     await start(flow);
     flow.cancel();
-    // The fake logs on exit; wait for it.
-    await expect.poll(async () => (await invocations()).length, { timeout: 5_000 }).toBe(1);
-    const [call] = await invocations();
-    expect(call?.stdin).toEqual([GOOD_PASSWORD]);
+    expect((await flow.finish(context(), GOOD_CODE)).ok).toBe(false);
+    expect(await invocations()).toHaveLength(1);
   });
 
-  it('a second start ends the first: both children exit, neither was given a code', async () => {
-    const flow = new SignUpFlow(300);
+  it('a wrong code is reported and the sign-up stays open for a retry', async () => {
+    const flow = new SignUpFlow();
     await start(flow);
-    await start(flow);
-    flow.cancel();
-    await expect.poll(async () => (await invocations()).length, { timeout: 15_000 }).toBe(2);
-    for (const call of await invocations()) expect(call.stdin).toEqual([GOOD_PASSWORD]);
-  });
-
-  it('a wrong code fails the sign-up and clears the pending state', async () => {
-    const flow = new SignUpFlow(300);
-    await start(flow);
-    const result = await flow.finish('00000000');
+    const result = await flow.finish(context(), '00000000');
     expect(!result.ok && result.reason).toBe('invalid_code');
-    expect((await flow.finish(GOOD_CODE)).ok).toBe(false);
+    expect((await flow.finish(context(), GOOD_CODE)).ok).toBe(true);
   });
 });
 
@@ -315,7 +315,6 @@ describe.skipIf(skipOnWindows)('the IPC handlers', () => {
         handlers.set(channel, listener);
       },
       context: () => Promise.resolve(ctx),
-      signUpSettleMs: 300,
     });
     return { handlers, flow, call: (channel: string, ...args: unknown[]) => handlers.get(channel)?.({}, ...args) };
   }

@@ -68,6 +68,7 @@ function state(overrides = {}) {
     secret_backend: 'keychain',
     secret_backend_insecure: false,
     environment: 'prod',
+    gate_mode: process.env['FAKE_AUTH_GATE_MODE'] ?? 'warn',
     test_seam: false,
     warnings: [],
     ...overrides,
@@ -97,6 +98,16 @@ async function main() {
 
   if (a === 'login') {
     if (args.includes('--google') || args.includes('--github')) return emit(state({ method: 'oauth' }));
+    if (args.includes('--signup') && args.includes('--send-code')) {
+      const password = await nextLine();
+      if (scenario === 'signup_unreachable') return fail(3, 'the account server could not be reached', 'unreachable');
+      if (password === null || password.length < 10) return fail(2, 'the password must be 10 to 64 characters and at most 72 bytes in UTF-8', 'usage');
+      return emit({ ok: true, sent: true, message: 'If this address can sign in, a code was sent to it.', expires_in: 600 });
+    }
+    if (args.includes('--signup') && args.includes('--finish')) {
+      const code = await nextLine();
+      return code === '12345678' ? emit(state({ method: 'password-signup' })) : fail(1, 'the code is invalid or has expired', 'invalid_code');
+    }
     if (args.includes('--signup')) {
       const password = await nextLine();
       if (scenario === 'signup_unreachable') return fail(3, 'the account server could not be reached', 'unreachable');

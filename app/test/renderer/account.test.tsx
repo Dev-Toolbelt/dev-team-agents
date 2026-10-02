@@ -256,7 +256,7 @@ describe('sign-in', () => {
     await waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
   });
 
-  it('cancelling a sign-up that is waiting for its code ends the held process', async () => {
+  it('cancelling a sign-up that is waiting for its code forgets it', async () => {
     const authPasswordSignUpCancel = vi.fn(() => Promise.resolve());
     const { user } = mount({
       authPasswordSignUpStart: vi.fn(() => Promise.resolve(ok({ pending: true as const }))),
@@ -272,7 +272,7 @@ describe('sign-in', () => {
     expect(screen.getByRole('heading', { name: /sign in to dev-team-agents/i })).toBeInTheDocument();
   });
 
-  it('leaving the screen while a sign-up waits also ends it', async () => {
+  it('leaving the screen while a sign-up waits also forgets it', async () => {
     const authPasswordSignUpCancel = vi.fn(() => Promise.resolve());
     const bridge = fakeBridge({
       authPasswordSignUpStart: vi.fn(() => Promise.resolve(ok({ pending: true as const }))),
