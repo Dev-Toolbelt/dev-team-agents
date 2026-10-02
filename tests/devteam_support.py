@@ -42,7 +42,7 @@ CLI = REPO_ROOT / "scripts" / "cli" / "devteam"
 # mode that matters, because a seam that stops being neutralised does not announce itself:
 # it changes what the whole suite exercises. `DEVTEAM_HOSTNAME` is still a literal because
 # `paths.machine_host()` reads it from an inline tuple and exports no constant for it.
-from devteam import compat, global_skills, paths, update  # noqa: E402  (needs the sys.path bootstrap above)
+from devteam import compat, entitlement, global_skills, paths, update  # noqa: E402  (needs the sys.path bootstrap above)
 # Aliased, not imported bare: `secrets` is also a stdlib module name, and the shadowing
 # trap `creds.py` documents at its own import of this module applies here identically.
 from devteam import secrets as secrets_module  # noqa: E402  (same bootstrap as above)
@@ -259,6 +259,7 @@ class StoreTestCase(unittest.TestCase):
                 compat.CLIENT_SCHEMAS_ENV,
                 update.SHA256_ENV,
                 global_skills.USER_HOME_ENV,
+                *entitlement.SEAM_ENVS,
             )
         }
         os.environ[paths.HOME_ENV] = str(self.home)
@@ -298,6 +299,10 @@ class StoreTestCase(unittest.TestCase):
         # fixture: exported, it turns `update.verify_digest`'s "no digest was published"
         # answer into a mismatch error on a payload it was never meant to describe.
         os.environ.pop(update.SHA256_ENV, None)
+        # The account test seam (ADR-0029 SR-44) redirects the identity endpoint and adds a
+        # trusted key: inherited from a shell it would change what every test verifies.
+        for seam_key in entitlement.SEAM_ENVS:
+            os.environ.pop(seam_key, None)
         # Pinned, not popped: `devteam skills` reads and writes the providers' global skill
         # directories under the user's real home, which `$DEVTEAM_HOME` does not redirect.
         # The contract sweep runs `skills list` bare, so without this pin the suite would
