@@ -26,22 +26,15 @@ import {
   authPasswordResetFinish,
   authPasswordResetStart,
   authPasswordSignIn,
-  authPasswordSignUp,
+  authPasswordSignUpFinish,
+  authPasswordSignUpSend,
   authProfileGet,
   authProfileUpdate,
   authStatus,
 } from '../cli/accountOperations.js';
 import type { CliContext } from '../cli/operations.js';
-import { AUTH_PROVIDERS, codeProblem, normalizeCode } from '../shared/accountRules.js';
+import { AUTH_PROVIDERS } from '../shared/accountRules.js';
 import { CHANNELS, type AuthProvider, type AuthSignUpPending, type AuthState, type OperationResult } from '../shared/api.js';
-
-/**
- * How long a sign-up child is watched for an early refusal before the screen moves on to
- * the code step. The CLI says nothing under `--json` when the code is sent, so "still
- * running after this long" is the only signal that it got past the password policy and the
- * network call; anything slower is simply reported when the code is submitted.
- */
-export const SIGNUP_SETTLE_MS = 4_000;
 
 type Failure = Extract<OperationResult<never>, { ok: false }>;
 
@@ -66,20 +59,14 @@ const NO_CLI: Failure = {
   durationMs: 0,
 };
 
-interface PendingSignUp {
-  readonly final: Promise<OperationResult<AuthState>>;
-  readonly submitCode: (code: string | null) => void;
-  settled: OperationResult<AuthState> | null;
-}
-
 /**
- * The one password sign-up in flight. A second `start` ends the first; `finish` hands the
- * emailed code to the waiting child and returns what it answers; `cancel` ends it.
+ * The one password sign-up in flight, as two CLI runs: `start` sends the confirmation code
+ * (`--send-code`) and remembers the address; `finish` completes it (`--finish`) with the
+ * code. Only the address is held here; the provider keeps the unconfirmed account. A
+ * wrong code leaves the sign-up open so the user can retype it; `cancel` forgets it.
  */
 export class SignUpFlow {
-  private pending: PendingSignUp | null = null;
-
-  constructor(private readonly settleMs: number = SIGNUP_SETTLE_MS) {}
+  private email: string | null = null;
 
   async start(
     context: CliContext,
@@ -88,51 +75,15 @@ export class SignUpFlow {
     name: string | null,
   ): Promise<OperationResult<AuthSignUpPending>> {
     this.cancel();
-    let submitCode!: (code: string | null) => void;
-    const code = new Promise<string | null>((resolve) => {
-      submitCode = resolve;
-    });
-    const entry: PendingSignUp = {
-      final: authPasswordSignUp(context, email, password, name, code),
-      submitCode,
-      settled: null,
-    };
-    void entry.final.then((result) => {
-      entry.settled = result;
-    });
-    this.pending = entry;
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const waited = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), this.settleMs);
-    });
-    const early = await Promise.race([entry.final, waited]);
-    clearTimeout(timer);
-    if (early === null) {
-      return {
-        ok: true,
-        outcome: 'success',
-        data: { pending: true },
-        command: 'devteam auth login',
-        durationMs: this.settleMs,
-      };
-    }
-    if (this.pending === entry) this.pending = null;
-    if (!early.ok) return early;
-    // It cannot finish without a code; a document here means the CLI changed.
-    return {
-      ok: false,
-      kind: 'contract-breach',
-      message: '`devteam auth login` finished before it was given the emailed code.',
-      exitCode: null,
-      command: early.command,
-      durationMs: early.durationMs,
-    };
+    const sent = await authPasswordSignUpSend(context, email, password, name);
+    if (!sent.ok) return sent;
+    this.email = email;
+    return { ...sent, data: { pending: true } };
   }
 
-  async finish(code: string): Promise<OperationResult<AuthState>> {
-    const entry = this.pending;
-    if (entry === null) {
+  async finish(context: CliContext, code: string): Promise<OperationResult<AuthState>> {
+    const email = this.email;
+    if (email === null) {
       return {
         ok: false,
         kind: 'refused',
@@ -142,19 +93,13 @@ export class SignUpFlow {
         durationMs: 0,
       };
     }
-    // A malformed code is refused *before* it is sent: the CLI reads one code and ends, so
-    // a typo that reached it would cost the whole sign-up.
-    const problem = codeProblem(code);
-    if (problem !== null) return { ...refusedArgument('auth login'), message: `\`devteam auth login\` was refused: code: ${problem}` };
-    if (entry.settled === null) entry.submitCode(normalizeCode(code));
-    this.pending = null;
-    return entry.final;
+    const result = await authPasswordSignUpFinish(context, email, code);
+    if (result.ok && this.email === email) this.email = null;
+    return result;
   }
 
   cancel(): void {
-    const entry = this.pending;
-    this.pending = null;
-    if (entry !== null && entry.settled === null) entry.submitCode(null);
+    this.email = null;
   }
 }
 
@@ -162,14 +107,13 @@ export interface AccountIpcDeps {
   /** `ipcMain.handle` behind the sender check — see `trustedHandler` in `security.ts`. */
   readonly handle: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => void;
   readonly context: () => Promise<CliContext | null>;
-  readonly signUpSettleMs?: number;
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string';
 const isProvider = (value: unknown): value is AuthProvider => AUTH_PROVIDERS.includes(value as AuthProvider);
 
 export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: SignUpFlow } {
-  const signUp = new SignUpFlow(deps.signUpSettleMs);
+  const signUp = new SignUpFlow();
   const { handle } = deps;
 
   /** Resolve the CLI, then run `call` with it; `NO_CLI` when none was found. */
@@ -207,7 +151,7 @@ export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: Sig
       : refusedArgument('auth login'),
   );
   handle(CHANNELS.authPasswordSignUpFinish, (_event, code) =>
-    isString(code) ? signUp.finish(code) : refusedArgument('auth login'),
+    isString(code) ? withCli((ctx) => signUp.finish(ctx, code)) : refusedArgument('auth login'),
   );
   handle(CHANNELS.authPasswordSignUpCancel, () => {
     signUp.cancel();

@@ -51,8 +51,6 @@ import { argvProblem, run, toOperationResult, type CliContext } from './operatio
 
 /** A browser sign-in waits up to five minutes for the callback; the child gets a little more. */
 export const OAUTH_TIMEOUT_MS = 6 * 60_000;
-/** A code is valid for ten minutes; a held sign-up child outlives it by a minute. */
-export const SIGNUP_HOLD_MS = 11 * 60_000;
 
 const STATUSES: readonly EntitlementStatus[] = [
   'active',
@@ -118,7 +116,6 @@ export function asAuthState(body: Record<string, unknown>): AuthState | string {
   const entitlement = asEntitlement(body['entitlement']);
   if (typeof entitlement === 'string') return entitlement;
   const online = isRecord(body['online']) ? body['online'] : {};
-  // The CLI's `gate_mode` is not in this document today; honour it the day it is.
   const mode = body['gate_mode'];
   const gate: AuthGateMode = mode === 'warn' || mode === 'enforce' ? mode : DEFAULT_GATE_MODE;
   return {
@@ -254,37 +251,51 @@ export function authPasswordSignIn(context: CliContext, email: string, password:
 }
 
 /**
- * Both stages of `auth login --email … --password --signup` in one process: the password is
- * written now, the emailed code when `code` settles. `main/accountFlow.ts` holds the promise
- * and decides when to settle it.
+ * Password sign-up, stage one: `auth login --email … --password --signup --send-code`. The
+ * password goes to stdin, the CLI creates the account at the identity provider and mails
+ * the confirmation code, and the process ends. Nothing is held between the stages; the
+ * provider keeps the unconfirmed account.
  */
-export function authPasswordSignUp(
+export function authPasswordSignUpSend(
   context: CliContext,
   email: string,
   password: string,
   name: string | null,
-  code: Promise<string | null>,
-): Promise<OperationResult<AuthState>> {
+): Promise<OperationResult<AuthSent>> {
   const problem = firstProblem(
     ['email', emailProblem(email)],
     ['password', newPasswordProblem(password)],
     ['name', name === null ? null : displayNameProblem(name)],
   );
   if (problem !== null) return Promise.resolve(refused('auth login', problem));
-  const args = [
-    'auth', 'login', '--email', normalizeEmail(email), '--password', '--signup',
-    ...(name === null ? [] : ['--name', name.trim()]),
-  ];
-  const refusal = argvProblem(args);
-  if (refusal !== null) return Promise.resolve(refused('auth login', refusal));
-  return invokeDevteam({
-    ...context,
-    args,
-    timeoutMs: SIGNUP_HOLD_MS,
-    cancelOnQuit: true,
-    lateStdin: { first: password, rest: code },
-    redactAlso: [password],
-  }).then((result) => toOperationResult(result, asAuthState));
+  return run(
+    context,
+    [
+      'auth', 'login', '--email', normalizeEmail(email), '--password', '--signup', '--send-code',
+      ...(name === null ? [] : ['--name', name.trim()]),
+    ],
+    asSent,
+    password,
+    [password],
+  );
+}
+
+/** Stage two: `auth login --email … --password --signup --finish`, the emailed code on stdin. */
+export function authPasswordSignUpFinish(
+  context: CliContext,
+  email: string,
+  code: string,
+): Promise<OperationResult<AuthState>> {
+  const problem = firstProblem(['email', emailProblem(email)], ['code', codeProblem(code)]);
+  if (problem !== null) return Promise.resolve(refused('auth login', problem));
+  const secret = normalizeCode(code);
+  return run(
+    context,
+    ['auth', 'login', '--email', normalizeEmail(email), '--password', '--signup', '--finish'],
+    asAuthState,
+    secret,
+    [secret],
+  );
 }
 
 // ── password ──────────────────────────────────────────────────────────────────────

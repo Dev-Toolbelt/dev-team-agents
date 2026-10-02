@@ -29,10 +29,10 @@ export const AUTH_PROVIDERS: readonly AuthProvider[] = Object.freeze(['google', 
 /**
  * Whether the blocked state stops the app (`enforce`) or only warns (`warn`).
  *
- * The CLI's `gate_mode` is compiled into `auth-config.json` and is not (yet) part of the
- * `auth status` document. The app reads it from the document when it is there, and
- * otherwise acts as `warn`: a dismissible banner, never a lock-out the CLI itself has not
- * been told to apply.
+ * The CLI's `gate_mode` is compiled into `auth-config.json` and reported in the
+ * `auth status` and `auth check` documents. The app reads it from there; before the first
+ * document arrives, or when a CLI predating the field answers, it acts as `warn`: a
+ * dismissible banner, never a lock-out the CLI itself has not been told to apply.
  */
 export type AuthGateMode = 'warn' | 'enforce';
 export const DEFAULT_GATE_MODE: AuthGateMode = 'warn';

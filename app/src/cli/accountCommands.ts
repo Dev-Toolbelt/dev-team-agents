@@ -40,7 +40,7 @@ const PROVIDER_FLAGS = { '--google': 'bare', '--github': 'bare' } as const;
 export const ACCOUNT_SHAPES: Readonly<Record<string, Shape>> = Object.freeze({
   'auth login': {
     operands: 0,
-    flags: { ...PROVIDER_FLAGS, '--email': 'value', '--password': 'bare', '--signup': 'bare', '--name': 'value' },
+    flags: { ...PROVIDER_FLAGS, '--email': 'value', '--password': 'bare', '--signup': 'bare', '--send-code': 'bare', '--finish': 'bare', '--name': 'value' },
   },
   'auth logout': { operands: 0, flags: {} },
   'auth status': { operands: 0, flags: {} },

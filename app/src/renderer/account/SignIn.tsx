@@ -37,8 +37,8 @@ export function SignIn({ onSignedIn }: { onSignedIn: (state: AuthState) => void 
   const t = currentTranslator();
   const [step, setStep] = useState<Step>({ name: 'choose' });
 
-  // A password sign-up holds a CLI process that waits for its code. Leaving this screen in
-  // any way other than finishing must end it.
+  // A password sign-up waiting for its code is remembered by the main process (the address
+  // only). Leaving this screen in any way other than finishing forgets it.
   const signUpWaiting = useRef(false);
   useEffect(
     () => () => {
@@ -89,10 +89,6 @@ export function SignIn({ onSignedIn }: { onSignedIn: (state: AuthState) => void 
             onDone={(state) => {
               signUpWaiting.current = false;
               onSignedIn(state);
-            }}
-            // The held process ends after one code, right or wrong; a wrong one means starting over.
-            onFailed={() => {
-              signUpWaiting.current = false;
             }}
           />
         ) : step.name === 'forgot' ? (
