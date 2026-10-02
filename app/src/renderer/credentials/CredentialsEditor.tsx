@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { SELECT_CLASS } from '../formStyles.js';
 import {
   coerce,
   editProblem,
@@ -16,6 +17,7 @@ import {
   isReserved,
   isSecretLeaf,
   markedIn,
+  moveTargets,
   pointerOf,
   productionAt,
   scalarText,
@@ -344,6 +346,7 @@ function RowActions({ ctx, path }: { ctx: Ctx; path: Path }) {
   return (
     <div className="flex items-center">
       {typeof key === 'string' ? <RenameButton ctx={ctx} path={path} /> : null}
+      {typeof key === 'string' ? <MoveButton ctx={ctx} path={path} /> : null}
       <Button
         type="button"
         variant="ghost"
@@ -412,6 +415,78 @@ function RenameButton({ ctx, path }: { ctx: Ctx; path: Path }) {
               </Button>
               <Button type="submit" disabled={problem !== null}>
                 Rename
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Move a field or group into another group, or to the top of the file. A secret keeps its mark. */
+function MoveButton({ ctx, path }: { ctx: Ctx; path: Path }) {
+  const [open, setOpen] = useState(false);
+  const targets = open ? moveTargets(ctx.doc, path) : [];
+  const [choice, setChoice] = useState('');
+  const selected = targets.find((target) => pointerOf(target) === choice) ?? targets[0];
+  const id = `${slug(pointerOf(path))}-move`;
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={ctx.disabled}
+        aria-label={`Move ${labelOf(path)}`}
+        onClick={() => {
+          setChoice('');
+          setOpen(true);
+        }}
+      >
+        <FolderInput aria-hidden="true" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (selected === undefined) return;
+              ctx.onEdit({ kind: 'move', path, into: selected });
+              setOpen(false);
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Move {labelOf(path)}</DialogTitle>
+              <DialogDescription>It keeps its name and value; a secret stays a secret where it lands.</DialogDescription>
+            </DialogHeader>
+            <div className="my-4 space-y-1">
+              <Label htmlFor={id}>Move into</Label>
+              {targets.length > 0 ? (
+                <select
+                  id={id}
+                  className={SELECT_CLASS}
+                  value={selected === undefined ? '' : pointerOf(selected)}
+                  onChange={(event) => setChoice(event.target.value)}
+                >
+                  {targets.map((target) => (
+                    <option key={pointerOf(target)} value={pointerOf(target)}>
+                      {target.length === 0 ? 'The top of the file' : labelOf(target)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p role="status" className="text-sm text-muted-foreground">
+                  No other group can take it: create one first, or rename the key that clashes.
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={selected === undefined}>
+                Move
               </Button>
             </DialogFooter>
           </form>

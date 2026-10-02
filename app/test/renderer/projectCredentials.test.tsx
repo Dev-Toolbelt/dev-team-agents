@@ -468,6 +468,36 @@ describe('ProjectCredentials — free-form editor', () => {
     expect(sentOps(bridge)).toEqual([{ op: 'set', pointer: '/work_feedback_interval_minutes', value: 10 }]);
   });
 
+  it('moves a secret into another group, carrying its mark', async () => {
+    const { bridge, user } = renderTab();
+    await screen.findByText('example');
+    await user.click(screen.getByRole('button', { name: 'Move example › staging › password' }));
+    const dialog = await screen.findByRole('dialog');
+    const into = within(dialog).getByLabelText('Move into');
+    expect(within(into).queryByRole('option', { name: 'example › staging' })).not.toBeInTheDocument();
+    expect(within(into).queryByRole('option', { name: 'example › production' })).not.toBeInTheDocument();
+    await user.selectOptions(into, 'example › production › db');
+    await user.click(within(dialog).getByRole('button', { name: 'Move' }));
+    expect(screen.queryByRole('button', { name: 'Move example › staging › password' })).not.toBeInTheDocument();
+    await save(user);
+    expect(sentOps(bridge)).toEqual([
+      { op: 'move', from: '/example/staging/password', pointer: '/example/production/db/password' },
+      { op: 'unset', pointer: '/example/staging/$secrets' },
+      { op: 'set', pointer: '/example/production/db/$secrets', value: ['password'] },
+    ]);
+  });
+
+  it('moves a whole group to the top of the file', async () => {
+    const { bridge, user } = renderTab();
+    await screen.findByText('example');
+    await user.click(screen.getByRole('button', { name: 'Move example › staging' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Move into'), 'The top of the file');
+    await user.click(within(dialog).getByRole('button', { name: 'Move' }));
+    await save(user);
+    expect(sentOps(bridge)).toEqual([{ op: 'move', from: '/example/staging', pointer: '/staging' }]);
+  });
+
   it('keeps ids unique for keys that differ only by punctuation', async () => {
     renderTab({
       credentialsLocalShow: vi.fn(() => Promise.resolve(ok(credentialsView({ data: { 'a-b': 'one', 'a/b': 'two', 'a.b': 'three' } })))),

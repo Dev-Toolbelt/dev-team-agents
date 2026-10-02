@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { applyOps, coerce, editProblem, opsFor, productionAt, record, searchHits } from '../src/renderer/credentials/document.js';
+import { applyOps, coerce, editProblem, moveTargets, opsFor, productionAt, record, searchHits } from '../src/renderer/credentials/document.js';
 
 const DOC = {
   a: { $secrets: ['pw'], pw: { secret: true, set: true, marked: true }, host: 'h.test' },
@@ -96,5 +96,43 @@ describe('coerce', () => {
     expect(coerce('10', 5)).toEqual({ value: 10, problem: null });
     expect(coerce('ten', 5).problem).toBe('Must be a number');
     expect(coerce('ten', 'x')).toEqual({ value: 'ten', problem: null });
+  });
+});
+
+describe('moving between groups', () => {
+  it('moves a plain field with one op, keeping its name', () => {
+    expect(opsFor(DOC, { kind: 'move', path: ['a', 'host'], into: ['prod', 'inner'] })).toEqual([
+      { op: 'move', from: '/a/host', pointer: '/prod/inner/host' },
+    ]);
+  });
+
+  it('carries a secret mark from the old group to the new one', () => {
+    const ops = opsFor(DOC, { kind: 'move', path: ['a', 'pw'], into: ['prod'] });
+    expect(ops).toEqual([
+      { op: 'move', from: '/a/pw', pointer: '/prod/pw' },
+      { op: 'unset', pointer: '/a/$secrets' },
+      { op: 'set', pointer: '/prod/$secrets', value: ['pw'] },
+    ]);
+    const out = applyOps(DOC, ops) as Record<string, Record<string, unknown>>;
+    expect(out['prod']?.['pw']).toEqual({ secret: true, set: true, marked: true });
+    expect(out['a']).toEqual({ host: 'h.test' });
+  });
+
+  it('offers the file and every other object, never the current parent, its own subtree or a list', () => {
+    expect(moveTargets(DOC, ['a', 'host'])).toEqual([[], ['prod'], ['prod', 'inner']]);
+    expect(moveTargets(DOC, ['prod'])).toEqual([['a']]);
+  });
+
+  it('leaves out a group that already has the key', () => {
+    const doc = { a: { url: 1 }, b: { url: 2 }, c: {} };
+    expect(moveTargets(doc, ['a', 'url'])).toEqual([[], ['c']]);
+  });
+
+  it('refuses a move into itself, into its current group, onto a clash or out of a list', () => {
+    expect(editProblem(DOC, { kind: 'move', path: ['prod'], into: ['prod', 'inner'] })).toMatch(/inside itself/);
+    expect(editProblem(DOC, { kind: 'move', path: ['a', 'host'], into: ['a'] })).toMatch(/already in that group/);
+    expect(editProblem({ a: { k: 1 }, b: { k: 2 } }, { kind: 'move', path: ['a', 'k'], into: ['b'] })).toMatch(/already has/);
+    expect(editProblem(DOC, { kind: 'move', path: ['list', 0], into: ['a'] })).toMatch(/named/);
+    expect(editProblem(DOC, { kind: 'move', path: ['a', 'host'], into: ['list'] })).toMatch(/Pick a group/);
   });
 });

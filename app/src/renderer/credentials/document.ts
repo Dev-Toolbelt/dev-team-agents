@@ -130,6 +130,7 @@ export type Edit =
   | { kind: 'add'; parent: Path; key: string | null; value: unknown }
   | { kind: 'remove'; path: Path }
   | { kind: 'rename'; path: Path; to: string }
+  | { kind: 'move'; path: Path; into: Path }
   | { kind: 'secret'; path: Path; marked: boolean }
   | { kind: 'production'; path: Path; on: boolean };
 
@@ -151,7 +152,36 @@ export function editProblem(doc: Doc, edit: Edit): string | null {
     const parent = parentOf(edit.path);
     if (isRecord(parent) && to !== edit.path[edit.path.length - 1] && to in parent) return `"${to}" already exists here`;
   }
+  if (edit.kind === 'move') {
+    const key = edit.path[edit.path.length - 1];
+    if (typeof key !== 'string') return 'Only a named field or group can be moved';
+    if (pointerOf(edit.path.slice(0, -1)) === pointerOf(edit.into)) return 'It is already in that group';
+    if (isInside(edit.into, edit.path)) return 'A group cannot move inside itself';
+    const target = valueAt(doc, edit.into);
+    if (!isRecord(target) || isSecretLeaf(target)) return 'Pick a group to move it into';
+    if (key in target) return `That group already has "${key}"`;
+  }
   return null;
+}
+
+/** Whether `path` is `ancestor` or sits below it. */
+const isInside = (path: Path, ancestor: Path): boolean =>
+  path.length >= ancestor.length && ancestor.every((token, index) => token === path[index]);
+
+/**
+ * Every group `path` could move into: the file itself and each object in it, outside `path`'s own
+ * subtree and other than its current parent. Lists are left out: what moves keeps its name.
+ */
+export function moveTargets(doc: Doc, path: Path): Path[] {
+  const key = path[path.length - 1];
+  const out: Path[] = [];
+  const walk = (node: unknown, at: Path): void => {
+    if (!isRecord(node) || isSecretLeaf(node) || isInside(at, path)) return;
+    if (pointerOf(at) !== pointerOf(path.slice(0, -1)) && !(typeof key === 'string' && key in node)) out.push(at);
+    for (const [child, value] of Object.entries(node)) if (!isReserved(child)) walk(value, [...at, child]);
+  };
+  walk(doc, []);
+  return out;
 }
 
 /** The ops that make `edit`, given the working copy `doc` it was made against. */
@@ -177,6 +207,20 @@ export function opsFor(doc: Doc, edit: Edit): CredentialsPatchOp[] {
         { op: 'move', from: pointerOf(edit.path), pointer: pointerOf(target) },
         ...secretsListOps(doc, edit.path.slice(0, -1), from, to),
       ];
+    }
+    case 'move': {
+      const from = edit.path[edit.path.length - 1];
+      if (typeof from !== 'string') return [];
+      const parent = edit.path.slice(0, -1);
+      const ops: CredentialsPatchOp[] = [{ op: 'move', from: pointerOf(edit.path), pointer: pointerOf([...edit.into, from]) }];
+      // A secret stays a secret where it lands: its mark moves with it.
+      if (markedIn(valueAt(doc, parent)).has(from)) {
+        ops.push(...secretsListOps(doc, parent, from, null));
+        const names = new Set(markedIn(valueAt(doc, edit.into)));
+        names.add(from);
+        ops.push(listOp(edit.into, names));
+      }
+      return ops;
     }
     case 'secret': {
       const parent = edit.path.slice(0, -1);

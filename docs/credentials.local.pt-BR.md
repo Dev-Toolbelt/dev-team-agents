@@ -39,7 +39,7 @@ O arquivo não existe por padrão. Crie-o de uma das três formas:
 
 ### Via Aplicativo Desktop
 
-Abra a aba **Credentials** na visão do projeto. Clique em **Create file** para criar o `credentials.local.json` a partir do exemplo inicial. A aba é um editor em árvore: adicione, renomeie, aninhe e remova grupos e campos, marque um campo como segredo ou um grupo como produção, e pesquise por chaves e valores visíveis.
+Abra a aba **Credentials** na visão do projeto. Clique em **Create file** para criar o `credentials.local.json` a partir do exemplo inicial. A aba é um editor em árvore: adicione, renomeie, aninhe, mova entre grupos e remova grupos e campos, marque um campo como segredo ou um grupo como produção, e pesquise por chaves e valores visíveis.
 
 Segredos são somente escrita: um valor marcado em `$secrets`, ou que parece segredo, aparece só como definido / não definido, com Substituir.
 
@@ -106,7 +106,7 @@ Um valor continua oculto mesmo sem entrada em `$secrets` quando a chave parece s
 - Mantenha só o que os agentes realmente precisam.
 - Marque todo grupo de produção com `$production`. Um grupo chamado `production` sem a flag não está marcado.
 - Prefira credenciais de staging sempre que a task não exigir produção explicitamente.
-- Renomear um segredo no app mantém o valor: a renomeação acontece no arquivo, e o valor nunca chega ao app.
+- Renomear um segredo, ou movê-lo para outro grupo, mantém o valor e a marcação de segredo: a mudança acontece no arquivo, e o valor nunca chega ao app.
 
 ---
 

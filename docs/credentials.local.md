@@ -39,7 +39,7 @@ The file does not exist by default. Create it in one of three ways:
 
 ### Via the Desktop App
 
-Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the starter example. The tab is a tree editor: add, rename, nest and remove groups and fields, mark a field secret or a group production, and search keys and visible values.
+Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the starter example. The tab is a tree editor: add, rename, nest, move between groups and remove groups and fields, mark a field secret or a group production, and search keys and visible values.
 
 Secrets are write-only: a value marked in `$secrets`, or one that looks secret, appears only as set / not set, with Replace.
 
@@ -106,7 +106,7 @@ A value stays hidden even without a `$secrets` entry when its key looks secret (
 - Keep only what the agents actually need.
 - Mark every production group with `$production`. A group named `production` without the flag is not marked.
 - Prefer staging credentials whenever the task does not explicitly require production.
-- Renaming a secret in the app keeps its value: the rename happens in the file, and the value never reaches the app.
+- Renaming a secret, or moving it to another group, keeps its value and its secret mark: the change happens in the file, and the value never reaches the app.
 
 ---
 
