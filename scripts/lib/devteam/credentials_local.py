@@ -30,6 +30,7 @@ from .lock import store_lock
 FILE_NAME = "credentials.local.json"
 FILE_MODE = 0o600
 TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "credentials-local-template.json"
+LEGACY_BLANKS_FILE = Path(__file__).resolve().parent.parent / "credentials-local-legacy-blanks.json"
 QUARANTINE_GROUP = "credentials-relocate"
 LOCK_NAME = "credentials-local"
 #: Machine-local key for the ``hash`` token (dot-prefixed, so machine-local by rule).
@@ -37,19 +38,19 @@ TOKEN_KEY_FILE = ".credentials-local-token-key"
 #: Ignore lines the file and its temp files need, relative to the project root.
 IGNORE_ENTRIES = (".dev-team-agents/" + FILE_NAME, ".dev-team-agents/" + FILE_NAME + ".*")
 
-#: Substrings that mark a key as secret-ish, compared case-insensitively. ``privateKeyPath``
-#: is a path, not a secret: ``privatekey`` only counts when it is not followed by ``path``.
+#: Reserved keys, valid in any object. Everything else in the file is the user's own.
+#: ``$secrets`` lists which sibling keys hold a secret; ``$production`` marks the object
+#: and everything below it as production.
+SECRETS_KEY = "$secrets"
+PRODUCTION_KEY = "$production"
+#: Substrings that make a key look secret even when it is not listed in ``$secrets``,
+#: compared case-insensitively. A safety net only: it hides, it never reveals.
+#: ``privateKeyPath`` is a path: ``privatekey`` counts only when not followed by ``path``.
 SECRET_SUBSTRINGS = (
     "pass", "secret", "token", "credential", "auth", "dsn", "apikey", "api_key", "api-key",
 )
-#: The flat top-level settings that are not credentials, with the types they may hold.
-PLAIN_TOP_LEVEL = {"work_feedback_active": (bool,), "work_feedback_interval_minutes": (int,)}
-#: Nested leaf names whose value ``show`` returns (lower-cased). Explicit on purpose: a
-#: leaf added to the template stays hidden until it is added here, and a test pins this
-#: set against the template so the two cannot drift.
-SAFE_LEAF_NAMES = frozenset(
-    {"user", "host", "privatekeypath", "path", "type", "port", "database", "username", "appurl"}
-)
+#: Longest key name ``$secrets`` may list before the list is treated as ordinary data.
+MAX_SECRET_NAME = 200
 #: URL userinfo (``scheme://user:pw@host``) or bare ``user:pw@host``.
 _USERINFO = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@|^[^/@\s:]+:[^/@\s]*@")
 #: A URL carrying a query or fragment (``?token=``, ``#access_token=``).
@@ -57,7 +58,7 @@ _URL_QUERY = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://[^?#]*[?#]")
 #: Pasted key material (PEM, OpenSSH).
 _KEY_MATERIAL = "-----BEGIN"
 
-OPS = ("set", "unset")
+OPS = ("set", "unset", "move")
 
 
 # --- locations ---------------------------------------------------------------------
@@ -124,12 +125,22 @@ def load_template():
     return json.loads(TEMPLATE_FILE.read_text(encoding="utf-8"))
 
 
-def is_blank_template(raw):
-    """True when ``raw`` parses to exactly the canonical template."""
+def _blank_templates():
+    blanks = [load_template()]
     try:
-        return json.loads(raw.decode("utf-8")) == load_template()
+        blanks.extend(json.loads(LEGACY_BLANKS_FILE.read_text(encoding="utf-8"))["templates"])
+    except (OSError, ValueError, KeyError):
+        pass
+    return blanks
+
+
+def is_blank_template(raw):
+    """True when ``raw`` parses to the canonical template or to one an earlier release wrote."""
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError, RecursionError):
         return False
+    return any(parsed == blank for blank in _blank_templates())
 
 
 # --- relocation --------------------------------------------------------------------
@@ -401,10 +412,6 @@ def _secret_ish(key):
     return "privatekey" in low and not low.endswith("path")
 
 
-def _has_userinfo(value):
-    return isinstance(value, str) and bool(_USERINFO.search(value))
-
-
 def _hidden_string(value):
     """A value that reads as a secret whatever key holds it."""
     if not isinstance(value, str):
@@ -416,48 +423,57 @@ def _hidden_string(value):
     )
 
 
+def _marked(node):
+    """The key names a well-formed ``$secrets`` list marks in ``node``, else ``None``."""
+    listed = node.get(SECRETS_KEY)
+    if not isinstance(listed, list):
+        return None
+    if not all(isinstance(n, str) and 0 < len(n) <= MAX_SECRET_NAME and not _hidden_string(n) for n in listed):
+        return None
+    return frozenset(listed)
+
+
 class _Redactor:
-    """Default-deny: only known non-secret shapes keep their value."""
+    """What the user marked in ``$secrets`` is hidden; what looks secret is hidden too.
+
+    A marked key hides its whole value, scalar or container. An unmarked key is hidden
+    only when its name or its value looks secret; containers under it are walked.
+    """
 
     @staticmethod
-    def _hide(value):
-        return {"secret": True, "set": _is_set(value)}
+    def _hide(value, marked):
+        return {"secret": True, "set": _is_set(value), "marked": marked}
 
-    @staticmethod
-    def _scalar_ok(key, value, top):
-        if not isinstance(key, str) or isinstance(value, (dict, list)):
-            return False
-        if top and key in PLAIN_TOP_LEVEL:
-            allowed = PLAIN_TOP_LEVEL[key]
-            return isinstance(value, allowed) and not (int in allowed and isinstance(value, bool))
-        if key.lower() not in SAFE_LEAF_NAMES or _secret_ish(key):
-            return False
-        return not _hidden_string(value)
-
-    def walk(self, value, top=False):
+    def walk(self, value):
         if isinstance(value, dict):
+            marked = _marked(value)
             out = {}
             for key, item in value.items():
-                if (
-                    key == "agents"
-                    and isinstance(item, list)
-                    and all(isinstance(i, str) and not _hidden_string(i) for i in item)
-                ):
+                if key == SECRETS_KEY and marked is not None:
                     out[key] = list(item)
+                elif key == PRODUCTION_KEY and isinstance(item, bool):
+                    out[key] = item
+                elif marked is not None and key in marked:
+                    out[key] = self._hide(item, True)
                 elif isinstance(item, (dict, list)):
                     out[key] = self.walk(item)
-                elif self._scalar_ok(key, item, top):
-                    out[key] = item
+                elif _secret_ish(key) or _hidden_string(item):
+                    out[key] = self._hide(item, False)
                 else:
-                    out[key] = self._hide(item)
+                    out[key] = item
             return out
         if isinstance(value, list):
-            return [self.walk(item) if isinstance(item, (dict, list)) else self._hide(item) for item in value]
-        return self._hide(value)
+            return [
+                self.walk(item) if isinstance(item, (dict, list))
+                else self._hide(item, False) if _hidden_string(item)
+                else item
+                for item in value
+            ]
+        return self._hide(value, False) if _hidden_string(value) else value
 
 
 def _redact(value):
-    return _Redactor().walk(value, top=True)
+    return _Redactor().walk(value)
 
 
 class _Invalid(Exception):
@@ -530,41 +546,6 @@ def _loads(raw):
     return parsed
 
 
-def _unknown_paths(data, template):
-    """JSON pointers in ``data`` outside the template's known shape, in document order."""
-    found = []
-
-    def walk(node, shape, pointer):
-        if isinstance(shape, dict):
-            if not isinstance(node, dict):
-                found.append(pointer or "/")
-                return
-            if not shape:  # `{}` in the template: free-form (e.g. `docker`)
-                return
-            for key, item in node.items():
-                child = "{}/{}".format(pointer, _pointer_escape(key))
-                if key not in shape:
-                    found.append(child)
-                else:
-                    walk(item, shape[key], child)
-        elif isinstance(shape, list):
-            if not isinstance(node, list):
-                found.append(pointer or "/")
-                return
-            exemplar = shape[0] if shape else None
-            for index, item in enumerate(node):
-                child = "{}/{}".format(pointer, index)
-                if isinstance(exemplar, (dict, list)):
-                    walk(item, exemplar, child)
-                elif isinstance(item, (dict, list)):
-                    found.append(child)
-        elif isinstance(node, (dict, list)):
-            found.append(pointer or "/")
-
-    walk(data, template, "")
-    return found
-
-
 def _state(path, raw):
     """The ``show`` payload for the bytes read from ``path`` (``None`` = file missing)."""
     base = {
@@ -574,7 +555,6 @@ def _state(path, raw):
         "error": None,
         "hash": None,
         "data": None,
-        "unknown_paths": [],
     }
     if raw is None:
         return base
@@ -582,7 +562,6 @@ def _state(path, raw):
     try:
         parsed = _loads(raw)
         redacted = _redact(parsed)
-        unknown = _unknown_paths(parsed, load_template())
     except _Invalid as exc:
         base["error"] = {"message": exc.message, "line": exc.line, "column": exc.column}
         return base
@@ -591,7 +570,6 @@ def _state(path, raw):
         return base
     base["valid"] = True
     base["data"] = redacted
-    base["unknown_paths"] = unknown
     return base
 
 
@@ -708,7 +686,7 @@ def _index(token, pointer):
 
 def _is_placeholder(value):
     if isinstance(value, dict):
-        if value.get("secret") is True and set(value) == {"secret", "set"}:
+        if value.get("secret") is True and set(value) in ({"secret", "set"}, {"secret", "set", "marked"}):
             return True
         return any(_is_placeholder(item) for item in value.values())
     if isinstance(value, list):
@@ -771,15 +749,62 @@ def _apply_unset(doc, tokens, pointer):
             node.pop(idx)
 
 
+def _lookup(doc, tokens, pointer):
+    """The value at ``tokens``; ``UsageError`` when any step is missing."""
+    node = doc
+    for token in tokens:
+        if isinstance(node, dict) and token in node:
+            node = node[token]
+        elif isinstance(node, list):
+            idx = _index(token, pointer)
+            if idx >= len(node):
+                raise UsageError("{!r} does not exist".format(pointer))
+            node = node[idx]
+        else:
+            raise UsageError("{!r} does not exist".format(pointer))
+    return node
+
+
+def _exists(doc, tokens, pointer):
+    try:
+        _lookup(doc, tokens, pointer)
+        return True
+    except UsageError:
+        return False
+
+
+def _apply_move(doc, source, target, op):
+    """Move the value at ``from`` to ``pointer`` without it ever leaving this process.
+
+    Renaming a key whose value ``show`` hides is only possible here: the app never holds
+    that value. Refuses a missing source, an existing destination (it would overwrite a
+    value the caller may not be able to see), and a move into the value's own subtree.
+    """
+    if not source or not target:
+        raise UsageError("a move takes a key, not the whole document")
+    if target[: len(source)] == source:
+        raise UsageError("{!r} cannot move inside itself".format(op["from"]))
+    value = _lookup(doc, source, op["from"])
+    if target[-1] != "-" and _exists(doc, target, op["pointer"]):
+        raise UsageError(
+            "{!r} already exists".format(op["pointer"]),
+            hint="Remove it first, or move to another name.",
+        )
+    _apply_unset(doc, source, op["from"])
+    _apply_set(doc, target, value, op["pointer"])
+
+
 def _validate_ops(ops):
     if not isinstance(ops, list):
         raise UsageError("the operations must be a JSON array")
     for position, op in enumerate(ops):
         if not isinstance(op, dict) or op.get("op") not in OPS:
             raise UsageError(
-                "operation {} must be an object with op 'set' or 'unset'".format(position)
+                "operation {} must be an object with op 'set', 'unset' or 'move'".format(position)
             )
         _tokens(op.get("pointer"))
+        if op["op"] == "move":
+            _tokens(op.get("from"))
         if op["op"] == "set":
             if "value" not in op:
                 raise UsageError("operation {} ('set') carries no value".format(position))
@@ -837,6 +862,8 @@ def apply_patch(project_root, ops, expect_hash):
                 tokens = _tokens(op["pointer"])
                 if op["op"] == "set":
                     _apply_set(working, tokens, copy.deepcopy(op["value"]), op["pointer"])
+                elif op["op"] == "move":
+                    _apply_move(working, _tokens(op["from"]), tokens, op)
                 else:
                     _apply_unset(working, tokens, op["pointer"])
             payload = _serialise(working)

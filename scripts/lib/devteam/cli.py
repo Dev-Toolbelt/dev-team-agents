@@ -1313,7 +1313,23 @@ def _cred_local_human(state):
         )
     lines.append("  hash     {}".format(state["hash"][:12]))
     if state["valid"]:
-        lines.append("  unknown  {} path(s) outside the template".format(len(state["unknown_paths"])))
+        hidden = []
+
+        def walk(node):
+            if isinstance(node, dict):
+                if node.get("secret") is True and "set" in node:
+                    hidden.append(node)
+                    return
+                for item in node.values():
+                    walk(item)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(state["data"])
+        lines.append("  secrets  {} hidden ({} marked in $secrets)".format(
+            len(hidden), sum(1 for item in hidden if item.get("marked"))
+        ))
     return "\n".join(lines)
 
 
@@ -1881,7 +1897,7 @@ def build_parser():
         "init", help="create the file from the canonical template; refuses if it exists"
     ).set_defaults(func=cmd_cred_local_init)
     cred_local_patch = cred_local_leaf(
-        "patch", help="apply set/unset operations read from stdin, atomically"
+        "patch", help="apply set/unset/move operations read from stdin, atomically"
     )
     cred_local_patch.add_argument(
         "--expect-hash", dest="expect_hash", required=True,
