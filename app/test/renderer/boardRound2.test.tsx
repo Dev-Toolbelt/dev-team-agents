@@ -655,24 +655,81 @@ describe('Board kanban — the worktree mark', () => {
 describe('Board kanban — a direct card', () => {
   const card = (text: string) => screen.getByText(text).closest('article')!;
 
-  it('shows the Direct badge and the prompts newest first, with an em dash for an uncaptured one', async () => {
+  it('shows the Direct badge and the prompts numbered in the order sent, with an em dash for an uncaptured one', async () => {
     await openKanban(boardProject({ sessions: [boardSession({ tasks: [directTask(), boardTask({ key: 'p', content: 'Plain' })] })] }));
     const direct = card('Direct work');
     expect(within(direct).getByText('Direct')).toBeInTheDocument();
-    const items = within(within(direct).getByRole('list', { name: /Prompts behind this work/ })).getAllByRole('listitem');
-    expect(items.map((li) => li.textContent)).toEqual(['fix the typo in the readme', '\u2014', 'rename the helper']);
+    const list = within(direct).getByRole('list', { name: /Prompts behind this work/ });
+    expect(list.tagName).toBe('OL');
+    expect(list).toHaveAttribute('start', '1');
+    const items = within(list).getAllByRole('listitem');
+    expect(items.map((li) => li.textContent)).toEqual(['rename the helper', '\u2014', 'fix the typo in the readme']);
     expect(within(card('Plain')).queryByText('Direct')).not.toBeInTheDocument();
   });
 
-  it('folds turns beyond the latest three behind a keyboard-operable button', async () => {
+  it('folds the earlier turns behind a keyboard-operable button, keeping the latest three at their numbers', async () => {
     const turns = Array.from({ length: 5 }, (_, i) => ({ text: `prompt ${i}`, at: 1_000 + i }));
     const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks: [directTask({ turns })] })] }));
     const direct = card('Direct work');
     expect(within(direct).queryByText('prompt 0')).not.toBeInTheDocument();
-    const more = within(direct).getByRole('button', { name: '+2 more' });
+    const list = within(direct).getByRole('list', { name: /Prompts behind this work/ });
+    expect(list).toHaveAttribute('start', '3');
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['prompt 2', 'prompt 3', 'prompt 4']);
+    const more = within(direct).getByRole('button', { name: '+2 earlier' });
     more.focus();
     await user.keyboard('{Enter}');
     expect(within(direct).getByText('prompt 0')).toBeInTheDocument();
+    expect(within(direct).getByRole('list', { name: /Prompts behind this work/ })).toHaveAttribute('start', '1');
     expect(within(direct).getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+describe('Board kanban — when a task was created and finished', () => {
+  const card = (text: string) => screen.getByText(text).closest('article')!;
+
+  it('shows the creation date and time on every card', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'c', content: 'Dated', created_at: NOW - 3600 })] })] }));
+    const time = within(card('Dated')).getByText(boardModel.formatDateTime(NOW - 3600));
+    expect(time.tagName).toBe('TIME');
+    expect(time).toHaveAttribute('datetime', new Date((NOW - 3600) * 1000).toISOString());
+  });
+
+  it('replaces the Done row of Time per step with the time the task finished', async () => {
+    const done = boardTask({
+      key: 'd', content: 'Finished one', status: 'completed', column: 'done',
+      completed_at: NOW - 60, status_since: NOW - 60, durations: { in_progress: 300, completed: 60 },
+    });
+    const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks: [done] })] }));
+    await user.click(within(card('Finished one')).getByRole('button', { name: /^Time per step/ }));
+    const steps = within(card('Finished one')).getByText('Finished at').closest('ul')!;
+    expect(within(steps).queryByText(/^Done/)).not.toBeInTheDocument();
+    expect(within(steps).getByText('In progress')).toBeInTheDocument();
+    expect(within(steps).getByText('Finished at').closest('li')).toHaveTextContent(boardModel.formatDateTime(NOW - 60));
+  });
+
+  it('shows no finish time on a task still open', async () => {
+    const { user } = await openKanban(boardProject({ sessions: [boardSession({ tasks: [boardTask({ key: 'o', content: 'Open one' })] })] }));
+    await user.click(within(card('Open one')).getByRole('button', { name: /^Time per step/ }));
+    expect(within(card('Open one')).queryByText('Finished at')).not.toBeInTheDocument();
+  });
+});
+
+describe('Board kanban — a direct card carries the session title', () => {
+  it('names the direct card after its session, and keeps the Direct badge', async () => {
+    await openKanban(
+      boardProject({
+        sessions: [boardSession({ title: 'Desafio 7D capa e link', tasks: [directTask(), boardTask({ key: 'p', content: 'Plain step' })] })],
+      }),
+    );
+    const card = screen.getByText('Desafio 7D capa e link', { selector: 'article p' }).closest('article')!;
+    expect(within(card).getByText('Direct')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Time per step, Desafio 7D capa e link' })).toBeInTheDocument();
+    expect(screen.queryByText('Direct work')).not.toBeInTheDocument();
+    expect(screen.getByText('Plain step')).toBeInTheDocument();
+  });
+
+  it('falls back to "Direct work" when the session has no title', async () => {
+    await openKanban(boardProject({ sessions: [boardSession({ title: null, tasks: [directTask()] })] }));
+    expect(screen.getByText('Direct work').closest('article')).not.toBeNull();
   });
 });

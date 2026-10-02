@@ -53,7 +53,7 @@ class IsNewerTest(unittest.TestCase):
                 self.assertFalse(self.is_newer(current, latest))
 
     def test_an_install_ahead_of_the_release_is_never_offered_a_downgrade(self):
-        for current, latest in [("2.48.900", "v2.48.0"), ("3.0.0", "v2.99.99"), ("2.10.0", "v2.9.0")]:
+        for current, latest in [("2.49.0-dev.1", "v2.48.0"), ("2.48.900", "v2.48.0"), ("3.0.0", "v2.99.99"), ("2.10.0", "v2.9.0")]:
             with self.subTest(current=current, latest=latest):
                 self.assertFalse(self.is_newer(current, latest))
 
@@ -69,8 +69,13 @@ class IsNewerTest(unittest.TestCase):
             with self.subTest(current=current, latest=latest):
                 self.assertFalse(self.is_newer(current, latest))
 
-    def test_a_pre_release_suffix_is_ignored_like_versions_parse_semver(self):
-        self.assertFalse(self.is_newer("2.48.0-rc1", "v2.48.0"))
+    def test_a_release_is_newer_than_its_own_pre_release_and_never_the_reverse(self):
+        # Semver precedence, the order `versions.sort_key` uses: 2.49.0-dev.1 < 2.49.0.
+        self.assertTrue(self.is_newer("2.48.0-rc1", "v2.48.0"))
+        self.assertTrue(self.is_newer("2.49.0-dev.1", "v2.49.0"))
+        self.assertFalse(self.is_newer("2.49.0", "v2.49.0-dev.1"))
+        self.assertFalse(self.is_newer("2.49.0-dev.1", "v2.49.0-dev.2"))
+        self.assertFalse(self.is_newer("2.49.0+build.7", "v2.49.0"))
 
     def test_a_hostile_version_never_reaches_arithmetic_evaluation(self):
         tmp = Path(tempfile.mkdtemp())

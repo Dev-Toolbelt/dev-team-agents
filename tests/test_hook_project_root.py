@@ -69,10 +69,15 @@ class ProviderParityTest(unittest.TestCase):
 
     def test_the_opencode_plugin_runs_its_hooks_from_the_project_directory(self):
         source = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
-        spawns = re.findall(r"spawn\(\"bash\", \[script\], \{([^}]*)\}", source)
+        spawns = re.findall(r"spawn\(\"bash\", bashArgs\(script\), \{([^}]*)\}", source)
         self.assertTrue(spawns, "the plugin no longer spawns its hooks with bash")
         for options in spawns:
             self.assertIn("cwd: directory", options)
+
+    def test_the_opencode_plugin_heals_through_the_core_pointer(self):
+        source = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
+        self.assertIn('"core-dir"', source)
+        self.assertIn('"self-heal.sh"', source)
 
 
 class CodexCommandTest(unittest.TestCase):
@@ -125,7 +130,7 @@ def _command(provider, script):
     """The command each provider registers, built from the one walk both share."""
     if provider == "claude":
         return hooks.command_for(script)
-    return "env -u BASH_ENV -u ENV bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, fallback=".", script=script))
+    return "env -u BASH_ENV -u ENV bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, pointer=hooks.CORE_POINTER, fallback=".", script=script))
 
 
 @requires_bash()
@@ -280,6 +285,85 @@ class HookFromSubdirectoryTest(StoreTestCase):
         result = self._run("/bin/sh", _claude_command(root), root, _claude_spawn("s-plain"), env)
         self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
         self.assertEqual(len(self._agents(root, project_id, "s-plain")), 1)
+
+
+@requires_bash()
+class SelfHealTest(HookFromSubdirectoryTest):
+    """`.dev-team-agents/scripts` deleted under a bound project (a `git rebase` onto a commit that
+    still vendored it does exactly that): the next hook re-binds and runs, on every provider that
+    registers a command. opencode's plugin is covered by `tests/js/opencode-plugin.test.mjs`."""
+
+    def _break(self, root):
+        link = root / ".dev-team-agents" / "scripts"
+        if link.is_symlink() or link.is_file():
+            link.unlink()
+        else:
+            shutil.rmtree(str(link))
+        self.assertTrue((root / hooks.CORE_POINTER).is_file())
+
+    def _env(self, case, root):
+        env = dict(os.environ)
+        env.pop("CLAUDE_PROJECT_DIR", None)
+        if case["env"]:
+            env[case["env"]] = str(root)
+        return env
+
+    def test_bind_writes_the_core_pointer(self):
+        root, _ = self._bound("claude")
+        self.assertEqual((root / hooks.CORE_POINTER).read_text(encoding="utf-8").strip(), Path(paths_core()).as_posix())
+
+    def test_the_next_hook_restores_the_link_and_reaches_the_board(self):
+        for provider, case in CASES.items():
+            if case is None:
+                continue
+            if provider in providers.DELEGATED_INSTALLERS and shutil.which("python3") is None:
+                continue
+            with self.subTest(provider=provider):
+                root, project_id = self._bound(provider)
+                command = case["command"](root)
+                self._break(root)
+                session = "heal-" + provider
+                result = self._run("/bin/sh", command, root / SUBDIR, case["spawn"](session), self._env(case, root))
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+                self.assertTrue((root / hooks.HOOK_DIR / "pre-tool-use.sh").is_file())
+                (task,) = self._agents(root, project_id, session)
+                self.assertEqual(task["agent_type"], AGENT)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores the read-only directory")
+    def test_when_the_rebind_fails_the_hooks_run_from_the_store_and_say_so(self):
+        for provider, case in CASES.items():
+            if case is None:
+                continue
+            if provider in providers.DELEGATED_INSTALLERS and shutil.which("python3") is None:
+                continue
+            with self.subTest(provider=provider):
+                root, project_id = self._bound(provider)
+                command = case["command"](root)
+                self._break(root)
+                project_dir = root / ".dev-team-agents"
+                project_dir.chmod(0o555)  # the re-bind cannot write the link back
+                self.addCleanup(project_dir.chmod, 0o755)
+                session = "store-" + provider
+                result = self._run("/bin/sh", command, root, case["spawn"](session), self._env(case, root))
+                project_dir.chmod(0o755)
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+                self.assertIn(b"running the hooks from the store", result.stderr)
+                (task,) = self._agents(root, project_id, session)
+                self.assertEqual(task["agent_type"], AGENT)
+
+    def test_an_unbound_tree_without_the_pointer_behaves_as_before(self):
+        root, _ = self._bound("claude")
+        self._break(root)
+        (root / hooks.CORE_POINTER).unlink()
+        result = self._run("/bin/sh", _claude_command(root), root, _claude_spawn("none"), self._env(CASES["claude"], root))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"No such file", result.stderr)
+
+
+def paths_core():
+    from devteam import paths
+
+    return paths.core_dir()
 
 
 class RewriteTest(StoreTestCase):

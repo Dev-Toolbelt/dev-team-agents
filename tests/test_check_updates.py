@@ -70,7 +70,7 @@ class CheckUpdatesTest(unittest.TestCase):
         self.assertEqual(self.check("v2.48.0"), "")
 
     def test_an_install_ahead_of_the_release_prints_nothing(self):
-        self.installed("2.48.900")
+        self.installed("2.49.0-dev.1")
         self.assertEqual(self.check("v2.48.0"), "")
 
     def test_no_answer_from_github_is_never_reported_as_up_to_date(self):

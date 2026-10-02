@@ -99,7 +99,7 @@ class MigrationTest(StoreTestCase):
         # and the bind this migration performs writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates", "user-data"],
+            ["core-dir", "memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates", "user-data"],
         )
         moved = {item["from"] for item in result["quarantined"]}
         self.assertIn(".dev-team-agents/agents", moved)

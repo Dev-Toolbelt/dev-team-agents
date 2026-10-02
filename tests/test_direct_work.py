@@ -323,6 +323,18 @@ class DirectWorkTest(BoardCase):
                 self.assertEqual(self.directs(session)[0]["status"], "in_progress")
                 self.assertEqual(len(self.directs(session)[0]["turns"]), 1)
 
+    def test_an_ended_session_never_leaves_its_direct_card_in_progress(self):
+        # A Stop that never ran (the hooks vanished mid-turn): the view settles the turn at the
+        # session's last sign of life, and the stored record is left as the hooks wrote it.
+        self.prompt("s1", "push it", T0)
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        later = T0 + tasks.DEFAULT_ENDED_AFTER + 100
+        (view,) = self.view(now=later)[0]["sessions"][0]["tasks"]
+        self.assertEqual((view["column"], view["completed_at"], view["abandoned"]), ("done", T0 + 1, False))
+        self.assertEqual(self.directs("s1")[0]["status"], "in_progress")
+        (live,) = self.view(now=T0 + 5)[0]["sessions"][0]["tasks"]
+        self.assertEqual(live["column"], "in_progress")
+
     def test_stop_completes_the_card_without_a_session_done_and_the_next_turn_revives_it(self):
         self.prompt("s1", "one", T0)
         self.rec(claude_edit("s1"), now=T0 + 1)

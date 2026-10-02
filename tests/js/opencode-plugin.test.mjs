@@ -2,7 +2,7 @@
 // with a node that can import .ts natively (22.18+); stub hook scripts stand in for the framework.
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs"
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -121,4 +121,70 @@ test("a Stop message (exit 2) is logged instead of dropped", async () => {
   await plugin.event({ event: { type: "session.idle", properties: { sessionID: "s1" } } })
   assert.ok(existsSync(join(dir, "stop.stdin")))
   assert.ok(logs.some((l) => /SESSION SUMMARY REQUIRED/.test(l.message)))
+})
+
+// A store whose self-heal.sh is a stub: it records the dispatcher it was asked for and the payload.
+const makeStore = (dir) => {
+  const core = join(dir, "store-core")
+  const lib = join(core, "versions", "9.9.9", "scripts", "hooks", "lib")
+  mkdirSync(lib, { recursive: true })
+  writeFileSync(join(core, "current"), "9.9.9\n")
+  writeFileSync(
+    join(lib, "self-heal.sh"),
+    ["#!/usr/bin/env bash", `printf '%s' "$1" > "${dir}/heal.arg"`, `cat > "${dir}/heal.stdin"`, `printf '%s' "$PWD" > "${dir}/heal.pwd"`].join("\n"),
+  )
+  writeFileSync(join(dir, ".dev-team-agents", "core-dir"), `${core}\n`)
+}
+
+test("with the scripts link gone, a hook runs the store's self-heal with the dispatcher and its payload", async () => {
+  const dir = makeProject()
+  makeStore(dir)
+  const { plugin } = await load(dir)
+  rmSync(join(dir, ".dev-team-agents", "scripts"), { recursive: true, force: true })
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "ls" } })
+  assert.equal(readFileSync(join(dir, "heal.arg"), "utf8"), "pre-tool-use.sh")
+  const healed = JSON.parse(readFileSync(join(dir, "heal.stdin"), "utf8"))
+  assert.equal(healed.sessionID ?? healed.session_id, "s1")
+  assert.equal(realpathSync(readFileSync(join(dir, "heal.pwd"), "utf8")), realpathSync(dir))
+})
+
+test("once the link is back, hooks run from the project again, not the store", async () => {
+  const dir = makeProject()
+  makeStore(dir)
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "ls" } })
+  assert.ok(existsSync(join(dir, "pre-tool-use.stdin")))
+  assert.ok(!existsSync(join(dir, "heal.arg")))
+})
+
+test("without a core-dir pointer a missing link is still only logged, never blocking", async () => {
+  const dir = makeProject()
+  const { plugin, logs } = await load(dir)
+  rmSync(join(dir, ".dev-team-agents", "scripts"), { recursive: true, force: true })
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "ls" } })
+  assert.ok(logs.some((l) => l.level === "warn"))
+})
+
+const addRetitleStub = (dir) => {
+  const hooks = join(dir, ".dev-team-agents", "scripts", "hooks")
+  writeFileSync(join(hooks, "session-retitle.sh"), ["#!/usr/bin/env bash", `cat >> "${dir}/session-retitle.stdin"`, `echo >> "${dir}/session-retitle.stdin"`].join("\n"))
+}
+const retitles = (dir) =>
+  existsSync(join(dir, "session-retitle.stdin"))
+    ? readFileSync(join(dir, "session-retitle.stdin"), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l))
+    : []
+
+test("a renamed session reaches the task board through session-retitle.sh", async () => {
+  const dir = makeProject()
+  addRetitleStub(dir)
+  const { plugin } = await load(dir)
+  const updated = (title) => plugin.event({ event: { type: "session.updated", properties: { info: { id: "s1", title } } } })
+  await updated("first title")
+  assert.deepEqual(retitles(dir), [], "the first sighting is the session being created, not a rename")
+  await updated("first title")
+  assert.deepEqual(retitles(dir), [], "an update that keeps the title is not a rename")
+  await updated("Desafio 7D")
+  const [sent] = retitles(dir)
+  assert.equal(sent.session_id, "s1")
+  assert.equal(sent.session_title, "Desafio 7D")
 })

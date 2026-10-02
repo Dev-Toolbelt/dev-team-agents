@@ -336,7 +336,7 @@ class UpgradeTest(StoreTestCase):
         # and the upgrade writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["credentials.local.json", "memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
+            ["core-dir", "credentials.local.json", "memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
         )
 
         destination = Path(result["destination"])

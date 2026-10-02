@@ -29,7 +29,7 @@ class BindTest(StoreTestCase):
         # and a bind writes both (ADR-0013).
         self.assertEqual(
             sorted(p.name for p in (root / project.PROJECT_DIR).iterdir()),
-            ["memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
+            ["core-dir", "memory-dir", "plugins", "project.json", "resolved", "scripts", "state-dir", "templates"],
         )
         for name in ("scripts", "templates"):
             link = root / project.PROJECT_DIR / name

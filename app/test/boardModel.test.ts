@@ -8,6 +8,7 @@ import {
   boardProjectName,
   buildKanban,
   countUnshown,
+  formatDateTime,
   formatDuration,
   formatDurationMinutes,
   percent,
@@ -392,5 +393,13 @@ describe('live figures from the CLI snapshot (as_of)', () => {
   it('falls back to the status_since arithmetic without as_of', () => {
     const task = boardTask({ column: 'in_progress', status: 'in_progress', status_since: NOW - 1000, durations: { in_progress: 100 } });
     expect(timeInColumn(session, task, NOW, true)).toBe(1000);
+  });
+});
+
+describe('formatDateTime', () => {
+  it('is the date and a 24-hour HH:mm in the given locale', () => {
+    const at = Date.UTC(2026, 9, 2, 13, 47) / 1000;
+    expect(formatDateTime(at, 'pt-BR', 'UTC')).toBe('02/10/2026 13:47');
+    expect(formatDateTime(at, 'en-GB', 'America/Sao_Paulo')).toBe('02/10/2026 10:47');
   });
 });

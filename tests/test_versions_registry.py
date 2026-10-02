@@ -70,6 +70,13 @@ class VersionStoreTest(StoreTestCase):
             self.install_version(version)
         self.assertEqual(versions.installed(), ["2.9.0", "2.10.0", "2.10.1"])
 
+    def test_a_pre_release_sorts_before_its_release_per_semver(self):
+        for version in ("2.49.0", "2.49.0-dev.10", "2.48.0", "2.49.0-dev.2", "2.49.0-alpha"):
+            self.install_version(version)
+        self.assertEqual(
+            versions.installed(), ["2.48.0", "2.49.0-alpha", "2.49.0-dev.2", "2.49.0-dev.10", "2.49.0"]
+        )
+
     def test_current_must_point_at_an_installed_version(self):
         self.install_version("3.0.0")
         with self.assertRaises(EnvError):
