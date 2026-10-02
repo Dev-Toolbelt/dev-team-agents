@@ -397,10 +397,10 @@ listener), on top of `entitlement.py`. None imports telemetry.
   else — no file, preference or other variable — changes the endpoint or the keys.
 - **Client gate.** Every `auth` leaf is `READ_ONLY` in `compat.py`: it writes only machine-local
   session records that are not declared store shapes, and a user must always be able to sign in.
-- **Account gate** (`gate.py`, SR-30). `main()` calls `gate.apply()` after the group-usage check and
+- **Account gate** (`auth_gate.py`, SR-30). `main()` calls `gate.apply()` after the group-usage check and
   before the handler, in-process through `auth.cmd_check` (no subprocess), so its decision, exit
   codes and message are `auth check`'s. The exempt list is an **allowlist on the parsed command
-  path** (`gate.EXEMPT`): `auth *`, `version`, `path`, `compat`, `doctor`, `unbind`, `uninstall`,
+  path** (`auth_gate.EXEMPT`): `auth *`, `version`, `path`, `compat`, `doctor`, `unbind`, `uninstall`,
   `export`, `quarantine restore`. Everything else, including a command added later, is gated;
   `tests/test_auth_gate.py` walks the real parser to prove it. `gate_mode` in the compiled
   `scripts/lib/auth-config.json` is `warn` (default, and when the key is absent) or `enforce`

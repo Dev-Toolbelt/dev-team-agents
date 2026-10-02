@@ -15,7 +15,8 @@ import time
 from pathlib import Path
 
 from . import auth, bind as bind_module
-from . import catalog, compat, creds, credentials_local, doctor, gate, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import auth_gate as gate
+from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter

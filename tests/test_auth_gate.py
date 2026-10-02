@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auth_support import AuthTestCase  # noqa: E402
 
-from devteam import auth, cli, entitlement, gate  # noqa: E402
+from devteam import auth, cli, entitlement
+from devteam import auth_gate as gate  # noqa: E402
 from devteam.output import Emitter  # noqa: E402
 
 #: The command roots ADR-0029 never gates. A new subcommand is gated unless added here AND

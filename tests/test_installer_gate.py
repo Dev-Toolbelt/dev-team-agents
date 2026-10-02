@@ -22,7 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auth_support import AuthTestCase  # noqa: E402
 from devteam_support import REPO_ROOT, requires_bash  # noqa: E402
 
-from devteam import gate, providers  # noqa: E402
+from devteam import auth_gate as gate
+from devteam import providers  # noqa: E402
 
 BLOCKED = 5
 
