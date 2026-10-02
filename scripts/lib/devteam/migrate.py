@@ -24,6 +24,15 @@ Two v2 shapes are converted:
     root one; the memory is moved to ``.dev-team-agents/user-data/`` (layout 1, which
     `devteam upgrade` then takes into the store); the docs stay where they are and
     are added to ``context_paths``.
+
+Either shape can also carry its ``.claude/`` links as **real copies** — a tool that
+copied the project dereferencing links, or a checkout without symlink support,
+materialized them (see ``bind.v2_copy``). Those copies are quarantined with the
+tree. A project left with only the copies — an earlier migration that quarantined
+the tree and then had its bind refused on them — is migrated the same way.
+
+Every check the bind runs happens before the first move: a refused bind leaves the
+project exactly as it was found.
 """
 
 from __future__ import annotations
@@ -290,11 +299,49 @@ def _context_paths_added(project_root, found):
     return [] if project.PRE_ROOT_DOCS_DIR in current else [project.PRE_ROOT_DOCS_DIR]
 
 
-def plan(root=None, provider_names=None, mode="auto"):
+def _git_tracked_many(project_root, relatives):
+    """The subset of ``relatives`` (files or directories) git has in the index."""
+    relatives = sorted(set(relatives))
+    tracked = set()
+    for start in range(0, len(relatives), UNTRACK_BATCH):
+        batch = relatives[start : start + UNTRACK_BATCH]
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", "-z", "--", *batch],
+                cwd=str(project_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            return []
+        if result.returncode != 0:
+            return []
+        for path in result.stdout.decode("utf-8", "replace").split("\0"):
+            for rel in batch:
+                if path == rel or path.startswith(rel + "/"):
+                    tracked.add(rel)
+    return sorted(tracked)
+
+
+def _copy_group(rel):
+    """Quarantine group for a v2 copy: its `.claude/` folder, kept apart from the tree."""
+    return "v2-install/claude/{}".format(Path(rel).parent.name)
+
+
+def plan(root=None, provider_names=None, mode="auto", pin=None):
     """Describe what a migration would do. Reads only."""
     project_root = project.resolve_root(root)
     found = detect(project_root)
-    if not found["is_v2"]:
+    identity = project.load(project_root)
+    known_id = registry.registered_id(project_root, identity)
+    entry = registry.get(known_id) if known_id is not None else None
+    # The copies a bind would refuse on, named against the version that bind resolves.
+    version_dir = versions.require(
+        versions.resolve(pin if pin is not None else (entry or {}).get("pin"))
+    )
+    copies = bind_module.v2_copies(version_dir, project_root)
+    if not found["is_v2"] and not copies:
         raise UsageError(
             "{} has no vendored v2 install to migrate".format(project_root),
             hint="Use `devteam bind` for a project that was never installed.",
@@ -305,9 +352,6 @@ def plan(root=None, provider_names=None, mode="auto"):
     # reversed the mode the user chose — and `vendored` exists precisely for CI,
     # containers and air-gapped repos where `link` into a per-developer absolute
     # path does not work.
-    identity = project.load(project_root)
-    known_id = registry.registered_id(project_root, identity)
-    entry = registry.get(known_id) if known_id is not None else None
     if entry is not None and entry.get("mode") == "vendored" and found["layout"] == LAYOUT_ROOT:
         raise UsageError(
             "{} is already bound in vendored mode, not a v2 install".format(project_root),
@@ -329,6 +373,7 @@ def plan(root=None, provider_names=None, mode="auto"):
     # Memory that git tracks leaves the index with the rest: its new home is
     # machine-local and excluded, so the old path would only ever show as deleted.
     tracked += [move["from"] for move in memory if _git_tracked(project_root, move["from"])]
+    tracked += _git_tracked_many(project_root, copies)
     # An identity with no registry entry is ours but unbound — typically what an
     # earlier bind attempt left before it was refused. Adopted, not replaced: the id
     # may already be committed.
@@ -362,6 +407,11 @@ def plan(root=None, provider_names=None, mode="auto"):
         actions.append("add {} to context_paths (the docs stay where they are)".format(path))
     for name in found["vendored_trees"] + found["vendored_files"]:
         actions.append("move {}/{} into the data-store quarantine".format(install_rel, name))
+    if copies:
+        actions.append(
+            "move {} real copy(ies) of the v2 install's .claude/ links ({}) into the "
+            "data-store quarantine".format(len(copies), ", ".join(sorted({str(Path(c).parent) for c in copies})))
+        )
     actions.append("bind providers: {} (mode={})".format(", ".join(selected), mode))
     if found["layout"] == LAYOUT_PRE_ROOT:
         actions.append(
@@ -393,6 +443,7 @@ def plan(root=None, provider_names=None, mode="auto"):
         "context_paths_added": added,
         "git_tracked": tracked,
         "git_tracked_artifacts": tracked_links,
+        "v2_copies": copies,
         "preserved": list(PRESERVED),
     }
 
@@ -481,9 +532,20 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
     ``untrack_paths`` also removes from git's index every path the plan reported as
     tracked (see :func:`untrack`); without it they are only reported.
     """
-    preview = plan(root, provider_names=provider_names, mode=mode)
+    preview = plan(root, provider_names=provider_names, mode=mode, pin=pin)
     project_root = Path(preview["path"])
     found = preview["detected"]
+
+    # The bind's own refusals, before anything moves. Checked after the moves, a
+    # refusal left the tree quarantined and `project.json` written on a project that
+    # neither `bind` nor `migrate` could then take further.
+    vacated = {
+        "{}/{}".format(preview["install_dir"], name)
+        for name in found["vendored_trees"] + found["vendored_files"]
+    } | set(preview["v2_copies"])
+    bind_module.check(
+        project_root, provider_names=preview["providers"], mode=mode, pin=pin, vacated=vacated
+    )
 
     # Memory before identity: `project.ensure` picks layout 1 because memory is at
     # `.dev-team-agents/user-data/`, which is what makes `devteam upgrade` offer the
@@ -529,6 +591,12 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
             quarantined.append(
                 {"from": "{}/{}".format(preview["install_dir"], name), "to": str(destination)}
             )
+    for rel in preview["v2_copies"]:
+        destination = quarantine.move(
+            project_root / rel, project_id, group=_copy_group(rel), stamp=stamp
+        )
+        if destination is not None:
+            quarantined.append({"from": rel, "to": str(destination)})
     if preview["layout"] == LAYOUT_PRE_ROOT:
         try:
             install_dir.rmdir()  # emptied above; a leftover keeps it, and is reported

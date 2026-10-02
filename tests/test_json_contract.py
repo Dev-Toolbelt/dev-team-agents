@@ -765,6 +765,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "context_paths_added",
             "git_tracked",
             "git_tracked_artifacts",
+            "v2_copies",
             "preserved",
         },
         "migrate --apply": {

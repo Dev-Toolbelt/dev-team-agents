@@ -494,7 +494,7 @@ def cmd_migrate(args, emitter):
             lines.append("  left alone {}".format(", ".join(result["unrecognised"])))
         return result, "\n".join(lines)
 
-    result = migrate.plan(args.path, provider_names=args.provider, mode=args.mode)
+    result = migrate.plan(args.path, provider_names=args.provider, mode=args.mode, pin=args.pin)
     lines = ["migration plan for {} (nothing changed)".format(result["path"])]
     lines.extend("  - {}".format(action) for action in result["actions"])
     untrack = result["git_tracked"] + result["git_tracked_artifacts"]

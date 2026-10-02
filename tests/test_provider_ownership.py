@@ -13,7 +13,7 @@ from pathlib import Path
 
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
-from devteam import bind, project, providers, registry, versions
+from devteam import bind, migrate, project, providers, registry, versions
 from devteam.errors import ConflictError
 
 #: Files a project authored itself, next to (never on top of) the framework's
@@ -121,6 +121,34 @@ class ProviderOwnershipTest(StoreTestCase):
                 for rel in own:
                     self.assertEqual((root / rel).read_text(encoding="utf-8"), "mine\n", rel)
                     self.assertNotIn(rel, moved)
+
+    def test_migrate_refused_by_any_provider_moves_nothing(self):
+        # `migrate` used to quarantine the v2 tree before the bind's checks ran, so a
+        # refusal from any provider's preflight left a half-migrated project behind.
+        from test_migrate_doctor import materialize_v2_links
+
+        for provider in self._providers():
+            with self.subTest(provider=provider):
+                root = self.new_project("migrate-clash-{}".format(provider))
+                bind.bind(root, provider_names=["claude"], mode="vendored")
+                bind.unbind(root, keep_artifacts=True)
+                bind.manifest_file(project.load(root)["project_id"]).unlink()
+                copied = materialize_v2_links(root)
+                rel = COLLISIONS[provider]
+                if provider == "claude":
+                    shutil.rmtree(str(root / Path(rel).parent))
+                self._seed(root, [rel])
+                selected = sorted({"claude", provider})
+
+                with self.assertRaises(ConflictError):
+                    migrate.apply(root, provider_names=selected, mode="link")
+                self.assertEqual((root / rel).read_text(encoding="utf-8"), "mine\n")
+                tree = root / project.PROJECT_DIR / "agents"
+                self.assertTrue(tree.is_dir() and not tree.is_symlink())
+                for path in copied:
+                    if not rel.startswith(path + "/"):
+                        self.assertFalse((root / path).is_symlink(), path)
+                self.assertIsNone(registry.get(project.load(root)["project_id"]))
 
     def test_bind_refuses_a_collision_before_writing_anything(self):
         for provider, mode in self._cases():

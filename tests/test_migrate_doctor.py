@@ -9,7 +9,7 @@ from pathlib import Path
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, doctor, migrate, project, registry, versions
+from devteam import bind, doctor, migrate, project, quarantine, registry, versions
 from devteam.errors import ConflictError, UsageError
 
 
@@ -480,6 +480,145 @@ class BindOverV2Test(StoreTestCase):
         subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
         manifest = bind.read_manifest(project.load(root)["project_id"])
         self.assertEqual(bind.tracked_artifacts(root, manifest), [])
+
+
+def materialize_v2_links(root):
+    """Replace every `.claude/` link of a v2 install with a real copy of its target.
+
+    What a tool that copies a project dereferencing links leaves — and what a
+    checkout without symlink support produces as text files instead.
+    """
+    copied = []
+    for base in (root / ".claude" / "agents", root / ".claude" / "commands", root / ".claude" / "skills"):
+        if not base.is_dir():
+            continue
+        for child in sorted(base.iterdir()):
+            if not child.is_symlink():
+                continue
+            target = child.resolve()
+            child.unlink()
+            shutil.copytree(str(target), str(child))
+            copied.append(child.relative_to(root).as_posix())
+    return copied
+
+
+class V2CopiesTest(StoreTestCase):
+    """A v2 install whose `.claude/` links were materialized as real copies.
+
+    Found migrating a real project: `bind` refused the copies as foreign, and a
+    `migrate` that had already quarantined the tree left a project neither command
+    could take further.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.install_version("3.0.0", activate=True)
+
+    _git_env = staticmethod(MigrationTest._git_env)
+    _legacy_project = MigrationTest._legacy_project
+    _install_sh_project = MigrationTest._install_sh_project
+
+    def _copies_project(self, name="copies"):
+        root = self._install_sh_project(name)
+        copied = materialize_v2_links(root)
+        self.assertIn(".claude/agents/dev-team", copied)
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", "commit", "-qm", "copies"],
+            cwd=str(root),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            env=self._git_env(),
+        )
+        return root, copied
+
+    def _interrupted(self, name="interrupted"):
+        """What a migrate that quarantined the tree and then had its bind refused left."""
+        root, copied = self._copies_project(name)
+        project_id = project.load(root)["project_id"]
+        for found in migrate.detect(root)["vendored_trees"]:
+            quarantine.move(root / project.PROJECT_DIR / found, project_id, group="v2-install")
+        self.assertFalse(migrate.detect(root)["is_v2"])
+        return root, copied
+
+    def test_v2_copy_recognises_copies_and_link_files_but_not_project_content(self):
+        root, _ = self._copies_project()
+        version_dir = versions.require(versions.resolve(None))
+        self.assertTrue(bind.v2_copy(".claude/agents/dev-team", root / ".claude/agents/dev-team", version_dir))
+        self.assertTrue(
+            bind.v2_copy(".claude/skills/unit", root / ".claude/skills/unit", version_dir)
+        )
+        link_file = root / ".claude" / "commands" / "devteam"
+        shutil.rmtree(str(link_file))
+        link_file.write_text("../../.dev-team-agents/commands", encoding="utf-8")
+        self.assertTrue(bind.v2_copy(".claude/commands/devteam", link_file, version_dir))
+
+        own = root / ".claude" / "agents" / "dev-team"
+        (own / "notes.txt").write_text("mine\n", encoding="utf-8")
+        self.assertFalse(bind.v2_copy(".claude/agents/dev-team", own, version_dir))
+        skill = root / ".claude" / "skills" / "unit" / "SKILL.md"
+        skill.write_text("---\nname: something-else\n---\n", encoding="utf-8")
+        self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir))
+
+    def test_bind_refuses_copies_with_the_v2_reason_and_writes_nothing(self):
+        root, copied = self._interrupted()
+        before = (root / project.PROJECT_DIR / "project.json").read_text(encoding="utf-8")
+        code, out, _ = self.run_cli("--json", "bind", str(root), "--provider", "claude", "--mode", "link")
+        self.assertEqual(code, 4)
+        payload = json.loads(out)
+        self.assertEqual(payload["details"]["reason"], bind.V2_INSTALL_REASON)
+        self.assertIn("devteam migrate", payload["hint"])
+        self.assertEqual((root / project.PROJECT_DIR / "project.json").read_text(encoding="utf-8"), before)
+        for rel in copied:
+            self.assertFalse((root / rel).is_symlink(), rel)
+
+    def test_migrate_quarantines_the_copies_with_the_tree_and_binds(self):
+        root, copied = self._copies_project()
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertEqual(sorted(preview["v2_copies"]), sorted(copied))
+        self.assertTrue(set(copied) <= set(preview["git_tracked"]))
+
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        moved = {item["from"] for item in result["quarantined"]}
+        self.assertTrue(set(copied) <= moved)
+        self.assertIn("{}/agents".format(project.PROJECT_DIR), moved)
+        for rel in copied:
+            self.assertTrue((root / rel).is_symlink(), rel)
+        agents = Path(result["quarantine_dir"]) / "claude" / "agents" / "dev-team" / "backend-developer.md"
+        self.assertTrue(agents.is_file())
+        self.assertEqual(migrate.leftover_trees(root), [])
+
+    def test_migrate_finishes_an_interrupted_migration_and_keeps_the_identity(self):
+        root, copied = self._interrupted()
+        project_id = project.load(root)["project_id"]
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue(preview["adopts_identity"])
+        self.assertEqual(sorted(preview["v2_copies"]), sorted(copied))
+
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(result["project_id"], project_id)
+        for rel in copied:
+            self.assertTrue((root / rel).is_symlink(), rel)
+
+    def test_a_refused_bind_moves_nothing(self):
+        root, copied = self._copies_project("refused")
+        # A project-owned directory at a framework path: still foreign, still refused.
+        own = root / ".claude" / "skills" / "project-context"
+        shutil.rmtree(str(own))
+        own.mkdir()
+        (own / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+        identity = (root / project.PROJECT_DIR / "project.json").read_text(encoding="utf-8")
+
+        with self.assertRaises(ConflictError):
+            migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(migrate.detect(root)["vendored_trees"], migrate.plan(root)["detected"]["vendored_trees"])
+        self.assertTrue((root / project.PROJECT_DIR / "agents").is_dir())
+        self.assertFalse((root / project.PROJECT_DIR / "agents").is_symlink())
+        for rel in copied:
+            if rel != ".claude/skills/project-context":
+                self.assertTrue((root / rel).exists() and not (root / rel).is_symlink(), rel)
+        self.assertEqual((root / project.PROJECT_DIR / "project.json").read_text(encoding="utf-8"), identity)
+        self.assertEqual(list(registry.entries()), [])
 
 
 class DoctorTest(StoreTestCase):
