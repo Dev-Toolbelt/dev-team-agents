@@ -21,6 +21,9 @@ head -5 docs/project.md docs/development/{architecture,code-standards,tech-stack
 ls docs/wiki/ 2>/dev/null
 ```
 
+**`--auto`:** derive the touched set per `skills/shared/feature-learn/SKILL.md` § Scope Derivation and
+pass it as a pathspec to every command above (`git log … -- <paths>`); an empty set ends the run as *nothing to update*.
+
 Extract from that output:
 - **Done / Decisions / Next** from the most recent session-summary entry.
 - Which files changed, in which layers, and how many commits were made today.
@@ -85,15 +88,13 @@ This command commits the knowledge-base updates automatically once the agents fi
 Awaiting your approval before proceeding. Approving this plan authorizes the listed commits.
 ```
 
-If **nothing to update** was determined: output exactly:
+**`--auto`:** print the plan without the approval line and go straight to Step 4 — the flag is the approval,
+commits included. Reuse rule candidates become `/devteam:rule …` suggestions in the summary instead of a
+reuse-rule pass: that pass's per-row confirmation belongs to `reuse-guidelines` and is never skipped.
 
-```
-Nothing to capture — session knowledge is already up to date.
-```
+If **nothing to update** was determined, output exactly `Nothing to capture — session knowledge is already up to date.`, record the run marker (see Step 4) and stop.
 
-Record the run marker (see Step 4) and stop.
-
-## Step 4 — Execute (after user approval)
+## Step 4 — Execute (after user approval, or directly with `--auto`)
 
 **MANDATORY:** Use the Task tool to spawn agents. Do NOT write files in the main context.
 
@@ -167,11 +168,9 @@ Record the run marker (any outcome): `echo "$(git log -1 --format=%ct 2>/dev/nul
 
 ## Step 5 — Auto-commit
 
-After all agents complete, execute the **Commit plan** declared in Step 3 — do not wait
-for the user to run `/devteam:commit`; the plan approval already authorized these commits.
+After all agents complete, execute the **Commit plan** declared in Step 3 — the plan approval (or `--auto`) already authorized these commits.
 
-1. Load `skills/shared/conventional-commits/SKILL.md` and follow it for message format,
-   project-pattern detection (`git log --oneline -10`), and authorship rules.
+1. Load `skills/shared/conventional-commits/SKILL.md` and follow it for message format, project-pattern detection and authorship rules.
 2. For each manifest row, stage only that row's files (`git add …`) and commit it. One
    atomic commit per row; never mix layers; commit **locally only** — do not push.
 3. If a file in the manifest was not actually created/changed, skip its commit and note it.
@@ -196,5 +195,6 @@ Commits created (N):
 | `wiki` | Wiki entries only |
 | `adr` | ADR candidates only |
 | `rule` | Reuse rule candidates only |
-| `--dry-run` | Show the classified plan (incl. commit manifest) only, do not spawn agents or commit |
+| `--auto` | No approval question; scope limited to what this session/branch/worktree touched (Step 1, Step 3) |
+| `--dry-run` | Show the classified plan (incl. commit manifest) only, do not spawn agents or commit — wins over `--auto` |
 | `--no-commit` | Run the full learn pass but skip the auto-commit — leave changes staged for manual commit |
