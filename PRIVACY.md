@@ -92,8 +92,8 @@ are retained for 90 days and then deleted automatically.
 
 **Local only, never sent: task board prompt excerpts.** Separately from telemetry, the
 task board keeps, on your machine, a short excerpt (first line, at most 100 characters)
-of each prompt that led the session to change files itself, on that session's "Direct
-work" card. Anything shaped like a secret is replaced by `[redacted]` before it is
+of each prompt that led the session to use a tool — read, search or change files — on
+that session's "Direct work" card. Anything shaped like a secret is replaced by `[redacted]` before it is
 stored — a best effort, not a guarantee. These excerpts live in the machine-local task
 board records, are never transmitted (telemetry included), and are kept until you
 delete them; there is no opt-out yet. See `docs/specs/task-board.md` § Direct work.
