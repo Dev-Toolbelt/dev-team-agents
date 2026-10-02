@@ -13,6 +13,10 @@ import { Doctor } from './screens/Doctor.js';
 import { Integrations } from './screens/Integrations.js';
 import { Projects } from './screens/Projects.js';
 import { NotificationBell } from './NotificationBell.js';
+import { AccountGate } from './account/AccountGate.js';
+import { AccountMenu } from './account/AccountMenu.js';
+import { AccountProvider } from './account/AccountContext.js';
+import { Profile } from './account/Profile.js';
 import { Skills } from './screens/Skills.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Loading } from './Problem.js';
@@ -108,6 +112,9 @@ export function App() {
   }, []);
 
   return (
+    // ADR-0029: accounts are mandatory. The provider asks the CLI (`auth check`) once a CLI is
+    // known to exist; the gate below decides what the answer lets the person see.
+    <AccountProvider enabled={!busy && resolution !== null && resolution.found}>
     <div className="flex h-full flex-col">
       <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
         <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -143,8 +150,9 @@ export function App() {
           {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
           {build !== null ? <AppVersion version={build.appVersion} /> : null}
           <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
-          <div className="ml-auto self-center">
+          <div className="ml-auto flex items-center gap-2 self-center">
             <NotificationBell onOpenProject={openProject} />
+            <AccountMenu onOpen={() => setTab('account')} />
           </div>
         </div>
       </header>
@@ -175,7 +183,7 @@ export function App() {
         ) : resolution === null || !resolution.found ? (
           <NoCli resolution={resolution} onRetry={() => void load()} />
         ) : (
-          <>
+          <AccountGate onOpenAccount={() => setTab('account')}>
             <HandshakeBanner handshake={handshake} />
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
@@ -185,6 +193,7 @@ export function App() {
                 <TabsTrigger value="skills">Global Skills</TabsTrigger>
                 <TabsTrigger value="integrations">Integrations</TabsTrigger>
                 <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
+                <TabsTrigger value="account">Account</TabsTrigger>
               </TabsList>
               {/* Kept mounted while another tab is shown: the project settings screen lives
                   inside this tab, and unmounting it would silently drop unsaved edits. */}
@@ -225,13 +234,19 @@ export function App() {
                   <Doctor />
                 </ErrorBoundary>
               </TabsContent>
+              <TabsContent value="account" className="pt-4">
+                <ErrorBoundary label="The Account screen">
+                  <Profile />
+                </ErrorBoundary>
+              </TabsContent>
             </Tabs>
-          </>
+          </AccountGate>
         )}
       </main>
       {/* Write results land here, outside every layout — see `toasts.tsx`. */}
       <Toaster position="bottom-right" richColors />
     </div>
+    </AccountProvider>
   );
 }
 
