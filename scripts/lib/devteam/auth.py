@@ -145,6 +145,8 @@ def _account_view(meta):
 
 
 def _state_view(identity, meta, result, online=None, warnings=None):
+    from . import auth_gate
+
     backend, insecure = session.backend_view(meta)
     notes = list(warnings or [])
     if insecure:
@@ -158,6 +160,7 @@ def _state_view(identity, meta, result, online=None, warnings=None):
         "last_online_check": meta.get("last_online_check") if meta else None,
         "secret_backend": backend,
         "secret_backend_insecure": insecure,
+        "gate_mode": auth_gate.gate_mode(),
         "environment": identity.environment,
         "test_seam": identity.test_seam,
         "warnings": notes,
@@ -259,6 +262,8 @@ def cmd_login(args, emitter):
         raise UsageError("choose a sign-in method: --google, --github or --email ADDRESS")
     if args.signup and not args.password:
         raise UsageError("--signup goes with --password")
+    if (args.send_code or args.finish) and not args.signup:
+        raise UsageError("--send-code and --finish go with --password --signup")
     email = gotrue.normalize_email(args.email)
     if args.password:
         return _login_password(args, emitter, identity, client, email)
@@ -272,10 +277,13 @@ def cmd_login(args, emitter):
 
 def _login_password(args, emitter, identity, client, email):
     if args.signup:
-        name = gotrue.normalize_display_name(args.name) if args.name else None
-        password = gotrue.validate_new_password(_read_new_password("password: "))
-        _swallow_rejection(lambda: client.sign_up(email, password, name))
-        emitter.line(SENT_MESSAGE)
+        if not args.finish:
+            name = gotrue.normalize_display_name(args.name) if args.name else None
+            password = gotrue.validate_new_password(_read_new_password("password: "))
+            _swallow_rejection(lambda: client.sign_up(email, password, name))
+            emitter.line(SENT_MESSAGE)
+            if args.send_code:
+                return {"sent": True, "message": SENT_MESSAGE, "expires_in": 600}, None
         code = gotrue.normalize_code(_read_secret("confirmation code: "))
         sess = client.verify(email, code, "signup")
         return _complete_login(emitter, identity, client, sess, "email", "password-signup")
@@ -684,6 +692,17 @@ def register(sub, leaf):
         help="with --email: use the account password (read from the terminal or stdin) instead of a code",
     )
     login.add_argument("--signup", action="store_true", help="with --password: create the account")
+    stage = login.add_mutually_exclusive_group()
+    stage.add_argument(
+        "--send-code",
+        action="store_true",
+        help="with --signup: read the password from stdin, send the confirmation code and stop",
+    )
+    stage.add_argument(
+        "--finish",
+        action="store_true",
+        help="with --signup: read the confirmation code from stdin and complete the sign-up",
+    )
     login.add_argument("--name", help="display name for a new account")
     login.set_defaults(func=cmd_login)
 
