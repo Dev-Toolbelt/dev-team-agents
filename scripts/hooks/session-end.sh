@@ -12,6 +12,7 @@ INPUT="$(cat)"
 SESSION="$(devteam_task_board_session_id "$INPUT")"
 [ -n "$SESSION" ] || exit 0
 devteam_task_board_init || exit 0
+devteam_task_board_clear_turn "$SESSION" prompt
 [ -f "${TB_STATE_DIR}/task-board/${SESSION}.json" ] || exit 0
 devteam_task_board_mark ended "$INPUT" >/dev/null 2>&1
 exit 0

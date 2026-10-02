@@ -208,14 +208,21 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // the CLI can read it (transcript, session index); opencode only has it through the SDK.
   // Looked up once per session and refreshed by `session.updated`; "" when unavailable.
   const titleBySession = new Map<string, string>()
-  const rememberTitle = (sessionID: unknown, title: unknown) => {
-    if (typeof sessionID !== "string" || !sessionID || typeof title !== "string") return
+  // A child session's parent, sent as `parent_id`: a subagent's edits are its agent task's, so the
+  // task board's "Direct work" card counts only the top session's. Kept beside the title, same cap.
+  const parentBySession = new Map<string, string>()
+  const rememberTitle = (sessionID: unknown, title: unknown, parentID?: unknown) => {
+    if (typeof sessionID !== "string" || !sessionID) return
+    // Known even when the title is not: `session.updated` carries the whole session.
+    if (typeof parentID === "string" && parentID) parentBySession.set(sessionID, parentID)
+    if (typeof title !== "string") return
     titleBySession.delete(sessionID)
     titleBySession.set(sessionID, title)
     while (titleBySession.size > SESSION_TITLES_KEPT) {
       const oldest = titleBySession.keys().next().value
       if (oldest === undefined) break
       titleBySession.delete(oldest)
+      parentBySession.delete(oldest)
     }
   }
   const sessionTitle = async (sessionID: string): Promise<string> => {
@@ -223,7 +230,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     try {
       const res = await client.session.get({ path: { id: sessionID } })
       const title = typeof res.data?.title === "string" ? res.data.title : ""
-      rememberTitle(sessionID, title)
+      rememberTitle(sessionID, title, (res.data as any)?.parentID)
       return title
     } catch {
       return ""
@@ -248,7 +255,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     event: async ({ event }) => {
       if (event.type === "session.updated") {
         const info: any = (event as any).properties?.info
-        rememberTitle(info?.id, info?.title)
+        rememberTitle(info?.id, info?.title, info?.parentID)
       }
       if (event.type === "session.created") {
         await safe("session-start", () => runHook(`${HOOKS}/session-start.sh`))
@@ -277,6 +284,8 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         tool_use_id: (input as any).callID,
         cwd: directory,
         session_title: await sessionTitle(input.sessionID),
+        // A subagent runs in a child session: its edits are its agent task's, not direct work.
+        parent_id: parentBySession.get(input.sessionID),
         args: output.args,
       })
       await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
