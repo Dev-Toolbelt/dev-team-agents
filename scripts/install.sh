@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 GITHUB_OWNER="Dev-Toolbelt"
 GITHUB_REPO="dev-team-agents"
 GITHUB_API="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}"

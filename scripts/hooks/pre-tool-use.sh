@@ -9,6 +9,10 @@ unset BASH_ENV ENV
 
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/../lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/pre-tool-use" && pwd)"
 INPUT=$(cat)
 # The payload is fed to each sub-script from a file, never through a pipe: a

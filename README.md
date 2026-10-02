@@ -27,7 +27,7 @@ If it's missing, the installer, updater, and `/devteam:health-check` will warn y
 | macOS | `brew install python3` |
 | Linux (Debian/Ubuntu) | `sudo apt install python3` |
 | Linux (Fedora/RHEL) | `sudo dnf install python3` |
-| Windows | [python.org/downloads](https://www.python.org/downloads/) or `winget install Python.Python.3` |
+| Windows | [python.org/downloads](https://www.python.org/downloads/) or `winget install Python.Python.3` — under Git Bash, `python3`, `python` or the `py` launcher all work: the scripts use whichever is Python 3.9+ (the Microsoft Store stub is skipped) |
 
 ---
 

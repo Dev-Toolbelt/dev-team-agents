@@ -19,6 +19,10 @@
 
 set -euo pipefail
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/../lib/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 # ── PostHog configuration ──────────────────────────────────────────────────────
 # POSTHOG_API_KEY below is this project's PostHog *project* key (the `phc_`
 # prefix marks a write-only capture key). Such keys are designed to be embedded

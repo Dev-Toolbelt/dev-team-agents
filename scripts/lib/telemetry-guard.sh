@@ -19,6 +19,10 @@
 #
 # A consumer that cannot source this file must also fail closed (skip telemetry).
 
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+[ -f "$_dta_py" ] && . "$_dta_py"
+
 _telemetry_enabled() {
     local prefs="${1:-${PREFS_FILE:-}}"
     [ -n "$prefs" ] || return 1
