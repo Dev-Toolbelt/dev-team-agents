@@ -24,6 +24,7 @@ export interface LauncherManifest {
   readonly compiler: string | null;
   readonly fakeDevteam: LauncherBuildOutcome;
   readonly fakeDevteamWrite: LauncherBuildOutcome;
+  readonly fakeDevteamAuth?: LauncherBuildOutcome;
 }
 
 /** `null` off Windows, and whenever the manifest is missing or unreadable. */

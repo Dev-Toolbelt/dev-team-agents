@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { authCheck, authStatus } from '../src/cli/accountOperations.js';
 import { invokeDevteam } from '../src/cli/invoke.js';
 import { ranAndAnswered } from '../src/cli/contract.js';
 import { APP_STORE_SCHEMAS, performHandshake, writeDeclarationFile } from '../src/cli/declaration.js';
@@ -651,6 +652,33 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     expect(result.exitCode).toBe(4);
     expect(result.message.length).toBeGreaterThan(0);
     expect(result.hint).toBeDefined();
+  });
+});
+
+describe.skipIf(!available)('auth status and check against the real CLI (ADR-0029)', () => {
+  it('status on a fresh store is signed-out data, not an error, with gate_mode warn', async () => {
+    const result = await authStatus(context());
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.data.signed_in).toBe(false);
+    expect(result.data.entitled).toBe(false);
+    expect(result.data.entitlement.status).toBe('signed_out');
+    expect(result.data.account).toBeNull();
+    expect(result.data.gate_mode).toBe('warn');
+  });
+
+  it('check on a fresh store (exit 1) still arrives as ok data with findings', async () => {
+    const result = await authCheck(context());
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.outcome).toBe('findings');
+    expect(result.data.entitled).toBe(false);
+    expect(result.data.entitlement.status).toBe('signed_out');
+  });
+
+  it('exposes no token or secret field to the renderer-visible payload', async () => {
+    const result = await authStatus(context());
+    expect(JSON.stringify(result)).not.toMatch(/token(?!_status)|secret(?!_backend_insecure)|password|refresh/i);
   });
 });
 

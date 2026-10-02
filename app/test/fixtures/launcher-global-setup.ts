@@ -22,6 +22,7 @@ import { LAUNCHER_MANIFEST_PATH, type LauncherManifest } from './launcher-manife
 const LAUNCHER_SRC = fileURLToPath(new URL('./launcher.c', import.meta.url));
 const FAKE_DEVTEAM = fileURLToPath(new URL('./fake-devteam.mjs', import.meta.url));
 const FAKE_DEVTEAM_WRITE = fileURLToPath(new URL('./fake-devteam-write.mjs', import.meta.url));
+const FAKE_DEVTEAM_AUTH = fileURLToPath(new URL('./fake-devteam-auth.mjs', import.meta.url));
 
 export default async function setup(): Promise<() => Promise<void>> {
   if (process.platform !== 'win32') return async () => {};
@@ -39,7 +40,9 @@ export default async function setup(): Promise<() => Promise<void>> {
   const fakeDevteam = build(FAKE_DEVTEAM, 'fake-devteam.exe');
   const fakeDevteamWrite = build(FAKE_DEVTEAM_WRITE, 'fake-devteam-write.exe');
 
-  const manifest: LauncherManifest = { compiler: compiler?.command ?? null, fakeDevteam, fakeDevteamWrite };
+  const fakeDevteamAuth = build(FAKE_DEVTEAM_AUTH, 'fake-devteam-auth.exe');
+
+  const manifest: LauncherManifest = { compiler: compiler?.command ?? null, fakeDevteam, fakeDevteamWrite, fakeDevteamAuth };
   await writeFile(LAUNCHER_MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
 
   if (compiler === null) {
@@ -47,11 +50,11 @@ export default async function setup(): Promise<() => Promise<void>> {
       '[windows launcher] no C compiler found on PATH (tried cc, gcc, clang, cl) — ' +
         'the spawn-dependent Windows tests stay skipped, not failed.',
     );
-  } else if (fakeDevteam.path === null || fakeDevteamWrite.path === null) {
+  } else if (fakeDevteam.path === null || fakeDevteamWrite.path === null || fakeDevteamAuth.path === null) {
     console.warn(
       `[windows launcher] found ${compiler.command} but compilation failed — ` +
         `the spawn-dependent Windows tests stay skipped, not failed. ` +
-        `${fakeDevteam.reason ?? fakeDevteamWrite.reason ?? ''}`,
+        `${fakeDevteam.reason ?? fakeDevteamWrite.reason ?? fakeDevteamAuth.reason ?? ''}`,
     );
   } else {
     console.log(`[windows launcher] built with ${compiler.command} — the spawn-dependent Windows tests will run.`);

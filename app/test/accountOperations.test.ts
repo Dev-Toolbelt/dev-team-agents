@@ -7,10 +7,13 @@
  * spawned, a blocked account is data rather than an error, and a held password sign-up is
  * completed, refused early or cancelled without leaving a process behind.
  *
- * Windows has no way to spawn the `.mjs` fixture with `shell: false` and the launcher the
- * other fixtures use is built per fixture; these cases are skipped there.
+ * On Windows the `.mjs` fixture cannot be spawned with `shell: false`, so the compiled
+ * launcher (`launcher-global-setup.ts`) stands in; its settings travel as JSON in the
+ * `.scenario` sibling file because the launcher cannot forward arbitrary variables. The
+ * cases skip only when no C compiler was available to build it.
  */
 
+import { copyFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  asAuthState,
   authCheck,
   authDeleteConfirm,
   authDeleteStart,
@@ -41,9 +45,14 @@ import {
 import type { CliContext } from '../src/cli/operations.js';
 import { registerAccountIpc, SignUpFlow } from '../src/main/accountIpc.js';
 import { CHANNELS } from '../src/shared/api.js';
+import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam-auth.mjs', import.meta.url));
-const skipOnWindows = process.platform === 'win32';
+const { binary: FAKE_BINARY, available: launcherAvailable } = resolveFixtureBinary(
+  FAKE,
+  readLauncherManifest()?.fakeDevteamAuth,
+);
+const skipOnWindows = process.platform === 'win32' && !launcherAvailable;
 
 let dir: string;
 let logPath: string;
@@ -56,11 +65,26 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-const context = (scenario = 'entitled', gateMode?: string): CliContext => ({
-  binary: FAKE,
-  cwd: dir,
-  env: { FAKE_AUTH_LOG: logPath, FAKE_AUTH_SCENARIO: scenario, ...(gateMode === undefined ? {} : { FAKE_AUTH_GATE_MODE: gateMode }) },
-});
+let launcherCount = 0;
+const context = (scenario = 'entitled', gateMode?: string): CliContext => {
+  const settings = { log: logPath, scenario, ...(gateMode === undefined ? {} : { gateMode }) };
+  if (process.platform !== 'win32') {
+    return {
+      binary: FAKE_BINARY,
+      cwd: dir,
+      env: {
+        FAKE_AUTH_LOG: logPath,
+        FAKE_AUTH_SCENARIO: scenario,
+        ...(gateMode === undefined ? {} : { FAKE_AUTH_GATE_MODE: gateMode }),
+      },
+    };
+  }
+  // A fresh copy per context so each carries its own `.scenario` sibling.
+  const binary = join(dir, `devteam-${String(launcherCount++)}.exe`);
+  copyFileSync(FAKE_BINARY, binary);
+  writeFileSync(`${binary}.scenario`, JSON.stringify(settings), 'utf8');
+  return { binary, cwd: dir, env: {} };
+};
 
 interface Logged {
   readonly argv: readonly string[];
@@ -132,6 +156,19 @@ describe.skipIf(skipOnWindows)('secrets travel on stdin only', () => {
     expect(call?.argv).toEqual(['auth', 'otp', 'verify', '--email', 'ana@example.com']);
     expect(call?.stdin).toEqual([GOOD_CODE]);
     expect(JSON.stringify(result)).not.toContain(GOOD_CODE);
+  });
+
+  it('never puts any secret in any invocation argv across a full password sign-up', async () => {
+    const flow = new SignUpFlow();
+    await flow.start(context(), 'ana@example.com', GOOD_PASSWORD, 'Ana');
+    await flow.finish(context(), GOOD_CODE);
+    await authPasswordChange(context(), GOOD_PASSWORD, 'a-brand-new-password');
+    const all = await invocations();
+    expect(all.length).toBe(3);
+    for (const call of all) {
+      const argv = call.argv.join(' ');
+      for (const secret of [GOOD_PASSWORD, GOOD_CODE, 'a-brand-new-password']) expect(argv).not.toContain(secret);
+    }
   });
 
   it('sends a sign-in password on stdin', async () => {
@@ -362,5 +399,35 @@ describe.skipIf(skipOnWindows)('the IPC handlers', () => {
     expect(await call(CHANNELS.authPasswordSignUpStart, 'ana@example.com', GOOD_PASSWORD, null)).toMatchObject({ ok: true, data: { pending: true } });
     expect(await call(CHANNELS.authPasswordSignUpFinish, GOOD_CODE)).toMatchObject({ ok: true });
     await call(CHANNELS.authPasswordSignUpCancel);
+  });
+});
+
+describe('asAuthState: what reaches the renderer', () => {
+  const base = {
+    signed_in: true,
+    entitled: true,
+    entitlement: { status: 'active', reason: null, features: [], trial_ends_at: null, expires_at: null },
+  };
+
+  it.each([[undefined], ['bogus'], [null], [1]])('reads gate_mode %s as warn, never enforce', (mode) => {
+    const state = asAuthState({ ...base, ...(mode === undefined ? {} : { gate_mode: mode }) });
+    if (typeof state === 'string') throw new Error(state);
+    expect(state.gate_mode).toBe('warn');
+  });
+
+  it('keeps enforce only when the CLI says exactly enforce', () => {
+    const state = asAuthState({ ...base, gate_mode: 'enforce' });
+    expect(typeof state !== 'string' && state.gate_mode).toBe('enforce');
+  });
+
+  it('drops tokens and any unknown field from the document', () => {
+    const state = asAuthState({
+      ...base,
+      access_token: 'tok-access-secret',
+      refresh_token: 'tok-refresh-secret',
+      account: { id: 'a', email: 'a@b.co', access_token: 'tok-nested-secret' },
+      entitlement: { ...base.entitlement, jwt: 'tok-jwt-secret' },
+    });
+    expect(JSON.stringify(state)).not.toMatch(/tok-|token/);
   });
 });

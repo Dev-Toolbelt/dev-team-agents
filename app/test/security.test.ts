@@ -407,3 +407,12 @@ describe('createWindow webPreferences and app.enableSandbox() — source-text fa
     expect(INDEX_SOURCE).toMatch(/^app\.enableSandbox\(\);/m);
   });
 });
+
+describe('the renderer document CSP (account screens make no network call)', () => {
+  it("keeps connect-src 'none' in index.html so account secrets cannot leave the renderer", () => {
+    const html = readFileSync(fileURLToPath(new URL('../src/renderer/index.html', import.meta.url)), 'utf8');
+    expect(html).toContain("connect-src 'none'");
+    expect(html).toContain("default-src 'none'");
+    expect(html).not.toMatch(/connect-src[^;"]*(https?:|wss?:|\*)/);
+  });
+});

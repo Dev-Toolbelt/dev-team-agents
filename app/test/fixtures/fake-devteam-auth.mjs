@@ -21,8 +21,17 @@ if (clientSchemas !== -1) args.splice(clientSchemas, 2);
 const json = args.indexOf('--json');
 if (json !== -1) args.splice(json, 1);
 
-const log = process.env['FAKE_AUTH_LOG'];
-const scenario = process.env['FAKE_AUTH_SCENARIO'] ?? 'entitled';
+// On Windows the launcher cannot forward arbitrary variables (see launcher.c), so the test
+// packs the three settings as JSON into the one variable it can set: FAKE_DEVTEAM_SCENARIO.
+let packed = {};
+try {
+  packed = JSON.parse(process.env['FAKE_DEVTEAM_SCENARIO'] ?? '{}') ?? {};
+} catch {
+  packed = {};
+}
+const setting = (name, key) => process.env[name] ?? packed[key];
+const log = setting('FAKE_AUTH_LOG', 'log');
+const scenario = setting('FAKE_AUTH_SCENARIO', 'scenario') ?? 'entitled';
 const received = [];
 const record = () => {
   if (log !== undefined) appendFileSync(log, `${JSON.stringify({ argv: args, stdin: received })}\n`);
@@ -68,7 +77,7 @@ function state(overrides = {}) {
     secret_backend: 'keychain',
     secret_backend_insecure: false,
     environment: 'prod',
-    gate_mode: process.env['FAKE_AUTH_GATE_MODE'] ?? 'warn',
+    gate_mode: setting('FAKE_AUTH_GATE_MODE', 'gateMode') ?? 'warn',
     test_seam: false,
     warnings: [],
     ...overrides,

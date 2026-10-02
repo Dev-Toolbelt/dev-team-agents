@@ -136,6 +136,122 @@ describe('the gate', () => {
   });
 });
 
+describe('the gate: warn versus enforce', () => {
+  it.each([
+    ['trial_expired', /your trial has ended/i],
+    ['banned', /this account is blocked/i],
+    ['needs_online_check', /needs an online check/i],
+    ['invalid', /could not be verified/i],
+  ] as const)('warn mode never locks out: %s shows its own banner above the app', async (status, title) => {
+    mountGate(fakeBridge({ authCheck: checkReturning(blockedState(status, { gate_mode: 'warn' })) }));
+    expect(await screen.findByText('the app itself')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(title);
+    expect(screen.queryByRole('button', { name: /check again/i })).not.toBeInTheDocument();
+  });
+
+  it('banner titles differ per reason, so the person is told what is actually wrong', async () => {
+    const seen = new Set<string>();
+    for (const status of ['trial_expired', 'banned', 'needs_online_check', 'invalid'] as const) {
+      mountGate(fakeBridge({ authCheck: checkReturning(blockedState(status)) }));
+      seen.add((await screen.findByRole('alert')).textContent ?? '');
+      cleanup();
+    }
+    expect(seen.size).toBe(4);
+  });
+
+  it('a document without gate_mode is treated as warn: the app stays, nothing is locked', async () => {
+    const withoutMode: Record<string, unknown> = { ...blockedState('trial_expired') };
+    Reflect.deleteProperty(withoutMode, 'gate_mode');
+    mountGate(fakeBridge({ authCheck: checkReturning(withoutMode as unknown as AuthState) }));
+    expect(await screen.findByText('the app itself')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /check again/i })).not.toBeInTheDocument();
+  });
+
+  it('enforce with an account that is not entitled shows only account screens, never the app', async () => {
+    mountGate(fakeBridge({ authCheck: checkReturning(blockedState('banned', { gate_mode: 'enforce' })) }));
+    expect(await screen.findByRole('heading', { name: /this account is blocked/i })).toBeInTheDocument();
+    expect(screen.queryByText('the app itself')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('an entitled account passes even in enforce mode', async () => {
+    mountGate(fakeBridge({ authCheck: checkReturning(authState({ gate_mode: 'enforce' })) }));
+    expect(await screen.findByText('the app itself')).toBeInTheDocument();
+  });
+});
+
+describe('sign-up confirmation code retry', () => {
+  async function toCodeScreen(overrides: Partial<DevteamBridge>) {
+    const bridge = fakeBridge({
+      authPasswordSignUpStart: vi.fn(() => Promise.resolve(ok({ pending: true as const }))),
+      ...overrides,
+    });
+    installBridge(bridge);
+    const onSignedIn = vi.fn();
+    render(<SignIn onSignedIn={onSignedIn} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: /email and password/i }));
+    await user.click(screen.getByRole('button', { name: /create an account/i }));
+    await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+    await user.type(screen.getByLabelText(/choose a password/i), 'a-long-enough-password');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+    await screen.findByRole('heading', { name: /confirm your email/i });
+    return { bridge, onSignedIn, user };
+  }
+
+  it('a wrong code keeps the code screen and the pending address, and the right code then signs in', async () => {
+    const authPasswordSignUpFinish = vi
+      .fn()
+      .mockResolvedValueOnce(fail('invalid code for ana@example.com', { reason: 'invalid_code' }))
+      .mockResolvedValue(ok(authState()));
+    const { bridge, onSignedIn, user } = await toCodeScreen({ authPasswordSignUpFinish });
+    await user.type(screen.getByLabelText(/^code/i), '00000000');
+    await user.click(screen.getByRole('button', { name: /confirm and sign in/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That code is not valid or has expired.');
+    expect(screen.getByRole('heading', { name: /confirm your email/i })).toBeInTheDocument();
+    expect(screen.getByText(/ana@example\.com can sign up/i)).toBeInTheDocument();
+    expect(onSignedIn).not.toHaveBeenCalled();
+    expect(bridge.authPasswordSignUpCancel).not.toHaveBeenCalled();
+    expect(bridge.authPasswordSignUpStart).toHaveBeenCalledOnce();
+
+    await user.clear(screen.getByLabelText(/^code/i));
+    await user.type(screen.getByLabelText(/^code/i), GOOD_CODE);
+    await user.click(screen.getByRole('button', { name: /confirm and sign in/i }));
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
+    expect(authPasswordSignUpFinish).toHaveBeenNthCalledWith(1, '00000000');
+    expect(authPasswordSignUpFinish).toHaveBeenNthCalledWith(2, GOOD_CODE);
+    // The held sign-up finished, so leaving the screen has nothing left to forget.
+    expect(bridge.authPasswordSignUpCancel).not.toHaveBeenCalled();
+  });
+
+  it('never shows the CLI text, the address from the failure, the code or the password after a failure', async () => {
+    const { user } = await toCodeScreen({
+      authPasswordSignUpFinish: vi.fn(() =>
+        Promise.resolve(fail('rejected 00000000 for ana@example.com pw a-long-enough-password', { reason: 'invalid_code' })),
+      ),
+    });
+    await user.type(screen.getByLabelText(/^code/i), '00000000');
+    await user.click(screen.getByRole('button', { name: /confirm and sign in/i }));
+    await screen.findByRole('alert');
+    expect(document.body.textContent).not.toContain('rejected');
+    expect(document.body.textContent).not.toContain('a-long-enough-password');
+    expect(screen.queryByDisplayValue('a-long-enough-password')).not.toBeInTheDocument();
+  });
+
+  it('cancelling after a wrong code clears the pending sign-up and returns to the sign-in screen', async () => {
+    const { bridge, user } = await toCodeScreen({
+      authPasswordSignUpFinish: vi.fn(() => Promise.resolve(fail('nope', { reason: 'invalid_code' }))),
+    });
+    await user.type(screen.getByLabelText(/^code/i), '00000000');
+    await user.click(screen.getByRole('button', { name: /confirm and sign in/i }));
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(bridge.authPasswordSignUpCancel).toHaveBeenCalledOnce();
+    expect(screen.getByRole('heading', { name: /sign in to dev-team-agents/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /confirm your email/i })).not.toBeInTheDocument();
+  });
+});
+
 describe('sign-in', () => {
   function mount(overrides: Partial<DevteamBridge> = {}) {
     const bridge = fakeBridge(overrides);
