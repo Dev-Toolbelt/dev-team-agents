@@ -174,6 +174,31 @@ describe('App — the no-CLI screen offers to install the CLI on Windows (ADR-00
     expect(resolveCli).toHaveBeenCalledTimes(1);
   });
 
+  it('says what went wrong when the install call itself rejects', async () => {
+    onWindows();
+    const user = userEvent.setup();
+    const installCli = vi.fn(() => Promise.reject(new Error('main process gone')));
+    installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())), installCli }));
+
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Install the CLI' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/could not be started.*main process gone/);
+    expect(screen.getByRole('button', { name: 'Install the CLI' })).toBeEnabled();
+  });
+
+  it('says so when the install succeeded but the CLI is still not found', async () => {
+    onWindows();
+    const user = userEvent.setup();
+    const installCli = vi.fn(() => Promise.resolve({ outcome: 'installed' as const, message: 'devteam 2.49.0 is installed.', version: '2.49.0' }));
+    installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())), installCli }));
+
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Install the CLI' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/is installed\. The app has not found it yet/);
+  });
+
   it('is not offered on macOS, where the remedy gives the commands instead', async () => {
     vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
     installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())) }));

@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  MAX_INSTALLER_BYTES,
+  RELEASE_AUTHOR,
   RELEASES_URL,
   installCli,
   isAllowedUrl,
@@ -27,6 +29,7 @@ const asset = (name: string) => ({
 
 const release = (tag: string, names: string[], extra: Partial<Release> = {}): Release => ({
   tag_name: tag,
+  author: { login: RELEASE_AUTHOR },
   assets: names.map(asset),
   ...extra,
 });
@@ -53,6 +56,12 @@ describe('pickRelease', () => {
       'arm64',
     );
     expect(picked?.version).toBe('2.50.0');
+  });
+
+  it('skips a release the release workflow did not create', () => {
+    const picked = pickRelease([{ ...cliRelease('9.0.0'), author: { login: 'someone' } }, cliRelease('2.50.0')], 'x64');
+    expect(picked?.version).toBe('2.50.0');
+    expect(pickRelease([{ ...cliRelease('2.50.0'), author: null }], 'x64')).toBeNull();
   });
 
   it('answers null when no release carries an installer and its sums', () => {
@@ -160,6 +169,35 @@ describe('installCli', () => {
     expect((await installCli(mac)).outcome).toBe('unsupported');
     expect(mac.fetch).not.toHaveBeenCalled();
     expect((await installCli(deps({ arch: 'ia32' }))).outcome).toBe('unsupported');
+  });
+
+  it('reports a failure, and runs nothing, when GitHub answers an error or garbage', async () => {
+    const answering = (body: string, status: number) =>
+      vi.fn(() => {
+        const response = new Response(body, { status });
+        Object.defineProperty(response, 'url', { value: RELEASES_URL });
+        return Promise.resolve(response);
+      }) as unknown as typeof fetch;
+    for (const fetchFake of [answering('rate limited', 403), answering('<html>not json</html>', 200)]) {
+      const d = deps({ fetch: fetchFake });
+      expect((await installCli(d)).outcome).toBe('failed');
+      expect(d.runInstaller).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses an installer larger than the cap without running it', async () => {
+    const d = deps();
+    const original = d.fetch;
+    const oversized = vi.fn(async (input: string) => {
+      const response = await original(input);
+      if (!input.endsWith('.exe')) return response;
+      const big = new Response('x', { status: 200, headers: { 'content-length': String(MAX_INSTALLER_BYTES + 1) } });
+      Object.defineProperty(big, 'url', { value: input });
+      return big;
+    });
+    const result = await installCli({ ...d, fetch: oversized as typeof fetch });
+    expect(result.outcome).toBe('failed');
+    expect(d.runInstaller).not.toHaveBeenCalled();
   });
 
   it('says so when no release carries an installer yet', async () => {

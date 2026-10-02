@@ -440,7 +440,7 @@ describe('when nothing is found', () => {
     expect(remedy).toContain('Install the CLI');
     expect(remedy).toContain('devteam-setup-');
     expect(remedy).toContain('DEVTEAM_CLI_PATH');
-    // The app's own installer shape is decided (NSIS); the remedy used to call it undecided.
+    // The app's own installer shape is decided (NSIS); the remedy must not call it undecided.
     expect(remedy).not.toContain('undecided');
   });
 });
