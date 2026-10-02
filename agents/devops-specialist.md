@@ -78,6 +78,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | Task targets GCP resources | `skills/devops/gcp/SKILL.md` |
 | Task targets Azure resources | `skills/devops/azure/SKILL.md` |
 | VPS setup or bare Linux server | `skills/devops/vps-linux/SKILL.md` |
+| `CPANEL_HOST` / `CPANEL_TOKEN` env vars, `Authorization: cpanel` headers, `/execute/<Module>/<function>` calls, `.cpanel.yml`, or `uapi --user=` in scripts | `skills/integrations/cpanel/SKILL.md` |
 | `sonar-project.properties`, `.sonarcloud.properties`, `sonarqube` service in compose, or `SONAR_TOKEN` env var | `skills/devops/sonarqube/SKILL.md` |
 | `SENTRY_DSN` env var, `@sentry/` in `package.json`, `sentry-sdk` in `requirements.txt`, or `sentry` service in compose | `skills/devops/sentry/SKILL.md` |
 | `vercel.json`, `.vercel/`, `VERCEL_TOKEN` env var, or Vercel-hosted project | `skills/devops/vercel/SKILL.md` |
