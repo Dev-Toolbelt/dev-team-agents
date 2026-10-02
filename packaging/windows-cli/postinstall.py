@@ -13,6 +13,7 @@ Standard library only: the embeddable distribution has no pip and needs none.
 
 import argparse
 import io
+import json
 import ntpath
 import os
 import subprocess
@@ -103,6 +104,41 @@ def _broadcast_environment_change():
     )
 
 
+def write_launcher(path, data):
+    """Replace `path` even while it runs: Windows lets a running .exe be renamed, not rewritten."""
+    old = path + ".old"
+    try:
+        os.remove(old)
+    except OSError:
+        pass  # absent, or still running from the previous upgrade
+    if os.path.exists(path):
+        try:
+            os.replace(path, old)
+        except OSError:
+            pass  # not in use after all; the open below overwrites it
+    with open(path, "wb") as handle:
+        handle.write(data)
+
+
+def hint_current(where):
+    """An install never moves `current`; say how when the store's current is another version."""
+    sys.path.insert(0, where["lib"])
+    try:
+        from devteam.versions import version_from_tree
+
+        bundled = version_from_tree(where["payload"])
+        listed = subprocess.run(
+            [where["python"], where["cli"], "store", "list", "--json"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True,
+        )
+        current = json.loads(listed.stdout or "{}").get("current")
+    except (ImportError, ValueError, OSError):
+        return
+    if bundled and current and bundled != current:
+        print("The store's current framework is {}. To use {}: devteam store use {} && devteam sync --all".format(
+            current, bundled, bundled))
+
+
 def store_install(where):
     """Install the bundled framework version; an installed version or a set `current` stays."""
     result = subprocess.run(
@@ -127,12 +163,14 @@ def cmd_install(instdir):
     with open(where["launcher"], "rb") as handle:
         stub = handle.read()
     os.makedirs(where["bin"], exist_ok=True)
-    with open(where["exe"], "wb") as handle:
-        handle.write(launcher_bytes(stub, where["python"], where["cli"]))
+    write_launcher(where["exe"], launcher_bytes(stub, where["python"], where["cli"]))
     print("wrote {}".format(where["exe"]))
     if _edit_user_path(lambda current: path_with(current, where["bin"])):
         print("added {} to the user PATH".format(where["bin"]))
-    return store_install(where)
+    status = store_install(where)
+    if status == 0:
+        hint_current(where)
+    return status
 
 
 def cmd_uninstall(instdir):

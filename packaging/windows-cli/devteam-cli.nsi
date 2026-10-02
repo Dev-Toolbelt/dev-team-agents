@@ -1,6 +1,6 @@
 ; devteam-cli.nsi — per-user Windows installer for the devteam CLI (ADR-0028).
 ;
-; Built by build.sh, which stages the files and passes:
+; Built by build.py, which stages the files and passes:
 ;   VERSION  the framework/CLI version (X.Y.Z)
 ;   ARCH     x64 | arm64 — which embedded Python and launcher the stage holds
 ;   STAGE    the staged tree: python\ cli\ launcher\ payload\ postinstall.py
@@ -12,6 +12,7 @@
 Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
 
 !define PRODUCT "devteam CLI"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\DevToolbelt.Devteam"
@@ -45,14 +46,41 @@ VIAddVersionKey "LegalCopyright" "MIT License"
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "PortugueseBR"
 
-Section "devteam"
-  SetOutPath "$INSTDIR"
-  ; Directories this installer owns outright are replaced, so an upgrade leaves no stale
-  ; module behind. bin\ is rewritten by postinstall.py.
+; The directories this installer owns outright inside $INSTDIR.
+!macro OWNED_DIRS
   RMDir /r "$INSTDIR\python"
   RMDir /r "$INSTDIR\cli"
   RMDir /r "$INSTDIR\launcher"
   RMDir /r "$INSTDIR\payload"
+!macroend
+
+Function .onInit
+  ; `/D=` (winget's --location) may name any directory. Installing into a dedicated
+  ; `devteam` folder under it keeps the uninstaller's deletions inside what it created.
+  ${GetFileName} "$INSTDIR" $0
+  ${If} $0 != "devteam"
+    StrCpy $INSTDIR "$INSTDIR\devteam"
+  ${EndIf}
+FunctionEnd
+
+Section "devteam"
+  SetOutPath "$INSTDIR"
+  ; A loaded python3.dll cannot be opened for writing: devteam (or the app's watchers) is
+  ; running from this install, and replacing it now would leave half an install behind.
+  ${If} ${FileExists} "$INSTDIR\python\python3.dll"
+    in_use_check:
+    ClearErrors
+    FileOpen $0 "$INSTDIR\python\python3.dll" a
+    ${If} ${Errors}
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "devteam is running from this install. Close the Dev Team Agents app and any terminal running devteam, then retry." /SD IDCANCEL IDRETRY in_use_check
+      SetErrorLevel 3
+      Abort "devteam is in use; nothing was changed."
+    ${EndIf}
+    FileClose $0
+  ${EndIf}
+  ; Directories this installer owns outright are replaced, so an upgrade leaves no stale
+  ; module behind. bin\ is rewritten by postinstall.py.
+  !insertmacro OWNED_DIRS
   File /r "${STAGE}\python"
   File /r "${STAGE}\cli"
   File /r "${STAGE}\launcher"
@@ -76,10 +104,17 @@ Section "devteam"
     ; A silent install is winget's: its manifest declares Git.Git as a dependency instead.
     IfSilent git_done
     MessageBox MB_YESNO|MB_ICONQUESTION "Git for Windows was not found. The dev-team-agents hooks run in Git Bash.$\r$\n$\r$\nInstall it now with winget (for your user only)? A window opens and winget asks you to accept the Git license." IDNO git_skipped
+    ; By absolute path: a bare `winget` is searched for in the installer's own directory
+    ; first, where a planted winget.exe beside a downloaded installer would run.
+    StrCpy $2 "$LOCALAPPDATA\Microsoft\WindowsApps\winget.exe"
     ClearErrors
-    ExecWait 'winget install --id Git.Git --exact --scope user --source winget' $1
+    ${If} ${FileExists} $2
+      ExecWait '"$2" install --id Git.Git --exact --scope user --source winget' $1
+    ${Else}
+      SetErrors
+    ${EndIf}
     ${If} ${Errors}
-      MessageBox MB_OK|MB_ICONINFORMATION "winget is not available on this computer. Install Git for Windows from https://git-scm.com/download/win and the hooks will find it."
+      MessageBox MB_OK|MB_ICONINFORMATION "winget is not available on this computer. Install Git for Windows from https://git-scm.com/download/win and the hooks will find it." /SD IDOK
     ${ElseIf} $1 != 0
       DetailPrint "winget exited with $1; Git for Windows may not be installed."
     ${EndIf}
@@ -93,7 +128,7 @@ Section "devteam"
   nsExec::ExecToLog '"$INSTDIR\python\python.exe" "$INSTDIR\postinstall.py" install --instdir "$INSTDIR"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "devteam was copied, but setting it up failed (exit $0). The details are in this window's log."
+    MessageBox MB_OK|MB_ICONEXCLAMATION "devteam was copied, but setting it up failed (exit $0). The details are in this window's log." /SD IDOK
     SetErrorLevel 2
   ${EndIf}
 SectionEnd
@@ -101,8 +136,14 @@ SectionEnd
 Section "Uninstall"
   nsExec::ExecToLog '"$INSTDIR\python\python.exe" "$INSTDIR\postinstall.py" uninstall --instdir "$INSTDIR"'
   Pop $0
-  ; Only this installer's directory. The store (%LOCALAPPDATA%\dev-team-agents and
-  ; %APPDATA%\dev-team-agents) is the user's and survives, as with every channel.
-  RMDir /r "$INSTDIR"
+  ; Only what this installer wrote, then the directory itself if that left it empty —
+  ; never `RMDir /r "$INSTDIR"`, which a `/D=` naming a shared folder would turn into
+  ; deleting it. The store (%LOCALAPPDATA%\dev-team-agents, %APPDATA%\dev-team-agents) is
+  ; the user's and survives, as with every channel.
+  !insertmacro OWNED_DIRS
+  RMDir /r "$INSTDIR\bin"
+  Delete "$INSTDIR\postinstall.py"
+  Delete "$INSTDIR\uninstall.exe"
+  RMDir "$INSTDIR"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
 SectionEnd

@@ -65,7 +65,14 @@ def committed_tree(destination):
         stdout=subprocess.PIPE,
     ).stdout
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-        tar.extractall(str(destination))
+        links = [member.name for member in tar.getmembers() if member.issym() or member.islnk()]
+        if links:
+            # copytree would follow them and ship whatever they point at on the build host.
+            raise SystemExit("build: the committed tree holds links, refusing: {}".format(", ".join(links)))
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(str(destination), filter="data")
+        else:
+            tar.extractall(str(destination))
 
 
 def stage(arch, tree, pins, root):
@@ -118,6 +125,10 @@ def find_makensis(explicit):
     found = shutil.which("makensis")
     if found:
         return found
+    # NSIS's own installer (and Chocolatey's package) put it here and add nothing to PATH.
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
+        if base and Path(base, "NSIS", "makensis.exe").is_file():
+            return str(Path(base, "NSIS", "makensis.exe"))
     # electron-builder downloads NSIS for the app's own installer; reuse it rather than
     # asking a maintainer who already builds the app to install a second copy.
     cache = Path.home() / "Library" / "Caches" / "electron-builder"
