@@ -50,10 +50,10 @@ switch (scenario) {
       ok: true,
       current: '3.0.0',
       projects: [
-        { project_id: 'p-true', path: '/a', providers: ['claude'], mode: 'link', pin: null, resolves_to: '3.0.0', path_exists: true, preferences: { auto_update: true, worktree_active: false, suppress_notifications: ['session-end', 7] } },
-        { project_id: 'p-false', path: '/b', providers: [], mode: 'copy', pin: '2.9.0', resolves_to: '2.9.0', path_exists: false, preferences: { auto_update: 'yes', worktree_active: null, suppress_notifications: true } },
+        { project_id: 'p-true', path: '/a', providers: ['claude'], mode: 'link', pin: null, resolves_to: '3.0.0', path_exists: true, layout: 2, upgrade_available: false, preferences: { auto_update: true, worktree_active: false, suppress_notifications: ['session-end', 7] } },
+        { project_id: 'p-false', path: '/b', providers: [], mode: 'copy', pin: '2.9.0', resolves_to: '2.9.0', path_exists: false, layout: 1, upgrade_available: true, preferences: { auto_update: 'yes', worktree_active: null, suppress_notifications: true } },
         { project_id: 'p-absent', path: '/c', providers: ['codex'], mode: null, pin: null, resolves_to: null },
-        { project_id: 'p-junk', path: '/d', providers: [], mode: null, pin: null, resolves_to: null, path_exists: 'yes' },
+        { project_id: 'p-junk', path: '/d', providers: [], mode: null, pin: null, resolves_to: null, path_exists: 'yes', layout: '2', upgrade_available: 'no' },
       ],
     });
     process.exit(0);

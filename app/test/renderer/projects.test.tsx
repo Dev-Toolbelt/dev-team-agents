@@ -319,6 +319,53 @@ describe('Projects — the upgrade order is enforced structurally', () => {
   });
 });
 
+describe('Projects — a project already in the store has nothing to upgrade', () => {
+  it('disables Upgrade when the list says upgrade_available is false, and keeps it when silent', async () => {
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() =>
+          Promise.resolve(
+            ok({
+              current: '2.48.0',
+              projects: [
+                project({ project_id: 'done', path: '/repo/done', layout: 2, upgrade_available: false }),
+                project({ project_id: 'old', path: '/repo/old', layout: null, upgrade_available: null }),
+              ],
+            }),
+          ),
+        ),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('done');
+    const buttons = screen.getAllByRole('button', { name: /upgrade…/i });
+    expect(buttons).toHaveLength(2);
+    expect(buttons.filter((button) => button.hasAttribute('disabled'))).toHaveLength(1);
+  });
+
+  it('shows "nothing to upgrade" instead of an error when the CLI answers up-to-date', async () => {
+    const user = userEvent.setup();
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))),
+        planUpgrade: vi.fn(() =>
+          Promise.resolve(
+            fail('/repo/project-1 is already on layout 2', { kind: 'usage', exitCode: 2, reason: 'up-to-date' }),
+          ),
+        ),
+      }),
+    );
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /upgrade…/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Nothing to upgrade')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/malformed/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /apply/i })).toBeDisabled();
+  });
+});
+
 describe('Projects — bind sends no path the app was not given', () => {
   it('changes nothing on a dismissed picker, and shows merged_project_files on success', async () => {
     const user = userEvent.setup();

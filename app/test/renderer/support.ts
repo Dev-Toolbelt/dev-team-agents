@@ -78,6 +78,8 @@ export function project(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     pin: null,
     resolves_to: '2.48.0',
     path_exists: true,
+    layout: 1,
+    upgrade_available: true,
     ...overrides,
   };
 }
