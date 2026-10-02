@@ -2276,7 +2276,9 @@ def record(root, payload, provider="auto", now=None):
     }
     try:
         call = normalize(payload, provider)
-        if call is None:
+        # A finished `git merge` is write-shaped, so it also reads as direct work; with its
+        # output in hand it is a merge event first (direct work is taken before the call runs).
+        if call is None or (call["op"][0] == "direct" and pr_refs.classify(payload) is not None):
             return _record_event(root, payload, now, result)
         project_id = _bound_id(root)
         path = record_path(root, project_id, call["session_id"]) if project_id else None

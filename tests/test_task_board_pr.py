@@ -523,6 +523,8 @@ class MergeTest(PrCase):
         self.merge("s1", "git merge feat/x", "Fast-forward\n", T0 + 60)
         (entry,) = self.load("s1")["merges"]
         self.assertEqual((entry["branch"], entry["into"]), ("feat/x", into))
+        # Write-shaped, but with its output in hand it is a merge, not a turn of direct work.
+        self.assertFalse(any(t.get("kind") == "direct" for t in self.load("s1")["tasks"]))
         self.assertEqual(self.task(now=T0 + 70)["pr"]["state"], "merged")
 
     def test_a_different_number_branch_or_repository_does_not_join(self):
