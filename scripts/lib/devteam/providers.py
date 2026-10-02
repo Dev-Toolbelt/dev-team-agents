@@ -17,6 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from . import shells
 from .errors import ConflictError, EnvError
 
 ALL_PROVIDERS = ("claude", "opencode", "codex")
@@ -114,7 +115,7 @@ def _installer_env():
 def _run_installer(script, version_dir, project_root, extra_args=None):
     if not script.is_file():
         raise EnvError("installer not found in the core version: {}".format(script))
-    bash = shutil.which("bash")
+    bash = shells.bash_path()
     if bash is None:
         raise EnvError(
             "bash is required to run {} but was not found on PATH".format(script.name),
@@ -171,6 +172,8 @@ _PYTHON_NAMES = ("python3", "python", "py")
 def _tool_available(tool):
     if tool == "python3":
         return bool(sys.executable) or any(shutil.which(name) for name in _PYTHON_NAMES)
+    if tool == "bash":
+        return shells.bash_path() is not None
     return shutil.which(tool) is not None
 
 

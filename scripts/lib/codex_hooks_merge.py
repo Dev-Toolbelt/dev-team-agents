@@ -12,9 +12,12 @@ ownership guard uses for a conflict), 1 anything else.
 
 import json
 import os
-import shutil
 import sys
 import tempfile
+
+# The Git Bash rules (never WSL's System32 launcher) live in the CLI package beside this file.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from devteam.shells import find_git_bash, is_windows  # noqa: E402,F401  (find_git_bash is part of this module's API)
 
 CONFLICT_EXIT = 4
 
@@ -65,36 +68,6 @@ ENV_PREFIX = "env -u BASH_ENV -u ENV"
 # `"<absolute Git Bash>" -c "<walk>"`, with the walk's own double quotes backslash-escaped.
 # The whole command gets one more pair of quotes: `cmd /C` strips the first and last quote of a
 # command line that holds more than two, which would otherwise eat the quotes around the path.
-_WSL_STUBS = ("\\windows\\system32\\", "\\windowsapps\\")
-_GIT_BASH_DEFAULTS = (
-    ("ProgramFiles", "Git", "bin", "bash.exe"),
-    ("ProgramFiles(x86)", "Git", "bin", "bash.exe"),
-    ("LOCALAPPDATA", "Programs", "Git", "bin", "bash.exe"),
-)
-
-
-def is_windows():
-    return sys.platform.startswith(("win", "msys", "cygwin"))
-
-
-def _is_wsl_stub(path):
-    norm = path.replace("/", "\\").lower()
-    return any(stub in norm for stub in _WSL_STUBS)
-
-
-def find_git_bash(which=shutil.which, environ=None, isfile=os.path.isfile):
-    """An absolute Git Bash, or None. Never WSL's launcher or the Store alias."""
-    environ = os.environ if environ is None else environ
-    found = which("bash")
-    if found and not _is_wsl_stub(found):
-        return found
-    for parts in _GIT_BASH_DEFAULTS:
-        base = environ.get(parts[0])
-        if base:
-            candidate = os.path.join(base, *parts[1:])
-            if isfile(candidate):
-                return candidate
-    return None
 
 
 def unix_command(hooks_dir, script):

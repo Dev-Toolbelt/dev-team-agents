@@ -28,7 +28,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import jsonio, project, registry, versions
+from . import jsonio, project, registry, shells, versions
 from .errors import ConflictError, EnvError, UsageError
 from .lock import store_lock
 
@@ -566,7 +566,8 @@ def requirements(plugin):
 def _interpreter(runtime):
     if runtime == "python3":
         return sys.executable or shutil.which("python3") or "python3"
-    return shutil.which("bash") or "bash"
+    # Never a bare `bash` on Windows: that is WSL's launcher, whose children a kill does not reach.
+    return shells.bash_path() or "bash"
 
 
 def _script_path(plugin, rel):
@@ -623,11 +624,55 @@ def _signal_group(proc, signum):
         pass
 
 
-def _kill_group(proc):
+def _windows_job(proc):
+    """A Job Object holding the script and everything it starts, or None.
+
+    Under Git Bash a script's children are not in the script's Windows process tree (the
+    MSYS2 runtime starts them), so neither TerminateProcess nor ``taskkill /T`` reaches a
+    ``sleep`` or a build it launched, and that child keeps the output pipes open. Processes
+    created by a job member join the job, so terminating the job ends all of them.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        if not kernel32.AssignProcessToJobObject(wintypes.HANDLE(job), wintypes.HANDLE(int(proc._handle))):
+            kernel32.CloseHandle(wintypes.HANDLE(job))
+            return None
+        return job
+    except (OSError, AttributeError, ValueError, TypeError):
+        return None
+
+
+def _close_job(job):
+    if job is None:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        ctypes.WinDLL("kernel32").CloseHandle(wintypes.HANDLE(job))
+    except (OSError, AttributeError):
+        pass
+
+
+def _kill_group(proc, job=None):
     if os.name == "nt":
-        # TerminateProcess ends only the script itself: its children (a `sleep`, a build) keep
-        # the output pipes open and the run waits for them past its timeout. taskkill /T ends
-        # the tree; it is resolved from SystemRoot, never PATH.
+        if job is not None:
+            try:
+                import ctypes
+                from ctypes import wintypes
+
+                if ctypes.WinDLL("kernel32").TerminateJobObject(wintypes.HANDLE(job), 1):
+                    return
+            except (OSError, AttributeError):
+                pass
+        # No job: end the tree Windows knows about. taskkill is resolved from SystemRoot, never PATH.
         taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "taskkill.exe")
         try:
             subprocess.run(
@@ -681,6 +726,7 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
         kwargs["start_new_session"] = True
     received = {"sig": None, "pid": None, "term_at": None}
     previous = {}
+    job = None
 
     def send_term():
         if received["pid"] is not None and received["term_at"] is None:
@@ -712,6 +758,8 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
         except OSError as exc:
             return 127, "", "cannot start {}: {}".format(argv[0], exc), False
         received["pid"] = proc.pid
+        if os.name == "nt":
+            job = _windows_job(proc)
         if received["sig"] is not None:
             send_term()
 
@@ -737,7 +785,7 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
                     if group_gone or now >= term_at + TERM_GRACE_SECONDS:
                         # Nothing left to wait for in the group (only a setsid-ed straggler
                         # can still hold the pipe), or the grace ran out.
-                        _kill_group(proc)
+                        _kill_group(proc, job)
                         killed_at = now
                         give_up = now + KILL_GRACE_SECONDS
                 if give_up is not None and now >= give_up:
@@ -749,8 +797,9 @@ def _spawn(argv, cwd, env, timeout, merge_stderr):
             while _group_alive(proc.pid) and time.monotonic() < term_at + TERM_GRACE_SECONDS:
                 time.sleep(0.05)
             if _group_alive(proc.pid):
-                _kill_group(proc)
+                _kill_group(proc, job)
     finally:
+        _close_job(job)
         for signum, handler in previous.items():
             try:
                 signal.signal(signum, handler if handler is not None else signal.SIG_DFL)
