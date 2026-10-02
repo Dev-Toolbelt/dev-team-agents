@@ -326,6 +326,25 @@ def _list_preferences(project_id, version):
     return out
 
 
+def _list_layout(path, exists):
+    """``layout`` and ``upgrade_available`` for one row — ``null`` when unreadable.
+
+    The app offers Upgrade from this: a project already on the current layout has
+    nothing to move, and asking `upgrade` anyway only earns a refusal.
+    """
+    current = None
+    if exists:
+        try:
+            if project.load(path) is not None:
+                current = project.layout(path)
+        except Exception:  # a malformed project.json is doctor's finding, not list's
+            current = None
+    return {
+        "layout": current,
+        "upgrade_available": None if current is None else current < project.CURRENT_LAYOUT,
+    }
+
+
 def cmd_list(args, emitter):
     entries = registry.entries()
     active = versions.current()
@@ -358,6 +377,7 @@ def cmd_list(args, emitter):
                 "resolves_to": resolved,
                 "path_exists": exists,
                 "preferences": _list_preferences(project_id, resolved),
+                **_list_layout(entry.get("path", ""), exists),
             }
         )
     payload = {"current": active, "projects": payload_projects}
