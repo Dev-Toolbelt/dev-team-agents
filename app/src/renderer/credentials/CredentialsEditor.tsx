@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Hint } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { SELECT_CLASS } from '../formStyles.js';
 import {
   coerce,
@@ -33,6 +35,49 @@ const slug = (pointer: string): string =>
   `cred${pointer.replace(/[^A-Za-z0-9/]/g, (char) => `_${char.charCodeAt(0).toString(16)}_`).replace(/\//g, '-')}`;
 
 const labelOf = (path: Path): string => path.map(String).join(' › ') || 'the file';
+
+/**
+ * A ghost button with a tooltip. `label` is the accessible name, naming the row it acts on;
+ * `hint` is the shorter text the tooltip shows. `danger` paints it red.
+ */
+function IconAction({
+  label,
+  hint,
+  disabled,
+  danger = false,
+  className,
+  children,
+  onClick,
+  ...rest
+}: {
+  label: string;
+  hint: string;
+  disabled?: boolean;
+  danger?: boolean;
+  className?: string;
+  children: ReactNode;
+  onClick: () => void;
+} & Pick<ComponentProps<'button'>, 'aria-expanded' | 'aria-controls'>) {
+  return (
+    <Hint content={hint}>
+      {/* A disabled button gets no pointer events, so the tooltip hangs on this wrapper. */}
+      <span className="inline-flex">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          aria-label={label}
+          className={cn(danger && 'text-destructive hover:bg-destructive/10 hover:text-destructive', className)}
+          onClick={onClick}
+          {...rest}
+        >
+          {children}
+        </Button>
+      </span>
+    </Hint>
+  );
+}
 
 interface Ctx {
   doc: Doc;
@@ -114,18 +159,16 @@ function Group({ ctx, path, node, depth }: { ctx: Ctx; path: Path; node: Record<
   return (
     <section aria-labelledby={`${id}-name`} className="rounded-lg border">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
+        <IconAction
+          label={`${expanded ? 'Collapse' : 'Expand'} ${labelOf(path)}`}
+          hint={expanded ? 'Collapse' : 'Expand'}
           className="h-7 px-1"
           aria-expanded={expanded}
           aria-controls={`${id}-body`}
           onClick={() => setOpen(!open)}
         >
           {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-          <span className="sr-only">{expanded ? 'Collapse' : 'Expand'} {labelOf(path)}</span>
-        </Button>
+        </IconAction>
         <KeyName path={path} id={`${id}-name`} />
         <span className="text-xs text-muted-foreground">{isList ? `list · ${node.length}` : 'group'}</span>
         {production.own || production.inherited ? (
@@ -283,10 +326,15 @@ function SecretToggle({ ctx, path, value, markedHere }: { ctx: Ctx; path: Path; 
   if (markedHere) {
     return (
       <>
-        <Button type="button" variant="ghost" size="sm" disabled={ctx.disabled} onClick={() => setConfirm(true)}>
+        <IconAction
+          label={`Secret: unmark ${labelOf(path)}`}
+          hint="Secret: write-only here and hidden from command output. Click to stop treating it as one"
+          disabled={ctx.disabled}
+          onClick={() => setConfirm(true)}
+        >
           <Lock aria-hidden="true" />
-          Secret<span className="sr-only">: unmark {labelOf(path)}</span>
-        </Button>
+          Secret
+        </IconAction>
         <Dialog open={confirm} onOpenChange={setConfirm}>
           <DialogContent>
             <DialogHeader>
@@ -313,18 +361,19 @@ function SecretToggle({ ctx, path, value, markedHere }: { ctx: Ctx; path: Path; 
     );
   }
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
+    <IconAction
+      label={`${looksSecret ? 'Mark secret' : 'Not secret'}: mark ${labelOf(path)} as secret`}
+      hint={
+        looksSecret
+          ? 'Hidden because it looks like a secret. Mark it to keep it hidden on purpose'
+          : 'Visible value. Click to mark it as a secret'
+      }
       disabled={ctx.disabled}
-      title={looksSecret ? 'Hidden because it looks like a secret; mark it to keep it hidden on purpose' : undefined}
       onClick={() => ctx.onEdit({ kind: 'secret', path, marked: true })}
     >
       {looksSecret ? <ShieldAlert aria-hidden="true" /> : <LockOpen aria-hidden="true" />}
       {looksSecret ? 'Mark secret' : 'Not secret'}
-      <span className="sr-only">: mark {labelOf(path)} as secret</span>
-    </Button>
+    </IconAction>
   );
 }
 
@@ -347,16 +396,9 @@ function RowActions({ ctx, path }: { ctx: Ctx; path: Path }) {
     <div className="flex items-center">
       {typeof key === 'string' ? <RenameButton ctx={ctx} path={path} /> : null}
       {typeof key === 'string' ? <MoveButton ctx={ctx} path={path} /> : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled={ctx.disabled}
-        onClick={() => ctx.onEdit({ kind: 'remove', path })}
-      >
+      <IconAction label={`Remove ${labelOf(path)}`} hint="Remove" danger disabled={ctx.disabled} onClick={() => ctx.onEdit({ kind: 'remove', path })}>
         <Trash2 aria-hidden="true" />
-        <span className="sr-only">Remove {labelOf(path)}</span>
-      </Button>
+      </IconAction>
     </div>
   );
 }
@@ -370,10 +412,9 @@ function RenameButton({ ctx, path }: { ctx: Ctx; path: Path }) {
   const problem = text.trim() === key ? null : editProblem(ctx.doc, edit);
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
+      <IconAction
+        label={`Rename ${labelOf(path)}`}
+        hint="Rename"
         disabled={ctx.disabled}
         onClick={() => {
           setText(key);
@@ -381,8 +422,7 @@ function RenameButton({ ctx, path }: { ctx: Ctx; path: Path }) {
         }}
       >
         <Pencil aria-hidden="true" />
-        <span className="sr-only">Rename {labelOf(path)}</span>
-      </Button>
+      </IconAction>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <form
@@ -433,19 +473,17 @@ function MoveButton({ ctx, path }: { ctx: Ctx; path: Path }) {
   const id = `${slug(pointerOf(path))}-move`;
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
+      <IconAction
+        label={`Move ${labelOf(path)}`}
+        hint="Move to another group"
         disabled={ctx.disabled}
-        aria-label={`Move ${labelOf(path)}`}
         onClick={() => {
           setChoice('');
           setOpen(true);
         }}
       >
         <FolderInput aria-hidden="true" />
-      </Button>
+      </IconAction>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <form

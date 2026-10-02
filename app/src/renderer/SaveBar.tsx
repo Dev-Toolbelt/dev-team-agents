@@ -5,8 +5,13 @@ import { cn } from '@/lib/utils';
 /**
  * The bar a form shows while it has unsaved edits: what is pending, Discard, and Save.
  *
- * `inline` drops the sticky, full-bleed placement the project screen uses, for a form that
- * lives inside a card (a plugin's config) and must not pin itself to the window edge.
+ * By default it is fixed to the bottom edge of the window, so Save is always in the same place
+ * whatever the length of the form: a sticky bar sat right under a short form, mid-window. A
+ * spacer of the bar's height keeps the end of the form from hiding behind it. It stops short
+ * of the right edge so the content's scrollbar stays reachable.
+ *
+ * `inline` drops that placement, for a form that lives inside a card (a plugin's config) and
+ * must not pin itself to the window edge.
  */
 export function SaveBar({
   dirtyCount,
@@ -46,7 +51,7 @@ export function SaveBar({
       ) : null}
     </Button>
   );
-  return (
+  const bar = (
     <div
       role="region"
       aria-label={label}
@@ -54,7 +59,7 @@ export function SaveBar({
         'flex flex-wrap items-center justify-between gap-3 border-t bg-card/95 py-3',
         inline
           ? 'rounded-b-xl px-5'
-          : 'sticky bottom-0 z-10 -mx-6 px-6 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] backdrop-blur',
+          : 'fixed bottom-0 left-0 right-[10px] z-20 px-6 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] backdrop-blur',
       )}
     >
       <p className={cn('text-sm', invalid > 0 ? 'text-destructive' : 'text-muted-foreground')}>
@@ -73,5 +78,12 @@ export function SaveBar({
         )}
       </div>
     </div>
+  );
+  if (inline) return bar;
+  return (
+    <>
+      <div aria-hidden="true" data-testid="save-bar-spacer" className="h-16" />
+      {bar}
+    </>
   );
 }

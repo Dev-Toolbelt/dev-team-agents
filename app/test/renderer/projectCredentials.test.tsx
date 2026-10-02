@@ -498,6 +498,33 @@ describe('ProjectCredentials — free-form editor', () => {
     expect(sentOps(bridge)).toEqual([{ op: 'move', from: '/example/staging', pointer: '/staging' }]);
   });
 
+  it('gives every icon button a tooltip and paints Remove red', async () => {
+    const { user } = renderTab();
+    await screen.findByText('example');
+    await user.hover(screen.getByRole('button', { name: 'Rename example › staging › url' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Rename');
+    await user.unhover(screen.getByRole('button', { name: 'Rename example › staging › url' }));
+
+    await user.hover(screen.getByRole('button', { name: 'Move example › staging › url' }));
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Move to another group'));
+    await user.unhover(screen.getByRole('button', { name: 'Move example › staging › url' }));
+
+    const remove = screen.getByRole('button', { name: 'Remove example › staging › url' });
+    expect(remove).toHaveClass('text-destructive');
+    expect(screen.getByRole('button', { name: 'Rename example › staging › url' })).not.toHaveClass('text-destructive');
+    await user.hover(remove);
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Remove'));
+  });
+
+  it('pins the save bar to the window edge and leaves room for it at the end of the form', async () => {
+    const { user } = renderTab();
+    await user.click(await screen.findByRole('switch', { name: 'work_feedback_active' }));
+    expect(screen.getByRole('region', { name: 'Unsaved credential changes' })).toHaveClass('fixed', 'bottom-0');
+    expect(screen.getByTestId('save-bar-spacer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByTestId('save-bar-spacer')).not.toBeInTheDocument();
+  });
+
   it('keeps ids unique for keys that differ only by punctuation', async () => {
     renderTab({
       credentialsLocalShow: vi.fn(() => Promise.resolve(ok(credentialsView({ data: { 'a-b': 'one', 'a/b': 'two', 'a.b': 'three' } })))),

@@ -147,7 +147,10 @@ export function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto px-6 py-5">
+      {/* `relative` makes this the containing block of anything absolutely positioned inside
+          (every `sr-only` text): without it they were placed against the page and stretched
+          the body into a second scrollbar. `min-h-0` keeps the flex child inside the window. */}
+      <main className="relative min-h-0 flex-1 overflow-auto px-6 py-5">
         {build !== null && !build.codeSigned && build.packaged ? (
           <Alert variant="destructive" className="mb-4">
             <ShieldAlert />

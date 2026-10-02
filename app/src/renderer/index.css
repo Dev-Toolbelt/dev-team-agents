@@ -207,8 +207,10 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-system);
-    /* A desktop window, not a document: the chrome does not rubber-band or select. */
+    /* A desktop window, not a document: the chrome does not rubber-band or select, and only
+       the content area scrolls — the body never does, whatever overflows into it. */
     overscroll-behavior: none;
+    overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
 
