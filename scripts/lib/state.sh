@@ -15,6 +15,7 @@ set -uo pipefail
 
 # `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
 _dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+# shellcheck source=python.sh
 [ -f "$_dta_py" ] && . "$_dta_py"
 
 # Resolution order: an explicit STATE_FILE, then USER_DATA_DIR, then the project's

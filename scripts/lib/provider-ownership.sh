@@ -14,6 +14,7 @@
 
 # `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
 _dta_py="$(dirname "${BASH_SOURCE[0]}")/python.sh"
+# shellcheck source=python.sh
 [ -f "$_dta_py" ] && . "$_dta_py"
 
 PO_CONFLICT_EXIT=4
@@ -100,7 +101,7 @@ po_guard() {
   [[ -z "$conflicts" ]] && return 0
   if [[ "$adopt" -ne 1 ]]; then
     echo "install-${provider}: ERROR: these paths already exist and were not created by dev-team-agents:" >&2
-    sed 's/^/  /' <<< "$conflicts" >&2
+    while IFS= read -r conflict; do printf '  %s\n' "$conflict"; done <<< "$conflicts" >&2
     echo "  Move or rename them and re-run, or pass --adopt to move them into" >&2
     echo "  .dev-team-agents/quarantine/ and install over them." >&2
     exit "$PO_CONFLICT_EXIT"

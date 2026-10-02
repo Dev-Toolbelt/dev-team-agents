@@ -45,6 +45,7 @@ set -euo pipefail
 
 # `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
 _dta_py="$(dirname "${BASH_SOURCE[0]}")/lib/python.sh"
+# shellcheck source=lib/python.sh
 [ -f "$_dta_py" ] && . "$_dta_py"
 
 PROJECT_ROOT="$(pwd)"
@@ -193,7 +194,7 @@ for LEGACY_PROMPTS_DIR in "$CODEX_DIR/prompts" "${HOME}/.codex/prompts"; do
   LEGACY_PROMPTS="$(find "$LEGACY_PROMPTS_DIR" -maxdepth 1 -type f -name 'devteam-*.md' 2>/dev/null | sort)"
   if [[ -n "$LEGACY_PROMPTS" ]]; then
     echo "  ! legacy prompt aliases found in $LEGACY_PROMPTS_DIR (superseded by \$devteam-* skills):" >&2
-    sed 's/^/      /' <<< "$LEGACY_PROMPTS" >&2
+    while IFS= read -r legacy; do printf '      %s\n' "$legacy"; done <<< "$LEGACY_PROMPTS" >&2
     echo "    Remove them yourself if they came from an older dev-team-agents install." >&2
   fi
 done
