@@ -170,6 +170,42 @@ This repository uses semantic versioning via git tags (`v1.0.0`, `v1.1.0`, `v2.0
 
 ---
 
+## Signing In to Your Account
+
+An account is required to use dev-team-agents. After installation, sign in once per machine:
+
+```bash
+devteam auth login
+```
+
+You'll be prompted to choose a sign-in method:
+
+| Method | Details |
+|--------|---------|
+| **Email (passwordless)** | Receive an 8-digit code by email; type it to sign in. No password to remember. |
+| **Email + password** | Create an account: email and password (10–64 characters). |
+| **Google OAuth** | Sign in with your Google account. Opens your system browser with PKCE security. |
+| **GitHub OAuth** | Sign in with your GitHub account. Opens your system browser with PKCE security. |
+
+Your refresh token is stored securely in the OS keychain (never persists the access token). After signing in, you can work **offline for up to 7 days** without a network connection. An online check is required after that to refresh your license.
+
+**In this release**, the account requirement is announced but not enforced — you'll see a banner reminder, but commands run anyway. **The next minor release will enforce it**, blocking gated commands until you sign in.
+
+### Manage your account
+
+- **Sign out** (revoke the session): `devteam auth logout`
+- **Check status** (online and offline): `devteam auth status` or `devteam auth status --offline`
+- **View profile** (email, display name, linked identities): `devteam auth profile show`
+- **Update display name**: `devteam auth profile update --name "Your Name"`
+- **Change password**: `devteam auth password change`
+- **Reset password**: `devteam auth password reset --email <address>`
+- **Link a sign-in method** (Google/GitHub to an existing account): `devteam auth profile link`
+- **Delete account** (irreversible): `devteam auth delete`
+
+See [`PRIVACY.md`](../PRIVACY.md) for what data we collect and [`TERMS.md`](../TERMS.md) for the terms of use.
+
+---
+
 ## Directory Layout After Install
 
 ```

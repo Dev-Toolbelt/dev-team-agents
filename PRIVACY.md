@@ -119,6 +119,86 @@ never asked) at install time. After saving, you can verify the current state wit
 
 ---
 
+---
+
+## Account Data Processing (LGPD / GDPR)
+
+Mandatory account sign-in was introduced in [ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md). This section covers the processing of account data.
+
+### Data Controller and Protection Officer
+
+**Data Controller:** [YOUR LEGAL ENTITY NAME]  
+**Data Protection Officer (encarregado de dados):** [NAME]  
+**Contact:** [CONTACT EMAIL/PHONE]  
+**Effective from:** [DATE]
+
+### What We Collect
+
+When you create an account and sign in:
+
+| Data | Purpose | Legal basis |
+|------|---------|-------------|
+| Email address | Account identity and sign-in | Contract execution (art. 7, V LGPD) |
+| Display name | Profile and account identification | Contract execution (art. 7, V LGPD) |
+| Identity provider ID (Google, GitHub) | Linking signed-in identities to one account | Contract execution (art. 7, V LGPD) |
+| Sign-up method | Account audit and identity confirmation | Contract execution (art. 7, V LGPD) |
+| `last_seen_at` (day precision, never hours/minutes) | Monitoring active users; purged after account deletion | Contract execution (art. 7, V LGPD) |
+| IP addresses in auth audit logs | Security audit and abuse prevention | Legitimate interest — fraud prevention (art. 7, IX LGPD) |
+| **HMAC hash of email** (if account is banned) | Preventing re-registration after a ban | Legitimate interest — fraud prevention (art. 7, IX LGPD) |
+| **Trial start marker** (if account is deleted but trial was used) | Preventing trial reset via re-registration within 12 months | Legitimate interest — fraud prevention (art. 7, IX LGPD) |
+
+### Data Processors
+
+Your data is processed by:
+
+- **Supabase Auth** (GoTrue) — hosted in region `sa-east-1` (São Paulo, Brazil) — manages account identity, sign-in methods and the refreshable entitlement token.
+- **SMTP Email Provider** [PLACEHOLDER] — sends transactional emails only (sign-in codes, security notices, license state changes).
+- **Google and GitHub** — process OAuth sign-in when you choose those methods; see their privacy policies for their data handling.
+
+### Data Storage and Retention
+
+- **Account records** (`email`, `display_name`, `identities`, `created_at`, `last_seen_at`) are retained while your account exists.
+- **IP addresses in auth audit logs** — retained by Supabase for 90 days, then deleted automatically.
+- **HMAC ban list** — the hash and ban reason are retained indefinitely (fraud prevention under LGPD art. 7, IX).
+- **Trial consumption marker** — retained for up to 12 months after account deletion (fraud prevention).
+
+### International Data Transfer
+
+Your data may be transferred to Supabase's servers outside Brazil when they are accessed from a different country. Supabase's privacy and data protection commitments are documented at <https://supabase.com/privacy>.
+
+### Your Rights
+
+Under LGPD art. 18, you have the right to:
+
+- **Access** your data: run `devteam auth profile show --json`
+- **Correct** your data: run `devteam auth profile update --name <your name>` or update your email through the app
+- **Delete** your account: run `devteam auth delete` (the app's Account menu also offers this)
+- **Port** your data: account data is available via `devteam auth profile --json`
+
+Account deletion is **immediate and irreversible**. All personal data is removed, except the HMAC ban list and trial marker (fraud prevention only; they retain no identifying information).
+
+### Registration is the Lead
+
+When you create an account, you become a lead for dev-team-agents product decisions. The basis for this contact is the account contract (art. 7, V LGPD), so we send only **transactional emails**:
+
+- Sign-in codes and security notices
+- License state changes (trial starting, ending, premium features)
+- Critical security incidents
+
+**Marketing emails require a separate, explicit opt-in** (consent under art. 7, I LGPD) that does not yet exist. We do not send marketing email.
+
+### Telemetry Remains Anonymous and Unlinked
+
+The telemetry system described above is completely separate from accounts:
+
+- Your account ID is **never** added to telemetry
+- Telemetry's anonymous ID is **never** sent to Supabase
+- No join between account and telemetry data exists or will be built
+
+Your telemetry privacy (anonymous, aggregate, non-personally-identifiable) is unchanged by mandatory accounts.
+
+---
+
 ## Questions
 
 Open an issue at <https://github.com/Dev-Toolbelt/dev-team-agents/issues>.

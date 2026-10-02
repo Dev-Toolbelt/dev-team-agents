@@ -53,6 +53,42 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ---
 
+## Entrando na conta
+
+Uma conta com dev-team-agents é necessária para usar o framework ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)).
+
+**Nesta versão**, a exigência da conta é anunciada mas não é obrigatória — você pode rodar sem entrar na conta, embora um banner vá lembrá-lo. **A próxima versão minor vai impor a exigência** e bloqueará comandos gated até que você entre.
+
+### Entre uma vez por máquina
+
+Após a instalação, entre com:
+
+```bash
+devteam auth login
+```
+
+Você será perguntado qual método quer usar para entrar:
+
+| Método | Como funciona |
+|--------|---------------|
+| Email (sem senha) | Receba um código de 8 dígitos por email, digite-o para entrar. Nenhuma senha para lembrar. |
+| Email + senha | Crie uma conta com email e senha (10–64 caracteres). |
+| Google OAuth | Entre com sua conta Google; abre seu navegador de sistema. |
+| GitHub OAuth | Entre com sua conta GitHub; abre seu navegador de sistema. |
+
+O token de atualização é armazenado de forma segura na sua máquina (keychain do SO no Linux, macOS, Windows). Você pode revogá-lo a qualquer momento com `devteam auth logout`.
+
+### O que funciona offline
+
+Depois de entrar, dev-team-agents funciona **offline por até 7 dias**. Depois disso, uma verificação online é necessária para atualizar sua licença e continuar. Isso garante que você tenha tempo para trabalhar ininterruptamente mesmo se estiver longe da rede.
+
+### Saiba mais
+
+- **Política de Privacidade**: [PRIVACY.md](PRIVACY.md) — que dados coletamos e como os protegemos
+- **Termos de Uso**: [TERMS.md](TERMS.md) — exigências de conta, trial e licenciamento
+
+---
+
 ## Instalação global (prévia da v3)
 
 O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona. O CLI é instalado junto com suas dependências ([ADR-0028](docs/development/adrs/0028-the-devteam-cli-installs-with-its-dependencies-on-windows-and-macos.md)), a partir da primeira release que o contém:

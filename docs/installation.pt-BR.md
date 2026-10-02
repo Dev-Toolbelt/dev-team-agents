@@ -170,6 +170,42 @@ Este repositório usa versionamento semântico via git tags (`v1.0.0`, `v1.1.0`,
 
 ---
 
+## Entrando na Sua Conta
+
+Uma conta é necessária para usar dev-team-agents. Após a instalação, entre uma vez por máquina:
+
+```bash
+devteam auth login
+```
+
+Você será perguntado qual método quer usar para entrar:
+
+| Método | Detalhes |
+|--------|----------|
+| **Email (sem senha)** | Receba um código de 8 dígitos por email; digite-o para entrar. Nenhuma senha para lembrar. |
+| **Email + senha** | Crie uma conta: email e senha (10–64 caracteres). |
+| **Google OAuth** | Entre com sua conta Google. Abre seu navegador de sistema com segurança PKCE. |
+| **GitHub OAuth** | Entre com sua conta GitHub. Abre seu navegador de sistema com segurança PKCE. |
+
+Seu token de atualização é armazenado com segurança no keychain do SO (nunca persiste o token de acesso). Depois de entrar, você pode trabalhar **offline por até 7 dias** sem uma conexão de rede. Uma verificação online é necessária depois disso para atualizar sua licença.
+
+**Nesta versão**, a exigência da conta é anunciada mas não é obrigatória — você verá um banner lembrando, mas os comandos rodam mesmo assim. **A próxima versão minor vai obrigá-lo**, bloqueando comandos gated até que você entre.
+
+### Gerenciar sua conta
+
+- **Sair** (revogar a sessão): `devteam auth logout`
+- **Verificar status** (online e offline): `devteam auth status` ou `devteam auth status --offline`
+- **Ver perfil** (email, nome de exibição, identidades vinculadas): `devteam auth profile show`
+- **Atualizar nome de exibição**: `devteam auth profile update --name "Seu Nome"`
+- **Mudar senha**: `devteam auth password change`
+- **Redefinir senha**: `devteam auth password reset --email <endereço>`
+- **Vincular um método de entrada** (Google/GitHub a uma conta existente): `devteam auth profile link`
+- **Deletar conta** (irreversível): `devteam auth delete`
+
+Veja [`PRIVACY.md`](../PRIVACY.md) para saber que dados coletamos e [`TERMS.md`](../TERMS.md) para os termos de uso.
+
+---
+
 ## Layout de Diretórios Após Instalação
 
 ```

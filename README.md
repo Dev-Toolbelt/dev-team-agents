@@ -53,6 +53,42 @@ Help me set up this project with dev-team-agents
 
 ---
 
+## Signing In
+
+An account with dev-team-agents is required to use the framework ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)). 
+
+**In this release**, the account requirement is announced but not enforced — you can run without signing in, though a banner will remind you. **The next minor release will enforce the requirement** and block gated commands until you sign in.
+
+### Sign in once per machine
+
+After installation, sign in with:
+
+```bash
+devteam auth login
+```
+
+You'll be prompted to choose a sign-in method:
+
+| Method | How it works |
+|--------|-------------|
+| Email (passwordless) | Receive an 8-digit code by email, type it to sign in. No password to remember. |
+| Email + password | Create an account with email and password (10–64 characters). |
+| Google OAuth | Sign in with your Google account; opens your system browser. |
+| GitHub OAuth | Sign in with your GitHub account; opens your system browser. |
+
+The refresh token is stored securely on your machine (OS keychain on Linux, macOS, Windows). You can revoke it at any time with `devteam auth logout`.
+
+### What works offline
+
+After signing in, dev-team-agents works **offline for up to 7 days**. After that, an online check is required to refresh your license and continue. This ensures you have time to work uninterrupted even if you're away from the network.
+
+### Learn more
+
+- **Privacy Policy**: [PRIVACY.md](PRIVACY.md) — what data we collect and how we protect it
+- **Terms of Use**: [TERMS.md](TERMS.md) — account requirements, trial, and licensing
+
+---
+
 ## Global Install (v3 preview)
 
 `devteam` installs the framework **once per machine** and binds each project to it, so an update is applied once instead of once per project. Milestone M1 — store, bind, version pinning and v2 migration — works today. The CLI installs with its dependencies ([ADR-0028](docs/development/adrs/0028-the-devteam-cli-installs-with-its-dependencies-on-windows-and-macos.md)), from the first release that contains it:
