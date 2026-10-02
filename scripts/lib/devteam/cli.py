@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from . import auth, bind as bind_module
-from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import catalog, compat, creds, credentials_local, doctor, gate, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .output import Emitter
@@ -2296,6 +2296,11 @@ def main(argv=None, stdout=None, stderr=None):
                 )
             )
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
+
+    try:
+        gate.apply(command_path, args, emitter)
+    except DevteamError as exc:
+        return emitter.fail(exc)
 
     try:
         payload, human = args.func(args, emitter)

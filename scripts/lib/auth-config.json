@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "_comment": "Compiled-in identity constants for the account system (ADR-0029 SR-8). Nothing in a project, a preference or the environment overrides them; the only seam is the loopback test seam of SR-44. Every REPLACE-ME value is a placeholder to be filled in at release time. A build whose values are still placeholders rejects every token. A prod build ships only the prod environment (SR-27).",
+  "_comment": "gate_mode is warn (notice only) or enforce (refuse); any other value reads as enforce. Compiled-in identity constants for the account system (ADR-0029 SR-8). Nothing in a project, a preference or the environment overrides them; the only seam is the loopback test seam of SR-44. Every REPLACE-ME value is a placeholder to be filled in at release time. A build whose values are still placeholders rejects every token. A prod build ships only the prod environment (SR-27).",
   "environment": "prod",
   "audience": "devteam-cli",
+  "gate_mode": "warn",
   "environments": {
     "prod": {
       "supabase_url": "https://REPLACE-ME-PROD.supabase.co",
