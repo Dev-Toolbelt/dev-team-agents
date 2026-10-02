@@ -407,7 +407,7 @@ function Overview({
 
   return (
     <>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Projects with tasks">
+      <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Projects with tasks">
         {views.map((view) => (
           <li key={view.project.project_id}>
             <ProjectCard view={view} name={boardProjectName(view.project, names)} onOpen={() => onOpen(view.project.project_id)} />
@@ -424,7 +424,7 @@ function ProjectCard({ view, name, onOpen }: { view: ProjectView; name: string; 
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full flex-col gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
+      className="flex h-full w-full flex-col gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
     >
       <span className="flex items-start justify-between gap-2">
         <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
