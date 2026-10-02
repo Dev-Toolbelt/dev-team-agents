@@ -353,6 +353,23 @@ def get_value(key, project_id, agent=None):
     return value
 
 
+def read_system_secret(ref, backend, label):
+    """Read a secret the CLI itself owns (no registered credential entry) and audit the read.
+
+    The account session's refresh token (ADR-0029 SR-16) has no ``credentials.json`` row, so
+    :func:`get_value` cannot resolve it, but its read still belongs in the same trail as every
+    other secret read. The audit line carries ``label`` as the key and never the value or the
+    ref. Returns ``None`` when nothing is stored.
+    """
+    value = secrets_module.get(ref, backend)
+    audit(
+        None, "get", label, agent=None,
+        outcome="ok" if value is not None else "value-missing",
+        detail={"layer": "system"},
+    )
+    return value
+
+
 def unset(key, project_id=None, forget_value=False):
     """Remove the reference from the layer ``project_id`` selects.
 

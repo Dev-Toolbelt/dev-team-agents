@@ -25,7 +25,7 @@ from __future__ import annotations
 import threading
 import time
 
-from . import entitlement, jsonio, paths
+from . import creds, entitlement, jsonio, paths
 from . import secrets as secrets_module
 from .auth_gotrue import REASON_SESSION_EXPIRED, Rejected
 from .errors import EnvError
@@ -177,7 +177,9 @@ def _delete_quietly(backend):
 
 def _stored_refresh_token(meta):
     try:
-        return secrets_module.get(REF, meta.get("backend") or secrets_module.default_backend())
+        return creds.read_system_secret(
+            REF, meta.get("backend") or secrets_module.default_backend(), "account.session"
+        )
     except EnvError:
         raise EnvError(
             "cannot read the stored session from the secret store",
