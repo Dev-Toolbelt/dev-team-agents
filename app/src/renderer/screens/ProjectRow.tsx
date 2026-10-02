@@ -5,6 +5,7 @@
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, GripVertical } from 'lucide-react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -198,6 +199,8 @@ export function ProjectRow({
   onDragEnd: () => void;
   moveMenu: ReactNode;
 }) {
+  // Only an affirmative `false` disables Upgrade: silence (an older CLI) keeps it offered.
+  const upToDate = project.upgrade_available === false;
   const [dialog, setDialog] = useState<RowDialog>(null);
   const name = displayName(project.path, project.project_id, projectNames);
 
@@ -291,7 +294,12 @@ export function ProjectRow({
             environment={environment}
             variant="outline"
             size="xs"
-            tooltip="Move this project's memory into the store — shows the plan first"
+            tooltip={
+              upToDate
+                ? 'Memory is already in the store — nothing to upgrade'
+                : "Move this project's memory into the store — shows the plan first"
+            }
+            disabled={upToDate}
             onClick={() => setDialog('upgrade')}
           >
             Upgrade…
@@ -359,6 +367,10 @@ function UpgradeDialog({
   // The plan was refused because the project's files are out of step with its registration:
   // Apply could never run, so the footer offers the way that fixes it instead.
   const repairable = plan.state.phase === 'done' && needsRepair(plan.state.result);
+  // Already on the current layout: the CLI's refusal is "nothing to do", not an error —
+  // reached when the list was read before another client upgraded the project.
+  const upToDate =
+    plan.state.phase === 'done' && !plan.state.result.ok && plan.state.result.reason === 'up-to-date';
 
   return (
     // Closing mid-apply would drop the report of a write that is still running.
@@ -374,7 +386,16 @@ function UpgradeDialog({
 
         <DialogBody className="space-y-4">
         {plan.state.phase !== 'done' ? <Loading what="devteam upgrade (plan)" /> : null}
-        {plan.state.phase === 'done' && !plan.state.result.ok ? <Problem problem={plan.state.result} /> : null}
+        {upToDate ? (
+          <Alert>
+            <CheckCircle2 />
+            <AlertTitle>Nothing to upgrade</AlertTitle>
+            <AlertDescription>This project&apos;s memory is already in the store.</AlertDescription>
+          </Alert>
+        ) : null}
+        {plan.state.phase === 'done' && !plan.state.result.ok && !upToDate ? (
+          <Problem problem={plan.state.result} />
+        ) : null}
         {planData !== null ? <UpgradePlanSummary plan={planData} /> : null}
 
         {apply.state.phase === 'done' && !apply.state.result.ok ? <Problem problem={apply.state.result} /> : null}

@@ -935,6 +935,15 @@ describe.skipIf(skipOnWindowsWithoutLauncher)('the project row mapping', () => {
     expect(byId.get('p-absent')?.path_exists).toBeNull();
     expect(byId.get('p-junk')?.path_exists).toBeNull();
 
+    // `layout` / `upgrade_available`: an affirmative value only when the CLI sent one of
+    // the right type — Upgrade is disabled on `false` alone, so silence must stay `null`.
+    expect(byId.get('p-true')?.upgrade_available).toBe(false);
+    expect(byId.get('p-true')?.layout).toBe(2);
+    expect(byId.get('p-false')?.upgrade_available).toBe(true);
+    expect(byId.get('p-absent')?.upgrade_available).toBeNull();
+    expect(byId.get('p-junk')?.upgrade_available).toBeNull();
+    expect(byId.get('p-junk')?.layout).toBeNull();
+
     // `preferences`: kept when the CLI sent it, with anything of the wrong type reduced to
     // `null` (silence), and left out entirely when the CLI predates the field.
     expect(byId.get('p-true')?.preferences).toEqual({

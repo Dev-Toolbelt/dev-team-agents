@@ -640,6 +640,8 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "resolves_to",
             "path_exists",
             "preferences",
+            "layout",
+            "upgrade_available",
         },
         "doctor": {"status", "findings", "actions", "credentials_local"},
         "bind": {

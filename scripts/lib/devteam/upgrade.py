@@ -106,6 +106,11 @@ def _git_tracked(root, relative):
     return result.returncode == 0
 
 
+#: ``details.reason`` when the project is already on the current layout — nothing to do,
+#: not a malformed request, so a client can say so instead of reporting an error.
+UP_TO_DATE_REASON = "up-to-date"
+
+
 def plan(root=None):
     """Describe the upgrade. Reads only."""
     project_root = project.resolve_root(root)
@@ -127,6 +132,7 @@ def plan(root=None):
         raise UsageError(
             "{} is already on layout {}".format(project_root, current),
             hint="Nothing to upgrade.",
+            details={"reason": UP_TO_DATE_REASON, "layout": current},
         )
 
     project_id = data["project_id"]

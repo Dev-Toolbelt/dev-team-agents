@@ -623,6 +623,8 @@ export function listProjects(context: CliContext): Promise<OperationResult<Proje
         // the UI rendered that as a red `missing` badge beside a path that exists. Silence
         // is reported as silence; see `ProjectRecord.path_exists`.
         path_exists: typeof raw['path_exists'] === 'boolean' ? raw['path_exists'] : null,
+        layout: typeof raw['layout'] === 'number' ? raw['layout'] : null,
+        upgrade_available: typeof raw['upgrade_available'] === 'boolean' ? raw['upgrade_available'] : null,
         ...(isRecord(raw['preferences']) ? { preferences: parseListPreferences(raw['preferences']) } : {}),
       });
     }

@@ -536,8 +536,24 @@ class UpgradeTest(StoreTestCase):
     def test_a_second_upgrade_is_refused(self):
         root, _ = self._v2_bound()
         upgrade.apply(root)
-        with self.assertRaises(UsageError):
+        with self.assertRaises(UsageError) as caught:
             upgrade.plan(root)
+        # A reason, so the app says "nothing to do" instead of "malformed request".
+        self.assertEqual(caught.exception.details["reason"], upgrade.UP_TO_DATE_REASON)
+
+    def test_list_reports_the_layout_and_whether_an_upgrade_is_available(self):
+        root, pid = self._v2_bound()
+        code, out, _ = self.run_cli("--json", "list")
+        self.assertEqual(code, 0)
+        row = next(p for p in json.loads(out)["projects"] if p["project_id"] == pid)
+        self.assertEqual(row["layout"], project.LAYOUT_MEMORY_IN_PROJECT)
+        self.assertTrue(row["upgrade_available"])
+
+        upgrade.apply(root)
+        code, out, _ = self.run_cli("--json", "list")
+        row = next(p for p in json.loads(out)["projects"] if p["project_id"] == pid)
+        self.assertEqual(row["layout"], project.CURRENT_LAYOUT)
+        self.assertFalse(row["upgrade_available"])
 
     def test_a_populated_destination_is_refused_and_nothing_is_moved(self):
         root, pid = self._v2_bound()
