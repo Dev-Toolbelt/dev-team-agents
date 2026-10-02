@@ -23,6 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/../lib/state.sh"
 # shellcheck source=scripts/hooks/lib/data-dirs.sh
 . "${SCRIPT_DIR}/lib/data-dirs.sh"
+# shellcheck source=scripts/hooks/lib/file-stat.sh
+. "${SCRIPT_DIR}/lib/file-stat.sh"
 # STATE_DIR / MEMORY_DIR are resolved BEFORE USER_DATA_DIR is assigned below —
 # devteam_state_dir treats a non-empty $USER_DATA_DIR as a caller-supplied
 # override, and USER_DATA_DIR here is that legacy in-project variable, not an
@@ -246,14 +248,15 @@ echo ""
 _days_since_modified() {
     local file="$1"
     local file_ts
-    file_ts=$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || echo 0)
+    file_ts=$(dt_file_mtime "$file")
     echo $(( ( $(date +%s) - file_ts ) / 86400 ))
 }
 
 _days_since_date_str() {
     local date_str="$1"
     local ts
-    ts=$(date -d "$date_str" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$date_str" +%s 2>/dev/null || echo 0)
+    # An unparseable date reports 0 days (no stale warning) rather than a ts=0 epoch age.
+    ts=$(dt_date_to_epoch "$date_str") || { echo 0; return; }
     echo $(( ( $(date +%s) - ts ) / 86400 ))
 }
 

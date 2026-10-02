@@ -63,6 +63,7 @@ INPUT=$(cat 2>/dev/null || true)
 
 case "$INPUT" in
     *'"tool_name":"Bash"'*|*'"tool_name": "Bash"'*) ;;
+    *'"tool":"bash"'*|*'"tool": "bash"'*) ;;
     *) exit 0 ;;
 esac
 

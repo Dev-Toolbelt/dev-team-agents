@@ -12,7 +12,7 @@ unset BASH_ENV ENV
 set -euo pipefail
 
 # Capture hook payload from stdin before dispatching to sub-scripts.
-HOOK_TMP=$(mktemp /tmp/devteam-stop-payload.XXXXXX)
+HOOK_TMP=$(mktemp "${TMPDIR:-/tmp}/devteam-stop-payload.XXXXXX")
 cat > "$HOOK_TMP" || true
 export DEVTEAM_HOOK_PAYLOAD="$HOOK_TMP"
 trap 'rm -f "$HOOK_TMP"' EXIT
@@ -67,9 +67,17 @@ for script in "$HOOKS_DIR"/*.sh; do
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:stop] running: $(basename "$script")" >&2
     env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:stop] exit ${SCRIPT_EXIT}: $(basename "$script")" >&2
-    if [ "$SCRIPT_EXIT" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
+    # First non-zero exit wins, except that exit 2 (a refusal) is never masked by an earlier
+    # exit 1 from another sub-script.
+    if [ "$SCRIPT_EXIT" -ne 0 ] && { [ "$EXIT_CODE" -eq 0 ] || { [ "$SCRIPT_EXIT" -eq 2 ] && [ "$EXIT_CODE" -ne 2 ]; }; }; then
         EXIT_CODE=$SCRIPT_EXIT
     fi
 done
+
+# A Stop block re-runs the turn with `stop_hook_active: true`. The sub-scripts still run and
+# still print their message, but a condition the turn cannot clear must not block again forever.
+if [ "$EXIT_CODE" -eq 2 ] && grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true' "$HOOK_TMP" 2>/dev/null; then
+    EXIT_CODE=0
+fi
 
 exit $EXIT_CODE

@@ -29,6 +29,9 @@
 # Stop hook waiting on a background agent to finish.
 set -uo pipefail
 
+# shellcheck source=scripts/hooks/lib/file-stat.sh
+. "$(dirname "${BASH_SOURCE[0]}")/file-stat.sh"
+
 devteam_queue_agent_usage() {
     local hook_payload="$1"
     local user_data_dir="$2"
@@ -50,7 +53,7 @@ devteam_queue_agent_usage() {
     fi
 
     local file_size
-    file_size=$(stat -f %z "$transcript_path" 2>/dev/null || stat -c %s "$transcript_path" 2>/dev/null || echo 0)
+    file_size=$(dt_file_size "$transcript_path")
     local start_offset=0
     if [ "$cached_path" = "$transcript_path" ] \
         && [ "${cached_offset:-0}" -le "${file_size:-0}" ] 2>/dev/null; then
