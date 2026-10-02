@@ -749,8 +749,17 @@ def _excerpt(text):
     return line
 
 
+#: What the provider injects as a prompt on its own (a background agent's completion, a reminder):
+#: not the user's turn, so it continues the one before it — a closed list, never any leading tag.
+_INJECTED_PROMPTS = ("<task-notification>", "<system-reminder>", "<local-command-stdout>")
+
+
 def _turn(path):
-    """``(started_at, excerpt)`` of the session's current turn, from its prompt file; ``(None, "")``."""
+    """``(started_at, excerpt)`` of the session's current turn, from its prompt file.
+
+    ``(None, "")`` when the call continues the turn before it: no prompt file (a Stop hook asked the
+    model to go on after the file was cleared) or a prompt the provider injected itself.
+    """
     prompt = _prompt_path(path)
     try:
         started = int(prompt.stat().st_mtime)
@@ -758,7 +767,10 @@ def _turn(path):
             raw = handle.read(4096)
     except OSError:
         return None, ""
-    return started, _excerpt(_decode_prompt(raw))
+    text = _decode_prompt(raw).lstrip()
+    if text.startswith(_INJECTED_PROMPTS):
+        return None, ""
+    return started, _excerpt(text)
 
 
 def _is_direct(task):
@@ -790,16 +802,16 @@ def _apply_direct(record, call, now, turn):
     card = next((t for t in record["tasks"] if _is_direct(t) and t["owner"] == MAIN_OWNER), None)
     status = "in_progress" if write else "pending"
     if card is None:
+        # A continuation that only reads asked nothing: no card To Do for a background agent's report.
+        if started is None and not write:
+            return False
         card = _add_task(record, call, {"id": None, "content": DIRECT_CONTENT, "status": status}, now)
         card.update(kind="direct", turns=[])
-        new_turn = True
+        new_turn = started is not None
     else:
         turns = card.get("turns") or []
-        # A new turn is a newer prompt, or — with no prompt file — the first call after a Stop.
-        if started is not None:
-            new_turn = not turns or turns[-1].get("at", 0) < started
-        else:
-            new_turn = not card.get("open_turn")
+        # Only a newer prompt of the user's starts a turn; a continuation (see `_turn`) never does.
+        new_turn = started is not None and (not turns or turns[-1].get("at", 0) < started)
         card["removed_at"] = None
         # A write promotes the card; a read restarts it only on a new turn, never demoting a
         # write already made in this one.
@@ -808,7 +820,7 @@ def _apply_direct(record, call, now, turn):
     card["open_turn"] = True
     turns = card.setdefault("turns", [])
     if new_turn:
-        turns.append({"text": excerpt, "at": started if started is not None else now})
+        turns.append({"text": excerpt, "at": started})
         del turns[: max(0, len(turns) - DIRECT_TURNS_CAP)]
     return True
 
