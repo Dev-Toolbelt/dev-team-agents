@@ -1255,12 +1255,11 @@ class WiringTest(tt.BoardCase):
         self.assertRegex(PROMPT_SUB.name, r"^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$")
 
     def test_the_codex_installer_writes_the_new_managed_events(self):
-        text = (REPO_ROOT / "scripts" / "install-codex.sh").read_text(encoding="utf-8")
-        body = re.search(r"python3 - \"\$HOOKS_FILE\" \"\$HOOKS_DIR_REL\" <<'PY'\n(.*?)\nPY\n", text, re.S).group(1)
+        merge = REPO_ROOT / "scripts" / "lib" / "codex_hooks_merge.py"
         target = self.tmp / "hooks.json"
         target.write_text(json.dumps({"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "mine"}]}]}}))
         for _ in range(2):
-            subprocess.run([sys.executable, "-c", body, str(target), ".dev-team-agents/scripts/hooks"], check=True, stdout=subprocess.PIPE)
+            subprocess.run([sys.executable, str(merge), str(target), ".dev-team-agents/scripts/hooks"], check=True, stdout=subprocess.PIPE)
         data = json.loads(target.read_text())["hooks"]
         for event, script in (("PostToolUse", "post-tool-use.sh"), ("UserPromptSubmit", "user-prompt-submit.sh"), ("SessionEnd", "session-end.sh")):
             ours = [g for g in data[event] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
@@ -1286,9 +1285,10 @@ class WiringTest(tt.BoardCase):
             self.assertIn(needle, text)
         self.assertNotIn("execAsync", text)
 
-    def test_the_opencode_plugin_ignores_stderr_kills_the_process_group_and_stops_at_the_last_user_message(self):
+    def test_the_opencode_plugin_reads_stderr_kills_the_process_group_and_stops_at_the_last_user_message(self):
         text = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
-        self.assertIn('stdio: ["pipe", "pipe", "ignore"]', text)
+        # stderr is piped: it carries a guard's refusal, which the plugin throws to block the tool.
+        self.assertIn('stdio: ["pipe", "pipe", "pipe"]', text)
         self.assertIn("detached", text)
         self.assertIn("process.kill(-child.pid", text)
         self.assertIn('if (role === "user") break', text)

@@ -76,26 +76,27 @@ class ProviderParityTest(unittest.TestCase):
 
 
 class CodexCommandTest(unittest.TestCase):
-    """`install-codex.sh` `cmd()`, run as the installer runs it, on each platform it branches on."""
+    """`codex_hooks_merge.command_for`, the command `install-codex.sh` writes, per platform."""
 
-    def _cmd(self, platform):
-        import types
-        text = (REPO_ROOT / "scripts" / "install-codex.sh").read_text(encoding="utf-8")
-        start = text.index("ROOT_WALK = (")
-        end = text.index("\n# Each managed hook carries", start)
-        namespace = {"sys": types.SimpleNamespace(platform=platform), "hooks_dir": hooks.HOOK_DIR}
-        exec(text[start:end], namespace)
-        return namespace["cmd"]
+    def _merge(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "codex_hooks_merge", REPO_ROOT / "scripts" / "lib" / "codex_hooks_merge.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     def test_posix_gets_the_root_walk(self):
-        for platform in ("linux", "darwin"):
-            self.assertEqual(self._cmd(platform)("stop.sh"), _command("codex", "stop.sh"))
+        merge = self._merge()
+        self.assertEqual(merge.command_for(hooks.HOOK_DIR, "stop.sh", windows=False), _command("codex", "stop.sh"))
 
-    def test_windows_keeps_the_plain_command_cmd_exe_can_parse(self):
-        for platform in ("win32", "msys", "cygwin"):
-            command = self._cmd(platform)("stop.sh")
-            self.assertEqual(command, "bash .dev-team-agents/scripts/hooks/stop.sh")
-            self.assertNotIn("'", command)
+    def test_windows_walks_to_the_root_in_a_form_cmd_exe_can_parse(self):
+        bash = "C:\\Program Files\\Git\\bin\\bash.exe"
+        command = self._merge().command_for(hooks.HOOK_DIR, "stop.sh", windows=True, bash_path=bash)
+        self.assertTrue(command.startswith('""' + bash + '" -c "'), command)
+        self.assertTrue(command.endswith('""'), command)
+        self.assertIn("pwd -P", command)
+        self.assertNotIn("'", command)
 
 
 class ClaudeCommandTest(unittest.TestCase):
@@ -123,7 +124,7 @@ def _command(provider, script):
     """The command each provider registers, built from the one walk both share."""
     if provider == "claude":
         return hooks.command_for(script)
-    return "bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, fallback=".", script=script))
+    return "env -u BASH_ENV -u ENV bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, fallback=".", script=script))
 
 
 @requires_bash()
