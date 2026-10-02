@@ -335,3 +335,20 @@ jobs:
 
       - name: Homebrew formula syntax + winget manifest contract
         run: bash .github/scripts/ci/04-packaging.sh
+
+  # The Supabase Edge Functions behind the account gate (ADR-0029) are TypeScript on Deno, so
+  # neither the python nor the app job sees them. The tests are offline and need no secrets.
+  edge-functions:
+    name: Edge Functions (deno)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Edge Function tests
+        run: bash .github/scripts/ci/07-edge-functions.sh
