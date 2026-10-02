@@ -377,7 +377,10 @@ class SessionTitleTest(BoardCase):
 
     def case_codex(self):
         home = self.codex_index("First name", "Notificações do app")
-        self.enterContext(mock.patch.dict(os.environ, {"CODEX_HOME": str(home)}))
+        # TestCase.enterContext is 3.11+; the floor is 3.9.
+        patcher = mock.patch.dict(os.environ, {"CODEX_HOME": str(home)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         def rename():
             self.codex_index("Renamed later")
             return {"session_id": "x1", "transcript_path": "/nonexistent/rollout.jsonl"}

@@ -923,6 +923,12 @@ class DurationAndDoneTest(ReviewCase):
 
     def test_a_direct_card_left_in_to_do_never_withholds_the_pass(self):
         self.start(items=[todo("A", "completed")])
+        # Only the user's prompt opens a direct-work turn (its file, written by the
+        # UserPromptSubmit hook); the read then lands in it.
+        path = tasks.record_path(self.root, self.project_id, "s1")
+        turn = tasks._prompt_path(path)
+        turn.write_text(': ' + json.dumps("look at a.py") + ', "x": 1}', encoding="utf-8")
+        os.utime(str(turn), (T0 + 4, T0 + 4))
         self.rec({"session_id": "s1", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, now=T0 + 5)
         self.assertEqual([t["status"] for t in self.load("s1")["tasks"] if t.get("kind") == "direct"], ["pending"])
         self.open(claude_spawn("s1"), now=T0 + 10)
@@ -1299,7 +1305,8 @@ class WiringTest(tt.BoardCase):
         for name in ("pre-tool-use.sh", "post-tool-use.sh", "user-prompt-submit.sh"):
             text = (HOOKS / name).read_text(encoding="utf-8")
             self.assertNotIn('echo "$INPUT"', text, name)
-            self.assertIn("printf '%s\\n' \"$INPUT\" |", text, name)
+            # Written to a file the sub-scripts read, not piped: see the dispatcher's SIGPIPE note.
+            self.assertIn("printf '%s\\n' \"$INPUT\" > \"$INPUT_FILE\"", text, name)
 
 
 class BackgroundReviewTest(ReviewCase):

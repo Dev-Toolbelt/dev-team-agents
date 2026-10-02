@@ -811,7 +811,8 @@ class HardeningTest(PluginTestCase):
         code, body, _ = self.cli("config", "set", "demo", "count", "9" * 6000)
         self.assertEqual(code, 2)
         self.assertFalse(body["ok"])
-        code, body, _ = self.cli("config", "set", "demo", "names", "[" * 200000)
+        # Under Linux's 128 KiB cap on one argv string (MAX_ARG_STRLEN), still far past any recursion limit.
+        code, body, _ = self.cli("config", "set", "demo", "names", "[" * 100000)
         self.assertEqual(code, 2)
         self.assertFalse(body["ok"])
 

@@ -44,14 +44,18 @@ const INDEX_SOURCE = readFileSync(
   'utf8',
 );
 
-const BUNDLE = '/app/dist/renderer';
-const INDEX = 'file:///app/dist/renderer/index.html';
+// A file URL only maps to a path with a drive letter on Windows (`fileURLToPath` throws
+// otherwise), so the fixture tree sits on `C:` there and at `/` everywhere else.
+const WINDOWS = process.platform === 'win32';
+const FILE_ROOT = WINDOWS ? 'file:///C:' : 'file://';
+const BUNDLE = WINDOWS ? 'C:\\app\\dist\\renderer' : '/app/dist/renderer';
+const INDEX = `${FILE_ROOT}/app/dist/renderer/index.html`;
 const PROD: RendererTarget = { indexUrl: INDEX, bundleDir: BUNDLE, devServerOrigin: null };
 const devTarget = (origin: string): RendererTarget => ({ ...PROD, devServerOrigin: origin });
 
 describe('isRequestAllowed — scheme allowlist', () => {
   it('allows the bundle and devtools:, and nothing else, with no dev server configured', () => {
-    expect(isRequestAllowed('file:///app/dist/renderer/assets/index.js', PROD)).toBe(true);
+    expect(isRequestAllowed(`${FILE_ROOT}/app/dist/renderer/assets/index.js`, PROD)).toBe(true);
     expect(isRequestAllowed('devtools://devtools/bundled/inspector.html', PROD)).toBe(true);
     // Mutation: putting `data:`, `blob:` or `chrome-extension:` back into
     // ALWAYS_ALLOWED_SCHEMES flips these to `true` — that is exactly the regression the
@@ -68,10 +72,10 @@ describe('isRequestAllowed — scheme allowlist', () => {
   it('refuses a file: URL outside the renderer bundle', () => {
     // Mutation: a bare `file:` scheme test (the previous filter) lets all of these through,
     // which is what made a dropped `.html` file a first-class page of this app.
-    expect(isRequestAllowed('file:///tmp/evil.html', PROD)).toBe(false);
-    expect(isRequestAllowed('file:///app/dist/renderer/../secret.html', PROD)).toBe(false);
-    expect(isRequestAllowed('file:///app/dist/renderer-evil/index.html', PROD)).toBe(false);
-    expect(isRequestAllowed('file:///app/dist/renderer', PROD)).toBe(false);
+    expect(isRequestAllowed(`${FILE_ROOT}/tmp/evil.html`, PROD)).toBe(false);
+    expect(isRequestAllowed(`${FILE_ROOT}/app/dist/renderer/../secret.html`, PROD)).toBe(false);
+    expect(isRequestAllowed(`${FILE_ROOT}/app/dist/renderer-evil/index.html`, PROD)).toBe(false);
+    expect(isRequestAllowed(`${FILE_ROOT}/app/dist/renderer`, PROD)).toBe(false);
   });
 
   it('rejects a malformed URL instead of throwing', () => {
@@ -192,7 +196,7 @@ describe('hardenSession — the response header and the request filter', () => {
     // or not registering the handler at all, is exactly the "remote content blocked"
     // guarantee the review verified by hand and found nothing pinning.
     expect(outcome?.cancel).toBe(true);
-    handlers.beforeRequest?.({ url: 'file:///app/dist/renderer/index.html' }, (result) => {
+    handlers.beforeRequest?.({ url: `${FILE_ROOT}/app/dist/renderer/index.html` }, (result) => {
       outcome = result as { cancel: boolean };
     });
     expect(outcome?.cancel).toBe(false);
@@ -268,8 +272,8 @@ describe('hardenContents — window-open, navigation, webview', () => {
     expect(fireWillNavigate('https://example.com').preventDefault).toHaveBeenCalled();
     // Mutation: the previous filter allowed every `file:` URL, so a dropped `.html` file
     // navigated the window to a page that inherits the preload's `window.devteam`.
-    expect(fireWillNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
-    expect(fireWillNavigate('file:///app/dist/renderer/other.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate(`${FILE_ROOT}/tmp/evil.html`).preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate(`${FILE_ROOT}/app/dist/renderer/other.html`).preventDefault).toHaveBeenCalled();
     expect(fireWillNavigate(INDEX).preventDefault).not.toHaveBeenCalled();
     // The router's hash and query are not a different page.
     expect(fireWillNavigate(`${INDEX}#/projects?tab=1`).preventDefault).not.toHaveBeenCalled();
@@ -278,7 +282,7 @@ describe('hardenContents — window-open, navigation, webview', () => {
   it('applies the same allow-list to frame navigations', () => {
     const { contents, fireWillFrameNavigate } = fakeWebContents();
     hardenContents(contents as unknown as WebContents, PROD);
-    expect(fireWillFrameNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillFrameNavigate(`${FILE_ROOT}/tmp/evil.html`).preventDefault).toHaveBeenCalled();
     expect(fireWillFrameNavigate('https://example.com/frame').preventDefault).toHaveBeenCalled();
     expect(fireWillFrameNavigate(INDEX).preventDefault).not.toHaveBeenCalled();
   });
@@ -288,7 +292,7 @@ describe('hardenContents — window-open, navigation, webview', () => {
     hardenContents(contents as unknown as WebContents, devTarget('http://localhost:5173'));
     expect(fireWillNavigate('http://localhost:5173/#/x').preventDefault).not.toHaveBeenCalled();
     expect(fireWillNavigate('http://localhost:5173.evil.tld/').preventDefault).toHaveBeenCalled();
-    expect(fireWillNavigate('file:///tmp/evil.html').preventDefault).toHaveBeenCalled();
+    expect(fireWillNavigate(`${FILE_ROOT}/tmp/evil.html`).preventDefault).toHaveBeenCalled();
   });
 
   it('prevents default on every webview attachment attempt', () => {
@@ -311,7 +315,7 @@ describe('resolveDevServer', () => {
     expect(resolveDevServer(undefined, false)).toBeNull();
     expect(resolveDevServer('', false)).toBeNull();
     expect(resolveDevServer('not a url', false)).toBeNull();
-    expect(resolveDevServer('file:///tmp/x', false)).toBeNull();
+    expect(resolveDevServer(`${FILE_ROOT}/tmp/x`, false)).toBeNull();
     expect(resolveDevServer('javascript:alert(1)', false)).toBeNull();
   });
 });
@@ -320,7 +324,7 @@ describe('isRendererUrl', () => {
   it('matches the index exactly, ignoring hash and query', () => {
     expect(isRendererUrl(INDEX, PROD)).toBe(true);
     expect(isRendererUrl(`${INDEX}?a=1#b`, PROD)).toBe(true);
-    expect(isRendererUrl('file:///app/dist/renderer/index.html/../x.html', PROD)).toBe(false);
+    expect(isRendererUrl(`${FILE_ROOT}/app/dist/renderer/index.html/../x.html`, PROD)).toBe(false);
     expect(isRendererUrl('not a url', PROD)).toBe(false);
   });
 });
@@ -331,7 +335,7 @@ describe('IPC sender check', () => {
   it('trusts only the renderer\'s own main frame', () => {
     expect(isTrustedSender(mainFrame(INDEX), PROD)).toBe(true);
     expect(isTrustedSender(mainFrame(`${INDEX}#/x`), PROD)).toBe(true);
-    expect(isTrustedSender(mainFrame('file:///tmp/evil.html'), PROD)).toBe(false);
+    expect(isTrustedSender(mainFrame(`${FILE_ROOT}/tmp/evil.html`), PROD)).toBe(false);
     expect(isTrustedSender(mainFrame('https://example.com/'), PROD)).toBe(false);
   });
 
@@ -355,7 +359,7 @@ describe('IPC sender check', () => {
       return value + 1;
     });
     expect(wrapped(mainFrame(INDEX), 1)).toBe(2);
-    expect(() => wrapped(mainFrame('file:///tmp/evil.html'), 1)).toThrow(/refused/);
+    expect(() => wrapped(mainFrame(`${FILE_ROOT}/tmp/evil.html`), 1)).toThrow(/refused/);
     expect(() => wrapped({}, 1)).toThrow(/refused/);
     expect(calls).toBe(1);
   });

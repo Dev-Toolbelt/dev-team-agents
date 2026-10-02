@@ -62,6 +62,8 @@ const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
   'integration test': ['integration', 'test', 'github', '--path', '/p'],
   'integration config set': ['integration', 'config', 'set', 'github', 'repository', 'a/b', '--path', '/p'],
   'integration config unset': ['integration', 'config', 'unset', 'github', 'repository', '--path', '/p'],
+  'cred local init': ['cred', 'local', 'init', '--path', '/p'],
+  'cred local patch': ['cred', 'local', 'patch', '--path', '/p', '--expect-hash', 'h'],
 };
 
 describe('run() deadlines', () => {
