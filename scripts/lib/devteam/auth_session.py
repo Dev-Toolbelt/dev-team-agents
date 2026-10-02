@@ -60,8 +60,11 @@ def meta_path():
 
 def read_meta():
     """The session record, or ``None`` when signed out. Regenerable, so a bad one is ignored."""
+    base = paths.known_machine_dir()
+    if base is None:
+        return None
     try:
-        data = jsonio.read_json(meta_path())
+        data = jsonio.read_json(base / META_FILE)
     except EnvError:
         return None
     if not isinstance(data, dict) or data.get("schema") != META_SCHEMA:

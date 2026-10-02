@@ -179,5 +179,25 @@ class BannerLineTest(AuthTestCase):
             self.assertEqual(gate.banner_line(), "")
 
 
+class ReadOnlyGateTest(unittest.TestCase):
+    """A gated read-only command with no session must create nothing under DEVTEAM_HOME."""
+
+    def test_gated_read_only_commands_leave_the_store_empty(self):
+        import os
+        import subprocess
+        import tempfile
+
+        cli_path = Path(__file__).resolve().parent.parent / "scripts" / "cli" / "devteam"
+        for command in (["list"], ["catalog", "summary"]):
+            with self.subTest(command=" ".join(command)), tempfile.TemporaryDirectory() as home:
+                env = {k: v for k, v in os.environ.items() if not k.startswith("DEVTEAM_")}
+                env["DEVTEAM_HOME"] = home
+                subprocess.run(
+                    [sys.executable, str(cli_path), *command, "--json"],
+                    env=env, capture_output=True, check=False, timeout=60,
+                )
+                self.assertEqual(list(Path(home).rglob("*")), [])
+
+
 if __name__ == "__main__":
     unittest.main()

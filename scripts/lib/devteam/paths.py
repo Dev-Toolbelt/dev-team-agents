@@ -430,6 +430,16 @@ def machine_dir(machine=None):
     return machines_dir() / (machine or machine_id())
 
 
+def known_machine_dir():
+    """The machine subtree when this machine already has an id, else ``None``.
+
+    For read-only callers (the account gate): asking a question must not mint an identity or
+    create anything under ``data/``.
+    """
+    known = machine_id(create=False)
+    return machines_dir() / known if known else None
+
+
 # ── machine-local records ─────────────────────────────────────────────────────
 
 

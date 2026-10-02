@@ -465,14 +465,23 @@ def cache_path():
     return paths.machine_dir() / CACHE_FILE
 
 
+def _cache_path_readonly():
+    """The cache path without minting a machine identity; ``None`` when there is none yet."""
+    base = paths.known_machine_dir()
+    return base / CACHE_FILE if base else None
+
+
 def read_cache(path=None):
     """The parsed cache, ``None`` when absent. A malformed file reads as ``{}`` (invalid).
 
     The cache is regenerable by signing in again, so unlike a user-authored file it is not
     protected from being replaced: a corrupt one must not lock the user out forever.
     """
+    target = path or _cache_path_readonly()
+    if target is None:
+        return None
     try:
-        data = jsonio.read_json(path or cache_path())
+        data = jsonio.read_json(target)
     except EnvError:
         return {}
     return data
@@ -519,11 +528,12 @@ def store_token(token, identity, account_id, local_now=None, path=None):
 def check(identity, account_id, local_now=None, path=None):
     """Read the cache, evaluate it and advance ``max_seen_at`` when the token is in use."""
     now = _now(local_now)
-    target = Path(path) if path else cache_path()
-    cache = read_cache(target)
+    target = Path(path) if path else _cache_path_readonly()
+    cache = read_cache(target) if target else None
     result = evaluate(cache, identity, account_id, now)
     if (
-        result.status in _OBSERVED
+        target is not None
+        and result.status in _OBSERVED
         and result.effective_now is not None
         and result.effective_now > cache["max_seen_at"] + OBSERVE_WRITE_STEP_SECONDS
     ):
