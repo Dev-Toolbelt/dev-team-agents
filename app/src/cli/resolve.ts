@@ -403,7 +403,10 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
  * Windows installer shape as still undecided — "a placeholder, not a decision" — so the
  * Windows branch does not invent a `winget install <package>` line that would imply
  * one; it says what is actually true today, which is that a Windows user reaches this
- * CLI only by pointing the app at one directly.
+ * CLI only by pointing the app at one directly. The macOS/Linux branch holds itself to
+ * the same rule: no Homebrew formula is published yet (ADR-0027 § 6), so it gives the
+ * from-a-clone install, which lands in `/usr/local/bin` — a directory `knownBinDirs`
+ * searches — instead of a `brew install` line that cannot succeed today.
  */
 function remedyFor(platform: NodeJS.Platform): readonly string[] {
   const forbidden =
@@ -418,7 +421,8 @@ function remedyFor(platform: NodeJS.Platform): readonly string[] {
     ];
   }
   return [
-    'Install the CLI: `brew install dev-toolbelt/devteam/devteam` (macOS or Linux via Homebrew).',
+    'No Homebrew formula is published yet — ADR-0027 records the app as a direct-download beta until it is.',
+    'Install the CLI from a clone: run `python3 scripts/cli/devteam store install --from .` in it, then `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam`. Python 3.9+ is required.',
     'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
     'Or set `cliPath` in the app settings file to the same path.',
     forbidden,
