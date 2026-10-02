@@ -411,6 +411,14 @@ class DirectHookTest(tt.HookTest):
         self.run_script(STOP_SUB, "", extra_env={"DEVTEAM_HOOK_PAYLOAD": str(payload)})
         self.assertEqual(sorted(p.name for p in self.board().glob(".direct*")), [])
 
+    def test_a_read_is_judged_by_its_command_not_by_the_rest_of_the_payload(self):
+        # `sed -n` once matched the `sed -i` pattern through a `-…i` in the cwd that follows it.
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "look"})
+        cwd = str(self.root) + "/dir-xi"
+        for command in ("ls", "sed -n 1,5p f", "git log --grep=x", "docker ps"):
+            self.run_script(PRE_TOOL_USE, claude_shell("s1", command, cwd=cwd))
+        self.assertEqual(self.python_calls(), 1)
+
     def test_the_gate_lets_every_write_through(self):
         # The gate must be a superset of `tasks.writes()`, or a real write never reaches the CLI.
         for n, command in enumerate(WRITE_COMMANDS):

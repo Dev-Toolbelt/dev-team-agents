@@ -43,14 +43,17 @@ SKIP_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(TaskList|TaskGet|TaskOutpu
 # A word starts a command after whitespace, a quote, an operator or an escaped newline (`\n`).
 CMD_START="(^|[[:space:]\"';&|(]|\\\\n)"
 CMD_END="([[:space:]\"';&|)]|\\\\|\$)"
+# Within one command only: the JSON string ends at an unescaped quote. A plain `[^|;&]*` ran on
+# into the rest of the payload, so a `-…i` in the session's cwd made `sed -n` look like `sed -i`.
+IN_CMD="([^|;&\"\\\\]|\\\\.)*"
 WRITE_RES=(
     "${CMD_START}(mv|rm|cp|mkdir|rmdir|touch|ln|chmod|chown|tee|truncate|patch|install|dd|scp|rsync)${CMD_END}"
     # Containers, clusters and services: the subcommand decides (`docker ps`, `kubectl get` only read).
     # An `ssh host '<cmd>'` needs no pattern of its own: its remote command is matched in place.
-    "${CMD_START}(docker|podman|docker-compose|kubectl|helm|systemctl|service)[^|;&]*[[:space:]](rm|rmi|run|exec|stop|start|restart|kill|build|pull|push|cp|prune|create|tag|load|import|commit|update|pause|unpause|rename|up|down|remove|deploy|scale|apply|delete|patch|edit|set|replace|label|annotate|cordon|uncordon|drain|taint|expose|autoscale|install|upgrade|uninstall|rollback|reload|try-restart|reload-or-restart|enable|disable|mask|unmask|daemon-reload)${CMD_END}"
-    "${CMD_START}kubectl[^|;&]*[[:space:]]rollout[[:space:]]+(restart|undo|pause|resume)${CMD_END}"
-    "${CMD_START}(sed|perl)[[:space:]][^|;&]*-[A-Za-z-]*i"
-    "${CMD_START}git[^|;&]*[[:space:]](add|am|apply|checkout|cherry-pick|commit|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag|worktree)${CMD_END}"
+    "${CMD_START}(docker|podman|docker-compose|kubectl|helm|systemctl|service)${IN_CMD}[[:space:]](rm|rmi|run|exec|stop|start|restart|kill|build|pull|push|cp|prune|create|tag|load|import|commit|update|pause|unpause|rename|up|down|remove|deploy|scale|apply|delete|patch|edit|set|replace|label|annotate|cordon|uncordon|drain|taint|expose|autoscale|install|upgrade|uninstall|rollback|reload|try-restart|reload-or-restart|enable|disable|mask|unmask|daemon-reload)${CMD_END}"
+    "${CMD_START}kubectl${IN_CMD}[[:space:]]rollout[[:space:]]+(restart|undo|pause|resume)${CMD_END}"
+    "${CMD_START}(sed|perl)[[:space:]]${IN_CMD}-[A-Za-z-]*i"
+    "${CMD_START}git${IN_CMD}[[:space:]](add|am|apply|checkout|cherry-pick|commit|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag|worktree)${CMD_END}"
     "${CMD_START}(npm|pnpm|yarn|bun|pip|pip3|poetry|uv|cargo|go|bundle|gem|composer|brew)[[:space:]]+(install|i|add|remove|rm|uninstall|update|upgrade|get)${CMD_END}"
     # A redirect into a file: not `=>`/`->`, not a descriptor copy (`>&`), not `/dev/...`.
     '(^|[^=-])>>?[[:space:]]*([^&[:space:]/\\"]|/[^d])'
