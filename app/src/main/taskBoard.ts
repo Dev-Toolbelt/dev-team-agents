@@ -147,6 +147,9 @@ export class TaskBoard {
       this.emit();
     } else if (result !== null) {
       this.deps.log?.(`task board: refresh failed: ${result.message}`);
+      return { ...this.snapshot(), refreshError: result.message };
+    } else {
+      return { ...this.snapshot(), refreshError: 'the task list could not be read' };
     }
     return this.snapshot();
   }

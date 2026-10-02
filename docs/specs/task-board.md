@@ -115,10 +115,12 @@ The todo tools that only read or drive their own list (`TaskList`, `TaskGet`, `T
 - **Turns** — the card keeps `turns: [{"text", "at"}]`, oldest first, at most 20. `at` is when the turn's
   prompt arrived; `text` is the prompt's first non-empty line, at most 100 characters, with invisible
   control/format characters dropped and anything shaped like a secret replaced by `[redacted]`:
-  `Bearer …`, a password in a URL, `sk-`/`sk_live_`/`ghp_`/`AKIA`/`AIza` keys, JWTs, a value after a
-  secret-named key (`NAME=v`, `"password": "v"`, `AWS_SECRET_ACCESS_KEY v`, `password is v`, `senha: v`),
-  and any long token mixing letters and digits (a path or a 40-hex commit id is not one). Records are
-  kept for good, so the full prompt never is. Redaction is a best effort, not a guarantee.
+  `Bearer …`, `Authorization: Basic …`/`Token …`, a password in a URL, `mysql -p<v>`,
+  `sk-`/`sk_live_`/`ghp_`/`AKIA`/`AIza` keys, JWTs, a value after a secret-named key (`NAME=v`,
+  `X-Api-Key: v`, `"password": "v"`, `AWS_SECRET_ACCESS_KEY v`, `password is v`, `senha: v`), and any
+  long token mixing letters and digits (a path or a 40-hex commit id is not one). Every task text —
+  an agent's description, a plan or todo item — gets the same treatment before it is stored. Records
+  are kept for good, so the full prompt never is. Redaction is a best effort, not a guarantee.
 - **Turn boundary** — `UserPromptSubmit` writes the prompt's **first line**, still JSON-escaped and at
   most 512 bytes, to `<state-dir>/task-board/.prompt-<session>` (owner-only, `umask 077`; its mtime
   starts the turn) and clears the turn's markers, in bash only. The first call of the turn forks
@@ -487,7 +489,8 @@ Implementation details:
   short id when it has none. The Done column carries a faint success tint. Leaving the Board tab
   returns it to the overview.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
-  (days, default 7). Not preferences.json keys.
+  (days, default 7), *Keep unanswered direct work for* (hours, 1–720, default 24). Not
+  preferences.json keys.
 - Resume commands (in the CLI's `tasks` output; the desktop app no longer shows or copies them): `cd <dir> && claude --resume <id>`, `cd <dir> && codex resume <id>`,
   `cd <dir> && opencode --session <id>`, where `<dir>` is the session's recorded `cwd` when that
   directory still exists (a linked worktree or subdirectory), else the project root. Always one
@@ -603,3 +606,4 @@ Implementation details:
 | 2026-10-01 | App: new PR/MR badges `#N` (PR) / `!N` (MR) on cards, clickable IPC to main with host/path validation; issue badges `PROJ-12` / `owner/repo#45`, clickable IPC; "with findings" filter added; session chip shows PR/MR badge if session has marks; board overview shows `pr_created` in counts and stacked bar; five-column kanban with horizontal scroll; security validation per ADR-0025 (no renderer URLs, main-process allow-list, IDN/canonical round-trip, path shapes) | Completes the flow from tool output through CLI to the board and app |
 | 2026-10-01 | Review fixes: (1) a `git merge` counts only when the checkout it ran in is known and differs from the merged branch, and records it as `into` — catching `feat/x` up with `origin/feat/x` no longer marks the PR merged. (2) Criterion 12 now names five columns. (3) `tasks.session_done` fires while tasks sit in PR/MR Created (PR/MR Created is finished work); `durations.done` no longer includes PR/MR Created time. (4) GitHub refs from any source, the prompt included, must name the bound repository or one a git remote on the web host names, and the binding's `repository` counts only when a remote names it. (5) Punycode hosts and known non-GitLab forges never become self-hosted GitLab hosts. (6) The open-link request carries `expect`, the number/key the badge showed; a mismatch is refused. (7) Env-assignment refusal is tokenised: only an assignment in command position refuses the command. (8) Known limits recorded (forks, ports, single-label hosts, merges outside a hooked session); PR/MR Created tasks are not hidden by done retention | Findings of the `/devteam:review` pass on the PR/MR Created branch |
 | 2026-10-02 | Direct work counts any tool call of the main session, not only writes: a read-only turn puts the card in To Do (and it stays there after `Stop`), a write moves it to In progress and `Stop` completes it; the card follows the latest turn. A To Do card is not abandoned work, is retired at `Stop` when its turn created a plan or an agent, and the app hides it after *Keep unanswered direct work for* (Board settings, default 24 h). The gate forks python at most twice a turn (`.direct-` / `.directw-` markers); acceptance criteria 9 and 17 reworded | User request: a production health check that only read never reached the board; everything done in a session should, and a question left unanswered should not linger |
+| 2026-10-01 | Audit fixes (`docs/audit/task-board-audit-2026-10-01.md`): (1) a payload that carries a tool result is never folded in as direct work — direct work is taken before the call runs; (2) a review result decides `tasks.session_done` with the direct card left out, as `record`/`mark` already did; (3) `tasks watch` emits `removed` for a project that left the bound set (unbound, folder gone), matching `tasks list`; (4) a stored GitHub issue ref is re-validated on read against the bound repository and the current remotes; (5) redaction covers every task text and `Authorization: Basic/Token`, hyphenated key names and `mysql -p<v>`; (6) the Settings bullet names the direct-work lifetime the app already had | Divergences found by the audit between the stated rules and the code |

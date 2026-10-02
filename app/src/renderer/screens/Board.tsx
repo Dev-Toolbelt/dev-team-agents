@@ -241,7 +241,9 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
     setRefreshing(true);
     setProblem(null);
     try {
-      setFeed(await window.devteam.refreshTaskBoard());
+      const next = await window.devteam.refreshTaskBoard();
+      setFeed(next);
+      if (next.refreshError !== undefined) setProblem(`The task board could not be refreshed: ${next.refreshError}`);
       loadFailedRef.current = false;
       setLoadFailed(false);
     } catch (error) {
@@ -555,8 +557,8 @@ async function openLink(request: OpenTaskLinkRequest): Promise<void> {
   try {
     const answer = await window.devteam.openTaskLink(request);
     if (!answer.ok) toastLinkRefused(answer.message);
-  } catch (error) {
-    toastLinkRefused(String(error));
+  } catch {
+    toastLinkRefused('That link could not be opened.');
   }
 }
 

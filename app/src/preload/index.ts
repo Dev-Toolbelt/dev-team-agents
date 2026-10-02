@@ -237,6 +237,7 @@ const bridge: DevteamBridge = {
     ipcRenderer.invoke(CHANNELS.setBoardSettings, {
       staleAfterMinutes: Number(settings.staleAfterMinutes),
       doneRetentionDays: Number(settings.doneRetentionDays),
+      directTodoTtlHours: Number(settings.directTodoTtlHours),
     }),
   openTaskLink: (request: OpenTaskLinkRequest) =>
     ipcRenderer.invoke(CHANNELS.openTaskLink, {

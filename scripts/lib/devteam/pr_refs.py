@@ -904,6 +904,12 @@ def _jira_key_re(project_key, source):
     return re.compile(r"(?<![A-Za-z0-9_-])" + re.escape(project_key) + r"-([1-9][0-9]{0,9})" + tail)
 
 
+def _github_repos(ctx):
+    """Lowercased repositories a GitHub issue reference may name: the bound one and any a remote on the web host names."""
+    github = ctx["github"]
+    return {github["repository"].lower()} | {r["repo"] for r in ctx.get("remotes") or [] if r["host"] == github["web_host"]}
+
+
 def extract_refs(text, ctx, source="prompt"):
     """Issue references in ``text`` as parts, per the strict rules; ``[]`` with no integration configured.
 
@@ -940,7 +946,7 @@ def extract_refs(text, ctx, source="prompt"):
     github = ctx.get("github")
     if github and github.get("repository") and source != "branch":
         bound = github["repository"].lower()
-        allowed = {bound} | {r["repo"] for r in ctx.get("remotes") or [] if r["host"] == github["web_host"]}
+        allowed = _github_repos(ctx)
 
         def accept(repo):
             # Prompt text is often pasted from elsewhere: no source may link an arbitrary repository.
@@ -963,7 +969,8 @@ def ref_view(entry, ctx):
     """``{"system", "key", "url"}`` for a stored reference that still validates, else ``None``.
 
     The URL is rebuilt from the current integration config on every call; a reference whose
-    integration is gone, or whose key no longer belongs to the bound project, is omitted.
+    integration is gone, or whose key or repository no longer belongs to the bound project or its
+    remotes, is omitted.
     """
     if not isinstance(entry, dict):
         return None
@@ -980,6 +987,9 @@ def ref_view(entry, ctx):
         github = ctx.get("github")
         repo, number = entry.get("repo"), entry.get("number")
         if not github or not github.get("repository") or not _valid_repository(repo):
+            return None
+        # Re-validated on every read, as when it was taken: a repository no remote vouches for any more is dropped.
+        if repo.lower() not in _github_repos(ctx):
             return None
         url = build_link("github_issue", github["web_host"], repo, number)
         return {"system": "github", "key": "{}#{}".format(repo, number), "url": url} if url else None

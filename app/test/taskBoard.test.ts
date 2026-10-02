@@ -577,7 +577,10 @@ describe('TaskBoard — snapshots', () => {
     await failing.board.start();
     failing.emit(snap(boardProject({ project_id: 'kept' })));
     failing.emit({ event: 'ready' });
-    expect((await failing.board.refresh()).projects.map((p) => p.project_id)).toEqual(['kept']);
+    const failed = await failing.board.refresh();
+    expect(failed.projects.map((p) => p.project_id)).toEqual(['kept']);
+    expect(failed.refreshError).toBe('nope');
+    expect(failing.board.snapshot().refreshError).toBeUndefined();
   });
 });
 

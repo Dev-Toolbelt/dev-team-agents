@@ -139,7 +139,8 @@ MAX_TASK_TEXT = 2000
 
 
 def _task_text(text):
-    return text[:MAX_TASK_TEXT].rstrip() if text else text
+    # Every task text gets the excerpt's treatment: invisible characters dropped, secrets masked.
+    return " ".join(redact(_INVISIBLE.sub(" ", text)).split())[:MAX_TASK_TEXT].rstrip() if text else text
 
 
 def norm_content(text):
@@ -532,6 +533,13 @@ def writes(command):
     return any(wrote or _segment_writes(words) for words, wrote in _segments(tokens))
 
 
+def _carries_result(payload):
+    """Whether a hook payload was sent after its call ran (it holds the call's result)."""
+    if _text(payload.get("hook_event_name")).startswith("PostToolUse"):
+        return True
+    return any(payload.get(k) is not None for k in ("tool_response", "tool_output", "output", "error"))
+
+
 def _normalize_direct(payload, provider, tool_name, bare_tool):
     """Any call of the session's own, as ``("direct", {"write": bool})``, else ``None``.
 
@@ -587,13 +595,15 @@ def _normalize_direct(payload, provider, tool_name, bare_tool):
     }
 
 
-_KEYWORD = r"(?:[A-Za-z0-9]+_)*(?:api_?key|access_key|private_key|secret_key|secret|token|password|passwd|pwd|pass|senha|credentials?)(?:_[A-Za-z0-9]+)*"
+_KEYWORD = r"(?:[A-Za-z0-9]+[-_]){0,4}(?:api[-_]?key|access[-_]key|private[-_]key|secret[-_]key|secret|token|password|passwd|pwd|pass|senha|credentials?)(?:[-_][A-Za-z0-9]+){0,4}"
 #: ``(pattern, replacement)``, applied in order. Shapes of real credentials, then a value after a
 #: secret-named key (``NAME=v``, ``"name": "v"``, ``NAME v`` for an env-style name, ``password is v``),
 #: then any long mixed token. A path is never one token (``/`` and ``.`` end it), and a 40-hex git
 #: commit id is not a secret.
 _SECRET_PATTERNS = (
     (re.compile(r"(?i)\bBearer\s+\S+"), "Bearer [redacted]"),
+    (re.compile(r"(?i)\b(Authorization\s*:\s*)(Basic|Token)\s+\S+"), r"\1\2 [redacted]"),
+    (re.compile(r"(?i)\b((?:mysql|mysqldump|mysqladmin|mariadb)\b[^\n]{0,200}?\s-p)(?=\S)[^\s\"',;]+"), r"\1[redacted]"),
     (re.compile(r"://[^\s/:@]+:[^\s/@]+@"), "://[redacted]@"),
     (re.compile(r"\b(?:sk|pk|rk)[-_](?:live_|test_|proj-)?[A-Za-z0-9_-]{8,}"), "[redacted]"),
     (re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr|github_pat|glpat|xox[abprs])[-_][A-Za-z0-9_-]{8,}"), "[redacted]"),
@@ -1730,7 +1740,7 @@ def _reread(rec, window, markers, now):
         "result": window.get("findings") is not None,
         "findings": window.get("findings"),
         "resolved": window.get("resolved_at") is not None,
-        "_all_done_now": _all_done(rec, _review_members(rec)),
+        "_all_done_now": _all_done(rec, _review_members(rec), skip_direct=True),
     }
 
 
@@ -1750,7 +1760,7 @@ def _apply_backgrounded(rec, call, now):
     bg.append(launch)
     window["last_at"] = now
     _sync_pending(window)
-    done = _all_done(rec, _review_members(rec))
+    done = _all_done(rec, _review_members(rec), skip_direct=True)
     return {
         "recorded": True, "window": window["id"], "result": False, "findings": None,
         "resolved": False, "all_done": done, "became_all_done": False,
@@ -1769,7 +1779,7 @@ def _finish(rec, window, now, observed=None):
         "result": complete,
         "findings": window.get("findings") if complete else None,
         "resolved": window.get("resolved_at") is not None,
-        "_all_done_now": _all_done(rec, _review_members(rec)),
+        "_all_done_now": _all_done(rec, _review_members(rec), skip_direct=True),
     }
 
 
@@ -1784,13 +1794,13 @@ def review_result(root, payload, now=None):
             return _apply_backgrounded(rec, call, at)
         if call["kind"] != "result":
             return None
-        was_done = _all_done(rec, _review_members(rec))
+        was_done = _all_done(rec, _review_members(rec), skip_direct=True)
         outcome = _apply_result(rec, call, at)
         if outcome is None:
             return None
         done = outcome.pop("_all_done_now")
         outcome.update(
-            all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec)),
+            all_done=done, became_all_done=done and not was_done and _cleanly_done(rec, _review_members(rec), skip_direct=True),
             title_short=title_short(rec.get("title")),
         )
         return outcome
@@ -2328,9 +2338,10 @@ def record(root, payload, provider="auto", now=None):
     }
     try:
         call = normalize(payload, provider)
-        # A finished `git merge` is write-shaped, so it also reads as direct work; with its
-        # output in hand it is a merge event first (direct work is taken before the call runs).
-        if call is None or (call["op"][0] == "direct" and pr_refs.classify(payload) is not None):
+        # Direct work is taken before the call runs: a payload that carries the call's result
+        # (a finished `git merge`, a PR/MR command or MCP call) is an event or nothing, never a
+        # second direct call folded in after the turn's PreToolUse already took it.
+        if call is None or (call["op"][0] == "direct" and _carries_result(payload)):
             return _record_event(root, payload, now, result)
         project_id = _bound_id(root)
         path = record_path(root, project_id, call["session_id"]) if project_id else None
@@ -3303,6 +3314,13 @@ def watch(
             if now - last_rescan >= rescan:
                 projects = _bound(project_ids)
                 last_rescan = now
+                # A project unbound or gone from disk is no longer scanned, so its removal is
+                # sent here: `tasks list` already leaves it out.
+                bound = {project_id for project_id, _ in projects}
+                for project_id in [p for p, view in last_view.items() if view is not None and p not in bound]:
+                    last_view[project_id] = None
+                    stamps.pop(project_id, None)
+                    emit({"event": "snapshot", "project": {"project_id": project_id, "removed": True}})
             for project_id, root in projects:
                 scan(project_id, root)
             if first:

@@ -735,8 +735,8 @@ class RefViewTest(unittest.TestCase):
             {"system": "jira", "key": "PROJ-12", "url": "https://acme.atlassian.net/browse/PROJ-12"},
         )
         self.assertEqual(
-            pr_refs.ref_view({"system": "github", "repo": "a/b", "number": 3, "url": "https://evil.example/x"}, CTX),
-            {"system": "github", "key": "a/b#3", "url": "https://github.com/a/b/issues/3"},
+            pr_refs.ref_view({"system": "github", "repo": "o/r", "number": 3, "url": "https://evil.example/x"}, CTX),
+            {"system": "github", "key": "o/r#3", "url": "https://github.com/o/r/issues/3"},
         )
 
     def test_an_edited_or_orphaned_entry_is_omitted(self):
@@ -754,6 +754,14 @@ class RefViewTest(unittest.TestCase):
             ("PROJ-1", CTX), (None, CTX),
         ):
             self.assertIsNone(pr_refs.ref_view(entry, ctx), entry)
+
+    def test_a_github_repository_no_remote_vouches_for_any_more_is_omitted(self):
+        bound = CTX["github"]["repository"]
+        self.assertIsNotNone(pr_refs.ref_view({"system": "github", "repo": bound.upper(), "number": 3}, CTX))
+        self.assertIsNotNone(pr_refs.ref_view({"system": "github", "repo": "acme/web", "number": 3}, CTX))
+        for ctx in (CTX, dict(CTX, remotes=[])):
+            self.assertIsNone(pr_refs.ref_view({"system": "github", "repo": "attacker/evil", "number": 1}, ctx))
+        self.assertIsNone(pr_refs.ref_view({"system": "github", "repo": "acme/web", "number": 3}, dict(CTX, remotes=[])))
 
     def test_identity_dedupes_case_insensitively_for_github(self):
         self.assertEqual(pr_refs.ref_identity({"system": "github", "repo": "A/B", "number": 3}), ("github", "a/b", 3))
