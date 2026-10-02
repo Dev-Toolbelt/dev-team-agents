@@ -99,6 +99,12 @@ class LauncherTest(unittest.TestCase):
                            extra_env={"DEVTEAM_PYTHON": sys.executable})
         self.assertEqual(result.stdout.split(), ["3", "picked=" + sys.executable], result.stderr)
 
+    def test_windows_runs_python_in_utf8_mode_and_posix_is_left_alone(self):
+        self._stub("python3", _forward(self.log))
+        self.assertEqual(self._run('echo "[${PYTHONUTF8:-}]"').stdout.strip(), "[1]")
+        self.assertEqual(self._run('echo "[${PYTHONUTF8:-}]"', platform="linux").stdout.strip(), "[]")
+        self.assertEqual(self._run('echo "[$PYTHONUTF8]"', extra_env={"PYTHONUTF8": "0"}).stdout.strip(), "[0]")
+
     def test_a_shipped_library_reaches_the_resolved_interpreter(self):
         self._stub("python3", BROKEN)
         self._stub("python", _forward(self.log))

@@ -99,6 +99,7 @@ class CodexCommandTest(unittest.TestCase):
         self.assertNotIn("'", command)
 
 
+@requires_bash()
 class ClaudeCommandTest(unittest.TestCase):
     def test_the_v2_installer_writes_the_same_command_as_the_bind(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
@@ -319,6 +320,7 @@ class RewriteTest(StoreTestCase):
         (stop,) = json.loads(settings.read_text(encoding="utf-8"))["hooks"]["Stop"]
         self.assertEqual(stop["hooks"], [dict(ours, command=hooks.command_for("stop.sh")), sibling])
 
+    @requires_bash()
     def test_the_v2_installer_rewrites_the_relative_command_and_keeps_the_rest(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
         functions = text[text.index("_HOOK_TEMPLATE="):text.index("\nif [ ! -f \"$SETTINGS_FILE\" ]")]

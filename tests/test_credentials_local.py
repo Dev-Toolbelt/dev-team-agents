@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from devteam_support import REPO_ROOT, StoreTestCase
+from devteam_support import POSIX_MODES, REPO_ROOT, StoreTestCase, requires_posix_modes
 from test_provider_ownership import _missing_tools
 
 from devteam import credentials_local as cl
@@ -40,6 +40,11 @@ def _mode(path):
 
 
 class LocalCredsCase(StoreTestCase):
+    def assertMode(self, path, mode):
+        # Windows has no permission bits to assert (every file reads 0666).
+        if POSIX_MODES:
+            self.assertEqual(_mode(path), mode)
+
     def setUp(self):
         super().setUp()
         self.install_version("3.0.0", activate=True)
@@ -55,7 +60,7 @@ class LocalCredsCase(StoreTestCase):
     def put(self, path, text, mode=0o600):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_bytes((text).encode("utf-8"))
         os.chmod(str(path), mode)
         return path
 
@@ -112,7 +117,7 @@ class RelocateTest(LocalCredsCase):
         self.assertEqual(len(report["moved"]), 1)
         self.assertEqual(self.target.read_bytes(), CONTENT.encode())
         self.assertFalse(self.user_data.exists())
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
 
     def test_row1_moves_layout2_store_copy(self):
         self.set_layout(2)
@@ -120,7 +125,7 @@ class RelocateTest(LocalCredsCase):
         cl.relocate(self.root)
         self.assertEqual(self.target.read_bytes(), CONTENT.encode())
         self.assertFalse(self.store_copy.exists())
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
 
     def test_move_preserves_non_canonical_bytes(self):
         raw = b'{ "a":   1 ,\r\n "b": "\xc3\xa9"}'
@@ -135,7 +140,7 @@ class RelocateTest(LocalCredsCase):
             cl.relocate(self.root)
         self.assertEqual(self.target.read_bytes(), CONTENT.encode())
         self.assertFalse(self.user_data.exists())
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
 
     def test_row2_identical_legacy_is_quarantined(self):
         self.put(self.target, CONTENT)
@@ -238,7 +243,7 @@ class ShowTest(LocalCredsCase):
         self.assertEqual(token, expected)
         self.assertNotEqual(token, hashlib.sha256(CONTENT.encode()).hexdigest())
         key_file = paths.machine_dir() / cl.TOKEN_KEY_FILE
-        self.assertEqual(_mode(key_file), 0o600)
+        self.assertMode(key_file, 0o600)
         self.assertTrue(paths.is_machine_local_record(key_file.name))
 
     def test_secret_looking_keys_are_hidden_case_insensitively_and_nested(self):
@@ -272,7 +277,7 @@ class InitTest(LocalCredsCase):
     def test_creates_the_template_owner_only(self):
         state = cl.init(self.root)
         self.assertTrue(state["valid"])
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
         self.assertEqual(json.loads(self.target.read_text()), cl.load_template())
         self.assertEqual(self.target.read_bytes(), cl.TEMPLATE_FILE.read_bytes())
         self.assertEqual(state["data"]["example"]["production"]["password"], {"secret": True, "set": False, "marked": True})
@@ -307,7 +312,7 @@ class PatchTest(LocalCredsCase):
         raw = self.target.read_text()
         self.assertTrue(raw.endswith("}\n"))
         self.assertIn('\n  "app": {', raw)
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
         self.assertNotEqual(state["hash"], self.hash)
         self.assertEqual(state["hash"], cl._hash(raw.encode()))
 
@@ -355,7 +360,7 @@ class PatchTest(LocalCredsCase):
         doc = self.on_disk()
         doc["monitoring"] = {"url": "m", "token": PLANTED}
         doc["app"]["qa"] = {"appUrl": "q"}
-        self.target.write_text(json.dumps(doc, indent=2) + "\n")
+        self.target.write_bytes((json.dumps(doc, indent=2) + "\n").encode("utf-8"))
         fresh = cl.show(self.root)["hash"]
         state = self.patch([{"op": "set", "pointer": "/app/staging/appUrl", "value": "s"}], fresh)
         data = self.on_disk()
@@ -377,12 +382,12 @@ class PatchTest(LocalCredsCase):
         self.assertEqual(self.target.read_bytes(), before)
 
     def test_a_hand_edit_between_read_and_write_is_refused(self):
-        self.target.write_text(self.target.read_text() + "\n")
+        self.target.write_bytes((self.target.read_text() + "\n").encode("utf-8"))
         with self.assertRaises(ConflictError):
             self.patch([{"op": "set", "pointer": "/app/staging/appUrl", "value": "s"}])
 
     def test_invalid_json_on_disk_is_refused(self):
-        self.target.write_text("{ broken")
+        self.target.write_bytes(("{ broken").encode("utf-8"))
         bad = cl.show(self.root)["hash"]
         with self.assertRaises(EnvError) as ctx:
             self.patch([{"op": "set", "pointer": "/a", "value": 1}], bad)
@@ -607,7 +612,7 @@ class WiredRelocationTest(LocalCredsCase):
         root = self.new_project("upg")
         memory = project.legacy_memory_dir(root)
         memory.mkdir(parents=True)
-        (memory / "session-summary.md").write_text("## memory\n", encoding="utf-8")
+        (memory / "session-summary.md").write_bytes(("## memory\n").encode("utf-8"))
         raw = b'{ "custom":   {"password": "%s"} }\r\n' % PLANTED.encode()
         (memory / cl.FILE_NAME).write_bytes(raw)
         digest = _sha(memory / cl.FILE_NAME)
@@ -629,7 +634,7 @@ class WiredRelocationTest(LocalCredsCase):
         root = self.new_project("upg-store")
         memory = project.legacy_memory_dir(root)
         memory.mkdir(parents=True)
-        (memory / "session-summary.md").write_text("## memory\n", encoding="utf-8")
+        (memory / "session-summary.md").write_bytes(("## memory\n").encode("utf-8"))
         pid = bind.bind(root, provider_names=["claude"])["project_id"]
         project.set_layout(root, 1)
         stored = paths.machine_project_dir(pid) / cl.FILE_NAME
@@ -698,9 +703,9 @@ class UpgradeConflictTest(LocalCredsCase):
         root = self.new_project("upg-conflict")
         memory = project.legacy_memory_dir(root)
         memory.mkdir(parents=True)
-        (memory / "session-summary.md").write_text("## memory\n", encoding="utf-8")
+        (memory / "session-summary.md").write_bytes(("## memory\n").encode("utf-8"))
         legacy = memory / cl.FILE_NAME
-        legacy.write_text('{"a": "%s"}' % PLANTED, encoding="utf-8")
+        legacy.write_bytes(('{"a": "%s"}' % PLANTED).encode("utf-8"))
         bind.bind(root, provider_names=["claude"])
         project.set_layout(root, 1)
         target = cl.file_path(root)
@@ -782,7 +787,7 @@ class MoveRaceTest(LocalCredsCase):
             cl.relocate(self.root)
         self.assertEqual(self.target.read_text(), CONTENT)
         self.assertFalse(self.user_data.exists())
-        self.assertEqual(_mode(self.target), 0o600)
+        self.assertMode(self.target, 0o600)
 
     def test_exclusive_copy_does_not_overwrite(self):
         self.put(self.user_data, CONTENT)
@@ -882,6 +887,7 @@ class DoctorCredentialsTest(LocalCredsCase):
         self.assertIsNone(report)
         self.assertEqual(findings[0]["level"], "warn")
 
+    @requires_posix_modes
     def test_loose_mode_warns_with_a_chmod_hint(self):
         self.put(self.target, CONTENT, mode=0o644)
         findings, _actions, _report = doctor.check_credentials_local(self.root)
@@ -913,7 +919,7 @@ class ReviewHardeningTest(LocalCredsCase):
     def test_relocate_makes_the_target_ignored_before_moving_even_without_the_gitignore_line(self):
         self.git_repo()
         gi = self.root / ".gitignore"
-        gi.write_text(gi.read_text().replace(".dev-team-agents/credentials.local.json", "#gone"))
+        gi.write_bytes((gi.read_text().replace(".dev-team-agents/credentials.local.json", "#gone")).encode("utf-8"))
         self.assertFalse(self.ignored(self.target))
         self.put(self.user_data, CONTENT)
         cl.relocate(self.root)
@@ -924,7 +930,7 @@ class ReviewHardeningTest(LocalCredsCase):
     def test_relocate_refuses_when_the_target_would_stay_tracked_by_a_negation(self):
         self.git_repo()
         gi = self.root / ".gitignore"
-        gi.write_text(gi.read_text() + "\n!.dev-team-agents/credentials.local.json\n")
+        gi.write_bytes((gi.read_text() + "\n!.dev-team-agents/credentials.local.json\n").encode("utf-8"))
         self.put(self.user_data, CONTENT)
         with self.assertRaises(EnvError):
             cl.relocate(self.root)
@@ -934,7 +940,7 @@ class ReviewHardeningTest(LocalCredsCase):
     def test_a_symlinked_legacy_copy_is_reported_never_followed(self):
         victim = Path(tempfile.mkdtemp(prefix="cl-victim-")) / "config.json"
         self.addCleanup(__import__("shutil").rmtree, str(victim.parent), True)
-        victim.write_text("victim")
+        victim.write_bytes(("victim").encode("utf-8"))
         os.chmod(str(victim), 0o644)
         self.user_data.parent.mkdir(parents=True, exist_ok=True)
         os.symlink(str(victim), str(self.user_data))
@@ -942,7 +948,7 @@ class ReviewHardeningTest(LocalCredsCase):
         self.assertEqual([c["reason"] for c in report["conflicts"]], ["symlink"])
         self.assertFalse(self.target.exists())
         self.assertTrue(self.user_data.is_symlink())
-        self.assertEqual(_mode(victim), 0o644)
+        self.assertMode(victim, 0o644)
 
     def test_a_symlinked_dev_team_agents_dir_is_refused(self):
         outside = Path(tempfile.mkdtemp(prefix="cl-out-"))
@@ -1001,7 +1007,7 @@ class MonorepoWorktreeTest(StoreTestCase):
         sub = mono / "apps" / "x"
         sub.mkdir(parents=True)
         _git(mono, "init", "-q")
-        (sub / "keep").write_text("k")
+        (sub / "keep").write_bytes(("k").encode("utf-8"))
         _git(mono, "add", "-A")
         _git(mono, "commit", "-q", "-m", "i")
         wt = Path(tempfile.mkdtemp(prefix="cl-mono-")) / "wt"

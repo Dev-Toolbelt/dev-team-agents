@@ -34,7 +34,7 @@ def _render_all(provider):
     """Yield (label, text) for every rendered agent and command on `provider`."""
     tm = LIB["tool_map"]
     for path in sorted((REPO_ROOT / "agents").glob("*.md")):
-        fm, body = render_provider.parse_frontmatter(path.read_text())
+        fm, body = render_provider.parse_frontmatter(path.read_text(encoding="utf-8"))
         if provider == "opencode":
             out = render_provider.render_agent_opencode(path.stem, fm, body, "m", None, tm)
         else:
@@ -42,7 +42,7 @@ def _render_all(provider):
         yield f"agent:{path.stem}", out["content"]
     for path in sorted((REPO_ROOT / "commands").glob("*.md")):
         meta = LIB["commands"]["commands"][path.stem]
-        _, body = render_provider.parse_frontmatter(path.read_text())
+        _, body = render_provider.parse_frontmatter(path.read_text(encoding="utf-8"))
         if provider == "opencode":
             entry = render_provider.render_command_opencode(path.stem, meta, body, "m", None, tm)
             yield f"command:{path.stem}", entry["snippet_entry"]["template"]
@@ -73,7 +73,7 @@ class RenderToolMapTest(unittest.TestCase):
             with self.subTest(provider=provider):
                 self.assertNotIn("docs/development/", rewrites)
         for script, needle in SCRIPT_DOC_PATHS.items():
-            self.assertIn(needle, (REPO_ROOT / script).read_text(), script)
+            self.assertIn(needle, (REPO_ROOT / script).read_text(encoding="utf-8"), script)
         for provider in providers.ALL_PROVIDERS:
             if provider == "claude":
                 continue
@@ -85,7 +85,7 @@ class RenderToolMapTest(unittest.TestCase):
 
     def test_opencode_commands_use_canonical_question_tool(self):
         for name in ("backend", "frontend", "fullstack", "mobile"):
-            body = (REPO_ROOT / "commands" / f"{name}.md").read_text()
+            body = (REPO_ROOT / "commands" / f"{name}.md").read_text(encoding="utf-8")
             self.assertNotIn("`question` tool", body, name)
 
 

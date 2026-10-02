@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from devteam_support import requires_bash
+
 REPO = Path(__file__).resolve().parent.parent
 LINT = REPO / "helpers" / "plugin-lint.sh"
 
@@ -29,6 +31,7 @@ MANIFEST = {
 }
 
 
+@requires_bash()
 class PluginLintTest(unittest.TestCase):
     def build(self, mutate=None, skip=()):
         tmp = Path(tempfile.mkdtemp())

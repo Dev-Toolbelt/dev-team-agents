@@ -847,6 +847,7 @@ class ProviderWiringTest(StoreTestCase):
         self.assertIn("entry.get('matcher') == \"{}\"".format(hooks.PREVIOUS_MATCHERS["PostToolUseFailure"][0]), text)
         self.assertEqual(text.count('new_entry["matcher"] = "{}"'.format(hooks.MATCHERS["PostToolUse"])), 1)
 
+    @requires_bash()
     def test_install_sh_upgrades_an_entry_with_the_second_generation_matcher(self):
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
         start = text.index("    _inject_hook() {")

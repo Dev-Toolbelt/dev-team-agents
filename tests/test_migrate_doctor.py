@@ -280,7 +280,10 @@ class PreRootMigrationTest(StoreTestCase):
         self.assertNotIn(".claude/dev-team-agents", stops[0])
         self.assertEqual(settings["permissions"], {"allow": ["Bash(npm test)"]})
         # The link the bind recreates points into the store; the one it does not is gone.
-        self.assertTrue(os.readlink(str(root / ".claude" / "agents" / "dev-team")).startswith(str(self.home)))
+        # Resolved on both sides: Windows reports the link target with a `\\?\` prefix and the
+        # temp home under its 8.3 short name.
+        agents = os.path.normcase(os.path.realpath(str(root / ".claude" / "agents" / "dev-team")))
+        self.assertTrue(agents.startswith(os.path.normcase(os.path.realpath(str(self.home)))), agents)
         self.assertFalse(os.path.lexists(str(root / ".claude" / "skills" / "old-skill")))
         self.assertIn(".claude/skills/old-skill", result["retired_links"])
         # doctor has nothing left to say about the old install or tracked artifacts.

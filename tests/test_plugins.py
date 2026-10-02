@@ -811,11 +811,13 @@ class HardeningTest(PluginTestCase):
         code, body, _ = self.cli("config", "set", "demo", "count", "9" * 6000)
         self.assertEqual(code, 2)
         self.assertFalse(body["ok"])
-        # Under Linux's 128 KiB cap on one argv string (MAX_ARG_STRLEN), still far past any recursion limit.
-        code, body, _ = self.cli("config", "set", "demo", "names", "[" * 100000)
+        # Under Windows' 32 KiB command line and Linux's 128 KiB per argv string, and still far
+        # past any recursion limit.
+        code, body, _ = self.cli("config", "set", "demo", "names", "[" * 30000)
         self.assertEqual(code, 2)
         self.assertFalse(body["ok"])
 
+    @unittest.skipIf(os.name == "nt", "the 64 KiB cap is past Windows' 32 KiB command line; the cap is unit-tested")
     def test_a_value_over_the_size_cap_is_a_usage_error(self):
         code, body, _ = self.cli("config", "set", "demo", "label", "x" * (plugins.MAX_VALUE_BYTES + 1))
         self.assertEqual(code, 2)

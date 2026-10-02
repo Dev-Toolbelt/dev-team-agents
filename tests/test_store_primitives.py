@@ -2,7 +2,9 @@
 
 import json
 import os
+import socket
 import unittest
+from unittest import mock
 
 from devteam_support import StoreTestCase
 
@@ -53,6 +55,38 @@ class LockTest(StoreTestCase):
         taker = lock.Lock(held.path, timeout=1.0, stale_after=1.0)
         with taker:
             self.assertIsNotNone(taker.stolen_from)
+
+
+    def test_release_retries_a_sharing_violation_instead_of_leaving_the_lock(self):
+        # Windows refuses to delete a file a waiter has open; release must not give up on it.
+        held = lock.store_lock("registry")
+        held.acquire()
+        real_unlink = type(held.path).unlink
+        calls = []
+
+        def flaky_unlink(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) <= 2:
+                raise PermissionError("in use")
+            return real_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(type(held.path), "unlink", flaky_unlink), mock.patch.object(lock.time, "sleep"):
+            held.release()
+        self.assertFalse(held.path.exists())
+        self.assertEqual(len(calls), 3)
+
+    def test_the_liveness_probe_never_signals_a_process_on_windows(self):
+        # os.kill(pid, 0) is TerminateProcess there: it would kill the lock's holder.
+        held = lock.store_lock("registry")
+        held.acquire()
+        self.addCleanup(held.release)
+        owner = held.path / "owner.json"
+        owner.write_text(json.dumps({"pid": 4242, "host": socket.gethostname()}), encoding="utf-8")
+        with mock.patch.object(lock.os, "name", "nt"), mock.patch.object(lock, "_windows_pid_alive", return_value=True) as probe, \
+                mock.patch.object(lock.os, "kill") as kill:
+            self.assertTrue(held._holder_is_alive())
+        probe.assert_called_once_with(4242)
+        kill.assert_not_called()
 
 
 class ProjectIdentityTest(StoreTestCase):

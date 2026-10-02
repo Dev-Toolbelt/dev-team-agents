@@ -34,6 +34,13 @@ STOP_SUB = HOOKS / "stop" / "04b-task-board.sh"
 T0 = 1_700_000_000
 
 
+def _resume(path, command):
+    """The resume command the CLI builds on this platform (PowerShell on Windows)."""
+    if os.name == "nt":
+        return "Set-Location -LiteralPath '{}'; {}".format(path.replace("'", "''"), command)
+    return "cd {} && {}".format(shlex.quote(path), command)
+
+
 def todo(content, status="pending"):
     return {"content": content, "status": status, "activeForm": content + "ing"}
 
@@ -269,7 +276,7 @@ class RecordTest(BoardCase):
         self.assertEqual(self.load("c1")["provider"], "codex")
         self.assertEqual(self.load("o1")["tasks"][0]["id"], "a")
         commands = {s["provider"]: s["resume_command"] for s in self.view()[0]["sessions"]}
-        self.assertEqual(commands["codex"], "cd {} && codex resume c1".format(shlex.quote(str(self.root.resolve()))))
+        self.assertEqual(commands["codex"], _resume(str(self.root.resolve()), "codex resume c1"))
         self.assertTrue(commands["opencode"].endswith("opencode --session o1"))
 
     def test_became_all_done_is_true_exactly_on_the_transition(self):
@@ -545,7 +552,7 @@ class CollectTest(BoardCase):
              "status_since", "completed_at", "durations", "stale", "abandoned", "review", "worktree", "turns", "pr", "refs"},
         )
         self.assertEqual(set(session["counts"]), {"todo", "in_progress", "done", "in_review", "pr_created", "total"})
-        self.assertTrue(session["resume_command"].startswith("cd "))
+        self.assertTrue(session["resume_command"].startswith("Set-Location " if os.name == "nt" else "cd "))
         self.assertIn("claude --resume", session["resume_command"])
 
     def test_projects_and_sessions_sort_by_recent_activity_and_the_project_filter_applies(self):
@@ -918,7 +925,7 @@ class ReviewRegressionTest(BoardCase):
         self.rec(todo_write("s1", [todo("A")], cwd=str(sub)))
         project = self.view()[0]
         command = self.session()["resume_command"]
-        self.assertEqual(command, "cd {} && claude --resume s1".format(shlex.quote(str(sub))))
+        self.assertEqual(command, _resume(str(sub), "claude --resume s1"))
         self.assertEqual(len(command.splitlines()), 1)
         self.assertNotIn(shlex.quote(project["root"]) + " &&", command)
 
@@ -927,7 +934,7 @@ class ReviewRegressionTest(BoardCase):
         self.rec(todo_write("s2", [todo("A")]), now=T0 + 1)
         root = self.view()[0]["root"]
         for session in self.view()[0]["sessions"]:
-            self.assertEqual(session["resume_command"], "cd {} && claude --resume {}".format(shlex.quote(root), session["session_id"]))
+            self.assertEqual(session["resume_command"], _resume(root, "claude --resume " + session["session_id"]))
 
     def test_a_non_empty_list_with_nothing_readable_does_not_wipe_the_owners_tasks(self):
         self.rec(todo_write("s1", [todo("A"), todo("B")]))

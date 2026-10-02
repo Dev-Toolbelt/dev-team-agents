@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from devteam_support import requires_bash
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -38,6 +40,7 @@ class InstallPipedDoesNotSourceCwdTest(unittest.TestCase):
             self.assertFalse(marker.exists(), "install.sh sourced ./lib/state.sh from the CWD")
 
 
+@requires_bash()
 class NewAdrTitleEscapingTest(unittest.TestCase):
     def test_special_characters_survive_substitution(self) -> None:
         title = "Auth & sessions | v2 \\ path"
@@ -55,16 +58,16 @@ class NewAdrTitleEscapingTest(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
             created = list(proj.rglob("0*-*.md"))
             self.assertEqual(len(created), 1, res.stdout)
-            self.assertIn(title, created[0].read_text())
+            self.assertIn(title, created[0].read_text(encoding="utf-8"))
 
 
 class PreferencesMirrorTest(unittest.TestCase):
     def setUp(self) -> None:
         self.keys = list(json.loads(
-            (ROOT / "scripts/lib/preferences-defaults.json").read_text()))
+            (ROOT / "scripts/lib/preferences-defaults.json").read_text(encoding="utf-8")))
 
     def _assert_all(self, path: str, fmt: str, text: str | None = None) -> None:
-        text = text if text is not None else (ROOT / path).read_text()
+        text = text if text is not None else (ROOT / path).read_text(encoding="utf-8")
         missing = [k for k in self.keys if fmt % k not in text]
         self.assertEqual(missing, [], f"{path} is missing keys")
 
@@ -75,7 +78,7 @@ class PreferencesMirrorTest(unittest.TestCase):
             self._assert_all(path, "`%s`")
 
     def test_install_sh_fallback_heredoc(self) -> None:
-        text = (ROOT / "scripts/install.sh").read_text()
+        text = (ROOT / "scripts/install.sh").read_text(encoding="utf-8")
         start = text.index("# Fallback: write a plain JSON file without python3.")
         self._assert_all("scripts/install.sh", '"%s":', text[start:])
 
