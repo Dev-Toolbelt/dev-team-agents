@@ -560,7 +560,8 @@ class AgentHookTest(tt.HookTest):
         for payload in (
             {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "echo spawn_agent Agent"}},
             {"tool_name": "Read", "session_id": "s1", "tool_input": {"file_path": "agents/backend-developer.md"}},
-            {"tool_name": "Edit", "session_id": "s1", "tool_input": {}},
+            # A subagent's edit is its agent task's work, never direct work (test_direct_work.py).
+            {"tool_name": "Edit", "session_id": "s1", "agent_id": "a1", "tool_input": {}},
             {"tool": "bash", "sessionID": "s1", "args": {"command": "task"}},
         ):
             for script in (PRE_TOOL_USE, POST_TOOL_USE):

@@ -1,0 +1,317 @@
+"""The session's own work is one "Direct work" card (docs/specs/task-board.md § Direct work).
+
+Work the main session does itself — an edit tool, a write-shaped shell command — with no plan
+step and no agent covering it lands on one card per session. These tests pin it on every
+provider: what counts, what is covered elsewhere and suppressed, the turn excerpt and its
+redaction, the Stop that completes the card, and the gate that keeps python off the hot path.
+"""
+
+import json
+import os
+import unittest
+
+from devteam_support import requires_bash
+
+from devteam import providers, tasks
+
+import test_tasks as tt
+from test_tasks import PRE_TOOL_USE, STOP_SUB, T0, BoardCase, todo, todo_write
+
+USER_PROMPT = PRE_TOOL_USE.parent.parent / "user-prompt-submit" / "01-task-board.sh"
+
+
+def claude_edit(session, **extra):
+    return dict({"session_id": session, "tool_name": "Edit", "tool_input": {"file_path": "a.py"}}, **extra)
+
+
+def claude_shell(session, command, **extra):
+    return dict({"session_id": session, "tool_name": "Bash", "tool_input": {"command": command}}, **extra)
+
+
+def codex_edit(session, **extra):
+    return dict({"session_id": session, "turn_id": "turn-1", "tool_name": "apply_patch",
+                 "tool_input": {"input": "*** Begin Patch"}}, **extra)
+
+
+def codex_shell(session, command, **extra):
+    return dict({"session_id": session, "turn_id": "turn-1", "tool_name": "Bash",
+                 "tool_input": {"command": command}}, **extra)
+
+
+def opencode_edit(session, **extra):
+    return dict({"sessionID": session, "tool": "edit", "args": {"filePath": "a.py"}}, **extra)
+
+
+def opencode_shell(session, command, **extra):
+    return dict({"sessionID": session, "tool": "bash", "args": {"command": command}}, **extra)
+
+
+#: One (edit, shell) pair per provider in `providers.ALL_PROVIDERS`: a provider added without a
+#: case fails `test_every_provider_has_its_direct_capture_decided`.
+CALLS = {
+    "claude": (claude_edit, claude_shell),
+    "codex": (codex_edit, codex_shell),
+    "opencode": (opencode_edit, opencode_shell),
+}
+
+
+class ParityTest(unittest.TestCase):
+    def test_every_provider_has_its_direct_capture_decided(self):
+        self.assertEqual(set(CALLS), set(providers.ALL_PROVIDERS))
+        self.assertEqual(set(tasks._DIRECT_EDIT_TOOLS), set(providers.ALL_PROVIDERS))
+        self.assertEqual(set(tasks._DIRECT_SHELL_TOOLS), set(providers.ALL_PROVIDERS))
+
+
+#: Shell commands `tasks.writes()` must accept; the bash gate must let every one through.
+WRITE_COMMANDS = (
+    "git commit -m 'x'", "rtk git push", "git -C /x commit -m y", 'git -C "/a b" commit', "echo hi > out.txt",
+    "echo a >> log", "cmd 2> err.log", "sed -i '' s/a/b/ f", "perl -pi -e s/a/b/ f", "npm install", "npm i x",
+    "go get x", "cat a | tee b", "FOO=1 rm -rf x", "python3 -m pip install x", "mkdir -p d && ls",
+    "echo hi\nmkdir foo", "bash -lc 'git commit -m x'", "bash -lc 'mv a b && echo ok'",
+)
+#: Read-only shapes common enough that the bash gate must not fork python for them either.
+READ_COMMANDS = (
+    "ls -la", "grep -r foo . 2>/dev/null", "git status", "git log --oneline -5", "git -c a=b diff", "npm test",
+    "cmd 2>&1", "cmd 2>&1 | head", "cat f > /dev/null", "sed -n 1,5p f", "git log --grep=reset", "pytest -k update",
+)
+
+
+class WritesTest(unittest.TestCase):
+    def test_write_shaped_commands(self):
+        for command in WRITE_COMMANDS + (["bash", "-lc", "touch f"], ["bash", "-lc", "mv a b && echo done"]):
+            self.assertTrue(tasks.writes(command), command)
+
+    def test_read_only_commands(self):
+        # Operators and `>` inside quotes are words, never a split or a redirect.
+        for command in READ_COMMANDS + ("grep -rn '=>' src", "jq '.a > 1' f.json", "echo 'a; rm x'", "", None, 42):
+            self.assertFalse(tasks.writes(command), command)
+
+
+class RedactTest(unittest.TestCase):
+    def test_secret_shapes_are_masked(self):
+        cases = {
+            "use sk-abc123456789xyz": "sk-abc123456789xyz",
+            "API_KEY=hunter2": "hunter2",
+            "ghp_aaaaaaaaaaaa": "ghp_aaaaaaaaaaaa",
+            "sk_live_51Habcdefgh": "sk_live_51Habcdefgh",
+            '{"password": "hunter2xyz"}': "hunter2xyz",
+            "Authorization: Bearer abcDEF123456": "abcDEF123456",
+            "postgres://admin:S3cretPw@db/x": "S3cretPw",
+            "AIzaSyA1234567890abcdefghijklmnopqrstu": "AIzaSyA1234567890",
+            "aws_secret_access_key wJalrXUtnFEMI": "wJalrXUtnFEMI",
+            "PASS=abc123": "abc123",
+            "senha: xyz123": "xyz123",
+            "my password is hunter2xyz": "hunter2xyz",
+            "key 4f8a9b2c7d1e6f3a5b8c9d0e1f2a3b4c5d6e7f8a9b0aa": "4f8a9b2c7d1e6f3a5b8c9d0e1f2a3b4c5d6e7f8a9b0aa",
+        }
+        for text, secret in cases.items():
+            self.assertNotIn(secret, tasks.redact(text), text)
+        self.assertEqual(tasks.redact("API_KEY=hunter2"), "API_KEY=[redacted]")
+
+    def test_ordinary_text_is_left_alone(self):
+        for text in (
+            "edit scripts/hooks/pre-tool-use/04-task-board.sh now",
+            "the cache key: abc",
+            "revert a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0 please",
+        ):
+            self.assertEqual(tasks.redact(text), text)
+
+    def test_invisible_characters_are_dropped_from_the_excerpt(self):
+        self.assertEqual(tasks._excerpt("abc\u202edef\u200b ghi"), "abc def ghi")
+
+    def test_the_excerpt_is_the_first_line_decoded_and_cut(self):
+        raw = ': "corrige o bug \\u00e9\\nsegunda linha"'
+        self.assertEqual(tasks._excerpt(tasks._decode_prompt(raw)), "corrige o bug é")
+        self.assertEqual(tasks._decode_prompt(': "cut mid escape \\u00'), "cut mid escape ")
+        long = tasks._excerpt("x " * 200)
+        self.assertEqual(len(long), tasks.DIRECT_EXCERPT)
+
+
+class DirectWorkTest(BoardCase):
+    def directs(self, session):
+        return [t for t in self.load(session)["tasks"] if t.get("kind") == "direct"]
+
+    def prompt(self, session, text, at):
+        path = tasks.record_path(self.root, self.project_id, session)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        prompt = tasks._prompt_path(path)
+        prompt.write_text(': ' + json.dumps(text) + ', "x": 1}', encoding="utf-8")
+        os.utime(str(prompt), (at, at))
+        tasks.direct_marker(path).unlink(missing_ok=True)
+
+    def test_an_edit_and_a_write_shaped_shell_call_open_one_card_on_every_provider(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                edit, shell = CALLS[provider]
+                session = "d-" + provider
+                self.prompt(session, "fix the login bug", T0)
+                self.assertTrue(self.rec(edit(session), now=T0 + 1)["recorded"])
+                self.assertTrue(self.rec(shell(session, "git commit -m x"), now=T0 + 2)["recorded"])
+                (card,) = self.directs(session)
+                self.assertEqual((card["content"], card["status"], card["owner"]), ("Direct work", "in_progress", "main"))
+                self.assertEqual(card["turns"], [{"text": "fix the login bug", "at": T0}])
+                self.assertEqual(self.load(session)["provider"], provider)
+
+    def test_a_read_only_shell_call_is_not_work(self):
+        for provider in providers.ALL_PROVIDERS:
+            _, shell = CALLS[provider]
+            self.assertFalse(self.rec(shell("r-" + provider, "git status"))["recorded"], provider)
+
+    def test_a_subagents_edit_is_its_agent_tasks_work(self):
+        self.assertFalse(self.rec(claude_edit("s1", agent_id="a1"))["recorded"])
+        self.assertFalse(self.rec(codex_edit("s2", agent_id="a1"))["recorded"])
+        self.assertFalse(self.rec(opencode_edit("s3", parent_id="p1"))["recorded"])
+
+    def test_an_in_progress_plan_step_covers_the_edit(self):
+        self.rec(todo_write("s1", [todo("Step 1: do it", "in_progress")]), now=T0)
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        self.assertEqual(self.directs("s1"), [])
+
+    def test_an_agent_spawned_this_turn_covers_the_edit_but_not_one_from_an_earlier_turn(self):
+        self.rec({"session_id": "s1", "tool_name": "Agent", "tool_use_id": "c1",
+                  "tool_input": {"description": "d", "prompt": "p", "subagent_type": "backend-developer"}}, now=T0 + 5)
+        self.prompt("s1", "first", T0)
+        self.rec(claude_edit("s1"), now=T0 + 6)
+        self.assertEqual(self.directs("s1"), [])
+        self.prompt("s1", "second", T0 + 100)
+        self.rec(claude_edit("s1"), now=T0 + 101)
+        self.assertEqual([t["text"] for t in self.directs("s1")[0]["turns"]], ["second"])
+
+    def test_a_plan_finished_in_a_turn_with_direct_work_still_notifies(self):
+        self.rec(todo_write("s1", [todo("Step 1: do it", "in_progress")]), now=T0)
+        self.prompt("s1", "wrap up", T0 + 5)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 6)
+        self.rec(claude_edit("s1"), now=T0 + 10)  # a new turn, no step in progress yet... the step still is
+        self.rec(todo_write("s1", [todo("Step 1: do it", "completed")]), now=T0 + 11)
+        self.rec(claude_edit("s1"), now=T0 + 12)
+        result = self.rec(todo_write("s1", [todo("Step 1: do it", "completed")]), now=T0 + 13)
+        self.assertTrue(result["all_done"])
+        # Same turn, the other order: direct work first, then the plan's last step.
+        self.rec(todo_write("s2", [todo("Step 1: do it", "pending")]), now=T0)
+        self.prompt("s2", "do it", T0 + 1)
+        self.rec(claude_edit("s2"), now=T0 + 2)
+        self.assertEqual(self.directs("s2")[0]["status"], "in_progress")
+        finished = self.rec(todo_write("s2", [todo("Step 1: do it", "completed")]), now=T0 + 3)
+        self.assertTrue(finished["became_all_done"])
+
+    def test_without_a_prompt_file_one_turn_is_one_entry(self):
+        for at in (T0, T0 + 1, T0 + 2):
+            self.rec(claude_edit("s1"), now=at)
+        self.assertEqual(len(self.directs("s1")[0]["turns"]), 1)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 3)
+        self.rec(claude_edit("s1"), now=T0 + 4)
+        self.assertEqual(len(self.directs("s1")[0]["turns"]), 2)
+
+    def test_stop_completes_the_card_without_a_session_done_and_the_next_turn_revives_it(self):
+        self.prompt("s1", "one", T0)
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        result = tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 2)
+        self.assertFalse(result["became_all_done"])
+        self.assertEqual(self.directs("s1")[0]["status"], "completed")
+        self.prompt("s1", "two", T0 + 10)
+        self.rec(claude_edit("s1"), now=T0 + 11)
+        (card,) = self.directs("s1")
+        self.assertEqual(card["status"], "in_progress")
+        self.assertEqual([h["status"] for h in card["history"]], ["in_progress", "completed", "in_progress"])
+        self.assertEqual([t["text"] for t in card["turns"]], ["one", "two"])
+
+    def test_turns_are_capped_and_a_secret_in_the_prompt_is_never_stored(self):
+        for n in range(tasks.DIRECT_TURNS_CAP + 3):
+            self.prompt("s1", "turn {} token=abc123".format(n), T0 + 10 * n)
+            self.rec(claude_edit("s1"), now=T0 + 10 * n + 1)
+        turns = self.directs("s1")[0]["turns"]
+        self.assertEqual(len(turns), tasks.DIRECT_TURNS_CAP)
+        self.assertEqual(turns[-1]["text"], "turn {} token=[redacted]".format(tasks.DIRECT_TURNS_CAP + 2))
+        raw = tasks.record_path(self.root, self.project_id, "s1").read_text(encoding="utf-8")
+        self.assertNotIn("abc123", raw)
+
+    def test_a_native_list_never_touches_the_direct_card(self):
+        self.rec(claude_edit("s1"), now=T0)
+        self.rec(todo_write("s1", [todo("A")]), now=T0 + 1)
+        self.rec(todo_write("s1", []), now=T0 + 2)
+        (card,) = self.directs("s1")
+        self.assertIsNone(card["removed_at"])
+
+    def test_the_view_carries_kind_and_turns(self):
+        self.prompt("s1", "ship it", T0)
+        self.rec(claude_edit("s1"), now=T0 + 1)
+        self.rec(todo_write("s1", [todo("A")]), now=T0 + 2)
+        views = {t["kind"]: t for t in self.view(now=T0 + 5)[0]["sessions"][0]["tasks"]}
+        self.assertEqual(views["direct"]["turns"], [{"text": "ship it", "at": T0}])
+        self.assertEqual(views["todo"]["turns"], [])
+
+
+@requires_bash()
+class DirectHookTest(tt.HookTest):
+    def board(self):
+        return self.state / "task-board"
+
+    def test_one_python_call_per_turn_and_stop_reopens_the_gate(self):
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "rename the module"})
+        self.assertEqual(self.python_calls(), 0)
+        for _ in range(3):
+            self.run_script(PRE_TOOL_USE, claude_edit("s1", cwd=str(self.root)))
+        self.assertEqual(self.python_calls(), 1)
+        self.assertTrue((self.board() / ".direct-s1").is_file())
+        payload = self.tmp / "stop.json"
+        payload.write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
+        self.run_script(STOP_SUB, "", extra_env={"DEVTEAM_HOOK_PAYLOAD": str(payload)})
+        self.assertFalse((self.board() / ".direct-s1").exists())
+        card = [t for t in self.load("s1")["tasks"] if t.get("kind") == "direct"][0]
+        self.assertEqual((card["status"], card["turns"][0]["text"]), ("completed", "rename the module"))
+
+    def test_every_provider_reaches_the_card_through_the_dispatcher(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                edit, _ = CALLS[provider]
+                session = "h-" + provider
+                self.assertEqual(self.run_script(PRE_TOOL_USE, edit(session)).stdout, b"")
+                self.assertEqual(self.load(session)["tasks"][0]["kind"], "direct")
+
+    def test_read_only_and_subagent_calls_fork_no_python(self):
+        payloads = [
+            claude_edit("s1", agent_id="a1"), opencode_edit("s1", parent_id="p1"),
+            {"tool_name": "Read", "session_id": "s1", "tool_input": {"file_path": "x"}},
+        ]
+        for command in READ_COMMANDS:
+            payloads += [claude_shell("s1", command), codex_shell("s1", command), opencode_shell("s1", command)]
+        for payload in payloads:
+            self.run_script(PRE_TOOL_USE, payload)
+        self.assertEqual(self.python_calls(), 0)
+
+    def test_the_gate_lets_every_write_through(self):
+        # The gate must be a superset of `tasks.writes()`, or a real write never reaches the CLI.
+        for n, command in enumerate(WRITE_COMMANDS):
+            before = self.python_calls()
+            self.run_script(PRE_TOOL_USE, claude_shell("w{}".format(n), command))
+            self.assertEqual(self.python_calls(), before + 1, command)
+
+    def test_an_edit_whose_content_names_agent_id_is_still_direct_work(self):
+        edit = claude_edit("s1", tool_input={"file_path": "a.json", "content": '{"agent_id": "x", "parent_id": "y"}'})
+        self.run_script(PRE_TOOL_USE, edit)
+        self.assertEqual(self.load("s1")["tasks"][0]["kind"], "direct")
+
+    def test_the_prompt_file_is_the_first_line_owner_only_and_gone_after_stop_and_session_end(self):
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "first line\nsecond secret line"})
+        prompt = self.board() / ".prompt-s1"
+        self.assertNotIn("second", prompt.read_text(encoding="utf-8"))
+        self.assertEqual(prompt.stat().st_mode & 0o077, 0)
+        payload = self.tmp / "stop.json"
+        payload.write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
+        self.run_script(STOP_SUB, "", extra_env={"DEVTEAM_HOOK_PAYLOAD": str(payload)})
+        self.assertFalse(prompt.exists())
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "again"})
+        self.run_script(tt.SESSION_END, {"session_id": "s1"})
+        self.assertFalse(prompt.exists())
+
+    def test_a_prompt_forks_no_python_and_clears_the_marker(self):
+        self.board().mkdir(parents=True, exist_ok=True)
+        (self.board() / ".direct-s1").write_text("", encoding="utf-8")
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "hello there"})
+        self.assertFalse((self.board() / ".direct-s1").exists())
+        self.assertIn("hello there", (self.board() / ".prompt-s1").read_text(encoding="utf-8"))
+        self.assertEqual(self.python_calls(), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

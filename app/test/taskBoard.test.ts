@@ -205,6 +205,29 @@ describe('asBoardProject', () => {
     }
   });
 
+  it('reads the direct kind and its turns, dropping malformed entries and capping at 20', () => {
+    const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
+    const turns = [{ text: 'a', at: 1 }, { text: '', at: 2 }, { text: 5, at: 3 }, { text: 'x', at: -1 }, 'nope', null, { text: 'b'.repeat(300), at: 4 }];
+    const task = asBoardTask({ ...raw, kind: 'direct', turns });
+    expect(task?.kind).toBe('direct');
+    expect(task?.turns.map((t) => t.at)).toEqual([1, 2, 4]);
+    expect(task?.turns[2]?.text).toHaveLength(100);
+    const many = Array.from({ length: 30 }, (_, i) => ({ text: `t${i}`, at: i }));
+    const capped = asBoardTask({ ...raw, kind: 'direct', turns: many })?.turns;
+    expect(capped).toHaveLength(20);
+    expect(capped?.[0]?.text).toBe('t10');
+    expect(capped?.[19]?.text).toBe('t29');
+  });
+
+  it('treats absent or non-array turns as none, and an unknown kind as todo', () => {
+    const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
+    const old = { ...raw };
+    delete old['turns'];
+    expect(asBoardTask(old)?.turns).toEqual([]);
+    for (const bad of ['x', 7, {}, null]) expect(asBoardTask({ ...raw, kind: 'direct', turns: bad })?.turns).toEqual([]);
+    expect(asBoardTask({ ...raw, kind: 'future-kind' })?.kind).toBe('todo');
+  });
+
   it('reads the worktree a task was started in, and null when absent or malformed', () => {
     const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
     expect(asBoardTask({ ...raw, worktree: { path: '.worktrees/feat/x', branch: 'feat/x' } })?.worktree).toEqual({
