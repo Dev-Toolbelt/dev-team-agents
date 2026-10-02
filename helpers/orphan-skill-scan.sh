@@ -104,7 +104,7 @@ done
 # ── Phase 2: Detect orphaned skills ──────────────────────────────────────────
 # Pre-build a single combined consumer text so Phase 2 needs only 2 greps per
 # skill instead of 2 × N_consumers greps (O(skills) vs O(skills × consumers)).
-COMBINED_TMP=$(mktemp /tmp/devteam-consumers.XXXXXX)
+COMBINED_TMP=$(mktemp "${TMPDIR:-/tmp}/devteam-consumers.XXXXXX")
 trap 'rm -f "$COMBINED_TMP"' EXIT
 if [ ${#CONSUMER_FILES[@]} -gt 0 ]; then
     cat "${CONSUMER_FILES[@]}" > "$COMBINED_TMP" 2>/dev/null || true

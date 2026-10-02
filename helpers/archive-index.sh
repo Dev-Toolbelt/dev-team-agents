@@ -47,13 +47,13 @@ if [ ! -f "$INDEX_FILE" ]; then
 fi
 
 # Cutoff = 90 days ago, YYYY-MM-DD. GNU and BSD date both handled.
-CUTOFF=$(date -d "90 days ago" +%Y-%m-%d 2>/dev/null || date -v-90d +%Y-%m-%d 2>/dev/null || true)
+CUTOFF=$(date -d "90 days ago" +%Y-%m-%d 2>/dev/null || date -v-90d +%Y-%m-%d 2>/dev/null || python3 -c 'import datetime;print((datetime.date.today()-datetime.timedelta(days=90)).isoformat())' 2>/dev/null || true)
 if [ -z "$CUTOFF" ]; then
     echo "→ Could not compute cutoff date; skipping archive." >&2
     exit 0
 fi
 
-WORK=$(mktemp -d)
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/devteam-archive.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
 # Split the index into the part that stays ($WORK/keep) and one file per dated
