@@ -355,6 +355,12 @@ git push origin vX.Y.Z
 **Expected output:** CI's `tag-name` job validates the tag shape; `release.yml`
 triggers on the same push.
 
+**Do not create the GitHub release by hand.** `release.yml`'s `windows-cli-installer` job
+creates it, and the app's "Install the CLI" accepts only a release whose author is
+`github-actions[bot]` (ADR-0028): a release made by hand is skipped, and its installers are
+never offered. Turn on immutable releases once per repository, so a published asset cannot be
+swapped afterwards.
+
 ### 2. Let `release.yml` open its PR, and watch its second job
 
 The first job downloads the tag's tarball, hashes it, runs

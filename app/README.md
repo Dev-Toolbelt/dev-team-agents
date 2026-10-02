@@ -202,8 +202,11 @@ steps are:
    `app-v<version>` — never `v<version>`, which starts the framework release workflow.
 3. On a Mac, with a clean tree: `npm ci`, then `npm run dist:beta`. It refuses to build unless HEAD
    carries exactly that tag and nothing is uncommitted, then runs `dist:all`.
-4. Create the Release from that tag and upload the four installers plus `release/SHA256SUMS.txt`.
-   Not the `-unsigned.zip`: it is for test machines and the digests do not cover it.
+4. Create the Release from that tag **as a pre-release, not marked latest**
+   (`gh release create app-v<version> --prerelease --latest=false …`), and upload the four installers
+   plus `release/SHA256SUMS.txt`. Not the `-unsigned.zip`: it is for test machines and the digests do
+   not cover it. GitHub's "latest release" must stay a framework `vX.Y.Z`: `devteam update`,
+   `install.sh` and the update check read it (ADR-0028).
 
 Text for the download page — adapt the wording, keep every point. Replace `<release URL>` with the
 Release's address:

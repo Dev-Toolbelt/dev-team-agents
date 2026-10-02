@@ -554,3 +554,20 @@ Every row is a condition in the shipped code or in the shipped absence of code.
 > - **Both v2 shapes:** `migrate` converts a pre-v2.1.0 install (`.claude/dev-team-agents/`) itself, so
 >   the app never needs `migrate-to-root.sh`, a bash tool this client could not run.
 
+
+> **Amended by ADR-0028 (2026-10-02) — one action that is not a CLI call: installing the CLI.**
+> § 4 makes the app a pure client that acts only through `devteam`, and the slice table keeps
+> networked, long-running work (`update`) and store administration (`store install`) out of the
+> app. "Install the CLI" (Windows, `app/src/main/cliInstaller.ts`) is the one exception, and it
+> exists only for the state those rules cannot reach: **there is no CLI to call.** It is bounded:
+> - It runs only from the no-CLI screen, and does one thing — download the newest workflow-created
+>   CLI installer from GitHub, check its digest, and run its wizard with no shell. The store write
+>   (`store install`) is done by the installed CLI, not by the app.
+> - Its network calls are the app's only ones, to an exact allow-list of GitHub hosts, with a timeout,
+>   a size cap and one install at a time.
+> - It never runs once a CLI resolves. Every other operation, `update` included, stays a CLI call,
+>   and the slice table's reasons for keeping `update` out of the app are unchanged.
+>
+> Resolution (§ 5) gains a fourth step after the channel locations: the installers' own `bin`
+> directories (`%LOCALAPPDATA%\Programs\devteam\bin`, `~/.local/bin`), so a CLI installed after the
+> app started is found without a restart.
