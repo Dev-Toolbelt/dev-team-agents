@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import bind as bind_module
+from . import auth, bind as bind_module
 from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
@@ -2091,6 +2091,10 @@ def build_parser():
     skills_remove.add_argument("--root", help="the root id, when the name exists in more than one")
     skills_remove.set_defaults(func=cmd_skills_remove)
 
+    # The account commands (ADR-0029): the CLI owns the session, the app and the installers
+    # call these. Their handlers and parser live in `auth.py`.
+    auth.register(sub, leaf)
+
     return parser
 
 
@@ -2285,6 +2289,12 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(UsageError("tasks needs a subcommand: record, mark, review-open, review-result, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
+        if getattr(args, "command", None) == "auth":
+            return emitter.fail(
+                UsageError(
+                    "auth needs a subcommand: login, logout, status, check, otp, password, profile, delete"
+                )
+            )
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:

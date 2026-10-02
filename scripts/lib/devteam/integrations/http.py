@@ -5,8 +5,8 @@
 * The credential is sent only to the exact scheme, host and port of the configured base
   URL. A redirect is followed only to that same origin; anything else is refused.
 * 10 second socket timeout, a 20 second total deadline, 2 MB response cap, JSON only.
-* :func:`post_json` follows no redirect at all: a POST that moved is refused, never replayed
-  as a GET. A caller may widen the loopback exception for its own test seam by passing
+* :func:`request_json` (and :func:`post_json`, its POST form) follows no redirect at all: a
+  request that moved is refused, never replayed as a GET. A caller may widen the loopback exception for its own test seam by passing
   ``allow_loopback_http=True`` (the account flow does so only when its seam is active,
   ADR-0029 SR-44); the integrations environment variable above stays the integrations seam.
 * A failure is a :class:`FetchError` carrying a *state* (``invalid_token``,
@@ -48,10 +48,13 @@ class FetchError(Exception):
     ``state`` is one of ``invalid_token``, ``rate_limited``, ``unreachable``.
     """
 
-    def __init__(self, state, summary, http_status=None, body=None):
+    def __init__(self, state, summary, http_status=None, body=None, retry_after=None):
         super().__init__(summary)
         self.state = state
         self.summary = summary
+        #: Seconds the server asked the caller to wait (``Retry-After``), when it sent a
+        #: usable integer, else ``None``.
+        self.retry_after = retry_after
         #: The HTTP status when the server answered, else ``None``.
         self.http_status = http_status
         #: The parsed JSON error body (a dict) when :func:`post_json` got one, else ``None``.
@@ -130,6 +133,14 @@ def _rate_limited(code, headers):
     return (headers.get("X-RateLimit-Remaining") or "").strip() == "0"
 
 
+def _retry_after(headers):
+    try:
+        value = int(str(headers.get("Retry-After", "")).strip())
+    except ValueError:
+        return None
+    return value if 0 <= value <= 86400 else None
+
+
 def _classify(exc):
     code = exc.code
     if code == 401:
@@ -137,7 +148,10 @@ def _classify(exc):
     if code in (403, 429):
         if _rate_limited(code, exc.headers):
             return FetchError(
-                "rate_limited", "The API rate limit was reached (HTTP {})".format(code), code
+                "rate_limited",
+                "The API rate limit was reached (HTTP {})".format(code),
+                code,
+                retry_after=_retry_after(exc.headers),
             )
         return FetchError(
             "invalid_token",
@@ -190,8 +204,8 @@ def _read_capped(response, deadline):
     return b"".join(chunks)
 
 
-def _send(request, base, deadline, follow_redirects, want_error_body):
-    """Run ``request`` under the shared policy; returns ``(payload_bytes, headers)``."""
+def _send(request, base, deadline, follow_redirects, want_error_body, allow_empty=False):
+    """Run ``request`` under the shared policy; returns ``(parsed_json, headers)``."""
     try:
         with _opener(origin(base), follow_redirects).open(request, timeout=TIMEOUT) as response:
             payload = _read_capped(response, deadline)
@@ -224,6 +238,8 @@ def _send(request, base, deadline, follow_redirects, want_error_body):
         raise FetchError("unreachable", "Cannot reach the server") from None
     if len(payload) > MAX_RESPONSE_BYTES:
         raise FetchError("unreachable", "The response is larger than the 2 MB cap")
+    if allow_empty and not payload.strip():
+        return {}, response_headers
     try:
         data = json.loads(payload.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
@@ -244,23 +260,39 @@ def get_json(base_url, path, headers, query=None):
     return _send(request, base, deadline, True, False)
 
 
+def request_json(
+    method, base_url, path, headers, body=None, query=None, allow_loopback_http=False
+):
+    """One JSON request with any method; returns ``(parsed_json, headers)``.
+
+    The account flow's general entry point (ADR-0029): same policy as :func:`get_json`
+    (https only, one origin, 10 s socket timeout, 20 s deadline, 2 MB cap), **no redirect is
+    followed**, an empty success body reads as ``{}``, and an HTTP error carries
+    ``http_status``, ``retry_after`` and the parsed JSON error object in ``body`` so a caller
+    can tell a wrong code from a rate limit without this module ever echoing the request
+    into a message.
+    """
+    base = validate_base_url(base_url, "API URL", allow_loopback_http=allow_loopback_http)
+    sent = {"Accept": "application/json", "User-Agent": USER_AGENT}
+    data = None
+    if body is not None:
+        sent["Content-Type"] = "application/json"
+        data = json.dumps(body, separators=(",", ":")).encode("utf-8")
+    sent.update(headers)
+    url = base + path
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    request = urllib.request.Request(url, data=data, headers=sent, method=method)
+    deadline = time.monotonic() + TOTAL_DEADLINE
+    return _send(request, base, deadline, False, True, allow_empty=True)
+
+
 def post_json(base_url, path, headers, body, allow_loopback_http=False):
     """``POST base_url + path`` with ``body`` as JSON; returns ``(parsed_json, headers)``.
 
-    Same policy as :func:`get_json` (https only, one origin, 10 s socket timeout, 20 s
-    deadline, 2 MB cap), and **no redirect is followed**. An HTTP error carries
-    ``http_status`` and, when the server sent one, the parsed JSON error object in
-    ``body`` so a caller can tell a wrong code from a rate limit without this module
-    ever echoing the request into a message.
+    :func:`request_json` with the ``POST`` method. A body is always sent, so a caller that
+    has nothing to say passes ``{}``.
     """
-    base = validate_base_url(base_url, "API URL", allow_loopback_http=allow_loopback_http)
-    sent = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": USER_AGENT,
-    }
-    sent.update(headers)
-    payload = json.dumps(body, separators=(",", ":")).encode("utf-8")
-    request = urllib.request.Request(base + path, data=payload, headers=sent, method="POST")
-    deadline = time.monotonic() + TOTAL_DEADLINE
-    return _send(request, base, deadline, False, True)
+    return request_json(
+        "POST", base_url, path, headers, body=body, allow_loopback_http=allow_loopback_http
+    )

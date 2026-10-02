@@ -504,6 +504,32 @@ READ_ONLY = {
     ("catalog", "show"): "read-only browse",
     ("skills", "list"): "reads the providers' global skill directories; creates nothing",
     ("skills", "show"): "reads one global skill; creates nothing",
+    # The account commands write the session and entitlement records, which are machine-local
+    # and not among the shapes a client declares (`store_schemas()`), so no declared client can
+    # misread them. They are never gated: a user must always be able to sign in and out
+    # (ADR-0029 section 3), including from a client that has fallen behind.
+    ("auth", "login"): "signs in; writes the machine-local session and entitlement records, "
+    "which are not declared store shapes",
+    ("auth", "logout"): "removes the machine-local session and entitlement records",
+    ("auth", "status"): "reports the session and the license; may refresh the cached "
+    "entitlement, a machine-local record",
+    ("auth", "check"): "reports whether the account is entitled; may refresh the cached "
+    "entitlement, a machine-local record",
+    ("auth", "otp", "start"): "asks the account server to send a sign-in code; writes nothing",
+    ("auth", "otp", "verify"): "signs in with a code; writes the machine-local session records",
+    ("auth", "password", "reset"): "sets a new password on the account server and signs in; "
+    "writes only the machine-local session records",
+    ("auth", "password", "change"): "changes the password on the account server; writes only "
+    "the machine-local session records",
+    ("auth", "profile"): "reads the account profile from the account server",
+    ("auth", "profile", "show"): "reads the account profile from the account server",
+    ("auth", "profile", "update"): "writes the display name on the account server",
+    ("auth", "profile", "identities"): "lists the linked sign-in methods",
+    ("auth", "profile", "email"): "starts or confirms an email change on the account server",
+    ("auth", "profile", "link"): "links a sign-in method on the account server",
+    ("auth", "profile", "unlink"): "unlinks a sign-in method on the account server",
+    ("auth", "delete"): "deletes the account on the account server and removes the "
+    "machine-local session records",
 }
 
 

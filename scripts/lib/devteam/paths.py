@@ -469,6 +469,10 @@ def locks_dir():
 #:
 #: `entitlement.json` is the signed account entitlement (ADR-0029) cached with this
 #: machine's clock skew and highest observed time; both describe this host only.
+#:
+#: `account-session.json` is the non-secret half of the signed-in session (ADR-0029): which
+#: account this machine is signed in as, which secret backend holds its refresh token and
+#: when the entitlement was last fetched. A session is a fact about this machine.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -497,6 +501,7 @@ MACHINE_LOCAL_RECORDS = (
     # this machine's clock skew and to the highest time it has observed. Tamper-evident
     # by signature, not a secret, but meaningless on another host.
     "entitlement.json",
+    "account-session.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:
