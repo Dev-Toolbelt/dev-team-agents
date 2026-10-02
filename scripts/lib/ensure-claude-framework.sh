@@ -13,6 +13,34 @@
 #   ensure_claude_framework <project-root> <source-dir>
 # Idempotent: re-runs are safe and only refresh files that changed.
 
+# _ecf_ignore_credentials <project-root> <source-dir>
+# Keeps git from tracking .dev-team-agents/credentials.local.json (and its backups) on a
+# standalone opencode/Codex install, as the Claude installer and `devteam bind` already do.
+# Reuses credentials_local.ensure_ignored (the machine-local info/exclude block) instead of
+# re-implementing that format. Never fatal: a missing devteam package only costs a warning.
+_ecf_ignore_credentials() {
+  local project_root="$1" source_dir="$2" lib_dir native_root
+  for lib_dir in "$source_dir/scripts/lib" "$project_root/.dev-team-agents/scripts/lib"; do
+    [[ -d "$lib_dir/devteam" ]] || continue
+    native_root="$project_root"
+    command -v cygpath >/dev/null 2>&1 && { native_root="$(cygpath -m "$project_root")"; lib_dir="$(cygpath -m "$lib_dir")"; }
+    if python3 - "$native_root" "$lib_dir" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[2])
+from devteam import credentials_local
+sys.exit(0 if credentials_local.ensure_ignored(Path(sys.argv[1])) else 1)
+PY
+    then
+      return 0
+    fi
+    break
+  done
+  echo "  ! could not add .dev-team-agents/credentials.local.json to the git exclude list;" >&2
+  echo "    add it to your .gitignore so credentials are never committed." >&2
+  return 0
+}
+
 ensure_claude_framework() {
   local project_root="$1"
   local source_dir="$2"
@@ -74,6 +102,8 @@ ensure_claude_framework() {
       cp -f "$source_dir/VERSION" "$framework_dir/VERSION" 2>/dev/null || true
     fi
   fi
+
+  _ecf_ignore_credentials "$project_root" "$source_dir"
 
   # Bootstrap runtime state dirs/files expected by shared hooks and the
   # health-check. Hooks will overwrite these on first real use; touching them

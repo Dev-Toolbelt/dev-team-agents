@@ -799,7 +799,7 @@ def render_run_banner(body, model_id, effort, provider):
 # ─── agent rendering per provider ─────────────────────────────────────
 def render_agent_claude(name, fm, body, src_path):
     # Claude is the identity case — return source verbatim.
-    return {"path": f".claude/agents/dev-team/{name}.md", "content": src_path.read_text()}
+    return {"path": f".claude/agents/dev-team/{name}.md", "content": src_path.read_text(encoding="utf-8")}
 
 
 def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
@@ -893,7 +893,7 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
 
 # ─── command rendering per provider ──────────────────────────────────
 def render_command_claude(name, body, src_path):
-    return {"path": f".claude/commands/devteam/{name}.md", "content": src_path.read_text()}
+    return {"path": f".claude/commands/devteam/{name}.md", "content": src_path.read_text(encoding="utf-8")}
 
 
 def render_command_opencode(name, meta, body, model_id, effort, tool_map):
@@ -940,7 +940,7 @@ def load_lib(lib_dir):
         p = lib_dir / name
         if not p.exists():
             die(f"missing required lib file: {p}")
-        return json.loads(p.read_text())
+        return json.loads(p.read_text(encoding="utf-8"))
     return {
         "tiers": _load("tiers.json"),
         "tool_map": _load("tool-map.json"),
@@ -1009,7 +1009,7 @@ def main():
         agents_dir = src / "agents"
         for agent_path in sorted(agents_dir.glob("*.md")):
             name = agent_path.stem
-            text = agent_path.read_text()
+            text = agent_path.read_text(encoding="utf-8")
             fm, body = parse_frontmatter(text)
             tier = fm.get("tier")
             if not tier:
@@ -1038,7 +1038,7 @@ def main():
             # the Codex prompt. render_command_claude re-reads the source file,
             # so Claude still receives it byte-identical (the contract checker
             # enforces exactly that).
-            _cmd_fm, body = parse_frontmatter(cmd_path.read_text())
+            _cmd_fm, body = parse_frontmatter(cmd_path.read_text(encoding="utf-8"))
             meta = commands_meta.get(name)
             if not meta:
                 die(f"command '{name}' has no metadata entry in scripts/lib/commands.json — add one")
@@ -1086,7 +1086,8 @@ def main():
         if p.exists() and args.provider == "claude":
             # Claude installation will symlink over these, so skip overwrite.
             continue
-        p.write_text(r["content"])
+        with p.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(r["content"])
         print(f"  + {r['path']}")
 
     print(f"render-provider: emitted {len(rendered)} files for provider '{args.provider}' "

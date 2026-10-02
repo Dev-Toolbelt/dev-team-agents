@@ -29,11 +29,14 @@
  *     context-window notifier in stop/04-notifier.sh gets real numbers
  *     instead of always falling back to the turn-count heuristic)
  *
- * Failures inside any hook are logged but NON-blocking: the opencode flow
- * must continue. The bash dispatchers already honor set -euo pipefail and
- * write structured warnings to stderr; anything that returns non-zero is
- * surfaced in the opencode log via `client.app.log` (warn level) and
- * swallowed.
+ * Failures inside a hook (timeout, crash, an unexpected exit code) are logged but
+ * NON-blocking: the opencode flow must continue. The one deliberate exception is
+ * a PreToolUse refusal: the dispatcher exits 2 and prints the reason on stderr
+ * (credential guard, full-suite guard), and `tool.execute.before` turns that into
+ * a thrown Error, which is how opencode blocks a tool call. Stop and compaction
+ * output (stderr + exit 2 in the bash hooks) is surfaced rather than dropped: the
+ * compaction text joins the compaction context, a Stop message goes to the
+ * opencode log via `client.app.log`.
  *
  * Placement: this file is copied by scripts/install-opencode.sh into
  * <project>/.opencode/plugins/dev-team-agents.ts. The framework install path
@@ -67,6 +70,25 @@ const OUTPUT_KEPT = 200000
 // Session titles the plugin has looked up, for the task board's notifications. Bounded likewise.
 const SESSION_TITLES_KEPT = 256
 
+type HookResult = { code: number; stdout: string; stderr: string }
+
+// opencode tool id -> the Claude Code name the guards' payload gate matches, the inverse of
+// `providers.opencode.tool_rewrites` in scripts/lib/tool-map.json (its `_unchanged` names are
+// the same word capitalized). `task` and `todowrite` are left out on purpose: the task board
+// detects them by the bare `tool` key, and a Claude-named `tool_name` beside it would make it
+// read them as Claude Code calls. An id not listed (patch, multiedit, MCP tools) sends no alias.
+const CLAUDE_TOOL_NAMES: Record<string, string> = {
+  bash: "Bash",
+  read: "Read",
+  write: "Write",
+  edit: "Edit",
+  glob: "Glob",
+  grep: "Grep",
+  question: "AskUserQuestion",
+  websearch: "WebSearch",
+  webfetch: "WebFetch",
+}
+
 export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   // One path for both layouts: a v2 install vendors `scripts/` here and a v3 bind
   // links it here. A project bound before the link replaced the `core` pointer, and
@@ -77,15 +99,16 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
 
   // `exec` has no stdin option (only the sync variants do), so the payload is written to a
   // spawned child; a hook that reads stdin would otherwise wait for it until the timeout.
-  // stderr is ignored: nothing reads it, and an unread pipe fills and blocks the script. The
-  // child leads its own process group, so a timeout kills the python children the dispatcher
+  // stderr is captured (and capped) because it carries a refusal's reason, and an unread pipe
+  // would fill and block the script. The child leads its own process group, so a timeout kills the python children the dispatcher
   // forked too, not just bash. `cwd` is the project root every hook assumes it runs in; left
   // unset, the child inherits whatever directory the opencode process happens to be in.
-  const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<string> =>
+  const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<HookResult> =>
     new Promise((resolve, reject) => {
       const posix = process.platform !== "win32"
-      const child = spawn("bash", [script], { cwd: directory, stdio: ["pipe", "pipe", "ignore"], detached: posix })
+      const child = spawn("bash", [script], { cwd: directory, stdio: ["pipe", "pipe", "pipe"], detached: posix })
       let stdout = ""
+      let stderr = ""
       const timer = setTimeout(() => {
         try {
           if (posix && child.pid) process.kill(-child.pid, "SIGKILL")
@@ -98,31 +121,41 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       child.stdout.on("data", (chunk) => {
         if (stdout.length < 1024 * 1024) stdout += String(chunk)
       })
+      child.stderr.on("data", (chunk) => {
+        if (stderr.length < 1024 * 1024) stderr += String(chunk)
+      })
       child.on("error", (err) => {
         clearTimeout(timer)
         reject(err)
       })
-      child.on("close", () => {
+      child.on("close", (code) => {
         clearTimeout(timer)
-        resolve(stdout)
+        resolve({ code: code ?? 1, stdout, stderr })
       })
       child.stdin.on("error", () => {})
       child.stdin.end(stdin ?? "")
     })
 
-  const runHook = async (script: string, stdin?: string, timeoutMs?: number): Promise<string> => {
+  // A logging failure must not escape runHook: its result decides whether a tool is blocked.
+  const warn = async (message: string): Promise<void> => {
     try {
-      return await runScript(script, stdin, timeoutMs)
+      await client.app.log({ body: { service: "dev-team-agents", level: "warn", message } })
+    } catch {}
+  }
+
+  const runHook = async (script: string, stdin?: string, timeoutMs?: number): Promise<HookResult> => {
+    try {
+      const result = await runScript(script, stdin, timeoutMs)
+      // Exit 2 is a message the hook meant to be seen (the caller decides how); any other
+      // non-zero exit is a hook that broke, which is logged and never blocks.
+      if (result.code !== 0 && result.code !== 2) {
+        await warn(`hook exited ${result.code}: ${script} — ${result.stderr.trim().slice(0, 2000)}`)
+      }
+      return result
     } catch (err) {
       // Timeout or error — log but don't block
-      await client.app.log({
-        body: {
-          service: "dev-team-agents",
-          level: "warn",
-          message: `hook timeout/error: ${script} — ${String(err)}`,
-        },
-      })
-      return ""
+      await warn(`hook timeout/error: ${script} — ${String(err)}`)
+      return { code: 0, stdout: "", stderr: "" }
     }
   }
 
@@ -275,7 +308,13 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         await safe("stop", async () => {
           const { stdin, cleanup } = await buildContextPayload(event.properties.sessionID)
           try {
-            await runHook(`${HOOKS}/stop.sh`, stdin, TASK_BOARD_HOOK_TIMEOUT_MS)
+            const r = await runHook(`${HOOKS}/stop.sh`, stdin, TASK_BOARD_HOOK_TIMEOUT_MS)
+            // Exit 2 is a prompt for the model (session summary, ADR gap, agent lint). opencode's
+            // idle event cannot continue the turn, so the message is logged rather than lost.
+            const message = (r.stderr.trim() || r.stdout.trim()).slice(0, 4000)
+            if (r.code === 2 && message) {
+              await client.app.log({ body: { service: "dev-team-agents", level: "warn", message: `stop hook: ${message}` } })
+            }
           } finally {
             if (cleanup) await cleanup()
           }
@@ -298,9 +337,13 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // `args` is whatever the model or the user put there.
       // `cwd`: the board records the worktree a task was started in, as Claude Code and Codex
       // payloads already allow (their hooks carry the session's working directory).
+      // `tool_name` / `tool_input`: the Claude Code spelling of the same call, which the guards
+      // (credential, full-suite) gate on. `tool` and `args` stay for the task board.
+      const claudeName = CLAUDE_TOOL_NAMES[input.tool]
       const payload = JSON.stringify({
         sessionID: input.sessionID,
         tool: input.tool,
+        ...(claudeName ? { tool_name: claudeName, tool_input: output.args } : {}),
         tool_use_id: (input as any).callID,
         cwd: directory,
         session_title: await sessionTitle(input.sessionID),
@@ -308,7 +351,10 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         parent_id: parentBySession.get(input.sessionID),
         args: output.args,
       })
-      await safe("pre-tool-use", () => runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
+      // Outside `safe()`: a refusal must reach opencode. runHook never throws, so a broken or
+      // timed-out hook still lets the call through.
+      const r = await runHook(`${HOOKS}/pre-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS)
+      if (r.code === 2) throw new Error(r.stderr.trim() || r.stdout.trim() || "blocked by a dev-team-agents PreToolUse hook")
     },
 
     "tool.execute.after": async (input, output) => {
@@ -376,8 +422,9 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
 
     "experimental.session.compacting": async (_input, output) => {
       const r = await runHook(`${HOOKS}/pre-compact.sh`)
-      if (r && r.trim()) {
-        output.context.push(`## dev-team-agents session summary\n${r.trim()}`)
+      const text = r.stdout.trim() || r.stderr.trim()
+      if (text) {
+        output.context.push(`## dev-team-agents session summary\n${text}`)
       }
     },
   }

@@ -39,14 +39,14 @@ print(f'opencode fixture: commands={len(d[\"command\"])}')
     done
     ;;
   codex)
-    # .codex/hooks.json parses, has 4 managed events, each hook command path resolves
+    # .codex/hooks.json parses, has all 7 managed events, each hook command path resolves
     python3 - <<PY
-import json, os
+import json, os, re
 fpath = "$FIXTURE/.codex/hooks.json"
 d = json.load(open(fpath))
 hooks_obj = d.get("hooks")
 assert isinstance(hooks_obj, dict), f"codex hooks.json 'hooks' must be an object keyed by event (got {type(hooks_obj).__name__})"
-required = {"SessionStart", "PreToolUse", "PreCompact", "Stop"}
+required = {"SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd"}
 missing = required - set(hooks_obj.keys())
 assert not missing, f"codex hooks.json missing events: {sorted(missing)}"
 missing_paths = []
@@ -54,17 +54,17 @@ for event, groups in hooks_obj.items():
     for grp in groups:
         for hh in grp.get("hooks", []):
             assert isinstance(hh.get("command"), str), f"{event}: command must be a string"
-            # commands look like 'bash .dev-team-agents/scripts/hooks/<n>.sh'
-            parts = hh["command"].split()
-            if len(parts) < 2:
+            # every form (Unix root walk, Windows cmd.exe wrapper) ends in the hook script path
+            found = re.search(r"\.dev-team-agents/scripts/hooks/[A-Za-z0-9_.-]+\.sh", hh["command"])
+            if not found:
                 missing_paths.append(f"{event}: malformed command '{hh['command']}'")
                 continue
-            rel = parts[1]
+            rel = found.group(0)
             full = os.path.join("$FIXTURE", rel)
             if not os.path.exists(full):
                 missing_paths.append(f"{event}: hook script '{rel}' not on disk at '{full}'")
 assert not missing_paths, f"codex hooks.json references missing scripts: {missing_paths}"
-print(f"codex fixture: hook events={sorted(hooks_obj.keys())} (all 4 paths verified on disk)")
+print(f"codex fixture: hook events={sorted(hooks_obj.keys())} (all paths verified on disk)")
 PY
     n_agents=$(find "$FIXTURE/.codex/agents" -maxdepth 1 -name '*.toml' -type f | wc -l | tr -d ' ')
     n_skills=$(find "$FIXTURE/.codex/skills" -mindepth 1 -maxdepth 1 -type d -name 'devteam-*' | wc -l | tr -d ' ')

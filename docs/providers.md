@@ -100,7 +100,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
    .claude/agents/dev-team/  .opencode/agents/   .codex/agents/<name>.toml
    .claude/commands/devteam/ .opencode/opencode.json    .codex/skills/devteam-*/SKILL.md
    (symlink — install.sh)    (deep-merge into .opencode/opencode.json)
-                                                  .codex/hooks.json (4 managed entries)
+                                                  .codex/hooks.json (7 managed events)
                               .opencode/plugins/dev-team-agents.ts (event ↔ bash hooks)
 ```
 

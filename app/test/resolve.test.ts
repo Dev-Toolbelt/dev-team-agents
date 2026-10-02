@@ -106,6 +106,19 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+describe('PATH walk', () => {
+  it('skips relative entries', async () => {
+    const resolution = await resolveDevteam({
+      env: { PATH: ['.', 'bin', join(root, 'abs')].join(delimiter) },
+      platform: crossPlatform,
+      knownLocations: [],
+    });
+    if (resolution.found) throw new Error('unreachable');
+    expect(resolution.searched.every((path) => path.startsWith(root))).toBe(true);
+    expect(resolution.searched.length).toBeGreaterThan(0);
+  });
+});
+
 describe('order', () => {
   it.skipIf(skipOnWindowsWithoutLauncher)('prefers DEVTEAM_CLI_PATH over everything on PATH', async () => {
     const configured = await plant('configured', 'version-with-compat');

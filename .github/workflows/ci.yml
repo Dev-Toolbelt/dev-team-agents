@@ -100,6 +100,9 @@ jobs:
       - name: Lint, orphan scan, fingerprint uniqueness, size limits, shellcheck
         run: bash .github/scripts/ci/01-lint.sh
 
+      - name: Bash 3.2 compatibility gate (shipped scripts)
+        run: bash .github/scripts/ci/06-bash32.sh
+
       - name: README / docs sync check (EN ↔ pt-BR)
         run: bash .github/scripts/ci/02-readme-sync.sh
 
@@ -227,11 +230,12 @@ jobs:
         run: bash .github/scripts/ci/05-app.sh
 
   provider-contracts:
-    name: Provider contract (${{ matrix.provider }})
-    runs-on: ubuntu-latest
+    name: Provider contract (${{ matrix.provider }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         provider: [claude, opencode, codex]
 
     steps:
@@ -243,6 +247,7 @@ jobs:
           python-version: "3.x"
 
       - name: Set up jq
+        if: runner.os == 'Linux'
         run: sudo apt-get update -y && sudo apt-get install -y jq
 
       - name: Render ${{ matrix.provider }} into staging

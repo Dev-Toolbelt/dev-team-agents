@@ -878,7 +878,7 @@ class ProviderWiringTest(StoreTestCase):
             self.assertEqual([e["matcher"] for e in result], [expected], matcher)
 
     def check_codex(self):
-        text = (REPO_ROOT / "scripts" / "install-codex.sh").read_text(encoding="utf-8")
+        text = (REPO_ROOT / "scripts" / "lib" / "codex_hooks_merge.py").read_text(encoding="utf-8")
         matcher = re.search(r'MATCHERS = \{"PostToolUse": "([^"]+)"\}', text).group(1)
         for tool in ("spawn_agent", "agents.wait_agent", "close_agent", "Bash", "mcp__github__create_pull_request", "mcp__x__merge_pull_request"):
             self.assertTrue(re.search(matcher, tool), tool)
@@ -886,14 +886,13 @@ class ProviderWiringTest(StoreTestCase):
             self.assertFalse(re.search(matcher, tool), tool)
 
     def test_codex_replaces_its_previously_managed_post_tool_use_group_on_reinstall(self):
-        text = (REPO_ROOT / "scripts" / "install-codex.sh").read_text(encoding="utf-8")
-        body = re.search(r"python3 - \"\$HOOKS_FILE\" \"\$HOOKS_DIR_REL\" <<'PY'\n(.*?)\nPY\n", text, re.S).group(1)
+        merge = REPO_ROOT / "scripts" / "lib" / "codex_hooks_merge.py"
         target = self.tmp / "hooks.json"
         old = {"matcher": ".*(wait_agent|spawn_agent|close_agent)", "hooks": [
             {"type": "command", "command": "old", "statusMessage": "dev-team-agents posttooluse hook _dev_team_agents_managed"}]}
         mine = {"matcher": "Bash", "hooks": [{"type": "command", "command": "mine"}]}
         target.write_text(json.dumps({"hooks": {"PostToolUse": [mine, old]}}))
-        subprocess.run([sys.executable, "-c", body, str(target), ".dev-team-agents/scripts/hooks"], check=True, stdout=subprocess.PIPE)
+        subprocess.run([sys.executable, str(merge), str(target), ".dev-team-agents/scripts/hooks"], check=True, stdout=subprocess.PIPE)
         groups = json.loads(target.read_text())["hooks"]["PostToolUse"]
         self.assertEqual(groups[0], mine)
         managed = [g for g in groups if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]

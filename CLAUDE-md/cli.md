@@ -647,7 +647,7 @@ When a reference exists but its value is missing, `devteam cred check` reports i
 | Backend | Availability | Behavior |
 |---------|--------------|----------|
 | `keychain` | macOS only, via `security` CLI | System keychain; service `dev-team-agents`, account `devteam/<project_id>/<key>`. Encrypted by OS. |
-| `dpapi` | Windows only, via ctypes | Windows Data Protection API; key derivation from machine identity. Implemented but unverified on real hardware — testers needed. |
+| `dpapi` | Windows only, via ctypes | Windows Data Protection API; key derivation from machine identity. Verified in CI on Windows. |
 | `insecure` | All platforms (fallback only) | **Not encrypted.** A mode-0600 JSON file at `data/machines/<machine-id>/secrets/`. Last resort when no native store is available. `devteam cred check` reports every value on this backend. Never use in production; suitable for test/CI environments where the value lifetime is seconds. |
 
 A value is stored on the first-available backend by default; `--backend` on `devteam cred set` overrides the probed default. When a backend becomes unavailable (e.g., upgrading to a different OS), values stay on the machine that wrote them — move them across machines with `devteam export --all` → `devteam import`. A reference without a value is not an error; it documents what a project needs even if the value has not been set yet.

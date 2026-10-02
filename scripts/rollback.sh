@@ -17,6 +17,9 @@ USER_DATA_DIR="$INSTALL_DIR/user-data"
 source "$SCRIPTS_DIR/lib/state.sh"
 STATE_FILE="$USER_DATA_DIR/state.json"
 
+# shellcheck source=scripts/lib/provider-ownership.sh
+source "$SCRIPTS_DIR/lib/provider-ownership.sh"
+
 # shellcheck source=scripts/lib/bound-project-guard.sh
 source "$SCRIPTS_DIR/lib/bound-project-guard.sh"
 refuse_if_bound "$INSTALL_DIR" "devteam pin <version>   (hold this project on an earlier version)"
@@ -95,9 +98,19 @@ fi
 
 bash "$TMP_INSTALLER" "$TARGET"
 
+# The opencode / Codex trees hold files rendered from the version just replaced: re-render them
+# from the one rolled back to. A failing provider is a warning; the exit status reflects it.
+_PROVIDER_FAILED=0
+po_rerender_providers || _PROVIDER_FAILED=1
+
 # Invalidate context cache after version change
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
 
 echo ""
 echo "✓ Rolled back to $TARGET."
 echo "  If the issue persists, check the changelog: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases"
+
+if [ "$_PROVIDER_FAILED" -ne 0 ]; then
+    echo "✗ Rolled back, but at least one provider re-render failed (see warnings above)." >&2
+    exit 1
+fi

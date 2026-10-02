@@ -85,6 +85,7 @@ import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferen
 import { trustedHandler, type RendererTarget } from './security.js';
 import { readSettings, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
 import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, type ProjectFoldersAnswer } from '../shared/projectFolders.js';
+import { PROVIDERS } from '../shared/providers.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
   CHANNELS,
@@ -138,10 +139,10 @@ import {
  *  a process boundary — the renderer is not trusted to have sent a member of either
  *  union just because the type says it did, the same argument `catalogListing`'s handler
  *  already makes for `CatalogKind`. */
-const BIND_PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
+const BIND_PROVIDERS: readonly BindProvider[] = PROVIDERS;
 const BIND_MODES: readonly BindMode[] = ['auto', 'link', 'copy', 'vendored'];
 
-const SKILL_PROVIDERS: readonly SkillProvider[] = ['claude', 'codex', 'opencode'];
+const SKILL_PROVIDERS: readonly SkillProvider[] = PROVIDERS;
 const SKILL_FILTERS: readonly SkillProviderFilter[] = ['all', ...SKILL_PROVIDERS];
 
 /** The extensions `skills install` accepts as an archive. */

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dispatcher for all PostToolUse hooks.
 # Reads stdin once (Claude Code sends hook JSON here) and pipes it to each sub-script.
-# Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated.
+# Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated (exit 2 wins over exit 1).
 # Registered with a narrow matcher on every provider — Claude Code: the todo tools, the
 # subagent tool (`Agent`/`Task`), `Bash` and the pull-request MCP tools (`create_pull_request`,
 # `merge_pull_request`), plus a `PostToolUseFailure` entry for the subagent tool; Codex: the agent
@@ -34,7 +34,9 @@ for script in "$HOOKS_DIR"/*.sh; do
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:post-tool-use] running: $(basename "$script")" >&2
     printf '%s\n' "$INPUT" | env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:post-tool-use] exit ${SCRIPT_EXIT}: $(basename "$script")" >&2
-    if [ "$SCRIPT_EXIT" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ]; then
+    # First non-zero exit wins, except that exit 2 (a refusal) is never masked by an earlier
+    # exit 1 from another sub-script.
+    if [ "$SCRIPT_EXIT" -ne 0 ] && { [ "$EXIT_CODE" -eq 0 ] || { [ "$SCRIPT_EXIT" -eq 2 ] && [ "$EXIT_CODE" -ne 2 ]; }; }; then
         EXIT_CODE=$SCRIPT_EXIT
     fi
 done

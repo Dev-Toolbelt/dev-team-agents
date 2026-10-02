@@ -13,6 +13,7 @@ from pathlib import Path
 from . import bind as bind_module
 from .errors import ConflictError, EnvError
 from . import creds, credentials_local, hooks, migrate, paths, prefs, project, registry, versions
+from . import providers as providers_module
 
 OK = "ok"
 WARN = "warn"
@@ -502,8 +503,9 @@ def check_project(project_root):
                 "{} artifact(s) resolve to {}".format(len(manifest["artifacts"]), expected_version),
             )
         )
+    bound = manifest.get("providers") or ["claude"]
     settings = root / hooks.SETTINGS_FILE
-    if manifest.get("mode") != "vendored":
+    if "claude" in bound and manifest.get("mode") != "vendored":
         registered = hooks.registered_events(root)
         expected_events = [event for event, _ in hooks.EVENTS]
         absent = [event for event in expected_events if event not in registered]
@@ -520,6 +522,39 @@ def check_project(project_root):
         elif settings.is_file():
             findings.append(
                 _finding(OK, "hooks", "{} dispatchers registered in {}".format(len(expected_events), hooks.SETTINGS_FILE))
+            )
+    if "codex" in bound:
+        present = providers_module.codex_hook_events(root)
+        absent = [e for e in providers_module.CODEX_MANAGED_EVENTS if e not in present]
+        if absent:
+            findings.append(
+                _finding(
+                    WARN,
+                    "hooks",
+                    "{} not wired in {}".format(", ".join(absent), providers_module.CODEX_HOOKS_FILE),
+                    "Run `devteam sync` — it re-runs the Codex installer, which rewrites the managed hooks.",
+                )
+            )
+        else:
+            findings.append(
+                _finding(
+                    OK,
+                    "hooks",
+                    "{} Codex hook events wired in {}".format(len(present), providers_module.CODEX_HOOKS_FILE),
+                )
+            )
+    if "opencode" in bound:
+        plugin = root / providers_module.OPENCODE_PLUGIN_FILE
+        if plugin.exists():
+            findings.append(_finding(OK, "hooks", "opencode plugin present at {}".format(providers_module.OPENCODE_PLUGIN_FILE)))
+        else:
+            findings.append(
+                _finding(
+                    WARN,
+                    "hooks",
+                    "opencode plugin missing at {}".format(providers_module.OPENCODE_PLUGIN_FILE),
+                    "Run `devteam sync` — it re-runs the opencode installer, which copies the plugin.",
+                )
             )
 
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:

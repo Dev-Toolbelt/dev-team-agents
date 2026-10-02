@@ -14,10 +14,50 @@
 
 PO_CONFLICT_EXIT=4
 
+# po_native_path <path>
+# The form a native (non-MSYS) python3 can open. Under Git Bash a POSIX path such as
+# /c/Users/x names nothing to it and its separators differ from the ones os.path compares
+# with, so every path handed to python3 goes through here. Identity everywhere else.
+po_native_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1" 2>/dev/null || printf '%s\n' "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# po_require_inside <provider> <project_root> <project-relative path>...
+# Refuses (exit 4) when any listed path resolves, through symlinks, outside the project:
+# a committed `.codex -> ~/.codex` would otherwise receive the install in the user's
+# global config. A path that does not exist yet is judged by its nearest existing parent.
+po_require_inside() {
+  local provider="$1" root="$2"
+  shift 2
+  if ! python3 - "$(po_native_path "$root")" "$@" <<'PY'
+
+import os, sys
+root = os.path.realpath(sys.argv[1])
+bad = []
+for rel in sys.argv[2:]:
+    real = os.path.realpath(os.path.join(root, rel))
+    if os.path.normcase(real) != os.path.normcase(root) and not os.path.normcase(real).startswith(os.path.normcase(root) + os.sep):
+        bad.append((rel, real))
+if bad:
+    for rel, real in bad:
+        sys.stderr.write("  {} resolves to {}, outside the project\n".format(rel, real))
+    sys.exit(1)
+PY
+  then
+    echo "install-${provider}: ERROR: a path the installer would write leaves the project (see above)." >&2
+    echo "  Replace the symlink with a real directory, or remove it, and re-run." >&2
+    exit "$PO_CONFLICT_EXIT"
+  fi
+}
+
 # po_conflicts <project_root> <source_dir> <provider> <owned_file|""> <targets_file>
 # Prints one conflicting project-relative path per line.
 po_conflicts() {
-  python3 - "$@" <<'PY'
+  python3 - "$(po_native_path "$1")" "$(po_native_path "$2")" "$3" "$([[ -n "$4" ]] && po_native_path "$4" || true)" "$(po_native_path "$5")" <<'PY'
 import os, sys
 root, source, provider, owned_arg, targets_file = sys.argv[1:6]
 owned = set()
@@ -99,17 +139,67 @@ po_link_skills() {
   else
     target="$source/skills"
   fi
-  target="$(python3 - "$root" "$target" "$link" <<'PY'
+  local rel
+  rel="$(python3 - "$(po_native_path "$root")" "$(po_native_path "$target")" "$(po_native_path "$link")" <<'PY'
 import os, sys
 root, target, link = (os.path.abspath(p) for p in sys.argv[1:4])
 if target == root or target.startswith(root + os.sep):
-    print(os.path.relpath(target, os.path.dirname(link)))
-else:
-    print(target)
+    print(os.path.relpath(target, os.path.dirname(link)).replace(os.sep, "/"))
 PY
 )"
+  [[ -n "$rel" ]] && target="$rel"
   if [[ -L "$link" || -e "$link" ]]; then rm -rf "$link"; fi
   mkdir -p "$(dirname "$link")"
-  ln -s "$target" "$link"
+  # Git Bash's `ln -s` silently COPIES unless native symlinks are requested, and a copy
+  # recorded as a link goes stale on the next update. Native or nothing.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;;
+  esac
+  if ! ln -s "$target" "$link" || [[ ! -L "$link" ]]; then
+    echo "install: ERROR: could not create the symlink ${link#"$root"/} -> $target." >&2
+    echo "  On Windows, enable Developer Mode (or run as administrator) so Git Bash can create symlinks." >&2
+    return 1
+  fi
   echo "  + symlinked $target -> ${link#"$root"/}"
+}
+
+# po_rerender_providers
+# Re-runs the opencode / Codex installers for the provider trees in the current directory
+# (a project root with an installed .dev-team-agents/). Shared by update.sh and rollback.sh.
+# Slim Claude installs don't bundle the cross-CLI plumbing (stripped by
+# scripts/lib/strip-tarball.sh), so the installer would abort with exit 3: check for the
+# plumbing first and degrade to guidance. A provider that fails is reported and the next one
+# still runs; returns non-zero when any failed, so the caller's exit reflects it.
+po_rerender_providers() {
+  local failed=0
+  if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
+    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/opencode/plugin/dev-team-agents.ts" ]; then
+      echo "→ opencode config detected, re-running install-opencode.sh..."
+      # --adopt: an install from before the ownership ledger has no record of the
+      # files its own earlier runs wrote. They are moved to .dev-team-agents/quarantine/
+      # once, never deleted, and the ledger claims the fresh copies from then on.
+      if ! bash .dev-team-agents/scripts/install-opencode.sh --adopt; then
+        echo "⚠ install-opencode.sh failed; opencode support was NOT refreshed." >&2
+        failed=1
+      fi
+    else
+      echo "⚠ opencode config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
+      echo "  Skipping automatic opencode re-render. To refresh opencode support, run:" >&2
+      echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode" >&2
+    fi
+  fi
+  if [ -f ".codex/hooks.json" ] || [ -d ".codex" ]; then
+    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/agents/product-analyst.md" ]; then
+      echo "→ Codex config detected, re-running install-codex.sh..."
+      if ! bash .dev-team-agents/scripts/install-codex.sh --adopt; then
+        echo "⚠ install-codex.sh failed; Codex support was NOT refreshed." >&2
+        failed=1
+      fi
+    else
+      echo "⚠ Codex config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
+      echo "  Skipping automatic Codex re-render. To refresh Codex support, run:" >&2
+      echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex" >&2
+    fi
+  fi
+  return "$failed"
 }

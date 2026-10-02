@@ -17,6 +17,7 @@
 
 import { spawn } from 'node:child_process';
 
+import { launchCommand } from './launch.js';
 import { childEnvironment, KILL_GRACE_MS, PIPE_GRACE_MS, type InvokeOptions } from './invoke.js';
 
 /** A single event line longer than this is a runaway; the child is killed. */
@@ -64,11 +65,13 @@ export function streamDevteam(options: StreamOptions): StreamHandle {
 
   let child: ReturnType<typeof spawn>;
   try {
-    child = spawn(options.binary, args, {
+    const env = childEnvironment(process.env, options.env ?? {});
+    const launch = launchCommand(options.binary, args, env);
+    child = spawn(launch.command, [...launch.args], {
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
-      env: childEnvironment(process.env, options.env ?? {}),
+      env,
       windowsHide: true,
     });
   } catch (error) {

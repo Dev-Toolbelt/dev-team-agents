@@ -57,6 +57,8 @@ if [ ! -f "$INSTALLER_LIB" ]; then
 fi
 # shellcheck source=scripts/lib/installer-fetch.sh
 source "$INSTALLER_LIB"
+# shellcheck source=scripts/lib/provider-ownership.sh
+source "$SCRIPTS_DIR/lib/provider-ownership.sh"
 
 if ! dta_have_http_tool; then
     echo "✗ Neither curl nor wget found. Cannot download update." >&2
@@ -100,41 +102,10 @@ fi
 
 bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 
-# For opencode projects, re-render agents and merge command snippets.
-# Slim Claude installs don't bundle the cross-CLI plumbing (stripped by
-# scripts/lib/strip-tarball.sh), so install-opencode.sh would abort with
-# exit 3 and — under set -euo pipefail — take the whole update down with it,
-# even though the core Claude Code update above already succeeded. Check for
-# the plumbing first and degrade to guidance instead of a hard failure.
-if [ -f ".opencode/opencode.json" ] || [ -d ".opencode" ]; then
-    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/opencode/plugin/dev-team-agents.ts" ]; then
-        echo "→ opencode config detected, re-running install-opencode.sh..."
-        # --adopt: an install from before the ownership ledger has no record of the
-        # files its own earlier runs wrote. They are moved to .dev-team-agents/quarantine/
-        # once, never deleted, and the ledger claims the fresh copies from then on.
-        bash .dev-team-agents/scripts/install-opencode.sh --adopt
-    else
-        echo "⚠ opencode config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
-        echo "  Skipping automatic opencode re-render. To refresh opencode support, run:" >&2
-        echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) opencode" >&2
-    fi
-fi
-
-# For Codex projects, re-render agents, migrate legacy prompt layouts, and
-# refresh project-local command skills. Same slim-install gap as above.
-if [ -f ".codex/hooks.json" ] || [ -d ".codex" ]; then
-    if [ -f ".dev-team-agents/scripts/render-provider.sh" ] && [ -f ".dev-team-agents/agents/product-analyst.md" ]; then
-        echo "→ Codex config detected, re-running install-codex.sh..."
-        # --adopt: an install from before the ownership ledger has no record of the
-        # files its own earlier runs wrote. They are moved to .dev-team-agents/quarantine/
-        # once, never deleted, and the ledger claims the fresh copies from then on.
-        bash .dev-team-agents/scripts/install-codex.sh --adopt
-    else
-        echo "⚠ Codex config detected, but this is a slim install (cross-CLI plumbing not bundled)." >&2
-        echo "  Skipping automatic Codex re-render. To refresh Codex support, run:" >&2
-        echo "    bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex" >&2
-    fi
-fi
+# Re-render the opencode / Codex trees. A failing provider is a warning and the rest still
+# run; the failure is carried to the script's final exit status.
+_PROVIDER_FAILED=0
+po_rerender_providers || _PROVIDER_FAILED=1
 
 # Invalidate context cache after version change
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true
@@ -164,3 +135,8 @@ echo "scan and catalog them with:"
 echo "  /devteam:sync-rules"
 echo "---"
 echo ""
+
+if [ "$_PROVIDER_FAILED" -ne 0 ]; then
+    echo "✗ Update finished, but at least one provider re-render failed (see warnings above)." >&2
+    exit 1
+fi

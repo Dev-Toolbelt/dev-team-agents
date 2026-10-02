@@ -12,7 +12,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
 ```
 
-This downloads the latest source, renders 18 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 4 managed lifecycle hooks to `.codex/hooks.json`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and injects a small managed rule into `AGENTS.md` so the SessionStart banner is actually echoed in Codex's first visible reply.
+This downloads the latest source, renders 18 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 7 managed lifecycle events to `.codex/hooks.json`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and injects a small managed rule into `AGENTS.md` so the SessionStart banner is actually echoed in Codex's first visible reply.
 
 If `.dev-team-agents/` already exists in the project, you can also run the bundled installer directly:
 
@@ -22,7 +22,7 @@ If `.dev-team-agents/` already exists in the project, you can also run the bundl
 
 ## After install
 
-Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 4 managed hooks. After that, the default project-local entrypoint is:
+Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 7 managed hooks. After that, the default project-local entrypoint is:
 
 ```
 $devteam-plan do a plan
@@ -37,7 +37,7 @@ Codex requires non-managed hooks to be reviewed before they run. On first use:
 1. Codex prints a warning about new hooks
 2. Run `/hooks` to inspect them
 3. Trust each hook entry
-4. The hooks now fire on `SessionStart`, `PreToolUse`, `PreCompact`, and `Stop`
+4. The hooks now fire on `SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PreCompact`, `Stop`, and `SessionEnd`
 
 ## Session banner
 
@@ -67,7 +67,7 @@ If the project already has `.dev-team-agents/`, re-running the bundled installer
 
 - **`install-codex: ERROR: could not locate dev-team-agents source.`** — run the installer from the project root, or pass `--source <path-to-dev-team-agents-clone>`.
 - **`install-codex.sh: ERROR: source missing cross-CLI plumbing`** — this usually means you pointed `--source` at an incomplete or stripped tree. Use the curl-pipe bootstrap or a full local clone of `dev-team-agents`.
-- **Hooks don't fire** — verify `.codex/hooks.json` has the 4 events (`SessionStart`, `PreToolUse`, `PreCompact`, `Stop`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
+- **Hooks don't fire** — verify `.codex/hooks.json` has the 7 events (`SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PreCompact`, `Stop`, `SessionEnd`) and each `command` path points to an existing file under `.dev-team-agents/scripts/hooks/`. If the files are missing, re-run the install curl-pipe.
 - **Hooks fire but the session banner still does not appear** — verify `AGENTS.md` contains the managed marker `<!-- dev-team-agents: codex-session-banner -->`. If it does not, re-run the install command.
 - **`$devteam-*` doesn't appear or run** — ensure the project's `.codex/` directory is trusted, restart Codex, and verify `.codex/skills/devteam-<name>/SKILL.md` exists in the project.
 - **Old `devteam-*.md` prompts still appear** — the installer lists any it finds in `.codex/prompts/` and `~/.codex/prompts/` but never deletes them. Remove the ones that came from an older dev-team-agents install yourself.

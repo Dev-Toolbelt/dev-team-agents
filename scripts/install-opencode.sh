@@ -139,7 +139,22 @@ if [[ $LIST_TARGETS -eq 1 ]]; then
   cat "$TARGETS" >&3
   exit 0
 fi
+po_require_inside opencode "$PROJECT_ROOT" .opencode .opencode/agents .opencode/skills .opencode/plugins .opencode/opencode.json
 po_guard "$PROJECT_ROOT" "$SOURCE_DIR" opencode "$OWNED_FILE" "$TARGETS" "$ADOPT" "$DRY_RUN"
+
+# jq reads strict JSON only. A config with comments or trailing commas (JSONC) is refused
+# before anything is written, naming the file, rather than reported as merged.
+_po_check_config() {
+  local cfg="$1"
+  [[ -f "$cfg" ]] || return 0
+  if ! jq empty "$cfg" >/dev/null 2>&1; then
+    echo "install-opencode: ERROR: $cfg is not strict JSON (comments or trailing commas?); it was left untouched." >&2
+    echo "  Remove the JSONC syntax or move the file aside and re-run — the /devteam:* commands" >&2
+    echo "  cannot be registered into it otherwise." >&2
+    exit "$PO_CONFLICT_EXIT"
+  fi
+}
+_po_check_config "$PROJECT_ROOT/.opencode/opencode.json"
 
 # ── write or symlink into project ────────────────────────────────────
 OPENCODE_DIR="$PROJECT_ROOT/.opencode"
@@ -229,10 +244,14 @@ JSON
   # crossed ARG_MAX. Do not convert this back to --argjson.
   snippet_json=$(mktemp)
   printf '%s' "$CLEAN_JSON" > "$snippet_json"
-  tmp=$(mktemp)
-  jq --slurpfile new "$snippet_json" '.command = (.command // {}) * $new[0]' "$CFG_FILE" > "$tmp" \
-    && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$tmp" \
-    && mv "$tmp" "$CFG_FILE"
+  tmp=$(mktemp "$CFG_FILE.XXXXXX")
+  if ! { jq --slurpfile new "$snippet_json" '.command = (.command // {}) * $new[0]' "$CFG_FILE" > "$tmp" \
+         && python3 -c "import json,sys; json.load(open(sys.argv[1], encoding='utf-8'))" "$(po_native_path "$tmp")" \
+         && mv "$tmp" "$CFG_FILE"; }; then
+    rm -f "$tmp" "$snippet_json"
+    echo "install-opencode: ERROR: could not merge the /devteam:* commands into $CFG_FILE (not strict JSON?); it was left untouched." >&2
+    exit "$PO_CONFLICT_EXIT"
+  fi
   CMD_COUNT=$(jq '. | length' "$snippet_json")
   rm -f "$snippet_json"
   echo "  + merged ${CMD_COUNT} command keys into .opencode/opencode.json (key: devteam:<name>)"

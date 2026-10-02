@@ -29,6 +29,11 @@ def write_skill(directory, name, description="does a thing", extra=""):
 class GlobalSkillsTestCase(StoreTestCase):
     def setUp(self):
         super().setUp()
+        # The roots honor these before `~`; an ambient value must not leak into a test.
+        for name in ("CODEX_HOME", "XDG_CONFIG_HOME"):
+            saved = os.environ.pop(name, None)
+            if saved is not None:
+                self.addCleanup(os.environ.__setitem__, name, saved)
         self.claude_root = self.user_home / ".claude" / "skills"
         self.agents_root = self.user_home / ".agents" / "skills"
         self.codex_root = self.user_home / ".codex" / "skills"

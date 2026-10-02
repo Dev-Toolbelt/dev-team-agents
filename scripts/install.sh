@@ -32,6 +32,9 @@ SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
 USER_DATA_DIR="$PROJECT_ROOT/.dev-team-agents/user-data"
 VERSION="${1:-latest}"
 
+# Git Bash/MSYS: without this, `ln -s` silently writes a copy instead of a link.
+case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;; esac
+
 # Source scripts/lib/state.sh for state.json read/write/migrate helpers.
 # Resolved relative to this script's own location (not BASH_SOURCE-only
 # reliant like strip-tarball.sh, which must come from the freshly-extracted
@@ -107,21 +110,34 @@ PYEOF
         else
             local tmp
             tmp="$(mktemp)"
-            declare -A kv
+            # bash 3.2 has no associative arrays: parallel indexed arrays, keyed by linear scan.
+            local -a kv_keys=() kv_vals=()
+            local _i _hit
+
             if [ -f "$file" ]; then
                 while IFS=': ' read -r k v; do
                     k="${k//\"/}"
                     v="${v%,}"
                     v="${v//\"/}"
-                    [ -n "$k" ] && kv["$k"]="$v"
+                    if [ -n "$k" ]; then
+                        _hit=-1
+                        for ((_i = 0; _i < ${#kv_keys[@]}; _i++)); do
+                            [ "${kv_keys[$_i]}" = "$k" ] && { _hit=$_i; break; }
+                        done
+                        if [ "$_hit" -ge 0 ]; then kv_vals[_hit]="$v"; else kv_keys+=("$k"); kv_vals+=("$v"); fi
+                    fi
                 done < <(grep -o '"[^"]*"[[:space:]]*:[[:space:]]*[^,}]*' "$file" 2>/dev/null)
             fi
-            kv["$key"]="$value"
+            _hit=-1
+            for ((_i = 0; _i < ${#kv_keys[@]}; _i++)); do
+                [ "${kv_keys[$_i]}" = "$key" ] && { _hit=$_i; break; }
+            done
+            if [ "$_hit" -ge 0 ]; then kv_vals[_hit]="$value"; else kv_keys+=("$key"); kv_vals+=("$value"); fi
             {
                 echo "{"
                 local first=true
-                for k in "${!kv[@]}"; do
-                    local v="${kv[$k]}"
+                for ((_i = 0; _i < ${#kv_keys[@]}; _i++)); do
+                    local k="${kv_keys[$_i]}" v="${kv_vals[$_i]}"
                     $first || echo ","
                     first=false
                     if [[ "$v" =~ ^[0-9]+$ ]]; then

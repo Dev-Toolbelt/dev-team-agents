@@ -78,6 +78,17 @@ def _expand(raw):
     return Path(raw)
 
 
+def _root_path(entry):
+    """``$<env>/<env_suffix>`` when the entry names a set variable, else its ``path``.
+
+    An explicit ``DEVTEAM_USER_HOME`` wins over both variables: it relocates every root.
+    """
+    base = None if os.environ.get(USER_HOME_ENV) else os.environ.get(entry.get("env") or "")
+    if base:
+        return Path(base).expanduser() / entry.get("env_suffix", "")
+    return _expand(entry["path"])
+
+
 def load_roots():
     """``(roots, install_target)`` from the canonical JSON file."""
     with open(ROOTS_FILE, encoding="utf-8") as handle:
@@ -87,7 +98,7 @@ def load_roots():
         roots.append(
             {
                 "id": entry["id"],
-                "path": _expand(entry["path"]),
+                "path": _root_path(entry),
                 "read_by": list(entry["read_by"]),
             }
         )

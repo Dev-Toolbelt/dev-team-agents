@@ -516,6 +516,13 @@ def _preflight(
         if provider_name not in providers.DELEGATED_INSTALLERS:
             continue
         targets = providers.delegated_targets(provider_name, version_dir, project_root)
+        # A committed `.codex -> ~/.codex` would otherwise land the framework's files
+        # in the user's global config: the installers write through the link.
+        extra = list(providers.MERGED_PROJECT_FILES.get(provider_name, ()))
+        if provider_name == "codex":
+            extra.append(providers.CODEX_HOOKS_FILE)
+        for rel in list(targets) + extra:
+            require_inside(root / rel, project_root, what="artifact")
         claimed = set(previous_paths) | set(providers.legacy_owned(previous_artifacts, targets))
         existing = []
         for rel in targets:
@@ -1329,6 +1336,23 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
             # Cleared, except for anything unbind kept: an entry it leaves behind still
             # needs ignoring, or the unbind trades two untracked files for a clean block.
             gitignore.apply_managed_block(exclude_file, sorted(kept_pointers))
+
+    if not keep_artifacts and (
+        "opencode" in (manifest.get("providers") or ())
+        or any(item.get("provider") == "opencode" for item in manifest.get("artifacts", []))
+    ):
+        try:
+            _removed, untouched = providers.unwire_opencode_commands(project_root)
+        except OSError as exc:
+            problems.append({"path": "opencode.json", "error": str(exc)})
+        else:
+            for rel in untouched:
+                problems.append(
+                    {
+                        "path": rel,
+                        "error": "not plain JSON, left untouched; remove its `devteam:*` command keys by hand",
+                    }
+                )
 
     pruned_dirs = []
     if not keep_artifacts:

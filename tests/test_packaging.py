@@ -261,11 +261,18 @@ class FormulaPayloadTest(unittest.TestCase):
         # of the bottle and fail at runtime for brew users only. If this fails,
         # either move the data file out of the package or widen the formula's
         # glob — do not delete this test.
+        # A subpackage is covered only by its own `Dir[".../<name>/*.py"]` line.
         package = REPO_ROOT / "scripts" / "lib" / "devteam"
+        formula = FORMULA.read_text(encoding="utf-8")
         strays = sorted(
-            entry.name
-            for entry in package.iterdir()
-            if entry.name != "__pycache__" and entry.suffix != ".py"
+            str(entry.relative_to(package))
+            for entry in package.rglob("*")
+            if "__pycache__" not in entry.parts
+            and (
+                (entry.is_file() and entry.suffix != ".py")
+                or (entry.is_dir() and 'Dir["scripts/lib/devteam/{}/*.py"]'.format(
+                    entry.relative_to(package).as_posix()) not in formula)
+            )
         )
         self.assertEqual(
             [],
@@ -688,10 +695,11 @@ class StagedPayloadRunTest(unittest.TestCase):
             "the staged CLI failed under the probe: {}".format(report),
         )
 
+        package = self.libexec / "scripts" / "lib" / "devteam"
         staged = sorted(
-            path.stem
-            for path in (self.libexec / "scripts" / "lib" / "devteam").glob("*.py")
-            if path.stem != "__init__"
+            ".".join(path.relative_to(package).with_suffix("").parts).replace(".__init__", "")
+            for path in package.rglob("*.py")
+            if path.relative_to(package).as_posix() != "__init__.py"
         )
         imported = sorted(
             name.split(".", 1)[1] for name in report["modules"] if name != "devteam"

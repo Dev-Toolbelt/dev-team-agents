@@ -2983,6 +2983,11 @@ def resume_command(root, provider, session_id, cwd=None):
     if not isinstance(session_id, str) or session_id.startswith("-") or not _SAFE_KEY.match(session_id):
         return None
     where = cwd if isinstance(cwd, str) and cwd and os.path.isdir(cwd) else root
+    if os.name == "nt":
+        # `cd '<p>' && …` fails in PowerShell 5 (no `&&`) and cmd.exe cannot quote it; a
+        # PowerShell literal path (single quotes doubled) joined with `;` is valid in 5 and 7.
+        literal = str(where).replace("'", "''")
+        return "Set-Location -LiteralPath '{}'; {} {}".format(literal, base, session_id)
     return "cd {} && {} {}".format(shlex.quote(str(where)), base, shlex.quote(session_id))
 
 
