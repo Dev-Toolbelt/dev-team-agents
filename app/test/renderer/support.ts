@@ -10,6 +10,8 @@
 import { vi } from 'vitest';
 
 import type {
+  AuthProfile,
+  AuthState,
   BindReport,
   BoardFeed,
   BoardSettings,
@@ -390,6 +392,56 @@ export function runResult(overrides: Partial<PluginRunResult> = {}): PluginRunRe
   return { plugin: 'graphify', action: 'detect', ok: true, exit_code: 0, duration_ms: 420, output: null, log_tail: '', ...overrides };
 }
 
+/** `auth check` for an entitled, signed-in account — what most screens' tests want underneath them. */
+export function authState(overrides: Partial<AuthState> = {}): AuthState {
+  return {
+    signed_in: true,
+    account: { id: 'acc-1', email: 'ana.souza@example.com', display_name: 'Ana Souza', provider: 'email' },
+    entitled: true,
+    entitlement: { status: 'active', reason: null, features: [], trial_ends_at: null, expires_at: null },
+    online_ok: true,
+    secret_backend_insecure: false,
+    warnings: [],
+    gate_mode: 'warn',
+    ...overrides,
+  };
+}
+
+/** A blocked account: signed in, not entitled, for `status`. */
+export function blockedState(status: AuthState['entitlement']['status'], overrides: Partial<AuthState> = {}): AuthState {
+  return authState({
+    entitled: false,
+    entitlement: { status, reason: null, features: [], trial_ends_at: null, expires_at: null },
+    ...overrides,
+  });
+}
+
+/** No session at all. */
+export function signedOutState(overrides: Partial<AuthState> = {}): AuthState {
+  return authState({
+    signed_in: false,
+    account: null,
+    entitled: false,
+    entitlement: { status: 'signed_out', reason: null, features: [], trial_ends_at: null, expires_at: null },
+    ...overrides,
+  });
+}
+
+export function authProfile(overrides: Partial<AuthProfile> = {}): AuthProfile {
+  return {
+    id: 'acc-1',
+    email: 'ana.souza@example.com',
+    display_name: 'Ana Souza',
+    signup_method: 'email',
+    identities: [
+      { id: 'i-1', provider: 'email', email: 'ana.souza@example.com' },
+      { id: 'i-2', provider: 'google', email: 'ana.souza@example.com' },
+    ],
+    pending_email: null,
+    ...overrides,
+  };
+}
+
 /** A fake bridge with every method stubbed to a benign default; tests override per case. */
 export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridge {
   return {
@@ -430,6 +482,27 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     updatePluginConfig: vi.fn((_projectId: string, _name: string, changes: readonly PluginConfigChange[]) =>
       Promise.resolve(ok({ applied: [...changes], failed: null })),
     ),
+    authStatus: vi.fn(() => Promise.resolve(ok(authState()))),
+    authCheck: vi.fn(() => Promise.resolve(ok(authState()))),
+    authLoginOAuth: vi.fn(() => Promise.reject(new Error('authLoginOAuth is not stubbed'))),
+    authOtpStart: vi.fn(() => Promise.reject(new Error('authOtpStart is not stubbed'))),
+    authOtpVerify: vi.fn(() => Promise.reject(new Error('authOtpVerify is not stubbed'))),
+    authPasswordSignIn: vi.fn(() => Promise.reject(new Error('authPasswordSignIn is not stubbed'))),
+    authPasswordSignUpStart: vi.fn(() => Promise.reject(new Error('authPasswordSignUpStart is not stubbed'))),
+    authPasswordSignUpFinish: vi.fn(() => Promise.reject(new Error('authPasswordSignUpFinish is not stubbed'))),
+    authPasswordSignUpCancel: vi.fn(() => Promise.resolve()),
+    authPasswordResetStart: vi.fn(() => Promise.reject(new Error('authPasswordResetStart is not stubbed'))),
+    authPasswordResetFinish: vi.fn(() => Promise.reject(new Error('authPasswordResetFinish is not stubbed'))),
+    authPasswordChange: vi.fn(() => Promise.reject(new Error('authPasswordChange is not stubbed'))),
+    authProfileGet: vi.fn(() => Promise.resolve(ok(authProfile()))),
+    authProfileUpdate: vi.fn(() => Promise.reject(new Error('authProfileUpdate is not stubbed'))),
+    authEmailChangeStart: vi.fn(() => Promise.reject(new Error('authEmailChangeStart is not stubbed'))),
+    authEmailChangeConfirm: vi.fn(() => Promise.reject(new Error('authEmailChangeConfirm is not stubbed'))),
+    authIdentityLink: vi.fn(() => Promise.reject(new Error('authIdentityLink is not stubbed'))),
+    authIdentityUnlink: vi.fn(() => Promise.reject(new Error('authIdentityUnlink is not stubbed'))),
+    authDeleteStart: vi.fn(() => Promise.reject(new Error('authDeleteStart is not stubbed'))),
+    authDeleteConfirm: vi.fn(() => Promise.reject(new Error('authDeleteConfirm is not stubbed'))),
+    authLogout: vi.fn(() => Promise.reject(new Error('authLogout is not stubbed'))),
     integrationList: vi.fn(() => Promise.resolve(ok({ project_id: null, integrations: [] }))),
     integrationConnect: vi.fn(() => Promise.reject(new Error('integrationConnect is not stubbed'))),
     integrationTest: vi.fn(() => Promise.reject(new Error('integrationTest is not stubbed'))),
