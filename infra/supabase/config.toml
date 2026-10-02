@@ -1,0 +1,118 @@
+# Supabase project configuration for the devteam account service (ADR-0029).
+# Pushed with `supabase config push` per linked project (dev, prod). Secrets come from
+# the environment via env(...) only; see .env.example.
+
+project_id = "devteam-accounts"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 100
+
+[db]
+port = 54322
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1"
+# SR-7: loopback only. GoTrue matches these entries as glob patterns, so `*` stands for the
+# OS-assigned port (SR-3 binds port 0) and does not cross `/`. No `**`, no localhost, no https.
+# The fake IdP seam is dev-only and is added to the dev project's list, never to this file.
+additional_redirect_urls = ["http://127.0.0.1:*/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+# SR-15: minimum 10. Supabase has no maximum or byte-length setting: the 64-character and
+# 72-byte ceiling is enforced by the CLI before sending. No composition rules, no rotation.
+minimum_password_length = 10
+password_requirements = ""
+
+[auth.rate_limit]
+# SR-11. Per hour, per IP unless noted.
+email_sent = 30
+sms_sent = 0
+anonymous_users = 0
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+web3 = 0
+
+[auth.email]
+# SR-14: confirmations on, both addresses confirm on change.
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = true
+# SR-11: one email per address per 60 seconds.
+max_frequency = "60s"
+# SR-12: 8-digit codes, 10-minute expiry.
+otp_length = 8
+otp_expiry = 600
+
+[auth.email.template.confirmation]
+subject = "Confirm your devteam account / Confirme sua conta devteam"
+content_path = "./templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Your devteam sign-in code / Seu código de acesso devteam"
+content_path = "./templates/otp-sign-in.html"
+
+[auth.email.template.recovery]
+subject = "Your devteam password reset code / Seu código de redefinição de senha devteam"
+content_path = "./templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new email / Confirme seu novo e-mail"
+content_path = "./templates/email-change.html"
+
+[auth.email.template.reauthentication]
+subject = "Your devteam verification code / Seu código de verificação devteam"
+content_path = "./templates/reauthentication.html"
+
+# SR-13: transactional security notice after a password change. Requires a recent CLI.
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Your devteam password was changed / Sua senha devteam foi alterada"
+content_path = "./templates/password-changed.html"
+
+[auth.email.smtp]
+enabled = true
+host = "env(SMTP_HOST)"
+port = 587
+user = "env(SMTP_USER)"
+pass = "env(SMTP_PASS)"
+admin_email = "env(SMTP_ADMIN_EMAIL)"
+sender_name = "devteam"
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
+
+[auth.external.github]
+enabled = true
+client_id = "env(GITHUB_CLIENT_ID)"
+secret = "env(GITHUB_CLIENT_SECRET)"
+# Scope user:email only (primary verified email, SR-14). Set it on the GitHub OAuth app
+# and in the dashboard provider settings; config.toml has no per-provider scope key.
+
+[auth.mfa]
+max_enrolled_factors = 0
+
+[auth.web3.solana]
+enabled = false
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
