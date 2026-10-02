@@ -571,7 +571,8 @@ class AgentHookTest(tt.HookTest):
         self.run_script(PRE_TOOL_USE, {"tool_name": "TaskCreate", "session_id": "s1", "tool_input": {"subject": "backend-developer"}})
         # None of them is an agent call; the first is the session's own work (one fork a turn).
         self.assertEqual(self.python_calls(), 1)
-        self.assertFalse(any(t.get("kind") == "agent" for t in self.load("s1")["tasks"]))
+        # With no prompt of the user's, that read opens no direct card either, so no record at all.
+        self.assertFalse(tasks.record_path(self.root, self.project_id, "s1").exists())
 
     def test_a_spawn_with_no_agent_type_forks_no_python(self):
         for payload in (
