@@ -116,6 +116,13 @@ if [[ ! -f "$RENDER_SCRIPT" ]]; then
   exit 3
 fi
 
+# ── account gate — before the first write (ADR-0029 SR-30) ───────────
+if [[ $DRY_RUN -eq 0 ]]; then
+  # shellcheck source=scripts/lib/auth-gate.sh
+  source "$SCRIPT_DIR/lib/auth-gate.sh"
+  ag_gate install-codex "$SCRIPT_DIR" || exit $?
+fi
+
 # ── render ────────────────────────────────────────────────────────────
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT

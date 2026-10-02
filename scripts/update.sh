@@ -109,8 +109,16 @@ bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 
 # Re-render the opencode / Codex trees. A failing provider is a warning and the rest still
 # run; the failure is carried to the script's final exit status.
+# The core update above is never gated, so hook fixes reach a blocked user; re-rendering
+# the provider trees into the project writes there, so it is (ADR-0029 SR-30).
 _PROVIDER_FAILED=0
-po_rerender_providers || _PROVIDER_FAILED=1
+# shellcheck source=scripts/lib/auth-gate.sh
+source "$SCRIPTS_DIR/lib/auth-gate.sh"
+if ag_gate update "$SCRIPTS_DIR"; then
+    po_rerender_providers || _PROVIDER_FAILED=1
+else
+    echo "⚠ Provider trees (opencode / Codex) were NOT re-rendered: sign in with \`devteam auth login\`, then re-run this update." >&2
+fi
 
 # Invalidate context cache after version change
 rm -f ".dev-team-agents/user-data/.context-cache.json" 2>/dev/null || true

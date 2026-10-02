@@ -98,5 +98,14 @@ if [[ ! -f "$INSTALLER" ]]; then
   echo "install-provider: ERROR: $INSTALLER not found in source." >&2; exit 1
 fi
 
+# ── account gate (ADR-0029 SR-30) ───────────────────────────────────
+# The delegated installer gates itself too; this covers a pinned older tarball whose
+# installer predates the gate. A tree without the lib cannot be gated and is skipped.
+if [[ -f "$STAGING/scripts/lib/auth-gate.sh" ]]; then
+  # shellcheck source=lib/auth-gate.sh
+  source "$STAGING/scripts/lib/auth-gate.sh"
+  ag_gate install-provider "$STAGING/scripts" || exit $?
+fi
+
 # ── run the provider installer with --source ────────────────────────
 bash "$INSTALLER" --source "$STAGING" ${INSTALLER_ARGS[@]+"${INSTALLER_ARGS[@]}"}

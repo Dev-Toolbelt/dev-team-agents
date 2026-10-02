@@ -119,6 +119,13 @@ if [[ ! -f "$RENDER_SCRIPT" ]] || [[ ! -f "$SOURCE_DIR/opencode/plugin/dev-team-
   exit 3
 fi
 
+# ── account gate — before the first write (ADR-0029 SR-30) ───────────
+if [[ $DRY_RUN -eq 0 ]]; then
+  # shellcheck source=scripts/lib/auth-gate.sh
+  source "$SCRIPT_DIR/lib/auth-gate.sh"
+  ag_gate install-opencode "$SCRIPT_DIR" || exit $?
+fi
+
 # ── render ────────────────────────────────────────────────────────────
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
