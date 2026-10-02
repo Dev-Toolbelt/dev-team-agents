@@ -1,6 +1,6 @@
 {
   "name": "dev-team-agents-app",
-  "productName": "dev-team-agents",
+  "productName": "Dev Team Agents",
   "version": "0.1.1",
   "private": true,
   "description": "Desktop client for the dev-team-agents multi-agent development harness (ADR-0011)",

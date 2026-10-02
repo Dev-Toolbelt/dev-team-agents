@@ -13,15 +13,21 @@ import { join } from 'node:path';
 
 export const releaseDir = 'release';
 
+/**
+ * The file-name slug `electron-builder.yml` writes into `dmg.artifactName` and
+ * `nsis.artifactName`. Not `productName`: that is the display name, and has spaces.
+ */
+export const artifactSlug = 'dev-team-agents';
+
 export function readRelease() {
-  const { productName, version } = JSON.parse(readFileSync('package.json', 'utf8'));
+  const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
   const installers = [
-    `${productName}-${version}.dmg`,
-    `${productName}-Setup-${version}.exe`,
-    `${productName}-Setup-${version}-x64.exe`,
-    `${productName}-Setup-${version}-arm64.exe`,
+    `${artifactSlug}-${version}.dmg`,
+    `${artifactSlug}-Setup-${version}.exe`,
+    `${artifactSlug}-Setup-${version}-x64.exe`,
+    `${artifactSlug}-Setup-${version}-arm64.exe`,
   ];
-  return { productName, version, installers };
+  return { version, installers };
 }
 
 /** Throws naming every missing installer, so no script works from a partial set that looks complete. */

@@ -8,12 +8,22 @@
 # app-specific password or API key for `notarytool`, and flipping `CODE_SIGNED` in
 # `src/main/build-info.ts` — none of which can be done from this repository today.
 #
-# The artifact names are what `packaging/homebrew/devteam-app.rb` expects:
-#   app "dev-team-agents.app"        -> productName: dev-team-agents
+# NAMES. `productName` is the name a user sees: the `.app` bundle, CFBundleName, the menu-bar
+# title, the Windows installer's title, its install directory and the Start menu entry. The
+# artifact FILE names are a fixed slug instead, written out in `dmg.artifactName` and
+# `nsis.artifactName` (and mirrored in `scripts/release-artifacts.mjs`): no spaces in a
+# download URL, and the URLs `packaging/homebrew/devteam-app.rb` and the winget manifests
+# point at stay what they were. The cask expects:
+#   app "Dev Team Agents.app"        -> productName below
 #   dev-team-agents-<version>.dmg    -> dmg.artifactName below
-# and `appId` matches the bundle id the cask's `zap` block uses as its placeholder.
+# and `appId` matches the bundle id the cask's `zap` block uses as its placeholder. `appId`
+# is also what NSIS derives the install GUID from, so it must not change: an upgrade finds
+# the previous install through it.
+#
+# Renaming is safe for stored state because nothing derives a path from `productName`:
+# `userData` is pinned to `dev-team-agents-app` in `src/main/index.ts`.
 appId: com.devtoolbelt.dev-team-agents-app
-productName: dev-team-agents
+productName: Dev Team Agents
 copyright: dev-team-agents contributors
 
 directories:
@@ -93,19 +103,15 @@ mac:
     # The app never loads remote content, so ATS exceptions are not needed and are not
     # added. Declared here so the absence is visibly deliberate.
     NSHighResolutionCapable: true
-    # The name Finder and the Dock show, without renaming the bundle. `productName` stays
-    # `dev-team-agents` because the cask, the dmg name and winget all expect it.
-    #
-    # **Never CFBundleName.** Electron finds its `<name> Helper.app`s from the bundle name,
-    # and electron-builder names them after `productName` — so a CFBundleName of "Dev Team
-    # Agents" made the packaged app look for "Dev Team Agents Helper.app", find none, and
-    # abort at launch ("Unable to find helper app"). Every test passed: none of them runs a
-    # packaged build. The bold menu-bar title therefore reads `dev-team-agents` in a
-    # packaged build until `productName` itself changes.
-    CFBundleDisplayName: Dev Team Agents
+    # **Never override CFBundleName here.** Electron finds its `<name> Helper.app`s from the
+    # bundle name, and electron-builder names them after `productName` — an override that
+    # differs from `productName` makes the packaged app look for helpers that do not exist
+    # and abort at launch ("Unable to find helper app"). No test catches it: none runs a
+    # packaged build. The display name comes from `productName` alone.
 
 dmg:
-  artifactName: ${productName}-${version}.dmg
+  # The fixed slug, not ${productName}: see NAMES in the header.
+  artifactName: dev-team-agents-${version}.dmg
 
 # WINDOWS SHAPE — DECIDED (M4.3 closeout), UNSIGNED BY CONFIGURATION.
 #
@@ -153,10 +159,9 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-Setup-${version}-${arch}.exe
-  # Start menu / desktop shortcut and Add/Remove Programs entry; the install directory and
-  # artifact keep `productName`, which winget's manifests expect.
-  shortcutName: Dev Team Agents
-  uninstallDisplayName: Dev Team Agents
+  # The fixed slug, not ${productName}: see NAMES in the header. The installer's title, the
+  # install directory, the shortcuts and the Add/Remove Programs entry all follow
+  # `productName`.
+  artifactName: dev-team-agents-Setup-${version}-${arch}.exe
 
 afterAllArtifactBuild: build/after-build.cjs

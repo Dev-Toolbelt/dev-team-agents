@@ -19,7 +19,7 @@ PackageLocale: en-US
 Publisher: Dev-Toolbelt
 PublisherUrl: https://github.com/Dev-Toolbelt
 PublisherSupportUrl: https://github.com/Dev-Toolbelt/dev-team-agents/issues
-PackageName: dev-team-agents
+PackageName: Dev Team Agents
 PackageUrl: https://github.com/Dev-Toolbelt/dev-team-agents
 License: MIT
 LicenseUrl: https://github.com/Dev-Toolbelt/dev-team-agents/blob/main/LICENSE

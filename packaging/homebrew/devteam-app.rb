@@ -3,7 +3,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # UNRELEASED. The app now EXISTS — `app/` holds the Electron client decided by
 # ADR-0015, and `npm run dist:mac` is configured to produce exactly what the
-# stanzas below name: a universal `dev-team-agents.app` inside
+# stanzas below name: a universal `Dev Team Agents.app` inside
 # `dev-team-agents-<version>.dmg`. A maintainer has run it locally and it
 # built; nothing in the tree is that artifact (`app/.gitignore` excludes
 # `release/`) and no CI job produces one. What does not exist is a
@@ -32,7 +32,7 @@
 #            release referenced does not exist — this URL 404s today.
 #
 # ── THIS `version` AND `app/package.json`'s ARE ONE VALUE, NOT TWO ──────────
-# `app/electron-builder.yml` sets `dmg.artifactName: ${productName}-${version}.dmg`,
+# `app/electron-builder.yml` sets `dmg.artifactName: dev-team-agents-${version}.dmg`,
 # so the dmg filename is a function of **`app/package.json`'s `version`**, while
 # the `url` below builds the same filename from **this cask's `version`**. The
 # two must be the same string at release time or the cask downloads a filename
@@ -60,7 +60,7 @@ cask "devteam-app" do
   sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"
 
   url "https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/app-v#{version}/dev-team-agents-#{version}.dmg"
-  name "dev-team-agents"
+  name "Dev Team Agents"
   desc "Desktop client for the dev-team-agents multi-agent development harness"
   homepage "https://github.com/Dev-Toolbelt/dev-team-agents"
 
@@ -96,7 +96,7 @@ cask "devteam-app" do
   # upgrade the store from a terminal without touching the app.
   depends_on formula: "devteam"
 
-  app "dev-team-agents.app"
+  app "Dev Team Agents.app"
 
   # Per ADR-0011: "macOS artifacts are signed and notarised." `brew audit
   # --cask` (unrun here, see packaging/README.md) verifies the codesign and

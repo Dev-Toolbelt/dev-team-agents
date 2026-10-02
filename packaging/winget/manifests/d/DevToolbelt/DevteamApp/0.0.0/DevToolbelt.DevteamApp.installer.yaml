@@ -12,7 +12,9 @@
 #                    string.
 #   Filename shape  dev-team-agents-Setup-<version>-<arch>.exe, which is
 #                    app/electron-builder.yml's `nsis.artifactName`
-#                    (${productName}-Setup-${version}-${arch}.exe) rendered.
+#                    (dev-team-agents-Setup-${version}-${arch}.exe) rendered —
+#                    a fixed slug, not ${productName}, which is the display
+#                    name `Dev Team Agents`.
 #                    ${version} interpolates WITHOUT a `v` prefix — only the
 #                    release tag in the URL path carries one. Do not "fix" the
 #                    filename to match the tag; that is a 404.

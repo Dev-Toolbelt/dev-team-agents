@@ -228,7 +228,7 @@ Release's address:
   refuses, open System Settings → Privacy & Security and choose **Open Anyway** (Control-click → Open
   no longer works from macOS 15). If macOS instead says the app "is damaged", that is the quarantine
   flag on an unsigned download; with the checksum already passed, clear it for this app only:
-  `xattr -dr com.apple.quarantine /Applications/dev-team-agents.app`. Never run that command because
+  `xattr -dr com.apple.quarantine "/Applications/Dev Team Agents.app"`. Never run that command because
   another website or app tells you to — it is how fake apps get past Gatekeeper.
 - **Windows, only for the verified file.** SmartScreen shows "Windows protected your PC" with
   **Unknown publisher**: choose **More info → Run anyway**. If it names any other publisher, stop. The

@@ -14,13 +14,13 @@ import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { readRelease, releaseDir, requireInstallers, runScript } from './release-artifacts.mjs';
+import { artifactSlug, readRelease, releaseDir, requireInstallers, runScript } from './release-artifacts.mjs';
 
 await runScript('zip-release', () => {
-  const { productName, version, installers } = readRelease();
+  const { version, installers } = readRelease();
   requireInstallers(installers);
 
-  const archive = `${productName}-${version}-unsigned.zip`;
+  const archive = `${artifactSlug}-${version}-unsigned.zip`;
   rmSync(join(releaseDir, archive), { force: true });
 
   const result = spawnSync('zip', ['-q', archive, ...installers], { cwd: releaseDir, stdio: 'inherit' });

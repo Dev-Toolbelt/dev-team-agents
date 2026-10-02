@@ -16,13 +16,20 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const scriptPath = (name: string) => fileURLToPath(new URL(`../scripts/${name}`, import.meta.url));
-const installers = ['demo-1.2.3.dmg', 'demo-Setup-1.2.3.exe', 'demo-Setup-1.2.3-x64.exe', 'demo-Setup-1.2.3-arm64.exe'];
+// The fixed artifact slug, not `productName`: the fixture's display name has spaces, and an
+// installer named after it would break every download URL the packaging manifests hold.
+const installers = [
+  'dev-team-agents-1.2.3.dmg',
+  'dev-team-agents-Setup-1.2.3.exe',
+  'dev-team-agents-Setup-1.2.3-x64.exe',
+  'dev-team-agents-Setup-1.2.3-arm64.exe',
+];
 
 let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'checksums-'));
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ productName: 'demo', version: '1.2.3' }));
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ productName: 'Demo App', version: '1.2.3' }));
   mkdirSync(join(dir, 'release'));
 });
 
@@ -54,7 +61,7 @@ describe('checksums.mjs', () => {
     const result = run('checksums.mjs');
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('demo-Setup-1.2.3-arm64.exe');
+    expect(result.stderr).toContain('dev-team-agents-Setup-1.2.3-arm64.exe');
     expect(() => readFileSync(join(dir, 'release', 'SHA256SUMS.txt'))).toThrow();
   });
 });
