@@ -33,9 +33,19 @@ def parse_semver(version):
     return tuple(int(part) for part in match.groups())
 
 
+def _prerelease_key(version):
+    """Semver precedence for the pre-release part: none ranks above any (``2.49.0-dev.1`` < ``2.49.0``),
+    numeric identifiers compare as numbers and rank below alphanumeric ones. Build metadata is ignored."""
+    match = re.match(r"^v?\d+\.\d+\.\d+(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$", version or "")
+    if not match or match.group(1) is None:
+        return (1,)
+    parts = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in match.group(1).split("."))
+    return (0,) + parts
+
+
 def sort_key(version):
     parsed = parse_semver(version)
-    return parsed if parsed else (-1, -1, -1)
+    return (parsed, _prerelease_key(version)) if parsed else ((-1, -1, -1), (0,))
 
 
 def installed():

@@ -185,7 +185,18 @@ uc_is_newer() {
     read -r l1 l2 l3 <<< "$lat"
     [ "$l1" -ne "$c1" ] && { [ "$l1" -gt "$c1" ]; return; }
     [ "$l2" -ne "$c2" ] && { [ "$l2" -gt "$c2" ]; return; }
-    [ "$l3" -gt "$c3" ]
+    [ "$l3" -ne "$c3" ] && { [ "$l3" -gt "$c3" ]; return; }
+    # Same X.Y.Z: a release is newer than its own pre-release (2.49.0-dev.1 → 2.49.0), never
+    # the other way round. Two pre-releases of one version are not compared: no notice.
+    uc_is_prerelease "$1" && ! uc_is_prerelease "$2"
+}
+
+# uc_is_prerelease <version> — a "-suffix" after X.Y.Z (build metadata "+..." does not count).
+uc_is_prerelease() {
+    local v="${1#v}"
+    v="${v%%+*}"
+    case "$v" in *-*) return 0 ;; esac
+    return 1
 }
 
 # ── Notifications ─────────────────────────────────────────────────────────────
