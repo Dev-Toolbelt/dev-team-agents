@@ -379,6 +379,22 @@ class BindOverV2Test(StoreTestCase):
         os.symlink("../dev-team-agents/agents", str(root / ".claude" / "agents" / "dev-team"))
         return root
 
+    def test_migrate_restores_the_registered_id_when_project_json_is_gone(self):
+        root = self._bound_over_v2()
+        registered = project.load(root)["project_id"]
+        (root / project.PROJECT_DIR / "project.json").unlink()
+
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertEqual(preview["restores_identity"], registered)
+        self.assertFalse(any("new project_id" in action for action in preview["actions"]))
+        self.assertFalse((root / project.PROJECT_DIR / "project.json").exists())
+
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(result["project_id"], registered)
+        self.assertEqual(result["restored_identity"], registered)
+        self.assertEqual(list(registry.entries()), [registered])
+        self.assertEqual(migrate.leftover_trees(root), [])
+
     def test_the_bind_command_refuses_a_pre_root_install_in_every_mode_and_writes_nothing(self):
         # Found binding a real project: this shape passed the v2 refusal, collided on
         # its own committed link, and left `project.json` behind.
@@ -420,8 +436,18 @@ class BindOverV2Test(StoreTestCase):
         with self.assertRaises(ConflictError) as caught:
             bind.sync_project(project_id)
         self.assertIn("devteam migrate", caught.exception.hint)
+        self.assertEqual(caught.exception.details["reason"], bind.V2_INSTALL_REASON)
         # Nothing of the user's was touched.
         self.assertFalse((root / project.PROJECT_DIR / "scripts").is_symlink())
+
+    def test_upgrade_on_a_registered_project_without_project_json_says_not_bound(self):
+        root = self._bound_over_v2()
+        (root / project.PROJECT_DIR / "project.json").unlink()
+        code, out, _ = self.run_cli("--json", "upgrade", str(root))
+        self.assertEqual(code, 2)
+        payload = json.loads(out)
+        self.assertEqual(payload["details"]["reason"], bind.NOT_BOUND_REASON)
+        self.assertIn("registered id", payload["hint"])
 
     def test_doctor_reports_the_leftover_tree_after_a_bind(self):
         root = self._bound_over_v2()

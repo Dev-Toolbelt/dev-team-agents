@@ -13,7 +13,7 @@ from pathlib import Path
 
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
-from devteam import bind, project, providers, versions
+from devteam import bind, project, providers, registry, versions
 from devteam.errors import ConflictError
 
 #: Files a project authored itself, next to (never on top of) the framework's
@@ -148,6 +148,22 @@ class ProviderOwnershipTest(StoreTestCase):
                     if mode == "vendored":
                         # Committed with the project: must resolve on every clone.
                         self.assertFalse(os.path.isabs(os.readlink(link)), str(link))
+
+    def test_a_rebind_after_losing_project_json_keeps_the_registered_id(self):
+        for provider, mode in self._cases():
+            with self.subTest(provider=provider, mode=mode):
+                root = self.new_project("lost-id-{}-{}".format(provider, mode))
+                first = bind.bind(root, provider_names=[provider], mode=mode)
+                (root / project.PROJECT_DIR / "project.json").unlink()
+
+                second = bind.bind(root, provider_names=[provider], mode=mode)
+                self.assertEqual(second["project_id"], first["project_id"])
+                self.assertEqual(project.load(root)["project_id"], first["project_id"])
+                at_path = [
+                    pid for pid, entry in registry.entries().items()
+                    if entry["path"] == str(root.resolve())
+                ]
+                self.assertEqual(at_path, [first["project_id"]])
 
     def test_vendored_bind_installs_every_selected_provider(self):
         selected = list(self._providers())
