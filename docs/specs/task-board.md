@@ -88,9 +88,16 @@ The todo tools that only read or drive their own list (`TaskList`, `TaskGet`, `T
 | opencode | `edit`, `write`, `patch`, `multiedit` | `bash` |
 
 - **Write-shaped shell** — a heuristic, deliberately: a file verb (`mv`, `rm`, `cp`, `mkdir`, `touch`,
-  `ln`, `chmod`, `tee`, `truncate`, `patch`, `install`, `dd`…), `sed -i`/`perl -i`, a git subcommand that
-  changes state (`commit`, `push`, `merge`, `rebase`, `checkout`, `reset`, `stash`, `tag`…), a package
-  manager action (`install`, `add`, `remove`, `update`…), or a redirect to anything but `/dev/null`. A
+  `ln`, `chmod`, `tee`, `truncate`, `patch`, `install`, `dd`, `scp`, `rsync`…), `sed -i`/`perl -i`, a git
+  subcommand that changes state (`commit`, `push`, `merge`, `rebase`, `checkout`, `reset`, `stash`,
+  `tag`…), a package manager action (`install`, `add`, `remove`, `update`…), a container, cluster or
+  service subcommand that changes state (`docker`/`podman` `rm`/`run`/`exec`/`restart`/`prune`…, also
+  under `container`/`image`/… groups; `docker compose`/`docker-compose` `up`/`down`/`restart`/`run`…;
+  `kubectl` `apply`/`delete`/`scale`/`exec`…, `rollout restart|undo|pause|resume`; `helm`
+  `install`/`upgrade`/`uninstall`/`rollback`; `systemctl`/`service` `start`/`stop`/`restart`/`reload`/
+  `enable`…), or a redirect to anything but `/dev/null`. `ssh [options] host '<cmd>'` is read through:
+  its remote command decides, so `ssh host 'docker ps'` reads and `ssh host 'docker rm -f c'` writes. An
+  API call (`curl -X POST`) is not judged from its text. A
   miss leaves the card in To Do, never a wrong Done.
 - **Only the main session** — a call with `agent_id` (opencode: `parent_id`, a child session) is its
   agent task's work and is ignored.
@@ -607,3 +614,4 @@ Implementation details:
 | 2026-10-01 | Review fixes: (1) a `git merge` counts only when the checkout it ran in is known and differs from the merged branch, and records it as `into` — catching `feat/x` up with `origin/feat/x` no longer marks the PR merged. (2) Criterion 12 now names five columns. (3) `tasks.session_done` fires while tasks sit in PR/MR Created (PR/MR Created is finished work); `durations.done` no longer includes PR/MR Created time. (4) GitHub refs from any source, the prompt included, must name the bound repository or one a git remote on the web host names, and the binding's `repository` counts only when a remote names it. (5) Punycode hosts and known non-GitLab forges never become self-hosted GitLab hosts. (6) The open-link request carries `expect`, the number/key the badge showed; a mismatch is refused. (7) Env-assignment refusal is tokenised: only an assignment in command position refuses the command. (8) Known limits recorded (forks, ports, single-label hosts, merges outside a hooked session); PR/MR Created tasks are not hidden by done retention | Findings of the `/devteam:review` pass on the PR/MR Created branch |
 | 2026-10-02 | Direct work counts any tool call of the main session, not only writes: a read-only turn puts the card in To Do (and it stays there after `Stop`), a write moves it to In progress and `Stop` completes it; the card follows the latest turn. A To Do card is not abandoned work, is retired at `Stop` when its turn created a plan or an agent, and the app hides it after *Keep unanswered direct work for* (Board settings, default 24 h). The gate forks python at most twice a turn (`.direct-` / `.directw-` markers); acceptance criteria 9 and 17 reworded | User request: a production health check that only read never reached the board; everything done in a session should, and a question left unanswered should not linger |
 | 2026-10-01 | Audit fixes (`docs/audit/task-board-audit-2026-10-01.md`): (1) a payload that carries a tool result is never folded in as direct work — direct work is taken before the call runs; (2) a review result decides `tasks.session_done` with the direct card left out, as `record`/`mark` already did; (3) `tasks watch` emits `removed` for a project that left the bound set (unbound, folder gone), matching `tasks list`; (4) a stored GitHub issue ref is re-validated on read against the bound repository and the current remotes; (5) redaction covers every task text and `Authorization: Basic/Token`, hyphenated key names and `mysql -p<v>`; (6) the Settings bullet names the direct-work lifetime the app already had | Divergences found by the audit between the stated rules and the code |
+| 2026-10-02 | Write-shaped shell widened: `ssh host '<cmd>'` is read through to its remote command; `docker`/`podman`/`docker compose`/`docker-compose`, `kubectl`, `helm`, `systemctl`/`service` count when their subcommand changes state, and `scp`/`rsync` always; the bash gate matches them too | A production fix run as `ssh host 'docker rm -f …'` left the card in To Do instead of moving it to In progress |
