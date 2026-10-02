@@ -37,13 +37,13 @@ describe('launchCommand', () => {
       ['list', '--json'],
       env,
       'win32',
-      present('C:\\Python312\\python.exe', 'C:\\Windows\\py.exe'),
+      present(SCRIPT, 'C:\\Python312\\python.exe', 'C:\\Windows\\py.exe'),
     );
     expect(launch).toEqual({ command: 'C:\\Windows\\py.exe', args: ['-3', SCRIPT, 'list', '--json'] });
   });
 
   it('falls back to python.exe', () => {
-    const launch = launchCommand(SCRIPT, ['x'], { PATH: 'C:\\Python312' }, 'win32', present('C:\\Python312\\python.exe'));
+    const launch = launchCommand(SCRIPT, ['x'], { PATH: 'C:\\Python312' }, 'win32', present(SCRIPT, 'C:\\Python312\\python.exe'));
     expect(launch).toEqual({ command: 'C:\\Python312\\python.exe', args: [SCRIPT, 'x'] });
   });
 
@@ -52,6 +52,11 @@ describe('launchCommand', () => {
       command: SCRIPT,
       args: ['x'],
     });
+  });
+
+  it('leaves a missing binary to the spawn, so it reports not-found instead of a python exit', () => {
+    const launch = launchCommand(SCRIPT, ['x'], { PATH: 'C:\\Python312' }, 'win32', present('C:\\Python312\\python.exe'));
+    expect(launch).toEqual({ command: SCRIPT, args: ['x'] });
   });
 
   it('never picks an interpreter from a relative or drive-relative PATH entry', () => {

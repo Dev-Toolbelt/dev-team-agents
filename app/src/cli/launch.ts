@@ -91,8 +91,9 @@ export function findWindowsPython(
 /**
  * What to hand to `spawn` for `binary` and `args`. Unchanged everywhere except a Windows
  * non-`.exe` target with a python interpreter available, which becomes
- * `<interpreter> [-3] <binary> <args…>`. With no interpreter the binary is returned as is,
- * so the spawn fails with its own, honest error rather than one invented here.
+ * `<interpreter> [-3] <binary> <args…>`. With no interpreter, or no file at `binary`, the
+ * binary is returned as is, so the spawn fails with its own, honest error (ENOENT for a
+ * missing CLI) rather than python exiting over a script it cannot open.
  */
 export function launchCommand(
   binary: string,
@@ -102,6 +103,7 @@ export function launchCommand(
   exists?: (path: string) => boolean,
 ): Launch {
   if (platform !== 'win32' || binary.toLowerCase().endsWith('.exe')) return { command: binary, args };
+  if (!(exists ?? isFile)(binary)) return { command: binary, args };
   const python = findWindowsPython(env, platform, exists);
   if (python === null) return { command: binary, args };
   return { command: python.command, args: [...python.args, binary, ...args] };
