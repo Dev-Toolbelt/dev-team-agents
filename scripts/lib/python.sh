@@ -9,7 +9,9 @@
 # child (a dispatcher's sub-scripts, an installer's helpers).
 #
 # Resolution order: $DEVTEAM_PYTHON (the CLI passes its own sys.executable), python3,
-# python, `py -3`; each must report Python >= 3.9. On macOS/Linux with a `python3` on
+# python, `py -3`, then — Windows only — the Python the CLI installer embeds under
+# %LOCALAPPDATA%\Programs\devteam\python (ADR-0028), so hooks run on a machine with no
+# system Python; each must report Python >= 3.9. On macOS/Linux with a `python3` on
 # PATH nothing is probed and nothing is defined, so behavior there is unchanged.
 # The result is cached in DTA_PYTHON / DTA_PYTHON_FLAG (exported), so children skip
 # the probe. Bash 3.2 compatible.
@@ -53,6 +55,14 @@ _dta_python_pick() {
     fi
 }
 
+# The embedded interpreter of the Windows CLI installer (ADR-0028), as a Git Bash path.
+_dta_cli_python() {
+    local base="${LOCALAPPDATA:-}"
+    [ -n "$base" ] || return 1
+    command -v cygpath >/dev/null 2>&1 && base="$(cygpath -u "$base")"
+    printf '%s/Programs/devteam/python/python.exe' "$base"
+}
+
 dta_python_resolve() {
     if [ -n "${DTA_PYTHON:-}" ]; then
         # Resolved by a parent. Re-arm the shim in case the exported function was
@@ -86,6 +96,14 @@ dta_python_resolve() {
     if command -v py >/dev/null 2>&1 && _dta_python_ok py -3; then
         _dta_python_pick py -3
         return 0
+    fi
+    if _dta_is_windows; then
+        local embedded
+        embedded="$(_dta_cli_python)" || return 1
+        if [ -f "$embedded" ] && _dta_python_ok "$embedded"; then
+            _dta_python_pick "$embedded"
+            return 0
+        fi
     fi
     return 1
 }
