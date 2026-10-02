@@ -279,7 +279,7 @@ n_openc_agents=$(find "$FIXTURE/.opencode/agents" -maxdepth 1 -name '*.md' -type
 bash "$SOURCE/scripts/install-provider.sh" codex --source "$SOURCE" >/dev/null
 
 python3 - <<PY
-import json, os
+import json, os, re
 d = json.load(open("$FIXTURE/.codex/hooks.json"))
 hooks_obj = d.get("hooks")
 assert isinstance(hooks_obj, dict), f"codex hooks.json 'hooks' must be object keyed by event (got {type(hooks_obj).__name__})"
@@ -293,9 +293,10 @@ for event, groups in hooks_obj.items():
     for grp in groups:
         for hh in grp.get("hooks", []):
             assert isinstance(hh.get("command"), str), f"{event}: command must be string"
-            parts = hh["command"].split()
-            assert len(parts) >= 2, f"{event}: malformed command"
-            rel = parts[1]
+            # every form (Unix root walk, Windows cmd.exe wrapper) ends in the hook script path
+            found = re.search(r"\.dev-team-agents/scripts/hooks/[A-Za-z0-9_.-]+\.sh", hh["command"])
+            assert found, f"{event}: malformed command"
+            rel = found.group(0)
             full = os.path.join("$FIXTURE", rel)
             if not os.path.exists(full):
                 missing_paths.append(f"{event}: {rel}")
