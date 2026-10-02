@@ -131,7 +131,10 @@ class RequireToolsTest(unittest.TestCase):
         for provider, needs in self.NEEDS.items():
             for tool in needs:
                 which = lambda name, _t=tool: None if name == _t else "/usr/bin/" + name  # noqa: E731
-                with self.subTest(provider=provider, tool=tool), mock.patch.object(providers.shutil, "which", which):
+                # bash is resolved through devteam.shells, which also probes Git for Windows' folders.
+                found_bash = None if tool == "bash" else "/usr/bin/bash"
+                with self.subTest(provider=provider, tool=tool), mock.patch.object(providers.shutil, "which", which), \
+                        mock.patch.object(providers.shells, "bash_path", return_value=found_bash):
                     with self.assertRaises(EnvError):
                         providers.require_tools(provider)
 
