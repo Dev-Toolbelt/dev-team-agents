@@ -105,6 +105,15 @@ export interface InvokeOptions {
    * single secret inside it could be echoed on its own in an error message.
    */
   readonly redactAlso?: readonly string[];
+  /**
+   * A secret now and a second one later, for the one command that reads stdin in two
+   * stages with a wait the user spends elsewhere (`auth login --signup`: the password,
+   * then the emailed code). `first` is written at once, stdin stays open, and `rest` —
+   * settled by the caller when the user has the code — is written and closes it; `null`
+   * closes it empty (cancelled). Both are redacted from everything returned, exactly like
+   * `secretStdin`, which this replaces for that call.
+   */
+  readonly lateStdin?: { readonly first: string; readonly rest: Promise<string | null> };
 }
 
 export const REDACTED = '[redacted]';
@@ -271,7 +280,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     child = spawn(launch.command, [...launch.args], {
       // Explicit: never a shell. See the file header.
       shell: false,
-      stdio: [options.secretStdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      stdio: [options.secretStdin !== undefined || options.lateStdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
       env,
       windowsHide: true,
@@ -294,6 +303,21 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
     // Swallowed; the exit code is the result, and no error text is surfaced.
     child.stdin?.on('error', () => undefined);
     child.stdin?.end(options.secretStdin, 'utf8');
+  }
+
+  const lateSecrets: string[] = [];
+  if (options.lateStdin !== undefined) {
+    const { first, rest } = options.lateStdin;
+    lateSecrets.push(first);
+    child.stdin?.on('error', () => undefined);
+    child.stdin?.write(`${first}\n`, 'utf8');
+    void rest.then(
+      (value) => {
+        if (value !== null) lateSecrets.push(value);
+        child.stdin?.end(value === null ? undefined : `${value}\n`, 'utf8');
+      },
+      () => child.stdin?.end(),
+    );
   }
 
   inFlight.set(child, {
@@ -391,7 +415,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
 
   const durationMs = Date.now() - startedAt;
   const redactAll = (text: string): string =>
-    (options.redactAlso ?? []).reduce(redactSecret, redactSecret(text, options.secretStdin));
+    [...(options.redactAlso ?? []), ...lateSecrets].reduce(redactSecret, redactSecret(text, options.secretStdin));
   const stdout = redactAll(Buffer.concat(stdoutChunks).toString('utf8'));
   const stderr = redactAll(Buffer.concat(stderrChunks).toString('utf8'));
 

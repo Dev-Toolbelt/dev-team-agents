@@ -23,6 +23,7 @@
  */
 
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
+import { ACCOUNT_COMMANDS, ACCOUNT_SHAPES } from './accountCommands.js';
 import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import { CREDENTIALS_SAVED_UNREADABLE } from '../shared/api.js';
@@ -151,6 +152,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['skills', 'show'],
   ['tasks', 'list'],
   ['tasks', 'watch'],
+  // ADR-0029. Every `auth` leaf is `compat.READ_ONLY`; see `accountCommands.ts`.
+  ...ACCOUNT_COMMANDS,
 ]);
 
 /**
@@ -368,6 +371,8 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   // allowed on the one-shot `list`.
   'tasks list': { operands: 0, flags: { '--stale-after': 'value', '--since': 'value' } },
   'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
+  // ADR-0029: the account. No flag carries a secret; a code or password goes over stdin.
+  ...ACCOUNT_SHAPES,
 });
 
 const MAX_COMMAND_WORDS = 3;
@@ -440,7 +445,7 @@ const PROBLEM_KIND_BY_OUTCOME: Readonly<Record<'findings' | 'usage' | 'environme
  * CLI's own `error` and `hint` text rather than a message invented here: the CLI's hints
  * are actionable and a paraphrase would be neither.
  */
-function toOperationResult<T>(result: CliResult, validate: (body: Record<string, unknown>) => T | string): OperationResult<T> {
+export function toOperationResult<T>(result: CliResult, validate: (body: Record<string, unknown>) => T | string): OperationResult<T> {
   if (!ranAndAnswered(result)) {
     const kind: ProblemKind = result.outcome;
     return {

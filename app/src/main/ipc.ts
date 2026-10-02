@@ -73,6 +73,7 @@ import {
   type CliContext,
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
+import { registerAccountIpc } from './accountIpc.js';
 import {
   PLUGIN_ACTION_ID,
   PLUGIN_CONFIG_KEY,
@@ -1394,6 +1395,9 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     pathsCache = entry;
     return entry.paths;
   }
+
+  // ADR-0029: the account. Read-only `auth` commands, so `context()` and never `gatedContext`.
+  registerAccountIpc({ handle, context });
 
   return {
     context,

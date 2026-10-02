@@ -17,6 +17,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import {
   CHANNELS,
+  type AuthProvider,
   type BindRequest,
   type ProjectFolders,
   type BoardFeed,
@@ -182,6 +183,41 @@ const bridge: DevteamBridge = {
         ...('value' in entry ? { value: entry.value } : {}),
       })),
     ),
+  // The account (ADR-0029). Everything is coerced to a string (or null) here and validated
+  // again in main. A code or password is passed straight through to a single call, which
+  // forwards it to the CLI's stdin; this bridge keeps none of it.
+  authStatus: () => ipcRenderer.invoke(CHANNELS.authStatus),
+  authCheck: () => ipcRenderer.invoke(CHANNELS.authCheck),
+  authLoginOAuth: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authLoginOAuth, String(provider)),
+  authOtpStart: (email: string, name: string | null) =>
+    ipcRenderer.invoke(CHANNELS.authOtpStart, String(email), name === null ? null : String(name)),
+  authOtpVerify: (email: string, code: string) => ipcRenderer.invoke(CHANNELS.authOtpVerify, String(email), String(code)),
+  authPasswordSignIn: (email: string, password: string) =>
+    ipcRenderer.invoke(CHANNELS.authPasswordSignIn, String(email), String(password)),
+  authPasswordSignUpStart: (email: string, password: string, name: string | null) =>
+    ipcRenderer.invoke(CHANNELS.authPasswordSignUpStart, String(email), String(password), name === null ? null : String(name)),
+  authPasswordSignUpFinish: (code: string) => ipcRenderer.invoke(CHANNELS.authPasswordSignUpFinish, String(code)),
+  authPasswordSignUpCancel: () => ipcRenderer.invoke(CHANNELS.authPasswordSignUpCancel),
+  authPasswordResetStart: (email: string) => ipcRenderer.invoke(CHANNELS.authPasswordResetStart, String(email)),
+  authPasswordResetFinish: (email: string, code: string, newPassword: string) =>
+    ipcRenderer.invoke(CHANNELS.authPasswordResetFinish, String(email), String(code), String(newPassword)),
+  authPasswordChange: (current: string, next: string) =>
+    ipcRenderer.invoke(CHANNELS.authPasswordChange, String(current), String(next)),
+  authProfileGet: () => ipcRenderer.invoke(CHANNELS.authProfileGet),
+  authProfileUpdate: (name: string) => ipcRenderer.invoke(CHANNELS.authProfileUpdate, String(name)),
+  authEmailChangeStart: (newEmail: string) => ipcRenderer.invoke(CHANNELS.authEmailChangeStart, String(newEmail)),
+  authEmailChangeConfirm: (newEmail: string, codeNew: string, codeCurrent: string | null) =>
+    ipcRenderer.invoke(
+      CHANNELS.authEmailChangeConfirm,
+      String(newEmail),
+      String(codeNew),
+      codeCurrent === null ? null : String(codeCurrent),
+    ),
+  authIdentityLink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityLink, String(provider)),
+  authIdentityUnlink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityUnlink, String(provider)),
+  authDeleteStart: () => ipcRenderer.invoke(CHANNELS.authDeleteStart),
+  authDeleteConfirm: (code: string) => ipcRenderer.invoke(CHANNELS.authDeleteConfirm, String(code)),
+  authLogout: () => ipcRenderer.invoke(CHANNELS.authLogout),
   pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) =>
     ipcRenderer.invoke(CHANNELS.pickProjectPath, String(projectId), String(picker)),
   notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),

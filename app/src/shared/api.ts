@@ -13,8 +13,9 @@
 
 import type { ProjectFolders, ProjectFoldersAnswer } from './projectFolders.js';
 import type { Provider } from './providers.js';
+import type { AuthGateMode, AuthProvider } from './accountRules.js';
 
-export type { ProjectFolders, ProjectFoldersAnswer };
+export type { ProjectFolders, ProjectFoldersAnswer, AuthGateMode, AuthProvider };
 
 export type ProblemKind =
   | 'usage'
@@ -1232,6 +1233,52 @@ export interface DevteamBridge {
    */
   readonly pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) => Promise<ProjectPathPick>;
   /**
+   * The account (ADR-0029). Every operation is a named `devteam auth` command run by the main
+   * process; the CLI owns the session, so **no token ever reaches the renderer**. A code or a
+   * password is forwarded over the child's stdin for that one call — never argv, never logged,
+   * never returned, never kept in main beyond it.
+   *
+   * `authCheck` answers `ok: true` with `entitled: false` when the account is not entitled
+   * (the CLI exits 1 or 3 with the same document), so a blocked account is data, not an error.
+   */
+  readonly authStatus: () => Promise<OperationResult<AuthState>>;
+  readonly authCheck: () => Promise<OperationResult<AuthState>>;
+  /** The CLI opens the system browser and waits (up to five minutes) for the loopback callback. */
+  readonly authLoginOAuth: (provider: AuthProvider) => Promise<OperationResult<AuthState>>;
+  readonly authOtpStart: (email: string, name: string | null) => Promise<OperationResult<AuthSent>>;
+  readonly authOtpVerify: (email: string, code: string) => Promise<OperationResult<AuthState>>;
+  readonly authPasswordSignIn: (email: string, password: string) => Promise<OperationResult<AuthState>>;
+  /**
+   * Password sign-up is one CLI process that reads the password, sends the code, then reads
+   * the code. Start holds that process (main keeps at most one) and Finish completes it;
+   * Cancel ends it. An early refusal (a password outside the policy, no network) is the
+   * Start result itself.
+   */
+  readonly authPasswordSignUpStart: (
+    email: string,
+    password: string,
+    name: string | null,
+  ) => Promise<OperationResult<AuthSignUpPending>>;
+  readonly authPasswordSignUpFinish: (code: string) => Promise<OperationResult<AuthState>>;
+  readonly authPasswordSignUpCancel: () => Promise<void>;
+  readonly authPasswordResetStart: (email: string) => Promise<OperationResult<AuthSent>>;
+  readonly authPasswordResetFinish: (email: string, code: string, newPassword: string) => Promise<OperationResult<AuthState>>;
+  readonly authPasswordChange: (current: string, next: string) => Promise<OperationResult<AuthPasswordChanged>>;
+  readonly authProfileGet: () => Promise<OperationResult<AuthProfile>>;
+  readonly authProfileUpdate: (name: string) => Promise<OperationResult<AuthDisplayName>>;
+  readonly authEmailChangeStart: (newEmail: string) => Promise<OperationResult<AuthSent>>;
+  /** `codeCurrent: null` skips the second code (the one sent to the old address). */
+  readonly authEmailChangeConfirm: (
+    newEmail: string,
+    codeNew: string,
+    codeCurrent: string | null,
+  ) => Promise<OperationResult<AuthEmailChanged>>;
+  readonly authIdentityLink: (provider: AuthProvider) => Promise<OperationResult<AuthIdentityLinked>>;
+  readonly authIdentityUnlink: (provider: AuthProvider) => Promise<OperationResult<AuthIdentityUnlinked>>;
+  readonly authDeleteStart: () => Promise<OperationResult<AuthSent>>;
+  readonly authDeleteConfirm: (code: string) => Promise<OperationResult<AuthDeleted>>;
+  readonly authLogout: () => Promise<OperationResult<AuthLoggedOut>>;
+  /**
    * Integrations (ADR-0023). Every operation is a named CLI command; `projectId` is resolved to a
    * registered project path in the main process, `null` meaning no project. The token travels
    * to the CLI over stdin only and is never returned, logged or stored by this app.
@@ -1593,6 +1640,110 @@ export const BOARD_SETTING_BOUNDS = {
   directTodoTtlHours: { min: 1, max: 720, fallback: 24 },
 } as const;
 
+// ── account (ADR-0029) ───────────────────────────────────────────────────────
+
+/** `entitlement.status` of the `auth` documents. Anything else is read as `invalid`. */
+export type EntitlementStatus =
+  | 'active'
+  | 'trial'
+  | 'trial_expired'
+  | 'banned'
+  | 'needs_online_check'
+  | 'signed_out'
+  | 'invalid';
+
+export interface AuthEntitlement {
+  readonly status: EntitlementStatus;
+  readonly reason: string | null;
+  readonly features: readonly string[];
+  /** Unix seconds, or `null`. */
+  readonly trial_ends_at: number | null;
+  readonly expires_at: number | null;
+}
+
+export interface AuthAccount {
+  readonly id: string;
+  readonly email: string | null;
+  readonly display_name: string | null;
+  readonly provider: string | null;
+}
+
+/**
+ * `auth status`, `auth check` and every sign-in's document. **No token is part of it** and the
+ * app never asks for one: the session belongs to the CLI.
+ */
+export interface AuthState {
+  readonly signed_in: boolean;
+  readonly account: AuthAccount | null;
+  readonly entitled: boolean;
+  readonly entitlement: AuthEntitlement;
+  /** `false` while the last online check did not succeed; the cached licence was used. */
+  readonly online_ok: boolean | null;
+  readonly secret_backend_insecure: boolean;
+  readonly warnings: readonly string[];
+  readonly gate_mode: AuthGateMode;
+}
+
+/** `auth otp start`, `auth password reset --send-code`, `auth delete --send-code`. */
+export interface AuthSent {
+  readonly sent: boolean;
+}
+
+export interface AuthIdentity {
+  readonly id: string | null;
+  readonly provider: string;
+  readonly email: string | null;
+}
+
+/** `auth profile show`. */
+export interface AuthProfile {
+  readonly id: string;
+  readonly email: string | null;
+  readonly display_name: string | null;
+  readonly signup_method: string | null;
+  readonly identities: readonly AuthIdentity[];
+  /** An address an email change is waiting on, or `null`. */
+  readonly pending_email: string | null;
+}
+
+export interface AuthDisplayName {
+  readonly display_name: string;
+}
+
+export interface AuthEmailChanged {
+  readonly confirmed: boolean;
+  readonly email: string | null;
+}
+
+export interface AuthPasswordChanged {
+  readonly changed: boolean;
+  readonly other_sessions_revoked: boolean;
+}
+
+export interface AuthIdentityLinked {
+  readonly linked: string;
+  readonly identities: readonly AuthIdentity[];
+}
+
+export interface AuthIdentityUnlinked {
+  readonly unlinked: string;
+}
+
+export interface AuthDeleted {
+  readonly deleted: boolean;
+}
+
+export interface AuthLoggedOut {
+  readonly signed_in: boolean;
+  /** `false` when the server could not be reached to revoke the session; it was removed here. */
+  readonly server_revoked: boolean | null;
+}
+
+/** The password sign-up is waiting for the emailed code, which {@link DevteamBridge.authPasswordSignUpFinish} sends. */
+export interface AuthSignUpPending {
+  readonly pending: true;
+}
+
 /** The channel names, shared so main and preload cannot disagree about a string. */
 export const CHANNELS = {
   buildInfo: 'devteam:build-info',
@@ -1632,6 +1783,27 @@ export const CHANNELS = {
   integrationConfigSet: 'devteam:integration-config-set',
   integrationConfigUnset: 'devteam:integration-config-unset',
   integrationResources: 'devteam:integration-resources',
+  authStatus: 'devteam:auth-status',
+  authCheck: 'devteam:auth-check',
+  authLoginOAuth: 'devteam:auth-login-oauth',
+  authOtpStart: 'devteam:auth-otp-start',
+  authOtpVerify: 'devteam:auth-otp-verify',
+  authPasswordSignIn: 'devteam:auth-password-sign-in',
+  authPasswordSignUpStart: 'devteam:auth-password-sign-up-start',
+  authPasswordSignUpFinish: 'devteam:auth-password-sign-up-finish',
+  authPasswordSignUpCancel: 'devteam:auth-password-sign-up-cancel',
+  authPasswordResetStart: 'devteam:auth-password-reset-start',
+  authPasswordResetFinish: 'devteam:auth-password-reset-finish',
+  authPasswordChange: 'devteam:auth-password-change',
+  authProfileGet: 'devteam:auth-profile-get',
+  authProfileUpdate: 'devteam:auth-profile-update',
+  authEmailChangeStart: 'devteam:auth-email-change-start',
+  authEmailChangeConfirm: 'devteam:auth-email-change-confirm',
+  authIdentityLink: 'devteam:auth-identity-link',
+  authIdentityUnlink: 'devteam:auth-identity-unlink',
+  authDeleteStart: 'devteam:auth-delete-start',
+  authDeleteConfirm: 'devteam:auth-delete-confirm',
+  authLogout: 'devteam:auth-logout',
   credentialsLocalShow: 'devteam:credentials-local-show',
   credentialsLocalInit: 'devteam:credentials-local-init',
   credentialsLocalPatch: 'devteam:credentials-local-patch',
