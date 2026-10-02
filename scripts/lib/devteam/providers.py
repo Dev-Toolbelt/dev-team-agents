@@ -71,7 +71,30 @@ def claude_artifacts(version_dir):
 #: Variables the installers documentably need. The child used to inherit the whole
 #: environment; a minimal one keeps an unrelated variable from changing what a
 #: shell script does, and makes the PATH the installer resolves explicit.
-_ENV_PASSTHROUGH = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "DEVTEAM_HOME", "TERM")
+_ENV_PASSTHROUGH = (
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "DEVTEAM_HOME",
+    "TERM",
+    # Windows (Git Bash, python, mktemp) cannot start or find a temp dir without
+    # these; all are absent on POSIX, so passing them through changes nothing there.
+    "SYSTEMROOT",
+    "SystemDrive",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PATHEXT",
+    "COMSPEC",
+    "MSYSTEM",
+    "PYTHONUTF8",
+    "PYTHONIOENCODING",
+)
 #: Installer stderr is surfaced as a hint; cap it so a chatty script cannot flood
 #: the `--json` document the desktop app consumes.
 _HINT_MAX = 2000
@@ -330,3 +353,88 @@ def unwire_codex_hooks(project_root):
         tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         os.replace(str(tmp), str(path))
     return sorted(removed)
+
+
+#: Mirrors ``MANAGED_EVENTS`` in `install-codex.sh`.
+CODEX_MANAGED_EVENTS = (
+    "SessionStart",
+    "PreToolUse",
+    "PostToolUse",
+    "UserPromptSubmit",
+    "PreCompact",
+    "Stop",
+    "SessionEnd",
+)
+#: Where `install-opencode.sh` copies the plugin that wires opencode's hooks.
+OPENCODE_PLUGIN_FILE = ".opencode/plugins/dev-team-agents.ts"
+#: The slash commands `install-opencode.sh` registers are keyed ``devteam:<name>``.
+OPENCODE_COMMAND_PREFIX = "devteam:"
+
+
+def codex_hook_events(project_root):
+    """Managed Codex events currently present in `.codex/hooks.json`."""
+    path = Path(project_root) / CODEX_HOOKS_FILE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return []
+    found = []
+    for event in CODEX_MANAGED_EVENTS:
+        groups = hooks.get(event)
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            inner = group.get("hooks", []) if isinstance(group, dict) else []
+            if any(
+                isinstance(hook, dict) and CODEX_HOOKS_MARKER in (hook.get("statusMessage") or "")
+                for hook in inner
+            ):
+                found.append(event)
+                break
+    return found
+
+
+def unwire_opencode_commands(project_root):
+    """Remove only the ``devteam:*`` command keys from the project's opencode config.
+
+    Returns ``(removed, untouched)``: the number of keys removed and the project
+    files left alone because they are not plain JSON (JSONC with comments or
+    trailing commas) — those are reported, never rewritten.
+    """
+    root = Path(project_root)
+    removed = 0
+    untouched = []
+    for rel in MERGED_PROJECT_FILES["opencode"]:
+        path = root / rel
+        if not path.is_file():
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except OSError:
+            untouched.append(rel)
+            continue
+        except ValueError:
+            # A JSONC file the installer never wrote is no problem of ours.
+            if OPENCODE_COMMAND_PREFIX in raw:
+                untouched.append(rel)
+            continue
+        commands = data.get("command") if isinstance(data, dict) else None
+        if not isinstance(commands, dict):
+            continue
+        ours = [key for key in commands if str(key).startswith(OPENCODE_COMMAND_PREFIX)]
+        if not ours:
+            continue
+        for key in ours:
+            commands.pop(key)
+        if not commands:
+            data.pop("command")
+        tmp = path.with_name(path.name + ".tmp")
+        with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        os.replace(str(tmp), str(path))
+        removed += len(ours)
+    return removed, untouched
