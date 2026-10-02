@@ -14,8 +14,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Empty } from '../Problem.js';
-import { toastBatch, toastResult } from '../toasts.js';
+import { Empty, needsRepair } from '../Problem.js';
+import { toastBatch, toastFailure, toastResult } from '../toasts.js';
 import { unreachable } from '../useOperation.js';
 import {
   BulkActionBar,
@@ -69,11 +69,13 @@ function newFolderId(): string {
  * rather than in the row, so a row that remounts — because it moved to another folder —
  * keeps its in-flight state. Results are reported as toasts, never written into the table.
  */
-export function useProjectSyncs(onChanged: () => void) {
+export function useProjectSyncs(onChanged: () => void, onRepair?: (projectId: string) => void) {
   const [rows, setRows] = useState<ReadonlyMap<string, RowSyncState>>(new Map());
   const [bulk, setBulk] = useState<BulkSyncState>(IDLE_BULK);
   const changed = useRef(onChanged);
   changed.current = onChanged;
+  const onRepairRef = useRef(onRepair);
+  onRepairRef.current = onRepair;
   const mounted = useRef(true);
   const stop = useRef(false);
   useEffect(() => {
@@ -92,7 +94,14 @@ export function useProjectSyncs(onChanged: () => void) {
     setRow(id, { phase: 'pending' });
     const result = await window.devteam.syncProject(id).catch(unreachable);
     setRow(id, IDLE_ROW);
-    toastResult(result, `Synced ${name}`, `sync-${id}`);
+    // A refusal the Repair flow answers carries its way out, instead of a hint to go run a
+    // command in a terminal.
+    const repair = onRepairRef.current;
+    if (!result.ok && needsRepair(result) && repair !== undefined) {
+      toastFailure(result, `sync-${id}`, { label: 'Repair…', onClick: () => repair(id) });
+    } else {
+      toastResult(result, `Synced ${name}`, `sync-${id}`);
+    }
     if (result.ok && mounted.current) changed.current();
   }
 
@@ -149,6 +158,7 @@ export function ProjectList({
   syncAllPending,
   onChanged,
   onOpenSettings,
+  onRepair,
   toolbar,
 }: {
   projects: readonly ProjectRecord[];
@@ -164,6 +174,8 @@ export function ProjectList({
   syncAllPending: boolean;
   onChanged: () => void;
   onOpenSettings: (projectId: string) => void;
+  /** Opens the Repair dialog for a project whose Sync or Upgrade was refused. */
+  onRepair: (projectId: string) => void;
   /** Screen-wide actions shown beside New folder; `Projects` owns their state. */
   toolbar?: ReactNode;
 }) {
@@ -373,6 +385,7 @@ export function ProjectList({
         current={current}
         onChanged={onChanged}
         onOpenSettings={() => onOpenSettings(id)}
+        onRepair={() => onRepair(id)}
         selected={isSelected}
         onSelect={(checked) => select([id], checked)}
         dragging={dragging?.includes(id) ?? false}
