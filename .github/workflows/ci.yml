@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The runner image ships its own shellcheck and bumps it without telling anyone.
       # That made this gate's verdict depend on the image: 0.9.0 on the runner against
@@ -135,7 +135,7 @@ jobs:
           - os: macos-latest
             python: "3.x"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python ${{ matrix.python }}
         uses: actions/setup-python@v5
@@ -203,7 +203,7 @@ jobs:
       # write, and no secret is referenced here, so this removes the token from the
       # runner's git config rather than fixing an exploit. Nothing in this job pushes
       # or fetches again, so it costs nothing.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -239,7 +239,7 @@ jobs:
         provider: [claude, opencode, codex]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
@@ -282,7 +282,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
@@ -317,7 +317,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
