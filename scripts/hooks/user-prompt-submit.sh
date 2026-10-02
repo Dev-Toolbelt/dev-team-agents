@@ -11,6 +11,12 @@ set -euo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/user-prompt-submit" && pwd)"
 INPUT=$(cat)
+# The payload is fed to each sub-script from a file, never through a pipe: a
+# sub-script that exits without reading stdin would otherwise kill the writer
+# with SIGPIPE (141) on payloads larger than the pipe buffer.
+INPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/devteam-hook-input.XXXXXX")
+trap 'rm -f "$INPUT_FILE"' EXIT
+printf '%s\n' "$INPUT" > "$INPUT_FILE"
 EXIT_CODE=0
 
 # Same filename convention as the PreToolUse and Stop dispatchers.
@@ -25,7 +31,7 @@ for script in "$HOOKS_DIR"/*.sh; do
     fi
     SCRIPT_EXIT=0
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:user-prompt-submit] running: $(basename "$script")" >&2
-    printf '%s\n' "$INPUT" | env -u BASH_ENV -u ENV bash "$script" || SCRIPT_EXIT=$?
+    env -u BASH_ENV -u ENV bash "$script" < "$INPUT_FILE" || SCRIPT_EXIT=$?
     [ -n "${DEVTEAM_HOOK_DEBUG:-}" ] && echo "[devteam:user-prompt-submit] exit ${SCRIPT_EXIT}: $(basename "$script")" >&2
     # First non-zero exit wins, except that exit 2 (a refusal) is never masked by an earlier
     # exit 1 from another sub-script.

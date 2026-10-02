@@ -57,6 +57,31 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 # scripts/hooks/pre-tool-use/02-graphify-hint.sh) so the hint fires again at
 # the start of this session instead of staying suppressed from a prior one.
 rm -f "${STATE_DIR}/.graphify-hint-shown" 2>/dev/null || true
+
+# ── Session-scoped worktree decision ──────────────────────────────
+# .dev-team-agents/.worktree-session is written by agents DURING a session, so a
+# copy present at a fresh start (source startup/clear, or no payload) is a
+# decision from an earlier session and must not be reused. resume/compact
+# continue the same session and keep it. A stale file is moved aside into the
+# machine-local state dir (never deleted) so the decision stays recoverable.
+# See skills/shared/worktree/references/session-protocol.md.
+_SS_SOURCE=""
+if [ ! -t 0 ]; then
+    _SS_PAYLOAD=""
+    IFS= read -r -t 1 -d '' _SS_PAYLOAD 2>/dev/null || true
+    _SS_SOURCE="$(printf '%s' "$_SS_PAYLOAD" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' | head -1)"
+fi
+case "$_SS_SOURCE" in
+    resume|compact) ;;
+    *)
+        for _ss_root in "$PROJECT_ROOT" "$MAIN_REPO_ROOT"; do
+            _ss_file="${_ss_root}/.dev-team-agents/.worktree-session"
+            if [ -f "$_ss_file" ]; then
+                mv -f "$_ss_file" "${STATE_DIR}/worktree-session.stale" 2>/dev/null || true
+            fi
+        done
+        ;;
+esac
 STATE_FILE="${STATE_DIR}/state.json"
 # Only the layout-1 path can still hold the legacy standalone dotfiles this
 # migrates — on layout 2, STATE_DIR != USER_DATA_DIR, and a leftover
