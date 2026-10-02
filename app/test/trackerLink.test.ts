@@ -180,11 +180,18 @@ describe('resolveTaskLink', () => {
       }),
     ],
   });
-  const ask = (taskKey: string | null, type: 'pr' | 'ref', index: number, session = 's1') => ({
+  const EXPECT: Record<string, string> = { 't1:pr:0': '45', 't1:ref:0': 'PROJ-12', 't1:ref:1': 'acme/shop#7', 'null:pr:0': '12' };
+  const ask = (taskKey: string | null, type: 'pr' | 'ref', index: number, session = 's1', expect?: string) => ({
     project_id: 'proj-a',
     session_id: session,
     task_key: taskKey,
-    link: { type, index },
+    link: { type, index, expect: expect ?? EXPECT[`${taskKey}:${type}:${index}`] ?? 'none' },
+  });
+
+  it('refuses a link whose number or key is not the one the badge showed', () => {
+    expect(resolveTaskLink(project, ask('t1', 'pr', 0, 's1', '46'))).toBeNull();
+    expect(resolveTaskLink(project, ask('t1', 'ref', 0, 's1', 'acme/shop#7'))).toBeNull();
+    expect(resolveTaskLink(project, ask('t1', 'ref', 1, 's1', 'ACME/shop#7'))).toMatchObject({ identity: 'acme/shop#7' });
   });
 
   it('resolves a task PR, a task ref and a session PR to the snapshot entry', () => {
@@ -232,7 +239,7 @@ async function loadIpc() {
 
 const TRUSTED_RENDERER = { indexUrl: 'file:///app/dist/renderer/index.html', devServerOrigin: null } as const;
 const TRUSTED = { senderFrame: { url: TRUSTED_RENDERER.indexUrl, parent: null } };
-const REQUEST = { project_id: 'proj-a', session_id: 's1', task_key: 't1', link: { type: 'pr', index: 0 } };
+const REQUEST = { project_id: 'proj-a', session_id: 's1', task_key: 't1', link: { type: 'pr', index: 0, expect: '45' } };
 const GOOD = { url: 'https://github.com/acme/shop/pull/45', kind: 'github_pr', identity: '45', linkHosts: HOSTS } as const;
 
 describe('openTaskLink IPC', () => {
@@ -270,15 +277,18 @@ describe('openTaskLink IPC', () => {
     const { open, openExternal } = await setup();
     const bad = [
       { ...REQUEST, url: 'https://evil.example/' },
-      { ...REQUEST, link: { type: 'pr', index: 0, url: 'https://evil.example/' } },
+      { ...REQUEST, link: { type: 'pr', index: 0, expect: '45', url: 'https://evil.example/' } },
+      { ...REQUEST, link: { type: 'pr', index: 0 } },
+      { ...REQUEST, link: { type: 'pr', index: 0, expect: '' } },
+      { ...REQUEST, link: { type: 'pr', index: 0, expect: 45 } },
       { project_id: 'proj-a', session_id: 's1', task_key: 't1', link: 'https://evil.example/' },
       'https://evil.example/',
       null,
       [],
-      { ...REQUEST, link: { type: 'url', index: 0 } },
-      { ...REQUEST, link: { type: 'pr', index: -1 } },
-      { ...REQUEST, link: { type: 'pr', index: 64 } },
-      { ...REQUEST, link: { type: 'pr', index: 1.5 } },
+      { ...REQUEST, link: { type: 'url', index: 0, expect: '45' } },
+      { ...REQUEST, link: { type: 'pr', index: -1, expect: '45' } },
+      { ...REQUEST, link: { type: 'pr', index: 64, expect: '45' } },
+      { ...REQUEST, link: { type: 'pr', index: 1.5, expect: '45' } },
       { ...REQUEST, session_id: '' },
       { ...REQUEST, session_id: 'a'.repeat(513) },
       { ...REQUEST, project_id: 'a\nb' },
@@ -318,7 +328,7 @@ describe('openTaskLink IPC', () => {
     const { open, openExternal, advance } = await setup();
     expect(await open(TRUSTED, REQUEST)).toEqual({ ok: true });
     advance(100);
-    expect(await open(TRUSTED, REQUEST)).toMatchObject({ ok: false });
+    expect(await open(TRUSTED, REQUEST)).toEqual({ ok: false, message: 'Links are opening too fast. Wait a moment and try again.' });
     expect(openExternal).toHaveBeenCalledTimes(1);
     for (let i = 0; i < 9; i += 1) {
       advance(750);

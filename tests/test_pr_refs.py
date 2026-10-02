@@ -17,7 +17,7 @@ from devteam import pr_refs
 
 JIRA = {"site_url": "https://acme.atlassian.net", "host": "acme.atlassian.net", "path": "", "project_key": "PROJ"}
 GITHUB = {"web_host": "github.com", "repository": "o/r"}
-CTX = {"remotes": [], "github": GITHUB, "jira": JIRA}
+CTX = {"remotes": [{"name": "up", "host": "github.com", "repo": "acme/web"}], "github": GITHUB, "jira": JIRA}
 NONE_CTX = {"remotes": [], "github": None, "jira": None}
 
 
@@ -67,8 +67,17 @@ class AnalyzeCommandTest(unittest.TestCase):
             "PATH=/ gh pr create", "PATH=/tmp/evil:$PATH gh pr create", "GH_HOST=evil.example gh pr create",
             "GH_REPO=a/b gh pr create", "GITLAB_HOST=evil.example glab mr create", "GLAB_HOST=x glab mr create",
             "GLAB_TOKEN=x glab mr merge 1", "FOO=1 PATH=/x gh pr merge 2",
+            "export PATH=/tmp/evil; gh pr create", "export GH_HOST=evil.example && gh pr create",
+            "PATH=/x; gh pr create", "declare -x GH_REPO=a/b\ngh pr merge 1",
         ):
             self.assertEqual(self.ops(command), [], command)
+
+    def test_an_assignment_inside_an_argument_is_not_refused(self):
+        for command in (
+            'gh pr create --body "set PATH=/a before running"',
+            "gh pr create --title 'GH_HOST=x is documented'",
+        ):
+            self.assertEqual(self.ops(command), [("create", "gh")], command)
 
     def test_a_command_that_defines_gh_or_glab_is_refused_whole(self):
         for command in (
@@ -536,6 +545,17 @@ class LinkHostsTest(unittest.TestCase):
         self.assertTrue(pr_refs.mark_valid({"kind": "mr", "host": "git.corp.example", "repo": "g/r", "number": 1}, ctx))
         self.assertFalse(pr_refs.mark_valid(None, ctx))
 
+    def test_punycode_and_other_forge_remotes_never_become_gitlab_hosts(self):
+        remotes = [
+            {"name": "a", "host": "xn--gthub-zsa.com", "repo": "o/r"},
+            {"name": "b", "host": "bitbucket.org", "repo": "o/r"},
+            {"name": "c", "host": "git.corp.example", "repo": "g/r"},
+        ]
+        hosts = {h["host"] for h in pr_refs.link_hosts({"remotes": remotes, "github": None, "jira": None})}
+        self.assertEqual(hosts, {"github.com", "gitlab.com", "git.corp.example"})
+        ctx = {"remotes": remotes, "github": None, "jira": None}
+        self.assertFalse(pr_refs.mark_valid({"kind": "mr", "host": "xn--gthub-zsa.com", "repo": "o/r", "number": 1}, ctx))
+
 
 class LoadContextTest(StoreTestCase):
     def ctx(self, github=None, jira=None):
@@ -558,9 +578,25 @@ class LoadContextTest(StoreTestCase):
             github={"account": {"api_url": "https://api.github.com"}, "project": {"repository": "o/r"}},
             jira={"account": {"site_url": "https://Acme.atlassian.net/"}, "project": {"project_key": "PROJ"}},
         )
-        self.assertEqual(ctx["github"], {"web_host": "github.com", "repository": "o/r"})
+        # Without remotes the committed binding names no repository: a remote must vouch for it.
+        self.assertEqual(ctx["github"], {"web_host": "github.com", "repository": None})
         self.assertEqual(ctx["jira"]["site_url"], "https://acme.atlassian.net")
         self.assertEqual((ctx["jira"]["host"], ctx["jira"]["project_key"]), ("acme.atlassian.net", "PROJ"))
+
+    def test_the_bound_repository_is_kept_only_when_a_remote_on_the_web_host_names_it(self):
+        github = {"account": {"api_url": "https://api.github.com"}, "project": {"repository": "o/r"}}
+
+        def fake(root, name):
+            return {"github": github, "jira": None}[name]
+
+        for remotes, expected in (
+            ([{"name": "origin", "host": "github.com", "repo": "o/r"}], "o/r"),
+            ([{"name": "origin", "host": "github.com", "repo": "attacker/x"}], None),
+            ([{"name": "origin", "host": "gitlab.com", "repo": "o/r"}], None),
+        ):
+            with mock.patch("devteam.integrations.link_config", side_effect=fake), \
+                    mock.patch.object(pr_refs, "git_remotes", return_value=remotes):
+                self.assertEqual(pr_refs.load_context(self.tmp)["github"]["repository"], expected, remotes)
 
     def test_ghe_api_url_maps_to_its_web_host(self):
         ctx = self.ctx(github={"account": {"api_url": "https://ghe.corp.example/api/v3"}, "project": {"repository": "o/r"}})
@@ -654,7 +690,8 @@ class ExtractRefsTest(unittest.TestCase):
         self.assertEqual(pr_refs.extract_refs("PROJ-12 fixes #3 o/r#4 https://github.com/o/r/issues/3", NONE_CTX, "prompt"), [])
 
     def test_a_ghe_host_is_the_web_host(self):
-        ctx = dict(CTX, github={"web_host": "ghe.corp.example", "repository": "o/r"})
+        ctx = dict(CTX, github={"web_host": "ghe.corp.example", "repository": "o/r"},
+                   remotes=[{"name": "origin", "host": "ghe.corp.example", "repo": "a/b"}])
         self.assertEqual(keys(pr_refs.extract_refs("https://ghe.corp.example/a/b/issues/2", ctx, "prompt")), ["a/b#2"])
         self.assertEqual(pr_refs.extract_refs("https://github.com/a/b/issues/2", ctx, "prompt"), [])
 
@@ -665,8 +702,13 @@ class ExtractRefsTest(unittest.TestCase):
         self.assertEqual(keys(pr_refs.extract_refs("do up/stream#6", ctx, "task")), ["up/stream#6"])
         self.assertEqual(pr_refs.extract_refs("do evil/repo#7 https://github.com/evil/repo/issues/8", ctx, "task"), [])
         self.assertEqual(keys(pr_refs.extract_refs("fixes #9", ctx, "task")), ["o/r#9"])
-        # The same text in a user prompt is the user's own words and is accepted for any repository.
-        self.assertEqual(keys(pr_refs.extract_refs("do evil/repo#7", ctx, "prompt")), ["evil/repo#7"])
+        # Prompt text is often pasted from elsewhere: it may not link an arbitrary repository either.
+        self.assertEqual(pr_refs.extract_refs("do evil/repo#7 https://github.com/evil/repo/issues/8", ctx, "prompt"), [])
+        self.assertEqual(keys(pr_refs.extract_refs("do up/stream#6", ctx, "prompt")), ["up/stream#6"])
+
+    def test_a_remote_on_another_host_does_not_widen_the_github_repositories(self):
+        ctx = dict(CTX, remotes=[{"name": "gl", "host": "gitlab.example.com", "repo": "x/y"}])
+        self.assertEqual(pr_refs.extract_refs("see x/y#3", ctx, "prompt"), [])
 
     def test_a_branch_yields_only_jira_keys_and_may_continue_with_a_slug(self):
         self.assertEqual(keys(pr_refs.extract_refs("feature/PROJ-12-login-form", CTX, "branch")), ["PROJ-12"])

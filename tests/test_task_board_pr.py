@@ -481,8 +481,9 @@ class MergeTest(PrCase):
         self.create(command=command)
         self.stop_idle()
 
-    def merge(self, session, command, stdout, now):
-        return self.rec(claude_bash(session, command, stdout), now=now)
+    def merge(self, session, command, stdout, now, cwd=None):
+        # `git merge` counts only when the checkout it ran in is known and is not the merged branch.
+        return self.rec(claude_bash(session, command, stdout, cwd=str(self.root) if cwd is None else cwd), now=now)
 
     def test_merging_in_the_same_session_moves_the_tasks_to_done_with_a_merged_badge(self):
         self.fixed()
@@ -506,6 +507,22 @@ class MergeTest(PrCase):
         self.merge("s2", "git merge feat/x", "Updating a..b\nFast-forward\n", T0 + 5)
         self.assertEqual(self.task(now=T0 + 70)["pr"]["state"], "open")
         self.merge("s2", "git merge origin/feat/x", "Merge made by the 'ort' strategy.\n", T0 + 60)
+        self.assertEqual(self.task(now=T0 + 70)["pr"]["state"], "merged")
+
+    def test_catching_a_branch_up_with_its_own_remote_is_not_a_merge(self):
+        self.fixed()
+        git(self.root, "checkout", "-q", "-b", "feat/x")
+        self.assertFalse(self.merge("s1", "git merge origin/feat/x", "Updating a..b\nFast-forward\n", T0 + 60)["recorded"])
+        self.assertFalse(self.merge("s1", "git merge feat/x", "Fast-forward\n", T0 + 61, cwd="")["recorded"])
+        self.assertNotIn("merges", self.load("s1"))
+        self.assertEqual(self.task(now=T0 + 70)["pr"]["state"], "open")
+
+    def test_a_git_merge_records_the_branch_it_merged_into(self):
+        self.fixed()
+        into = git(self.root, "rev-parse", "--abbrev-ref", "HEAD")
+        self.merge("s1", "git merge feat/x", "Fast-forward\n", T0 + 60)
+        (entry,) = self.load("s1")["merges"]
+        self.assertEqual((entry["branch"], entry["into"]), ("feat/x", into))
         self.assertEqual(self.task(now=T0 + 70)["pr"]["state"], "merged")
 
     def test_a_different_number_branch_or_repository_does_not_join(self):
@@ -670,8 +687,9 @@ class IssueRefsTest(PrCase):
 
     def test_github_forms_in_a_prompt(self):
         self.begin()
+        git(self.root, "remote", "add", "up", "https://github.com/acme/web.git")
         with integrations(JIRA_CFG, GITHUB_CFG):
-            self.prompt("fixes #12 and acme/web#45 and https://github.com/acme/web/issues/46 and see #99")
+            self.prompt("fixes #12 and acme/web#45 and https://github.com/acme/web/issues/46 and see #99 and evil/x#1")
         found = sorted((r["repo"], r["number"]) for r in self.load("s1")["refs"])
         self.assertEqual(found, [("acme/web", 45), ("acme/web", 46), ("o/r", 12)])
         self.rec(todo_write("s1", [todo("A", "completed"), todo("B"), todo("Late")]), now=T0 + 60)
@@ -984,13 +1002,17 @@ class PrHookGateTest(tt.BoardCase):
         self.assertLess(time.monotonic() - started, 10)
         self.assertEqual(self.python_calls(), 0)
 
-    def test_the_pr_gate_is_fast_on_a_large_command_with_the_needle_after_the_padding(self):
+    def test_the_pr_gate_is_fast_on_a_large_command_and_skips_one_python_would_not_analyse(self):
         self.seed()
         command = "echo {} && gh pr create --fill".format("x " * 100000)
+        self.assertGreater(len(command), pr_refs.MAX_COMMAND)
         started = time.monotonic()
         self.run_script(PR_SUB, claude_bash("s1", command, PR + "\n", cwd=str(self.root)))
         self.assertLess(time.monotonic() - started, 1.0)
-        self.assertEqual(self.python_calls(), 1)
+        self.assertEqual(self.python_calls(), 0)
+
+    def test_the_pr_gate_cap_matches_max_command(self):
+        self.assertIn("-le {} ]".format(pr_refs.MAX_COMMAND), PR_SUB.read_text(encoding="utf-8"))
 
     def test_the_pr_gate_ignores_the_tool_output_and_an_oversize_payload(self):
         self.seed()

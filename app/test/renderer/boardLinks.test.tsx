@@ -130,7 +130,7 @@ describe('Board — link clicks send ids, never a URL', () => {
       project_id: 'proj-a',
       session_id: 's1',
       task_key: 'pr-task',
-      link: { type: 'pr', index: 0 },
+      link: { type: 'pr', index: 0, expect: '45' },
     });
   });
 
@@ -141,7 +141,7 @@ describe('Board — link clicks send ids, never a URL', () => {
       project_id: 'proj-a',
       session_id: 's1',
       task_key: 'pr-task',
-      link: { type: 'ref', index: 1 },
+      link: { type: 'ref', index: 1, expect: 'acme/shop#7' },
     });
     const chip = within(screen.getByRole('list', { name: 'Sessions' })).getAllByRole('listitem')[0]!;
     fireEvent.click(within(chip).getByRole('button', { name: /merge request !12/ }));
@@ -149,7 +149,7 @@ describe('Board — link clicks send ids, never a URL', () => {
       project_id: 'proj-a',
       session_id: 's1',
       task_key: null,
-      link: { type: 'pr', index: 0 },
+      link: { type: 'pr', index: 0, expect: '12' },
     });
   });
 
