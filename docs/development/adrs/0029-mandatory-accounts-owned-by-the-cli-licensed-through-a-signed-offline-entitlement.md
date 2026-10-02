@@ -350,6 +350,23 @@ fake IdP issues so tests can grep every output for it.
     drops its `kid`; tokens it signed stop working at that release, and at most 30 days later on any
     install that does not update. The rotation steps go in a runbook. *Test:* secret scanning (SR-36).
 
+#### Entitlement token wire format
+
+Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement`); SR-21 to SR-23 remain the rules.
+
+| Part | Content |
+|------|---------|
+| Token | `v1.<header>.<payload>.<signature>`, each part base64url without padding, 4 KB at most |
+| Header | exactly `{"kid":"<key id>"}` |
+| Payload | JSON object with exactly these claims: `iss`, `aud`, `sub`, `v`, `iat`, `exp`, `status`, `features`, and `trial_ends_at` only while `status` is `trial` |
+| Signature | Ed25519 over the ASCII bytes `v1.<header>.<payload>` |
+
+- `iat`, `exp` and `trial_ends_at` are integer Unix seconds. `v` is the integer `1`; `features` is an array of strings, possibly empty.
+- `iss` is the project origin with no trailing slash and no path, for example `https://<ref>.supabase.co`. `aud` is `devteam-cli`.
+- `kid` lives in the header only and is not repeated in the payload. There is no `max_offline_days` claim: the window is already encoded by `exp`.
+- The HTTP response is `200 {"token": "<token>"}`. Errors are `{"error": "<code>"}` with the codes `unauthorized` (401), `rate_limited` (429, with `Retry-After`), `reauth_required` (403, `account-delete` only) and `request_failed` (500). The same JSON shape is used for every function.
+- Request: `GET` or `POST` to `/functions/v1/entitlement` with `Authorization: Bearer <access JWT>` and the project `apikey` header. The body is ignored.
+
 ### E. The vendored Ed25519 verifier
 
 28. **Source and scope.** Port the RFC 8032 § 6 reference code, verify-only. Keep its notice: RFC code
@@ -403,7 +420,11 @@ fake IdP issues so tests can grep every output for it.
 
 37. **Deletion re-authenticates.** `auth delete` requires a fresh code from GoTrue's reauthenticate
     endpoint, typed on stdin, then calls the function, then removes the local session and
-    `entitlement.json`. *Test:* the function refuses a deletion without a valid reauthentication nonce.
+    `entitlement.json`. GoTrue exposes no endpoint that verifies a reauthentication nonce on its own, so `account-delete`
+    judges freshness from the access JWT: its newest `amr` entry must be at most 300 seconds old. The CLI
+    therefore obtains the fresh code by signing in again with an email OTP (`verifyOtp`), whose session
+    carries that `amr` entry, and calls the function with that access token. A refreshed token keeps its
+    original `amr` timestamp, so a stolen long-lived session cannot pass. *Test:* the function refuses a deletion without a valid reauthentication nonce.
 38. **Ban list is a keyed HMAC.** `banned_identities.email_hmac = HMAC-SHA256(pepper,
     normalize(email))`, with the pepper as an Edge Function secret, never in the database. `normalize`
     is trim, NFC, lowercase. Plus-addressing and Gmail dots are **not** folded: folding risks banning

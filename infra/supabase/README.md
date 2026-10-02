@@ -21,6 +21,26 @@ supabase functions deploy                 # entitlement, account-delete
 supabase secrets set ENTITLEMENT_ED25519_PRIVATE_KEY=... ENTITLEMENT_KID=... BAN_HMAC_KEY=...
 ```
 
+## Edge Functions
+
+`functions/entitlement` signs the offline entitlement and `functions/account-delete` deletes an account
+after a fresh authentication (ADR-0029 SR-33 to SR-39). Both run with JWT verification on (the default) and
+read `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which the platform injects.
+
+| Secret | Value |
+|--------|-------|
+| `ENTITLEMENT_ED25519_PRIVATE_KEY` | Base64 of the PKCS#8 DER private key (see the keypair section) |
+| `ENTITLEMENT_KID` | Key id placed in the token header; must match a public key embedded in the CLI |
+| `BAN_HMAC_KEY` | Random pepper for the email HMAC, 32+ bytes (`openssl rand -base64 48`). Changing it orphans every `banned_identities` and `trial_consumed` row, so treat it as write-once |
+
+```bash
+supabase functions deploy entitlement account-delete
+deno test --no-lock -q functions/     # no network, no secrets needed
+```
+
+Never set `BAN_HMAC_KEY` from the database or commit it. The `dev` and `prod` projects get different values.
+Banning a user: `runbooks/ban-user.md`.
+
 Run from `infra/supabase/` (or pass `--workdir`). Dashboard-only settings that `config.toml`
 cannot express: leaked-password protection (paid plan, SR-15), the GitHub scope on the OAuth app,
 and the dev project's extra redirect entry for the fake IdP seam.
