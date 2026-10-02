@@ -162,7 +162,10 @@ Every `dist:*` script starts with `clean`, which empties `release/`: running `di
 `electron-builder --mac --win` pass. It needs a macOS host, since a `.dmg` cannot be built
 elsewhere. It ends by zipping the four installers into
 `release/dev-team-agents-<version>-unsigned.zip` (`scripts/zip-release.mjs`), the single file
-to copy to a test machine.
+to copy to a test machine, and writing their SHA-256 digests to `release/SHA256SUMS.txt`
+(`scripts/checksums.mjs`, also `npm run checksums` on its own). Both scripts read the installer
+list from `scripts/release-artifacts.mjs`. A build meant for publishing goes through `npm run dist:beta`
+instead — see § Direct-download beta.
 
 | # | Do | Expect |
 |---|----|--------|
@@ -185,6 +188,54 @@ echo '{"id":"'$(date +%s)'-1-1","ts":'$(date +%s)',"project_id":"<id>","session_
 `devteam prefs list` and writes through `devteam prefs set|unset --scope project`, so every
 change lands in the store's project layer and in the project's `resolved/preferences.json`,
 exactly as if it had been made in a terminal. The app keeps no copy of any preference.
+
+## Direct-download beta
+
+[ADR-0027](../docs/development/adrs/0027-the-desktop-app-ships-an-unsigned-direct-download-beta-until-it-is-signed.md)
+lets these unsigned installers be published as a GitHub Release, linked from the website, until the
+app is signed. Never to the Homebrew cask or winget. The ADR holds the conditions and the risks; the
+steps are:
+
+1. Once per repository: turn on GitHub's immutable releases, so a published asset cannot be swapped
+   after users have checked its digest.
+2. Raise `version` in `package.json` (and `package-lock.json`), commit, and tag the commit
+   `app-v<version>` — never `v<version>`, which starts the framework release workflow.
+3. On a Mac, with a clean tree: `npm ci`, then `npm run dist:beta`. It refuses to build unless HEAD
+   carries exactly that tag and nothing is uncommitted, then runs `dist:all`.
+4. Create the Release from that tag and upload the four installers plus `release/SHA256SUMS.txt`.
+   Not the `-unsigned.zip`: it is for test machines and the digests do not cover it.
+
+Text for the download page — adapt the wording, keep every point. Replace `<release URL>` with the
+Release's address:
+
+- **Beta, unsigned.** macOS and Windows cannot confirm who built these files, so they warn before the
+  first launch. Download only from `<release URL>`.
+- **The app needs the `devteam` CLI** and does nothing without it. No package exists yet, so install
+  it from a clone of the repository (Python 3.9+ required):
+  - macOS: in the clone, `python3 scripts/cli/devteam store install --from .`, then
+    `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam`. The app finds it there.
+  - Windows: in the clone, `py -3 scripts\cli\devteam store install --from .`, then set the user
+    environment variable `DEVTEAM_CLI_PATH` to the clone's `scripts\cli\devteam`. Python must be on
+    PATH.
+- **Check the download before opening it.** If the check fails, delete the file and stop — do not
+  continue with the steps below.
+  - macOS, in the download folder: `shasum -a 256 -c SHA256SUMS.txt --ignore-missing`. Continue only
+    if your file's line ends in `: OK`; "no file was verified" means the file name does not match.
+  - Windows PowerShell, in the download folder:
+    `(Get-FileHash .\<installer>.exe -Algorithm SHA256).Hash` and compare it with the installer's line
+    in `SHA256SUMS.txt`. PowerShell prints uppercase, the file lowercase; the letters are the same.
+- **macOS, only for the verified file.** Drag the app to Applications and open it once. When macOS
+  refuses, open System Settings → Privacy & Security and choose **Open Anyway** (Control-click → Open
+  no longer works from macOS 15). If macOS instead says the app "is damaged", that is the quarantine
+  flag on an unsigned download; with the checksum already passed, clear it for this app only:
+  `xattr -dr com.apple.quarantine /Applications/dev-team-agents.app`. Never run that command because
+  another website or app tells you to — it is how fake apps get past Gatekeeper.
+- **Windows, only for the verified file.** SmartScreen shows "Windows protected your PC" with
+  **Unknown publisher**: choose **More info → Run anyway**. If it names any other publisher, stop. The
+  installer is per-user and asks for no administrator rights. Pick the `x64` or `arm64` installer for
+  your machine, or the one without a suffix, which carries both.
+- **No auto-update.** Watch the repository's Releases and Security Advisories for new versions and
+  fixes, then download and install over the old one.
 
 ## Project folders
 
