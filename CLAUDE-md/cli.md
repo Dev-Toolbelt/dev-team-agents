@@ -174,7 +174,7 @@ mode.
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
 | `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
-| `devteam auth login (--google \| --github \| --email <addr> [--password [--signup]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password. Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
+| `devteam auth login (--google \| --github \| --email <addr> [--password [--signup [--send-code \| --finish]]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password; `--password --signup` creates the account and, without a terminal, runs in two stages: `--send-code` (password on stdin, sends the confirmation code, exits) then `--finish` (code on stdin; GoTrue's own unconfirmed-signup state carries it, nothing is persisted locally). Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
 | `devteam auth logout` | Revoke the session on the server (best effort), then **always** remove the refresh token, `entitlement.json` and `account-session.json` locally; reports which parts succeeded |
 | `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it. The delegated installers call `check --json`; the session-start banner reads the cache itself and never calls the CLI |
 | `devteam auth otp start --email <addr> \| verify --email <addr>` | The two-step form of `login --email`, for the desktop app. `start` answers identically for every address |
@@ -388,7 +388,7 @@ listener), on top of `entitlement.py`. None imports telemetry.
   shape: `{signed_in, account: {id, email, display_name, provider, signed_in_at} | null, entitled,
   entitlement: {status, reason, token_status, features, trial_ends_at, expires_at}, online:
   {attempted, ok}, last_online_check, secret_backend, secret_backend_insecure, environment,
-  test_seam, warnings}`; `login` adds `method`, `status`/`check` add `offline`. A failing `check`
+  gate_mode, test_seam, warnings}` (`gate_mode` is `warn` or `enforce`, from `auth-config.json`); `login` adds `method`, `status`/`check` add `offline`. A failing `check`
   returns the same body plus `error`, `exit_code`, `hint` and `details`, so the gate and the
   installers parse one schema. `entitlement.status` is one of `active`, `trial`, `trial_expired`,
   `banned`, `needs_online_check`, `signed_out`, `invalid`.

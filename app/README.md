@@ -109,15 +109,15 @@ person's initials, never a picture).
 
 - **Sign in** — Google and GitHub (the CLI opens the system browser and waits up to five minutes
   for its loopback callback), an emailed 8-digit code, or email and password, with sign-up
-  (the password, then the emailed code) and a forgotten-password reset (send a code, then the code
+  (the password, then the emailed code, as two CLI runs) and a forgotten-password reset (send a code, then the code
   and a new password).
 - **Blocked** — a signed-in account that is not entitled (`trial_expired`, `banned`,
   `needs_online_check`, `invalid`) sees one plain sentence, "Check again" and "Sign out", and that
   their projects are untouched.
 - **Gate mode** — in `enforce` the sign-in or blocked screen **replaces** the app; in `warn` the
   app stays usable under a dismissible banner that opens the Account tab. `gate_mode` is compiled
-  into the CLI's `auth-config.json` and is not yet part of the `auth status` document, so the app
-  reads it from the document when it appears and otherwise acts as `warn`.
+  into the CLI's `auth-config.json` and reported in the `auth status` and `auth check` documents;
+  the app reads it from there and acts as `warn` until the first document arrives.
 - **Account tab** (and the initials button in the header) — display name, email change (a code to
   the new address, optionally one to the old), linked providers (link and unlink; the last one
   cannot be removed), password change, sign out, and account deletion, which needs the typed word
@@ -126,10 +126,12 @@ person's initials, never a picture).
 **Secrets travel on stdin only.** A code or a password is written to the child's stdin for that one
 call (`src/cli/accountOperations.ts`) — no `devteam auth` flag can carry one, and
 `COMMAND_SHAPES` refuses an operand that tries — and is redacted from everything the child
-returns. Password **sign-up** is the one two-stage command (the CLI reads the password, sends the
-code, then reads the code), so the main process holds that single child between "create account"
-and "confirm" (`src/main/accountIpc.ts`, `SignUpFlow`) and ends it on cancel, on leaving the
-screen or on quit. Fields are validated on submit with the CLI's own rules
+returns. Password **sign-up** is two non-interactive runs, like the other
+two-step flows: `auth login --email … --password --signup --send-code` (password on stdin; the
+CLI creates the account and sends the code, then exits) and `… --signup --finish` (the code on
+stdin). Nothing secret is held between them; the main process remembers only the address
+(`src/main/accountIpc.ts`, `SignUpFlow`), so a wrong code can be retyped, and the provider keeps
+the unconfirmed account. Fields are validated on submit with the CLI's own rules
 (`src/shared/accountRules.ts`); failures are generic sentences chosen from the CLI's
 `details.reason`, never its text (which carries the address), and never say whether an address is
 registered. The screens are in English and Brazilian Portuguese, chosen from the OS language
