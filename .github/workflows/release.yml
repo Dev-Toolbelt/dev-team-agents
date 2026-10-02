@@ -51,13 +51,16 @@ on:
   push:
     tags: ["v*.*.*"]
 
+# Read-only by default; each job that writes says so itself, and no more than it needs.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   bump-homebrew-formula:
     name: Compute release sha256 and update the Homebrew formula
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: ubuntu-latest
 
     # Published so the verify job below re-uses the tag, url and digest THIS job
@@ -90,7 +93,7 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -150,7 +153,7 @@ jobs:
       # Uploaded straight after the rewrite and before anything else runs, so the
       # artifact is that step's output and not a later step's idea of it.
       - name: Upload the rewritten formula for the verify job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bumped-homebrew-formula
           path: packaging/homebrew/devteam.rb
@@ -204,9 +207,9 @@ jobs:
             printf '\n'
             printf '%s\n' "Still manual after this merges (see packaging/README.md):"
             printf '%s\n' "- winget: a PR to microsoft/winget-pkgs, with the digests from this release's SHA256SUMS.txt"
+            printf '%s\n' "- everything for \`devteam-app.rb\` (no signed app build exists yet)"
             printf '\n'
-            printf '%s\n' "The \`publish-homebrew-tap\` job has already copied the verified formula to Dev-Toolbelt/homebrew-devteam (when HOMEBREW_TAP_TOKEN is set). Merge this PR so the source of truth matches the tap."
-            printf '%s\n' "- everything for \`devteam-app.rb\` (no app build exists yet)"
+            printf '%s\n' "Once the macOS job installs this formula from the real tarball, the \`publish-homebrew-tap\` job copies it to Dev-Toolbelt/homebrew-devteam (when HOMEBREW_TAP_TOKEN is set). Merge this PR so the source of truth matches the tap."
           } > "$PR_BODY_FILE"
 
           gh pr create \
@@ -220,7 +223,7 @@ jobs:
     needs: bump-homebrew-formula
     runs-on: macos-latest
     # Read-only: this job proves the formula, it never writes to the repo or the
-    # PR. Narrower than the workflow-level `contents: write` the bump job needs.
+    # PR. Narrower than the `contents: write` the bump job needs.
     # `actions/download-artifact@v4` needs no extra scope here — an artifact of
     # the CURRENT run is fetched with the runner's own runtime token; it is the
     # cross-run form (`run-id:` + `github-token:`) that would require
@@ -291,10 +294,10 @@ jobs:
     #   * The published path remains unproven: no tap hosts this formula, so
     #     `brew install` from a tap a user has added is not what runs here.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download the formula the bump job rewrote
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: bumped-homebrew-formula
           # A directory of its own, NOT over packaging/homebrew/devteam.rb. The
@@ -384,6 +387,8 @@ jobs:
   windows-cli-installer:
     name: Build, smoke-test and attach the Windows CLI installers
     runs-on: windows-latest
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -399,20 +404,22 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
-      - name: Make sure makensis is available
+      # A pinned version, not whatever Chocolatey serves today: this job builds the
+      # executable users run. build.py finds makensis under Program Files itself, so
+      # nothing is written to GITHUB_PATH (a POSIX path there is not one Windows
+      # python can resolve).
+      - name: Install NSIS
         run: |
           set -euo pipefail
-          if ! command -v makensis >/dev/null 2>&1; then
-            choco install nsis -y --no-progress
-          fi
-          NSIS_DIR="/c/Program Files (x86)/NSIS"
-          [ -d "$NSIS_DIR" ] && echo "$NSIS_DIR" >> "$GITHUB_PATH"
+          choco install nsis --version 3.13.0 -y --no-progress
 
       - name: Build the installers
         run: python packaging/windows-cli/build.py --version "$VERSION" --out dist
@@ -434,10 +441,15 @@ jobs:
           }
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
           if ($userPath -notlike '*Programs\devteam\bin*') { throw 'bin was not added to the user PATH' }
-          $uninstaller = Start-Process -FilePath (Join-Path $env:LOCALAPPDATA 'Programs\devteam\uninstall.exe') -ArgumentList '/S' -Wait -PassThru
-          Start-Sleep -Seconds 5  # the NSIS uninstaller re-launches itself from %TEMP% and returns early
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          if ($userPath -like '*Programs\devteam\bin*') { throw 'uninstall left bin on the user PATH' }
+          Start-Process -FilePath (Join-Path $env:LOCALAPPDATA 'Programs\devteam\uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
+          # The NSIS uninstaller re-launches itself from %TEMP% and returns early: poll.
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            Start-Sleep -Seconds 2
+            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $gone = ($userPath -notlike '*Programs\devteam\bin*') -and -not (Test-Path $exe)
+          } until ($gone -or (Get-Date) -gt $deadline)
+          if (-not $gone) { throw 'uninstall left bin on the user PATH, or devteam.exe on disk' }
           if (-not (Test-Path (Join-Path $env:DEVTEAM_HOME 'core'))) { throw 'uninstall removed the store, which it must never touch' }
 
       - name: Attach the installers to the release
@@ -471,7 +483,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download the rewritten formula
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: bumped-homebrew-formula
           path: bumped-formula
@@ -486,7 +498,11 @@ jobs:
             echo "::warning::HOMEBREW_TAP_TOKEN is not set — the tap was NOT updated. Copy bumped-formula/devteam.rb to Dev-Toolbelt/homebrew-devteam/Formula/ by hand."
             exit 0
           fi
-          git clone --quiet "https://x-access-token:${TAP_TOKEN}@github.com/Dev-Toolbelt/homebrew-devteam.git" tap
+          # The token goes in a header for these two commands only — never into the
+          # remote URL, where it would be written to tap/.git/config.
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
+          echo "::add-mask::$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
+          git -c http.extraHeader="$AUTH" clone --quiet https://github.com/Dev-Toolbelt/homebrew-devteam.git tap
           mkdir -p tap/Formula
           cp bumped-formula/devteam.rb tap/Formula/devteam.rb
           cd tap
@@ -498,5 +514,5 @@ jobs:
             exit 0
           fi
           git commit --quiet -m "devteam ${TAG#v}"
-          git push --quiet origin HEAD
+          git -c http.extraHeader="$AUTH" push --quiet origin HEAD
           echo "Published devteam ${TAG} to Dev-Toolbelt/homebrew-devteam."
