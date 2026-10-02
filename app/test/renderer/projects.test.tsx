@@ -1562,3 +1562,70 @@ describe('Projects — folders (ADR-0021)', () => {
     expect(screen.queryByText('Drop here to take it out of its folder')).not.toBeInTheDocument();
   });
 });
+
+describe('Projects — a project out of step with its registration is offered Repair', () => {
+  const listOne = () => vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] })));
+  const v2Refusal = () =>
+    fail('/repo/project-1/.dev-team-agents/scripts is a v2 vendored tree', {
+      kind: 'conflict',
+      exitCode: 4,
+      reason: 'v2-install',
+      hint: 'Run `devteam migrate`.',
+    });
+
+  it('turns a sync refused over a v2 tree into a Repair dialog on that project, which offers the migration', async () => {
+    const user = userEvent.setup();
+    const bridge = fakeBridge({
+      listProjects: listOne(),
+      syncProject: vi.fn(() => Promise.resolve(v2Refusal())),
+      planMigration: vi.fn(() => Promise.resolve(ok(migrationPlan()))),
+    });
+    installBridge(bridge);
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(await screen.findByText('This project still holds a v2 install')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /repair…/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Repair project-1')).toBeInTheDocument();
+    // Its own path is not refused as "already bound" — repairing that binding is the point.
+    expect(within(dialog).queryByText(/already bound/i)).not.toBeInTheDocument();
+    expect(await within(dialog).findByText(/dev-team-agents v2 found/i)).toBeInTheDocument();
+    expect(bridge.planMigration).toHaveBeenCalledWith({ path: '/repo/project-1' });
+    expect(bridge.applyMigration).not.toHaveBeenCalled();
+  });
+
+  it('offers Repair instead of Apply when the upgrade plan says the project is not bound', async () => {
+    const user = userEvent.setup();
+    const bridge = fakeBridge({
+      listProjects: listOne(),
+      planUpgrade: vi.fn(() =>
+        Promise.resolve(fail('/repo/project-1 is not a bound project', { kind: 'usage', exitCode: 2, reason: 'not-bound' })),
+      ),
+    });
+    installBridge(bridge);
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /upgrade…/i }));
+
+    const upgrade = await screen.findByRole('dialog');
+    expect(await within(upgrade).findByText('This project has no project.json')).toBeInTheDocument();
+    expect(within(upgrade).queryByRole('button', { name: /apply/i })).not.toBeInTheDocument();
+    await user.click(within(upgrade).getByRole('button', { name: /repair…/i }));
+
+    expect(await screen.findByText('Repair project-1')).toBeInTheDocument();
+    await vi.waitFor(() => expect(bridge.planMigration).toHaveBeenCalledWith({ path: '/repo/project-1' }));
+  });
+
+  it('keeps the plain failure toast for a sync refused for any other reason', async () => {
+    const user = userEvent.setup();
+    installBridge(fakeBridge({ listProjects: listOne(), syncProject: vi.fn(() => Promise.resolve(fail('the store is locked'))) }));
+    render(<Projects environment={environment()} />);
+    await screen.findByText('project-1');
+    await user.click(screen.getByRole('button', { name: /^sync$/i }));
+    await screen.findByText(/the store is locked/);
+    expect(screen.queryByRole('button', { name: /repair…/i })).not.toBeInTheDocument();
+  });
+});
