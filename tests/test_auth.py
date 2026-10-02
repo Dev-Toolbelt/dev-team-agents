@@ -116,6 +116,43 @@ class PasswordSignInTest(AuthTestCase):
         code, body, _ = self.run_json("auth", "login", "--email", EMAIL, "--password", input_text=PASSWORD + "\n")
         self.assertEqual((code, body["method"]), (0, "password"))
 
+    def test_sign_up_in_two_non_interactive_stages_keeps_nothing_on_disk(self):
+        code, body, _ = self.run_json(
+            "auth", "login", "--email", EMAIL, "--password", "--signup", "--send-code", input_text=PASSWORD + "\n"
+        )
+        self.assertEqual((code, body["sent"]), (0, True))
+        self.assertEqual(len(self.idp.calls_to("/auth/v1/signup")), 1)
+        self.assertEqual(self.idp.calls_to("/auth/v1/verify"), [])
+        code, body, _ = self.run_json("auth", "status", "--offline")
+        self.assertFalse(body["signed_in"])
+        code, body, _ = self.run_json(
+            "auth", "login", "--email", EMAIL, "--password", "--signup", "--finish", input_text=CODE + "\n"
+        )
+        self.assertEqual(code, 0, body)
+        self.assertEqual(body["method"], "password-signup")
+        self.assertEqual(len(self.idp.calls_to("/auth/v1/signup")), 1)
+        self.assertTrue(body["signed_in"])
+
+    def test_signup_stages_need_signup_and_are_exclusive(self):
+        code, _body, _ = self.run_json("auth", "login", "--email", EMAIL, "--password", "--send-code")
+        self.assertEqual(code, 2)
+        code, _body, _ = self.run_json(
+            "auth", "login", "--email", EMAIL, "--password", "--signup", "--send-code", "--finish"
+        )
+        self.assertEqual(code, 2)
+
+    def test_a_weak_password_is_refused_at_the_send_code_stage(self):
+        code, _body, _ = self.run_json(
+            "auth", "login", "--email", EMAIL, "--password", "--signup", "--send-code", input_text="short\n"
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(self.idp.calls, [])
+
+    def test_status_and_check_report_the_gate_mode(self):
+        for sub in ("status", "check"):
+            code, body, _ = self.run_json("auth", sub, "--offline")
+            self.assertIn(body["gate_mode"], ("warn", "enforce"), sub)
+
     def test_every_failed_sign_in_is_the_same_generic_answer(self):
         self.idp.add_user("known@example.com")
         self.idp.add_user("unconfirmed@example.com", confirmed=False)
