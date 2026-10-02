@@ -5,6 +5,10 @@
 * The credential is sent only to the exact scheme, host and port of the configured base
   URL. A redirect is followed only to that same origin; anything else is refused.
 * 10 second socket timeout, a 20 second total deadline, 2 MB response cap, JSON only.
+* :func:`post_json` follows no redirect at all: a POST that moved is refused, never replayed
+  as a GET. A caller may widen the loopback exception for its own test seam by passing
+  ``allow_loopback_http=True`` (the account flow does so only when its seam is active,
+  ADR-0029 SR-44); the integrations environment variable above stays the integrations seam.
 * A failure is a :class:`FetchError` carrying a *state* (``invalid_token``,
   ``rate_limited``, ``unreachable``) and a summary built here, never from the request:
   neither the token nor the Authorization header can appear in it.
@@ -44,17 +48,21 @@ class FetchError(Exception):
     ``state`` is one of ``invalid_token``, ``rate_limited``, ``unreachable``.
     """
 
-    def __init__(self, state, summary):
+    def __init__(self, state, summary, http_status=None, body=None):
         super().__init__(summary)
         self.state = state
         self.summary = summary
+        #: The HTTP status when the server answered, else ``None``.
+        self.http_status = http_status
+        #: The parsed JSON error body (a dict) when :func:`post_json` got one, else ``None``.
+        self.body = body
 
 
 def _loopback_allowed():
     return os.environ.get(LOOPBACK_ENV) == "1"
 
 
-def validate_base_url(url, label="URL"):
+def validate_base_url(url, label="URL", allow_loopback_http=False):
     """The normalised base URL (no trailing slash), or ``UsageError``."""
     if not isinstance(url, str) or not url.strip():
         raise UsageError("{} must not be empty".format(label))
@@ -66,7 +74,9 @@ def validate_base_url(url, label="URL"):
     except ValueError:
         raise UsageError("{} is not a valid URL".format(label))
     scheme_ok = parsed.scheme == "https" or (
-        parsed.scheme == "http" and _loopback_allowed() and host in LOOPBACK_HOSTS
+        parsed.scheme == "http"
+        and (allow_loopback_http or _loopback_allowed())
+        and host in LOOPBACK_HOSTS
     )
     if not scheme_ok:
         raise UsageError(
@@ -87,8 +97,10 @@ def origin(url):
     return (scheme, (parsed.hostname or "").lower(), parsed.port or _DEFAULT_PORTS.get(scheme))
 
 
-def _opener(base_origin):
+def _opener(base_origin, follow_redirects=True):
     def check(newurl):
+        if not follow_redirects:
+            raise FetchError("unreachable", "Refused a redirect on a POST request")
         try:
             target = origin(newurl)
         except ValueError:
@@ -121,14 +133,32 @@ def _rate_limited(code, headers):
 def _classify(exc):
     code = exc.code
     if code == 401:
-        return FetchError("invalid_token", "The server rejected the token (HTTP 401)")
+        return FetchError("invalid_token", "The server rejected the token (HTTP 401)", code)
     if code in (403, 429):
         if _rate_limited(code, exc.headers):
-            return FetchError("rate_limited", "The API rate limit was reached (HTTP {})".format(code))
+            return FetchError(
+                "rate_limited", "The API rate limit was reached (HTTP {})".format(code), code
+            )
         return FetchError(
-            "invalid_token", "Access denied (HTTP 403): the token lacks the needed permission"
+            "invalid_token",
+            "Access denied (HTTP 403): the token lacks the needed permission",
+            code,
         )
-    return FetchError("unreachable", "The server answered HTTP {}".format(code))
+    return FetchError("unreachable", "The server answered HTTP {}".format(code), code)
+
+
+def _error_body(exc):
+    """The JSON object an error response carried, or ``None``. Capped like any body."""
+    try:
+        raw = exc.read(MAX_RESPONSE_BYTES + 1)
+        if len(raw) > MAX_RESPONSE_BYTES:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError, http.client.HTTPException):
+        return None
+    finally:
+        exc.close()
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _shrink_timeout(response, remaining):
@@ -160,22 +190,17 @@ def _read_capped(response, deadline):
     return b"".join(chunks)
 
 
-def get_json(base_url, path, headers, query=None):
-    """``GET base_url + path``; returns ``(parsed_json, response_headers)``."""
-    base = validate_base_url(base_url, "API URL")
-    url = base + path
-    if query:
-        url += "?" + urllib.parse.urlencode(query)
-    sent = {"Accept": "application/json", "User-Agent": USER_AGENT}
-    sent.update(headers)
-    request = urllib.request.Request(url, headers=sent, method="GET")
-    deadline = time.monotonic() + TOTAL_DEADLINE
+def _send(request, base, deadline, follow_redirects, want_error_body):
+    """Run ``request`` under the shared policy; returns ``(payload_bytes, headers)``."""
     try:
-        with _opener(origin(base)).open(request, timeout=TIMEOUT) as response:
+        with _opener(origin(base), follow_redirects).open(request, timeout=TIMEOUT) as response:
             payload = _read_capped(response, deadline)
             response_headers = response.headers
     except urllib.error.HTTPError as exc:
-        raise _classify(exc) from None
+        error = _classify(exc)
+        if want_error_body:
+            error.body = _error_body(exc)
+        raise error from None
     except FetchError:
         raise
     except ValueError:
@@ -204,3 +229,38 @@ def get_json(base_url, path, headers, query=None):
     except (ValueError, UnicodeDecodeError):
         raise FetchError("unreachable", "The server answered with something that is not JSON") from None
     return data, response_headers
+
+
+def get_json(base_url, path, headers, query=None):
+    """``GET base_url + path``; returns ``(parsed_json, response_headers)``."""
+    base = validate_base_url(base_url, "API URL")
+    url = base + path
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    sent = {"Accept": "application/json", "User-Agent": USER_AGENT}
+    sent.update(headers)
+    request = urllib.request.Request(url, headers=sent, method="GET")
+    deadline = time.monotonic() + TOTAL_DEADLINE
+    return _send(request, base, deadline, True, False)
+
+
+def post_json(base_url, path, headers, body, allow_loopback_http=False):
+    """``POST base_url + path`` with ``body`` as JSON; returns ``(parsed_json, headers)``.
+
+    Same policy as :func:`get_json` (https only, one origin, 10 s socket timeout, 20 s
+    deadline, 2 MB cap), and **no redirect is followed**. An HTTP error carries
+    ``http_status`` and, when the server sent one, the parsed JSON error object in
+    ``body`` so a caller can tell a wrong code from a rate limit without this module
+    ever echoing the request into a message.
+    """
+    base = validate_base_url(base_url, "API URL", allow_loopback_http=allow_loopback_http)
+    sent = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+    }
+    sent.update(headers)
+    payload = json.dumps(body, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(base + path, data=payload, headers=sent, method="POST")
+    deadline = time.monotonic() + TOTAL_DEADLINE
+    return _send(request, base, deadline, False, True)

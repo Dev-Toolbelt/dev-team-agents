@@ -466,6 +466,9 @@ def locks_dir():
 #: `integrations-status.json` is the last connection test of each integration: a token
 #: that worked from this machine says nothing about another one. The account config and
 #: the token reference beside it (`data/integrations/`, `data/credentials/`) stay portable.
+#:
+#: `entitlement.json` is the signed account entitlement (ADR-0029) cached with this
+#: machine's clock skew and highest observed time; both describe this host only.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -490,6 +493,10 @@ MACHINE_LOCAL_RECORDS = (
     # token worked against an API from THIS machine, at that moment. The token and the
     # account config that produced the result are not portable proof of it elsewhere.
     "integrations-status.json",
+    # The signed account entitlement cached on THIS machine (ADR-0029): a token bound to
+    # this machine's clock skew and to the highest time it has observed. Tamper-evident
+    # by signature, not a secret, but meaningless on another host.
+    "entitlement.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:

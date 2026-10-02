@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "_comment": "Compiled-in identity constants for the account system (ADR-0029 SR-8). Nothing in a project, a preference or the environment overrides them; the only seam is the loopback test seam of SR-44. Every REPLACE-ME value is a placeholder to be filled in at release time. A build whose values are still placeholders rejects every token. A prod build ships only the prod environment (SR-27).",
+  "environment": "prod",
+  "audience": "devteam-cli",
+  "environments": {
+    "prod": {
+      "supabase_url": "https://REPLACE-ME-PROD.supabase.co",
+      "anon_key": "REPLACE-ME-PROD-ANON-KEY",
+      "entitlement_keys": {
+        "prod-1": "REPLACE-ME-PROD-ED25519-PUBLIC-KEY-BASE64URL"
+      }
+    },
+    "dev": {
+      "supabase_url": "https://REPLACE-ME-DEV.supabase.co",
+      "anon_key": "REPLACE-ME-DEV-ANON-KEY",
+      "entitlement_keys": {
+        "dev-1": "REPLACE-ME-DEV-ED25519-PUBLIC-KEY-BASE64URL"
+      }
+    }
+  }
+}

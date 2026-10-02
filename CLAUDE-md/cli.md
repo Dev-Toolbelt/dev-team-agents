@@ -65,7 +65,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
