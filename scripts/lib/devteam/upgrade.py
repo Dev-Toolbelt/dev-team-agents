@@ -28,6 +28,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from . import bind as bind_module
 from . import credentials_local, gitignore, jsonio, paths, project, quarantine, registry
 from .errors import ConflictError, EnvError, UsageError
 
@@ -110,9 +111,16 @@ def plan(root=None):
     project_root = project.resolve_root(root)
     data = project.load(project_root)
     if data is None:
+        registered, _entry = registry.find_by_path(project_root)
         raise UsageError(
             "{} is not a bound project".format(project_root),
-            hint="Run `devteam bind` first.",
+            hint=(
+                "It is registered but its project.json is gone — `devteam bind` restores it "
+                "with the registered id (`devteam migrate` when a v2 tree is still there)."
+                if registered is not None
+                else "Run `devteam bind` first."
+            ),
+            details={"reason": bind_module.NOT_BOUND_REASON},
         )
     current = project.layout(project_root)
     if current >= project.CURRENT_LAYOUT:

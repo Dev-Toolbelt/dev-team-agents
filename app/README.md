@@ -130,6 +130,12 @@ instead of Bind: the plan, with the providers and mode on screen, then **Migrate
 memory is kept, and the old paths leave git's index; the result says so, and the commit is yours. A
 pre-v2.1.0 project lands on layout 1 — use Upgrade on its row to move the memory into the store.
 
+A project already in the list can fall out of step with its registration: a v2 tree still vendored
+beside a bind, or a `project.json` that is gone. Sync and Upgrade are refused there
+(`details.reason` `v2-install` / `not-bound`), and instead of only naming a terminal command they
+offer **Repair…** — the same dialog, opened on that project's directory. It migrates a v2 install,
+or binds again, which restores `project.json` under the registered id rather than a new one.
+
 ## Notifications and running in the background
 
 Hooks queue notifications; this app shows them (ADR-0017). The main process runs one

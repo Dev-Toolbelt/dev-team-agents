@@ -173,11 +173,13 @@ def load(root):
     return validate(data, source=str(project_file(root)))
 
 
-def ensure(root, context_paths=None):
+def ensure(root, context_paths=None, project_id=None):
     """Create ``project.json`` when absent; never regenerate an existing one.
 
     Returns ``(data, created)``. An existing identity is preserved, which is
-    what makes ``devteam bind`` idempotent.
+    what makes ``devteam bind`` idempotent. ``project_id`` is the id to restore
+    when the file is absent but the registry already knows this path; it is
+    ignored when the file exists.
     """
     existing = load(root)
     if existing is not None:
@@ -202,7 +204,7 @@ def ensure(root, context_paths=None):
     )
     data = {
         "schema": SCHEMA,
-        "project_id": str(uuid.uuid4()),
+        "project_id": project_id or str(uuid.uuid4()),
         "layout": born_layout,
         "context_paths": list(context_paths or DEFAULT_CONTEXT_PATHS),
     }

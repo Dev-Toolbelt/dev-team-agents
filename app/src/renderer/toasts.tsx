@@ -39,9 +39,14 @@ export function toastResult(result: OperationResult<unknown>, success: string, i
  * A failed operation, kept until it is closed. `id` lets a retry of the same action replace
  * its earlier failure instead of stacking a second one under it.
  */
-export function toastFailure(result: Extract<OperationResult<unknown>, { ok: false }>, id?: string): void {
+export function toastFailure(
+  result: Extract<OperationResult<unknown>, { ok: false }>,
+  id?: string,
+  action?: { readonly label: string; readonly onClick: () => void },
+): void {
   toast.error(problemTitle(result), {
     ...idOf(id),
+    ...(action !== undefined ? { action } : {}),
     description: (
       <>
         <p>{result.message}</p>

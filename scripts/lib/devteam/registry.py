@@ -75,6 +75,20 @@ def find_by_path(path):
     return None, None
 
 
+def registered_id(path, identity):
+    """The id ``path`` is bound under: its ``project.json`` first, the registry second.
+
+    ``identity`` is the loaded ``project.json`` or ``None``. The fallback covers a
+    registered project whose ``project.json`` was lost — a ``git clean``, a reset of
+    ``.dev-team-agents/`` — where minting a new id would leave a second entry for the
+    same path and orphan the first one's manifest, preferences and memory.
+    """
+    if identity is not None:
+        return identity["project_id"]
+    project_id, _entry = find_by_path(path)
+    return project_id
+
+
 def upsert(project_id, path, providers, mode, pin=None, extra=None):
     """Create or update an entry, refusing a second path for the same identity.
 

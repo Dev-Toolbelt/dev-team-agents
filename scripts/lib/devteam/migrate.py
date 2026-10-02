@@ -306,7 +306,8 @@ def plan(root=None, provider_names=None, mode="auto"):
     # containers and air-gapped repos where `link` into a per-developer absolute
     # path does not work.
     identity = project.load(project_root)
-    entry = registry.get(identity["project_id"]) if identity is not None else None
+    known_id = registry.registered_id(project_root, identity)
+    entry = registry.get(known_id) if known_id is not None else None
     if entry is not None and entry.get("mode") == "vendored" and found["layout"] == LAYOUT_ROOT:
         raise UsageError(
             "{} is already bound in vendored mode, not a v2 install".format(project_root),
@@ -333,8 +334,19 @@ def plan(root=None, provider_names=None, mode="auto"):
     # may already be committed.
     adopts = identity is not None and entry is None
 
+    # The reverse case: registered, but the file is gone. The registry's id is restored
+    # so the bind keeps its manifest, preferences and memory instead of starting a
+    # second entry for the same path.
+    restores = identity is None and known_id is not None
+
     actions = []
-    if identity is None:
+    if restores:
+        actions.append(
+            "restore {}/project.json with the registered project_id {}".format(
+                project.PROJECT_DIR, known_id
+            )
+        )
+    elif identity is None:
         actions.append("create {}/project.json with a new project_id".format(project.PROJECT_DIR))
     elif adopts:
         actions.append(
@@ -376,6 +388,7 @@ def plan(root=None, provider_names=None, mode="auto"):
         "mode": mode,
         "actions": actions,
         "adopts_identity": adopts,
+        "restores_identity": known_id if restores else None,
         "memory_moves": memory,
         "context_paths_added": added,
         "git_tracked": tracked,
@@ -489,7 +502,9 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         if preview["context_paths_added"]
         else None
     )
-    identity, _created = project.ensure(project_root, context_paths=context_paths)
+    identity, _created = project.ensure(
+        project_root, context_paths=context_paths, project_id=preview["restores_identity"]
+    )
     project_id = identity["project_id"]
     if (
         preview["memory_moves"]
@@ -550,6 +565,7 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         "mode": bind_result["mode"],
         "providers": bind_result["providers"],
         "adopted_identity": preview["adopts_identity"],
+        "restored_identity": preview["restores_identity"],
         "memory_moved": preview["memory_moves"],
         "context_paths_added": preview["context_paths_added"],
         "quarantined": quarantined,

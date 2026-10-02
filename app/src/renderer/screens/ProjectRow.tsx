@@ -20,7 +20,7 @@ import {
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Loading, Problem } from '../Problem.js';
+import { Loading, needsRepair, Problem } from '../Problem.js';
 import { useAction } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
 import type {
@@ -158,6 +158,7 @@ export function ProjectRow({
   current,
   onChanged,
   onOpenSettings,
+  onRepair,
   selected,
   onSelect,
   dragging,
@@ -186,6 +187,8 @@ export function ProjectRow({
   current: string | null;
   onChanged: () => void;
   onOpenSettings: () => void;
+  /** Opens the Repair dialog — offered when Upgrade's plan is refused for a reason it answers. */
+  onRepair: () => void;
   selected: boolean;
   onSelect: (checked: boolean) => void;
   dragging: boolean;
@@ -305,6 +308,10 @@ export function ProjectRow({
         projectId={project.project_id}
         name={name}
         onApplied={onChanged}
+        onRepair={() => {
+          setDialog(null);
+          onRepair();
+        }}
       />
     </TableRow>
   );
@@ -322,12 +329,14 @@ function UpgradeDialog({
   projectId,
   name,
   onApplied,
+  onRepair,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   name: string;
   onApplied: () => void;
+  onRepair: () => void;
 }) {
   const plan = useAction(() => window.devteam.planUpgrade(projectId));
   const apply = useAction(() => window.devteam.applyUpgrade(projectId));
@@ -347,6 +356,9 @@ function UpgradeDialog({
   const planData = plan.state.phase === 'done' && plan.state.result.ok ? plan.state.result.data : null;
   const nothingToDo = planData !== null && planData.actions.length === 0;
   const applying = apply.state.phase === 'pending';
+  // The plan was refused because the project's files are out of step with its registration:
+  // Apply could never run, so the footer offers the way that fixes it instead.
+  const repairable = plan.state.phase === 'done' && needsRepair(plan.state.result);
 
   return (
     // Closing mid-apply would drop the report of a write that is still running.
@@ -378,6 +390,8 @@ function UpgradeDialog({
           </Button>
           {apply.state.phase === 'done' && apply.state.result.ok ? (
             <Button onClick={() => onOpenChange(false)}>Done</Button>
+          ) : repairable ? (
+            <Button onClick={onRepair}>Repair…</Button>
           ) : (
             <Button
               disabled={planData === null || nothingToDo || apply.state.phase === 'pending'}

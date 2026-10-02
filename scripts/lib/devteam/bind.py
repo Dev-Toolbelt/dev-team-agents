@@ -350,12 +350,20 @@ def _foreign_path_error(dest):
     )
 
 
+#: ``details.reason`` on every refusal whose answer is `devteam migrate` — machine-readable,
+#: so a client offers the migration instead of parsing the hint.
+V2_INSTALL_REASON = "v2-install"
+
+#: ``details.reason`` on a command that needs a bound project and found no ``project.json``.
+NOT_BOUND_REASON = "not-bound"
+
+
 def _v2_runtime_tree_error(dest, rel):
     return ConflictError(
         "{} is a v2 vendored tree, where this bind links {}".format(dest, rel),
         hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
         "old tree into a dated quarantine rather than deleting it.",
-        details={"path": str(dest)},
+        details={"path": str(dest), "reason": V2_INSTALL_REASON},
     )
 
 
@@ -656,7 +664,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     # bind that collides must leave the project exactly as it found it. `known_id` is
     # None for a project never bound, which has no registry entry and no manifest.
     identity = project.load(project_root)
-    known_id = identity["project_id"] if identity is not None else None
+    known_id = registry.registered_id(project_root, identity)
 
     # `pin=None` means "leave the pin alone", not "clear it". Reading the stored
     # pin here is what stops a bare `devteam bind` from silently moving a pinned
@@ -707,7 +715,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     )
 
     # The first write.
-    data, created_identity = project.ensure(project_root)
+    data, created_identity = project.ensure(project_root, project_id=known_id)
     project_id = data["project_id"]
 
     artifacts = []

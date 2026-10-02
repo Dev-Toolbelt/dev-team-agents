@@ -26,13 +26,27 @@ const TITLES: Record<ProblemKind, string> = {
 /** Titles for a `reason` the CLI attaches, where it says more than the exit code does. */
 const REASON_TITLES: Record<string, string> = {
   'invalid-source': 'This source cannot be installed',
+  'v2-install': 'This project still holds a v2 install',
+  'not-bound': 'This project has no project.json',
 };
+
+/**
+ * The reasons a project's files are out of step with its registration — a v2 tree still
+ * vendored, or a `project.json` that is gone. Sync and Upgrade can only fail on them; the
+ * answer is the bind dialog's migrate-or-rebind check, which the screen offers instead.
+ */
+const REPAIR_REASONS: ReadonlySet<string> = new Set(['v2-install', 'not-bound']);
 
 type Failure = Extract<OperationResult<never>, { ok: false }>;
 
 /** The heading a failure is reported under — shared by the inline alert and the toast. */
 export function problemTitle(problem: Failure): string {
   return (problem.reason !== undefined ? REASON_TITLES[problem.reason] : undefined) ?? TITLES[problem.kind];
+}
+
+/** Whether a failure is one the project's Repair flow answers — see `REPAIR_REASONS`. */
+export function needsRepair(result: OperationResult<unknown>): boolean {
+  return !result.ok && result.reason !== undefined && REPAIR_REASONS.has(result.reason);
 }
 
 export function Problem({ problem }: { problem: Failure }) {

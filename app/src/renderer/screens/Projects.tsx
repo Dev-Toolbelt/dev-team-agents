@@ -159,7 +159,10 @@ export function Projects({
   }
 
   // Every sync on the screen goes through one coordinator, so none runs beside another.
-  const syncs = useProjectSyncs(reload);
+  // The project whose Sync or Upgrade was refused for a reason the bind dialog answers (a v2
+  // tree still vendored, a lost `project.json`), by id — see `needsRepair`.
+  const [repairId, setRepairId] = useState<string | null>(null);
+  const syncs = useProjectSyncs(reload, setRepairId);
 
   const [filterText, setFilterText] = useState('');
   const [filterMode, setFilterMode] = useState<BindMode | 'all'>('all');
@@ -207,6 +210,7 @@ export function Projects({
   }
 
   const { current, projects } = state.result.data;
+  const repairTarget = repairId === null ? undefined : projects.find((project) => project.project_id === repairId);
 
   const settingsFor = openSettings === null ? undefined : projects.find((project) => project.project_id === openSettings);
   if (settingsFor !== undefined) {
@@ -354,6 +358,7 @@ export function Projects({
             syncAllPending={syncAll.state.phase === 'pending'}
             onChanged={reload}
             onOpenSettings={setOpenSettings}
+            onRepair={setRepairId}
             toolbar={
               <>
                 <WriteButton
@@ -394,6 +399,27 @@ export function Projects({
           path: project.path,
           name: displayName(project.path, project.project_id, projectNames),
         }))}
+      />
+      {/* The same dialog, aimed at a project already in the list: its own path is not
+          "already bound" here, because repairing that binding is the point. */}
+      <BindDialog
+        open={repairTarget !== undefined}
+        onOpenChange={(next) => {
+          if (!next) setRepairId(null);
+        }}
+        environment={environment}
+        onBound={reload}
+        repair={
+          repairTarget !== undefined
+            ? { path: repairTarget.path, name: displayName(repairTarget.path, repairTarget.project_id, projectNames) }
+            : undefined
+        }
+        bound={projects
+          .filter((project) => project.project_id !== repairId)
+          .map((project) => ({
+            path: project.path,
+            name: displayName(project.path, project.project_id, projectNames),
+          }))}
       />
     </section>
   );
@@ -504,6 +530,7 @@ function BindDialog({
   environment,
   onBound,
   bound: boundProjects,
+  repair,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -511,6 +538,12 @@ function BindDialog({
   onBound: () => void;
   /** The projects already bound, from the list on screen — a directory among them is refused. */
   bound: readonly BoundDirectory[];
+  /**
+   * A listed project whose Sync or Upgrade was refused. The dialog opens on its directory and
+   * runs the usual check: a v2 install is offered the migration, anything else the bind,
+   * which restores a lost `project.json` with the registered id.
+   */
+  repair?: { readonly path: string; readonly name: string } | undefined;
 }) {
   const [path, setPath] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -622,7 +655,14 @@ function BindDialog({
   // on `open` alone: a reset is idempotent, so running it on an already-blank form (the
   // ordinary first-open case) costs nothing.
   useEffect(() => {
-    if (open) resetForm();
+    if (open) {
+      resetForm();
+      if (repair !== undefined) {
+        setPath(repair.path);
+        setName(repair.name);
+        void detect(repair.path);
+      }
+    }
     // Keyed on `open` alone, deliberately: `resetForm` is a fresh closure every render
     // and is not itself part of what should re-trigger this effect — see `UpgradeDialog`'s
     // identical `[open, projectId]` effect above for the same reasoning.
@@ -648,8 +688,12 @@ function BindDialog({
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Bind a project</DialogTitle>
-          <DialogDescription>Choose a directory, then confirm which providers and mode to bind it with.</DialogDescription>
+          <DialogTitle>{repair !== undefined ? `Repair ${repair.name}` : 'Bind a project'}</DialogTitle>
+          <DialogDescription>
+            {repair !== undefined
+              ? 'Its files are out of step with its registration. A v2 install still here is migrated; otherwise the project is bound again under its registered id. Nothing changes until you confirm.'
+              : 'Choose a directory, then confirm which providers and mode to bind it with.'}
+          </DialogDescription>
         </DialogHeader>
 
         {/* The body scrolls and the header and footer stay: the dialog never runs past the
