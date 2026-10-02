@@ -65,7 +65,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -174,6 +174,13 @@ mode.
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
 | `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
+| `devteam auth login (--google \| --github \| --email <addr> [--password [--signup]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password. Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
+| `devteam auth logout` | Revoke the session on the server (best effort), then **always** remove the refresh token, `entitlement.json` and `account-session.json` locally; reports which parts succeeded |
+| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it (the session-start hook and installers use it) |
+| `devteam auth otp start --email <addr> \| verify --email <addr>` | The two-step form of `login --email`, for the desktop app. `start` answers identically for every address |
+| `devteam auth password reset --email <addr> [--send-code \| --finish] \| change` | Reset with an emailed recovery code (`--send-code` only sends; `--finish` reads code then new password from stdin; neither flag does both). `change` reads current then new password. Both revoke the account's other sessions |
+| `devteam auth profile [show] \| update --name <n> \| identities \| email --new <addr> [--confirm] \| link \| unlink --google\|--github` | The account profile. Unlinking the last sign-in method is refused (exit 1, `details.reason: "last_identity"`) |
+| `devteam auth delete [--send-code \| --yes]` | Delete the account after a **fresh** email code (signs in again with it; a refreshed token would fail the server's freshness check). A terminal asks for the address; without one, `--send-code` then `--yes` with the code on stdin |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
 | `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()`. A **pre-v2.1.0 install at `.claude/dev-team-agents/`** is refused in every mode and pointed at `migrate`. Every collision is checked before the first write, so a refused bind leaves no `project.json` and no `.dev-team-agents/`. A registered path whose `project.json` is gone gets it back **with the registered `project_id`**, never a new one — a new id would leave a second registry entry for the same path and orphan the first one's manifest, preferences and memory |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
@@ -356,6 +363,40 @@ of those directories; its unit is the physical **root**, each listing the provid
 - `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
 - `skills install`: `{name, description, source, linked, source_kind, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
 - `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`
+
+## Account
+
+`devteam auth` is the only code that talks to the identity provider ([ADR-0029](../docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)).
+Modules: `auth.py` (handlers and parser), `auth_gotrue.py` (wire protocol, input rules, fixed error
+messages), `auth_session.py` (session store, refresh lock), `auth_oauth.py` (PKCE and the loopback
+listener), on top of `entitlement.py`. None imports telemetry.
+
+- **Session.** The refresh token is the global secret `account.session.refresh_token` (`secrets.py`,
+  default backend); the non-secret half — account id, email, which backend holds the token, last
+  online check — is the machine-local `account-session.json`. The access token is in memory only.
+  When the backend is `insecure`, `secret_backend` is `"insecure"`, `secret_backend_insecure` is
+  `true`, and a warning is printed. A refresh runs under the `auth-session` store lock; a process
+  that waited re-reads the stored token. Threads of one process share one exchange.
+- **Stale and retry.** A usable license is refreshed when its last online check is over 24 hours old
+  (1 hour for `trial_expired`/`banned`), and a failed attempt is not repeated for 15 minutes.
+- **Errors.** One fixed sentence per failure; a response body is never echoed. `1` rejected by the
+  server (wrong credential or code, dead session, not signed in), `2` usage (bad flag, password
+  outside 10-64 characters / 72 bytes, a code that is not 8 digits), `3` environment (unreachable,
+  rate limited with `details.retry_after`, no display, secret store, no account server in this
+  build), `4` the lock. `details.reason` is the stable machine-readable cause.
+- **`--json`.** `login`, `otp verify`, `password reset --finish`, `status` and `check` share one
+  shape: `{signed_in, account: {id, email, display_name, provider, signed_in_at} | null, entitled,
+  entitlement: {status, reason, token_status, features, trial_ends_at, expires_at}, online:
+  {attempted, ok}, last_online_check, secret_backend, secret_backend_insecure, environment,
+  test_seam, warnings}`; `login` adds `method`, `status`/`check` add `offline`. A failing `check`
+  returns the same body plus `error`, `exit_code`, `hint` and `details`, so the gate and the
+  installers parse one schema. `entitlement.status` is one of `active`, `trial`, `trial_expired`,
+  `banned`, `needs_online_check`, `signed_out`, `invalid`.
+- **Test seam.** `DEVTEAM_AUTH_TEST_URL` / `_KID` / `_PUBKEY` (loopback URL, `test-` key id) point the
+  CLI at a fake server; every command then warns on stderr and reports `test_seam: true`. Nothing
+  else — no file, preference or other variable — changes the endpoint or the keys.
+- **Client gate.** Every `auth` leaf is `READ_ONLY` in `compat.py`: it writes only machine-local
+  session records that are not declared store shapes, and a user must always be able to sign in.
 
 ## Compatibility block in `version`
 
