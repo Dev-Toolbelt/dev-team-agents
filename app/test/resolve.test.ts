@@ -362,7 +362,9 @@ describe('when nothing is found', () => {
     expect(resolution.searched).toContain(join(root, 'nowhere', 'devteam'));
     expect(resolution.searched).toContain(join(brewish, 'devteam'));
     expect(resolution.remedy.join(' ')).toContain('DEVTEAM_CLI_PATH');
-    expect(resolution.remedy.join(' ')).toContain('brew install');
+    // No formula is published (ADR-0027 § 6), so the remedy must not send anyone to one.
+    expect(resolution.remedy.join(' ')).not.toContain('brew install');
+    expect(resolution.remedy.join(' ')).toContain('/usr/local/bin/devteam');
     // The claim ADR-0011 rests on, asserted rather than only commented.
     expect(resolution.remedy.join(' ')).toContain('ships no copy of the CLI');
     // "which locations it tried" (ADR-0015 § 5), grouped by step rather than one count.
