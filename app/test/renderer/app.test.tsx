@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/renderer/App.js';
 import { isPrerelease } from '../../src/shared/appVersion.js';
-import { buildInfo, cliResolutionFound, fakeBridge, installBridge } from './support.js';
+import { buildInfo, cliResolutionFound, cliResolutionNotFound, fakeBridge, installBridge } from './support.js';
 
 const state = vi.hoisted(() => ({ doctorThrows: true }));
 
@@ -137,5 +137,71 @@ describe('App — the Integrations tab', () => {
     await user.click(screen.getByRole('tab', { name: 'Diagnosis' }));
     await user.click(screen.getByRole('tab', { name: 'Integrations' }));
     expect(screen.getByLabelText('Personal access token')).toHaveValue('ghp_draft');
+  });
+});
+
+describe('App — the no-CLI screen offers to install the CLI on Windows (ADR-0028)', () => {
+  const onWindows = () => vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Win32');
+
+  it('installs, then looks again — and finds the CLI the installer placed', async () => {
+    onWindows();
+    const user = userEvent.setup();
+    const resolveCli = vi.fn().mockResolvedValueOnce(cliResolutionNotFound()).mockResolvedValue(cliResolutionFound());
+    const installCli = vi.fn(() => Promise.resolve({ outcome: 'installed' as const, message: 'devteam 2.49.0 is installed.', version: '2.49.0' }));
+    installBridge(fakeBridge({ resolveCli, installCli }));
+
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Install the CLI' }));
+
+    expect(installCli).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('tab', { name: 'Projects' })).toBeInTheDocument();
+    expect(resolveCli).toHaveBeenCalledTimes(2);
+  });
+
+  it('says why when nothing was installed, and does not look again', async () => {
+    onWindows();
+    const user = userEvent.setup();
+    const resolveCli = vi.fn(() => Promise.resolve(cliResolutionNotFound()));
+    const installCli = vi.fn(() =>
+      Promise.resolve({ outcome: 'checksum-mismatch' as const, message: 'devteam-setup-2.49.0-x64.exe does not match the SHA-256 its release lists, so it was not run.' }),
+    );
+    installBridge(fakeBridge({ resolveCli, installCli }));
+
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Install the CLI' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/does not match the SHA-256/);
+    expect(resolveCli).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not offered on macOS, where the remedy gives the commands instead', async () => {
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())) }));
+
+    render(<App />);
+    expect(await screen.findByText('No devteam CLI on this host')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Install the CLI' })).not.toBeInTheDocument();
+  });
+});
+
+describe('App — the unsigned-build banner names the platform it is read on', () => {
+  const packagedUnsigned = () => buildInfo({ packaged: true, codeSigned: false });
+
+  it('speaks of Authenticode and SmartScreen on Windows, not Apple or a .dmg', async () => {
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Win32');
+    installBridge(fakeBridge({ buildInfo: vi.fn(() => Promise.resolve(packagedUnsigned())) }));
+    render(<App />);
+    const banner = (await screen.findByText('This build is not signed')).closest('[role="alert"]')!;
+    expect(banner).toHaveTextContent(/Authenticode/);
+    expect(banner).toHaveTextContent(/SmartScreen/);
+    expect(banner).not.toHaveTextContent(/Apple|\.dmg|notarytool/);
+  });
+
+  it('keeps the Apple wording on macOS', async () => {
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    installBridge(fakeBridge({ buildInfo: vi.fn(() => Promise.resolve(packagedUnsigned())) }));
+    render(<App />);
+    const banner = (await screen.findByText('This build is not signed or notarised')).closest('[role="alert"]')!;
+    expect(banner).toHaveTextContent(/Apple Developer ID/);
   });
 });

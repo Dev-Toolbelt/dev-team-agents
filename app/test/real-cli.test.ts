@@ -84,8 +84,8 @@ const pythonPresent = python3Works();
  * this file's `spawnSync(REAL_CLI, …)` can start it — the fixture helper `runCliDirectly`
  * hit exactly that gap, failing with `status: null` (a process that never launched) on
  * every call. A packaged Windows CLI would be a real `.exe`, not this checked-out
- * script; ADR-0011 records that shape as still undecided, so there is no Windows
- * equivalent to run this file against yet.
+ * script; no packaged Windows CLI exists yet, so there is no Windows equivalent to run
+ * this file against.
  */
 const canSpawnScriptDirectly = process.platform !== 'win32';
 const available = cliPresent && pythonPresent && canSpawnScriptDirectly;

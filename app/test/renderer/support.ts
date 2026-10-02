@@ -396,6 +396,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     buildInfo: vi.fn(() => Promise.resolve(buildInfo())),
     environment: vi.fn(() => Promise.resolve(environment())),
     resolveCli: vi.fn(() => Promise.resolve(cliResolutionFound())),
+    installCli: vi.fn(() => Promise.resolve({ outcome: 'unsupported' as const, message: 'unsupported' })),
     handshake: vi.fn(() => Promise.resolve(ok(handshakeView()))),
     listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [] }))),
     projectNames: vi.fn(() => Promise.resolve({})),

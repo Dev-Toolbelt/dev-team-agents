@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { knownBinDirs, knownLocationSource, resolveDevteam } from '../src/cli/resolve.js';
+import { installerBinDirs, knownBinDirs, knownLocationSource, resolveDevteam } from '../src/cli/resolve.js';
 import { readLauncherManifest, resolveFixtureBinary } from './fixtures/launcher-manifest.js';
 
 const FAKE = fileURLToPath(new URL('./fixtures/fake-devteam.mjs', import.meta.url));
@@ -247,6 +247,34 @@ describe('step 3 — the channel location a GUI launch cannot see', () => {
   });
 });
 
+describe('step 4 — the devteam installers’ own directory (ADR-0028)', () => {
+  it('derives the NSIS installer’s bin on Windows and ~/.local/bin elsewhere', () => {
+    expect(installerBinDirs('win32', { LOCALAPPDATA: 'C:\\Users\\k\\AppData\\Local' })).toEqual([
+      join('C:\\Users\\k\\AppData\\Local', 'Programs', 'devteam', 'bin'),
+    ]);
+    expect(installerBinDirs('darwin', { HOME: '/Users/k' })).toEqual(['/Users/k/.local/bin']);
+    // No path is invented when the variable that anchors it is absent.
+    expect(installerBinDirs('win32', {})).toEqual([]);
+    expect(installerBinDirs('darwin', {})).toEqual([]);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('finds a CLI the Windows installer placed, with no PATH entry for it', async () => {
+    // The case the app's own "Install the CLI" action creates: the installer appended its
+    // bin to the user PATH, but this process started before that and still has the old one.
+    // LOCALAPPDATA is the temp root, so step 3's winget directories are empty too and the
+    // test depends only on what it planted.
+    const localAppData = join(root, 'AppData');
+    await plant(join('AppData', 'Programs', 'devteam', 'bin'), 'version-with-compat');
+    const resolution = await resolveDevteam({
+      env: { PATH: join(root, 'nowhere'), LOCALAPPDATA: localAppData },
+      platform: 'win32',
+    });
+    if (!resolution.found) throw new Error('expected a CLI');
+    expect(resolution.cli.source).toBe('installer');
+    expect(resolution.cli.sourceDetail).toContain('devteam installer');
+  });
+});
+
 describe('a candidate must answer, not merely exist', () => {
   it.skipIf(skipOnWindowsWithoutLauncher)('rejects a program called devteam that has no compat block', async () => {
     await plant('bin', 'version-no-compat');
@@ -364,7 +392,9 @@ describe('when nothing is found', () => {
     expect(resolution.remedy.join(' ')).toContain('DEVTEAM_CLI_PATH');
     // No formula is published (ADR-0027 § 6), so the remedy must not send anyone to one.
     expect(resolution.remedy.join(' ')).not.toContain('brew install');
-    expect(resolution.remedy.join(' ')).toContain('/usr/local/bin/devteam');
+    // The CLI's own installer (ADR-0028), into a directory step 4 searches.
+    expect(resolution.remedy.join(' ')).toContain('install-cli.sh');
+    expect(resolution.remedy.join(' ')).toContain('~/.local/bin');
     // The claim ADR-0011 rests on, asserted rather than only commented.
     expect(resolution.remedy.join(' ')).toContain('ships no copy of the CLI');
     // "which locations it tried" (ADR-0015 § 5), grouped by step rather than one count.
@@ -403,10 +433,14 @@ describe('when nothing is found', () => {
     // The defect this covers: the remedy used to open with `brew install`, unconditionally,
     // on every platform — including this one, where Homebrew does not apply.
     expect(remedy).not.toContain('brew install');
-    // ADR-0011 records the Windows installer shape as undecided; a `winget install <pkg>`
-    // line would claim a package that does not exist.
+    // No packaged Windows CLI exists; a `winget install <pkg>` line would claim a package
+    // that does not exist.
     expect(remedy).not.toContain('winget install');
+    // The installer the screen's "Install the CLI" action fetches (ADR-0028).
+    expect(remedy).toContain('Install the CLI');
+    expect(remedy).toContain('devteam-setup-');
     expect(remedy).toContain('DEVTEAM_CLI_PATH');
-    expect(remedy).toContain('ADR-0011');
+    // The app's own installer shape is decided (NSIS); the remedy used to call it undecided.
+    expect(remedy).not.toContain('undecided');
   });
 });
