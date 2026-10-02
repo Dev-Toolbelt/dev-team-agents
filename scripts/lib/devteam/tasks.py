@@ -436,8 +436,36 @@ def normalize(payload, provider="auto"):
 #: actions below, an in-place edit, or a redirect to a file. A heuristic, documented as one in
 #: docs/specs/task-board.md § Direct work: a miss costs a card, never a wrong Done.
 _WRITE_VERBS = frozenset(
-    ("mv", "rm", "cp", "mkdir", "rmdir", "touch", "ln", "chmod", "chown", "tee", "truncate", "patch", "install", "dd")
+    ("mv", "rm", "cp", "mkdir", "rmdir", "touch", "ln", "chmod", "chown", "tee", "truncate", "patch", "install", "dd",
+     "scp", "rsync")
 )
+#: Tools whose subcommand decides: ``(options that take a value, subcommands that change something)``.
+#: ``docker container rm`` / ``docker image prune`` read through their management command; a
+#: ``compose`` subcommand and ``rollout`` take one more word (``rollout status`` only reads).
+_CONTAINER_WRITES = frozenset((
+    "rm", "rmi", "run", "exec", "stop", "start", "restart", "kill", "build", "pull", "push", "cp", "prune",
+    "create", "tag", "load", "import", "commit", "update", "pause", "unpause", "rename",
+))
+_COMPOSE_WRITES = frozenset((
+    "up", "down", "restart", "stop", "start", "rm", "run", "exec", "build", "pull", "push", "kill", "create", "cp",
+))
+_SUBCOMMAND_TOOLS = {
+    "docker": (frozenset(("-H", "--host", "--context", "-c", "--config", "-l", "--log-level")), _CONTAINER_WRITES),
+    "podman": (frozenset(("--url", "--connection", "-c", "--log-level")), _CONTAINER_WRITES),
+    "docker-compose": (frozenset(("-f", "--file", "-p", "--project-name", "--env-file", "--profile", "--project-directory")), _COMPOSE_WRITES),
+    "kubectl": (frozenset(("-n", "--namespace", "--context", "--kubeconfig", "--cluster", "--user", "-s", "--server")),
+                frozenset(("apply", "delete", "create", "scale", "patch", "edit", "exec", "set", "replace", "label",
+                           "annotate", "cordon", "uncordon", "drain", "taint", "cp", "run", "expose", "autoscale"))),
+    "helm": (frozenset(("-n", "--namespace", "--kube-context", "--kubeconfig")),
+             frozenset(("install", "upgrade", "uninstall", "delete", "rollback"))),
+    "systemctl": (frozenset(("-H", "--host", "-M", "--machine")),
+                  frozenset(("start", "stop", "restart", "reload", "try-restart", "reload-or-restart", "enable",
+                             "disable", "mask", "unmask", "kill", "daemon-reload"))),
+}
+_CONTAINER_GROUPS = frozenset(("container", "image", "volume", "network", "system", "builder", "buildx", "service", "stack"))
+_ROLLOUT_WRITES = frozenset(("restart", "undo", "pause", "resume"))
+#: `ssh` options that take a value; the first other word is the host, the rest the remote command.
+_SSH_VALUE_OPTIONS = frozenset("BbcDEeFIiJLlmOopQRSWw")
 _GIT_WRITES = frozenset((
     "add", "am", "apply", "checkout", "cherry-pick", "commit", "merge", "mv", "pull", "push", "rebase",
     "reset", "restore", "revert", "rm", "stash", "switch", "tag", "worktree",
@@ -515,7 +543,51 @@ def _segment_writes(words):
         return bool(args) and args[0] in _GIT_WRITES
     if verb in _PACKAGE_TOOLS and rest and rest[0] in _PACKAGE_WRITES:
         return True
+    if verb == "ssh":
+        # `ssh host '<cmd>'` runs the command remotely: read it like `bash -lc`. No command is a login.
+        # Its own words, not `rest`: a port (`-p 22`) is a number, not a descriptor to drop.
+        # ssh joins them with spaces for the remote shell, exactly like this.
+        return writes(" ".join(_ssh_command(words[1:])))
+    if verb == "service":
+        return len(rest) >= 2 and rest[1] in _SUBCOMMAND_TOOLS["systemctl"][1]
+    if verb in _SUBCOMMAND_TOOLS:
+        return _subcommand_writes(verb, rest)
     return verb in ("python", "python3") and rest[:3] == ["-m", "pip", "install"]
+
+
+def _skip_options(args, valued):
+    """``args`` from the first word that is not an option (nor the value of one in ``valued``)."""
+    while args and args[0].startswith("-"):
+        args = args[2:] if args[0] in valued else args[1:]
+    return args
+
+
+def _subcommand_writes(verb, rest):
+    valued, changes = _SUBCOMMAND_TOOLS[verb]
+    args = _skip_options(list(rest), valued)
+    if not args:
+        return False
+    if verb in ("docker", "podman"):
+        if args[0] == "compose":
+            return _subcommand_writes("docker-compose", args[1:])
+        if args[0] in _CONTAINER_GROUPS:
+            args = _skip_options(args[1:], valued)
+            return bool(args) and (args[0] in changes or args[0] in ("remove", "up", "deploy", "scale"))
+    if verb == "kubectl" and args[0] == "rollout":
+        return len(args) > 1 and args[1] in _ROLLOUT_WRITES
+    return args[0] in changes
+
+
+def _ssh_command(rest):
+    """The remote command words of an ``ssh`` invocation (``rest`` is everything after ``ssh``)."""
+    index = 0
+    while index < len(rest) and rest[index].startswith("-") and rest[index] != "--":
+        flag = rest[index]
+        # `-p 22` takes the next word; `-p22`, `-tt` and `-oX=y` carry theirs or take none.
+        index += 2 if len(flag) == 2 and flag[1] in _SSH_VALUE_OPTIONS else 1
+    if index < len(rest) and rest[index] == "--":
+        index += 1
+    return rest[index + 1:]
 
 
 def writes(command):
