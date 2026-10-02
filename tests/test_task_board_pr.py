@@ -22,7 +22,7 @@ from unittest import mock
 
 from devteam_support import CLI, REPO_ROOT, StoreTestCase, make_git_project, requires_bash
 
-from devteam import hooks, pr_refs, providers, tasks
+from devteam import hooks, pr_refs, providers, registry, tasks
 
 import test_tasks as tt
 from test_review_board import PROMPT_DISPATCHER, ReviewCase, claude_return, claude_spawn, marker
@@ -262,6 +262,91 @@ class CreationTest(PrCase):
         self.assertEqual(len(self.prs()), tasks.MAX_PRS)
         self.assertEqual(tasks.MAX_PRS, 20)
         self.assertEqual([p["number"] for p in self.prs()][-1], 20)
+
+
+OTHER = "https://github.com/o/other/pull/7"
+
+
+class OtherBoundProjectTest(PrCase):
+    """A PR/MR created from this session in the checkout of ANOTHER bound project (the VHI-710 case):
+    the repository is vouched for by that project's remote, never by the command or the output."""
+
+    def setUp(self):
+        super().setUp()
+        self.other = make_git_project(self.tmp / "other", name="other")
+        git(self.other, "remote", "add", "origin", "git@github.com:o/other.git")
+        git(self.other, "checkout", "-q", "-b", "fix/other-x")
+        registry.upsert("other-id", self.other, ["claude"], "link")
+
+    def create_there(self, session="s1", now=T0 + 20, url=OTHER, command=None):
+        command = command or "cd {} && git push -u origin fix/other-x && gh pr create --base develop".format(self.other)
+        return self.rec(claude_bash(session, command, url + "\n", cwd=str(self.root)), now=now)
+
+    def test_a_pr_in_another_bound_project_is_recorded_with_that_project_as_its_voucher(self):
+        self.begin()
+        out = self.create_there()
+        self.assertEqual(out["event"], "pr_created")
+        (mark,) = self.prs()
+        self.assertEqual(
+            (mark["repo"], mark["number"], mark["via"], mark["head"]), ("o/other", 7, "other-id", "fix/other-x")
+        )
+        self.stop_idle()
+        view = self.task()
+        self.assertEqual(view["column"], "pr_created")
+        self.assertEqual((view["pr"]["number"], view["pr"]["url"], view["pr"]["state"]), (7, OTHER, "open"))
+        self.assertNotIn("via", json.dumps(self.session(T0 + 40)))
+
+    def test_a_repository_no_bound_project_names_is_still_refused(self):
+        self.begin()
+        self.create_there(url="https://github.com/x/y/pull/1")
+        self.assertEqual(self.prs(), [])
+
+    def test_unbinding_the_other_project_hides_the_mark_but_keeps_it(self):
+        self.begin()
+        self.create_there()
+        self.stop_idle()
+        registry.remove("other-id")
+        self.assertEqual(self.task()["column"], "done")
+        self.assertEqual(self.session(T0 + 40)["prs"], [])
+        self.assertEqual(self.prs()[0]["via"], "other-id")
+
+    def test_a_merge_run_in_the_other_checkout_moves_the_tasks_to_done(self):
+        self.begin()
+        self.create_there()
+        self.stop_idle()
+        out = self.rec(claude_bash(
+            "s1", "cd {} && gh pr merge 7 --squash".format(self.other),
+            "✓ Squashed and merged pull request #7 (fix)\n", cwd=str(self.root),
+        ), now=T0 + 50)
+        self.assertEqual(out["event"], "pr_merged")
+        (merge,) = self.load("s1")["merges"]
+        self.assertEqual((merge["repo"], merge["number"]), ("o/other", 7))
+        view = self.task(now=T0 + 60)
+        self.assertEqual((view["column"], view["pr"]["state"]), ("done", "merged"))
+
+    def test_a_merge_number_after_an_unreadable_cd_is_credited_to_no_repository(self):
+        self.begin()
+        self.create(command="gh pr create --head feat/x")
+        self.stop_idle()
+        self.rec(claude_bash("s1", "cd $W && gh pr merge 12 --squash", "✓ Squashed and merged pull request #12 (t)\n", cwd=str(self.root)), now=T0 + 50)
+        self.assertNotIn("merges", self.load("s1"))
+        self.assertEqual(self.task(now=T0 + 60)["pr"]["state"], "open")
+
+    def test_a_git_merge_in_the_other_checkout_is_not_this_projects_merge(self):
+        self.begin()
+        self.create(command="gh pr create --head feat/x")
+        self.stop_idle()
+        self.rec(claude_bash("s1", "cd {} && git merge feat/x".format(self.other), "Fast-forward\n", cwd=str(self.root)), now=T0 + 50)
+        self.assertNotIn("merges", self.load("s1"))
+
+    def test_every_provider_records_the_other_projects_pr(self):
+        for provider in providers.ALL_PROVIDERS:
+            session = ProviderPayloadTest.SESSIONS[provider]
+            self.rec(ProviderPayloadTest.RECORDS[provider](session), now=T0)
+            command = "cd {} && gh pr create --fill".format(self.other)
+            out = self.rec(ProviderPayloadTest.BASH[provider](session, command, OTHER + "\n", cwd=str(self.root)), now=T0 + 20)
+            self.assertEqual(out["event"], "pr_created", provider)
+            self.assertEqual(self.load(session)["prs"][0]["via"], "other-id", provider)
 
 
 class ProviderPayloadTest(PrCase):
