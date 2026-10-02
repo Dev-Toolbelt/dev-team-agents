@@ -87,6 +87,36 @@ class LauncherTest(unittest.TestCase):
         result = self._run('echo "$(type -t python3) [${DTA_PYTHON:-}]"')
         self.assertEqual(result.stdout.split(), ["file", "[]"])
 
+    def _embedded_cli_python(self):
+        """The interpreter the Windows CLI installer places (ADR-0028), under a fake LOCALAPPDATA."""
+        local = self.tmp / "local"
+        target = local / "Programs" / "devteam" / "python" / "python.exe"
+        target.parent.mkdir(parents=True)
+        target.write_text(_forward(self.log))
+        target.chmod(0o755)
+        return local, target
+
+    def test_windows_falls_back_to_the_cli_installers_embedded_python(self):
+        self._stub("python3", BROKEN)
+        self._stub("python", BROKEN)
+        local, target = self._embedded_cli_python()
+        result = self._run('python3 -c "print(5)"; echo "picked=$DTA_PYTHON"', extra_env={"LOCALAPPDATA": str(local)})
+        self.assertEqual(result.stdout.split(), ["5", "picked={}".format(target)], result.stderr)
+
+    def test_a_system_python_still_wins_over_the_embedded_one(self):
+        self._stub("python3", BROKEN)
+        self._stub("python", _forward(self.log))
+        local, _ = self._embedded_cli_python()
+        result = self._run('echo "picked=$DTA_PYTHON"', extra_env={"LOCALAPPDATA": str(local)})
+        self.assertEqual(result.stdout.split(), ["picked=python"], result.stderr)
+
+    def test_posix_never_looks_for_the_embedded_python(self):
+        self._stub("python3", BROKEN)
+        self._stub("python", BROKEN)
+        local, _ = self._embedded_cli_python()
+        result = self._run('echo "[${DTA_PYTHON:-}]"', platform="darwin", extra_env={"LOCALAPPDATA": str(local)})
+        self.assertEqual(result.stdout.split(), ["[]"], result.stderr)
+
     def test_posix_with_python3_probes_nothing(self):
         self._stub("python3", _forward(self.log))
         result = self._run('echo "$(type -t python3) [${DTA_PYTHON:-}]"', platform="linux")
