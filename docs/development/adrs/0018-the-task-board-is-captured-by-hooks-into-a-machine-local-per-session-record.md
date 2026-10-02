@@ -178,6 +178,22 @@ sessions simply lack the card.
 | Loose refs without integration config | An unbound GitHub issue is still a URL; binding makes it canonical and auditable |
 | Store URLs, validate on read | Removes the ability to detect a stale reference (e.g. a remote was removed) until the view is built |
 
+### Security amendments (mandatory, override earlier sections where they differ)
+
+**Refs and PR/MR handling security review approved 2026-10-01 with mandatory changes. Full enforcement per the app ADR listed below.**
+
+1. **Store parts, not URLs.** Parse every URL/number from tool output and prompts into validated parts (kind, host, path segments, number/key), store those, rebuild the URL on every read, and re-validate on every read.
+2. **Allow-list by kind.** The CLI computes `link_hosts` dynamically: `github.com` and the connected GitHub web host for PRs (plus `github_issue` when the bound repository is vouched for by a git remote on that host), `gitlab.com` and every other git-remote host for MRs — except punycode (`xn--`) hosts and known non-GitLab forges (Bitbucket, Codeberg, Azure DevOps, SourceForge) — and the connected Jira site. A mark never adds a host — it is a consistency check inside the CLI trust boundary, not a second trust anchor.
+3. **Canonical round-trip and path shapes in the app.** Defined once, in ADR-0025 § Decision; the CLI applies the same shapes when it rebuilds a URL.
+4. **Extraction.** CLI accepts a URL only when it appears whole on a line (gh/glab tools) or as `html_url`/`number` in JSON (MCP tools), validated before storing. MCP tools must parse structured responses only; free-text regex never.
+5. **Repo check.** Normalize hosts (lowercase) and paths, strip `.git`, compare case-insensitively. Reject if the mark's host/owner/repo does not match one of the project's `git remote -v` entries (verified inside CLI trust boundary).
+6. **Command-token filter.** The substring check `gh pr create`, `glab mr create`, etc. is a false-positive filter, NOT a security control — explicitly documented. Additionally refuse segments with env assignments for PATH, GH_HOST, GH_REPO, GITLAB_HOST, GLAB_*, or a function/alias redefining gh/glab.
+7. **Ref regexes.** Jira: word-boundary + project-key regex. GitHub: owner/repo#N and closing-keyword patterns. Validate key/repo formats (Jira: `^[A-Z][A-Z0-9_]{1,9}$`; GitHub owner: `[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})`; repo: `[A-Za-z0-9._-]{1,100}`). A GitHub `owner/repo#N` or issue URL — from any source, prompt included — must name the bound repository or one a git remote on the web host names; the committed binding's `repository` counts only when a remote names it too.
+8. **IPC in app.** Renderer sends only ids; main looks them up in its snapshot, validates paths/hosts, caps 20 prs[], 50 refs[], 50 merges[] per session, rate limits 1 open/750ms + 10/min.
+9. **Testing mandate.** Unit-test the validator for IDN/punycode, trailing dot, uppercase host, percent-encoding, userinfo, port, fragment, shape mismatches, number divergence, cross-host mark reuse.
+
+**Reference implementation:** ADR-0025: The desktop app opens allow-listed tracker links from the main process.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
@@ -186,22 +202,3 @@ sessions simply lack the card.
 | Parse plan and sprint documents | Only persisted plans are visible, at sprint granularity, with no in-progress signal |
 | One append-only event log for all sessions | Every reader replays the whole log, and one lock is shared by every concurrent session |
 | Snapshot only, no history | Cannot answer how long a task spent in each step, which is a stated requirement |
-
-## SECURITY AMENDMENTS (mandatory, override earlier sections where they differ)
-
-**Refs and PR/MR handling security review approved 2026-10-01 with mandatory changes. Full enforcement per the app ADR listed below.**
-
-1. **Store parts, not URLs.** Parse every URL/number from tool output and prompts into validated parts (kind, host, path segments, number/key), store those, rebuild the URL on every read, and re-validate on every read.
-2. **Allow-list by kind.** The CLI computes `link_hosts` dynamically from configured integrations (GitHub web host, Jira site host, hosts of git remotes that carry a PR/MR URL). A mark never adds a host — it is a consistency check inside the CLI trust boundary, not a second trust anchor.
-3. **Canonical round-trip in the app.** Refuse a URL unless it parses, protocol is `https:`, hostname matches the canonical form (lowercase, no username/password, default port only), hostname matches a configured kind in `link_hosts`, and path matches the exact shape for that kind.
-4. **Path validation.** GitHub PR/issue: `^/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100})/(pull|issues)/([1-9][0-9]{0,9})$`. GitLab MR: `^/((?:[A-Za-z0-9_.-]{1,255}/){1,20}[A-Za-z0-9_.-]{1,255})/-/merge_requests/([1-9][0-9]{0,9})$`. Jira: `^<escaped site path>/browse/([A-Z][A-Z0-9_]{1,9})-([1-9][0-9]{0,9})$`. No percent-encoding allowed.
-5. **Extraction.** CLI accepts a URL only when it appears whole on a line (gh/glab tools) or as `html_url`/`number` in JSON (MCP tools), validated before storing. MCP tools must parse structured responses only; free-text regex never.
-6. **Repo check.** Normalize hosts (lowercase) and paths, strip `.git`, compare case-insensitively. Reject if the mark's host/owner/repo does not match one of the project's `git remote -v` entries (verified inside CLI trust boundary).
-7. **Command-token filter.** The substring check `gh pr create`, `glab mr create`, etc. is a false-positive filter, NOT a security control — explicitly documented. Additionally refuse segments with env assignments for PATH, GH_HOST, GH_REPO, GITLAB_HOST, GLAB_*, or a function/alias redefining gh/glab.
-8. **Ref regexes.** Jira: word-boundary + project-key regex. GitHub: owner/repo#N and closing-keyword patterns. Validate key/repo formats (Jira: `^[A-Z][A-Z0-9_]{1,9}$`; GitHub owner: `[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})`; repo: `[A-Za-z0-9._-]{1,100}`).
-9. **IPC in app.** Renderer sends only ids; main looks them up in its snapshot, validates paths/hosts, caps 20 prs[], 50 refs[], 50 merges[] per session, rate limits 1 open/750ms + 10/min.
-10. **Testing mandate.** Unit-test the validator for IDN/punycode, trailing dot, uppercase host, percent-encoding, userinfo, port, fragment, shape mismatches, number divergence, cross-host mark reuse.
-
-**Reference implementation:** ADR-0025: The desktop app opens allow-listed tracker links from the main process.
-
-## Alternatives Considered

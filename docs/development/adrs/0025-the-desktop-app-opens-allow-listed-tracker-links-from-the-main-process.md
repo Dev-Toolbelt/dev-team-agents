@@ -12,30 +12,33 @@ Qualifies ADR-0015 ("The desktop app runs as a CLI client") and security.ts wind
 
 ## Decision
 
-**IPC endpoint takes only ids, main process looks up and validates.** The renderer sends `{project_id, session_id, task_key|null, link: {type:"pr"|"ref", index}}` (all strings/integers) — never a URL. The main process looks the link up in its own snapshot (taskBoard supervisor), parses it with `new URL()`, and validates:
+**IPC endpoint takes only ids, main process looks up and validates.** The renderer sends `{project_id, session_id, task_key|null, link: {type:"pr"|"ref", index, expect}}` (all strings/integers) — never a URL. `expect` is the number or key the badge showed; a snapshot that moved between render and click resolves to a different link, which is refused rather than opened. The main process looks the link up in its own snapshot (taskBoard supervisor), parses it with `new URL()`, and validates:
 
 - Protocol exactly `https:`
 - Hostname canonical form (lowercase, no username/password, default port only)
 - Hostname matches a configured kind in the project's `link_hosts` allow-list
 - Path matches the exact regex shape for that kind:
-  - GitHub PR/issue: `^/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100})/(pull|issues)/([1-9][0-9]{0,9})$`
+  - GitHub PR/issue: `^/([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100})/(pull|issues)/([1-9][0-9]{0,9})$`, the repository not ending in `.git` nor starting with `-`
   - GitLab MR: `^/((?:[A-Za-z0-9_.-]{1,255}/){1,20}[A-Za-z0-9_.-]{1,255})/-/merge_requests/([1-9][0-9]{0,9})$`
   - Jira: `^<escaped site path>/browse/([A-Z][A-Z0-9_]{1,9})-([1-9][0-9]{0,9})$` (site path is the configured Jira `base_path` from `link_hosts`)
 - Number/key in path matches the snapshot's `pr.number` / `ref.key`
 - No query string or fragment
 
-Only valid URLs are passed to `shell.openExternal(canonical)` with `activate: true`. Invalid links are silently refused (logged).
+Only valid URLs are passed to `shell.openExternal(canonical)` with `activate: true`. An invalid link is refused, logged in the main process (host and reason, never the URL), and the renderer shows a generic error toast; a rate-limited click gets a "try again in a moment" toast instead.
+
+These shapes are defined here once. ADR-0018's security amendments point to this section, and the CLI (`pr_refs.py`) and the app (`security.ts`) implement them.
 
 **`link_hosts` is dynamic, checked on every IPC.** It combines:
 - GitHub: configured web host (derived from account `api_url`) + github.com
 - Jira: configured site host
-- GitLab: gitlab.com + any self-hosted host that is a git remote's hostname at read time
+- GitLab: gitlab.com + any self-hosted host that is a git remote's hostname at read time, except punycode (`xn--`) hosts and known non-GitLab forges (Bitbucket, Codeberg, Azure DevOps, SourceForge). A punycode host can only arrive through a configured integration.
 
 A mark (PR/MR/ref) never adds a host to the list — it is a consistency check inside the CLI trust boundary, not a second trust anchor. If a remote is deleted or a Jira site is reconfigured, links to it stop validating.
 
 **Renderer security contract.** IPC handler enforces:
 - Sender is the app's main frame only
-- Ids are strings matching existing id patterns, safe integers 0..63, no extra keys
+- Ids are strings matching existing id patterns, safe integers 0..63, an `expect` string of at most 128 characters, no extra keys
+- The app window is focused, and opens are rate-limited (one per 750 ms, ten per minute)
 - `setWindowOpenHandler` stays deny — the renderer cannot open any window
 
 ## Consequences
@@ -65,4 +68,4 @@ A mark (PR/MR/ref) never adds a host to the list — it is a consistency check i
 ## Further Reading
 
 - ADR-0015: The desktop app's stack and its operating rules as a CLI client
-- ADR-0018 § SECURITY AMENDMENTS: PR/MR Created column security rules (URL parsing, parts-not-URLs, path shapes, repo check)
+- ADR-0018 § Amendment 2026-10-01, Security amendments: parts-not-URLs, repo check, command filter, ref rules

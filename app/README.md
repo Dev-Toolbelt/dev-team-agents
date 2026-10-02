@@ -237,8 +237,9 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   narrows it by each session's last activity.
 - **Kanban.** Click a card for five columns — To do, In progress, **In Review**, **PR/MR Created**, and Done —
   side by side in one row that scrolls horizontally when the window is too narrow for them, never stacking; each
-  column scrolls its own cards under a heading that stays in view. The **PR/MR Created** column appears only
-  when a PR or MR has been created in that project; it shows tasks that have reached a pull request.
+  column scrolls its own cards under a heading that stays in view. The **PR/MR Created** column is always
+  there and stays empty until a PR or MR is created; it shows tasks that have reached a pull request
+  and are waiting for its merge. The done-retention setting does not hide them.
   Each task shows its session (provider and branch) and the time it has spent in its column,
   kept live between snapshots; the time spent in each step opens on hover **and** on keyboard focus.
   Task badges include PR/MR badges (`#N` for GitHub PR, `!N` for GitLab MR, clickable to open in the browser),

@@ -372,22 +372,51 @@ findings.
 
 #### PR/MR Created — the fifth column
 
-An optional `pr_created` column appears between In Review and Done when a PR or MR is recorded for
-the session. Only **confirmed** creations reach the board: when `gh pr create` / `glab mr create` /
-MCP `create_pull_request` succeeds, their output carries the URL or number. A PR/MR mark stores
-(kind, number, url, head branch, host, state). Tasks enter this column when their membership is
-fixed at the next `Stop`: every task completed since the previous PR mark's `fixed_at` timestamp
-(or since the session's creation/resume when no prior mark exists), up to that Stop. Tasks leave
-when a merge of that PR/MR is observed (`gh pr merge` / `glab mr merge` / `/devteam:merge` / MCP
-`merge_pull_request` success) or cancelled (repo check fails, mark removed). Merge is joined across
-sessions on read: a mark is merged when its (repo + number) matches a recorded merge or its head
-branch matches a merge's branch at >= the mark's creation time. Notifications `tasks.pr_created`
-raised by the hook.
+An optional `pr_created` column sits between In Review and Done; it is always rendered and stays
+empty when no task enters it. Only **confirmed** creations reach the board: when `gh pr create` /
+`glab mr create` / MCP `create_pull_request` succeeds, their output carries the URL or number.
+Tasks enter this column when their membership is fixed at the next `Stop`: every task completed
+since the previous PR mark's `fixed_at` timestamp (or since the session's creation/resume when no
+prior mark exists), up to that Stop. Tasks leave when a merge of that PR/MR is observed (`gh pr
+merge` / `glab mr merge` / the `git merge` of `/devteam:merge` / MCP `merge_pull_request` success).
+Merge is joined across sessions on read: a mark is merged when its (repo + number) matches a
+recorded merge or its head branch matches a merge's branch at >= the mark's creation time. A task
+reopened and completed again after its PR's `fixed_at` falls back to Done (latest completion wins).
+Notifications `tasks.pr_created` are raised by the hook.
+
+**Stored vs emitted.** The record never keeps a URL:
+
+| Where | Fields |
+|---|---|
+| Record — `prs[]` | `id`, `kind` (`pr`\|`mr`), `host`, `repo`, `number`, `head`, `source`, `seen_at`, `fixed_at`, `task_keys` |
+| Record — `merges[]` | `kind` (`pr`\|`mr`\|`git`), `number`, `host`, `repo`, `branch`, `into` (git merges only), `at` |
+| Record — `refs[]` / task `refs` | `{system: "jira", key}` or `{system: "github", repo, number}`, plus `seen_at` |
+| JSON — task `pr` | `{kind, number, url, state}` \| `null` |
+| JSON — session `prs[]` | `{kind, number, url, state, head}` |
+| JSON — task `refs[]` | `{system, key, url}` |
+
+URLs are rebuilt from the parts and re-validated on every read; a mark or ref that no longer
+validates is omitted from the view and kept in the record.
+
+**Finished work.** PR/MR Created counts as finished for `all_done`, `tasks.session_done`, stale and
+abandoned, so `tasks.session_done` fires while tasks wait in PR/MR Created. `durations.done` no
+longer includes the time a task spent in PR/MR Created; that time is `durations.pr_created`. The
+desktop app's done-retention filter hides old Done tasks only: a PR/MR Created task stays visible
+until its merge is observed.
+
+**Known limits.** A merge is recorded only when the checkout it ran in is known and is not the
+merged branch, so catching `feat/x` up with `origin/feat/x` is never a merge. A merge done outside
+a hooked session (the GitHub web UI) is not seen, and the tasks stay in PR/MR Created. A PR whose
+URL names a repository no git remote names (a fork's `origin` with the PR opened upstream) is not
+recorded. Hosts must be lowercase DNS names with a TLD and no port: a GitHub Enterprise or GitLab
+on `host:8443`, or a single-label intranet host, is never recorded or opened. A command that
+assigns `PATH`, `GH_HOST`, `GH_REPO`, `GITLAB_HOST` or `GLAB_*` in command position is ignored;
+the same text inside an argument (`--body "set PATH=/a"`) is not.
 
 Implementation details:
 
 - Hook cwd is trusted only when it resolves (realpath) inside the record's project root or inside a linked worktree listed by `git worktree list` run against the project root; the check runs before any git command in that cwd, and git (rev-parse, remote -v) otherwise runs against the project root
-- Project `link_hosts` entries are `{host, kinds[]}`, plus for Jira a `base_path` field (`""` at root, `""` e.g. `/jira` for Server, validated `^(/[A-Za-z0-9._~-]+)*$`); GitHub Enterprise hosts are listed only when connected (no integration → omitted); GitLab hosts are gitlab.com plus any remote host existing at read time; marks never add hosts
+- Project `link_hosts` entries are `{host, kinds[]}`, plus for Jira a `base_path` field (`""` at root, e.g. `/jira` for Server, validated `^(/[A-Za-z0-9._~-]+)*$`); GitHub Enterprise hosts are listed only when connected (no integration → omitted); GitLab hosts are gitlab.com plus any remote host existing at read time, except punycode (`xn--`) hosts and known non-GitLab forges; marks never add hosts
 - Claude `PostToolUseFailure` (matcher `Agent|Task|Bash|mcp__.*create_pull_request`) carries gh's non-zero "already exists" form; failure events can only CREATE a PR/MR mark, never record a merge
 - Field read order for tool output: first present of `tool_response`, `tool_output`, `output`, `error` (Claude failure payload is not verified live)
 - A first prompt carrying a valid ref creates a task-less session record; tasks created afterwards inherit the ref; a record with no tasks never makes a project appear on the board
@@ -396,14 +425,17 @@ Implementation details:
 #### Issue refs
 
 Issue references (Jira, GitHub) are captured from the user prompt, branch name, and task text,
-stored as parsed parts (system, key, url), and rebuilt+revalidated on every read against current
-integration config (Jira site + project binding, GitHub account + repository binding). A ref without
+stored as parsed parts (system plus key, or repo and number — never a URL), and rebuilt+revalidated
+on every read against current integration config (Jira site + project binding, GitHub account +
+repository binding). A GitHub `owner/repo#N` or issue URL, from any source including the prompt,
+must name the bound repository or one a git remote on the GitHub web host names; the committed
+binding's `repository` counts only when a git remote names it too. A ref without
 a configured integration is omitted from the view (kept in the record). Refs appear as badges on task
 cards and link to the tracker in the desktop app (ADR-0025).
 
 Implementation details:
 
-- Branch name inference: a Jira key of the bound project in the session branch name is recognized when word-bounded by branch separators (/, -, _)
+- Branch name inference: only a Jira key of the bound project is read from the session branch name (no GitHub refs), recognized when word-bounded by branch separators (/, -, _) and allowed to continue with a `-slug`
 - Command detection handles redirections (`2>&1`), line continuations, and prefixes `time`, `command`, `env VAR=…`, `(/{`, `if/then/do/!` — it is a false-positive filter, not a security control (ADR-0025)
 
 #### Desktop app
@@ -461,10 +493,11 @@ Implementation details:
 10. **Given** a malformed payload or an unwritable state dir, **Then** the hook exits 0 and the
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
-12. **Given** any project, **When** its kanban opens, **Then** it shows four columns in order — To do,
-    In progress, In Review, Done — with In Review empty when no task is in review — side by side in
-    one row; **When** the window is narrower than the four columns' minimum width, **Then** the row
-    scrolls horizontally and the columns never stack.
+12. **Given** any project, **When** its kanban opens, **Then** it shows five columns in order — To do,
+    In progress, In Review, PR/MR Created, Done — with In Review and PR/MR Created empty when no task
+    is in them — side by side in one row; **When** the window is narrower than the five columns'
+    minimum width, **Then** the row scrolls horizontally and the columns never stack. (Superseded the
+    four-column wording on 2026-10-01; see the Amendment Log.)
 13. **Given** a task in review whose window recorded 2 findings, **Then** its card shows **2 findings**;
     with no marker read it shows **result not read**; with no answer yet it shows **pending**.
 14. **Given** the findings filter is on, **Then** only tasks in review with findings are listed.
@@ -490,7 +523,8 @@ Implementation details:
     the board even if a task text names a key.
 24. **Given** a task with an issue badge in the kanban, **When** the badge is clicked, **Then** the
     browser opens to that issue on the configured tracker host; if the link is invalid (no longer
-    exists, config removed), the click is refused silently (logged).
+    exists, config removed, or the snapshot moved and the badge's number/key no longer matches), the
+    click is refused, logged in the main process, and a generic error toast is shown.
 25. **Given** the project kanban, **Then** five columns appear in order — To do, In progress, In Review,
     PR/MR Created, Done — side by side in one row; PR/MR Created is empty when no task enters it.
 
@@ -539,6 +573,7 @@ Implementation details:
 | 2026-10-01 | The per-session header rows in the kanban become one wrapping line of compact chips; per-session counts move to the chip's tooltip and screen-reader text | Projects routinely have several sessions, and a full-width row each pushed the columns below the fold |
 | 2026-10-01 | Direct work: the main session's own edits and write-shaped shell commands, with no plan step in progress and no agent spawned in the turn, land on one `kind: "direct"` card per session with a redacted prompt excerpt per turn (§ Direct work); acceptance criterion 9 widened, 16-18 added | User request: everything done in a session should reach the board, including work that never produces a plan |
 | 2026-10-01 | Direct work review fixes: (1) the direct card is left out of the `tasks.session_done` decision both ways, so a plan or agent finished in a turn with direct work still notifies; (2) the bash gate is a superset of `tasks.writes()` that lets `2>&1`, `2>/dev/null`, `sed -n` and `git log --grep=reset` fork nothing; (3) `writes()` tokenizes the whole command before splitting, so `bash -lc 'mv a b && echo ok'` is a write and quoted `>`/`=>` are not; (4) the prompt file holds only the first line (≤ 512 bytes), owner-only, deleted at `Stop` and `SessionEnd`; (5) redaction covers Bearer, URL passwords, Stripe/Google keys, quoted JSON values, env-style names and `password is`, and leaves paths, prose `key:` and commit ids alone; invisible characters are dropped; (6) the subagent test reads the payload's own `agent_id`/`parent_id` key; (7) without a prompt file one turn is one entry; edges and privacy documented | Findings of the review of Direct work |
-| 2026-10-01 | Fifth column: `pr_created`, optional, between In Review and Done; task membership fixed at `Stop` for tasks completed since the previous PR's `fixed_at`; merge observed on `gh pr merge`/`glab mr merge`/`/devteam:merge`/MCP `merge_pull_request` success and joined across sessions on read by (repo+number) or (branch match); notifications `tasks.pr_created` raised by hook; both CLI and app store PR/MR as parts not URLs (kind, number, url, head, host, state), rebuilt and revalidated on read against git remotes and integration config | User request: see what work has reached a PR/MR and what is waiting in flight |
-| 2026-10-01 | Issue refs: Jira and GitHub issues captured from prompt (strict patterns per integration, no config → no ref), branch name (branch name inference: a Jira key of the bound project in the session branch name is recognized, word-bounded by separators), and task text (agent-written task descriptions); stored as parts (system, key, url), rebuilt and revalidated on read against current bindings; refs without config validation are omitted from view (kept in record); appear as clickable badges on task cards linked through the main process IPC with allow-list and path validation (ADR-0025); cwd validation: hook cwd trusted only when inside project root, else git used against project root; link_hosts: Jira entries carry base_path (validated regex), GitHub Enterprise listed only when connected; merge records structure: {kind, number\|null, repo\|null, host, branch\|null, at}; Claude PostToolUseFailure (matchers: Agent/Task create_pull_request) carries gh "already exists" form and can only CREATE PR/MR marks, not merge records; field read: first present of tool_response, tool_output, output, error (not verified live); task-less first-prompt refs create sessions without tasks; opencode bash non-zero exit behavior not verified live; command detection: handles redirections, continuations, prefixes (time, command, env VAR=…, (/{, if/then/do/!) — false-positive filter, not a security control (ADR-0025) | User request: link work directly to the tracker issues it addresses |
+| 2026-10-01 | Fifth column: `pr_created`, optional, between In Review and Done; task membership fixed at `Stop` for tasks completed since the previous PR's `fixed_at`; merge observed on `gh pr merge`/`glab mr merge`/`/devteam:merge`/MCP `merge_pull_request` success and joined across sessions on read by (repo+number) or (branch match); notifications `tasks.pr_created` raised by hook; the record stores PR/MR marks as parts, never URLs (kind, host, repo, number, head; see § Stored vs emitted), rebuilt and revalidated on read against git remotes and integration config | User request: see what work has reached a PR/MR and what is waiting in flight |
+| 2026-10-01 | Issue refs: Jira and GitHub issues captured from prompt (strict patterns per integration, no config → no ref), branch name (branch name inference: a Jira key of the bound project in the session branch name is recognized, word-bounded by separators), and task text (agent-written task descriptions); stored as parts (system plus key, or repo and number — never a URL), rebuilt and revalidated on read against current bindings; refs without config validation are omitted from view (kept in record); appear as clickable badges on task cards linked through the main process IPC with allow-list and path validation (ADR-0025); cwd validation: hook cwd trusted only when inside project root, else git used against project root; link_hosts: Jira entries carry base_path (validated regex), GitHub Enterprise listed only when connected; merge records structure: {kind, number\|null, repo\|null, host, branch\|null, at}; Claude PostToolUseFailure (matchers: Agent/Task create_pull_request) carries gh "already exists" form and can only CREATE PR/MR marks, not merge records; field read: first present of tool_response, tool_output, output, error (not verified live); task-less first-prompt refs create sessions without tasks; opencode bash non-zero exit behavior not verified live; command detection: handles redirections, continuations, prefixes (time, command, env VAR=…, (/{, if/then/do/!) — false-positive filter, not a security control (ADR-0025) | User request: link work directly to the tracker issues it addresses |
 | 2026-10-01 | App: new PR/MR badges `#N` (PR) / `!N` (MR) on cards, clickable IPC to main with host/path validation; issue badges `PROJ-12` / `owner/repo#45`, clickable IPC; "with findings" filter added; session chip shows PR/MR badge if session has marks; board overview shows `pr_created` in counts and stacked bar; five-column kanban with horizontal scroll; security validation per ADR-0025 (no renderer URLs, main-process allow-list, IDN/canonical round-trip, path shapes) | Completes the flow from tool output through CLI to the board and app |
+| 2026-10-01 | Review fixes: (1) a `git merge` counts only when the checkout it ran in is known and differs from the merged branch, and records it as `into` — catching `feat/x` up with `origin/feat/x` no longer marks the PR merged. (2) Criterion 12 now names five columns. (3) `tasks.session_done` fires while tasks sit in PR/MR Created (PR/MR Created is finished work); `durations.done` no longer includes PR/MR Created time. (4) GitHub refs from any source, the prompt included, must name the bound repository or one a git remote on the web host names, and the binding's `repository` counts only when a remote names it. (5) Punycode hosts and known non-GitLab forges never become self-hosted GitLab hosts. (6) The open-link request carries `expect`, the number/key the badge showed; a mismatch is refused. (7) Env-assignment refusal is tokenised: only an assignment in command position refuses the command. (8) Known limits recorded (forks, ports, single-label hosts, merges outside a hooked session); PR/MR Created tasks are not hidden by done retention | Findings of the `/devteam:review` pass on the PR/MR Created branch |
