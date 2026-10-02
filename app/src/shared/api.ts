@@ -166,6 +166,13 @@ export interface ProjectRecord {
    */
   readonly path_exists: boolean | null;
   /**
+   * The project's memory layout and whether `devteam upgrade` has anything to move —
+   * **`null` when the CLI did not say** (an older CLI, a missing or unreadable
+   * `project.json`). Only an affirmative `false` disables Upgrade; silence keeps it.
+   */
+  readonly layout: number | null;
+  readonly upgrade_available: boolean | null;
+  /**
    * The resolved values the Projects table shows as badges, from `list --json`. Absent
    * entirely on a CLI that predates the field, and each key is `null` when the CLI could
    * not resolve it — either way the UI renders a neutral dash, never "Off". Silence is

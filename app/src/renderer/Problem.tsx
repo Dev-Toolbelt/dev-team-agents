@@ -28,6 +28,7 @@ const REASON_TITLES: Record<string, string> = {
   'invalid-source': 'This source cannot be installed',
   'v2-install': 'This project still holds a v2 install',
   'not-bound': 'This project has no project.json',
+  'up-to-date': 'Nothing to upgrade',
 };
 
 /**
