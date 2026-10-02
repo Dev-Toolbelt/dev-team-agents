@@ -1530,6 +1530,8 @@ export interface BoardFeed {
   readonly detail: string | null;
   /** Newest activity first. Only projects with at least one task are ever here. */
   readonly projects: readonly BoardProject[];
+  /** Set only on the answer to a manual refresh whose one-shot `list` failed; never pushed or stored. */
+  readonly refreshError?: string;
 }
 
 /**
