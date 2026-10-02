@@ -280,6 +280,8 @@ dev-team-agents/
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
 │   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
+│   ├── gen-cpanel-uapi-reference.sh ← regenerates the cPanel skill's generated UAPI
+│   │                                reference from the official OpenAPI spec (`--check` = drift)
 │   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
 │                                    global fingerprint uniqueness across live + archives
 ├── opencode/        ← opencode provider plugin source (plugin/dev-team-agents.ts); stripped at install,
