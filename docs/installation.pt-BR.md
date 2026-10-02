@@ -249,6 +249,6 @@ Tudo acima descreve a **instalação v2 por projeto**, que continua funcionando 
 | Todos os projetos andam juntos | Pin e rollback de versão por projeto |
 | Arquivos do framework commitados no repo do produto | Só o `.dev-team-agents/project.json` é commitado |
 
-O marco M1 — store, bind, pin e migração do v2 — está implementado; o tap do Homebrew, o pacote winget e o app desktop são marcos posteriores. Um projeto v2 existente converte com `devteam migrate` (que previsualiza antes, e move a árvore vendorizada para quarentena em vez de apagar).
+O marco M1 — store, bind, pin e migração do v2 — está implementado. O CLI tem instaladores próprios (ADR-0028): `scripts/install-cli.sh` no macOS e no Linux, e `devteam-setup-<versão>-<arch>.exe` no Windows, que traz o próprio Python — veja a seção *Instalação global* do README. O tap do Homebrew e o pacote winget ainda serão publicados. Um projeto v2 existente converte com `devteam migrate` (que previsualiza antes, e move a árvore vendorizada para quarentena em vez de apagar).
 
 > Layout do store, modos de bind, registro de hooks, contrato `--json` e códigos de saída: [../CLAUDE-md/cli.md](../CLAUDE-md/cli.md)

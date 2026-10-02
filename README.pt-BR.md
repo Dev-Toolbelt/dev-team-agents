@@ -55,12 +55,17 @@ Ajude-me a configurar este projeto com dev-team-agents
 
 ## Instalação global (prévia da v3)
 
-O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona; o tap do Homebrew, o pacote winget e o app desktop chegam nos marcos seguintes. Até lá o CLI roda de um clone, e **python 3.9+ é obrigatório** para ele (não há modo degradado: sem python3 o comando `devteam` simplesmente não roda).
+O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto a ela, então uma atualização é aplicada uma vez em vez de uma vez por projeto. O marco M1 — store, bind, pin de versão e migração do v2 — já funciona. O CLI é instalado junto com suas dependências ([ADR-0028](docs/development/adrs/0028-the-devteam-cli-installs-with-its-dependencies-on-windows-and-macos.md)), a partir da primeira release que o contém:
+
+| Plataforma | Instalar o CLI | Dependências |
+|------------|----------------|--------------|
+| macOS / Linux | `curl -fsSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-cli.sh \| bash` — ou `bash scripts/install-cli.sh --from .` num clone | Python 3.9+ e git; no macOS o script abre o instalador das Command Line Tools quando faltam |
+| Windows | `devteam-setup-<versão>-<arch>.exe` das [releases](https://github.com/Dev-Toolbelt/dev-team-agents/releases), ou **Install the CLI** no app desktop | Nenhuma: o instalador traz o próprio Python e oferece instalar o Git for Windows |
+
+Os dois instalam só para o seu usuário, colocam o `devteam` no PATH e instalam o framework no store. O tap do Homebrew e o pacote winget ainda serão publicados.
 
 | Passo | Comando |
 |-------|---------|
-| Colocar uma versão no store | `python3 scripts/cli/devteam store install --from .` |
-| Colocar o `devteam` no PATH | `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam` |
 | Vincular um projeto | `devteam bind /caminho/do/projeto` |
 | Listar o que está disponível | `devteam catalog agents|skills|commands` |
 | Gerenciar suas skills globais do Claude / Codex / opencode | `devteam skills list\|show\|install\|remove` |
@@ -72,7 +77,7 @@ O `devteam` instala o framework **uma vez por máquina** e vincula cada projeto 
 | Mover a memória de um projeto para o store | `devteam upgrade --apply` |
 | Gerenciar credenciais (definir, obter, auditar, migrar v2) | `devteam cred set\|get\|list\|unset\|import\|check\|backends` |
 
-No Windows, chame o CLI como `py -3 scripts\cli\devteam …` — o shebang do arquivo sem extensão não executa lá. Um projeto vinculado guarda um `.dev-team-agents/project.json` commitado (sua identidade e suas pastas de conhecimento) e dois links para o store (`scripts/`, `templates/`); nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
+Rodando de um clone no Windows, chame o CLI como `py -3 scripts\cli\devteam …` — o shebang do arquivo sem extensão não executa lá. Um projeto vinculado guarda um `.dev-team-agents/project.json` commitado (sua identidade e suas pastas de conhecimento) e dois links para o store (`scripts/`, `templates/`); nenhuma cópia do framework, e nenhum diff de framework no repositório do seu produto.
 
 `devteam bind` usa `--mode=auto` por padrão, que resolve para **`link`** (symlinks para o store) em qualquer sistema de arquivos que suporte — o modo recomendado, já que um `devteam update` posterior chega a todo projeto vinculado assim sem nenhum passo extra. `copy` (o fallback do Windows quando symlinks não estão disponíveis) e o modo opcional `vendored` precisam de um `devteam sync` explícito por projeto após cada atualização para captar a mudança. Se um link sumir — um `git rebase` para um commit que ainda tinha `.dev-team-agents/scripts` vendorizado o remove — o próximo hook refaz o bind do projeto sozinho através do pointer `.dev-team-agents/core-dir`, no Claude Code, no Codex e no opencode.
 

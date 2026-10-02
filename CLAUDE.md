@@ -289,6 +289,7 @@ dev-team-agents/
 ├── scripts/
 │   ├── cli/devteam  ← v3 CLI entry point (python3); see CLAUDE-md/cli.md
 │   ├── install.sh · update.sh · rollback.sh   ← install / update / rollback lifecycle
+│   ├── install-cli.sh                ← macOS/Linux CLI bootstrap into ~/.local (ADR-0028); stripped from the package
 │   ├── install-provider.sh · install-opencode.sh · install-codex.sh ← multi-provider installers
 │   ├── render-provider.sh         ← renders the canonical source into a provider-specific tree
 │   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
@@ -325,9 +326,9 @@ dev-team-agents/
 ├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
 │                      (incl. 04-packaging.sh, 05-app.sh ← the app/ JS gate) + scripts/release/bump-homebrew-formula.sh — stripped at install
 ├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
-│                      and the operator runbook. UNRELEASED — see packaging/README.md for what each
-│                      placeholder needs. Never reaches a user project: install.sh's KEEP_ROOT
-│                      allowlist drops it
+│                      the Windows CLI installer build (windows-cli/, ADR-0028) and the operator
+│                      runbook. UNRELEASED — see packaging/README.md for what each placeholder
+│                      needs. Never reaches a user project: install.sh's KEEP_ROOT allowlist drops it
 ├── tests/           ← devteam CLI test suite (stdlib unittest); DEV-ONLY, stripped from the package
 ├── user-data/       ← runtime state of this repo's own self-install; gitignored and untracked
 ├── README.md

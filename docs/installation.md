@@ -249,6 +249,6 @@ Everything above describes the **v2 per-project install**, which keeps working a
 | Every project moves together | Per-project version pinning and rollback |
 | Framework files committed to the product repo | Only `.dev-team-agents/project.json` is committed |
 
-Milestone M1 — store, bind, pinning and v2 migration — is implemented; the Homebrew tap, the winget package and the desktop app are later milestones. An existing v2 project converts with `devteam migrate` (which previews first, and moves the vendored tree to quarantine rather than deleting it).
+Milestone M1 — store, bind, pinning and v2 migration — is implemented. The CLI has its own installers (ADR-0028): `scripts/install-cli.sh` on macOS and Linux, and `devteam-setup-<version>-<arch>.exe` on Windows, which carries its own Python — see the README's *Global Install* section. The Homebrew tap and the winget package are still to be published. An existing v2 project converts with `devteam migrate` (which previews first, and moves the vendored tree to quarantine rather than deleting it).
 
 > Store layout, bind modes, hook wiring, the `--json` contract and exit codes: [../CLAUDE-md/cli.md](../CLAUDE-md/cli.md)

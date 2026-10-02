@@ -119,6 +119,8 @@ disagree.
 **The app is never a prerequisite.** Every capability is reachable from the CLI. A user who
 never installs the app loses nothing but the screens.
 
+> **Superseded in part by [ADR-0029](0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md) (2026-10-02)** — this clause stands (sign-in is reachable from the CLI); what is superseded is the unstated assumption that the framework runs with no account and no network.
+
 **Compatibility is declared, not assumed.** The app states `minFrameworkVersion` and the
 framework states `minAppVersion`. When the store is ahead of the app, the app degrades to
 read-only and says so, instead of writing a structure it does not understand.
@@ -406,3 +408,12 @@ Added by implementation (M4.1) — options that only became real once there was 
 | A hardcoded command list in the contract sweep | Simpler to read and stale on the next commit. A list omits precisely the command nobody remembered to add, and the sweep exists to catch the command nobody thought about. Discovering from `cli.build_parser()` costs a parser walk that itself has to be asserted — hence the three discovery tests — and buys a sweep that cannot fall behind the surface. |
 | Publish nothing under `packaging/` until signing credentials exist | Avoids the "looks done" risk entirely, and defers the one part of this that could be got wrong in a way nobody would notice. The manifest schema version, the one-artifact-shape decision, the placeholder digest formats and the per-channel prerequisite list were all research findings; discarding them would mean rediscovering them under release pressure. They are committed *with* the statement that they are unverified, and the placeholders are built to fail loudly. |
 | Build a bespoke release tarball for Homebrew | The obvious reading of "build the package tarball", and it creates a second artifact shape that only Homebrew users receive. `scripts/install.sh` already installs from GitHub's own tag archive; the formula points at that same URL, and `release.yml` hashes the bytes it actually downloaded rather than a locally built archive whose gzip parameters need not match. One artifact, one digest, no drift between how two populations of users get the same version. |
+
+> **Amended by ADR-0028 (2026-10-02) — the CLI's Windows packaging shape is decided.** The Risks row
+> "The Windows CLI has no decided packaging shape" is closed: the CLI ships as a per-user NSIS
+> installer that embeds its own CPython and writes a distlib launcher as `devteam.exe`, built by
+> `packaging/windows-cli/` and attached to each `vX.Y.Z` release by `release.yml`. The winget
+> manifest's `InstallerType` is now `nullsoft`, with `Git.Git` as a package dependency; its URLs and
+> digests stay placeholders until a PR to `microsoft/winget-pkgs` is opened. The Homebrew tap is
+> still unpublished, and `scripts/install-cli.sh` is the macOS channel until it is. Nothing in the
+> Decision changes: the app still bundles no CLI, and installs only the newest published one.

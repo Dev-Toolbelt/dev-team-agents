@@ -24,16 +24,16 @@ channel: nothing re-runs it. `.github/scripts/ci/04-packaging.sh` gates both for
 all three winget manifests on **every pull request and on pushes to `main` and to
 tags** — not on every push; see the trigger note below — and
 `tests/test_packaging.py` runs the formula's own declared payload on Linux in CI.
-**What remains unproven is the published path**: no `homebrew-devteam` tap hosts
-this formula, no release tarball has ever been installed from one, no Windows
-installer has been built, **no cask-installable artifact exists**, and the release
+**What remains unproven is the published path**: the `homebrew-devteam` tap exists
+but hosts no formula yet, no release tarball has ever been installed from it, no
+Windows installer has been published, **no cask-installable artifact exists**, and the release
 workflow has never been triggered. Nothing below claims otherwise — read the two
 tables at the end for the split, item by item.
 
 **The app exists now, and it is unsigned. Both halves of that matter.**
 `app/` holds the Electron client decided by
 [ADR-0015](../docs/development/adrs/0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md),
-and `npm run dist:mac` produces a universal `dev-team-agents.app` inside
+and `npm run dist:mac` produces a universal `Dev Team Agents.app` inside
 `dev-team-agents-<version>.dmg` — a maintainer has run it on macOS and it built.
 That is a recorded local build, in the same sense as the formula run above, and it
 is **weaker than one**: nothing in the tree is the artifact (`app/.gitignore`
@@ -168,24 +168,22 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 
 ### Homebrew — CLI formula (`devteam.rb`)
 
-- [ ] A `homebrew-devteam` tap repository, public on GitHub under an org/user that
-      owns it (Homebrew taps are just git repos with a `Formula/` directory —
-      **this does not exist yet**). The throwaway tap `verify-formula-locally.sh`
-      creates is local, git-less and deleted on exit; it is not a published tap and
-      proves nothing about one
-- [ ] Push access to that tap repo for whichever automation or maintainer publishes
-      accepted formula bumps into it
-- [ ] `GITHUB_TOKEN` (the default Actions token) — sufficient for opening the PR
-      `release.yml` opens **in this repo**; a **separate** token/deploy key would be
-      needed if a later step is added to also push the formula into the tap repo,
-      since a tap is a different repository
+- [x] **The tap repository exists**: [`Dev-Toolbelt/homebrew-devteam`](https://github.com/Dev-Toolbelt/homebrew-devteam),
+      holding a README. It has no `Formula/` yet — the first one is the first release
+      that contains the CLI, published by `release.yml`
+- [ ] **The tap is public.** It was created private; `brew tap` cannot read a private
+      repository without credentials, so every user's install fails until it is public
+- [ ] **`HOMEBREW_TAP_TOKEN`** as a repository secret here: a fine-grained token with
+      Contents read/write on `Dev-Toolbelt/homebrew-devteam` only. `release.yml`'s
+      `publish-homebrew-tap` job pushes the verified formula with it; `GITHUB_TOKEN`
+      cannot push to another repository. Without it the job warns and skips
 
 ### Homebrew — app cask (`devteam-app.rb`)
 
 - [x] The Electron app itself (`app/`, decided by ADR-0015) and a build that
       produces the artifact shape the cask names: `npm run dist:mac` →
       `release/dev-team-agents-<version>.dmg` containing a universal
-      `dev-team-agents.app`. **This box is ticked for existence only** — the
+      `Dev Team Agents.app`. **This box is ticked for existence only** — the
       build is unsigned, no CI job runs it, and no artifact is committed
 - [ ] A step that stamps `app/package.json`'s `version` from the `app-v*` git tag
       at build time. Without it the dmg filename and this cask's `version` are two
@@ -204,15 +202,14 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 
 ### winget — CLI manifest
 
-- [ ] A decided Windows packaging shape for the CLI. The scaffold assumes a signed
-      `.exe` installer wrapping the python payload, and that is an explicit design
-      placeholder rather than a decision — see
-      [the next section](#the-windows-installer-shape--undecided-and-the-test-that-decides-it),
-      which records the candidates and the one test that settles them
-- [ ] A code-signing certificate (Authenticode) — **required by candidate (a) only**,
-      recommended by the others. winget does not require signing, but shipping an
-      unsigned `.exe` triggers SmartScreen warnings for every user, which defeats
-      "the tool their platform already has" from ADR-0011
+- [x] **A decided Windows packaging shape for the CLI** (ADR-0028): a per-user NSIS
+      installer with an embedded CPython — see
+      [the next section](#the-windows-installer-shape-for-the-cli--decided-adr-0028)
+- [x] **A build that produces it**: `windows-cli/build.py`, run by `release.yml`'s
+      `windows-cli-installer` job, which also attaches the installers and their
+      `SHA256SUMS.txt` to the tag's release
+- [ ] A code-signing certificate (Authenticode). winget does not require signing, but
+      the unsigned installer triggers SmartScreen for every user, as the app does
 - [ ] A GitHub account able to open a pull request against
       `microsoft/winget-pkgs` (public repo, no special access needed — just review)
 
@@ -236,79 +233,37 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 - [ ] Real `InstallerUrl`/`InstallerSha256` values once that build exists, and a
       reviewed pull request to `microsoft/winget-pkgs`, same process as the CLI
 
-## The Windows installer shape for the CLI — undecided, and the test that decides it
+## The Windows installer shape for the CLI — decided (ADR-0028)
 
-This section is about the **CLI** package (`DevToolbelt.Devteam`) only. The **app**'s
-Windows shape is a separate, already-decided question — see
-[§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided)
-below — because an Electron app and a python CLI are packaged by different tools with
-different constraints, and conflating the two sections was the wrong shape for this
-document.
+This section is about the **CLI** package (`DevToolbelt.Devteam`) only; the app's shape
+is [§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided).
 
-`winget/manifests/.../DevToolbelt.Devteam.installer.yaml` carries
-`InstallerType: exe`. **That is an honest design placeholder, and this section does
-not replace it with a decision.** The choice cannot be made from this repository:
-every candidate below is discriminated by running `winget` on a real Windows
-machine, and nothing here can do that. What this section does is record the three
-candidates and, for each, the exact test that settles it — so whoever has a Windows
-machine can close the question in one sitting instead of re-deriving it.
+| Piece | What it is | Where |
+|-------|-----------|-------|
+| Installer | NSIS, per-user (`%LOCALAPPDATA%\Programs\devteam`), no elevation, `devteam-setup-<version>-<arch>.exe` for x64 and arm64 | `windows-cli/devteam-cli.nsi` |
+| Python | The official CPython **embeddable** distribution, pinned by URL and SHA-256 (cross-checked against python.org's sigstore bundle) | `windows-cli/pins.json` |
+| `devteam.exe` | distlib's script launcher (the stub pip uses for console scripts), written at install time with an absolute shebang to the embedded `python.exe` | `windows-cli/postinstall.py` |
+| Framework | The same version's tree, installed into the store with `devteam store install`; an installed version and an existing `current` are left alone | `windows-cli/postinstall.py` |
+| PATH | `bin\` appended to the user `PATH` through `winreg`, never NSIS strings (their 1024-character limit would truncate a long PATH); the uninstaller removes it | `windows-cli/postinstall.py` |
+| Git for Windows | Offered through `winget install Git.Git --scope user` when no Git Bash is found; a silent install skips the prompt and the manifest declares `Git.Git` instead | `windows-cli/devteam-cli.nsi`, the winget manifest |
 
-**Schema facts below were read from the manifest schema itself**,
-`https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.installer.1.12.0.json`
-(confirmed 2026-09-28, the same `manifestVersion 1.12.0` the manifests declare):
+The uninstaller removes only its own directory and its PATH entry — never the store.
 
-- `InstallerType` enum: `msix`, `msi`, `appx`, `exe`, `zip`, `inno`, `nullsoft`,
-  `wix`, `burn`, `pwa`, `portable`, `font`
-- `NestedInstallerType` enum: the same set **minus `zip` and `pwa`** — so a `zip`
-  cannot nest a `zip`
-- `NestedInstallerFiles` entries: `RelativeFilePath` (**required**) and
-  `PortableCommandAlias` (optional, portable only)
-- `Dependencies.PackageDependencies` — entries of `PackageIdentifier` (required) and
-  `MinimumVersion` (optional) — exists at **both** the root level and the
-  per-installer level
+**Build it locally** (macOS, Linux or Windows; needs `git` and `makensis`, and reuses
+the NSIS electron-builder downloads for the app when there is no `makensis` on PATH):
 
-### The three candidates
+```bash
+python3 packaging/windows-cli/build.py --arch all
+```
 
-| | Shape | Needs | Does not need | The test that discriminates it |
-|---|---|---|---|---|
-| **(a)** | `InstallerType: exe` — a signed installer executable wrapping the python payload (the current placeholder) | An Authenticode code-signing certificate; a bespoke Windows installer build (PyInstaller + Inno/NSIS, pynsist, or similar); `InstallerSwitches` that actually match whatever produced the `.exe` | A system python3 on the user's machine | Build the `.exe`, then run `winget install --manifest <dir>` with the real digest and confirm the recorded `Silent` switch installs with no UI. Until an `.exe` exists there is nothing to test — which is why this candidate is the most expensive to even evaluate |
-| **(b)** | `InstallerType: zip` + `NestedInstallerType: portable`, wrapping a built `devteam.exe` (e.g. PyInstaller) with `PortableCommandAlias: devteam` | A Windows build job — **which CI can do with no credentials**, since PyInstaller needs no certificate and no account | A certificate (signing becomes recommended, not required); a system python3 | `winget validate` the manifest, then `winget install --manifest <dir>` and confirm `devteam --help` resolves through the `PortableCommandAlias` shim in a fresh shell |
-| **(c)** | The same zip/portable shape, but the zip ships the **python sources plus a launcher**, with `Dependencies.PackageDependencies` naming a python package | Nothing to build and nothing to sign — the payload is the same files the formula installs | Build tooling, a certificate, an Apple-style account of any kind | The same two commands as (b), **plus** the open question below — because the nested file is a launcher, not an `.exe` |
+The installers and `SHA256SUMS.txt` land in `packaging/windows-cli/dist/` (gitignored).
+The framework comes from `git archive HEAD`, so a build is the committed tree.
 
-### The open question that decides between (b) and (c)
-
-**Does winget's `portable` nested installer accept a non-`.exe` file, such as a
-`.cmd` launcher?**
-
-This is unresolved, and it is the whole difference between (b) and (c). Two sources
-were checked and neither answers it:
-
-- The JSON schema above does **not** constrain the file type. `RelativeFilePath` is
-  a plain string with a length bound; nothing restricts its extension, and
-  `NestedInstallerType: portable` carries no companion field that would.
-- Microsoft's [Create your package manifest](https://learn.microsoft.com/en-us/windows/package-manager/package/manifest)
-  page does not address it either — it documents the manifest fields and the
-  multi-file layout without saying what a portable target may be.
-
-A schema that permits something and a client that accepts it are not the same
-claim, so this is settled only by `winget validate` and `winget install --manifest`
-against a real manifest on a real Windows machine. Candidate (c) is the cheapest
-shape by a wide margin — no build, no certificate — so it is worth testing first;
-if the launcher is rejected, (b) is the fallback and needs a build job but still no
-credentials.
-
-### Two constraints from the same documentation, worth recording because they bound the design
-
-Both are quoted on the Microsoft page linked above:
-
-- **winget manifests do not support all of YAML.** Anchors, complex keys and sets
-  are explicitly unsupported. So no candidate may factor repetition out of the
-  installer manifest with an anchor — the two per-architecture entries stay written
-  out in full, as they are today.
-- **Every tool must support a silent install.** winget-pkgs states that an
-  executable without a silent install cannot be accepted. That is a hard gate on
-  candidate (a)'s `InstallerSwitches`, and it is a reason the portable shapes are
-  attractive: a portable install has no installer UI to silence.
+**What is proven where.** `tests/test_windows_cli_installer.py` runs anywhere: the PATH
+edit, the launcher's payload (Python starts the real CLI through it), the staged layout
+the NSIS script copies, and the pins. The release job installs silently on a Windows
+runner, runs `devteam.exe`, checks the store and the PATH, and uninstalls. The wizard and
+its Git prompt are exercised only by a person.
 
 ## The Windows app installer shape — decided
 
@@ -353,14 +308,14 @@ are.
 | `homebrew/devteam.rb` | `url "...tags/vX.Y.Z.tar.gz"` | The real tag | `.github/scripts/release/bump-homebrew-formula.sh`, called by `release.yml`, from `github.ref_name` on tag push |
 | `homebrew/devteam.rb` | `sha256 "REPLACE_WITH_SHA256_OF_RELEASE_TARBALL"` | 64-char hex digest | The same script, automatically — `sha256sum` of the downloaded tag tarball, never hand-written. The script refuses anything that is not 64 lowercase hex characters |
 | `homebrew/devteam-app.rb` | Entire file marked UNRELEASED | A real cask, once a **signed** build exists | Manual — write it against the actual signed, notarised `.dmg`; do not just fill in these placeholders. The header no longer claims the app is absent: `app/` exists and builds an unsigned dmg |
-| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | The `app-v*` git tag, via a build step that stamps `app/package.json` from it. **Coupled**: `dmg.artifactName: ${productName}-${version}.dmg` derives the dmg filename from `app/package.json`'s `version` while the cask's `url` derives it from this line, so the two must be one string at release time. They disagree today on purpose (`0.0.0` vs `0.0.0-unreleased`) and must not be reconciled by hand — see the cask header |
+| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | The `app-v*` git tag, via a build step that stamps `app/package.json` from it. **Coupled**: `dmg.artifactName: dev-team-agents-${version}.dmg` derives the dmg filename from `app/package.json`'s `version` while the cask's `url` derives it from this line, so the two must be one string at release time. They disagree today on purpose (`0.0.0` vs `0.0.0-unreleased`) and must not be reconciled by hand — see the cask header |
 | `homebrew/devteam-app.rb` | `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"` | 64-char hex digest of the real notarised `.dmg` | Manual — hash the actual release artifact once it exists; do not reuse the CLI formula's automation blindly, since a cask's artifact is signed/notarised and that should be verified, not just hashed. **Never the digest of a local unsigned build**, which is a different artifact with the same filename |
 | `homebrew/devteam-app.rb` | ~~`depends_on macos: ">= :big_sur"`~~ — **no longer a placeholder** | `">= :ventura"`, measured | `app/node_modules/electron/dist/Electron.app/Contents/Info.plist` → `LSMinimumSystemVersion` **13.0** for Electron 44.5.1, mirrored by `mac.minimumSystemVersion: '13.0'` in `app/electron-builder.yml`. Big Sur was wrong in the dangerous direction: it licensed an install on a system the app cannot launch on. **Re-measure on every Electron major** — the floor moves with it, nothing checks the pair, and this is the one row in this table that comes back |
-| `homebrew/devteam-app.rb` | ~~placeholder bundle id in `zap trash:`~~ — **no longer a placeholder** | `com.devtoolbelt.dev-team-agents-app` | `appId` in `app/electron-builder.yml`; `app "dev-team-agents.app"` likewise matches its `productName`. Both confirmed against the build config, both still unchecked by any gate |
+| `homebrew/devteam-app.rb` | ~~placeholder bundle id in `zap trash:`~~ — **no longer a placeholder** | `com.devtoolbelt.dev-team-agents-app` | `appId` in `app/electron-builder.yml`; `app "Dev Team Agents.app"` likewise matches its `productName`. Both confirmed against the build config, both still unchecked by any gate |
 | `winget/manifests/.../DevToolbelt.Devteam.yaml` (version dir + all 3 files) | `0.0.0` (`PackageVersion`, directory name) | The real release version | Manual — rename the `0.0.0/` directory and update `PackageVersion` in all three files together when a Windows installer first ships. `04-packaging.sh` fails the build if those four edits disagree with each other |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerUrl` entries (`vX.Y.Z`, filenames) | Real asset URLs | Manual — wherever the installers actually get uploaded (a GitHub Release is the obvious place, not decided). `04-packaging.sh` refuses a half-bump in either direction: the URL's tag and `PackageVersion` must move together |
 | `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | Both `InstallerSha256` (64 zeros — deliberately not a plausible-looking fake hash) | Real digests of the real installers | Manual — hash the actual artifacts; **do this after signing**, if the chosen shape signs, since signing changes the bytes and therefore the hash |
-| `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | `InstallerType: exe` | Whatever the Windows packaging decision lands on | Manual — a design placeholder, not a decided tool. See [the section above](#the-windows-installer-shape-for-the-cli--undecided-and-the-test-that-decides-it); update alongside `InstallerSwitches`, `NestedInstallerType`/`NestedInstallerFiles` and `Dependencies` as one edit |
+| `winget/manifests/.../DevToolbelt.Devteam.installer.yaml` | ~~`InstallerType: exe`~~ — **decided**: `nullsoft` (ADR-0028) | — | The URLs and digests remain placeholders; the real digests are in the release's `SHA256SUMS.txt` |
 | `winget/manifests/.../DevToolbelt.DevteamApp.yaml` (version dir + all 3 files) | `0.0.0` (`PackageVersion`, directory name) | The real release version | Manual — same four-edit discipline as the CLI's row above, once a Windows build of the app first ships |
 | `winget/manifests/.../DevToolbelt.DevteamApp.installer.yaml` | Both `InstallerUrl` entries — the tag segment is `vX.Y.Z` **with** the prefix, the filename segment is `X.Y.Z` **without** it, because `nsis.artifactName` interpolates `${version}` and only the tag carries a `v`. Making the two match is a 404 | Real asset URLs | Manual — wherever the app's Windows build actually gets uploaded (a GitHub Release is the obvious place, matching `app/electron-builder.yml`'s `nsis.artifactName`). `04-packaging.sh` refuses a half-bump in either direction |
 | `winget/manifests/.../DevToolbelt.DevteamApp.installer.yaml` | Both `InstallerSha256` (64 zeros) | Real digests of the real installer `.exe` per architecture | Manual — hash the actual built artifacts; nothing here signs them, so no post-signing re-hash step is needed unless a certificate is added later |
@@ -427,21 +382,26 @@ hex string (the script already refuses anything else, but review it again — th
 the value users' machines will trust). If the `macos-latest` job is red, the formula
 does not install; do not merge on the strength of the textual diff alone.
 
-### 4. Publish to the tap (manual, no tooling exists for this step yet)
+### 4. Publish to the tap (automated, after the macOS verification passes)
+
+`release.yml`'s `publish-homebrew-tap` job copies the formula the bump job produced —
+the bytes the macOS job installed and tested — to `Formula/devteam.rb` in
+`Dev-Toolbelt/homebrew-devteam` and pushes it. Without `HOMEBREW_TAP_TOKEN` it warns
+and skips; then do it by hand:
 
 ```bash
 # Inside a checkout of the homebrew-devteam tap repo:
 cp <this-repo>/packaging/homebrew/devteam.rb Formula/devteam.rb
-git commit -am "devteam vX.Y.Z"
+git commit -am "devteam X.Y.Z"
 git push
 ```
 
-**Expected output:** `brew install Dev-Toolbelt/devteam/devteam` resolves the new
-version for users of the tap. **Unverified** — there is no tap to push to yet.
+**Expected output:** `brew install dev-toolbelt/devteam/devteam` resolves the new
+version. **Unverified** — no release has run this job yet.
 
-### 5. winget (manual, PR-gated, only after the installer shape is decided and built)
+### 5. winget (manual, PR-gated)
 
-Decide the shape (see the section above), build the artifact, update `PackageVersion`
+`release.yml` builds the CLI installers and attaches them to the release. Update `PackageVersion`
 and the version directory, fill in the real `InstallerUrl`/`InstallerSha256` values,
 then open a PR against `microsoft/winget-pkgs` following their contribution guide.
 This step cannot be automated from this repository — it is review by Microsoft,

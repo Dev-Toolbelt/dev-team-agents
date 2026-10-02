@@ -104,3 +104,12 @@ is worse, which is acceptable for a beta that is meant to reach few people.
 | **Electron fuses and the install location are not controls here.** `enableEmbeddedAsarIntegrityValidation` and `onlyLoadAppFromAsar` assume a signature that does not exist: an ad-hoc-signed bundle can be modified and re-signed ad hoc, and the unsigned NSIS install lives in a per-user folder any user-level process can write. | None in this ADR; stated so nobody counts them. | Unchanged until signing. |
 | **No auto-update, so old betas stay in use.** A beta user does not learn about a fix, and an old app keeps running against a store that `devteam update` moves forward. | ADR-0015 § 6: the app degrades rather than writing a store shape it does not understand (ADR-0014's write gate). The download text tells users to watch the repository's Releases and Security Advisories. | Depends on the user watching. The store side is covered only while every write action stays behind the gate. |
 | **No published CLI channel.** The app does nothing without `devteam`, and no formula or winget package exists. On macOS the from-a-clone install puts it in `/usr/local/bin`, a location the app searches. On Windows the app finds it only through `DEVTEAM_CLI_PATH` or `cliPath`, with Python 3 on PATH. | The download text gives both installs step by step, and the no-CLI screen says the same thing (decision 6). | On Windows the beta exercises only the manual-path step of ADR-0015 § 5, not the channel lookup. |
+
+> **Amended by ADR-0028 (2026-10-02) — the CLI has a channel.** The Risks row "No published CLI
+> channel" is addressed on both platforms: on Windows the no-CLI screen's **Install the CLI** action
+> downloads the newest CLI installer from the project's releases, checks it against that release's
+> `SHA256SUMS.txt` and runs it; on macOS the remedy gives `scripts/install-cli.sh`, which installs
+> into `~/.local/bin`, a directory the app now searches. Decision 6's rule — the no-CLI screen names
+> no command that cannot work — still holds: neither a `brew install` nor a `winget install` line is
+> shown until those channels are published. Both installers work only from the first release that
+> contains the CLI; every earlier tag predates it.
