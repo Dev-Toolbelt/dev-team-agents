@@ -5,7 +5,7 @@ Everything the hooks need to decide "did a pull/merge request just get created o
 :mod:`review_triggers`. The bash gates in front of the CLI are deliberately looser (a substring
 test); this module is the authority.
 
-Trust model (docs/specs/task-board.md, security amendments S1-S8). A command line, a tool result
+Trust model (ADR-0018 § SECURITY AMENDMENTS, ADR-0025). A command line, a tool result
 and a prompt are all untrusted text. Nothing here ever keeps a URL taken from them: a link is
 parsed into validated *parts* (kind, host, repository path, number) and the URL is **rebuilt** from
 the parts, then re-validated on every read against the project's current git remotes and
@@ -55,8 +55,8 @@ _URL_LINE_RE = re.compile(r"^\s*(https://\S+)\s*$")
 _URL_IN_TEXT_RE = re.compile(r"https://[^\s<>\"'`)\]]{1,2048}")
 _ENV_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=")
 _FORBIDDEN_ENV = re.compile(r"^(PATH|GH_HOST|GH_REPO|GITLAB_HOST|GLAB_[A-Z0-9_]*)$")
-#: An assignment of a variable that can aim a tool (`export PATH=…`, `GH_HOST=…`) anywhere in the line.
-_ENV_EXPORT_RE = re.compile(r"(?:^|[\s;&|(])(?:PATH|GH_HOST|GH_REPO|GITLAB_HOST|GLAB_[A-Z0-9_]*)=")
+#: Builtins whose arguments are assignments that persist for the rest of the command line.
+_EXPORTERS = frozenset({"export", "declare", "typeset", "readonly", "local"})
 _SHADOW_RE = re.compile(r"(?:^|[\s;&|(])(?:function\s+(?:gh|glab)\b|(?:gh|glab)\s*\(\s*\)|alias\s+(?:gh|glab)=)")
 _REDIR_OP_RE = re.compile(r"&>>?|>>|>&|>\||>|<<<|<&|<>|<")
 _PREFIX_KEYWORDS = frozenset({"if", "then", "do", "else", "elif", "while", "until", "!", "{", "("})
@@ -268,7 +268,8 @@ def load_context(root, with_remotes=True):
     ``github`` is ``{"web_host", "repository"|None}`` when the GitHub integration is connected,
     ``jira`` is ``{"site_url", "host", "path", "project_key"}`` when Jira is connected AND the
     project binds a valid key. An integration that is not connected contributes nothing: there is
-    no fallback to the git origin. Never raises.
+    no fallback to the git origin. ``repository`` is ``None`` unless a current git remote on the
+    web host names it, so ``with_remotes=False`` never yields one. Never raises.
     """
     ctx = {"remotes": git_remotes(root) if with_remotes else [], "github": None, "jira": None}
     try:
@@ -278,7 +279,12 @@ def load_context(root, with_remotes=True):
         if config is not None:
             web = _web_host(config["account"].get("api_url", ""))
             if web:
-                ctx["github"] = {"web_host": web, "repository": _valid_repository(config["project"].get("repository"))}
+                # The binding file is committed: it names the repository `fixes #N` links to only
+                # when a current git remote on the web host names the same repository.
+                repository = _valid_repository(config["project"].get("repository"))
+                if repository and not any(r["host"] == web and r["repo"] == repository.lower() for r in ctx["remotes"]):
+                    repository = None
+                ctx["github"] = {"web_host": web, "repository": repository}
         config = integrations.link_config(root, "jira")
         if config is not None:
             key = config["project"].get("project_key")
@@ -321,7 +327,7 @@ def link_hosts(ctx):
             add(github["web_host"], "github_issue")
     add("gitlab.com", "gitlab_mr")
     for remote in ctx.get("remotes") or []:
-        if remote["host"] not in github_hosts:
+        if remote["host"] not in github_hosts and _self_hosted_gitlab_candidate(remote["host"]):
             add(remote["host"], "gitlab_mr")
     if ctx.get("jira"):
         add(ctx["jira"]["host"], "jira")
@@ -332,6 +338,15 @@ def link_hosts(ctx):
             entry["base_path"] = ctx["jira"].get("path", "")
         entries.append(entry)
     return entries
+
+
+#: Remote hosts that are known forges other than GitLab: never a self-hosted GitLab MR host.
+_OTHER_FORGES = frozenset({"bitbucket.org", "codeberg.org", "dev.azure.com", "ssh.dev.azure.com", "sourceforge.net"})
+
+
+def _self_hosted_gitlab_candidate(host):
+    """True when a non-GitHub remote host may carry GitLab MR links: no punycode label, no other forge."""
+    return host not in _OTHER_FORGES and not any(label.startswith("xn--") for label in host.split("."))
 
 
 def mark_valid(parts, ctx):
@@ -475,17 +490,32 @@ def _skip_redirect(command, i):
     return j
 
 
-def _tokens(segment):
-    """The command tokens of a segment with leading ``NAME=value`` words dropped, else ``None``.
-
-    A segment that sets ``PATH``, ``GH_HOST``, ``GH_REPO``, ``GITLAB_HOST`` or ``GLAB_*`` is
-    refused: it can aim the tool somewhere the project's remotes do not say.
-    """
+def _split(segment):
+    """The shell words of a segment, else ``None`` when it does not parse."""
     try:
-        tokens = shlex.split(segment, posix=True)
+        return shlex.split(segment, posix=True)
     except ValueError:
         return None
-    return _strip_prefixes(tokens)
+
+
+def _sets_tool_env(words):
+    """True when a segment assigns ``PATH``/``GH_HOST``/``GH_REPO``/``GITLAB_HOST``/``GLAB_*``.
+
+    Only an assignment in command position counts — a ``NAME=value`` prefix, or an argument of
+    ``export``/``declare``/``env`` and friends — so ``gh pr create --body "set PATH=/a"`` is not one.
+    Such an assignment can aim the tool somewhere the project's remotes do not say.
+    """
+    for i, word in enumerate(words):
+        match = _ENV_ASSIGN_RE.match(word)
+        if not match or not _FORBIDDEN_ENV.match(match.group(1)):
+            continue
+        if all(
+            _ENV_ASSIGN_RE.match(w) or w in _PREFIX_KEYWORDS or w in _EXPORTERS or w in ("env", "time", "command")
+            or w.startswith("-")
+            for w in words[:i]
+        ):
+            return True
+    return False
 
 
 def _strip_prefixes(tokens):
@@ -597,13 +627,16 @@ def analyze_command(command):
     """
     if not isinstance(command, str) or not command.strip() or len(command) > MAX_COMMAND:
         return []
-    if _SHADOW_RE.search(command) or _ENV_EXPORT_RE.search(command):
+    if _SHADOW_RE.search(command):
         return []
     actions = []
     for segment in _segments(command):
         if not segment.strip():
             continue
-        tokens = _tokens(segment)
+        words = _split(segment)
+        if words and _sets_tool_env(words):
+            return []
+        tokens = _strip_prefixes(words) if words else None
         if not tokens:
             continue
         head = tokens[0]
@@ -875,7 +908,8 @@ def extract_refs(text, ctx, source="prompt"):
     """Issue references in ``text`` as parts, per the strict rules; ``[]`` with no integration configured.
 
     ``source`` is ``prompt``, ``branch`` (Jira keys only, which may be followed by ``-slug``) or
-    ``task`` (agent-written: ``owner/repo#N`` must name the bound repository or a remote's).
+    ``task``. A GitHub ``owner/repo#N`` or issue URL must name the bound repository or one a remote
+    on the web host names, whatever the source.
     Returns ``{"system": "jira", "key"}`` / ``{"system": "github", "repo", "number"}`` entries;
     nothing but the key is kept from the text.
     """
@@ -906,10 +940,11 @@ def extract_refs(text, ctx, source="prompt"):
     github = ctx.get("github")
     if github and github.get("repository") and source != "branch":
         bound = github["repository"].lower()
-        allowed = {bound} | {r["repo"] for r in ctx.get("remotes") or []}
+        allowed = {bound} | {r["repo"] for r in ctx.get("remotes") or [] if r["host"] == github["web_host"]}
 
         def accept(repo):
-            return source != "task" or repo.lower() in allowed
+            # Prompt text is often pasted from elsewhere: no source may link an arbitrary repository.
+            return repo.lower() in allowed
 
         for match in _OWNER_REPO_ISSUE_RE.finditer(text):
             repo = "{}/{}".format(match.group(1), match.group(2))

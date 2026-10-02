@@ -2092,7 +2092,7 @@ def _git_head(cwd):
     """The branch ``HEAD`` names in ``cwd``, else ``None``."""
     try:
         result = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-c", "core.fsmonitor=false", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=3,
@@ -2212,7 +2212,7 @@ def _git_location(cwd):
         return None, None
     try:
         result = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel", "--abbrev-ref", "HEAD"],
+            ["git", "-c", "core.fsmonitor=false", "-C", cwd, "rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel", "--abbrev-ref", "HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=3,
@@ -2559,7 +2559,11 @@ def _merges_from(event, root, ctx):
         if action["op"] == "git_merge":
             if pr_refs.merge_confirmed(action, event["output"]):
                 branch = _strip_remote(action["branch"], remotes)
-                found.append({"kind": "git", "number": None, "host": None, "repo": None, "branch": branch})
+                into = _branch_in_project(event.get("cwd"), root)
+                # Catching a branch up with its own remote (`git merge origin/feat/x` on `feat/x`) is
+                # not a merge of that branch; neither is a merge whose target branch is unknown.
+                if into and into != branch:
+                    found.append({"kind": "git", "number": None, "host": None, "repo": None, "branch": branch, "into": into})
             continue
         if action["op"] != "merge":
             continue
@@ -2596,7 +2600,7 @@ def _prepare_event(root, event):
     """The operations an event stands for, resolved before the lock (git and configuration are read here)."""
     kind = event["event"]
     if kind == "prompt":
-        ctx = pr_refs.load_context(root, with_remotes=False)
+        ctx = pr_refs.load_context(root)
         refs = pr_refs.extract_refs(event["text"], ctx, "prompt")
         return [{"op": "refs", "refs": refs}] if refs else []
     ctx = pr_refs.load_context(root)
@@ -2717,7 +2721,7 @@ def _prefetch_refs(root, call, stored, branch):
     if not ctx["github"] and not ctx["jira"]:
         return {"branch": [], "texts": {}}
     if ctx["github"] and texts:
-        ctx["remotes"] = pr_refs.git_remotes(root)
+        ctx = pr_refs.load_context(root)  # the bound repository is checked against the remotes
     return {
         "branch": pr_refs.extract_refs(branch, ctx, "branch") if branch_changed else [],
         "texts": {t: pr_refs.extract_refs(t, ctx, "task") for t in texts},

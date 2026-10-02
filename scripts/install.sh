@@ -712,7 +712,7 @@ for entry in data.get('hooks', {}).get('PostToolUse', []):
         entry['matcher'] = wanted
         changed = True
     else:
-        print("→ NOTE: PostToolUse matcher %r left as is; review capture needs %r" % (entry.get('matcher'), wanted), file=sys.stderr)
+        print("→ NOTE: PostToolUse matcher %r is not one dev-team-agents shipped, so it was left as is; the task board (reviews, PR/MR Created) needs it to be %r" % (entry.get('matcher'), wanted), file=sys.stderr)
 if changed:
     with open(settings_file, 'w') as f:
         json.dump(data, f, indent=2)

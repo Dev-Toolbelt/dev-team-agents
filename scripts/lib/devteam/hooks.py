@@ -182,7 +182,8 @@ def wire(project_root, emitter=None):
                 else:
                     _warn(
                         emitter,
-                        "{} matcher {!r} left as is; dev-team-agents needs {!r}".format(event, has, wanted),
+                        "{} matcher {!r} is not one dev-team-agents shipped, so it was left as is; the task "
+                        "board (reviews, PR/MR Created) needs it to be {!r}".format(event, has, wanted),
                     )
             if current != merged:
                 entries[existing_index] = merged
