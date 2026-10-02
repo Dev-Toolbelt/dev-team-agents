@@ -23,8 +23,9 @@ provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/task-bo
 
 The board reads only the provider's native task list. A plan written to chat or to a file never
 reaches it: every approved plan's Steps table becomes native tasks per
-`skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Sessions that never plan and whose
-provider never opens a list — a quick question, a `/devteam:status` — correctly stay off the board.
+`skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Agent spawns are tasks of their own
+(below), and the session's own work with neither is one **Direct work** card (§ Direct work). A
+session that only reads — a quick question, a `/devteam:status` — correctly stays off the board.
 
 #### Agent spawns are tasks (amendment 2026-09-30)
 
@@ -63,6 +64,73 @@ may move afterwards. Claude Code and Codex report the session's current director
 opencode was started), so opencode marks only sessions started inside a worktree. A detached HEAD gives
 `branch: null`. The kanban card shows a
 worktree mark, only when set, whose tooltip (hover and keyboard focus) names the path and branch.
+
+#### Direct work (amendment 2026-10-01)
+
+Work the main session does itself, with no plan step and no agent covering it — a one-line fix, an
+inline edit, a commit — reached no source above. It lands on **one card per session**, made by the
+hooks with no agent cooperation:
+
+| Provider | Edit tools (always work) | Shell tools (work when `tasks.writes()` says so) |
+|---|---|---|
+| Claude Code | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `Bash` |
+| Codex | `apply_patch` | `Bash`, `shell`, `exec_command` (a `bash -lc '<cmd>'` wrapper is read through) |
+| opencode | `edit`, `write`, `patch`, `multiedit` | `bash` |
+
+- **Write-shaped shell** — a heuristic, deliberately: a file verb (`mv`, `rm`, `cp`, `mkdir`, `touch`,
+  `ln`, `chmod`, `tee`, `truncate`, `patch`, `install`, `dd`…), `sed -i`/`perl -i`, a git subcommand that
+  changes state (`commit`, `push`, `merge`, `rebase`, `checkout`, `reset`, `stash`, `tag`…), a package
+  manager action (`install`, `add`, `remove`, `update`…), or a redirect to anything but `/dev/null`. A
+  miss costs one card, never a wrong Done.
+- **Only the main session** — a call with `agent_id` (opencode: `parent_id`, a child session) is its
+  agent task's work and is ignored.
+- **Covered work is not counted twice** — nothing is recorded while the main session has a native task
+  `in_progress` (a plan step, its own list) or spawned an agent in the current turn.
+- **One card** — `kind: "direct"`, owner `main`, text `Direct work`. It goes `in_progress` on the first
+  work of a turn and `completed` at `Stop` (and at `SessionEnd`); a later turn revives it, appending to
+  `history`. A turn of direct work alone never raises `tasks.session_done`: the card is settled before
+  the Stop decides whether the session just finished. It enters In Review like any task, and leaves it
+  when a later turn revives it.
+- **Turns** — the card keeps `turns: [{"text", "at"}]`, oldest first, at most 20. `at` is when the turn's
+  prompt arrived; `text` is the prompt's first non-empty line, at most 100 characters, with invisible
+  control/format characters dropped and anything shaped like a secret replaced by `[redacted]`:
+  `Bearer …`, a password in a URL, `sk-`/`sk_live_`/`ghp_`/`AKIA`/`AIza` keys, JWTs, a value after a
+  secret-named key (`NAME=v`, `"password": "v"`, `AWS_SECRET_ACCESS_KEY v`, `password is v`, `senha: v`),
+  and any long token mixing letters and digits (a path or a 40-hex commit id is not one). Records are
+  kept for good, so the full prompt never is. Redaction is a best effort, not a guarantee.
+- **Turn boundary** — `UserPromptSubmit` writes the prompt's **first line**, still JSON-escaped and at
+  most 512 bytes, to `<state-dir>/task-board/.prompt-<session>` (owner-only, `umask 077`; its mtime
+  starts the turn) and clears `.direct-<session>`, in bash only. The first direct call of the turn
+  forks `tasks record`, which creates `.direct-<session>`; every later call of that turn leaves on a
+  `[ -f ]`. `Stop` deletes both files and `SessionEnd` deletes them again, so a prompt's text outlives
+  its turn only in the redacted excerpt. Both are dot-prefixed, so machine-local (ADR-0013).
+- **The bash gate is a superset of `tasks.writes()`** — every write the CLI accepts passes it, and the
+  common read-only shapes (`2>&1`, `2>/dev/null`, `sed -n`, `git log --grep=reset`) do not, so they fork
+  no python; `tests/test_direct_work.py` pins both. A read-only command the gate still lets through
+  (`jq '.a > 1'`) forks once and records nothing. `writes()` tokenizes the whole command first: an
+  operator or `>` inside quotes is a word, and a `bash -lc '<cmd>'` wrapper is read through.
+- **Edges, by design** —
+  - The decision is made once per turn, at its first direct call: if a plan step was `in_progress`
+    then, the rest of that turn is not recorded even after the step ends (the marker avoids forking
+    python on every edit while a plan runs). A native task abandoned `in_progress` therefore keeps
+    suppressing direct work until it is moved.
+  - Direct work done before an agent is spawned in the same turn stays on the card; only work after
+    the spawn is suppressed.
+  - Capture is on the pre-call hook, so an edit the user then denies still marks the turn.
+  - A session whose provider sends no prompt hook (or one before the hook existed) still gets the
+    card; its turn text is empty, and one turn is one entry (a new entry when the card reopens after
+    a `Stop`).
+  - The direct card never counts toward `tasks.session_done`, either way: a turn of direct work alone
+    raises nothing, and a plan or agent finished beside it still does.
+  - Subagents: Claude Code and Codex send `agent_id` (Codex from its source, unverified live); the
+    opencode plugin sends `parent_id` once it knows the session's parent (from `session.updated` or
+    `session.get`). A child session whose parent it could not learn counts as direct work.
+- **Privacy** — excerpts stay on this machine (ADR-0013) and are never sent anywhere, including
+  telemetry. There is no opt-out and no retention limit yet: both need a preference key and a delete
+  path that is a named exception to the No-Destruction Rule, a product decision left open (see Out of
+  Scope).
+
+JSON (additive): task `kind` gains `"direct"`; every task carries `turns` (empty on any other kind).
 
 #### Capture per provider
 
@@ -348,7 +416,8 @@ findings.
    Claude Code a `tasks.session_abandoned` notification is raised.
 8. **Given** a session's last open task is completed, **Then** a `tasks.session_done` notification
    is raised once.
-9. **Given** the hook runs for any tool other than a todo tool, **Then** no python process is forked.
+9. **Given** the hook runs for any tool other than a todo tool, an agent spawn or the first direct
+   work of a turn, **Then** no python process is forked.
 10. **Given** a malformed payload or an unwritable state dir, **Then** the hook exits 0 and the
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
@@ -361,12 +430,22 @@ findings.
 14. **Given** the findings filter is on, **Then** only tasks in review with findings are listed.
 15. **Given** a review that returns `findings=0`, **Then** the tasks leave In Review at once and no
     card ever shows a "passed" state.
+16. **Given** a session that edits a file and commits with no plan and no agent, **Then** the board shows
+    one `Direct work` card in progress, listing the prompt's excerpt, completed at `Stop`, on every
+    provider.
+17. **Given** a turn that only reads (`ls`, `git status`, `Read`), or a subagent's edit, **Then** no
+    direct card is created and no python is forked.
+18. **Given** a prompt containing `API_KEY=abc123`, **Then** the stored excerpt reads `API_KEY=[redacted]`.
 
 ### Out of Scope
 - Editing, moving or deleting tasks from the board (read-only).
 - A "Blocked" column and plan titles as activity names (need agent cooperation).
 - Cross-machine sync; deleting old records (`devteam tasks prune` is future work).
 - A notification for stale tasks (badge only).
+- One direct card per turn (rejected: a long session of small fixes becomes a wall of cards; one card
+  per session lists the turns instead).
+- An opt-out for prompt excerpts and a retention limit on them (open product decision; needs a
+  preference key and a No-Destruction exception).
 
 ### Dependencies
 - ADR-0013 (machine-local records), ADR-0015/0011 (app as CLI client, JSON contract),
@@ -401,3 +480,5 @@ findings.
 | 2026-10-01 | Task `worktree` (`{path, branch}` or null) captured at creation from the hook call's `cwd` with one `git rev-parse` (branch, git dir, common dir, toplevel); the opencode plugin now sends `cwd`; the card shows a worktree mark with a tooltip only when set | Requested: see at a glance which work ran in an isolated worktree |
 | 2026-10-01 | Each session in the `tasks` view carries `title` (string or null): the title its provider shows — Claude Code's last transcript `custom-title`, Codex's `session_index.jsonl` `thread_name`, opencode's `session.get` title sent as `session_title`. The kanban shows it in the session strip and the session filter; task-board notifications already quote it cut to 15 characters | A session id names nothing the user recognizes; the title is what the provider's own UI shows. Additive to the contract: an older CLI omits it and the app reads null |
 | 2026-10-01 | The per-session header rows in the kanban become one wrapping line of compact chips; per-session counts move to the chip's tooltip and screen-reader text | Projects routinely have several sessions, and a full-width row each pushed the columns below the fold |
+| 2026-10-01 | Direct work: the main session's own edits and write-shaped shell commands, with no plan step in progress and no agent spawned in the turn, land on one `kind: "direct"` card per session with a redacted prompt excerpt per turn (§ Direct work); acceptance criterion 9 widened, 16-18 added | User request: everything done in a session should reach the board, including work that never produces a plan |
+| 2026-10-01 | Direct work review fixes: (1) the direct card is left out of the `tasks.session_done` decision both ways, so a plan or agent finished in a turn with direct work still notifies; (2) the bash gate is a superset of `tasks.writes()` that lets `2>&1`, `2>/dev/null`, `sed -n` and `git log --grep=reset` fork nothing; (3) `writes()` tokenizes the whole command before splitting, so `bash -lc 'mv a b && echo ok'` is a write and quoted `>`/`=>` are not; (4) the prompt file holds only the first line (≤ 512 bytes), owner-only, deleted at `Stop` and `SessionEnd`; (5) redaction covers Bearer, URL passwords, Stripe/Google keys, quoted JSON values, env-style names and `password is`, and leaves paths, prose `key:` and commit ids alone; invisible characters are dropped; (6) the subagent test reads the payload's own `agent_id`/`parent_id` key; (7) without a prompt file one turn is one entry; edges and privacy documented | Findings of the review of Direct work |
