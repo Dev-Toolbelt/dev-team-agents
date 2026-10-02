@@ -82,9 +82,10 @@ export type OperationResult<T> =
 /**
  * Which step of the resolution order produced a candidate. `homebrew` and `winget` are
  * the same step — "a known per-platform channel location" — kept apart because the badge
- * that names it should say which channel rather than "a known location".
+ * that names it should say which channel rather than "a known location". `installer` is
+ * step 4: the devteam installers' own directory (ADR-0028).
  */
-export type CliSource = 'configured' | 'path' | 'homebrew' | 'winget';
+export type CliSource = 'configured' | 'path' | 'homebrew' | 'winget' | 'installer';
 
 export interface CliIdentity {
   readonly path: string;
@@ -1118,10 +1119,20 @@ export interface SkillRemoveReport {
   readonly link_target: string | null;
 }
 
+/** What "Install the CLI" did (ADR-0028). Windows only; `unsupported` everywhere else. */
+export interface CliInstallResult {
+  readonly outcome: 'installed' | 'cancelled' | 'failed' | 'checksum-mismatch' | 'no-release' | 'unsupported';
+  readonly message: string;
+  /** The release the installer came from, once one was chosen. */
+  readonly version?: string;
+}
+
 export interface DevteamBridge {
   readonly buildInfo: () => Promise<BuildInfo>;
   readonly environment: () => Promise<EnvironmentReport>;
   readonly resolveCli: () => Promise<CliResolution>;
+  /** Downloads, checks and runs the newest CLI installer, then re-resolves. Windows only. */
+  readonly installCli: () => Promise<CliInstallResult>;
   readonly handshake: () => Promise<OperationResult<HandshakeView>>;
   readonly listProjects: () => Promise<OperationResult<ProjectList>>;
   readonly catalogSummary: () => Promise<OperationResult<CatalogSummary>>;
@@ -1587,6 +1598,7 @@ export const CHANNELS = {
   buildInfo: 'devteam:build-info',
   environment: 'devteam:environment',
   resolveCli: 'devteam:resolve-cli',
+  installCli: 'devteam:install-cli',
   handshake: 'devteam:handshake',
   listProjects: 'devteam:list-projects',
   catalogSummary: 'devteam:catalog-summary',

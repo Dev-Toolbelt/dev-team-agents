@@ -17,6 +17,7 @@ import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
+import { installCli, runInstallerProcess } from './cliInstaller.js';
 import { windowSize } from './windowSize.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
 import { createFileLog, describeError, type FileLog } from './logFile.js';
@@ -450,6 +451,14 @@ function onReady(): void {
     // macOS draws a message box with the running bundle's icon, which in development is
     // Electron's; a packaged build has its own and needs nothing here.
     dialogIcon: developmentIcon(),
+    installCli: () =>
+      installCli({
+        platform: process.platform,
+        arch: process.arch,
+        tempDir: app.getPath('temp'),
+        fetch: globalThis.fetch,
+        runInstaller: runInstallerProcess,
+      }),
     onResolved: (resolution) => {
       setAbout(resolution);
       // A different CLI may mean a different store: start the stream again against it.

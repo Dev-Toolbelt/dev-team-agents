@@ -49,6 +49,7 @@ const bridge: DevteamBridge = {
   buildInfo: () => ipcRenderer.invoke(CHANNELS.buildInfo),
   environment: () => ipcRenderer.invoke(CHANNELS.environment),
   resolveCli: () => ipcRenderer.invoke(CHANNELS.resolveCli),
+  installCli: () => ipcRenderer.invoke(CHANNELS.installCli),
   handshake: () => ipcRenderer.invoke(CHANNELS.handshake),
   listProjects: () => ipcRenderer.invoke(CHANNELS.listProjects),
   projectNames: () => ipcRenderer.invoke(CHANNELS.projectNames),

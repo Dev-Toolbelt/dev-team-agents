@@ -20,6 +20,7 @@ const SOURCE_LABEL: Record<CliSource, string> = {
   path: 'PATH',
   homebrew: 'Homebrew',
   winget: 'winget',
+  installer: 'devteam installer',
 };
 
 export interface AboutFacts {

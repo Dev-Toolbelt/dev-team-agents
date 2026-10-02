@@ -88,6 +88,7 @@ import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, typ
 import { PROVIDERS } from '../shared/providers.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
+  type CliInstallResult,
   CHANNELS,
   type BindMode,
   type BindProvider,
@@ -295,13 +296,15 @@ export interface IpcDependencies {
   readonly onResolved?: (resolution: CliResolution) => void;
   /** The icon native dialogs show; `null` (or absent) leaves the platform's default. */
   readonly dialogIcon?: NativeImage | null;
+  /** "Install the CLI" (ADR-0028, `cliInstaller.ts`); absent means the action is unsupported. */
+  readonly installCli?: () => Promise<CliInstallResult>;
 }
 
 const NO_CLI: OperationResult<never> = {
   ok: false,
   kind: 'unavailable',
   message: 'No `devteam` CLI was found on this host.',
-  hint: 'Install it with Homebrew, or point the app at one with DEVTEAM_CLI_PATH.',
+  hint: 'Install it with the devteam installer, or point the app at one with DEVTEAM_CLI_PATH.',
   exitCode: null,
   command: 'devteam',
   durationMs: 0,
@@ -611,6 +614,14 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     deps.onResolved?.(resolved);
     return resolved;
   });
+
+  // The renderer calls `resolveCli` afterwards, which is the reset: a CLI that did not
+  // exist a moment ago invalidates everything the empty resolution cached.
+  handle(CHANNELS.installCli, async (): Promise<CliInstallResult> =>
+    deps.installCli === undefined
+      ? { outcome: 'unsupported', message: 'This build cannot install the CLI on this platform.' }
+      : deps.installCli(),
+  );
 
   handle(CHANNELS.handshake, async (): Promise<OperationResult<HandshakeView>> => {
     if (handshake !== null) return handshake;

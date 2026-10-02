@@ -30,6 +30,10 @@
  *      resolution order "is the *only* thing standing between the app and no CLI" on
  *      Windows. `executableNames` already handled `.exe`/`.cmd`/`.bat`; the gap was a
  *      directory list, and it is `knownBinDirs` below.
+ *   4. **The devteam installers' own locations** (ADR-0028) — `%LOCALAPPDATA%\Programs\devteam\bin`
+ *      on Windows, `~/.local/bin` elsewhere. Both installers add that directory to the
+ *      user's `PATH`, but an app started before the install never sees the change; the
+ *      app's own "Install the CLI" action is exactly that case.
  *
  * A candidate is not accepted for existing. It is **run** — `devteam version --json` —
  * and accepted only if it answers with a conforming document carrying a `compat` block.
@@ -121,14 +125,14 @@ export interface ResolveOptions {
    * was asserting something about the machine it ran on: green here, red on a
    * contributor's laptop with a Homebrew-installed `devteam`, with a message that names
    * neither cause. Passing `[]` — or a temp directory — makes such a test depend only on
-   * what it created.
+   * what it created. It replaces step 4's directories too, for the same reason.
    */
   readonly knownLocations?: readonly string[];
 }
 
 /** Candidate executable names. The CLI is a python script behind a symlink on unix. */
 function executableNames(platform: NodeJS.Platform): string[] {
-  // On Windows the packaging shape is still undecided (ADR-0011's winget row is a
+  // No packaged Windows CLI exists yet (ADR-0011's winget row for the CLI is a
   // placeholder), so every plausible shim name is tried rather than one being assumed.
   return platform === 'win32' ? ['devteam.exe', 'devteam.cmd', 'devteam.bat', 'devteam'] : ['devteam'];
 }
@@ -179,6 +183,27 @@ export function knownBinDirs(
   push('/opt/homebrew/bin');
   push('/usr/local/bin');
   return dirs;
+}
+
+/**
+ * Step 4's directories: where the devteam installers put the executable (ADR-0028).
+ *
+ * Windows: the NSIS CLI installer's `bin`, under `%LOCALAPPDATA%` (skipped when that is
+ * absent, as in `knownBinDirs`). Elsewhere: `scripts/install-cli.sh`'s default
+ * `~/.local/bin`, built with `posixPath` for the reason `knownBinDirs` gives.
+ */
+export function installerBinDirs(
+  platform: NodeJS.Platform,
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  if (platform === 'win32') {
+    const localAppData = env['LOCALAPPDATA'];
+    return typeof localAppData === 'string' && localAppData !== ''
+      ? [join(localAppData, 'Programs', 'devteam', 'bin')]
+      : [];
+  }
+  const home = env['HOME'];
+  return typeof home === 'string' && home !== '' ? [posixPath.join(home, '.local', 'bin')] : [];
 }
 
 /**
@@ -340,6 +365,14 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
     }
   }
 
+  // 4 — the devteam installers' own directory, which a PATH change made after this app
+  // started cannot reach.
+  for (const dir of options.knownLocations === undefined ? installerBinDirs(platform, env) : []) {
+    for (const name of names) {
+      candidates.push({ path: join(dir, name), source: 'installer', detail: `devteam installer ${dir}` });
+    }
+  }
+
   // One label per step, matching this file's own numbered header comment — the
   // screen that reports "which locations it tried" names these three steps rather
   // than a bare count or every individual `PATH` directory.
@@ -348,6 +381,7 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
     path: 'a PATH entry',
     homebrew: 'Homebrew bin',
     winget: 'a winget shim directory',
+    installer: 'the devteam installer directory',
   };
 
   const rejected: RejectedCandidate[] = [];
@@ -398,33 +432,28 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
 
 /**
  * The remedy is the one thing on the no-CLI screen that used to be true on exactly one
- * platform: it opened with a `brew install` line and no branch, while `knownBinDirs`
- * above was fixed specifically so Windows resolution works. ADR-0011 records the
- * Windows installer shape as still undecided — "a placeholder, not a decision" — so the
- * Windows branch does not invent a `winget install <package>` line that would imply
- * one; it says what is actually true today, which is that a Windows user reaches this
- * CLI only by pointing the app at one directly. The macOS/Linux branch holds itself to
- * the same rule: no Homebrew formula is published yet (ADR-0027 § 6), so it gives the
- * from-a-clone install, which lands in `/usr/local/bin` — a directory `knownBinDirs`
- * searches — instead of a `brew install` line that cannot succeed today.
+ * platform: it opened with a `brew install` line and no branch. Each branch now names the
+ * devteam installer for its platform (ADR-0028) — on Windows the NSIS installer, which the
+ * screen's "Install the CLI" action fetches and checks; elsewhere `scripts/install-cli.sh`,
+ * which installs into `~/.local/bin`, a directory step 4 searches. Neither names a
+ * `brew install` or `winget install` line: no tap and no winget package is published yet,
+ * and a line that cannot succeed is worse than none. The manual path stays as the fallback.
  */
 function remedyFor(platform: NodeJS.Platform): readonly string[] {
   const forbidden =
     'The app deliberately ships no copy of the CLI: a bundled, older CLI writing a newer store is the failure ADR-0011 forbids.';
   if (platform === 'win32') {
     return [
-      'No packaged Windows install exists yet — ADR-0011 records the Windows installer shape as still undecided.',
-      'Set DEVTEAM_CLI_PATH to a `devteam.exe`, or to a checkout\'s scripts/cli/devteam (the extensionless python script).',
-      'A script is run through `py.exe -3` or `python.exe` found in an absolute PATH entry, so Python 3 must be installed and on PATH. A `.cmd` or `.bat` shim cannot be used: the app never starts a shell.',
-      'Or set `cliPath` in the app settings file to the same path.',
+      'Use "Install the CLI" below: it downloads the newest devteam installer from the project\'s GitHub releases, checks its SHA-256 and runs it. The installer carries its own Python and offers to install Git for Windows.',
+      'Or download devteam-setup-<version>-<arch>.exe from https://github.com/Dev-Toolbelt/dev-team-agents/releases and run it yourself.',
+      'Or set DEVTEAM_CLI_PATH (or `cliPath` in the app settings file) to a `devteam.exe`, or to a checkout\'s scripts\\cli\\devteam run by `py.exe -3` or `python.exe` from an absolute PATH entry. A `.cmd` or `.bat` shim cannot be used: the app never starts a shell.',
       forbidden,
     ];
   }
   return [
-    'No Homebrew formula is published yet — ADR-0027 records the app as a direct-download beta until it is.',
-    'Install the CLI from a clone: run `python3 scripts/cli/devteam store install --from .` in it, then `ln -s "$PWD/scripts/cli/devteam" /usr/local/bin/devteam`. Python 3.9+ is required.',
-    'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
-    'Or set `cliPath` in the app settings file to the same path.',
+    'Install the CLI: `curl -fsSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-cli.sh | bash`. It installs into ~/.local/bin, which this app searches, and needs only Python 3.9+ and git — on macOS the Command Line Tools, which it offers to install.',
+    'From a clone: `bash scripts/install-cli.sh --from .`.',
+    'Or set DEVTEAM_CLI_PATH (or `cliPath` in the app settings file) to the `devteam` executable.',
     forbidden,
   ];
 }

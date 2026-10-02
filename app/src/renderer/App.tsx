@@ -17,6 +17,7 @@ import { Skills } from './screens/Skills.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Loading } from './Problem.js';
 import { isPrerelease } from '../shared/appVersion.js';
+import { hostPlatformFrom } from '../shared/directoryPaths.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
 // and the 2400px source put 224 kB of bundle into a 20px image. Regenerate with
 // `bash build/make-icon.sh`. Imported rather than referenced from `public/` so a missing
@@ -27,6 +28,7 @@ import lockupLight from './logo/derived/horizontal-light-720.png';
 import lockupDark from './logo/derived/horizontal-dark-720.png';
 import type {
   BuildInfo,
+  CliInstallResult,
   CliResolution,
   EnvironmentReport,
   HandshakeView,
@@ -151,17 +153,7 @@ export function App() {
           (every `sr-only` text): without it they were placed against the page and stretched
           the body into a second scrollbar. `min-h-0` keeps the flex child inside the window. */}
       <main className="relative min-h-0 flex-1 overflow-auto px-6 py-5">
-        {build !== null && !build.codeSigned && build.packaged ? (
-          <Alert variant="destructive" className="mb-4">
-            <ShieldAlert />
-            <AlertTitle>This build is not signed or notarised</AlertTitle>
-            <AlertDescription>
-              No Apple Developer ID exists for this project yet, so nothing here has been through{' '}
-              <code className="font-mono">codesign</code> or <code className="font-mono">notarytool</code>. Do not
-              distribute it, and do not treat the <code className="font-mono">.dmg</code> as shippable.
-            </AlertDescription>
-          </Alert>
-        ) : null}
+        {build !== null && !build.codeSigned && build.packaged ? <UnsignedBuildNotice /> : null}
 
         {/* Above the no-CLI branch on purpose: a malformed settings file is one reason the
             search found nothing, and the user needs both facts on the same screen. */}
@@ -406,9 +398,12 @@ function NoCli({ resolution, onRetry }: { resolution: CliResolution | null; onRe
               <li key={line}>{line}</li>
             ))}
           </ul>
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            Look again
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {hostPlatform() === 'win32' ? <InstallCliButton onInstalled={onRetry} /> : null}
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Look again
+            </Button>
+          </div>
         </AlertDescription>
       </Alert>
     </div>
@@ -474,4 +469,82 @@ function HandshakeBanner({ handshake }: { handshake: OperationResult<HandshakeVi
 
   // Compatible: nothing to say. Only a problem earns a banner.
   return null;
+}
+
+/** Read at render time, not module load, so a test can set the platform per case. */
+function hostPlatform() {
+  return hostPlatformFrom(typeof navigator === 'undefined' ? undefined : navigator.platform);
+}
+
+/**
+ * "Install the CLI" (ADR-0028), Windows only: the main process downloads the newest CLI
+ * installer from GitHub, checks its SHA-256 and runs its wizard. On success the app looks
+ * again, which finds the CLI in the installer's directory even though this process
+ * started with the old PATH.
+ */
+function InstallCliButton({ onInstalled }: { onInstalled: () => void }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<CliInstallResult | null>(null);
+
+  const install = async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const outcome = await window.devteam.installCli();
+      setResult(outcome);
+      if (outcome.outcome === 'installed') onInstalled();
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <>
+      <Button size="sm" onClick={() => void install()} disabled={running}>
+        {running ? 'Installing the CLI…' : 'Install the CLI'}
+      </Button>
+      {result !== null && result.outcome !== 'installed' ? (
+        <p role="status" className="basis-full">
+          {result.message}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The unsigned-build warning, worded for the platform it is read on: a Windows user was
+ * shown Apple's signing tools and a `.dmg` they never downloaded. The text sits in one
+ * `<p>` because `AlertDescription` is a grid — loose text and `<code>` siblings each
+ * became a row of their own.
+ */
+function UnsignedBuildNotice() {
+  return (
+    <Alert variant="destructive" className="mb-4">
+      <ShieldAlert />
+      {hostPlatform() === 'win32' ? (
+        <>
+          <AlertTitle>This build is not signed</AlertTitle>
+          <AlertDescription>
+            <p>
+              No Authenticode certificate exists for this project yet, so this installer is unsigned and Windows
+              SmartScreen warns before it runs. Do not distribute it, and do not treat the{' '}
+              <code className="font-mono">.exe</code> as shippable.
+            </p>
+          </AlertDescription>
+        </>
+      ) : (
+        <>
+          <AlertTitle>This build is not signed or notarised</AlertTitle>
+          <AlertDescription>
+            <p>
+              No Apple Developer ID exists for this project yet, so nothing here has been through{' '}
+              <code className="font-mono">codesign</code> or <code className="font-mono">notarytool</code>. Do not
+              distribute it, and do not treat the <code className="font-mono">.dmg</code> as shippable.
+            </p>
+          </AlertDescription>
+        </>
+      )}
+    </Alert>
+  );
 }
