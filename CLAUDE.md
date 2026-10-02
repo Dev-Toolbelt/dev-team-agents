@@ -448,14 +448,8 @@ the `--json` contract and exit codes, and the contributor rules.
 
 ### Accounts and Licensing
 
-The framework requires a signed-in account to run gated commands ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)).
-Sign in with `devteam auth login` — OAuth opens the system browser (PKCE, loopback), or you can use email passwordless or email + password.
-The refresh token is stored in the OS keychain; the entitlement (signed license) is cached locally and refreshed on each online check.
-
-**Gate mode** starts as `warn` (announced, not enforced) and becomes `enforce` at the next minor release, blocking gated commands when the account is not entitled (trial expired, banned, or not signed in).
-The exempt list (`auth *`, `version`, `help`, `doctor`, `unbind`, etc.) is always passthrough.
-
-→ See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) § Account for the CLI command reference, session storage, the gate, and the test seam.
+A signed-in account gates the framework ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)): `devteam auth login`, gate mode `warn` then `enforce`.
+→ See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) § Account for the commands, session storage, the gate and its exempt list, and the test seam.
 
 ---
 

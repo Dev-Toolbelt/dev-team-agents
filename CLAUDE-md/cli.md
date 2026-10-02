@@ -176,7 +176,7 @@ mode.
 | `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
 | `devteam auth login (--google \| --github \| --email <addr> [--password [--signup [--send-code \| --finish]]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password; `--password --signup` creates the account and, without a terminal, runs in two stages: `--send-code` (password on stdin, sends the confirmation code, exits) then `--finish` (code on stdin; GoTrue's own unconfirmed-signup state carries it, nothing is persisted locally). Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
 | `devteam auth logout` | Revoke the session on the server (best effort), then **always** remove the refresh token, `entitlement.json` and `account-session.json` locally; reports which parts succeeded |
-| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it. The delegated installers call `check --json`; the session-start banner reads the cache itself and never calls the CLI |
+| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it. The delegated installers call `check --json`; the session-start banner calls `auth_gate.banner_line()` in-process: cache-only, no network, never the CLI |
 | `devteam auth otp start --email <addr> \| verify --email <addr>` | The two-step form of `login --email`, for the desktop app. `start` answers identically for every address |
 | `devteam auth password reset --email <addr> [--send-code \| --finish] \| change` | Reset with an emailed recovery code (`--send-code` only sends; `--finish` reads code then new password from stdin; neither flag does both). `change` reads current then new password. Both revoke the account's other sessions |
 | `devteam auth profile [show] \| update --name <n> \| identities \| email --new <addr> [--confirm] \| link \| unlink --google\|--github` | The account profile. Unlinking the last sign-in method is refused (exit 1, `details.reason: "last_identity"`) |
@@ -416,8 +416,9 @@ listener), on top of `entitlement.py`. None imports telemetry.
   `scripts/lib/auth-gate.sh` and call `ag_gate` before their first write: it runs
   `devteam auth check --json` (the tree's own `scripts/cli/devteam`, else `devteam` on PATH),
   reads `gate_mode` from the same config, and returns 0 (proceed) or **5** (blocked, `enforce`
-  only). Exits 1, 3 and 4 from `check` are blocked-class; any other exit, or no CLI at all, skips
-  the gate with a stderr note rather than failing the install. `--dry-run` and `--list-targets`
+  only). Exits 1, 3 and 4 from `check` are blocked-class; any other exit, or no CLI at all, cannot
+  be decided: `warn` skips with a stderr note, `enforce` blocks (SR-42), so a missing or broken CLI
+  never opens the gate. `--dry-run` and `--list-targets`
   are never gated. `tests/test_installer_gate.py` iterates `ALL_PROVIDERS` with a per-provider map.
 
 ## Compatibility block in `version`

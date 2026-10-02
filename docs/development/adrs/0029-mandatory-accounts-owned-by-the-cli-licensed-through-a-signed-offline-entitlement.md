@@ -451,11 +451,12 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
 
 42. **Installers check by exit code.** `install-opencode.sh`, `install-codex.sh`,
     `install-provider.sh` and `update.sh` run `devteam auth check --json` and decide on its exit code.
-    A missing CLI, a non-zero code or unparseable output is a block, except in the announce-only
-    release. Tests iterate `ALL_PROVIDERS` with a per-provider fixture map.
-43. **Hooks never verify on their own.** `session-start.sh` gets the state from
-    `devteam auth status --json --offline`; it never parses `entitlement.json` itself, so there is one
-    verification code path. It never blocks (§ 3).
+    A missing CLI, a non-zero code outside the documented set or unparseable output is a block in
+    `enforce` mode; in the announce-only (`warn`) release it skips with a stderr note. Tests iterate `ALL_PROVIDERS` with a per-provider fixture map.
+43. **Hooks never verify on their own.** `session-start.sh` gets the state in-process from
+    `auth_gate.banner_line()`, which is cache-only (no network, no file write) and evaluates the cache
+    with the same pure `entitlement.evaluate` as `auth status`; it never parses `entitlement.json`
+    itself, so there is one verification code path. It never blocks (§ 3).
 
 ### I. Test seam
 
