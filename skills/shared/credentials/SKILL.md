@@ -15,20 +15,18 @@ This file is **gitignored** and **never committed**. It is created only via an e
 
 ## Structure
 
-`devteam cred local init` writes the canonical template. The file follows a category → environment → credential pattern: `devops` (per environment: `ssh`, `database[]`, `docker`) and `app` (per environment: `appUrl`, `username`, `password`); users may add more. It also carries two flat top-level settings unrelated to credentials — `work_feedback_active` and `work_feedback_interval_minutes`, consumed by `skills/shared/work-feedback/SKILL.md`.
+The file is **free-form**: the user names, nests and removes groups and fields as they like. Nothing in it is a fixed category, environment or agent mapping — find what you need by key name and context. `devteam cred local init` writes a small example the user is expected to edit or delete.
 
-### Key `agents`
+Two reserved keys may appear in any object; every other key is the user's own:
 
-Each category has an `agents` array listing which agents typically need that category's credentials. This is a suggestion — any agent may use any category if the task requires it.
+| Key | Value | Meaning |
+|-----|-------|---------|
+| `$production` | `true` | This object and everything nested below it is **production** — see § 5 |
+| `$secrets` | list of sibling key names | Those keys hold secrets. The app keeps them write-only; never echo, log or paste them |
 
-### Extensibility
+Two flat top-level keys are settings, not credentials: `work_feedback_active` and `work_feedback_interval_minutes`, consumed by `skills/shared/work-feedback/SKILL.md`.
 
-Users may add:
-- **New environments** (e.g. `"qa"`, `"review"`, `"sandbox"`) under any category
-- **New categories** at the top level (e.g. `"monitoring"`, `"ci"`, `"cloud"`)
-- **New credential fields** within any environment
-
-Treat any unknown key as valid. Never reject or remove user-added structure.
+Strip the `$`-prefixed keys before using an object as connection data. Treat any other key as valid; never reject, rename or remove user structure.
 
 ## How to Use
 
@@ -55,15 +53,15 @@ with open(CRED_FILE) as f:  # the path resolved in step 1
 
 ### 3. Find the Relevant Credentials
 
-- Identify the **category** that matches your role or the task scope (e.g., `"devops"` for infrastructure, `"app"` for application access)
-- Identify the **environment** (e.g., `"staging"`, `"production"`)
+- Find the group that matches the task by its key names and nesting (e.g. a `staging` group under `api`, a `jira` group with a `token`)
+- Work out whether it is production: `$production: true` on it **or on any ancestor**. A group merely *named* `production` without the flag is not marked, so ask when the name and the flag disagree
 - Check if the required fields are filled in
 
 ### 4. Handle Empty Fields
 
 If a required field is empty (`""`, `{}`, `null`, or missing):
 
-> Ask the user: "The field `<field>` under `<category>` → `<environment>` is empty. How should I access this environment?"
+> Ask the user: "The field `<field>` under `<group path>` is empty. How should I access this environment?"
 
 Use `AskUserQuestion` with relevant options (SSH key path, password, token, etc.) or let the user type free-form input.
 
@@ -85,6 +83,8 @@ When you need write/execute access, pause and ask:
 > "I need to `<action>` on `<environment>`. This is not read-only. Do you authorize this operation?"
 
 Proceed only after the user explicitly confirms.
+
+**Under `$production`**, the same rule tightens: ask before **every** state-changing action, one action per question, and name it as production in the question. An earlier approval — for another action, for staging, or "for this session" — never carries over.
 
 ### 6. Protocol-Specific Access
 
