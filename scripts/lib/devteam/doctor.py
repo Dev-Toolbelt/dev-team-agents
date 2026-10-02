@@ -361,6 +361,7 @@ def check_project(project_root):
     expected = (
         (project.STATE_DIR_POINTER, str(project.state_dir(root, project_id))),
         (project.MEMORY_DIR_POINTER, str(project.memory_dir(root, project_id))),
+        (project.CORE_DIR_POINTER, project.core_dir_pointer()),
     )
     stale = []
     for name, want in expected:

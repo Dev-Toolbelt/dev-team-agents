@@ -849,6 +849,19 @@ def _settle_direct(record, now):
                 task["removed_at"] = now
 
 
+def _settle_ended_direct(record, until):
+    """An ended session's turn is over, so its direct work is too: the view settles what Stop missed.
+
+    A Stop that never ran (a hook that vanished mid-turn, a killed provider) left the card In
+    progress for good. Applied to the view's copy only, finished at the session's last sign of
+    life; the stored record still changes only through a hook call.
+    """
+    for task in record["tasks"]:
+        if _is_direct(task) and task["status"] == "in_progress":
+            task["open_turn"] = False
+            _push(task, "completed", max(until, task["history"][-1]["at"] if task.get("history") else until))
+
+
 def _is_waiting_direct(task):
     """A direct card in To Do: a turn that only read. Never abandoned work — see :func:`_open_count`."""
     return _is_direct(task) and task["status"] == "pending"
@@ -2331,6 +2344,108 @@ def session_title(payload, provider):
         return ""
 
 
+def _keep_transcript(rec, payload):
+    """Remember a Claude Code transcript path, so the view can re-read a rename made between hooks."""
+    path = _first_text(payload, "transcript_path") if isinstance(payload, dict) else ""
+    if path and os.path.isabs(path):
+        rec["transcript_path"] = path
+
+
+#: `(kind, path) -> (stamp, value)`: a title source is re-read only when its file changed, so a
+#: `tasks watch` tick costs one `stat` per session. Bounded: cleared past :data:`_LIVE_CACHE_MAX`.
+_LIVE_CACHE = {}
+_LIVE_CACHE_MAX = 512
+
+
+def _cached(kind, path, read):
+    try:
+        info = os.stat(path)
+    except (OSError, TypeError, ValueError):
+        return None
+    stamp = (info.st_mtime_ns, info.st_size)
+    hit = _LIVE_CACHE.get((kind, path))
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    if len(_LIVE_CACHE) >= _LIVE_CACHE_MAX:
+        _LIVE_CACHE.clear()
+    value = read(path)
+    _LIVE_CACHE[(kind, path)] = (stamp, value)
+    return value
+
+
+def _codex_index():
+    home = os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex")
+    return os.path.join(home, "session_index.jsonl")
+
+
+def _codex_titles(index_path):
+    """Every thread's name in a Codex session index, last entry winning."""
+    titles = {}
+    try:
+        with open(index_path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+                    name = _text(entry.get("thread_name"))
+                    if name:
+                        titles[entry["id"]] = name
+    except OSError:
+        pass
+    return titles
+
+
+def live_title(rec):
+    """The session's title as its provider shows it NOW, or ``""``. Never raises.
+
+    A rename writes the provider's own file (Claude Code: a `custom-title` line in the transcript;
+    Codex: its session index) without any hook running, so the board reads it at view time rather
+    than waiting for the next Stop. opencode keeps it out of reach; its plugin pushes a rename
+    through `tasks retitle` instead.
+    """
+    try:
+        provider = rec.get("provider")
+        if provider == "claude":
+            path = rec.get("transcript_path")
+            return (_cached("claude", path, _transcript_title) or "") if isinstance(path, str) and path else ""
+        if provider == "codex":
+            titles = _cached("codex", _codex_index(), _codex_titles) or {}
+            return titles.get(rec.get("session_id"), "")
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return ""
+
+
+def retitle(root, payload, now=None):
+    """Hook-only: write a renamed session's title into its record. Returns ``{"retitled": bool}``.
+
+    Only the title changes: no status, no activity time, so a rename never makes a session look
+    alive. Nothing happens when the session has no record or the title is unchanged. Never raises.
+    """
+    result = {"retitled": False}
+    try:
+        if not isinstance(payload, dict):
+            return result
+        session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
+        title = _first_text(payload, "session_title")
+        project_id = _bound_id(root)
+        path = record_path(root, project_id, session_id) if project_id and session_id else None
+        if path is None or not title or not path.is_file():
+            return result
+        with _session_lock(path):
+            rec = _load(path)
+            if rec is None or rec.get("title") == title:
+                return result
+            rec["title"] = title
+            jsonio.write_json_atomic(path, rec)
+        result["retitled"] = True
+    except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
+    return result
+
+
 def title_short(title):
     """``title`` cut to :data:`TITLE_SHORT_CHARS` with an ellipsis; ``None`` when empty.
 
@@ -2481,6 +2596,7 @@ def record(root, payload, provider="auto", now=None):
             rec["branch"] = branch or rec.get("branch")
             if title:
                 rec["title"] = title
+            _keep_transcript(rec, payload)
             rec["updated_at"] = now
             # Activity after the last idle mark means the session is working again; without
             # this a same-second tie kept showing it idle.
@@ -2547,6 +2663,7 @@ def mark(root, payload, state, now=None):
                 return result
             if title:
                 rec["title"] = title
+            _keep_transcript(rec, payload)
             rec["last_seen_at"] = now
             done = []
             # The turn is over, and so is its direct work. The card never counts toward
@@ -3180,6 +3297,8 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     rec = copy.deepcopy(rec)
     _expire(rec, now)
     _sweep_reviews(rec, rec.get("updated_at") or now)
+    if status == "ended":
+        _settle_ended_direct(rec, until)
     members = _review_members(rec)
     spans = _review_spans(rec, until)
     shown = {t["key"] for t in _visible(rec)}
@@ -3199,7 +3318,8 @@ def session_view(rec, root, now, stale_after=DEFAULT_STALE_AFTER, ended_after=DE
     if not views:
         return None
     activity = max(v for v in (rec.get("updated_at"), rec.get("last_seen_at"), 0) if _number(v))
-    title = rec.get("title")
+    # The provider's current title wins over the stored one: a rename between hooks shows up.
+    title = live_title(rec) or rec.get("title")
     return {
         "session_id": rec["session_id"],
         # The title the provider shows for the session (see `session_title`); None until one is seen.

@@ -792,6 +792,11 @@ def cmd_tasks_mark(args, emitter):
     return result, "marked ({} open)".format(result["open"]) if result["marked"] else "nothing marked"
 
 
+def cmd_tasks_retitle(args, emitter):
+    result = tasks.retitle(_hook_root(args), _hook_payload())
+    return result, "retitled" if result["retitled"] else "nothing retitled"
+
+
 def cmd_tasks_review_open(args, emitter):
     result = tasks.review_open(_hook_root(args), _hook_payload())
     return result, "review window {}".format(result["window"]) if result["recorded"] else "no review window"
@@ -1750,6 +1755,9 @@ def build_parser():
     tasks_mark.add_argument("--project-root", metavar="DIR")
     tasks_mark.add_argument("--state", required=True, choices=("idle", "ended"))
     tasks_mark.set_defaults(func=cmd_tasks_mark)
+    tasks_retitle = leaf(tasks_parser, "retitle", help="hook-only: write the payload's renamed session title into its record")
+    tasks_retitle.add_argument("--project-root", metavar="DIR")
+    tasks_retitle.set_defaults(func=cmd_tasks_retitle)
     tasks_open = leaf(
         tasks_parser, "review-open", help="hook-only: open or join a review window from a review trigger on stdin"
     )

@@ -62,6 +62,12 @@ CURRENT_LAYOUT = LAYOUT_MEMORY_IN_STORE
 #: without adding this one left them all looking in a directory that has no summary.
 STATE_DIR_POINTER = "state-dir"
 MEMORY_DIR_POINTER = "memory-dir"
+#: The store's core directory, for the hook wrappers. Every other route to the store runs through
+#: `.dev-team-agents/scripts`, a symlink git treats as expendable: a rebase onto a commit that still
+#: vendored that tree deletes it, and every hook then fails unseen. A plain file next to the other
+#: pointers survives that, and lets the wrapper run `scripts/hooks/lib/self-heal.sh` from the store.
+#: Forward slashes on every platform: Git Bash reads it back, and so does Python.
+CORE_DIR_POINTER = "core-dir"
 LEGACY_MEMORY_DIR = "user-data"
 
 # `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
@@ -394,11 +400,12 @@ def _write_pointer(root, name, resolved):
 
 
 def write_pointers(root, project_id=None):
-    """Record both resolved directories, for the hooks and the agent context order.
+    """Record the resolved directories, for the hooks and the agent context order.
 
     `state-dir` names :func:`state_dir` because `scripts/lib/state.sh` resolves
     `state.json` through it; `memory-dir` names :func:`memory_dir` because the
-    canonical context-loading order reads the session summary through it.
+    canonical context-loading order reads the session summary through it; `core-dir` names
+    the store's core so a hook wrapper can heal a project whose `scripts` link vanished.
 
     Returns one manifest record per pointer. Both are projections of state that lives
     elsewhere, so a stale one is a bug rather than a user edit to preserve — which is
@@ -409,7 +416,15 @@ def write_pointers(root, project_id=None):
     return [
         _write_pointer(root, STATE_DIR_POINTER, state_dir(root, project_id)),
         _write_pointer(root, MEMORY_DIR_POINTER, memory_dir(root, project_id)),
+        _write_pointer(root, CORE_DIR_POINTER, core_dir_pointer()),
     ]
+
+
+def core_dir_pointer():
+    """What `core-dir` holds: the store's core directory, forward-slashed (see :data:`CORE_DIR_POINTER`)."""
+    from . import paths
+
+    return Path(paths.core_dir()).as_posix()
 
 
 def write_state_pointer(root, project_id=None):
