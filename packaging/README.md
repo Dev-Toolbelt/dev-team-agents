@@ -43,7 +43,11 @@ deliberately never `dist:mac`, because "one that builds an unsigned artifact is
 shipping, not checking" — and the build is unsigned by configuration, not by
 accident: `app/electron-builder.yml` sets `mac.identity: null` and
 `mac.notarize: false`, and `app/build/after-build.cjs` prints
-`UNSIGNED, UNNOTARISED BUILD — DO NOT DISTRIBUTE` after every artifact. A
+`UNSIGNED, UNNOTARISED BUILD — DIRECT-DOWNLOAD BETA ONLY` after every artifact
+([ADR-0027](../docs/development/adrs/0027-the-desktop-app-ships-an-unsigned-direct-download-beta-until-it-is-signed.md)
+allows publishing it as a beta GitHub Release from an `app-v*` tag with
+`SHA256SUMS.txt` beside it — never through this directory's cask or manifests;
+`app/README.md` § Direct-download beta). A
 universal build still carries an **ad-hoc** signature because macOS will not load
 an unsigned arm64 Mach-O, and an ad-hoc signature is not a Developer ID
 signature and carries no notarisation ticket: `brew audit --cask` rejects it, and

@@ -484,7 +484,8 @@ installs before anyone merges**
   `dev-team-agents.app` inside `dev-team-agents-<version>.dmg`, so "there is no build" is no longer the
   obstacle. **Every such build is unsigned by configuration** — `app/electron-builder.yml` sets
   `mac.identity: null` and `mac.notarize: false`, `app/build/after-build.cjs` prints
-  `UNSIGNED, UNNOTARISED BUILD — DO NOT DISTRIBUTE`, and `app/src/main/build-info.ts` carries
+  `UNSIGNED, UNNOTARISED BUILD — DIRECT-DOWNLOAD BETA ONLY` (ADR-0027 allows an unsigned beta
+  GitHub Release outside the cask — it does not move this scenario), and `app/src/main/build-info.ts` carries
   `CODE_SIGNED = false` as a greppable source constant — and an unsigned build is not this scenario's
   subject: `brew audit --cask` verifies a Developer ID signature and a notarisation ticket, so its
   correct verdict on an ad-hoc-signed artifact is *reject*. Signing needs a paid Apple Developer ID and
@@ -616,6 +617,18 @@ installs before anyone merges**
     shipping: the client is unsigned, unreleased and installed by nobody, which is why the scenario is
     `[PARTLY MET]` and not `[MET]`.
 
+**Scenario [MET]: a beta release build publishes digests and comes only from its tag**
+- Given the direct-download beta of ADR-0027
+- When `npm run dist:beta` runs in `app/`
+- Then `scripts/release-guard.mjs` refuses to build unless HEAD carries exactly `app-v<version>` for
+  `package.json`'s `version` and the working tree has no changes, tracked or untracked
+- And a `v<version>` tag on HEAD does not satisfy it
+- And `dist:all` ends by writing `release/SHA256SUMS.txt`, one GNU `sha256sum` line per installer in
+  the order `scripts/release-artifacts.mjs` lists them, which `shasum -a 256 -c` verifies as-is
+- And a missing installer fails the step, naming it, with no digest file written
+- Asserted by `app/test/releaseChecksums.test.ts`. Out of reach here: the GitHub immutable-releases
+  setting and the upload itself, which are the maintainer's.
+
 ### Out of Scope
 - **Everything about the Electron app beyond its first slice.** Milestone M4.3 is no longer wholly
   outside this spec's scope, and the bullet is rewritten rather than left standing: the app's stack and
@@ -706,6 +719,7 @@ installs before anyone merges**
 - **Blocks**: the desktop app (M4.3), and both publication pipelines
 
 ### Amendment Log
+- 2026-10-02 | software-architect | ADR-0027 adds an unsigned direct-download beta for the app beside the two channels. New scenario `[MET]` for the release guard and `SHA256SUMS.txt`; the signed-`.dmg` scenario's banner quote updated, its verdict unchanged. The app's no-CLI remedy on macOS no longer offers `brew install`, which no published formula backs.
 - 2026-10-01 | software-architect | ADR-0024 § 6 makes the credentials file free-form: the Credentials tab is a tree editor with per-field `$secrets`, a per-group `$production` flag and search, and `cred local patch` gains a `move` op. `cred local show` drops `unknown_paths` (unreleased, so no deprecation). The credential-resolution [MET] verdict is unchanged: the app still runs only the three `cred local` leaves and no value-resolving command.
 - 2026-10-01 | technical-writer | ADR-0024 resolves the app's need for credentials editing: `devteam cred local {show,init,patch}` let the app read and write `.dev-team-agents/credentials.local.json` while respecting the rule that `cred get` (which prints secret values) is never called. The [MET] verdicts for credential resolution were re-annotated in place: the app runs the three `cred local` leaves and no other `cred` command.
 - 2026-09-28 | software-architect | Spec created after M4.1 and M4.2 landed, with every scenario

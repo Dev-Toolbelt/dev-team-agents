@@ -36,3 +36,7 @@ the app — a major when the app stops working against a CLI it used to accept, 
 or feature, a patch for a fix. While it is `0.x` it is a pre-release and the header shows the **beta**
 badge (`app/src/shared/appVersion.ts`). Bump it in the same commit as the app change it describes, and
 keep `app/package-lock.json` in step.
+
+An app release is tagged **`app-v<version>`**, never `v<version>`: `.github/workflows/release.yml` runs on
+`v*.*.*` and would treat the tag as a framework release. `npm run dist:beta` refuses to build unless HEAD
+carries exactly `app-v<version>` for the `version` in `app/package.json` (ADR-0027).

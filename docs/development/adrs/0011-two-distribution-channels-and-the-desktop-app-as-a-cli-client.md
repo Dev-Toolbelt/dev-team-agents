@@ -379,6 +379,13 @@ hypothetical.
 > either. The app's Windows column moves from "no shape, no manifest" to "decided shape, scaffolded
 > manifest, still unbuilt and unsigned" — a narrower gap, not a closed one.
 
+> **Narrowed 2026-10-02 by
+> [ADR-0027](0027-the-desktop-app-ships-an-unsigned-direct-download-beta-until-it-is-signed.md) — the
+> app may be published unsigned, as a direct-download beta beside the two channels, until it is
+> signed.** The channel table and the signing bar above are unchanged and still apply to the cask and
+> winget. ADR-0027 holds the conditions, the end condition, why the "Own installer only" alternative
+> below does not apply to it, and the risks it adds — those are not repeated in the Risks table here.
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
