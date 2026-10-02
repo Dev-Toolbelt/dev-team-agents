@@ -272,6 +272,13 @@ echo "[DEVTEAM:SESSION_BANNER]"
 echo "DevTeam Agents • ${DT_VERSION} (github.com/Dev-Toolbelt/dev-team-agents)"
 echo "─────────────────────────────────────────────────"
 echo "Language: ${USER_LANG} | Auto Update: ${DT_AUTO_UPDATE_LABEL} | Worktree: ${DT_WORKTREE_LABEL}"
+# Account state (ADR-0029): informational only, read from the local cache, never the network.
+# A hook never blocks a session on it, and any failure here prints nothing.
+DT_ACCOUNT_LINE="$(PYTHONDONTWRITEBYTECODE=1 python3 -c 'import sys
+sys.path.insert(0, sys.argv[1])
+from devteam import gate
+print(gate.banner_line())' "${SCRIPT_DIR}/../lib" 2>/dev/null || true)"
+[ -n "$DT_ACCOUNT_LINE" ] && echo "Account: ${DT_ACCOUNT_LINE}"
 echo ""
 
 # ── Cross-platform date diff helper ──────────────────────────────
