@@ -17,6 +17,7 @@ import { Hint } from '@/components/ui/tooltip';
 import { Empty, Loading, Problem } from '../Problem.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
+import { PROVIDERS } from '../../shared/providers.js';
 import type {
   EnvironmentReport,
   SkillInstallReport,
@@ -26,17 +27,19 @@ import type {
   SkillRoot,
 } from '../../shared/api.js';
 
+const SKILL_PROVIDER_LABELS: Readonly<Record<SkillProvider, string>> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'opencode',
+};
+
+const PROVIDER_CHOICES: readonly { readonly value: SkillProvider; readonly label: string }[] = PROVIDERS.map(
+  (value) => ({ value, label: SKILL_PROVIDER_LABELS[value] }),
+);
+
 const FILTERS: readonly { readonly value: SkillProviderFilter; readonly label: string }[] = [
   { value: 'all', label: 'All providers' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'opencode', label: 'opencode' },
-];
-
-const PROVIDER_CHOICES: readonly { readonly value: SkillProvider; readonly label: string }[] = [
-  { value: 'claude', label: 'Claude' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'opencode', label: 'opencode' },
+  ...PROVIDER_CHOICES,
 ];
 
 /** Fixed locale, so the order is the same on every machine and in CI. */

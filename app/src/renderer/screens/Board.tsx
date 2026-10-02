@@ -51,6 +51,7 @@ import {
   type Period,
   type ProjectView,
 } from '../boardModel.js';
+import type { Provider } from '../../shared/providers.js';
 import {
   BOARD_SETTING_BOUNDS,
   type BoardCounts,
@@ -77,13 +78,15 @@ const DEFAULT_SETTINGS: BoardSettings = {
 const SELECT_CLASS =
   'h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30';
 
-const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+// Keyed by `Provider` so a provider added to the CLI fails the typecheck here; looked up by
+// `string` below because a feed can carry a provider this build has never heard of.
+const PROVIDER_LABELS: Readonly<Record<Provider, string>> = {
   claude: 'Claude Code',
   codex: 'Codex',
   opencode: 'opencode',
 };
 
-const PROVIDER_ICONS: Readonly<Record<string, typeof Bot>> = {
+const PROVIDER_ICONS: Readonly<Record<Provider, typeof Bot>> = {
   claude: Sparkles,
   codex: SquareTerminal,
   opencode: Braces,
@@ -98,12 +101,12 @@ const PROVIDER_ICONS: Readonly<Record<string, typeof Bot>> = {
 const PROVIDER_LOGOS: Readonly<Record<string, string>> = {};
 
 function providerLabel(provider: string): string {
-  return PROVIDER_LABELS[provider] ?? provider;
+  return (PROVIDER_LABELS as Readonly<Record<string, string | undefined>>)[provider] ?? provider;
 }
 
 /** The provider's mark. Its name is always available as text: the icon is never the only cue. */
 export function ProviderIcon({ provider, withLabel = false }: { provider: string; withLabel?: boolean }) {
-  const Icon = PROVIDER_ICONS[provider] ?? Bot;
+  const Icon = (PROVIDER_ICONS as Readonly<Record<string, typeof Bot | undefined>>)[provider] ?? Bot;
   const logo = PROVIDER_LOGOS[provider];
   const label = providerLabel(provider);
   const a11y = { role: 'img', 'aria-label': withLabel ? undefined : label, 'aria-hidden': withLabel ? true : undefined } as const;

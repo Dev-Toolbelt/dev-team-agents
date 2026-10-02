@@ -12,6 +12,7 @@
  */
 
 import type { ProjectFolders, ProjectFoldersAnswer } from './projectFolders.js';
+import type { Provider } from './providers.js';
 
 export type { ProjectFolders, ProjectFoldersAnswer };
 
@@ -280,7 +281,7 @@ export type DirectoryChoice =
   /** The user dismissed the picker. Not an error, and the UI says nothing about it. */
   | { readonly chosen: false };
 
-export type BindProvider = 'claude' | 'opencode' | 'codex';
+export type BindProvider = Provider;
 export type BindMode = 'auto' | 'link' | 'copy' | 'vendored';
 
 /**
@@ -1005,7 +1006,7 @@ export interface AppHealth {
 // ── global skills ─────────────────────────────────────────────────────────────
 
 /** The providers whose user-level skill directories `devteam skills` manages. */
-export type SkillProvider = 'claude' | 'codex' | 'opencode';
+export type SkillProvider = Provider;
 export type SkillProviderFilter = SkillProvider | 'all';
 
 /**

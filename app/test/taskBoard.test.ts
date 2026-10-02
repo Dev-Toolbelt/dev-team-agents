@@ -327,6 +327,16 @@ describe('asBoardProject', () => {
       ["cd '/repo' && rm -rf ~", null],
       ["cd '/repo' && claude --resume 'abc'\nrm -rf ~", null],
       ['claude --resume abc', null],
+      ["Set-Location -LiteralPath 'C:\\Users\\o''b\\repo'; claude --resume abc", "Set-Location -LiteralPath 'C:\\Users\\o''b\\repo'; claude --resume abc"],
+      ["Set-Location -LiteralPath 'C:\\repo'; codex resume abc", "Set-Location -LiteralPath 'C:\\repo'; codex resume abc"],
+      ["Set-Location -LiteralPath 'C:\\repo'; opencode --session abc", "Set-Location -LiteralPath 'C:\\repo'; opencode --session abc"],
+      ["Set-Location -LiteralPath 'C:\\repo'; Remove-Item x; claude --resume abc", null],
+      ["Set-Location -LiteralPath 'C:\\repo' ; claude --resume abc", null],
+      ["Set-Location -LiteralPath 'C:\\a'b'; claude --resume abc", null],
+      ["Set-Location -LiteralPath 'C:\\a\u2019; calc'; claude --resume abc", null],
+      ["Set-Location -LiteralPath C:\\repo; claude --resume abc", null],
+      ["Set-Location -LiteralPath 'C:\\repo'; claude --resume abc; calc", null],
+      ["Set-Location -LiteralPath 'C:\\repo'; claude --resume 'abc'\nrm x", null],
     ];
     for (const [command, expected] of cases) {
       const parsed = asBoardProject(boardProject({ sessions: [boardSession({ resume_command: command })] })) as BoardProject;

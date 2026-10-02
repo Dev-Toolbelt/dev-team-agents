@@ -25,6 +25,8 @@ import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { toastFailure, toastPartialFailure, toastResult } from '../toasts.js';
 import { Notice, WriteButton } from '../WriteButton.js';
+import { hostPlatformFrom, isSameDirectory, isSameOrInside } from '../../shared/directoryPaths.js';
+import { PROVIDERS } from '../../shared/providers.js';
 import type {
   BindMode,
   BindProvider,
@@ -38,7 +40,6 @@ import type {
   SyncAllReport,
 } from '../../shared/api.js';
 
-const PROVIDERS: readonly BindProvider[] = ['claude', 'opencode', 'codex'];
 
 // The values sent to the CLI — never change these. The label shown to the user is a
 // separate concern (`PROVIDER_LABELS`, below).
@@ -82,21 +83,14 @@ interface BoundDirectory {
   readonly name: string;
 }
 
-/** Without trailing separators, and with Windows separators normalised: paths compared as written. */
-function normalizeDirectory(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '');
-}
+const HOST_PLATFORM = hostPlatformFrom(typeof navigator === 'undefined' ? undefined : navigator.platform);
 
 /**
  * The bound project `chosen` is, or sits inside — or `undefined`. Compared by whole path
  * components, so `/repo/app-2` is not read as inside `/repo/app`.
  */
 function boundDirectory(chosen: string, bound: readonly BoundDirectory[]): BoundDirectory | undefined {
-  const target = normalizeDirectory(chosen);
-  return bound.find((project) => {
-    const root = normalizeDirectory(project.path);
-    return target === root || target.startsWith(`${root}/`);
-  });
+  return bound.find((project) => isSameOrInside(chosen, project.path, HOST_PLATFORM));
 }
 
 /**
@@ -757,7 +751,7 @@ function BindDialog({
 
             {alreadyBound !== undefined ? (
               <p role="alert" className="text-sm text-destructive">
-                {normalizeDirectory(alreadyBound.path) === normalizeDirectory(path ?? '')
+                {isSameDirectory(alreadyBound.path, path ?? '', HOST_PLATFORM)
                   ? `This project is already bound as ${alreadyBound.name}.`
                   : `This directory is inside ${alreadyBound.name}, which is already bound.`}{' '}
                 Choose a different directory.

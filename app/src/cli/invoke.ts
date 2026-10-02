@@ -25,6 +25,7 @@ import {
   type CommandDescription,
   type ExitCode,
 } from './contract.js';
+import { launchCommand, lookupEnv } from './launch.js';
 import { parseSingleDocument } from './parse.js';
 
 /** Long enough for a cold `catalog` walk on a large store, short enough to notice. */
@@ -127,6 +128,8 @@ const PASS_THROUGH_ENV = [
   'LOGNAME',
   'SHELL',
   'TMPDIR',
+  'TEMP',
+  'TMP',
   'LANG',
   'LC_ALL',
   'LC_CTYPE',
@@ -138,17 +141,45 @@ const PASS_THROUGH_ENV = [
   'LOCALAPPDATA',
   'USERPROFILE',
   'SYSTEMROOT',
+  'SYSTEMDRIVE',
+  'WINDIR',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'PATHEXT',
+  'COMSPEC',
   'DEVTEAM_HOME',
+  // The CLI's own children (`git`, and `gh` for the user's recorded commands) reach the
+  // network and the user's credentials through these; without them a proxied or
+  // agent-authenticated host fails in the app while the same command works in a terminal.
+  'HTTP_PROXY',
+  'http_proxy',
+  'HTTPS_PROXY',
+  'https_proxy',
+  'NO_PROXY',
+  'no_proxy',
+  'SSH_AUTH_SOCK',
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+  'GH_HOST',
 ] as const;
 
 export function childEnvironment(
   parent: Readonly<Record<string, string | undefined>>,
   extra: Readonly<Record<string, string>> = {},
+  platform: NodeJS.Platform = process.platform,
 ): Record<string, string> {
   const env: Record<string, string> = {};
+  const seen = new Set<string>();
   for (const key of PASS_THROUGH_ENV) {
-    const value = parent[key];
-    if (typeof value === 'string') env[key] = value;
+    // Windows env names are case-insensitive, so `http_proxy` and `HTTP_PROXY` are one
+    // variable: look up the way the platform does, and emit it once.
+    const folded = platform === 'win32' ? key.toLowerCase() : key;
+    if (seen.has(folded)) continue;
+    const value = lookupEnv(parent, key, platform);
+    if (typeof value === 'string') {
+      env[key] = value;
+      seen.add(folded);
+    }
   }
   // `PYTHONUNBUFFERED` so a killed child's partial stdout is not lost in a pipe
   // buffer — the timeout report is worth more when it can quote what did arrive.
@@ -235,12 +266,14 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
 
   let child: ReturnType<typeof spawn>;
   try {
-    child = spawn(options.binary, args, {
+    const env = childEnvironment(process.env, options.env ?? {});
+    const launch = launchCommand(options.binary, args, env);
+    child = spawn(launch.command, [...launch.args], {
       // Explicit: never a shell. See the file header.
       shell: false,
       stdio: [options.secretStdin !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
-      env: childEnvironment(process.env, options.env ?? {}),
+      env,
       windowsHide: true,
     });
   } catch (error) {

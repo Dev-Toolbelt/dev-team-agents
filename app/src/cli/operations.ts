@@ -2423,9 +2423,21 @@ const MAX_TASKS_PER_SESSION = 2_000;
  * session's `resume_command` is accepted only when every hostile id or path in it is quoted.
  */
 const SHELL_TOKEN = String.raw`(?:[\w@%+=:,./-]+|(?:'[^'\u0000-\u001f\u007f]*'|"'")+)`;
-/** A resume command is one line the user pastes into a terminal; anything else is not shown. */
+/**
+ * The Windows form of the path operand: one PowerShell single-quoted literal, where an
+ * embedded quote is `''`. PowerShell also treats the typographic quotes U+2018..U+201B as
+ * quote characters, and the CLI doubles only the ASCII one, so a path holding one would
+ * close the literal early: it is refused rather than shown.
+ */
+const POWERSHELL_LITERAL = String.raw`'(?:[^'\u2018-\u201b\u0000-\u001f\u007f]|'')*'`;
+const RESUME_PROVIDER = String.raw`(?:claude --resume|codex resume|opencode --session) ${SHELL_TOKEN}`;
+/**
+ * A resume command is one line the user pastes into a terminal; anything else is not shown.
+ * Two shapes, both the CLI's own: POSIX `cd <token> && <resume>`, and Windows
+ * `Set-Location -LiteralPath '<path>'; <resume>`.
+ */
 export const RESUME_COMMAND = new RegExp(
-  String.raw`^cd ${SHELL_TOKEN} && (?:claude --resume|codex resume|opencode --session) ${SHELL_TOKEN}$`,
+  String.raw`^(?:cd ${SHELL_TOKEN} && |Set-Location -LiteralPath ${POWERSHELL_LITERAL}; )${RESUME_PROVIDER}$`,
 );
 
 function finiteNumber(value: unknown): number | null {

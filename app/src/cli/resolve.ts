@@ -50,6 +50,7 @@ import { access, stat } from 'node:fs/promises';
 import { delimiter, dirname, join, posix as posixPath } from 'node:path';
 
 import { invokeDevteam } from './invoke.js';
+import { isAbsoluteEntry, lookupEnv } from './launch.js';
 import { ranAndAnswered } from './contract.js';
 import type { CliSource, RejectedCli } from '../shared/api.js';
 
@@ -316,9 +317,14 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
   }
 
   // 2 — PATH, in the order the shell would search it.
-  const pathValue = env['PATH'] ?? '';
+  // Absolute entries only: a relative one (`.`, `bin`) resolves against the app's working
+  // directory, so a `devteam` planted there would be run in place of the user's.
+  const pathValue = lookupEnv(env, 'PATH', platform) ?? '';
+  // Split and judged by the *host's* rules, not the simulated `platform`: these are real
+  // directories on this machine, and the only thing `platform` changes below is which
+  // file names are tried.
   for (const dir of pathValue.split(delimiter)) {
-    if (dir === '') continue;
+    if (dir === '' || !isAbsoluteEntry(dir, process.platform)) continue;
     for (const name of names) {
       candidates.push({ path: join(dir, name), source: 'path', detail: `PATH entry ${dir}` });
     }
@@ -400,16 +406,21 @@ export async function resolveDevteam(options: ResolveOptions = {}): Promise<Reso
  * CLI only by pointing the app at one directly.
  */
 function remedyFor(platform: NodeJS.Platform): readonly string[] {
-  const seams = [
-    'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
-    'Or set `cliPath` in the app settings file to the same path.',
-    'The app deliberately ships no copy of the CLI: a bundled, older CLI writing a newer store is the failure ADR-0011 forbids.',
-  ];
+  const forbidden =
+    'The app deliberately ships no copy of the CLI: a bundled, older CLI writing a newer store is the failure ADR-0011 forbids.';
   if (platform === 'win32') {
     return [
       'No packaged Windows install exists yet — ADR-0011 records the Windows installer shape as still undecided.',
-      ...seams,
+      'Set DEVTEAM_CLI_PATH to a `devteam.exe`, or to a checkout\'s scripts/cli/devteam (the extensionless python script).',
+      'A script is run through `py.exe -3` or `python.exe` found in an absolute PATH entry, so Python 3 must be installed and on PATH. A `.cmd` or `.bat` shim cannot be used: the app never starts a shell.',
+      'Or set `cliPath` in the app settings file to the same path.',
+      forbidden,
     ];
   }
-  return ['Install the CLI: `brew install dev-toolbelt/devteam/devteam` (macOS or Linux via Homebrew).', ...seams];
+  return [
+    'Install the CLI: `brew install dev-toolbelt/devteam/devteam` (macOS or Linux via Homebrew).',
+    'Or set DEVTEAM_CLI_PATH to the `devteam` executable, e.g. a checkout\'s scripts/cli/devteam.',
+    'Or set `cliPath` in the app settings file to the same path.',
+    forbidden,
+  ];
 }
