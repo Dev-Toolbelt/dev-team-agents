@@ -1557,6 +1557,8 @@ export interface BoardSettings {
   readonly staleAfterMinutes: number;
   /** The kanban hides done tasks older than this by default. */
   readonly doneRetentionDays: number;
+  /** A "Direct work" card left in To Do (a turn that only read) is hidden after this long idle. */
+  readonly directTodoTtlHours: number;
 }
 
 export type BoardSettingsAnswer =
@@ -1567,6 +1569,7 @@ export type BoardSettingsAnswer =
 export const BOARD_SETTING_BOUNDS = {
   staleAfterMinutes: { min: 5, max: 1440, fallback: 60 },
   doneRetentionDays: { min: 1, max: 365, fallback: 7 },
+  directTodoTtlHours: { min: 1, max: 720, fallback: 24 },
 } as const;
 
 /** The channel names, shared so main and preload cannot disagree about a string. */

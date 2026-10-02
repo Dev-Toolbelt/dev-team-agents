@@ -7,7 +7,7 @@
 # It also opens a new turn for the "Direct work" card (docs/specs/task-board.md § Direct work):
 # the prompt's first line, still JSON-escaped and at most 512 bytes, is kept as `.prompt-<session>`
 # beside the record, owner-only — its mtime is when the turn started, the CLI decodes and redacts it,
-# and Stop/SessionEnd delete it — and `.direct-<session>` is cleared. Bash only: a prompt never
+# and Stop/SessionEnd delete it — and the `.direct[w]-<session>` markers are cleared. Bash only: a prompt never
 # forks python for it.
 # Exits 0 always, prints nothing.
 set -uo pipefail

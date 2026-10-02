@@ -24,8 +24,9 @@ provider todo tool ─hook─▶ devteam tasks record ─▶ <state-dir>/task-bo
 The board reads only the provider's native task list. A plan written to chat or to a file never
 reaches it: every approved plan's Steps table becomes native tasks per
 `skills/shared/plan-mode/SKILL.md` § Task List Mirroring. Agent spawns are tasks of their own
-(below), and the session's own work with neither is one **Direct work** card (§ Direct work). A
-session that only reads — a quick question, a `/devteam:status` — correctly stays off the board.
+(below), and the session's own work with neither is one **Direct work** card (§ Direct work) — a
+session that only reads lands there too, in To Do. Only a prompt answered without any tool call
+stays off the board.
 
 #### Agent spawns are tasks (amendment 2026-09-30)
 
@@ -68,10 +69,19 @@ worktree mark, only when set, whose tooltip (hover and keyboard focus) names the
 #### Direct work (amendment 2026-10-01)
 
 Work the main session does itself, with no plan step and no agent covering it — a one-line fix, an
-inline edit, a commit — reached no source above. It lands on **one card per session**, made by the
-hooks with no agent cooperation:
+inline edit, a commit, an investigation that only reads — reached no source above. It lands on
+**one card per session**, made by the hooks with no agent cooperation. **Any tool call** of the main
+session counts (amendment 2026-10-02); what it decides is the card's column:
 
-| Provider | Edit tools (always work) | Shell tools (work when `tasks.writes()` says so) |
+- a **write** — an edit tool, or a shell call `tasks.writes()` reads as write-shaped — moves the card to
+  In progress;
+- anything else — a read, a search, a fetch, an MCP tool, a read-only shell call — leaves it in **To
+  Do**: a question asked is still something to do.
+
+The todo tools that only read or drive their own list (`TaskList`, `TaskGet`, `TaskOutput`,
+`TaskStop`, opencode `todoread`) are never direct work; the ones that write it are native tasks.
+
+| Provider | Edit tools (a write) | Shell tools (a write when `tasks.writes()` says so) |
 |---|---|---|
 | Claude Code | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `Bash` |
 | Codex | `apply_patch` | `Bash`, `shell`, `exec_command` (a `bash -lc '<cmd>'` wrapper is read through) |
@@ -81,16 +91,27 @@ hooks with no agent cooperation:
   `ln`, `chmod`, `tee`, `truncate`, `patch`, `install`, `dd`…), `sed -i`/`perl -i`, a git subcommand that
   changes state (`commit`, `push`, `merge`, `rebase`, `checkout`, `reset`, `stash`, `tag`…), a package
   manager action (`install`, `add`, `remove`, `update`…), or a redirect to anything but `/dev/null`. A
-  miss costs one card, never a wrong Done.
+  miss leaves the card in To Do, never a wrong Done.
 - **Only the main session** — a call with `agent_id` (opencode: `parent_id`, a child session) is its
   agent task's work and is ignored.
 - **Covered work is not counted twice** — nothing is recorded while the main session has a native task
   `in_progress` (a plan step, its own list) or spawned an agent in the current turn.
-- **One card** — `kind: "direct"`, owner `main`, text `Direct work`. It goes `in_progress` on the first
-  work of a turn and `completed` at `Stop` (and at `SessionEnd`); a later turn revives it, appending to
-  `history`. A turn of direct work alone never raises `tasks.session_done`: the card is settled before
-  the Stop decides whether the session just finished. It enters In Review like any task, and leaves it
-  when a later turn revives it.
+- **One card, following the latest turn** — `kind: "direct"`, owner `main`, text `Direct work`. A turn
+  that only reads puts it in `pending` (To Do) and it stays there after `Stop`; the first write of a
+  turn moves it to `in_progress`, and `Stop` (and `SessionEnd`) completes it. A read after a write in
+  the same turn never demotes it; a read-only turn after a completed one moves it back to To Do. Every
+  change is appended to `history`. A turn of direct work alone never raises `tasks.session_done`: the
+  card is settled before the Stop decides whether the session just finished. It enters In Review like
+  any task, and leaves it when a later turn revives it.
+- **A card left in To Do is not abandoned work** — it neither counts toward `tasks.session_abandoned`
+  nor shows the abandoned flag when its session ends.
+- **A read-only turn the plan or agent took over is retired** — at `Stop`, a card still in To Do whose
+  last turn also created a main-session task (a plan's steps, an agent) gets `removed_at`: the turn was
+  planning that work, and the plan is its grain. Kept in the record, never deleted; a later turn
+  revives it.
+- **Lifetime in To Do (the app)** — the kanban hides a direct card in To Do once its last turn is older
+  than *Keep unanswered direct work for* (Board settings, app-local, 1–720 hours, default 24). Hidden
+  on read, never deleted: a new turn brings it back. The CLI always lists it.
 - **Turns** — the card keeps `turns: [{"text", "at"}]`, oldest first, at most 20. `at` is when the turn's
   prompt arrived; `text` is the prompt's first non-empty line, at most 100 characters, with invisible
   control/format characters dropped and anything shaped like a secret replaced by `[redacted]`:
@@ -100,23 +121,25 @@ hooks with no agent cooperation:
   kept for good, so the full prompt never is. Redaction is a best effort, not a guarantee.
 - **Turn boundary** — `UserPromptSubmit` writes the prompt's **first line**, still JSON-escaped and at
   most 512 bytes, to `<state-dir>/task-board/.prompt-<session>` (owner-only, `umask 077`; its mtime
-  starts the turn) and clears `.direct-<session>`, in bash only. The first direct call of the turn
-  forks `tasks record`, which creates `.direct-<session>`; every later call of that turn leaves on a
-  `[ -f ]`. `Stop` deletes both files and `SessionEnd` deletes them again, so a prompt's text outlives
-  its turn only in the redacted excerpt. Both are dot-prefixed, so machine-local (ADR-0013).
-- **The bash gate is a superset of `tasks.writes()`** — every write the CLI accepts passes it, and the
-  common read-only shapes (`2>&1`, `2>/dev/null`, `sed -n`, `git log --grep=reset`) do not, so they fork
-  no python; `tests/test_direct_work.py` pins both. A read-only command the gate still lets through
-  (`jq '.a > 1'`) forks once and records nothing. `writes()` tokenizes the whole command first: an
+  starts the turn) and clears the turn's markers, in bash only. The first call of the turn forks
+  `tasks record`, which creates `.direct-<session>`; the first write forks it once more, which creates
+  `.directw-<session>`. A read leaves on the first marker, a write on the second: python forks **at
+  most twice a turn**. `Stop` deletes the markers and the prompt file and `SessionEnd` deletes them
+  again, so a prompt's text outlives its turn only in the redacted excerpt. All are dot-prefixed, so
+  machine-local (ADR-0013).
+- **The bash write gate is a superset of `tasks.writes()`** — every write the CLI accepts passes it, and
+  the common read-only shapes (`2>&1`, `2>/dev/null`, `sed -n`, `git log --grep=reset`) do not, so after
+  the turn's first call they fork no more python; `tests/test_direct_work.py` pins both. A read-only
+  command the gate still takes for a write (`jq '.a > 1'`) forks once more and changes nothing. `writes()` tokenizes the whole command first: an
   operator or `>` inside quotes is a word, and a `bash -lc '<cmd>'` wrapper is read through.
 - **Edges, by design** —
-  - The decision is made once per turn, at its first direct call: if a plan step was `in_progress`
-    then, the rest of that turn is not recorded even after the step ends (the marker avoids forking
+  - The decision is made at the turn's first call (and again at its first write): if a plan step was
+    `in_progress` then, the rest of that turn is not recorded even after the step ends (the marker avoids forking
     python on every edit while a plan runs). A native task abandoned `in_progress` therefore keeps
     suppressing direct work until it is moved.
   - Direct work done before an agent is spawned in the same turn stays on the card; only work after
     the spawn is suppressed.
-  - Capture is on the pre-call hook, so an edit the user then denies still marks the turn.
+  - Capture is on the pre-call hook, so an edit the user then denies still moves the card.
   - A session whose provider sends no prompt hook (or one before the hook existed) still gets the
     card; its turn text is empty, and one turn is one entry (a new entry when the card reopens after
     a `Stop`).
@@ -488,8 +511,8 @@ Implementation details:
    Claude Code a `tasks.session_abandoned` notification is raised.
 8. **Given** a session's last open task is completed, **Then** a `tasks.session_done` notification
    is raised once.
-9. **Given** the hook runs for any tool other than a todo tool, an agent spawn or the first direct
-   work of a turn, **Then** no python process is forked.
+9. **Given** the hook runs for any tool other than a todo tool, an agent spawn, or the first call or
+   first write of a turn, **Then** no python process is forked.
 10. **Given** a malformed payload or an unwritable state dir, **Then** the hook exits 0 and the
     provider is not disturbed.
 11. `devteam tasks list --json` and `watch --json` are covered by `tests/test_json_contract.py`.
@@ -506,8 +529,10 @@ Implementation details:
 16. **Given** a session that edits a file and commits with no plan and no agent, **Then** the board shows
     one `Direct work` card in progress, listing the prompt's excerpt, completed at `Stop`, on every
     provider.
-17. **Given** a turn that only reads (`ls`, `git status`, `Read`), or a subagent's edit, **Then** no
-    direct card is created and no python is forked.
+17. **Given** a turn that only reads (`ls`, `git status`, `Read`, `ssh host 'docker ps'`), **Then** the
+    session's direct card is in To Do with the prompt's excerpt, stays there after `Stop`, is not
+    flagged abandoned when the session ends, and the app hides it after the configured lifetime. A
+    subagent's call creates no direct card and forks no python.
 18. **Given** a prompt containing `API_KEY=abc123`, **Then** the stored excerpt reads `API_KEY=[redacted]`.
 19. **Given** `gh pr create` succeeds with URL `https://github.com/owner/repo/pull/123`, **Then** a
     `pr_created` column appears and a PR badge `#123` appears on tasks completed after the PR was created
@@ -577,3 +602,4 @@ Implementation details:
 | 2026-10-01 | Issue refs: Jira and GitHub issues captured from prompt (strict patterns per integration, no config → no ref), branch name (branch name inference: a Jira key of the bound project in the session branch name is recognized, word-bounded by separators), and task text (agent-written task descriptions); stored as parts (system plus key, or repo and number — never a URL), rebuilt and revalidated on read against current bindings; refs without config validation are omitted from view (kept in record); appear as clickable badges on task cards linked through the main process IPC with allow-list and path validation (ADR-0025); cwd validation: hook cwd trusted only when inside project root, else git used against project root; link_hosts: Jira entries carry base_path (validated regex), GitHub Enterprise listed only when connected; merge records structure: {kind, number\|null, repo\|null, host, branch\|null, at}; Claude PostToolUseFailure (matchers: Agent/Task create_pull_request) carries gh "already exists" form and can only CREATE PR/MR marks, not merge records; field read: first present of tool_response, tool_output, output, error (not verified live); task-less first-prompt refs create sessions without tasks; opencode bash non-zero exit behavior not verified live; command detection: handles redirections, continuations, prefixes (time, command, env VAR=…, (/{, if/then/do/!) — false-positive filter, not a security control (ADR-0025) | User request: link work directly to the tracker issues it addresses |
 | 2026-10-01 | App: new PR/MR badges `#N` (PR) / `!N` (MR) on cards, clickable IPC to main with host/path validation; issue badges `PROJ-12` / `owner/repo#45`, clickable IPC; "with findings" filter added; session chip shows PR/MR badge if session has marks; board overview shows `pr_created` in counts and stacked bar; five-column kanban with horizontal scroll; security validation per ADR-0025 (no renderer URLs, main-process allow-list, IDN/canonical round-trip, path shapes) | Completes the flow from tool output through CLI to the board and app |
 | 2026-10-01 | Review fixes: (1) a `git merge` counts only when the checkout it ran in is known and differs from the merged branch, and records it as `into` — catching `feat/x` up with `origin/feat/x` no longer marks the PR merged. (2) Criterion 12 now names five columns. (3) `tasks.session_done` fires while tasks sit in PR/MR Created (PR/MR Created is finished work); `durations.done` no longer includes PR/MR Created time. (4) GitHub refs from any source, the prompt included, must name the bound repository or one a git remote on the web host names, and the binding's `repository` counts only when a remote names it. (5) Punycode hosts and known non-GitLab forges never become self-hosted GitLab hosts. (6) The open-link request carries `expect`, the number/key the badge showed; a mismatch is refused. (7) Env-assignment refusal is tokenised: only an assignment in command position refuses the command. (8) Known limits recorded (forks, ports, single-label hosts, merges outside a hooked session); PR/MR Created tasks are not hidden by done retention | Findings of the `/devteam:review` pass on the PR/MR Created branch |
+| 2026-10-02 | Direct work counts any tool call of the main session, not only writes: a read-only turn puts the card in To Do (and it stays there after `Stop`), a write moves it to In progress and `Stop` completes it; the card follows the latest turn. A To Do card is not abandoned work, is retired at `Stop` when its turn created a plan or an agent, and the app hides it after *Keep unanswered direct work for* (Board settings, default 24 h). The gate forks python at most twice a turn (`.direct-` / `.directw-` markers); acceptance criteria 9 and 17 reworded | User request: a production health check that only read never reached the board; everything done in a session should, and a question left unanswered should not linger |

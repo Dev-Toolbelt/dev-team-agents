@@ -62,6 +62,7 @@ export interface AppSettings {
 export const DEFAULT_BOARD_SETTINGS: BoardSettings = Object.freeze({
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
   doneRetentionDays: BOARD_SETTING_BOUNDS.doneRetentionDays.fallback,
+  directTodoTtlHours: BOARD_SETTING_BOUNDS.directTodoTtlHours.fallback,
 });
 
 function clampSetting(value: unknown, bounds: { readonly min: number; readonly max: number; readonly fallback: number }): number {
@@ -74,6 +75,7 @@ export function readBoardSettings(record: Record<string, unknown>): BoardSetting
   return {
     staleAfterMinutes: clampSetting(record['boardStaleAfterMinutes'], BOARD_SETTING_BOUNDS.staleAfterMinutes),
     doneRetentionDays: clampSetting(record['boardDoneRetentionDays'], BOARD_SETTING_BOUNDS.doneRetentionDays),
+    directTodoTtlHours: clampSetting(record['boardDirectTodoTtlHours'], BOARD_SETTING_BOUNDS.directTodoTtlHours),
   };
 }
 
@@ -87,6 +89,7 @@ export function boardSettingsProblem(value: unknown): string | null {
   const checks = [
     ['staleAfterMinutes', 'the stale threshold (minutes)', BOARD_SETTING_BOUNDS.staleAfterMinutes],
     ['doneRetentionDays', 'the done retention (days)', BOARD_SETTING_BOUNDS.doneRetentionDays],
+    ['directTodoTtlHours', 'the direct work to-do lifetime (hours)', BOARD_SETTING_BOUNDS.directTodoTtlHours],
   ] as const;
   for (const [key, label, bounds] of checks) {
     const n = record[key];
@@ -241,6 +244,7 @@ async function writeSettingsNow(
   const board = patch.board ?? current.board;
   if (board.staleAfterMinutes !== DEFAULT_BOARD_SETTINGS.staleAfterMinutes) payload['boardStaleAfterMinutes'] = board.staleAfterMinutes;
   if (board.doneRetentionDays !== DEFAULT_BOARD_SETTINGS.doneRetentionDays) payload['boardDoneRetentionDays'] = board.doneRetentionDays;
+  if (board.directTodoTtlHours !== DEFAULT_BOARD_SETTINGS.directTodoTtlHours) payload['boardDirectTodoTtlHours'] = board.directTodoTtlHours;
   const projectFolders = patch.projectFolders ?? current.projectFolders;
   if (!isEmptyFolders(projectFolders)) payload['projectFolders'] = projectFolders;
 

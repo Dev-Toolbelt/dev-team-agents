@@ -71,6 +71,7 @@ const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] }
 const DEFAULT_SETTINGS: BoardSettings = {
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
   doneRetentionDays: BOARD_SETTING_BOUNDS.doneRetentionDays.fallback,
+  directTodoTtlHours: BOARD_SETTING_BOUNDS.directTodoTtlHours.fallback,
 };
 
 const SELECT_CLASS =
@@ -744,10 +745,17 @@ function Kanban({
     () =>
       buildKanban(
         project,
-        { sessionId: effectiveSession, period, hideOldDone, retentionDays: settings.doneRetentionDays, onlyFindings: findingsOn },
+        {
+          sessionId: effectiveSession,
+          period,
+          hideOldDone,
+          retentionDays: settings.doneRetentionDays,
+          onlyFindings: findingsOn,
+          directTodoTtlHours: settings.directTodoTtlHours,
+        },
         coarseNow,
       ),
-    [project, effectiveSession, period, hideOldDone, findingsOn, settings.doneRetentionDays, coarseNow],
+    [project, effectiveSession, period, hideOldDone, findingsOn, settings.doneRetentionDays, settings.directTodoTtlHours, coarseNow],
   );
   // Only an in-progress card in a live session needs seconds; In Review and the rest read the minute clock.
   const anyRunning = view.in_progress.some((item) => isRunning(item.session, item.task));
@@ -1205,16 +1213,19 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
   const [open, setOpen] = useState(false);
   const [stale, setStale] = useState(String(settings.staleAfterMinutes));
   const [retention, setRetention] = useState(String(settings.doneRetentionDays));
+  const [directTtl, setDirectTtl] = useState(String(settings.directTodoTtlHours));
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const staleBounds = BOARD_SETTING_BOUNDS.staleAfterMinutes;
   const retentionBounds = BOARD_SETTING_BOUNDS.doneRetentionDays;
+  const directTtlBounds = BOARD_SETTING_BOUNDS.directTodoTtlHours;
 
   useEffect(() => {
     if (!open) return;
     setStale(String(settings.staleAfterMinutes));
     setRetention(String(settings.doneRetentionDays));
+    setDirectTtl(String(settings.directTodoTtlHours));
     setProblem(null);
   }, [open, settings]);
 
@@ -1227,6 +1238,7 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
       const answer = await window.devteam.setBoardSettings({
         staleAfterMinutes: Number(stale),
         doneRetentionDays: Number(retention),
+        directTodoTtlHours: Number(directTtl),
       });
       if (answer.ok) {
         onSaved(answer.settings);
@@ -1281,6 +1293,22 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
             />
             <p className="text-xs text-muted-foreground">
               The kanban hides done tasks older than this by default ({retentionBounds.min} to {retentionBounds.max}).
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="board-direct-ttl">Keep unanswered direct work for (hours)</Label>
+            <Input
+              id="board-direct-ttl"
+              type="number"
+              inputMode="numeric"
+              min={directTtlBounds.min}
+              max={directTtlBounds.max}
+              value={directTtl}
+              onChange={(event) => setDirectTtl(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              A Direct work card left in To Do — a turn that only read — is hidden after this long without a new turn (
+              {directTtlBounds.min} to {directTtlBounds.max}).
             </p>
           </div>
           {problem !== null ? (

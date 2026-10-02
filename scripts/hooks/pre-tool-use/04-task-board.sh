@@ -10,11 +10,13 @@
 # the provider's built-ins (one list, review_triggers.BUILTIN_AGENTS) — the gate only has to be cheap.
 # Claude Code's todo tools are captured after the call, by post-tool-use/01-task-board.sh.
 #   the main session's own work (one "Direct work" card per session, docs/specs/task-board.md
-#   § Direct work): an edit tool, or a shell call whose text looks write-shaped —
+#   § Direct work): ANY other tool call. A read leaves the card in To Do; a write moves it to
+#   In progress — an edit tool, or a shell call whose text looks write-shaped:
 #     Claude Code  Edit|Write|MultiEdit|NotebookEdit, Bash     Codex  apply_patch, Bash|shell|exec_command
 #     opencode     edit|write|patch|multiedit, bash
-#   Once a turn's direct work is settled the CLI drops `.direct-<session>` beside the record, and
-#   every later call of that turn leaves on a `[ -f ]`. The CLI makes the exact shell decision.
+#   The CLI drops `.direct-<session>` once a call of the turn is recorded and `.directw-<session>`
+#   once a write is: a read after the first leaves on a `[ -f ]`, a write after the first write
+#   too — at most two python calls a turn. The CLI makes the exact shell decision.
 #
 # This runs on EVERY tool call, so the gate is a bash string test on the payload: for any
 # other tool nothing is sourced and no python is forked (acceptance criterion 9). The
@@ -32,6 +34,9 @@ REVIEW_TYPE_RE='"(subagent_type|agent_type)"[[:space:]]*:[[:space:]]*"([^"]*:)?(
 
 EDIT_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(Edit|Write|MultiEdit|NotebookEdit|apply_patch|edit|write|patch|multiedit)"'
 SHELL_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(Bash|shell|exec_command|bash)"'
+# Any tool at all; the todo tools that only read or drive their own list are never direct work.
+ANY_TOOL_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"[^"]'
+SKIP_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(TaskList|TaskGet|TaskOutput|TaskStop|TodoWrite|TaskCreate|TaskUpdate|todoread)"'
 # A superset of `tasks.writes()` (tests/test_direct_work.py pins it): every write it accepts must
 # pass here, and the common read-only shapes (`2>&1`, `2>/dev/null`, `sed -n`, `git log --grep=reset`)
 # must not, or each of them forks python again — the marker is only set once a write is recorded.
@@ -64,11 +69,15 @@ elif [[ "$INPUT" =~ $SPAWN_RE ]]; then
     # skip here, so the common unnamed spawn forks nothing.
     [[ "$INPUT" == *'"subagent_type"'* || "$INPUT" == *'"agent_type"'* ]] || exit 0
     MODE="spawn"
-elif [[ "$INPUT" =~ $EDIT_RE ]] || { [[ "$INPUT" =~ $SHELL_RE ]] && writes_shaped; }; then
+elif [[ "$INPUT" =~ $ANY_TOOL_RE ]] && ! [[ "$INPUT" =~ $SKIP_RE ]]; then
     # A subagent's work belongs to its agent task (opencode: a child session names its parent). Only
     # the payload's own key counts: inside a tool argument the quotes are escaped and never match.
     [[ "$INPUT" =~ $SUBAGENT_RE ]] && exit 0
     MODE="direct"
+    MARK=".direct-"
+    if [[ "$INPUT" =~ $EDIT_RE ]] || { [[ "$INPUT" =~ $SHELL_RE ]] && writes_shaped; }; then
+        MARK=".directw-"
+    fi
 else
     exit 0
 fi
@@ -79,7 +88,7 @@ devteam_task_board_init || exit 0
 if [ "$MODE" = "direct" ]; then
     SESSION="$(devteam_task_board_session_id "$INPUT")"
     [ -n "$SESSION" ] || exit 0
-    [ -f "${TB_STATE_DIR}/task-board/.direct-${SESSION}" ] && exit 0
+    [ -f "${TB_STATE_DIR}/task-board/${MARK}${SESSION}" ] && exit 0
     devteam_task_board_record "$INPUT" >/dev/null 2>&1
 elif [ "$MODE" = "todo" ]; then
     devteam_task_board_record "$INPUT" >/dev/null 2>&1

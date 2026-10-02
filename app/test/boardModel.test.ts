@@ -293,6 +293,26 @@ describe('buildKanban', () => {
     expect(view.hiddenDone).toBe(1);
   });
 
+  it('hides a Direct work card left in To Do once its last turn is older than the lifetime', () => {
+    const asked = (key: string, at: number) =>
+      boardTask({ key, kind: 'direct', column: 'todo', status: 'pending', status_since: at, turns: [{ text: 'q', at }] });
+    const stale = asked('stale', NOW - 25 * 3600);
+    const fresh = asked('fresh', NOW - 3600);
+    // A new turn on an old card keeps it: the lifetime runs from the last turn.
+    const revived = boardTask({
+      key: 'revived', kind: 'direct', column: 'todo', status: 'pending', status_since: NOW - 30 * 3600,
+      turns: [{ text: 'q', at: NOW - 30 * 3600 }, { text: 'again', at: NOW - 60 }],
+    });
+    const plainTodo = boardTask({ key: 'plain', status_since: NOW - 99 * 3600 });
+    const doingDirect = boardTask({ key: 'work', kind: 'direct', column: 'in_progress', status: 'in_progress', status_since: NOW - 99 * 3600 });
+    const p = boardProject({ sessions: [boardSession({ tasks: [stale, fresh, revived, plainTodo, doingDirect] })] });
+    const view = buildKanban(p, { ...filters, directTodoTtlHours: 24 }, NOW);
+    expect(view.todo.map((i) => i.task.key).sort()).toEqual(['fresh', 'plain', 'revived']);
+    expect(view.in_progress.map((i) => i.task.key)).toEqual(['work']);
+    expect(view.hiddenDirect).toBe(1);
+    expect(buildKanban(p, filters, NOW).hiddenDirect).toBe(0);
+  });
+
   it('never hides a task that is not done, however old', () => {
     const ancient = boardTask({ key: 'ancient', created_at: 1, status_since: 1 });
     const view = buildKanban(boardProject({ sessions: [boardSession({ tasks: [ancient] })] }), filters, NOW);

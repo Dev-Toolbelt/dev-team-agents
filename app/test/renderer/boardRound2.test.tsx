@@ -391,10 +391,10 @@ describe('Board — accessibility and overflow', () => {
   });
 
   it('submits the settings with Enter and ignores a second submit while saving', async () => {
-    let finish: (value: { ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number } }) => void = () => undefined;
+    let finish: (value: { ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number; directTodoTtlHours: number } }) => void = () => undefined;
     const setBoardSettings = vi.fn(
       () =>
-        new Promise<{ ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number } }>((resolve) => {
+        new Promise<{ ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number; directTodoTtlHours: number } }>((resolve) => {
           finish = resolve;
         }),
     );
@@ -410,7 +410,7 @@ describe('Board — accessibility and overflow', () => {
     await user.keyboard('{Enter}');
     expect(setBoardSettings).toHaveBeenCalledTimes(1);
     await act(() => {
-      finish({ ok: true, settings: { staleAfterMinutes: 60, doneRetentionDays: 7 } });
+      finish({ ok: true, settings: { staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 } });
       return Promise.resolve();
     });
     expect(screen.queryByRole('dialog', { name: 'Board settings' })).not.toBeInTheDocument();

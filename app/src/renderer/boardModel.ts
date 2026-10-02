@@ -272,6 +272,12 @@ export interface KanbanFilters {
   readonly retentionDays: number;
   /** Only tasks in review with findings. Optional so a caller that predates the filter keeps working. */
   readonly onlyFindings?: boolean;
+  /**
+   * Hide a "Direct work" card left in To Do — a turn that only read, a question nobody came back
+   * to — once its last turn is older than this. Hidden, never deleted: a new turn brings it back.
+   * Optional: a caller that predates it hides nothing.
+   */
+  readonly directTodoTtlHours?: number;
 }
 
 export interface KanbanItem {
@@ -287,6 +293,8 @@ export interface KanbanView {
   readonly done: readonly KanbanItem[];
   /** Done tasks the retention setting is hiding. */
   readonly hiddenDone: number;
+  /** "Direct work" cards in To Do the lifetime setting is hiding. */
+  readonly hiddenDirect: number;
 }
 
 export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSeconds: number): KanbanView {
@@ -296,8 +304,13 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   const items: KanbanItem[] = sessions.flatMap((session) => session.tasks.map((task) => ({ session, task })));
   const doneCutoff = nowSeconds - filters.retentionDays * DAY;
   let hiddenDone = 0;
+  let hiddenDirect = 0;
   const visible = items.filter(({ task }) => {
     if (filters.onlyFindings === true && !hasFindings(task)) return false;
+    if (isExpiredDirectTodo(task, filters.directTodoTtlHours, nowSeconds)) {
+      hiddenDirect += 1;
+      return false;
+    }
     if (task.column !== 'done' || !filters.hideOldDone) return true;
     const finished = task.completed_at ?? task.status_since;
     if (finished >= doneCutoff) return true;
@@ -314,7 +327,15 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
       .filter((i) => i.task.column === 'done')
       .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),
     hiddenDone,
+    hiddenDirect,
   };
+}
+
+/** A "Direct work" card in To Do whose last turn is older than `ttlHours`. */
+export function isExpiredDirectTodo(task: BoardTask, ttlHours: number | undefined, nowSeconds: number): boolean {
+  if (ttlHours === undefined || task.kind !== 'direct' || task.column !== 'todo') return false;
+  const lastTurn = task.turns.reduce((latest, turn) => Math.max(latest, turn.at), 0);
+  return nowSeconds - Math.max(task.status_since, lastTurn) > ttlHours * 3600;
 }
 
 /** The last path segment, POSIX or Windows. */

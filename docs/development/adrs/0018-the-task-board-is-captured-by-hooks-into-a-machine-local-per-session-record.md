@@ -156,6 +156,35 @@ sessions simply lack the card.
 | A card on every prompt | Questions would fill the board, and python would fork on every prompt |
 | Diff the working tree at `Stop` | Misses commits, pushes and anything that leaves the tree clean |
 
+## Amendment — 2026-10-02: a read-only turn is direct work too, in To Do
+
+**Context.** A session that checked production container health ran only `ssh … docker ps`, `curl` and
+`grep`, and never reached the board: the 2026-10-01 amendment recorded writes only. The user's goal is
+that everything done in a session is followed there.
+
+**Decision.** Any tool call of the main session feeds its one Direct work card; whether it wrote picks
+the column. A read-only turn leaves the card in **To Do** — a question asked is something to do — and
+it stays there after `Stop`; a write moves it to In progress and `Stop` completes it. The card follows
+the latest turn. A To Do card is not abandoned work, and is retired at `Stop` when its turn created a
+plan or an agent (that work has a better grain). The app hides a To Do card once its last turn is
+older than an app-local lifetime (default 24 h). Full rules: `docs/specs/task-board.md` § Direct work.
+
+**Why.** Recording only writes left investigations, reviews by hand and health checks invisible. A To
+Do card says "asked, not acted on" without claiming work was done. The lifetime keeps an unanswered
+question from lingering, and hides rather than deletes, so the No-Destruction Rule holds and a new turn
+brings the card back.
+
+**Consequences.** The gate forks python at most twice a turn — once for the first call, once for the
+first write (`.direct-` / `.directw-` markers) — instead of once. Almost every session now has a card;
+a prompt answered without any tool still has none. More prompt excerpts are stored locally, under the
+same redaction.
+
+| Alternative | Why rejected |
+|---|---|
+| A card on every prompt | A greeting or a one-line answer would be a card; the tool call is the cheapest signal that work happened |
+| Read-only turns straight to Done | A question nobody followed up would look finished |
+| Delete expired To Do cards | Breaks the No-Destruction Rule; hiding on read gives the same board |
+
 ## Amendment — 2026-10-01: PR/MR Created column and issue refs
 
 **Decision.** A new `pr_created` column appears between In Review and Done, optional and derived on read. A PR/MR mark is recorded only when its URL or number appears in `gh pr create` / `glab mr create` / MCP `create_pull_request` output — confirmed, not inferred — along with its head branch for later merge matching. Tasks entered this column when its membership is fixed at the next Stop: every completed task completed since the previous PR's `fixed_at` timestamp. A merge is observed when `gh pr merge` / `glab mr merge` / `/devteam:merge` / MCP `merge_pull_request` succeeds, recorded per session, and joined across sessions on read: a PR mark is merged when its (repo + number) matches or its head branch matches a merge's branch (at >= the mark's timestamp). Issue references are captured from the user prompt, branch name, and task text with strict rules per integration (Jira requires site + project binding; GitHub requires account + repository binding; no integration → no ref badge). Refs are stored as parsed parts, rebuilt and revalidated on every read against current remotes and config.

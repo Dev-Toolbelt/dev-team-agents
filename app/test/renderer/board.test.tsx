@@ -509,7 +509,7 @@ describe('Board settings', () => {
     await user.clear(retention);
     await user.type(retention, '14');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(bridge.setBoardSettings).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14 });
+    expect(bridge.setBoardSettings).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 });
     await user.click(await card('storefront'));
     expect(await screen.findByRole('checkbox', { name: /hide done older than 14 days/i })).toBeInTheDocument();
   });

@@ -805,7 +805,7 @@ describe('TaskBoard — round-2 races and failures', () => {
 });
 
 describe('saveBoardSettings', () => {
-  function store(previous: { staleAfterMinutes: number; doneRetentionDays: number }) {
+  function store(previous: { staleAfterMinutes: number; doneRetentionDays: number; directTodoTtlHours: number }) {
     let current = previous;
     const restart = vi.fn();
     return {
@@ -822,16 +822,16 @@ describe('saveBoardSettings', () => {
   }
 
   it('restarts the stream only when the stale threshold changed', async () => {
-    const changed = store({ staleAfterMinutes: 60, doneRetentionDays: 7 });
-    await saveBoardSettings(changed.io, { staleAfterMinutes: 30, doneRetentionDays: 7 });
+    const changed = store({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 });
+    await saveBoardSettings(changed.io, { staleAfterMinutes: 30, doneRetentionDays: 7, directTodoTtlHours: 24 });
     expect(changed.restart).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the stream alone on a retention-only save, and returns what was stored', async () => {
-    const retention = store({ staleAfterMinutes: 60, doneRetentionDays: 7 });
-    const saved = await saveBoardSettings(retention.io, { staleAfterMinutes: 60, doneRetentionDays: 14 });
+    const retention = store({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 });
+    const saved = await saveBoardSettings(retention.io, { staleAfterMinutes: 60, doneRetentionDays: 14, directTodoTtlHours: 24 });
     expect(retention.restart).not.toHaveBeenCalled();
-    expect(saved).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 14 });
+    expect(saved).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 14, directTodoTtlHours: 24 });
   });
 });
 
@@ -911,7 +911,7 @@ describe('task board IPC', () => {
       trustedRenderer: TRUSTED_RENDERER,
       feed: () => ({ status: 'live', detail: null, projects: [] }),
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
-      boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7 }),
+      boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 }),
       saveBoardSettings: (settings) => Promise.resolve(settings),
       linkFor: () => null,
       openExternal: () => Promise.resolve(),
@@ -947,19 +947,19 @@ describe('task board IPC', () => {
     const save = vi.fn((s) => Promise.resolve(s));
     registerTaskBoardIpc(deps({ saveBoardSettings: save }));
     const set = handlers.get(CHANNELS.setBoardSettings)!;
-    for (const bad of [null, 'x', { staleAfterMinutes: 60 }, { staleAfterMinutes: '60', doneRetentionDays: 7 },
-      { staleAfterMinutes: 4, doneRetentionDays: 7 }, { staleAfterMinutes: 1441, doneRetentionDays: 7 },
-      { staleAfterMinutes: 60, doneRetentionDays: 0 }, { staleAfterMinutes: 60, doneRetentionDays: 366 },
-      { staleAfterMinutes: 60.5, doneRetentionDays: 7 }, { staleAfterMinutes: NaN, doneRetentionDays: 7 }]) {
+    for (const bad of [null, 'x', { staleAfterMinutes: 60 }, { staleAfterMinutes: '60', doneRetentionDays: 7, directTodoTtlHours: 24 },
+      { staleAfterMinutes: 4, doneRetentionDays: 7, directTodoTtlHours: 24 }, { staleAfterMinutes: 1441, doneRetentionDays: 7, directTodoTtlHours: 24 },
+      { staleAfterMinutes: 60, doneRetentionDays: 0, directTodoTtlHours: 24 }, { staleAfterMinutes: 60, doneRetentionDays: 366, directTodoTtlHours: 24 },
+      { staleAfterMinutes: 60.5, doneRetentionDays: 7, directTodoTtlHours: 24 }, { staleAfterMinutes: NaN, doneRetentionDays: 7, directTodoTtlHours: 24 }]) {
       expect(await set(TRUSTED, bad), JSON.stringify(bad)).toMatchObject({ ok: false });
     }
     expect(save).not.toHaveBeenCalled();
     // Only the two known keys are passed on.
-    expect(await set(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14, extra: 'x' })).toEqual({
+    expect(await set(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24, extra: 'x' })).toEqual({
       ok: true,
-      settings: { staleAfterMinutes: 30, doneRetentionDays: 14 },
+      settings: { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 },
     });
-    expect(save).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14 });
+    expect(save).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 });
   });
 
   it('setBoardSettings answers ok:false when the save throws synchronously too', async () => {
@@ -971,7 +971,7 @@ describe('task board IPC', () => {
         },
       }),
     );
-    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
+    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 })).toMatchObject({
       ok: false,
       message: expect.stringMatching(/read-only volume/),
     });
@@ -980,7 +980,7 @@ describe('task board IPC', () => {
   it('reports a failed save as a problem, not a throw', async () => {
     const { handlers, registerTaskBoardIpc, CHANNELS } = await loadIpc();
     registerTaskBoardIpc(deps({ saveBoardSettings: () => Promise.reject(new Error('disk full')) }));
-    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14 })).toMatchObject({
+    expect(await handlers.get(CHANNELS.setBoardSettings)!(TRUSTED, { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 })).toMatchObject({
       ok: false,
       message: expect.stringMatching(/disk full/),
     });
@@ -999,14 +999,14 @@ describe('board settings', () => {
   });
 
   it('defaults to 60 minutes and 7 days when nothing is stored', async () => {
-    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 7 });
+    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 });
   });
 
   it('clamps stored values into their bounds and ignores malformed ones on read', async () => {
-    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ boardStaleAfterMinutes: 99999, boardDoneRetentionDays: -3 }));
-    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 1440, doneRetentionDays: 1 });
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ boardStaleAfterMinutes: 99999, boardDoneRetentionDays: -3, boardDirectTodoTtlHours: 9999 }));
+    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 1440, doneRetentionDays: 1, directTodoTtlHours: 720 });
     await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ boardStaleAfterMinutes: 'soon', boardDoneRetentionDays: null }));
-    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 7 });
+    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 });
   });
 
   it('keeps board values readable when the file has a bad cliPath', async () => {
@@ -1018,23 +1018,25 @@ describe('board settings', () => {
 
   it('round-trips a write and never drops cliPath or project names', async () => {
     await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ cliPath: '/opt/devteam', projectNames: { p: 'Storefront' } }));
-    await writeBoardSettings(dir, { staleAfterMinutes: 30, doneRetentionDays: 14 });
+    await writeBoardSettings(dir, { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 });
     const read = await readSettings(dir);
-    expect(read).toMatchObject({ cliPath: '/opt/devteam', projectNames: { p: 'Storefront' }, board: { staleAfterMinutes: 30, doneRetentionDays: 14 } });
+    expect(read).toMatchObject({ cliPath: '/opt/devteam', projectNames: { p: 'Storefront' }, board: { staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 } });
     // A later, unrelated write carries the board values forward.
     await writeProjectName(dir, 'q', 'Billing');
-    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 30, doneRetentionDays: 14 });
+    expect((await readSettings(dir)).board).toEqual({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 });
   });
 
   it('writes nothing for a board left at its defaults', async () => {
-    await writeBoardSettings(dir, { staleAfterMinutes: 60, doneRetentionDays: 7 });
+    await writeBoardSettings(dir, { staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 });
     const written = JSON.parse(await readFile(join(dir, SETTINGS_FILE_NAME), 'utf8')) as Record<string, unknown>;
     expect(Object.keys(written)).toEqual(['projectNames']);
   });
 
   it('boardSettingsProblem names the bound that was broken', () => {
-    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 7 })).toBeNull();
-    expect(boardSettingsProblem({ staleAfterMinutes: 2, doneRetentionDays: 7 })).toMatch(/between 5 and 1440/);
-    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 400 })).toMatch(/between 1 and 365/);
+    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 })).toBeNull();
+    expect(boardSettingsProblem({ staleAfterMinutes: 2, doneRetentionDays: 7, directTodoTtlHours: 24 })).toMatch(/between 5 and 1440/);
+    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 400, directTodoTtlHours: 24 })).toMatch(/between 1 and 365/);
+    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 0 })).toMatch(/between 1 and 720/);
+    expect(boardSettingsProblem({ staleAfterMinutes: 60, doneRetentionDays: 7 })).toMatch(/direct work/);
   });
 });
