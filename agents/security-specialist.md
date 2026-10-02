@@ -144,6 +144,7 @@ Detect the platform from project signals, then load the matching skill **before*
 | Detection signal | Skill to load |
 |---|---|
 | `wp-config.php`, `wp-content/`, a plugin file with a `Plugin Name:` header, or a theme's `functions.php` | `skills/integrations/wordpress/SKILL.md` |
+| `CPANEL_HOST` / `CPANEL_TOKEN` env vars, `Authorization: cpanel` headers, `/execute/<Module>/<function>` calls, `.cpanel.yml`, or `uapi --user=` in scripts | `skills/integrations/cpanel/SKILL.md` |
 
 ---
 
