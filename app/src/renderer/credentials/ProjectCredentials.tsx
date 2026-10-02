@@ -9,6 +9,7 @@ import {
   CREDENTIALS_HASH_CONFLICT,
   CREDENTIALS_SAVED_UNREADABLE,
   type CredentialsLocalView,
+  type CredentialsPatchOp,
   type EnvironmentReport,
   type OperationResult,
   type ProjectRecord,
@@ -20,8 +21,8 @@ import { useOnActivate } from '../useOnDeactivate.js';
 import { unreachable } from '../useOperation.js';
 import { WriteButton } from '../WriteButton.js';
 import { CREDENTIALS_COMMANDS, isWithheld } from '../writeActionGating.js';
-import { CredentialsForm } from './CredentialsForm.js';
-import { EMPTY_DRAFTS, reportDrafts, type Drafts } from './drafts.js';
+import { CredentialsEditor } from './CredentialsEditor.js';
+import { MAX_OPS, applyOps, opsFor, record, type Edit } from './document.js';
 
 type Failure = Extract<OperationResult<never>, { ok: false }>;
 
@@ -54,7 +55,10 @@ export function ProjectCredentials({
   const [view, setView] = useState<CredentialsLocalView | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
-  const [drafts, setDrafts] = useState<Drafts>(EMPTY_DRAFTS);
+  // Edits since the file was loaded, as `cred local patch` ops in the order they were made.
+  const [ops, setOps] = useState<readonly CredentialsPatchOp[]>([]);
+  // Fields holding text that is not a valid value yet (a number field with letters), by pointer.
+  const [problems, setProblems] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saveFailure, setSaveFailure] = useState<Failure | null>(null);
@@ -78,7 +82,7 @@ export function ProjectCredentials({
       if (changesNow.current > changesAtStart) return;
       setView(result.data);
       setLoadFailure(null);
-      setDrafts(EMPTY_DRAFTS);
+      clearEdits();
       setSaveFailure(null);
       setStale(false);
     } else {
@@ -90,10 +94,32 @@ export function ProjectCredentials({
     void load();
   }, [load]);
 
-  const report = useMemo(
-    () => (view !== null && view.valid && view.data !== null ? reportDrafts(view, drafts) : { ops: [], problems: {}, changes: 0 }),
-    [view, drafts],
+  const data = view !== null && view.valid ? view.data : null;
+  const doc = useMemo(() => (data !== null ? applyOps(data, ops) : null), [data, ops]);
+  const report = { ops, problems, changes: ops.length };
+
+  function clearEdits(): void {
+    setOps([]);
+    setProblems({});
+  }
+
+  const onEdit = useCallback(
+    (edit: Edit) => {
+      if (data === null) return;
+      // Functional: two edits in one event (add a field, then mark it secret) each see the first.
+      setOps((previous) => record(previous, ...opsFor(applyOps(data, previous), edit)));
+    },
+    [data],
   );
+  const onProblem = useCallback((pointer: string, problem: string | null) => {
+    setProblems((previous) => {
+      if (problem === null) {
+        if (!(pointer in previous)) return previous;
+        return Object.fromEntries(Object.entries(previous).filter(([key]) => key !== pointer));
+      }
+      return previous[pointer] === problem ? previous : { ...previous, [pointer]: problem };
+    });
+  }, []);
 
   // Re-read the file when the tab comes back, unless that would discard something typed.
   useOnActivate(active, () => {
@@ -143,15 +169,15 @@ export function ProjectCredentials({
     supersedeLoads();
     setSaving(true);
     setSaveFailure(null);
-    const result = await window.devteam.credentialsLocalPatch(projectId, view.hash, report.ops).catch(unreachable);
+    const result = await window.devteam.credentialsLocalPatch(projectId, view.hash, [...report.ops]).catch(unreachable);
     setSaving(false);
     if (result.ok) {
       setView(result.data);
-      setDrafts(EMPTY_DRAFTS);
+      clearEdits();
       toastResult(result, 'Saved the credentials file', 'credentials-save');
     } else if (result.kind === 'contract-breach' && result.reason === CREDENTIALS_SAVED_UNREADABLE) {
       // The write went through; only the answer was lost. Re-read rather than show a failed save.
-      setDrafts(EMPTY_DRAFTS);
+      clearEdits();
       toastPartialFailure('Saved the credentials file, but the response was unreadable', 'The file was reloaded to show what it holds now.');
       await load();
     } else {
@@ -168,7 +194,9 @@ export function ProjectCredentials({
   const reloading = loading && view !== null;
   const status = hasProblems
     ? `${Object.keys(report.problems).length} value needs fixing before you can save`
-    : `${report.changes} change${report.changes === 1 ? '' : 's'} not saved yet`;
+    : report.changes > MAX_OPS
+      ? `${report.changes} changes: save at most ${MAX_OPS} at a time`
+      : `${report.changes} change${report.changes === 1 ? '' : 's'} not saved yet`;
 
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -178,7 +206,7 @@ export function ProjectCredentials({
           Local credentials
         </h3>
         <p className="text-sm text-muted-foreground">
-          Staging and production access for the agents. Secrets are write-only: set or replace them here, never read back.
+          Settings, tokens and secrets the agents use, organised any way you like. Values marked secret are write-only.
         </p>
         {view !== null ? <p className="break-all font-mono text-xs text-muted-foreground">{view.path}</p> : null}
       </div>
@@ -236,7 +264,9 @@ export function ProjectCredentials({
             {report.changes > 0 ? status : ''}
           </p>
           <fieldset disabled={reloading || stale} className="m-0 min-w-0 border-0 p-0" aria-busy={reloading || undefined}>
-            <CredentialsForm view={view} drafts={drafts} report={report} disabled={busy || reloading || stale} onDrafts={setDrafts} />
+            {doc !== null ? (
+              <CredentialsEditor doc={doc} disabled={busy || reloading || stale} onEdit={onEdit} onProblem={onProblem} />
+            ) : null}
           </fieldset>
         </>
       )}
@@ -272,12 +302,12 @@ export function ProjectCredentials({
           invalid={Object.keys(report.problems).length}
           status={status}
           saving={saving}
-          canSave={!saving && !reloading && !stale && report.ops.length > 0 && !hasProblems && !gate.withheld}
+          canSave={!saving && !reloading && !stale && report.ops.length > 0 && report.ops.length <= MAX_OPS && !hasProblems && !gate.withheld}
           withheld={gate.withheld ? gate.reason : stale ? 'the file changed on disk; reload it first' : null}
           shortcut={false}
           label="Unsaved credential changes"
           onDiscard={() => {
-            setDrafts(EMPTY_DRAFTS);
+            clearEdits();
             if (!stale) setSaveFailure(null);
           }}
           onSave={() => void save()}
@@ -300,7 +330,7 @@ export function ProjectCredentials({
               variant="destructive"
               onClick={() => {
                 setConfirmReload(false);
-                setDrafts(EMPTY_DRAFTS);
+                clearEdits();
                 void load(true);
               }}
             >

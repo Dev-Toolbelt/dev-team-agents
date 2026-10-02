@@ -847,20 +847,34 @@ export interface CredentialsLocalView {
   readonly exists: boolean;
   readonly valid: boolean;
   readonly error: CredentialsLocalParseError | null;
-  /** sha256 of the raw bytes, `null` when the file does not exist. Pass it back as `expectHash`. */
+  /** A machine-keyed token of the raw bytes, `null` when the file does not exist. Pass it back as `expectHash`. */
   readonly hash: string | null;
-  /** The parsed file with every secret replaced by a `CredentialsSecretLeaf`; `null` unless `valid`. */
+  /**
+   * The parsed file, free-form. A value listed in its object's `$secrets`, or one whose name or
+   * content looks secret, is replaced by a `CredentialsSecretLeaf`; `null` unless `valid`.
+   */
   readonly data: Readonly<Record<string, unknown>> | null;
-  /** JSON pointers outside the template's known shape, to be shown read-only. */
-  readonly unknown_paths: readonly string[];
 }
 
-/** One edit for `cred local patch`; `pointer` is an RFC 6901 JSON pointer, `value` is required for `set`. */
-export interface CredentialsPatchOp {
-  readonly op: 'set' | 'unset';
-  readonly pointer: string;
-  readonly value?: unknown;
+/** What `cred local show` puts in place of a hidden value. `marked`: listed in `$secrets`, not just secret-looking. */
+export interface CredentialsSecretLeaf {
+  readonly secret: true;
+  readonly set: boolean;
+  readonly marked: boolean;
 }
+
+/** The reserved keys of the local credentials file (ADR-0024); every other key is the user's own. */
+export const CREDENTIALS_SECRETS_KEY = '$secrets';
+export const CREDENTIALS_PRODUCTION_KEY = '$production';
+
+/**
+ * One edit for `cred local patch`; pointers are RFC 6901. `set` needs `value`; `move` needs `from`
+ * and refuses an existing destination, so a hidden value can be renamed without the app holding it.
+ */
+export type CredentialsPatchOp =
+  | { readonly op: 'set'; readonly pointer: string; readonly value: unknown }
+  | { readonly op: 'unset'; readonly pointer: string }
+  | { readonly op: 'move'; readonly from: string; readonly pointer: string };
 
 /** `reason` on a refused `credentialsLocalPatch` when the file changed since it was read (exit 4). */
 export const CREDENTIALS_HASH_CONFLICT = 'hash-conflict';

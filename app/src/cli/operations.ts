@@ -1356,14 +1356,17 @@ export function credentialsOpsProblem(ops: unknown): string | null {
   for (const entry of ops) {
     if (!isRecord(entry)) return 'an edit is not an object';
     const { op, pointer } = entry;
-    if (op !== 'set' && op !== 'unset') return 'an edit\'s op is `set` or `unset`';
-    if (typeof pointer !== 'string' || !pointer.startsWith('/') || pointer.length > CREDENTIALS_MAX_POINTER) {
-      return 'an edit\'s pointer is a JSON pointer starting with "/"';
+    if (op !== 'set' && op !== 'unset' && op !== 'move') return 'an edit\'s op is `set`, `unset` or `move`';
+    const pointers = op === 'move' ? [pointer, entry['from']] : [pointer];
+    for (const candidate of pointers) {
+      if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.length > CREDENTIALS_MAX_POINTER) {
+        return 'an edit\'s pointer is a JSON pointer starting with "/"';
+      }
+      // eslint-disable-next-line no-control-regex
+      if (/[\u0000-\u001f\u007f]/.test(candidate)) return 'a pointer cannot contain control characters';
     }
-    // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u001f\u007f]/.test(pointer)) return 'a pointer cannot contain control characters';
     if (op === 'set' && (!('value' in entry) || entry['value'] === undefined)) return 'a `set` edit needs a value';
-    if (op === 'unset' && 'value' in entry) return 'an `unset` edit takes no value';
+    if (op !== 'set' && 'value' in entry) return `\`${op}\` takes no value`;
   }
   return null;
 }
@@ -1373,10 +1376,14 @@ export function isCredentialsOps(ops: unknown): ops is readonly CredentialsPatch
   return credentialsOpsProblem(ops) === null;
 }
 
-/** `[{op, pointer, value?}]` rebuilt from validated input, with only the three known keys. */
+/** The ops rebuilt from validated input, carrying only the keys each op defines. */
 function normalizeOps(ops: readonly CredentialsPatchOp[]): CredentialsPatchOp[] {
   return ops.map((entry) =>
-    entry.op === 'set' ? { op: 'set', pointer: entry.pointer, value: entry.value } : { op: 'unset', pointer: entry.pointer },
+    entry.op === 'set'
+      ? { op: 'set', pointer: entry.pointer, value: entry.value }
+      : entry.op === 'move'
+        ? { op: 'move', from: entry.from, pointer: entry.pointer }
+        : { op: 'unset', pointer: entry.pointer },
   );
 }
 
@@ -1421,7 +1428,6 @@ export function asCredentialsLocalView(body: Record<string, unknown>): Credentia
     error,
     hash: asNullableString(body['hash']),
     data: isRecord(data) ? { ...data } : null,
-    unknown_paths: asStringArray(body['unknown_paths']),
   };
 }
 
