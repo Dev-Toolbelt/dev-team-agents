@@ -176,9 +176,9 @@ If Step 0.5 selected a worktree finalize action (rebase, or rebase + merge + tea
 
 Skip this step entirely if `$ARGUMENTS` contained `dry-run`/`--dry-run`, no commit was actually made (e.g., the user chose "just show me" / aborted), `$ARGUMENTS` contains `--skip-learn`, the user explicitly asked to skip it, or `auto_learn_before_commit` in `.dev-team-agents/resolved/preferences.json` is `false` (default: `true`).
 
-**Session guard.** Check `.dev-team-agents/.learn-last-run` (format: `<unix-timestamp> <head-sha>`). Compare its `<head-sha>` against the current `git rev-parse HEAD` (now reflecting the commits just made, and any worktree rebase/merge), and its timestamp against the mtime of `.dev-team-agents/user-data/session-summary.md`. If HEAD hasn't moved since that marker was written and the session summary hasn't changed, skip — nothing new exists to capture.
+**Session guard.** Read `.dev-team-agents/.learn-last-run` (`<unix-timestamp> <head-sha>`, written by `/devteam:learn` § Step 5 with `date +%s` and the post-commit HEAD). Skip — nothing new to capture — only when `<head-sha>` equals the current `git rev-parse HEAD` (now reflecting the commits just made and any worktree rebase/merge) **and** `<unix-timestamp>` is not older than the mtime of `.dev-team-agents/user-data/session-summary.md`. A missing marker never skips.
 
-Otherwise, run `/devteam:learn` Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", stop. `/devteam:learn` Step 4 writes the run marker itself, now recording the post-commit HEAD.
+Otherwise, run `/devteam:learn` Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", stop. Then write the run marker exactly as `/devteam:learn` § Step 5 item 4 defines — Step 5 is not run here, so this command records it.
 
 ## $ARGUMENTS options
 

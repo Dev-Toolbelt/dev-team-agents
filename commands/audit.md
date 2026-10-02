@@ -185,7 +185,7 @@ Then:
    - Use `<module>` in lowercase, hyphens for spaces.
    - Example: audit of module `Billing` → `docs/audit/billing-audit-2026-07-27.md`.
 2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.
-3. Nudge `/devteam:learn` per the merge.md Step 4 marker check (`.dev-team-agents/.learn-last-run`) — this report is a finalization signal even on **Report only**.
+3. Nudge `/devteam:learn` — run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip; this report is a finalization signal even on **Report only**.
 
 ---
 
