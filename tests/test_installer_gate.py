@@ -176,5 +176,82 @@ class InstallerGateTest(AuthTestCase):
                 self.assertFalse((project / ".dev-team-agents").exists())
 
 
+@requires_bash()
+class UpdateScriptGateTest(AuthTestCase):
+    """`scripts/update.sh` end to end, with the download and the re-render stubbed at their seams."""
+
+    def setUp(self):
+        super().setUp()
+        self.fake_home = self.tmp / "fake-home"
+        self.fake_home.mkdir()
+
+    def _install(self, mode, drop_cli=False):
+        """A project with a copy of ``scripts/`` as its installed, unbound `.dev-team-agents/`."""
+        root = self.tmp / "update-project-{}".format(mode + ("-nocli" if drop_cli else ""))
+        scripts = root / ".dev-team-agents" / "scripts"
+        shutil.copytree(REPO_ROOT / "scripts", scripts, ignore=shutil.ignore_patterns("__pycache__"))
+        (scripts / "helpers" / "telemetry-send.sh").unlink()
+        config = scripts / "lib" / "auth-config.json"
+        data = json.loads(config.read_text())
+        data["gate_mode"] = mode
+        config.write_text(json.dumps(data))
+        if drop_cli:
+            shutil.rmtree(scripts / "cli")
+        # The two seams: what the update downloads, and what re-renders the provider trees.
+        (scripts / "lib" / "installer-fetch.sh").write_text(
+            "dta_have_http_tool() { return 0; }\n"
+            "dta_resolve_ref() { echo v9.9.9; }\n"
+            "dta_fetch_installer() { printf 'echo CORE-UPDATED >> \"$MARKS\"\\n' > \"$1\"; }\n"
+        )
+        (scripts / "lib" / "provider-ownership.sh").write_text(
+            "po_rerender_providers() { echo RERENDERED >> \"$MARKS\"; }\n"
+        )
+        return root, scripts
+
+    def _update(self, root, scripts, path=None):
+        marks = self.tmp / "marks-{}".format(root.name)
+        env = dict(os.environ, HOME=str(self.fake_home), MARKS=str(marks))
+        if path is not None:
+            env["PATH"] = path
+        result = subprocess.run(
+            ["bash", str(scripts / "update.sh")], cwd=str(root), env=env,
+            capture_output=True, text=True, timeout=120,
+        )
+        done = marks.read_text().split() if marks.exists() else []
+        return result, done
+
+    def test_enforce_updates_the_core_but_withholds_the_provider_re_render(self):
+        root, scripts = self._install("enforce")
+        result, done = self._update(root, scripts)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(done, ["CORE-UPDATED"])
+        self.assertIn("NOT re-rendered", result.stderr)
+        self.assertIn("devteam auth login", result.stderr)
+
+    def test_warn_updates_and_re_renders_with_a_notice(self):
+        root, scripts = self._install("warn")
+        result, done = self._update(root, scripts)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(done, ["CORE-UPDATED", "RERENDERED"])
+        self.assertIn("upcoming release", result.stderr)
+
+    def test_an_entitled_account_re_renders_under_enforce(self):
+        self.sign_in()
+        root, scripts = self._install("enforce")
+        result, done = self._update(root, scripts)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(done, ["CORE-UPDATED", "RERENDERED"])
+
+    def test_a_tree_with_no_cli_notes_the_skip_and_re_renders(self):
+        root, scripts = self._install("enforce", drop_cli=True)
+        path = os.pathsep.join(
+            d for d in os.environ.get("PATH", "").split(os.pathsep) if not (Path(d) / "devteam").exists()
+        )
+        result, done = self._update(root, scripts, path=path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(done, ["CORE-UPDATED", "RERENDERED"])
+        self.assertIn("skipped", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
