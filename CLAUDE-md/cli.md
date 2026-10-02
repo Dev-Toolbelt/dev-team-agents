@@ -176,7 +176,7 @@ mode.
 | `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
 | `devteam auth login (--google \| --github \| --email <addr> [--password [--signup]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password. Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
 | `devteam auth logout` | Revoke the session on the server (best effort), then **always** remove the refresh token, `entitlement.json` and `account-session.json` locally; reports which parts succeeded |
-| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it (the session-start hook and installers use it) |
+| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it. The delegated installers call `check --json`; the session-start banner reads the cache itself and never calls the CLI |
 | `devteam auth otp start --email <addr> \| verify --email <addr>` | The two-step form of `login --email`, for the desktop app. `start` answers identically for every address |
 | `devteam auth password reset --email <addr> [--send-code \| --finish] \| change` | Reset with an emailed recovery code (`--send-code` only sends; `--finish` reads code then new password from stdin; neither flag does both). `change` reads current then new password. Both revoke the account's other sessions |
 | `devteam auth profile [show] \| update --name <n> \| identities \| email --new <addr> [--confirm] \| link \| unlink --google\|--github` | The account profile. Unlinking the last sign-in method is refused (exit 1, `details.reason: "last_identity"`) |
@@ -397,6 +397,28 @@ listener), on top of `entitlement.py`. None imports telemetry.
   else — no file, preference or other variable — changes the endpoint or the keys.
 - **Client gate.** Every `auth` leaf is `READ_ONLY` in `compat.py`: it writes only machine-local
   session records that are not declared store shapes, and a user must always be able to sign in.
+- **Account gate** (`gate.py`, SR-30). `main()` calls `gate.apply()` after the group-usage check and
+  before the handler, in-process through `auth.cmd_check` (no subprocess), so its decision, exit
+  codes and message are `auth check`'s. The exempt list is an **allowlist on the parsed command
+  path** (`gate.EXEMPT`): `auth *`, `version`, `path`, `compat`, `doctor`, `unbind`, `uninstall`,
+  `export`, `quarantine restore`. Everything else, including a command added later, is gated;
+  `tests/test_auth_gate.py` walks the real parser to prove it. `gate_mode` in the compiled
+  `scripts/lib/auth-config.json` is `warn` (default, and when the key is absent) or `enforce`
+  (any other value reads as `enforce`, so a typo never opens the gate). `warn` prints one stderr
+  line and runs the command, leaving the `--json` document unchanged; `enforce` refuses with exit
+  1 (not entitled) or 3 (an online check is needed and could not be made) and the remedy
+  `devteam auth login`. A cached license inside its offline window is entitled, so it never
+  blocks. While blocked, `devteam update` still installs the core (hook fixes must reach blocked
+  users) but its project sync is withheld; `sync`, `bind`, `upgrade` and `migrate` stay gated.
+  The gate runs after the one-time layout adoption, so a refusal does not skip a store migration.
+- **Installers.** `install-opencode.sh`, `install-codex.sh`, `install-provider.sh` and `update.sh`
+  (before it re-renders the opencode/Codex trees; the core update above is never gated) source
+  `scripts/lib/auth-gate.sh` and call `ag_gate` before their first write: it runs
+  `devteam auth check --json` (the tree's own `scripts/cli/devteam`, else `devteam` on PATH),
+  reads `gate_mode` from the same config, and returns 0 (proceed) or **5** (blocked, `enforce`
+  only). Exits 1, 3 and 4 from `check` are blocked-class; any other exit, or no CLI at all, skips
+  the gate with a stderr note rather than failing the install. `--dry-run` and `--list-targets`
+  are never gated. `tests/test_installer_gate.py` iterates `ALL_PROVIDERS` with a per-provider map.
 
 ## Compatibility block in `version`
 
