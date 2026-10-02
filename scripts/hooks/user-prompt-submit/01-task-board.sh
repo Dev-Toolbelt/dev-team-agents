@@ -30,11 +30,21 @@ devteam_task_board_init || exit 0
 SESSION="$(devteam_task_board_session_id "$INPUT")"
 if [ -n "$SESSION" ]; then
     devteam_task_board_clear_turn "$SESSION"
-    FIRST_LINE="${TAIL%%\\n*}"
+    # The first non-blank line: a prompt that opens with a blank line would otherwise keep nothing.
+    # Bounded: a pasted run of blank lines must not make every prompt pay for it.
+    BODY="${TAIL#*\"}"
+    for _ in {1..64}; do
+        case "$BODY" in
+            \\n*|\\r*|\\t*) BODY="${BODY:2}" ;;
+            " "*) BODY="${BODY:1}" ;;
+            *) break ;;
+        esac
+    done
+    FIRST_LINE="${BODY%%\\n*}"
     (
         umask 077
         mkdir -p "${TB_STATE_DIR}/task-board" 2>/dev/null &&
-            printf '%s' "${FIRST_LINE:0:512}" > "${TB_STATE_DIR}/task-board/.prompt-${SESSION}"
+            printf '"%s' "${FIRST_LINE:0:512}" > "${TB_STATE_DIR}/task-board/.prompt-${SESSION}"
     ) 2>/dev/null
 fi
 
