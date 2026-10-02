@@ -16,6 +16,7 @@ import {
   SquareTerminal,
   TriangleAlert,
   Braces,
+  CalendarPlus,
   XCircle,
 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ import {
   boardProjectName,
   buildKanban,
   countUnshown,
+  formatDateTime,
   formatDuration,
   formatDurationMinutes,
   isRunning,
@@ -510,27 +512,28 @@ function DirectBadge() {
 const TURNS_SHOWN = 3;
 
 /**
- * The prompts behind a direct card, newest first. Only the latest few are listed; the rest sit
- * behind a button, so a long session does not stretch the card.
+ * The prompts behind a direct card, numbered in the order they were sent. Only the latest few
+ * are listed, keeping their real numbers; the earlier ones sit behind a button, so a long
+ * session does not stretch the card.
  */
 function DirectTurns({ turns }: { turns: readonly BoardTurn[] }) {
   const [all, setAll] = useState(false);
   const id = useId();
-  const newest = [...turns].reverse();
-  const shown = all ? newest : newest.slice(0, TURNS_SHOWN);
-  const hidden = newest.length - TURNS_SHOWN;
+  const hidden = Math.max(0, turns.length - TURNS_SHOWN);
+  const first = all ? 0 : hidden;
+  const shown = turns.slice(first);
   return (
     <div className="mt-2 text-xs text-muted-foreground">
       <p className="sr-only" id={`${id}-label`}>
-        Prompts behind this work, newest first
+        Prompts behind this work, in order
       </p>
-      <ul aria-labelledby={`${id}-label`} className="space-y-0.5">
+      <ol aria-labelledby={`${id}-label`} start={first + 1} className="list-decimal space-y-0.5 pl-5 marker:tabular-nums">
         {shown.map((turn, index) => (
-          <li key={`${turn.at}-${index}`} className="break-words [overflow-wrap:anywhere]">
+          <li key={`${turn.at}-${first + index}`} className="break-words [overflow-wrap:anywhere]">
             {turn.text === '' ? <span title="The prompt was not captured">{'\u2014'}</span> : turn.text}
           </li>
         ))}
-      </ul>
+      </ol>
       {hidden > 0 ? (
         <button
           type="button"
@@ -538,7 +541,7 @@ function DirectTurns({ turns }: { turns: readonly BoardTurn[] }) {
           onClick={() => setAll((was) => !was)}
           className="mt-1 rounded-sm underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
         >
-          {all ? 'Show fewer' : `+${hidden} more`}
+          {all ? 'Show fewer' : `+${hidden} earlier`}
         </button>
       ) : null}
     </div>
@@ -1117,13 +1120,16 @@ const TaskCard = memo(function TaskCard({
   const toggle = useRef<HTMLButtonElement>(null);
   const running = isRunning(session, task);
   const inColumn = timeInColumn(session, task, now, running, asOf);
-  const steps = stepDurations(task, now, running, inColumn, asOf);
+  // Done is where a task ends, not a step it spends time in: the row says when it finished.
+  const steps = stepDurations(task, now, running, inColumn, asOf).filter((step) => step.status !== 'completed');
   // Only the in-progress card is on the one-second clock; the others refresh once a minute, so
   // their seconds would be stale the moment they are drawn.
   const format = task.column === 'in_progress' ? formatDuration : formatDurationMinutes;
   const where = session.branch ?? 'no branch';
   const split = task.kind === 'agent' ? splitAgentTask(task.content) : null;
-  const title = split?.title ?? task.content;
+  // A direct card is the session's own work, so it carries the session's name — the provider's
+  // current title, renames included (the CLI re-reads it) — and the Direct badge says what it is.
+  const title = task.kind === 'direct' ? (session.title ?? task.content) : (split?.title ?? task.content);
   return (
     <li className="min-w-0">
       <article
@@ -1150,6 +1156,13 @@ const TaskCard = memo(function TaskCard({
             <Clock className="size-3" aria-hidden="true" />
             <span className="sr-only">Time in this column: </span>
             {format(inColumn)}
+          </span>
+          <span className="inline-flex items-center gap-1" title="Created at">
+            <CalendarPlus className="size-3" aria-hidden="true" />
+            <span className="sr-only">Created at </span>
+            <time dateTime={new Date(task.created_at * 1000).toISOString()} className="tabular-nums">
+              {formatDateTime(task.created_at)}
+            </time>
           </span>
           {task.worktree !== null ? <WorktreeMark worktree={task.worktree} /> : null}
           {task.pr !== null ? (
@@ -1186,7 +1199,7 @@ const TaskCard = memo(function TaskCard({
             type="button"
             aria-expanded={open}
             aria-controls={detailId}
-            aria-label={`Time per step, ${task.content}`}
+            aria-label={`Time per step, ${title}`}
             onClick={() => setOpen((was) => !was)}
             className="inline-flex items-center gap-1 rounded-sm underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
           >
@@ -1205,6 +1218,14 @@ const TaskCard = memo(function TaskCard({
                 <span className="tabular-nums">{format(step.seconds)}</span>
               </li>
             ))}
+            {task.completed_at !== null ? (
+              <li className="flex justify-between gap-4">
+                <span>Finished at</span>
+                <time dateTime={new Date(task.completed_at * 1000).toISOString()} className="tabular-nums">
+                  {formatDateTime(task.completed_at)}
+                </time>
+              </li>
+            ) : null}
           </ul>
         </div>
       </article>

@@ -137,27 +137,49 @@ function Children({ ctx, path, node, depth }: { ctx: Ctx; path: Path; node: unkn
   if (shown.length === 0 && ctx.hits === null) return <p className="text-sm text-muted-foreground">Empty.</p>;
   return (
     <ul className="space-y-2" role="list">
-      {shown.map(([key, value]) => (
-        <li key={String(key)}>
-          {isContainer(value) ? (
-            <Group ctx={ctx} path={[...path, key]} node={value} depth={depth} />
-          ) : (
-            <Field ctx={ctx} path={[...path, key]} value={value} />
-          )}
-        </li>
-      ))}
+      {shown.map(([key, value], index) => {
+        // Alternate rows over what is shown (a search filters the list), so neighbours stay
+        // apart at a glance; counted per list, so a group's own rows start over.
+        const stripe = index % 2 === 1 ? 'odd' : 'even';
+        return (
+          <li key={String(key)} data-stripe={stripe}>
+            {isContainer(value) ? (
+              <Group ctx={ctx} path={[...path, key]} node={value} depth={depth} stripe={stripe} />
+            ) : (
+              <Field ctx={ctx} path={[...path, key]} value={value} stripe={stripe} />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-function Group({ ctx, path, node, depth }: { ctx: Ctx; path: Path; node: Record<string, unknown> | unknown[]; depth: number }) {
+type Stripe = 'odd' | 'even';
+
+/** The second, fourth… row of a list: a faint tint, the same in both schemes through `--muted`. */
+const STRIPE_CLASS: Readonly<Record<Stripe, string>> = { odd: 'bg-muted/40', even: 'bg-transparent' };
+
+function Group({
+  ctx,
+  path,
+  node,
+  depth,
+  stripe = 'even',
+}: {
+  ctx: Ctx;
+  path: Path;
+  node: Record<string, unknown> | unknown[];
+  depth: number;
+  stripe?: Stripe;
+}) {
   const [open, setOpen] = useState(depth < 2);
   const expanded = open || ctx.hits !== null;
   const id = slug(pointerOf(path));
   const production = productionAt(ctx.doc, path);
   const isList = Array.isArray(node);
   return (
-    <section aria-labelledby={`${id}-name`} className="rounded-lg border">
+    <section aria-labelledby={`${id}-name`} className={cn('rounded-lg border', STRIPE_CLASS[stripe])}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <IconAction
           label={`${expanded ? 'Collapse' : 'Expand'} ${labelOf(path)}`}
@@ -199,13 +221,13 @@ function Group({ ctx, path, node, depth }: { ctx: Ctx; path: Path; node: Record<
   );
 }
 
-function Field({ ctx, path, value }: { ctx: Ctx; path: Path; value: unknown }) {
+function Field({ ctx, path, value, stripe = 'even' }: { ctx: Ctx; path: Path; value: unknown; stripe?: Stripe }) {
   const id = slug(pointerOf(path));
   const key = path[path.length - 1];
   const markedHere = typeof key === 'string' && markedIn(valueAt(ctx.doc, path.slice(0, -1))).has(key);
   const hidden = isSecretLeaf(value) || markedHere;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cn('-mx-2 flex flex-wrap items-center gap-2 rounded-md px-2 py-1', STRIPE_CLASS[stripe])}>
       <div className="w-48 min-w-0 shrink-0">
         <KeyName path={path} id={`${id}-name`} />
       </div>

@@ -70,6 +70,20 @@ export function formatDurationMinutes(seconds: number): string {
   return formatDuration(total < 60 ? total : Math.floor(total / 60) * 60);
 }
 
+/**
+ * A moment as date plus `HH:mm` in the viewer's locale (`02/10/2026 10:47` under pt-BR), 24-hour
+ * clock. `locale` and `timeZone` exist for the tests; the app passes neither.
+ */
+export function formatDateTime(epochSeconds: number, locale?: string, timeZone?: string): string {
+  const at = new Date(epochSeconds * 1000);
+  const zone = timeZone !== undefined ? { timeZone } : {};
+  // Two formatters joined by a space: one combined format puts a locale's own separator
+  // (`02/10/2026, 10:47`) between the halves.
+  const date = new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric', ...zone }).format(at);
+  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...zone }).format(at);
+  return `${date} ${time}`;
+}
+
 /** Tasks the CLI counts in these sessions that were not parsed into a card (unknown column and status). */
 export function countUnshown(sessions: readonly BoardSession[]): number {
   return sessions.reduce((n, session) => n + Math.max(0, session.counts.total - session.tasks.length), 0);
