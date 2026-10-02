@@ -38,6 +38,19 @@ def codex_shell(session, command, **extra):
                  "tool_input": {"command": command}}, **extra)
 
 
+def claude_read(session, **extra):
+    return dict({"session_id": session, "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, **extra)
+
+
+def codex_read(session, **extra):
+    return dict({"session_id": session, "turn_id": "turn-1", "tool_name": "mcp__docs__search",
+                 "tool_input": {"q": "x"}}, **extra)
+
+
+def opencode_read(session, **extra):
+    return dict({"sessionID": session, "tool": "read", "args": {"filePath": "a.py"}}, **extra)
+
+
 def opencode_edit(session, **extra):
     return dict({"sessionID": session, "tool": "edit", "args": {"filePath": "a.py"}}, **extra)
 
@@ -46,12 +59,12 @@ def opencode_shell(session, command, **extra):
     return dict({"sessionID": session, "tool": "bash", "args": {"command": command}}, **extra)
 
 
-#: One (edit, shell) pair per provider in `providers.ALL_PROVIDERS`: a provider added without a
-#: case fails `test_every_provider_has_its_direct_capture_decided`.
+#: One (edit, shell, read) triple per provider in `providers.ALL_PROVIDERS`: a provider added
+#: without a case fails `test_every_provider_has_its_direct_capture_decided`.
 CALLS = {
-    "claude": (claude_edit, claude_shell),
-    "codex": (codex_edit, codex_shell),
-    "opencode": (opencode_edit, opencode_shell),
+    "claude": (claude_edit, claude_shell, claude_read),
+    "codex": (codex_edit, codex_shell, codex_read),
+    "opencode": (opencode_edit, opencode_shell, opencode_read),
 }
 
 
@@ -142,7 +155,7 @@ class DirectWorkTest(BoardCase):
     def test_an_edit_and_a_write_shaped_shell_call_open_one_card_on_every_provider(self):
         for provider in providers.ALL_PROVIDERS:
             with self.subTest(provider=provider):
-                edit, shell = CALLS[provider]
+                edit, shell, _ = CALLS[provider]
                 session = "d-" + provider
                 self.prompt(session, "fix the login bug", T0)
                 self.assertTrue(self.rec(edit(session), now=T0 + 1)["recorded"])
@@ -152,10 +165,57 @@ class DirectWorkTest(BoardCase):
                 self.assertEqual(card["turns"], [{"text": "fix the login bug", "at": T0}])
                 self.assertEqual(self.load(session)["provider"], provider)
 
-    def test_a_read_only_shell_call_is_not_work(self):
+    def test_a_read_only_turn_opens_the_card_in_to_do_on_every_provider(self):
         for provider in providers.ALL_PROVIDERS:
-            _, shell = CALLS[provider]
-            self.assertFalse(self.rec(shell("r-" + provider, "git status"))["recorded"], provider)
+            with self.subTest(provider=provider):
+                _, shell, read = CALLS[provider]
+                session = "r-" + provider
+                self.prompt(session, "are the containers healthy?", T0)
+                self.assertTrue(self.rec(shell(session, "git status"), now=T0 + 1)["recorded"])
+                self.assertTrue(self.rec(read(session), now=T0 + 2)["recorded"])
+                (card,) = self.directs(session)
+                self.assertEqual(card["status"], "pending")
+                self.assertEqual(card["turns"], [{"text": "are the containers healthy?", "at": T0}])
+                tasks.mark(self.root, {"session_id": session, "sessionID": session}, "idle", now=T0 + 3)
+                self.assertEqual(self.directs(session)[0]["status"], "pending")
+
+    def test_a_write_promotes_the_card_and_a_later_read_never_demotes_it(self):
+        self.prompt("s1", "check then fix", T0)
+        self.rec(claude_read("s1"), now=T0 + 1)
+        self.rec(claude_edit("s1"), now=T0 + 2)
+        self.rec(claude_read("s1"), now=T0 + 3)
+        (card,) = self.directs("s1")
+        self.assertEqual([h["status"] for h in card["history"]], ["pending", "in_progress"])
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 4)
+        self.assertEqual(self.directs("s1")[0]["status"], "completed")
+        # The card follows the latest turn: a question after the work is something to do again.
+        self.prompt("s1", "and the logs?", T0 + 10)
+        self.rec(claude_read("s1"), now=T0 + 11)
+        (card,) = self.directs("s1")
+        self.assertEqual(card["status"], "pending")
+        self.assertEqual([t["text"] for t in card["turns"]], ["check then fix", "and the logs?"])
+
+    def test_a_read_turn_covered_by_a_plan_retires_the_card_at_stop(self):
+        self.prompt("s1", "plan the feature", T0)
+        self.rec(claude_read("s1"), now=T0 + 1)
+        self.rec(todo_write("s1", [todo("Step 1: A", "pending")]), now=T0 + 2)
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 3)
+        (card,) = self.directs("s1")
+        self.assertEqual((card["status"], card["removed_at"]), ("pending", T0 + 3))
+        self.assertNotIn("direct", [t["kind"] for t in self.view(now=T0 + 5)[0]["sessions"][0]["tasks"]])
+
+    def test_a_card_left_in_to_do_is_not_abandoned_work(self):
+        self.prompt("s1", "a question", T0)
+        self.rec(claude_read("s1"), now=T0 + 1)
+        result = tasks.mark(self.root, {"session_id": "s1"}, "ended", now=T0 + 2)
+        self.assertEqual(result["open"], 0)
+        (view,) = self.view(now=T0 + 5)[0]["sessions"][0]["tasks"]
+        self.assertEqual((view["kind"], view["column"], view["abandoned"]), ("direct", "todo", False))
+
+    def test_the_todo_tools_that_only_read_their_list_are_not_work(self):
+        for payload in ({"session_id": "s1", "tool_name": "TaskList", "tool_input": {}},
+                        {"sessionID": "s1", "tool": "todoread", "args": {}}):
+            self.assertFalse(self.rec(payload)["recorded"], payload)
 
     def test_a_subagents_edit_is_its_agent_tasks_work(self):
         self.assertFalse(self.rec(claude_edit("s1", agent_id="a1"))["recorded"])
@@ -263,21 +323,32 @@ class DirectHookTest(tt.HookTest):
     def test_every_provider_reaches_the_card_through_the_dispatcher(self):
         for provider in providers.ALL_PROVIDERS:
             with self.subTest(provider=provider):
-                edit, _ = CALLS[provider]
+                edit, _, _ = CALLS[provider]
                 session = "h-" + provider
                 self.assertEqual(self.run_script(PRE_TOOL_USE, edit(session)).stdout, b"")
                 self.assertEqual(self.load(session)["tasks"][0]["kind"], "direct")
 
-    def test_read_only_and_subagent_calls_fork_no_python(self):
-        payloads = [
-            claude_edit("s1", agent_id="a1"), opencode_edit("s1", parent_id="p1"),
-            {"tool_name": "Read", "session_id": "s1", "tool_input": {"file_path": "x"}},
-        ]
-        for command in READ_COMMANDS:
-            payloads += [claude_shell("s1", command), codex_shell("s1", command), opencode_shell("s1", command)]
-        for payload in payloads:
+    def test_subagent_and_list_reading_calls_fork_no_python(self):
+        for payload in (claude_edit("s1", agent_id="a1"), claude_read("s1", agent_id="a1"),
+                        opencode_edit("s1", parent_id="p1"), {"session_id": "s1", "tool_name": "TaskList"}):
             self.run_script(PRE_TOOL_USE, payload)
         self.assertEqual(self.python_calls(), 0)
+
+    def test_at_most_two_python_calls_a_turn_one_for_reads_one_for_writes(self):
+        self.run_script(USER_PROMPT, {"session_id": "s1", "prompt": "look, then fix"})
+        for command in READ_COMMANDS:
+            self.run_script(PRE_TOOL_USE, claude_shell("s1", command, cwd=str(self.root)))
+        self.run_script(PRE_TOOL_USE, claude_read("s1", cwd=str(self.root)))
+        self.assertEqual(self.python_calls(), 1)
+        for _ in range(3):
+            self.run_script(PRE_TOOL_USE, claude_edit("s1", cwd=str(self.root)))
+            self.run_script(PRE_TOOL_USE, claude_read("s1", cwd=str(self.root)))
+        self.assertEqual(self.python_calls(), 2)
+        self.assertEqual(self.load("s1")["tasks"][0]["status"], "in_progress")
+        payload = self.tmp / "stop.json"
+        payload.write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
+        self.run_script(STOP_SUB, "", extra_env={"DEVTEAM_HOOK_PAYLOAD": str(payload)})
+        self.assertEqual(sorted(p.name for p in self.board().glob(".direct*")), [])
 
     def test_the_gate_lets_every_write_through(self):
         # The gate must be a superset of `tasks.writes()`, or a real write never reaches the CLI.

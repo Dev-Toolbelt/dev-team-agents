@@ -129,7 +129,7 @@ class NormalizeTest(unittest.TestCase):
 
     def test_anything_unreadable_or_foreign_is_none(self):
         for payload in (
-            None, [], "x", {}, {"tool_name": "Bash", "session_id": "s"},
+            None, [], "x", {}, {"tool_name": "Bash"}, {"tool_name": "TaskList", "session_id": "s"},
             {"tool_name": "TodoWrite", "session_id": "s", "tool_input": {"todos": "nope"}},
             {"tool_name": "TodoWrite", "tool_input": {"todos": []}},  # no session id
             {"tool_name": "TaskUpdate", "session_id": "s", "tool_input": {}},
@@ -737,7 +737,9 @@ class HookTest(BoardCase):
         path = self.state / "notifications.jsonl"
         return [json.loads(l) for l in path.read_text().splitlines()] if path.is_file() else []
 
-    def test_pre_tool_use_forks_no_python_for_any_other_tool(self):
+    def test_pre_tool_use_forks_python_once_a_turn_for_any_other_tool(self):
+        # Any other tool is the session's own work (test_direct_work.py): the first call of a
+        # turn forks the CLI once, and every later read leaves on the turn's marker.
         for payload in (
             {"tool_name": "Bash", "tool_input": {"command": "ls"}, "session_id": "s"},
             {"tool_name": "Bash", "tool_input": {"command": "echo update_plan todowrite"}, "session_id": "s"},
@@ -747,8 +749,8 @@ class HookTest(BoardCase):
         ):
             result = self.run_script(PRE_TOOL_USE, payload)
             self.assertEqual((result.stdout, result.stderr), (b"", b""))
-        self.assertEqual(self.python_calls(), 0)
-        self.assertEqual(list((self.state / "task-board").glob("*")) if (self.state / "task-board").exists() else [], [])
+        self.assertEqual(self.python_calls(), 1)
+        self.assertTrue((self.state / "task-board" / ".direct-s").is_file())
 
     def test_pre_tool_use_records_codex_and_opencode_todo_calls(self):
         self.assertEqual(self.run_script(PRE_TOOL_USE, codex_plan("c1", [("Ship", "in_progress")])).stdout, b"")

@@ -252,7 +252,7 @@ describe('openTaskLink IPC', () => {
       trustedRenderer: TRUSTED_RENDERER,
       feed: () => ({ status: 'live', detail: null, projects: [] }),
       refresh: () => Promise.resolve({ status: 'live', detail: null, projects: [] }),
-      boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7 }),
+      boardSettings: () => Promise.resolve({ staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 }),
       saveBoardSettings: (settings) => Promise.resolve(settings),
       linkFor: () => GOOD,
       openExternal: (url) => openExternal(url, { activate: true }),

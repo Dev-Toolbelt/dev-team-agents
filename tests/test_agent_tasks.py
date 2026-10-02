@@ -569,7 +569,9 @@ class AgentHookTest(tt.HookTest):
                 self.assertEqual((result.stdout, result.stderr), (b"", b""))
         # `TaskCreate` is a todo tool: only the post hook records it, the pre hook ignores it.
         self.run_script(PRE_TOOL_USE, {"tool_name": "TaskCreate", "session_id": "s1", "tool_input": {"subject": "backend-developer"}})
-        self.assertEqual(self.python_calls(), 0)
+        # None of them is an agent call; the first is the session's own work (one fork a turn).
+        self.assertEqual(self.python_calls(), 1)
+        self.assertFalse(any(t.get("kind") == "agent" for t in self.load("s1")["tasks"]))
 
     def test_a_spawn_with_no_agent_type_forks_no_python(self):
         for payload in (
