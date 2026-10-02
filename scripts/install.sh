@@ -51,8 +51,14 @@ case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*) export MSYS=winsymlinks:nativest
 # (`curl ... | bash`), there is no source file and BASH_SOURCE is empty;
 # under `set -u` that made `${BASH_SOURCE[0]}` an unbound-variable error
 # before this fell back to $0.
-_INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-if [ -f "$_INSTALL_SH_DIR/lib/state.sh" ]; then
+# Only a BASH_SOURCE that names a real file counts as "this installer's
+# location". Piped into bash, $0 is `bash`, whose dirname is `.` — falling back
+# to it would source ./lib/state.sh from the user's CWD, i.e. run project code.
+_INSTALL_SH_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    _INSTALL_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+if [ -n "$_INSTALL_SH_DIR" ] && [ -f "$_INSTALL_SH_DIR/lib/state.sh" ]; then
     # shellcheck source=scripts/lib/state.sh
     source "$_INSTALL_SH_DIR/lib/state.sh"
 else
@@ -1272,6 +1278,7 @@ else
   "worktree_active": true,
   "worktree_base_branch": null,
   "worktree_commit_action": "ask",
+  "auto_learn_before_commit": true,
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
