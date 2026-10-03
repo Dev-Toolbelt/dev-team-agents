@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -79,10 +79,16 @@ function IconAction({
   );
 }
 
+interface Bulk {
+  readonly open: boolean;
+}
+
 interface Ctx {
   doc: Doc;
   disabled: boolean;
   hits: ReadonlySet<string> | null;
+  /** The last "Expand all" / "Collapse all", which every group follows until toggled by hand. */
+  bulk: Bulk | null;
   onEdit: (edit: Edit) => void;
   onProblem: (pointer: string, problem: string | null) => void;
 }
@@ -104,21 +110,47 @@ export function CredentialsEditor({
   onProblem: (pointer: string, problem: string | null) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [bulk, setBulk] = useState<Bulk | null>(null);
   const hits = searchHits(doc, query);
-  const ctx: Ctx = { doc, disabled, hits, onEdit, onProblem };
+  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem };
   const empty = hits !== null && hits.size === 0;
+  const hasGroups = Object.entries(doc).some(([key, value]) => !isReserved(key) && isContainer(value));
+  // A search opens every group it matches, so neither action would change what is drawn.
+  const searching = hits !== null;
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input
-          type="search"
-          value={query}
-          placeholder="Search keys and visible values"
-          aria-label="Search credentials"
-          className="pl-8"
-          onChange={(event) => setQuery(event.target.value)}
-        />
+      <div className="flex items-center gap-1">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            type="search"
+            value={query}
+            placeholder="Search keys and visible values"
+            aria-label="Search credentials"
+            className="pl-8"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        {hasGroups ? (
+          <>
+            <IconAction
+              label="Expand all groups"
+              hint={searching ? 'Clear the search first' : 'Expand all'}
+              disabled={searching}
+              onClick={() => setBulk({ open: true })}
+            >
+              <ChevronsUpDown aria-hidden="true" />
+            </IconAction>
+            <IconAction
+              label="Collapse all groups"
+              hint={searching ? 'Clear the search first' : 'Collapse all'}
+              disabled={searching}
+              onClick={() => setBulk({ open: false })}
+            >
+              <ChevronsDownUp aria-hidden="true" />
+            </IconAction>
+          </>
+        ) : null}
       </div>
       {empty ? <p className="text-sm text-muted-foreground">Nothing matches “{query.trim()}”. Secret values are never searched.</p> : null}
       <Children ctx={ctx} path={[]} node={doc} depth={0} />
@@ -173,7 +205,11 @@ function Group({
   depth: number;
   stripe?: Stripe;
 }) {
-  const [open, setOpen] = useState(depth < 2);
+  const [open, setOpen] = useState(ctx.bulk?.open ?? depth < 2);
+  // A fresh object per click, so repeating an action still reaches a group toggled by hand since.
+  useEffect(() => {
+    if (ctx.bulk !== null) setOpen(ctx.bulk.open);
+  }, [ctx.bulk]);
   const expanded = open || ctx.hits !== null;
   const id = slug(pointerOf(path));
   const production = productionAt(ctx.doc, path);
