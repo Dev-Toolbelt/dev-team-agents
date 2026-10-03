@@ -63,29 +63,29 @@ otp_expiry = 600
 
 [auth.email.template.confirmation]
 subject = "Confirm your devteam account / Confirme sua conta devteam"
-content_path = "./templates/confirmation.html"
+content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.magic_link]
 subject = "Your devteam sign-in code / Seu código de acesso devteam"
-content_path = "./templates/otp-sign-in.html"
+content_path = "./supabase/templates/otp-sign-in.html"
 
 [auth.email.template.recovery]
 subject = "Your devteam password reset code / Seu código de redefinição de senha devteam"
-content_path = "./templates/recovery.html"
+content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.email_change]
 subject = "Confirm your new email / Confirme seu novo e-mail"
-content_path = "./templates/email-change.html"
+content_path = "./supabase/templates/email-change.html"
 
 [auth.email.template.reauthentication]
 subject = "Your devteam verification code / Seu código de verificação devteam"
-content_path = "./templates/reauthentication.html"
+content_path = "./supabase/templates/reauthentication.html"
 
 # SR-13: transactional security notice after a password change. Requires a recent CLI.
 [auth.email.notification.password_changed]
 enabled = true
 subject = "Your devteam password was changed / Sua senha devteam foi alterada"
-content_path = "./templates/password-changed.html"
+content_path = "./supabase/templates/password-changed.html"
 
 [auth.email.smtp]
 enabled = true
