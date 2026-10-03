@@ -837,6 +837,29 @@ winget_scaffold() {
 advisory "homebrew: release placeholders" homebrew_placeholders
 advisory "winget: unreleased scaffold" winget_scaffold
 
+# ── Service-role credentials (ADR-0029 SR-36) ───────────────────────────────
+# The repository and the package a user receives (the tree after apply_strip) must carry
+# no Supabase service-role key: it bypasses every row-level policy.
+service_role_scan() {
+  local stage rc=0
+  # No RETURN trap for the cleanup: `source` below fires RETURN traps too, which would delete
+  # the staged tree before it is scanned.
+  stage="$(mktemp -d)"
+  git archive --format=tar HEAD | tar -x -C "$stage"
+  # shellcheck source=../../../scripts/lib/strip-tarball.sh
+  source scripts/lib/strip-tarball.sh
+  apply_strip "$stage"
+  if [ -e "$stage/scripts/lib/auth-config.dev.json" ]; then
+    echo "  the package still carries scripts/lib/auth-config.dev.json (SR-27)"
+    rc=1
+  fi
+  python3 .github/scripts/ci/secret_scan.py "$REPO_ROOT" "$stage" || rc=$?
+  rm -rf "$stage"
+  return "$rc"
+}
+
+blocking "secrets: service-role credentials" service_role_scan
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 if [ ${#ADVISORY_HITS[@]} -gt 0 ]; then
   echo ""
