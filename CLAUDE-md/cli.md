@@ -829,6 +829,19 @@ the global credential audit log. `compat` classifies it **store-neutral**, and t
 `ALLOWED_COMMANDS` does not include it. `03-credential-guard.sh` refuses `devteam cred get
 integration.*` for agents.
 
+**A write asks the user in the provider's own prompt** ([ADR-0032](../docs/development/adrs/0032-bind-writes-provider-native-ask-rules-for-integration-writes.md)).
+`call` refuses a `POST`/`PUT`/`PATCH`/`DELETE` unless the command line starts
+`integration call <name> <METHOD>` with the method upper-case (`integrations.is_canonical_call`) —
+the form every provider rule matches, Codex's by prefix only. The rules come from one module,
+`scripts/lib/devteam/permissions.py` (installers: `scripts/lib/permission_rules.py`): Claude's are
+merged into `.claude/settings.json` `permissions.ask` by `hooks.wire` (same `settings` record; the v2
+`install.sh` too), opencode's are the last `permission.bash` keys of `.opencode/opencode.json`
+(`install-opencode.sh`; removed by `unwire_opencode_commands`), and Codex's are the owned file
+`.codex/rules/devteam.rules` (`install-codex.sh`; an ADR-0022 target). Each merge adds and removes
+only our exact entries and refuses (exit 4) a file it cannot parse. `doctor` reports a missing rule,
+an opencode override (a later key, an agent's own `permission.bash`) and an untrusted Codex project
+under the `permissions` category.
+
 ## Plugins
 
 See `plugins/README.md` and `docs/development/adrs/0019-plugins-as-manifest-declared-per-project-integrations.md`.
