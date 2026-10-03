@@ -715,6 +715,18 @@ case "$TOK" in
         esac ;;
 esac
 
+# ADR-0031: an integration token (`integration.<name>.token`) is used by the CLI
+# itself — `devteam integration call/test/resources` read it, audited, and send it
+# only to the bound origin. No agent task needs the value, so the one sanctioned read
+# path is refused for that namespace: printing it would put the token in the
+# transcript, the exact thing the call proxy exists to avoid. The user can still run
+# it in their own terminal, which no PreToolUse hook sees.
+if [ -z "$ACTION" ]; then
+    case "$LC" in
+        *"devteam cred get"*integration.*) ACTION="refuse"; KIND="integration" ;;
+    esac
+fi
+
 # ADR-0010: "warns on echoing a resolved value". A bare `devteam cred get` is
 # the sanctioned path and stays silent; piping it into something that reproduces
 # the value in the transcript, a log or a request is the pattern worth a note.
@@ -749,6 +761,16 @@ if [ "$ACTION" = "refuse" ] && [ "$KIND" = "gitadd" ]; then
         echo "This is not about the read being unaudited. That file is gitignored ON PURPOSE, which is the only thing keeping the value out of the repository; -f overrides exactly that, and one push then puts a live secret on a remote where it cannot be recalled."
         echo "The fix is to remove the value, not to stage it: run \`devteam cred import <file>\`, which pushes each value into the OS keychain, rewrites the file as non-secret references and quarantines the original. A migrated file has nothing left in it to leak, and committing it is then harmless."
         echo "If you are force-adding something else and a credential file merely sits under the same path, name that path explicitly instead of sweeping it."
+    } >&2
+    VERDICT="refuse"
+    exit 2
+fi
+
+if [ "$ACTION" = "refuse" ] && [ "$KIND" = "integration" ]; then
+    {
+        echo "credential-guard: BLOCKED — this command prints an integration token."
+        echo "Per ADR-0031 integration tokens are used by the CLI, never by an agent: run the API request with \`devteam integration call <name> <METHOD> <endpoint>\`, which sends the token to the bound origin without it entering this conversation."
+        echo "If the user needs the value, they can run the command in their own terminal."
     } >&2
     VERDICT="refuse"
     exit 2
