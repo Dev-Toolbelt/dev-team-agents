@@ -222,16 +222,24 @@ class RefreshLockTest(AuthTestCase):
 
 class TestSeamTest(AuthTestCase):
     def test_a_seam_with_a_remote_url_is_refused(self):
+        # Refused means never used: the seam is ignored (with a warning) and the compiled
+        # identity stays in force, so a stray variable can neither redirect the CLI nor make
+        # every command fail.
         for url in ("https://evil.example.com", "http://evil.example.com", "http://192.168.0.5:9"):
             os.environ["DEVTEAM_AUTH_TEST_URL"] = url
-            code, body, _ = self.run_json("auth", "status")
-            self.assertEqual(code, 2, url)
+            code, body, err = self.run_json("auth", "status")
+            self.assertEqual(code, 0, url)
+            self.assertFalse(body["test_seam"], url)
+            self.assertIn("test seam ignored", err)
             self.assertEqual(self.idp.calls, [])
 
     def test_a_seam_key_must_carry_the_test_prefix(self):
         os.environ["DEVTEAM_AUTH_TEST_KID"] = "prod-1"
-        code, _body, _ = self.run_json("auth", "status")
-        self.assertEqual(code, 2)
+        code, body, err = self.run_json("auth", "status")
+        self.assertEqual(code, 0)
+        self.assertFalse(body["test_seam"])
+        self.assertIn("test seam ignored", err)
+        self.assertEqual(self.idp.calls, [])
 
     def test_an_active_seam_warns_on_stderr_and_reports_itself(self):
         code, body, err = self.run_json("auth", "status")
@@ -260,8 +268,8 @@ class TestSeamTest(AuthTestCase):
 
 class TelemetrySeparationTest(AuthTestCase):
     def test_no_auth_module_touches_telemetry_and_no_module_imports_auth_but_the_cli(self):
-        auth_files = sorted(LIB.glob("auth*.py"))
-        self.assertGreaterEqual(len(auth_files), 4)
+        auth_files = sorted(LIB.glob("auth*.py")) + [LIB / "entitlement.py", LIB / "ed25519.py"]
+        self.assertGreaterEqual(len(auth_files), 6)
         for path in auth_files:
             code = "\n".join(
                 line for line in path.read_text().splitlines() if line.lstrip().startswith(("import ", "from "))
@@ -272,6 +280,21 @@ class TelemetrySeparationTest(AuthTestCase):
             if path.name == "cli.py" or path.name.startswith("auth"):
                 continue
             self.assertIsNone(pattern.search(path.read_text()), "{} imports the auth modules".format(path.name))
+
+    def test_the_telemetry_payload_has_no_account_field(self):
+        # SR-41 from the other side: the event the telemetry sender builds, and every call
+        # that feeds it properties, name nothing that identifies an account.
+        root = LIB.parent.parent.parent
+        sender = (root / "scripts" / "helpers" / "telemetry-send.sh").read_text(encoding="utf-8")
+        forbidden = ("account", "email", "entitlement", "auth-session", '"sub"', "user_id")
+        for word in forbidden:
+            self.assertNotIn(word, sender.lower(), word)
+        callers = [p for p in (root / "scripts").rglob("*.sh") if p.name != "telemetry-send.sh"]
+        call = re.compile(r"telemetry-send\.sh[^\n]*")
+        for path in callers:
+            for line in call.findall(path.read_text(encoding="utf-8", errors="replace")):
+                for word in forbidden:
+                    self.assertNotIn(word, line.lower(), "{}: {}".format(path.name, line))
 
     def test_requests_carry_no_identifier_beyond_the_project_key(self):
         self.sign_in()

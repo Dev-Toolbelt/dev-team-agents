@@ -171,7 +171,7 @@ class ClassificationCompletenessTest(unittest.TestCase):
         self.assertFalse(
             unclassified,
             "these commands exist in cli.build_parser() but appear in neither "
-            "compat.MUTATING nor compat.READ_ONLY: {}. Add each one to the table that "
+            "compat.MUTATING, compat.READ_ONLY nor compat.STORE_NEUTRAL: {}. Add each one to the table that "
             "fits, with the reason beside it. Until then the gate treats it as mutating "
             "(compat.is_mutating fails closed), which is safe but undecided.".format(
                 [" ".join(leaf) for leaf in unclassified]
@@ -179,7 +179,10 @@ class ClassificationCompletenessTest(unittest.TestCase):
         )
 
     def test_the_tables_do_not_disagree_with_each_other(self):
-        overlap = sorted(set(compat.MUTATING) & set(compat.READ_ONLY))
+        tables = (set(compat.MUTATING), set(compat.READ_ONLY), set(compat.STORE_NEUTRAL))
+        overlap = sorted(
+            {path for i, a in enumerate(tables) for b in tables[i + 1 :] for path in a & b}
+        )
         self.assertFalse(
             overlap,
             "classified twice, so `classify` answers by table order rather than by "
@@ -193,7 +196,9 @@ class ClassificationCompletenessTest(unittest.TestCase):
         # would catch the new name; this catches the corpse it left behind, and names it.
         leaves, _groups = discover_commands()
         known = set(leaves)
-        stale = sorted((set(compat.MUTATING) | set(compat.READ_ONLY)) - known)
+        stale = sorted(
+            (set(compat.MUTATING) | set(compat.READ_ONLY) | set(compat.STORE_NEUTRAL)) - known
+        )
         self.assertFalse(
             stale,
             "classified but not reachable from cli.build_parser() — renamed or removed? "

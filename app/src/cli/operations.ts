@@ -128,7 +128,10 @@ export type CliContext = Required<Pick<InvokeOptions, 'binary' | 'cwd'>> &
 // `secretStdin` is deliberately not part of `CliContext`: a context is reused and may be
 // logged, a secret belongs to one invocation only.
 
-/** Subcommands this build runs that the framework classifies in `compat.READ_ONLY`. */
+/**
+ * Subcommands this build runs that a declared client is never refused: `compat.READ_ONLY`,
+ * plus the account leaves in `compat.STORE_NEUTRAL`.
+ */
 export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['version'],
   ['compat'],
@@ -152,7 +155,7 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['skills', 'show'],
   ['tasks', 'list'],
   ['tasks', 'watch'],
-  // ADR-0029. Every `auth` leaf is `compat.READ_ONLY`; see `accountCommands.ts`.
+  // ADR-0029. Every `auth` leaf is `compat.STORE_NEUTRAL`; see `accountCommands.ts`.
   ...ACCOUNT_COMMANDS,
 ]);
 

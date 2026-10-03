@@ -13,6 +13,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auth_support import AuthTestCase  # noqa: E402
+from devteam_support import REPO_ROOT  # noqa: E402
 
 from devteam import auth, cli, entitlement
 from devteam import auth_gate as gate  # noqa: E402
@@ -20,7 +21,7 @@ from devteam.output import Emitter  # noqa: E402
 
 #: The command roots ADR-0029 never gates. A new subcommand is gated unless added here AND
 #: to `gate.EXEMPT`, so this list changing is a reviewed decision, not a side effect.
-EXEMPT_ROOTS = {"auth", "version", "path", "compat", "doctor", "unbind", "uninstall", "export"}
+EXEMPT_ROOTS = {"auth", "version", "path", "compat", "doctor", "unbind", "uninstall", "export", "tasks"}
 
 
 def leaf_paths():
@@ -86,7 +87,7 @@ class GateBehaviourTest(AuthTestCase):
             return self.run_inproc(list(argv))
 
     def test_enforce_blocks_a_gated_command_when_signed_out(self):
-        for argv in (("list",), ("store", "list"), ("prefs", "list"), ("tasks", "list")):
+        for argv in (("list",), ("store", "list"), ("prefs", "list"), ("notifications", "list")):
             with self.subTest(argv=argv):
                 code, out, _err = self.run_mode("enforce", *argv, "--json")
                 body = json.loads(out)
@@ -107,13 +108,13 @@ class GateBehaviourTest(AuthTestCase):
                 code, _out, err = self.run_mode("enforce", *argv, "--json")
                 self.assertEqual(code, 0, err)
 
-    def test_warn_prints_one_stderr_line_and_proceeds(self):
+    def test_warn_proceeds_and_stays_quiet_when_stderr_is_captured(self):
+        # A script, CI job, hook or the app captures stderr; the notice is for a terminal
+        # only (tests/test_auth_review_fixes.py covers the terminal case).
         code, out, err = self.run_mode("warn", "list", "--json")
         self.assertEqual(code, 0, err)
         self.assertTrue(json.loads(out)["ok"])
-        notice = [line for line in err.splitlines() if "devteam list" in line]
-        self.assertEqual(len(notice), 1, err)
-        self.assertIn("upcoming release", notice[0])
+        self.assertEqual([line for line in err.splitlines() if "devteam list" in line], [], err)
 
     def test_warn_leaves_the_json_document_untouched(self):
         _code, gated, _ = self.run_mode("warn", "list", "--json")
@@ -155,11 +156,34 @@ class GateBehaviourTest(AuthTestCase):
         emitter = Emitter(as_json=True, stdout=io.StringIO(), stderr=io.StringIO())
         with mock.patch.object(auth, "cmd_check", side_effect=refusal):
             with mock.patch.object(gate, "gate_mode", return_value="enforce"):
-                gate.apply(("update",), args, emitter)
-                self.assertTrue(args.no_sync)
+                self.assertEqual(gate.apply(("update",), args, emitter), gate.CORE_ONLY)
+                self.assertFalse(args.no_sync, "the gate reports a verdict; it does not edit args")
                 for blocked in (("sync",), ("bind",), ("upgrade",)):
-                    with self.assertRaises(auth.EntitlementRefusal, msg=blocked):
+                    with self.assertRaises(auth.EntitlementRefusal, msg=blocked) as caught:
                         gate.apply(blocked, argparse.Namespace(), emitter)
+                    self.assertEqual(caught.exception.details.get("gate"), gate.GATE_MARKER)
+
+    def test_warn_mode_survives_a_check_that_cannot_run(self):
+        from devteam.errors import EnvError
+        emitter = Emitter(as_json=True, stdout=io.StringIO(), stderr=io.StringIO())
+        broken = EnvError("auth-config.json is missing or malformed")
+        with mock.patch.object(auth, "cmd_check", side_effect=broken):
+            with mock.patch.object(gate, "gate_mode", return_value="warn"):
+                self.assertEqual(gate.apply(("list",), argparse.Namespace(), emitter), gate.ALLOWED)
+            with mock.patch.object(gate, "gate_mode", return_value="enforce"):
+                with self.assertRaises(EnvError) as caught:
+                    gate.apply(("list",), argparse.Namespace(), emitter)
+                self.assertEqual(caught.exception.details.get("gate"), gate.GATE_MARKER)
+
+    def test_the_shell_default_mode_matches_the_python_default(self):
+        import re
+        from devteam import entitlement
+        text = (REPO_ROOT / "scripts" / "lib" / "auth-gate.sh").read_text(encoding="utf-8")
+        match = re.search(r"^AG_DEFAULT_MODE=(\w+)$", text, re.M)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), entitlement.DEFAULT_GATE_MODE)
+        shipped = entitlement.gate_mode_of(entitlement.read_config(entitlement._CONFIG_PATH, dev_path=False))
+        self.assertEqual(shipped, entitlement.DEFAULT_GATE_MODE, "flip auth-config.json and DEFAULT_GATE_MODE together")
 
 
 class BannerLineTest(AuthTestCase):

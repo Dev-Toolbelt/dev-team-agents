@@ -435,22 +435,43 @@ class LoadIdentityTest(unittest.TestCase):
         self.assertIn("test seam", ent.seam_warning(loaded))
         self.assertIsNone(ent.seam_warning(ent.load_identity(environ={})))
 
-    def test_seam_refuses_non_loopback_host(self):
+    def assertSeamIgnored(self, environ, path):
+        loaded = ent.load_identity(environ=environ, config_path=path)
+        self.assertFalse(loaded.test_seam)
+        self.assertNotIn("127.0.0.1", loaded.supabase_url)
+        self.assertTrue(loaded.seam_error)
+        self.assertIn("ignored", ent.seam_warning(loaded))
+
+    def test_seam_ignores_non_loopback_host(self):
         path = self.config(self.dir.name)
         for url in ("https://acct.example.com", "http://example.com:80", "http://127.0.0.1.evil.com",
                     "ftp://127.0.0.1"):
             with self.subTest(url=url):
-                with self.assertRaises(UsageError):
-                    ent.load_identity(environ=self.seam(**{ent.SEAM_URL_ENV: url}), config_path=path)
+                self.assertSeamIgnored(self.seam(**{ent.SEAM_URL_ENV: url}), path)
 
-    def test_seam_refuses_a_kid_without_the_test_prefix_and_partial_seams(self):
+    def test_seam_ignores_a_kid_without_the_test_prefix_and_partial_seams(self):
         path = self.config(self.dir.name)
-        with self.assertRaises(UsageError):
-            ent.load_identity(environ=self.seam(**{ent.SEAM_KID_ENV: "prod-1"}), config_path=path)
-        with self.assertRaises(UsageError):
-            ent.load_identity(environ=self.seam(**{ent.SEAM_KEY_ENV: None}), config_path=path)
-        with self.assertRaises(UsageError):
-            ent.load_identity(environ=self.seam(**{ent.SEAM_KEY_ENV: "AAAA"}), config_path=path)
+        self.assertSeamIgnored(self.seam(**{ent.SEAM_KID_ENV: "prod-1"}), path)
+        self.assertSeamIgnored(self.seam(**{ent.SEAM_KEY_ENV: None}), path)
+        self.assertSeamIgnored(self.seam(**{ent.SEAM_KEY_ENV: "AAAA"}), path)
+        loaded = ent.load_identity(environ=self.seam(**{ent.SEAM_KID_ENV: "prod-1"}), config_path=path)
+        self.assertNotIn("prod-1", [k for k in loaded.keys if k.startswith("test-")])
+
+    def test_gate_mode_comes_from_the_config_and_defaults_to_the_release_mode(self):
+        import json as _json
+        path = self.config(self.dir.name)
+        self.assertEqual(ent.load_identity(environ={}, config_path=path).gate_mode, ent.DEFAULT_GATE_MODE)
+        data = _json.loads(open(path).read())
+        data["gate_mode"] = "typo"
+        with open(path, "w") as handle:
+            _json.dump(data, handle)
+        self.assertEqual(ent.load_identity(environ={}, config_path=path).gate_mode, ent.GATE_ENFORCE)
+
+    def test_the_shipped_config_carries_the_prod_environment_only(self):
+        import json as _json
+        shipped = _json.loads(ent._CONFIG_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(set(shipped["environments"]), {"prod"})
+        self.assertEqual(shipped["environment"], "prod")
 
 
 if __name__ == "__main__":

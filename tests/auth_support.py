@@ -24,6 +24,10 @@ EMAIL = "ada@example.com"
 class AuthTestCase(StoreTestCase):
     def setUp(self):
         super().setUp()
+        from devteam import auth_session
+
+        auth_session._forget_memory()
+        self.addCleanup(auth_session._forget_memory)
         self.idp = FakeIdP()
         self.idp.fixed_code = CODE
         self.idp.start()

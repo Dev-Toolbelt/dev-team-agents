@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { ACCOUNT_COMMANDS } from '../src/cli/accountCommands.js';
 import {
   ALLOWED_COMMANDS,
   credentialsOpsProblem,
@@ -138,10 +139,12 @@ function classificationTables() {
   const source = readFileSync(file, 'utf8');
   const mutatingStart = markerIndex(source, 'MUTATING = {', file);
   const readOnlyStart = markerIndex(source, 'READ_ONLY = {', file);
+  const storeNeutralStart = markerIndex(source, 'STORE_NEUTRAL = {', file);
   const needsMachineLayoutStart = markerIndex(source, 'NEEDS_MACHINE_LAYOUT = {', file);
   return {
     mutating: source.slice(mutatingStart, readOnlyStart),
-    readOnly: source.slice(readOnlyStart, needsMachineLayoutStart),
+    readOnly: source.slice(readOnlyStart, storeNeutralStart),
+    storeNeutral: source.slice(storeNeutralStart, needsMachineLayoutStart),
   };
 }
 
@@ -151,11 +154,16 @@ function tupleLiteral(command: readonly string[]): string {
 }
 
 describe('what this slice is allowed to run', () => {
-  it('keeps every READ_ONLY_COMMANDS entry in compat.READ_ONLY and out of compat.MUTATING', () => {
-    const { mutating, readOnly } = classificationTables();
+  it('keeps every READ_ONLY_COMMANDS entry in compat.READ_ONLY (account leaves in STORE_NEUTRAL) and out of compat.MUTATING', () => {
+    const { mutating, readOnly, storeNeutral } = classificationTables();
+    const account = new Set(ACCOUNT_COMMANDS.map((command) => command.join(' ')));
     for (const command of READ_ONLY_COMMANDS) {
       const tuple = tupleLiteral(command);
-      expect(readOnly, `${command.join(' ')} should be in compat.READ_ONLY`).toContain(tuple);
+      if (account.has(command.join(' '))) {
+        expect(storeNeutral, `${command.join(' ')} should be in compat.STORE_NEUTRAL`).toContain(tuple);
+      } else {
+        expect(readOnly, `${command.join(' ')} should be in compat.READ_ONLY`).toContain(tuple);
+      }
       expect(mutating, `${command.join(' ')} must not be in compat.MUTATING`).not.toContain(tuple);
     }
   });

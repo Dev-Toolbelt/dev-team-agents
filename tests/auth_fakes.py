@@ -54,6 +54,9 @@ class FakeIdP:
         self.entitlement_calls = 0
         self.down = False
         self.limited = set()
+        #: ``{path: (status, body)}``: answer that path with a fixed response (a function not
+        #: deployed, a proxy's 403, a weak-password refusal).
+        self.forced = {}
         self.statuses = {}
         self.default_status = "active"
         self.oauth_emails = {"google": "oauth.person@example.com", "github": "oauth.person@example.com"}
@@ -219,6 +222,8 @@ class FakeIdP:
                     return self._send(503, {"error": "down"})
                 if parsed.path in idp.limited:
                     return self._send(429, {"error_code": "over_request_rate_limit"}, {"Retry-After": "7"})
+                if parsed.path in idp.forced:
+                    return self._send(*idp.forced[parsed.path])
                 try:
                     result = idp.route(method, parsed.path, query, body, bearer, self.headers)
                 except Exception as exc:  # noqa: BLE001 - a fake: report, do not crash the thread
