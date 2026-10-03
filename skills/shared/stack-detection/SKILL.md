@@ -9,26 +9,28 @@ Use file signals to infer the project's primary stack before making technology d
 
 ## Signal → Stack Table
 
-| Signal file(s) | Inferred stack |
-|----------------|----------------|
-| `pyproject.toml`, `requirements.txt`, `setup.py`, `*.py` in root | Python |
-| `package.json` + `tsconfig.json`, or `*.ts`/`*.tsx` in `src/` | TypeScript/Node.js |
-| `package.json` (no tsconfig), `*.js` in `src/` | JavaScript/Node.js |
-| `Cargo.toml` | Rust |
-| `composer.json`, `*.php` in root or `src/` | PHP |
-| `Gemfile`, `*.rb` in `app/` | Ruby |
-| `go.mod` | Go |
-| `pom.xml`, `build.gradle`, `*.java` in `src/` | Java |
-| `build.gradle.kts`, `*.kt` in `src/` | Kotlin |
-| `*.csproj`, `*.sln`, `Program.cs` | C#/.NET |
-| `pubspec.yaml`, `*.dart` in `lib/` | Flutter/Dart |
-| `app.json` with `expo` OR `package.json` with `react-native` | React Native |
+The canonical table is `scripts/lib/stack-signals.json` (installed: `.dev-team-agents/scripts/lib/stack-signals.json`). It is the single source of truth read by `devteam detect`; edit rows there, never here. `devteam detect --json` returns the result as `stack.primary`, `stack.all` and `stack.signals`, so prefer running it over matching files by hand.
+
+| Stack | Typical signals (summary — the JSON is authoritative) |
+|-------|--------------------------------------------------------|
+| Python | `pyproject.toml`, `requirements.txt`, `setup.py`, `*.py` in root |
+| TypeScript/Node.js | `package.json` + `tsconfig.json`, `*.ts`/`*.tsx` in `src/` |
+| JavaScript/Node.js | `package.json` without tsconfig, `*.js` in `src/` |
+| Rust | `Cargo.toml` |
+| PHP | `composer.json`, `*.php` in root or `src/` |
+| Ruby | `Gemfile`, `*.rb` in `app/` |
+| Go | `go.mod` |
+| Java | `pom.xml`, `build.gradle`, `*.java` in `src/` |
+| Kotlin | `build.gradle.kts`, `*.kt` in `src/` |
+| C#/.NET | `*.csproj`, `*.sln`, `Program.cs` |
+| Flutter/Dart | `pubspec.yaml`, `*.dart` in `lib/` |
+| React Native | `app.json` with `expo`, or `package.json` with `react-native` |
 
 ## Multi-stack Projects
 
 If multiple signals coexist (e.g., `package.json` + `go.mod`), identify the PRIMARY stack:
 1. Check `CLAUDE.md` or project README for explicit stack declaration
-2. Count files: largest language directory is likely primary
+2. Count files: the stack with the most source files is primary (`devteam detect` does this)
 3. Check for API/service separation (e.g., `backend/` in Go, `frontend/` in TS)
 
 ## Tooling Detection

@@ -24,8 +24,8 @@ from .errors import ConflictError, EnvError
 ALL_PROVIDERS = ("claude", "opencode", "codex")
 
 
-def detect(project_root):
-    """Providers a project already uses; ``claude`` when nothing indicates one."""
+def detect_in_project(project_root):
+    """Providers a project already carries artifacts for; empty when none."""
     root = Path(project_root)
     found = []
     if (root / ".claude").is_dir():
@@ -38,7 +38,12 @@ def detect(project_root):
         found.append("opencode")
     if (root / ".codex").is_dir():
         found.append("codex")
-    return found or ["claude"]
+    return found
+
+
+def detect(project_root):
+    """Providers a project already uses; ``claude`` when nothing indicates one."""
+    return detect_in_project(project_root) or ["claude"]
 
 
 def skill_dirs(version_dir):

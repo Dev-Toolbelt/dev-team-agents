@@ -10,12 +10,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 import time
 from pathlib import Path
 
 from . import auth, bind as bind_module
 from . import auth_gate as gate
+from . import detect
 from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
@@ -528,16 +530,90 @@ def cmd_migrate(args, emitter):
 
 
 def cmd_doctor(args, emitter):
-    target = None if args.no_project else (args.path or ".")
-    result = doctor.run(project_root=target, reassign_identity=args.reassign_identity)
+    if getattr(args, "machine", False):
+        result = doctor.run_machine()
+    else:
+        target = None if args.no_project else (args.path or ".")
+        result = doctor.run(project_root=target, reassign_identity=args.reassign_identity)
     lines = []
     for item in result["findings"]:
         marker = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL"}[item["level"]]
         lines.append("{} [{}] {}".format(marker, item["category"], item["message"]))
         if item.get("hint"):
             lines.append("        hint: {}".format(item["hint"]))
+        if item.get("fix"):
+            lines.append("        fix:  {}".format(item["fix"]))
     lines.append("status: {}".format(result["status"]))
     return result, "\n".join(lines)
+
+
+def cmd_detect(args, emitter):
+    result = detect.run(args.path)
+    stack = result["stack"]["primary"] or "no known stack"
+    kind = result["project_type"]
+    lines = [
+        "folder     {}".format(result["path"]),
+        "stack      {}".format(stack),
+        "looks like {} ({} confidence)".format(kind["suggested"], kind["confidence"]),
+        "providers  installed: {}; suggested: {}".format(
+            ", ".join(p["name"] for p in result["providers"]["installed"]) or "none",
+            result["providers"]["suggested"] or "none",
+        ),
+    ]
+    task = result["first_task"]
+    if task:
+        lines.append("first task {} (read-only)".format(task["label"]))
+    return result, "\n".join(lines)
+
+
+#: Used only when commands.json carries no `featured` key at all (ADR-0030 section 5).
+_FALLBACK_FEATURED = ("plan", "fix", "review", "commit", "pr")
+
+
+def _featured_commands():
+    try:
+        with (Path(__file__).resolve().parent.parent / "commands.json").open("r", encoding="utf-8") as stream:
+            entries = json.load(stream).get("commands", {})
+    except (OSError, ValueError):
+        return list(_FALLBACK_FEATURED)
+    if not any("featured" in meta for meta in entries.values() if isinstance(meta, dict)):
+        return list(_FALLBACK_FEATURED)
+    return [name for name, meta in entries.items() if isinstance(meta, dict) and meta.get("featured")]
+
+
+def cmd_start(args, emitter):
+    """Detect, then set the project up with the defaults. The user never sees how."""
+    root = project.resolve_root(args.path)
+    found = detect.run(str(root), provider=args.provider, project_type=args.type)
+    chosen = args.provider
+    if chosen is None and not found["providers"]["in_project"] and found["providers"]["suggested"]:
+        chosen = found["providers"]["suggested"]
+    bound, _human = cmd_bind(
+        argparse.Namespace(
+            path=str(root), provider=[chosen] if chosen else None, mode="auto", pin=None
+        ),
+        emitter,
+    )
+    featured = _featured_commands()
+    task = found["first_task"]
+    lines = [
+        "Project ready. Start with one of these: {}".format(
+            ", ".join("/devteam:{}".format(name) for name in featured)
+        )
+    ]
+    if task:
+        lines.append("")
+        lines.append("Suggested first task, read-only: {}".format(task["label"]))
+        if task["launch"]:
+            lines.append("  {}".format(" ".join(shlex.quote(part) for part in task["launch"]["argv"])))
+    payload = {
+        "bound": True,
+        "project_id": bound["project_id"],
+        "detect": found,
+        "featured_commands": featured,
+        "first_task": task,
+    }
+    return payload, "\n".join(lines)
 
 
 
@@ -614,7 +690,8 @@ def cmd_catalog(args, emitter):
 def _cmd_catalog_kind(kind):
     def handler(args, emitter):
         version, project_id = _catalog_version(args)
-        entries = catalog.list_kind(kind, version)
+        featured_only = bool(getattr(args, "featured", False))
+        entries = catalog.list_kind(kind, version, featured_only=featured_only)
         rows = [_catalog_row(kind, entry) for entry in entries]
         payload = {
             "version": version,
@@ -1996,7 +2073,24 @@ def build_parser():
         action="store_true",
         help="give this project a new project_id (fork case)",
     )
+    doctor_parser.add_argument(
+        "--machine",
+        action="store_true",
+        help="check this machine's prerequisites (git, Python, provider CLIs) instead of a project",
+    )
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    detect_parser = leaf(sub, "detect", help="read a folder: providers, stack, project type, first task")
+    detect_parser.add_argument("--path", help="project directory (default: the current one)")
+    detect_parser.set_defaults(func=cmd_detect)
+
+    start_parser = leaf(sub, "start", help="set a folder up and suggest a first, read-only task")
+    start_parser.add_argument("--path", help="project directory (default: the current one)")
+    start_parser.add_argument("--provider", choices=providers.ALL_PROVIDERS, help="override the detected provider")
+    start_parser.add_argument(
+        "--type", choices=("new", "unfinished", "maintenance"), help="override the detected project type"
+    )
+    start_parser.set_defaults(func=cmd_start)
 
     # Unlike `store`/`prefs`/`cred`, `catalog` alone is a valid, meaningful call
     # (the summary) — so `func` is set on the parent parser itself, not only on
@@ -2020,6 +2114,7 @@ def build_parser():
 
     catalog_commands = leaf(catalog_sub, "commands", help="every command in the resolved version")
     catalog_commands.add_argument("--path", help="project directory (default: the current one)")
+    catalog_commands.add_argument("--featured", action="store_true", help="only the five featured commands")
     catalog_commands.set_defaults(func=cmd_catalog_commands)
 
     catalog_show = leaf(catalog_sub, "show", help="one entry's metadata and its body")

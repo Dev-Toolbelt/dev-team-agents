@@ -8,9 +8,12 @@ that are missing or point at the wrong version. Nothing here deletes.
 from __future__ import annotations
 
 import os
+import shutil
+import sys
 from pathlib import Path
 
 from . import bind as bind_module
+from . import detect as detect_module
 from .errors import ConflictError, EnvError
 from . import creds, credentials_local, hooks, migrate, paths, prefs, project, registry, versions
 from . import providers as providers_module
@@ -705,3 +708,146 @@ def run(project_root=None, reassign_identity=False):
         "actions": actions,
         "credentials_local": credentials_report,
     }
+
+
+# ── machine prerequisites (`doctor --machine`, ADR-0030) ──────────────────────
+
+MIN_PYTHON = (3, 9)
+
+#: The provider CLIs' official install commands. Never auto-fixable: installing an AI
+#: provider is the user's decision, so the finding carries the command and nothing runs it.
+PROVIDER_INSTALL = {
+    "claude": "npm install -g @anthropic-ai/claude-code",
+    "codex": "npm install -g @openai/codex",
+    "opencode": "npm install -g opencode-ai",
+}
+
+
+def _machine_finding(level, category, message, hint=None, fix=None, auto_fixable=False):
+    """A finding with the two machine-only keys, additive to ``_finding``'s shape."""
+    item = _finding(level, category, message, hint)
+    item["fix"] = fix
+    item["auto_fixable"] = bool(auto_fixable)
+    return item
+
+
+def _git_fix(platform, which):
+    """``(command, auto_fixable)``: auto only when a package manager runs it unattended."""
+    if platform == "darwin":
+        if which("brew"):
+            return "brew install git", True
+        return "xcode-select --install", True
+    if platform.startswith("win"):
+        return "winget install Git.Git", bool(which("winget"))
+    if which("apt-get"):
+        return "sudo apt-get install -y git", False
+    if which("dnf"):
+        return "sudo dnf install -y git", False
+    return None, False
+
+
+def _python_fix(platform, which):
+    if platform == "darwin":
+        return ("brew install python@3.12", True) if which("brew") else (None, False)
+    if platform.startswith("win"):
+        return "winget install Python.Python.3.12", bool(which("winget"))
+    if which("apt-get"):
+        return "sudo apt-get install -y python3", False
+    if which("dnf"):
+        return "sudo dnf install -y python3", False
+    return None, False
+
+
+def check_prerequisites(platform=None, which=None, version_of=None, python_version=None):
+    """Git, Python and each provider CLI. Reports only; nothing here installs anything.
+
+    ``platform``, ``which``, ``version_of`` and ``python_version`` are seams for tests.
+    """
+    platform = platform or sys.platform
+    which = which or shutil.which
+    version_of = version_of or detect_module.binary_version
+    python_version = python_version or sys.version_info[:3]
+    findings = []
+
+    git_bin = which("git")
+    git_version = version_of("git") if git_bin else None
+    if git_bin and git_version:
+        findings.append(_machine_finding(OK, "git", git_version))
+    else:
+        command, auto = _git_fix(platform, which)
+        findings.append(
+            _machine_finding(
+                FAIL,
+                "git",
+                "git is installed but did not answer" if git_bin else "git is not installed",
+                hint="Git is required to track your project's changes.",
+                fix=command,
+                auto_fixable=auto,
+            )
+        )
+
+    label = ".".join(str(part) for part in python_version)
+    if tuple(python_version[:2]) >= MIN_PYTHON:
+        findings.append(_machine_finding(OK, "python", "Python {}".format(label)))
+    else:
+        command, auto = _python_fix(platform, which)
+        findings.append(
+            _machine_finding(
+                FAIL,
+                "python",
+                "Python {} is older than the {}.{} the CLI needs".format(label, *MIN_PYTHON),
+                fix=command,
+                auto_fixable=auto,
+            )
+        )
+
+    found_any = False
+    for name in providers_module.ALL_PROVIDERS:
+        if not which(name):
+            findings.append(
+                _machine_finding(
+                    WARN,
+                    "provider",
+                    "{} is not installed".format(name),
+                    hint="Install at least one AI provider to run your first task.",
+                    fix=PROVIDER_INSTALL.get(name),
+                )
+            )
+            continue
+        found_any = True
+        version = version_of(name)
+        if version:
+            findings.append(_machine_finding(OK, "provider", "{} {}".format(name, version)))
+        else:
+            findings.append(
+                _machine_finding(
+                    WARN,
+                    "provider",
+                    "{} is on PATH but did not answer --version".format(name),
+                    hint="Reinstall it, or check that it starts on its own.",
+                    fix=PROVIDER_INSTALL.get(name),
+                )
+            )
+    if not found_any:
+        findings.append(
+            _machine_finding(
+                FAIL,
+                "provider",
+                "no AI provider is installed ({})".format(", ".join(providers_module.ALL_PROVIDERS)),
+                hint="Install one of them with the command shown beside it above.",
+            )
+        )
+    return findings
+
+
+def run_machine(**seams):
+    """``doctor --machine``: the prerequisites only, in ``run``'s document shape."""
+    findings = check_prerequisites(**seams)
+    worst = OK
+    for item in findings:
+        if item["level"] == FAIL:
+            worst = FAIL
+            break
+        if item["level"] == WARN:
+            worst = WARN
+    return {"status": worst, "findings": findings, "actions": [], "credentials_local": None}

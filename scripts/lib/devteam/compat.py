@@ -399,6 +399,7 @@ MUTATING = {
     ("store", "use"): "rewrites the `current` pointer every bound project resolves through",
     ("store", "gc"): "removes installed versions with --apply; classified by what the "
     "command can do, not by which flag this invocation passed",
+    ("start",): "detects, then does exactly what `bind` does with the defaults",
     ("bind",): "writes project.json, the registry entry, the manifest and every artifact",
     ("unbind",): "removes artifacts and rewrites the registry entry",
     ("sync",): "rebuilds artifacts and rewrites the manifest",
@@ -497,6 +498,7 @@ READ_ONLY = {
     ("tasks", "watch"): "stats each project's session records and streams snapshots; "
     "writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
+    ("detect",): "reads a folder, `git` and `PATH`; writes nothing and creates no identity",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
     ("catalog", "skills"): "read-only browse",

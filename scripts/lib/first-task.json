@@ -1,0 +1,25 @@
+{
+  "_comment": "Per-provider launch map for the first, read-only task (ADR-0030). Read by scripts/lib/devteam/detect.py. Every provider in providers.ALL_PROVIDERS has an entry; tests/test_first_task.py fails when one is missing. Read-only is enforced by the provider's own permission mode (the `argv` flags), never by prompt wording. `argv` is an array, never a shell string; `{prompt}` is replaced by `prompt` with `{kind}` (audit|review), `{target}` and `{args}` (the kind's extra arguments from `kinds`, with a leading space, or empty) substituted. A provider with no read-only mode has `null` here and a `_why` sibling; detect then returns `launch: null` for it.",
+  "kinds": {
+    "audit": {"args": "--report-only"},
+    "review": {"args": ""}
+  },
+  "providers": {
+    "claude": {
+      "read_only_via": "--permission-mode plan",
+      "prompt": "/devteam:{kind} {target}{args}",
+      "argv": ["claude", "--permission-mode", "plan", "{prompt}"]
+    },
+    "codex": {
+      "read_only_via": "--sandbox read-only",
+      "prompt": "$devteam-{kind} {target}{args}",
+      "argv": ["codex", "--sandbox", "read-only", "{prompt}"]
+    },
+    "opencode": {
+      "read_only_via": "--agent plan (built-in plan agent: permission edit = deny)",
+      "_why": "devteam commands are registered as `devteam:<name>` and each carries its own `agent`, which overrides --agent, so a slash command would leave plan mode. The prompt therefore names the workflow in prose and the built-in plan agent, whose `edit` permission is deny, stays in charge.",
+      "prompt": "Follow the devteam:{kind} command workflow for {target}{args}. This session is read-only: do not create, edit or delete any file.",
+      "argv": ["opencode", "--agent", "plan", "--prompt", "{prompt}"]
+    }
+  }
+}
