@@ -668,7 +668,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
         "catalog skills": {"version", "project_id", "skills", "count"},
         "catalog skills.record": {"name", "description", "category", "path", "version"},
         "catalog commands": {"version", "project_id", "commands", "count"},
-        "catalog commands.record": {"name", "description", "path", "version"},
+        "catalog commands.record": {"name", "description", "path", "version", "featured", "related"},
         "catalog show <name>": {
             "name",
             "tier",
@@ -685,7 +685,15 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # finding with no hint has exactly the required set, one with a hint has
         # required | {"hint"}, and nothing else is ever legal either way.
         "doctor.finding.required": {"level", "category", "message"},
-        "doctor.finding.optional": {"hint"},
+        "doctor.finding.optional": {"hint", "fix", "auto_fixable"},
+        # ADR-0030: additive documents behind the first-run screens.
+        "detect": {"path", "providers", "stack", "project_type", "first_task"},
+        "detect.providers": {"installed", "in_project", "suggested"},
+        "detect.stack": {"primary", "all", "signals"},
+        "detect.project_type": {"suggested", "confidence", "reasons"},
+        "detect.first_task": {"kind", "target", "label", "read_only", "launch"},
+        "detect.launch": {"provider", "argv"},
+        "start": {"bound", "project_id", "detect", "featured_commands", "first_task"},
         # `catalog`'s `counts` and `malformed` maps share this shape -- both are
         # `{agents, skills, commands}` per `cli.py`'s catalog handler.
         "catalog.counts": {"agents", "skills", "commands"},
@@ -996,6 +1004,43 @@ class AppFacingKeySetContractTest(StoreTestCase):
         for finding in with_hint:
             self._assert_finding_keys("doctor.finding (with hint)", finding)
             self.assertEqual(set(finding), self.EXPECTED["doctor.finding.required"] | {"hint"})
+
+    def test_doctor_machine(self):
+        code, out, _err = self.run_cli("doctor", "--machine", "--json")
+        payload = json.loads(out)
+        self.assertIn(code, (0, 1))
+        self._assert_exact_keys("doctor --machine", payload, self.EXPECTED["doctor"])
+        for finding in payload["findings"]:
+            self._assert_finding_keys("doctor --machine finding", finding)
+            self.assertIn("fix", finding)
+            self.assertIsInstance(finding["auto_fixable"], bool)
+
+    def test_detect(self):
+        payload = self._run_ok("detect", "--path", str(self.project_root), "--json")
+        self._assert_exact_keys("detect", payload, self.EXPECTED["detect"])
+        self._assert_record_keys("detect.providers", payload["providers"], self.EXPECTED["detect.providers"])
+        self._assert_record_keys("detect.stack", payload["stack"], self.EXPECTED["detect.stack"])
+        self._assert_record_keys(
+            "detect.project_type", payload["project_type"], self.EXPECTED["detect.project_type"]
+        )
+        self.assertIsNone(payload["first_task"], "no source files, so nothing to suggest")
+
+    def test_detect_first_task_and_launch_shapes(self):
+        src = self.project_root / "src"
+        src.mkdir()
+        (src / "a.py").write_text("x = 1\n", encoding="utf-8")
+        payload = self._run_ok("detect", "--path", str(self.project_root), "--json")
+        task = payload["first_task"]
+        self._assert_record_keys("detect.first_task", task, self.EXPECTED["detect.first_task"])
+        if task["launch"] is not None:
+            self._assert_record_keys("detect.launch", task["launch"], self.EXPECTED["detect.launch"])
+
+    def test_start(self):
+        (self.project_root / "src").mkdir()
+        (self.project_root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+        payload = self._run_ok("start", "--path", str(self.project_root), "--provider", "claude", "--json")
+        self._assert_exact_keys("start", payload, self.EXPECTED["start"])
+        self.assertEqual(set(payload["detect"]), self.EXPECTED["detect"])
 
     def test_bind(self):
         # Reuse the bind already performed in setUp rather than binding again --
