@@ -231,7 +231,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
 <!-- dev-team-agents: codex-session-banner -->
 ## Codex Session Banner
 
-When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the next three lines **verbatim, unmodified**, as the first thing in your **first reply of the session**.
+When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the lines that follow it, up to the first blank line, **verbatim, unmodified**, as the first thing in your **first reply of the session**.
 
 Rules:
 - Do not add any text before the banner.
@@ -240,6 +240,21 @@ Rules:
 - This rule applies to normal conversation too, not only `$devteam-*` skills.
 AGENTSEOF
     echo "  + injected Codex session-banner echo rule into AGENTS.md"
+  elif grep -qF "reproduce the next three lines" "$TARGET_AGENTS_MD"; then
+    # The banner grew past three lines (ADR-0030 added Start with / Also try): adapt the old rule in place.
+    python3 - "$(po_native_path "$TARGET_AGENTS_MD")" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as fh:
+    text = fh.read()
+text = text.replace(
+    "reproduce the next three lines **verbatim, unmodified**",
+    "reproduce the lines that follow it, up to the first blank line, **verbatim, unmodified**",
+)
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PYEOF
+    echo "  + updated Codex session-banner echo rule in AGENTS.md"
   else
     echo "  + Codex session-banner echo rule already present in AGENTS.md"
   fi

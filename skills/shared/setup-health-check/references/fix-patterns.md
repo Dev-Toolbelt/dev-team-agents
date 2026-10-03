@@ -316,7 +316,7 @@ if ! grep -qF "$_DTA_CODEX_BANNER_MARKER" AGENTS.md 2>/dev/null; then
 <!-- dev-team-agents: codex-session-banner -->
 ## Codex Session Banner
 
-When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the next three lines **verbatim, unmodified**, as the first thing in your **first reply of the session**.
+When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the lines that follow it, up to the first blank line, **verbatim, unmodified**, as the first thing in your **first reply of the session**.
 
 Rules:
 - Do not add any text before the banner.
