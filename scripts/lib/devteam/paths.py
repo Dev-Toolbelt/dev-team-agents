@@ -483,6 +483,9 @@ def locks_dir():
 #: `account-session.json` is the non-secret half of the signed-in session (ADR-0029): which
 #: account this machine is signed in as, which secret backend holds its refresh token and
 #: when the entitlement was last fetched. A session is a fact about this machine.
+#:
+#: `command-usage.json` counts how often this machine's user ran each devteam command
+#: (ADR-0030); it decides which commands the session-start banner reveals.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -507,6 +510,10 @@ MACHINE_LOCAL_RECORDS = (
     # token worked against an API from THIS machine, at that moment. The token and the
     # account config that produced the result are not portable proof of it elsewhere.
     "integrations-status.json",
+    # How often THIS machine's user ran each devteam command in this project (ADR-0030):
+    # `{"<command>": {"count": n, "last_used": iso8601}}`, which decides the "Also try:"
+    # commands the session-start banner reveals. A count means nothing on another host.
+    "command-usage.json",
     # The signed account entitlement cached on THIS machine (ADR-0029): a token bound to
     # this machine's clock skew and to the highest time it has observed. Tamper-evident
     # by signature, not a secret, but meaningless on another host.

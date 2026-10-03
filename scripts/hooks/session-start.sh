@@ -279,6 +279,12 @@ sys.path.insert(0, sys.argv[1])
 from devteam import auth_gate
 print(auth_gate.banner_line())' "${SCRIPT_DIR}/../lib" 2>/dev/null || true)"
 [ -n "$DT_ACCOUNT_LINE" ] && echo "Account: ${DT_ACCOUNT_LINE}"
+# Five featured commands, plus up to three revealed by use (ADR-0030 section 5). Every command
+# stays installed; this only decides what the banner mentions. Prints nothing on any failure.
+PYTHONDONTWRITEBYTECODE=1 python3 -c 'import sys
+sys.path.insert(0, sys.argv[1])
+from devteam import command_usage
+command_usage.banner(sys.argv[2], sys.argv[3])' "${SCRIPT_DIR}/../lib" "$PROJECT_ROOT" "$STATE_DIR" 2>/dev/null || true
 echo ""
 
 # ── Cross-platform date diff helper ──────────────────────────────

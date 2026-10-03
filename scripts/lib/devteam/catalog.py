@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import versions
+from . import command_usage, versions
 from .errors import UsageError
 
 #: The three trees this catalog reads, and the order they are reported in.
@@ -137,7 +137,12 @@ def _skill_entry(path, version_dir, version):
     }
 
 
-def _command_entry(path, version_dir, version):
+def _command_meta(version_dir):
+    """The resolved version's own commands.json (`featured`, `related`); ``{}`` when it has none."""
+    return command_usage.load_commands(Path(version_dir) / "scripts" / "lib")
+
+
+def _command_entry(path, version_dir, version, meta=None):
     # `.as_posix()`: see `_agent_entry` — same `--json` contract.
     rel = Path(path).relative_to(version_dir).as_posix()
     # Commands carry no `name:` key (only `description` and, optionally,
@@ -147,11 +152,17 @@ def _command_entry(path, version_dir, version):
         frontmatter, _body = parse_frontmatter(_read_text(path))
     except (OSError, ValueError) as exc:
         return _malformed(name, rel, version, exc)
+    entry_meta = (meta or {}).get(name)
+    entry_meta = entry_meta if isinstance(entry_meta, dict) else {}
+    related = entry_meta.get("related")
     return {
         "name": name,
         "description": frontmatter.get("description"),
         "path": rel,
         "version": version,
+        # ADR-0030 section 5: additive, so a version that predates them answers false / [].
+        "featured": entry_meta.get("featured") is True,
+        "related": [item for item in related if isinstance(item, str)] if isinstance(related, list) else [],
     }
 
 
@@ -167,16 +178,22 @@ def list_skills(version):
     return [_skill_entry(path, version_dir, version) for path in found]
 
 
-def list_commands(version):
+def list_commands(version, featured_only=False):
     version_dir = versions.require(version)
     found = sorted((version_dir / "commands").glob("*.md"))
-    return [_command_entry(path, version_dir, version) for path in found]
+    meta = _command_meta(version_dir)
+    entries = [_command_entry(path, version_dir, version, meta) for path in found]
+    if featured_only:
+        entries = [entry for entry in entries if entry.get("featured")]
+    return entries
 
 
 _LISTERS = {"agents": list_agents, "skills": list_skills, "commands": list_commands}
 
 
-def list_kind(kind, version):
+def list_kind(kind, version, featured_only=False):
+    if featured_only and kind == "commands":
+        return list_commands(version, featured_only=True)
     lister = _LISTERS.get(kind)
     if lister is None:
         raise UsageError(

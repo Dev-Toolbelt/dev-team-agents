@@ -960,6 +960,21 @@ def render_command_opencode(name, meta, body, model_id, effort, tool_map):
     }
 
 
+def featured_marker(meta, provider):
+    """The line carrying a command's `featured` flag, per provider (ADR-0030 section 5).
+
+    Only Codex has somewhere to put it: its command skill already carries inert marker
+    comments (`codex-plan-gate`, `codex-interaction-mode`). Claude Code symlinks the source
+    command file, whose frontmatter has no such key, and an opencode config entry has no field
+    for it; inventing one in either would be a key the provider does not define. For those two
+    the session-start banner and `devteam catalog commands --featured` carry the flag.
+    Descriptions are never touched.
+    """
+    if provider == "codex" and meta.get("featured") is True:
+        return "<!-- codex-featured: true -->\n"
+    return ""
+
+
 def render_command_codex(name, meta, body, model_id, effort, tool_map):
     note = tool_conventions_note("codex", tool_map)
     interaction_mode = meta.get("interaction_mode", "optional")
@@ -976,7 +991,9 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
         f'description: "{desc}"\n'
         "---\n\n"
         f"<!-- codex-plan-gate: {meta.get('plan_gate', 'conditional')} -->\n"
-        f"<!-- codex-interaction-mode: {interaction_mode} -->\n\n"
+        f"<!-- codex-interaction-mode: {interaction_mode} -->\n"
+        + featured_marker(meta, "codex")
+        + "\n"
         + note + body
     )
     return {"path": f".codex/skills/devteam-{name}/SKILL.md", "content": skill_content}

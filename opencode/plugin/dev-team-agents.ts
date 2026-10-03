@@ -129,7 +129,13 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
   const runScript = (script: string, stdin?: string, timeoutMs: number = HOOK_TIMEOUT_MS): Promise<HookResult> =>
     new Promise((resolve, reject) => {
       const posix = process.platform !== "win32"
-      const child = spawn("bash", bashArgs(script), { cwd: directory, stdio: ["pipe", "pipe", "pipe"], detached: posix })
+      const child = spawn("bash", bashArgs(script), {
+        cwd: directory,
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: posix,
+        // Tells session-start.sh whose command syntax the banner should use.
+        env: { ...process.env, DEVTEAM_PROVIDER: "opencode" },
+      })
       let stdout = ""
       let stderr = ""
       const timer = setTimeout(() => {
