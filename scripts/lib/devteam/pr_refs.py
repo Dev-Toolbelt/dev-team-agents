@@ -20,6 +20,7 @@ never touch the network, the keychain or the integration token.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -621,7 +622,8 @@ def analyze_command(command):
     """The PR/MR/merge actions a shell command line invokes, in order; ``[]`` for anything else.
 
     Actions: ``{"op": "create", "tool", "kind", "head", "repo"}``, ``{"op": "merge", "tool",
-    "kind", "target", "repo"}`` and ``{"op": "git_merge", "branch"}``. A false-positive filter
+    "kind", "target", "repo"}`` and ``{"op": "git_merge", "branch"}``; after a ``cd`` each also
+    carries ``dir``, the target as written (``None`` when only a shell could resolve it). A false-positive filter
     only (a command inside ``echo``, quotes or a heredoc is not an action); what makes a mark is
     the tool's own result, parsed by :func:`created_link` / :func:`merge_confirmed`.
     """
@@ -630,6 +632,9 @@ def analyze_command(command):
     if _SHADOW_RE.search(command):
         return []
     actions = []
+    # A `cd` earlier in the line moves the actions after it; ``moved`` is its target, ``None`` when
+    # it cannot be read without a shell (a variable, a substitution, `cd -`).
+    moved, cd_seen = None, False
     for segment in _segments(command):
         if not segment.strip():
             continue
@@ -640,6 +645,10 @@ def analyze_command(command):
         if not tokens:
             continue
         head = tokens[0]
+        if head == "cd":
+            moved, cd_seen = _cd_target(tokens[1:]), True
+            continue
+        before = len(actions)
         if head == "gh" and len(tokens) >= 3 and tokens[1] == "pr" and tokens[2] in ("create", "merge"):
             tool, kind, verb = "gh", KIND_PR, tokens[2]
         elif head == "glab" and len(tokens) >= 3 and tokens[1] == "mr" and tokens[2] in ("create", "merge"):
@@ -647,6 +656,8 @@ def analyze_command(command):
         elif head == "git":
             action = _git_merge_action(tokens[1:])
             if action:
+                if cd_seen:
+                    action["dir"] = moved
                 actions.append(action)
             continue
         else:
@@ -658,7 +669,26 @@ def analyze_command(command):
             actions.append({"op": "create", "tool": tool, "kind": kind, "head": clean_branch(branch), "repo": repo})
         else:
             actions.append({"op": "merge", "tool": tool, "kind": kind, "target": _merge_target(positionals), "repo": repo})
+        if cd_seen:
+            for action in actions[before:]:
+                action["dir"] = moved
     return actions
+
+
+def _cd_target(args):
+    """The directory a ``cd`` names, as written (absolute, relative or ``~``), else ``None``."""
+    if len(args) != 1:
+        return None
+    target = args[0]
+    if not target or target.startswith("-") or any(c in target for c in "$`*?[\x00"):
+        return None
+    if target == "~" or target.startswith("~/"):
+        target = os.path.expanduser(target)
+        if target.startswith("~"):
+            return None
+    elif target.startswith("~"):
+        return None
+    return target
 
 
 def _git_merge_action(tokens):

@@ -8,6 +8,7 @@ then each accepted shape, the remote match and the strict reference rules.
 
 import json
 import subprocess
+import os
 import unittest
 from unittest import mock
 
@@ -26,6 +27,21 @@ def keys(found):
 
 
 class AnalyzeCommandTest(unittest.TestCase):
+    def test_a_cd_before_the_action_is_carried_as_its_dir(self):
+        (action,) = pr_refs.analyze_command("cd /work/other && git push && gh pr create --fill")
+        self.assertEqual(action["dir"], "/work/other")
+        (action,) = pr_refs.analyze_command("cd ../other; gh pr merge 3")
+        self.assertEqual(action["dir"], "../other")
+        (action,) = pr_refs.analyze_command("cd ~/other && git merge feat/x")
+        self.assertEqual(action["dir"], os.path.expanduser("~/other"))
+        self.assertNotIn("dir", pr_refs.analyze_command("gh pr create --fill")[0])
+
+    def test_a_cd_only_a_shell_could_resolve_leaves_the_dir_unknown(self):
+        for target in ("$W", "`pwd`", "-", "~bob/x", "a b", "*"):
+            command = "cd {} && gh pr merge 3".format(target)
+            (action,) = pr_refs.analyze_command(command)
+            self.assertIsNone(action["dir"], target)
+
     def ops(self, command):
         return [(a["op"], a.get("tool")) for a in pr_refs.analyze_command(command)]
 
