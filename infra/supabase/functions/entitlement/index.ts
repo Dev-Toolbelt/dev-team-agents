@@ -12,7 +12,9 @@ Deno.serve(async (req) => {
       banKey: requireEnv("BAN_HMAC_KEY"),
       signingKey: await importSigningKey(requireEnv("ENTITLEMENT_ED25519_PRIVATE_KEY")),
       kid: requireEnv("ENTITLEMENT_KID"),
-      issuer: new URL(requireEnv("SUPABASE_URL")).origin,
+      // The public URL clients know. SUPABASE_URL is that URL in the cloud, but the gateway's
+      // internal address under a local `supabase start`, so dev-local.sh sets this instead.
+      issuer: new URL(Deno.env.get("ENTITLEMENT_ISSUER") || requireEnv("SUPABASE_URL")).origin,
       now: () => new Date(),
     });
   } catch (err) {
