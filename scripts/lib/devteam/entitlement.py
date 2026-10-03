@@ -88,6 +88,10 @@ SEAM_URL_ENV = "DEVTEAM_AUTH_TEST_URL"
 SEAM_KID_ENV = "DEVTEAM_AUTH_TEST_KID"
 SEAM_KEY_ENV = "DEVTEAM_AUTH_TEST_PUBKEY"
 SEAM_ENVS = (SEAM_URL_ENV, SEAM_KID_ENV, SEAM_KEY_ENV)
+#: Optional: the public ``apikey`` of the server behind the seam (a local ``supabase start``
+#: gateway refuses the compiled one). Read only while the three variables above form a valid
+#: seam, so on its own it changes nothing.
+SEAM_ANON_KEY_ENV = "DEVTEAM_AUTH_TEST_ANON_KEY"
 SEAM_KID_PREFIX = "test-"
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "auth-config.json"
@@ -289,7 +293,7 @@ def load_identity(environ=None, config_path=None, dev_path=None):
     return Identity(
         environment=name,
         supabase_url=test_url or url,
-        anon_key=str(section.get("anon_key", "")),
+        anon_key=str((test_url and env.get(SEAM_ANON_KEY_ENV)) or section.get("anon_key", "")),
         audience=str(config.get("audience", "devteam-cli")),
         keys=keys,
         test_seam=test_url is not None,
