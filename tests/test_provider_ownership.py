@@ -14,7 +14,7 @@ from pathlib import Path
 
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
-from devteam import bind, migrate, project, providers, registry, versions
+from devteam import bind, migrate, permissions, project, providers, registry, versions
 from devteam.errors import ConflictError, UsageError
 
 #: Files a project authored itself, next to (never on top of) the framework's
@@ -476,6 +476,9 @@ class ProviderOwnershipTest(StoreTestCase):
                 ]
                 bind.jsonio.write_json_atomic(bind.manifest_file(project_id), manifest)
                 self._seed(root, OWN_FILES[provider])
+                # The release that recorded directories wrote no Codex rules file (ADR-0032 came
+                # later), so the legacy state this test rebuilds has none either.
+                (root / permissions.CODEX_RULES_FILE).unlink(missing_ok=True)
 
                 again = bind.bind(root, provider_names=[provider])
                 self.assertEqual(again["pruned"]["quarantined"], [])

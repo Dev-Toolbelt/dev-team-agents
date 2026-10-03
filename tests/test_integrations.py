@@ -1665,3 +1665,48 @@ class IntegrationCallHardeningTest(CloudflareTestCase):
         operations = (REPO_ROOT / "app" / "src" / "cli" / "operations.ts").read_text(encoding="utf-8")
         self.assertIn("['integration', 'resources']", operations)
         self.assertNotIn("['integration', 'call']", operations)
+
+
+class CanonicalWriteFormTest(CloudflareTestCase):
+    """ADR-0032: the provider ask rules key on `integration call <name> <METHOD>`; a write in
+    any other form would walk past them, so the CLI refuses it before anything is sent."""
+
+    def raw(self, *args):
+        code, out, err = self.run_cli(*args)
+        try:
+            body = json.loads(out)
+        except ValueError:
+            body = None
+        return code, body
+
+    def test_a_lower_case_write_method_is_refused(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        code, body, _o, _e = self.cli("call", "cloudflare", "delete", "/zones/abc", "--allow-write")
+        self.assertEqual(code, 2)
+        self.assertIn("ADR-0032", body["hint"])
+        self.assertEqual(len(self.server.log), before)
+
+    def test_an_option_before_the_method_is_refused_for_a_write(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        code, _body = self.raw(
+            "integration", "call", "--path", str(self.root), "cloudflare", "DELETE", "/zones/abc",
+            "--allow-write", "--json",
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(len(self.server.log), before)
+
+    def test_reads_keep_any_form(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (200, {}, cf([]))
+        code, _body = self.raw("integration", "call", "--path", str(self.root), "cloudflare", "get", "/zones", "--json")
+        self.assertEqual(code, 0)
+
+    def test_the_canonical_form_is_recognised(self):
+        self.assertTrue(integrations.is_canonical_call(
+            ["integration", "call", "cloudflare", "POST", "/x", "--allow-write"], "cloudflare", "POST"))
+        self.assertFalse(integrations.is_canonical_call(
+            ["integration", "call", "cloudflare", "Post", "/x"], "cloudflare", "Post"))
+        self.assertFalse(integrations.is_canonical_call(
+            ["integration", "call", "--json", "cloudflare", "POST", "/x"], "cloudflare", "POST"))

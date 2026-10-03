@@ -9,7 +9,7 @@ from pathlib import Path
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, doctor, migrate, project, quarantine, registry, versions
+from devteam import bind, doctor, migrate, permissions, project, quarantine, registry, versions
 from devteam.errors import ConflictError, UsageError
 
 
@@ -278,7 +278,9 @@ class PreRootMigrationTest(StoreTestCase):
         self.assertEqual(len(stops), 1)
         self.assertIn(".dev-team-agents/scripts/hooks/stop.sh", stops[0])
         self.assertNotIn(".claude/dev-team-agents", stops[0])
-        self.assertEqual(settings["permissions"], {"allow": ["Bash(npm test)"]})
+        # The project's own rule is kept; the integration-write ask rules are added (ADR-0032).
+        self.assertEqual(settings["permissions"]["allow"], ["Bash(npm test)"])
+        self.assertEqual(settings["permissions"]["ask"], list(permissions.CLAUDE_ASK_RULES))
         # The link the bind recreates points into the store; the one it does not is gone.
         # Resolved on both sides: Windows reports the link target with a `\\?\` prefix and the
         # temp home under its 8.3 short name.
