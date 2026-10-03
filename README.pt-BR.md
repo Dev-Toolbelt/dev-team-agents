@@ -127,7 +127,7 @@ Os dois instalam só para o seu usuário, colocam o `devteam` no PATH e instalam
 | Vincular um projeto | `devteam bind /caminho/do/projeto` |
 | Listar o que está disponível | `devteam catalog agents|skills|commands` |
 | Gerenciar suas skills globais do Claude / Codex / opencode | `devteam skills list\|show\|install\|remove` |
-| Conectar contas do GitHub e Jira | `devteam integration connect github\|jira`, test, disconnect, config |
+| Conectar contas do GitHub, Jira e Cloudflare | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
@@ -141,18 +141,20 @@ Rodando de um clone no Windows, chame o CLI como `py -3 scripts\cli\devteam …`
 
 > Layout do store, modos de bind, registro de hooks, contrato `--json` e códigos de saída: [CLAUDE-md/cli.md](CLAUDE-md/cli.md)
 
-### Integrações — GitHub e Jira
+### Integrações — GitHub, Jira e Cloudflare
 
-Conecte suas contas GitHub e Jira uma vez; cada projeto na sua máquina pode usá-las. Tokens são armazenados de forma segura no keychain do SO e nunca são exibidos novamente. Vinculações específicas por projeto (qual repositório, qual projeto Jira) são commitadas em cada projeto para que seu time fique sincronizado.
+Conecte suas contas GitHub, Jira e Cloudflare uma vez; cada projeto na sua máquina pode usá-las. Tokens são armazenados de forma segura no keychain do SO e nunca são exibidos novamente. Vinculações específicas por projeto (qual repositório, qual projeto Jira, qual zona do Cloudflare) são commitadas em cada projeto para que seu time fique sincronizado.
 
 **Crie tokens:**
 - **GitHub**: [Tokens de acesso pessoal (fine-grained)](https://github.com/settings/personal-access-tokens/new) — selecione **Repository access: Public repositories (read-only)** e permissões **Metadata (read-only)**, ou para repositórios privados conceda **Contents (read-only)** + **Metadata (read-only)**.
 - **Jira Cloud**: Tokens de API em [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens). Você também precisará do seu email. Para Jira Data Center auto-hospedado, use um Personal Access Token (PAT).
+- **Cloudflare**: um [API token](https://dash.cloudflare.com/profile/api-tokens) com escopo restrito às permissões de que seus agentes precisam (ex.: **Zone: DNS: Edit**, **Zone: Cache Purge: Purge**). Nunca a Global API Key.
 
 Conecte com:
 ```bash
 devteam integration connect github
 devteam integration connect jira --field site_url=https://acme.atlassian.net --field email=me@example.com
+devteam integration connect cloudflare --field account_id=<account-id>
 ```
 
 Cada prompt lê o token apenas da entrada padrão — nunca da linha de comando, o que o deixaria no histórico do shell. O token é enviado apenas à origem configurada via HTTPS e armazenado no keychain da sua máquina.
@@ -161,9 +163,12 @@ Depois, em cada projeto, vincule a integração ao seu repositório ou projeto:
 ```bash
 devteam integration config set github repository owner/repo-name
 devteam integration config set jira project_key PROJ
+devteam integration config set cloudflare zone_id <zone-id>
 ```
 
-Ou descubra de forma interativa na aba **Integrações** do app desktop, ou com `devteam integration resources github repos` e `devteam integration resources jira projects`.
+Ou descubra de forma interativa na aba **Integrações** do app desktop, ou com `devteam integration resources github repos`, `devteam integration resources jira projects` e `devteam integration resources cloudflare zones`.
+
+**Agentes podem executar chamadas à API do Cloudflare** (registros DNS, purge de cache, regras de WAF e cache, rollback do Pages, inspeção de Workers/R2/KV/D1) com `devteam integration call cloudflare <MÉTODO> <endpoint>` ([ADR-0031](docs/development/adrs/0031-agents-call-integration-apis-through-a-cli-proxy-that-holds-the-token.md)). A CLI faz a requisição com o token armazenado, então o token nunca chega ao agente, ao chat ou ao ambiente. Leituras rodam livremente; toda escrita (`POST`/`PUT`/`PATCH`/`DELETE`) exige `--allow-write`, que os agentes são instruídos a passar só depois que você confirma a alteração exata — uma política que o agente segue, não uma trava que ele não consegue abrir. Endpoints cuja resposta é uma credencial são recusados sempre, e toda chamada fica registrada no log de auditoria de credenciais.
 
 O app desktop também tem uma aba **Credentials** (Credenciais) em cada tela de projeto para criar e editar `.dev-team-agents/credentials.local.json` como uma árvore livre, com segredos por campo, flag de produção por grupo e busca — ou use `devteam cred local init`, `show` e `patch` da CLI.
 

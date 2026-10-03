@@ -55,7 +55,7 @@ Other directories under `.claude/` created by agents:
 
 ### Integration settings
 
-GitHub and Jira bindings live in `.dev-team-agents/integration-settings/<name>.json` — **committed**, like plugin settings (`paths.PROJECT_OWNED_RECORDS`). Shape: `{ "schema": 1, "config": { "repository": "owner/name" } }`. Only project-scope fields are stored here; the token and the account fields (API URL, site URL, email) are account-level and never enter the project.
+Integration bindings (GitHub, Jira, Cloudflare) live in `.dev-team-agents/integration-settings/<name>.json` — **committed**, like plugin settings (`paths.PROJECT_OWNED_RECORDS`). Shape: `{ "schema": 1, "config": { "repository": "owner/name" } }`. Only project-scope fields are stored here; the token and the account fields (API URL, site URL, email) are account-level and never enter the project.
 
 ### Plugin settings
 

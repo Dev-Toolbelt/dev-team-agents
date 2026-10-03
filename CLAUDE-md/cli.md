@@ -65,7 +65,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029), and `command-usage.json` (how often this machine's user ran each devteam command, which decides the commands the banner reveals, ADR-0030). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029), and `command-usage.json` (how often this machine's user ran each devteam command, which decides the commands the banner reveals, ADR-0030). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -191,7 +191,7 @@ mode.
 | `devteam migrate [path] [--apply [--untrack]]` | v2 install → bind, in either shape: `root` (vendored at `.dev-team-agents/`) or `pre-root` (at `.claude/dev-team-agents/`, before v2.1.0 — its memory moves to `.dev-team-agents/user-data/`, its `.claude/docs/` stays and joins `context_paths`, its hook entries and links are replaced). Previews unless `--apply`. An unregistered `project.json` (left by a refused bind) is adopted (`adopts_identity`); a registered path with no `project.json` gets the registered id back (`restores_identity` / `restored_identity`: that id, or `null`). Reports the paths git still tracks — `git_tracked` (the vendored trees, and memory) and `git_tracked_artifacts` (committed links a bind replaced) — and with `--untrack` runs `git rm -r --cached` on exactly those: the index only, never the working tree, nothing committed (`untracked`, `untrack_problem`). The one command that runs git on the user's repository, and only when asked (ADR-0015 amendment). `.claude/` links materialized as real copies (`bind.v2_copy`) and the real files a v2 Codex or opencode installer rendered (`providers.is_v2_render`, or listed in its `.provider-owned-<provider>` ledger, which goes with them) are quarantined with the tree and listed in `v2_copies`, never a path a v3 manifest claims (ADR-0022 amendment 2026-10-02); a project left with only those copies by an interrupted migration is migrated on the same identity. Every provider's bind preflight (`bind.check`) runs before the first move, so a refused migration changes nothing |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
 | `devteam plugin list \| show <name> \| enable <name> [--force] \| disable <name> \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| run <name> <action>` | Manage plugins; see § Plugins below |
-| `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind>` | Account-level GitHub and Jira connections; see § Integrations below |
+| `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind> \| call <name> <METHOD> <endpoint> [--query k=v]… [--data J \| --data-file F] [--allow-write]` | Account-level GitHub, Jira and Cloudflare connections, and the agents' API proxy; see § Integrations below |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam cred local show \| init \| patch --expect-hash <H>` | Manage `.dev-team-agents/credentials.local.json` for agents and the app; see § Local Credentials File below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command**. A project already on the current layout is refused with exit 2 and `details.reason: "up-to-date"` — nothing to do, not a malformed request |
@@ -768,7 +768,7 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 
 ## Integrations
 
-`devteam integration` connects the account to GitHub and Jira. An integration is **not** a plugin: the
+`devteam integration` connects the account to GitHub, Jira and Cloudflare. An integration is **not** a plugin: the
 token is account-level, and all network I/O happens in the CLI (the desktop app never touches the
 network, ADR-0015). Each adapter (`scripts/lib/devteam/integrations/`) declares a descriptor — fields, scope, picker
 resource — and the `IntegrationView` in `--json` carries it, so a client renders generically.
@@ -807,6 +807,27 @@ it changed. A reference whose value is not on this machine makes `test` answer `
 `connect` checks the required account fields before it prompts for a token.
 Read-modify-write of the account and binding files, and `disconnect`, hold the `integrations` lock
 (outer; `creds`' lock nests inside it); no lock is held across a network call.
+
+**`call` is the agents' API proxy** ([ADR-0031](../docs/development/adrs/0031-agents-call-integration-apis-through-a-cli-proxy-that-holds-the-token.md)).
+Only an adapter with `supports_call = True` accepts it — `cloudflare` today; `github`/`jira` answer a
+usage error. The endpoint is an absolute path of RFC 3986 path characters: no query, fragment, empty,
+`.` or `..` segment, and no percent-escape that decodes to `/`, `\`, `.`, `%` or a control character;
+query parameters go through `--query`. Its shape is checked **before** the token is read. `{field}`
+placeholders take the effective account and project values (never the origin field), each
+re-validated by the adapter and percent-encoded; the filled path is checked again and matched
+(decoded) against the adapter's `forbidden_endpoints` — endpoints whose response is a credential,
+refused even with `--allow-write`. `GET` runs freely; `POST`/`PUT`/`PATCH`/`DELETE` are a usage error
+without `--allow-write` (no option abbreviations: `--allow` is rejected), and nothing is sent. The
+body is strict JSON, at most 1 MB (`--data`, or `--data-file`, `-` for stdin). An unreadable project
+binding is an environment error, never read as an unset field. It uses `http.request_json`: same
+policy, **no redirect followed**. Success payload: `{integration, method, endpoint, response}`
+(`tests/test_json_contract.py` `AGENT_FACING_KEYS`); an HTTP failure exits `3` with
+`details.{state, http_status, response, retry_after?}`, and the human-mode message carries the
+adapter's `describe_error` summary. Every call, refused or sent, appends an `integration-call` line
+(method, resolved path, `allow_write`, project id, outcome; never body, query values or response) to
+the global credential audit log. `compat` classifies it **store-neutral**, and the desktop app's
+`ALLOWED_COMMANDS` does not include it. `03-credential-guard.sh` refuses `devteam cred get
+integration.*` for agents.
 
 ## Plugins
 
