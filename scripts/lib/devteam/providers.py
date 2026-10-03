@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import shells
+from . import permissions, shells
 from .errors import ConflictError, EnvError
 
 ALL_PROVIDERS = ("claude", "opencode", "codex")
@@ -387,6 +387,9 @@ def is_v2_render(rel, dest, version_dir):
         return _has_marker(text) and (_frontmatter(text) or {}).get("mode") == "subagent"
     if rel.as_posix() == OPENCODE_PLUGIN_FILE:
         return _has_marker(read_regular_file(dest))
+    if rel.as_posix() == permissions.CODEX_RULES_FILE:
+        # ADR-0032: wholly rendered, and its first line names the framework.
+        return (read_regular_file(dest) or "").startswith(permissions.CODEX_RULES_MARKER)
     return False
 
 
@@ -517,7 +520,8 @@ def codex_hook_events(project_root):
 
 
 def unwire_opencode_commands(project_root):
-    """Remove only the ``devteam:*`` command keys from the project's opencode config.
+    """Remove only the ``devteam:*`` command keys, and the integration-write ask rules
+    (ADR-0032), from the project's opencode config.
 
     Returns ``(removed, untouched)``: the number of keys removed and the project
     files left alone because they are not plain JSON (JSONC with comments or
@@ -538,22 +542,25 @@ def unwire_opencode_commands(project_root):
             continue
         except ValueError:
             # A JSONC file the installer never wrote is no problem of ours.
-            if OPENCODE_COMMAND_PREFIX in raw:
+            if OPENCODE_COMMAND_PREFIX in raw or permissions.CALL_PREFIX in raw:
                 untouched.append(rel)
             continue
-        commands = data.get("command") if isinstance(data, dict) else None
-        if not isinstance(commands, dict):
+        if not isinstance(data, dict):
             continue
-        ours = [key for key in commands if str(key).startswith(OPENCODE_COMMAND_PREFIX)]
-        if not ours:
+        commands = data.get("command")
+        ours = []
+        if isinstance(commands, dict):
+            ours = [key for key in commands if str(key).startswith(OPENCODE_COMMAND_PREFIX)]
+            for key in ours:
+                commands.pop(key)
+            if ours and not commands:
+                data.pop("command")
+        rules = permissions.unmerge_opencode(data)
+        if not ours and not rules:
             continue
-        for key in ours:
-            commands.pop(key)
-        if not commands:
-            data.pop("command")
         tmp = path.with_name(path.name + ".tmp")
         with tmp.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         os.replace(str(tmp), str(path))
-        removed += len(ours)
+        removed += len(ours) + rules
     return removed, untouched

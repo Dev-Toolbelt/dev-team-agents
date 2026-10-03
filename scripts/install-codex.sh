@@ -39,6 +39,7 @@
 #      pre-compact,stop,session-end}.sh to the Codex PreToolUse/PostToolUse/
 #      UserPromptSubmit/SessionStart/PreCompact/Stop/SessionEnd events. Idempotent: only
 #      dev-team-managed hook entries are touched.
+#   7b. Writes .codex/rules/devteam.rules, the integration-write ask rule (ADR-0032).
 #   8. Records the installed version.
 
 set -euo pipefail
@@ -143,13 +144,16 @@ TARGETS="$STAGING/.targets"
       -exec basename {} \; | sort | sed 's|^|.codex/skills/|'
   fi
   echo ".codex/skills/dev-team-agents"
+  # ADR-0032: the integration-write ask rule. A whole file of ours, so it is owned and
+  # recorded like an agent file, and removed by unbind with the rest.
+  echo ".codex/rules/devteam.rules"
 } > "$TARGETS"
 
 if [[ $LIST_TARGETS -eq 1 ]]; then
   cat "$TARGETS" >&3
   exit 0
 fi
-po_require_inside codex "$PROJECT_ROOT" .codex .codex/agents .codex/skills .codex/hooks.json
+po_require_inside codex "$PROJECT_ROOT" .codex .codex/agents .codex/skills .codex/hooks.json .codex/rules
 po_guard "$PROJECT_ROOT" "$SOURCE_DIR" codex "$OWNED_FILE" "$TARGETS" "$ADOPT" "$DRY_RUN"
 # A hooks.json this installer cannot merge into is refused before anything is written.
 python3 "$(po_native_path "$SCRIPT_DIR/lib/codex_hooks_merge.py")" "$(po_native_path "$PROJECT_ROOT/.codex/hooks.json")" "" --check
@@ -218,6 +222,16 @@ if [[ $DRY_RUN -eq 0 ]]; then
   HOOKS_DIR_REL=".dev-team-agents/scripts/hooks"
 
   python3 "$(po_native_path "$SCRIPT_DIR/lib/codex_hooks_merge.py")" "$(po_native_path "$HOOKS_FILE")" "$HOOKS_DIR_REL"
+fi
+
+# ── rules for Codex: a write through `devteam integration call` prompts (ADR-0032) ──
+# Codex rules match only a command's prefix, so the rule keys on the method as the fourth
+# word; the CLI refuses a write written any other way. Codex loads project rules only for a
+# trusted project (`devteam doctor` says when it is not).
+if [[ $DRY_RUN -eq 0 ]]; then
+  mkdir -p "$CODEX_DIR/rules"
+  python3 "$(po_native_path "$SCRIPT_DIR/lib/permission_rules.py")" codex "$(po_native_path "$CODEX_DIR/rules/devteam.rules")"
+  echo "  + wrote the integration-write ask rule to .codex/rules/devteam.rules (applies once the project is trusted)"
 fi
 
 # ── project AGENTS.md rule for visible SessionStart banner in Codex ─────────

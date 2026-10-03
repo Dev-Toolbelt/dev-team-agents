@@ -758,6 +758,20 @@ def _call_adapter(name):
     return adapter
 
 
+def is_canonical_call(argv, name, method):
+    """True when ``argv`` starts ``integration call <name> <METHOD>`` with the method upper-case.
+
+    The provider permission rules (ADR-0032) match the command text, and Codex's only by
+    prefix: a write is recognised by its method as the fourth word. An option before the
+    method, or a lower-case method, would walk past every one of them.
+    """
+    return (
+        isinstance(method, str)
+        and method == method.upper()
+        and list(argv[:4]) == ["integration", "call", name, method]
+    )
+
+
 def _check_method(method, allow_write):
     method = (method or "").upper()
     if method not in CALL_METHODS:
@@ -896,8 +910,11 @@ def _error_message(adapter, method, path, exc):
 
 
 def call(name, method, endpoint, query=None, body=None, allow_write=False,
-         project_root=None, project_id=None):
+         project_root=None, project_id=None, canonical=True):
     """One API request on the user's behalf; the token never leaves this function's callees.
+
+    ``canonical`` is whether the command line had the form the provider permission rules
+    match (:func:`is_canonical_call`); a write in any other form is refused.
 
     Returns ``{"integration", "method", "endpoint", "response"}``. An HTTP failure is an
     ``EnvError`` whose ``details`` carry the status and the API's own error body. Every
@@ -909,6 +926,12 @@ def call(name, method, endpoint, query=None, body=None, allow_write=False,
         method = _check_method(method, allow_write)
         if body is not None and method == "GET":
             raise UsageError("a GET request takes no body")
+        if method in WRITE_METHODS and not canonical:
+            raise UsageError(
+                "a write must be written as `devteam integration call {} {} <endpoint> ...`".format(name, method),
+                hint="Method in upper case, right after the integration name, with every option after "
+                "the endpoint: that is the form the provider's approval prompt recognises (ADR-0032).",
+            )
         check_endpoint(adapter, endpoint)
     except UsageError:
         _audit_call(name, raw_method, endpoint, allow_write, "refused", project_id)

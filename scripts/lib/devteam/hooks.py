@@ -13,6 +13,10 @@ enforced nowhere.
 merges into it and **never** rewrites it wholesale: it adds the entries it owns,
 replaces a stale v2 path with the current one, and leaves every other key alone.
 ``unwire`` removes only the entries it recognises.
+
+The same file carries the ``permissions.ask`` rules that make a write through
+``devteam integration call`` prompt the user (ADR-0032); their text and merge live in
+:mod:`.permissions`, and they ride on the same ``settings`` manifest record.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ import copy
 import sys
 from pathlib import Path
 
-from . import jsonio, project
+from . import jsonio, permissions, project
 from .errors import EnvError
 
 SETTINGS_FILE = Path(".claude") / "settings.json"
@@ -197,6 +201,12 @@ def wire(project_root, emitter=None):
         data["includeCoAuthoredBy"] = False
         changed = True
 
+    try:
+        if permissions.merge_claude(data):
+            changed = True
+    except EnvError as exc:
+        raise EnvError("{}: {}".format(settings_path, exc.message), hint=exc.hint) from None
+
     if changed:
         jsonio.write_json_atomic(settings_path, data, mode=0o644)
     elif emitter is not None:
@@ -214,11 +224,10 @@ def unwire(project_root):
     if not isinstance(data, dict):
         return []
     hooks = data.get("hooks")
-    if not isinstance(hooks, dict):
-        return []
 
     removed = []
-    for event, script in EVENTS:
+    # A `hooks` value that is not an object is the user's to fix, never ours to drop.
+    for event, script in EVENTS if isinstance(hooks, dict) else ():
         entries = hooks.get(event)
         if not isinstance(entries, list):
             continue
@@ -229,10 +238,11 @@ def unwire(project_root):
             hooks[event] = kept
         else:
             hooks.pop(event, None)
-    if not hooks:
+    if isinstance(hooks, dict) and not hooks:
         data.pop("hooks", None)
 
-    if removed:
+    rules_removed = permissions.unmerge_claude(data)
+    if removed or rules_removed:
         jsonio.write_json_atomic(settings_path, data, mode=0o644)
     return removed
 
@@ -254,3 +264,13 @@ def registered_events(project_root):
         if any(_is_devteam_entry(entry, script) for entry in entries):
             found.append(event)
     return found
+
+
+def missing_ask_rules(project_root):
+    """Our ``permissions.ask`` rules absent from the settings file, for ``doctor``."""
+    settings_path = Path(project_root) / SETTINGS_FILE
+    try:
+        data = jsonio.read_json(settings_path, default=None)
+    except EnvError:
+        return list(permissions.CLAUDE_ASK_RULES)
+    return permissions.claude_rules_present(data if isinstance(data, dict) else {})

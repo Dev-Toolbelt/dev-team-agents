@@ -33,6 +33,8 @@
 #   5. Copies the opencode plugin to <project>/.opencode/plugins/dev-team-agents.ts.
 #   6. Deep-merges the rendered command snippet into <project>/opencode.json
 #      (or opencode.jsonc) under the `command` key. Creates the file if absent.
+#      Then appends the integration-write ask rules under `permission.bash`
+#      (scripts/lib/permission_rules.py, ADR-0032).
 #   7. Records the installed version in .dev-team-agents/VERSION (reused
 #      by the existing update mechanism).
 
@@ -267,6 +269,14 @@ JSON
   CMD_COUNT=$(jq '. | length' "$snippet_json")
   rm -f "$snippet_json"
   echo "  + merged ${CMD_COUNT} command keys into .opencode/opencode.json (key: devteam:<name>)"
+
+  # ADR-0032: a write through `devteam integration call` asks the user, in opencode's own
+  # prompt. Appended as the LAST permission.bash keys (opencode lets the last match win).
+  if ! python3 "$(po_native_path "$SCRIPT_DIR/lib/permission_rules.py")" opencode "$(po_native_path "$CFG_FILE")"; then
+    echo "install-opencode: ERROR: could not add the integration-write ask rules to $CFG_FILE; it was left untouched." >&2
+    exit "$PO_CONFLICT_EXIT"
+  fi
+  echo "  + integration-write ask rules present in .opencode/opencode.json (permission.bash)"
 fi
 
 # 5. record version (reuse Claude installer's VERSION file if present). Not in a

@@ -917,6 +917,18 @@ PYEOF
     fi
 fi
 
+# ── Step 7b: Ask rules for writes through `devteam integration call` (ADR-0032) ──
+# The same rules `devteam bind` merges through scripts/lib/devteam/hooks.py: a write to an
+# integration's API prompts the user in Claude Code's own dialog, which the agent cannot
+# answer itself. Only our entries are added; a file that is not strict JSON is left alone.
+if command -v python3 >/dev/null 2>&1 && [ -f "$INSTALL_DIR/scripts/lib/permission_rules.py" ]; then
+    if python3 "$INSTALL_DIR/scripts/lib/permission_rules.py" claude "$SETTINGS_FILE"; then
+        echo "→ Integration-write ask rules present in .claude/settings.json"
+    else
+        echo "→ NOTE: the integration-write ask rules were not added to $SETTINGS_FILE (see above)."
+    fi
+fi
+
 # ── Step 8: Inject pre-compact auto-summary rule into project CLAUDE.md ──────
 _TARGET_CLAUDE_MD="$PROJECT_ROOT/CLAUDE.md"
 _DTA_MARKER="<!-- dev-team-agents: pre-compact-auto-summary -->"

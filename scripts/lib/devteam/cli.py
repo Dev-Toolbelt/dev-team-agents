@@ -1347,6 +1347,7 @@ def _call_body(args):
 
 def cmd_integration_call(args, emitter):
     root, project_id = _integration_project(args)
+    raw = getattr(args, "raw_argv", None) or []
     result = integrations.call(
         args.name,
         args.method,
@@ -1356,6 +1357,7 @@ def cmd_integration_call(args, emitter):
         allow_write=args.allow_write,
         project_root=root,
         project_id=project_id,
+        canonical=integrations.is_canonical_call(raw, args.name, args.method),
     )
     return result, json.dumps(result["response"], indent=2, sort_keys=True)
 
@@ -2332,6 +2334,8 @@ def main(argv=None, stdout=None, stderr=None):
         return emitter.fail(exc)
 
     emitter.as_json = getattr(args, "json", emitter.as_json)
+    # `integration call` checks the literal command line a write arrived in (ADR-0032).
+    args.raw_argv = list(raw)
 
     # The write gate, and it runs HERE — before `adopt_machine_layout()`, which is
     # itself a store mutation, and before any handler. A refusal must leave the store

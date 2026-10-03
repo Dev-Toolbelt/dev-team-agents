@@ -7,6 +7,7 @@ that are missing or point at the wrong version. Nothing here deletes.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -15,7 +16,7 @@ from pathlib import Path
 from . import bind as bind_module
 from . import detect as detect_module
 from .errors import ConflictError, EnvError
-from . import creds, credentials_local, hooks, migrate, paths, prefs, project, registry, versions
+from . import creds, credentials_local, hooks, integrations, migrate, paths, permissions, prefs, project, registry, versions
 from . import providers as providers_module
 
 OK = "ok"
@@ -44,6 +45,52 @@ def _points_into(target, version):
         return True
     except (ValueError, OSError):
         return False
+
+
+def _ask_rule_findings(root, bound, manifest):
+    """Whether a write through `integration call` still asks the user, per provider (ADR-0032)."""
+    findings = []
+    sync_hint = "Run `devteam sync` to write them again."
+    if "claude" in bound and manifest.get("mode") != "vendored":
+        missing = hooks.missing_ask_rules(root)
+        if missing:
+            findings.append(_finding(
+                WARN, "permissions",
+                "{} integration-write ask rule(s) missing from {}".format(len(missing), hooks.SETTINGS_FILE),
+                sync_hint + " Without them a write through `devteam integration call` runs without your approval.",
+            ))
+        else:
+            findings.append(_finding(OK, "permissions", "integration writes ask before running (Claude Code)"))
+    if "opencode" in bound:
+        path = root / ".opencode" / "opencode.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None
+        problems = permissions.opencode_findings(data) if isinstance(data, dict) else ["the file cannot be read"]
+        if problems:
+            findings.append(_finding(
+                WARN, "permissions",
+                "opencode may not ask before an integration write: {}".format("; ".join(problems)),
+                sync_hint + " A rule listed after ours, or an agent's own permission.bash, overrides them.",
+            ))
+        else:
+            findings.append(_finding(OK, "permissions", "integration writes ask before running (opencode)"))
+    if "codex" in bound:
+        if not permissions.codex_rules_current(root, integrations.callable_names()):
+            findings.append(_finding(
+                WARN, "permissions",
+                "{} is missing or out of date".format(permissions.CODEX_RULES_FILE), sync_hint,
+            ))
+        elif permissions.codex_project_trusted(root) is not True:
+            findings.append(_finding(
+                WARN, "permissions",
+                "Codex does not trust this project, so it ignores {}".format(permissions.CODEX_RULES_FILE),
+                "Open the project in Codex and trust it; until then an integration write does not ask.",
+            ))
+        else:
+            findings.append(_finding(OK, "permissions", "integration writes ask before running (Codex)"))
+    return findings
 
 
 def _finding(level, category, message, hint=None):
@@ -560,6 +607,8 @@ def check_project(project_root):
                     "Run `devteam sync` — it re-runs the opencode installer, which copies the plugin.",
                 )
             )
+
+    findings.extend(_ask_rule_findings(root, bound, manifest))
 
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:
         findings.append(
