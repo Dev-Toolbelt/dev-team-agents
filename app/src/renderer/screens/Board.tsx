@@ -37,6 +37,7 @@ import {
   PERIODS,
   basename,
   boardProjectName,
+  sortProjectViews,
   buildKanban,
   countUnshown,
   formatDateTime,
@@ -388,10 +389,11 @@ function Overview({
 }) {
   const views = useMemo(
     () =>
-      feed.projects
-        .map((project) => viewProject(project, period, now))
-        .filter((view): view is ProjectView => view !== null),
-    [feed.projects, period, now],
+      sortProjectViews(
+        feed.projects.map((project) => viewProject(project, period, now)).filter((view): view is ProjectView => view !== null),
+        names,
+      ),
+    [feed.projects, period, now, names],
   );
 
   if (views.length === 0) {

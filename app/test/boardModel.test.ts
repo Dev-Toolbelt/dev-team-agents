@@ -15,6 +15,7 @@ import {
   percentLabels,
   timeInColumn,
   periodCutoff,
+  sortProjectViews,
   stepDurations,
   viewProject,
 } from '../src/renderer/boardModel.js';
@@ -401,5 +402,20 @@ describe('formatDateTime', () => {
     const at = Date.UTC(2026, 9, 2, 13, 47) / 1000;
     expect(formatDateTime(at, 'pt-BR', 'UTC')).toBe('02/10/2026 13:47');
     expect(formatDateTime(at, 'en-GB', 'America/Sao_Paulo')).toBe('02/10/2026 10:47');
+  });
+});
+
+describe('sortProjectViews', () => {
+  const view = (id: string, root: string, inProgress: number) =>
+    viewProject(boardProject({ project_id: id, root, sessions: [boardSession({ session_id: id, tasks: tasksOf(id, 1, inProgress, 1) })] }), 'all', NOW)!;
+
+  it('puts projects with a task in progress first, each group by name ignoring case and accents', () => {
+    const views = [view('z', '/r/zeta', 1), view('b', '/r/beta', 0), view('n', '/r/Nádia', 0), view('a', '/r/alpha', 2), view('m', '/r/nadia-b', 0)];
+    expect(sortProjectViews(views, {}).map((v) => v.project.project_id)).toEqual(['a', 'z', 'b', 'n', 'm']);
+  });
+
+  it('sorts by the app-local name when one is set', () => {
+    const views = [view('a', '/r/alpha', 0), view('b', '/r/beta', 0)];
+    expect(sortProjectViews(views, { b: 'Aardvark' }).map((v) => v.project.project_id)).toEqual(['b', 'a']);
   });
 });

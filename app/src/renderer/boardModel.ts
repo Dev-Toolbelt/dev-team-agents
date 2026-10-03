@@ -364,6 +364,16 @@ export function boardProjectName(project: BoardProject, names: Readonly<Record<s
   return names[project.project_id] ?? (project.root !== '' ? basename(project.root) : project.project_id);
 }
 
+/** Projects with a task in progress first, then by the name the card shows, ignoring case and accents. */
+export function sortProjectViews(views: readonly ProjectView[], names: Readonly<Record<string, string>>): ProjectView[] {
+  const idle = (view: ProjectView): number => (view.counts.in_progress > 0 ? 0 : 1);
+  return [...views].sort(
+    (a, b) =>
+      idle(a) - idle(b) ||
+      boardProjectName(a.project, names).localeCompare(boardProjectName(b.project, names), undefined, { sensitivity: 'base' }),
+  );
+}
+
 /** An agent task reads `<agent>: <description>`; the badge takes the name only when that split is clean. */
 export function splitAgentTask(content: string): { agent: string; title: string } | null {
   const at = content.indexOf(': ');
