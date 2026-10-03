@@ -27,7 +27,10 @@ enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
-enable_manual_linking = false
+# Linking a second provider from the profile (`auth profile link`) needs manual linking. It is
+# safe because deletion demands a fresh email code (SR-37), so a session that links an
+# attacker's provider gains no destructive step; linking itself requires a signed-in session.
+enable_manual_linking = true
 # SR-15: minimum 10. Supabase has no maximum or byte-length setting: the 64-character and
 # 72-byte ceiling is enforced by the CLI before sending. No composition rules, no rotation.
 minimum_password_length = 10
