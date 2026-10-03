@@ -14,7 +14,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/renderer/App.js';
-import { AccountProvider } from '../../src/renderer/account/AccountContext.js';
+import { AccountProvider, FOCUS_RECHECK_MS } from '../../src/renderer/account/AccountContext.js';
+import { AccountMenu } from '../../src/renderer/account/AccountMenu.js';
 import { AccountGate } from '../../src/renderer/account/AccountGate.js';
 import { Profile } from '../../src/renderer/account/Profile.js';
 import { SignIn } from '../../src/renderer/account/SignIn.js';
@@ -547,6 +548,9 @@ describe('profile', () => {
     expect(authIdentityLink).toHaveBeenCalledWith('github');
     expect(await screen.findByText('GitHub linked.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /unlink google/i }));
+    // The first click only asks; nothing is unlinked until it is confirmed.
+    expect(authIdentityUnlink).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /click again to unlink google/i }));
     expect(authIdentityUnlink).toHaveBeenCalledWith('google');
     await waitFor(() => expect(vi.mocked(bridge.authProfileGet).mock.calls.length).toBeGreaterThanOrEqual(3));
   });
@@ -563,6 +567,7 @@ describe('profile', () => {
       authIdentityUnlink: vi.fn(() => Promise.resolve(fail('only way to sign in', { reason: 'last_identity', exitCode: 1 }))),
     });
     await user.click(screen.getByRole('button', { name: /unlink google/i }));
+    await user.click(screen.getByRole('button', { name: /click again to unlink google/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/only way to sign in, so it cannot be removed/i);
   });
 
@@ -692,3 +697,57 @@ describe('the shell', () => {
     expect(authCheck).not.toHaveBeenCalled();
   });
 });
+
+describe('review follow-ups', () => {
+  it('asks again when the window regains focus, at most once a minute', async () => {
+    const authCheck = checkReturning(authState());
+    mountGate(fakeBridge({ authCheck }));
+    await screen.findByText('the app itself');
+    expect(authCheck).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('focus'));
+    expect(authCheck).toHaveBeenCalledTimes(1);
+    const later = Date.now() + FOCUS_RECHECK_MS + 1;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(authCheck).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers a neutral Account button when the check failed', async () => {
+    installBridge(fakeBridge({ authCheck: vi.fn(() => Promise.resolve(fail('timeout', { reason: 'unreachable' }))) }));
+    render(
+      <AccountProvider enabled>
+        <AccountMenu onOpen={vi.fn()} />
+      </AccountProvider>,
+    );
+    expect(await screen.findByRole('button', { name: /^account$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
+  });
+
+  it('lets the person give up on a browser sign-in', async () => {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const bridge = fakeBridge({ authLoginOAuth: vi.fn(() => pending.promise) });
+    installBridge(bridge);
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(bridge.authCancelOAuth).toHaveBeenCalledOnce();
+    pending.resolve(fail('cancelled', { reason: 'oauth_failed', exitCode: 1 }));
+  });
+
+  it('sends the deletion code when Enter is pressed on the confirmation word', async () => {
+    const authDeleteStart = vi.fn(() => Promise.resolve(ok({ sent: true })));
+    const bridge = fakeBridge({ authCheck: checkReturning(authState()), authDeleteStart, authProfileGet: vi.fn(() => Promise.resolve(ok(authProfile()))) });
+    installBridge(bridge);
+    render(
+      <AccountProvider enabled>
+        <Profile />
+      </AccountProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /delete my account/i }));
+    await user.type(screen.getByLabelText(/type delete to confirm/i), 'delete{Enter}');
+    await waitFor(() => expect(authDeleteStart).toHaveBeenCalledOnce());
+  });
+});
+

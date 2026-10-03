@@ -491,6 +491,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     authPasswordSignUpStart: vi.fn(() => Promise.reject(new Error('authPasswordSignUpStart is not stubbed'))),
     authPasswordSignUpFinish: vi.fn(() => Promise.reject(new Error('authPasswordSignUpFinish is not stubbed'))),
     authPasswordSignUpCancel: vi.fn(() => Promise.resolve()),
+    authCancelOAuth: vi.fn(() => Promise.resolve()),
     authPasswordResetStart: vi.fn(() => Promise.reject(new Error('authPasswordResetStart is not stubbed'))),
     authPasswordResetFinish: vi.fn(() => Promise.reject(new Error('authPasswordResetFinish is not stubbed'))),
     authPasswordChange: vi.fn(() => Promise.reject(new Error('authPasswordChange is not stubbed'))),

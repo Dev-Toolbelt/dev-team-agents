@@ -655,8 +655,10 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
   });
 });
 
+const REPO_ROOT_FOR_AUTH = fileURLToPath(new URL('../..', import.meta.url));
+
 describe.skipIf(!available)('auth status and check against the real CLI (ADR-0029)', () => {
-  it('status on a fresh store is signed-out data, not an error, with gate_mode warn', async () => {
+  it('status on a fresh store is signed-out data, not an error, with the shipped gate_mode', async () => {
     const result = await authStatus(context());
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
@@ -664,7 +666,12 @@ describe.skipIf(!available)('auth status and check against the real CLI (ADR-002
     expect(result.data.entitled).toBe(false);
     expect(result.data.entitlement.status).toBe('signed_out');
     expect(result.data.account).toBeNull();
-    expect(result.data.gate_mode).toBe('warn');
+    // Whatever this build ships (warn now, enforce in the release that flips it), read from
+    // the config the CLI itself reads rather than hardcoded here.
+    const shipped = JSON.parse(await readFile(join(REPO_ROOT_FOR_AUTH, 'scripts', 'lib', 'auth-config.json'), 'utf8')) as {
+      gate_mode?: string;
+    };
+    expect(result.data.gate_mode).toBe(shipped.gate_mode ?? 'warn');
   });
 
   it('check on a fresh store (exit 1) still arrives as ok data with findings', async () => {
@@ -676,9 +683,15 @@ describe.skipIf(!available)('auth status and check against the real CLI (ADR-002
     expect(result.data.entitlement.status).toBe('signed_out');
   });
 
-  it('exposes no token or secret field to the renderer-visible payload', async () => {
-    const result = await authStatus(context());
-    expect(JSON.stringify(result)).not.toMatch(/token(?!_status)|secret(?!_backend_insecure)|password|refresh/i);
+  it('the CLI document itself carries no token or secret field', async () => {
+    // Asserted on the raw `--json` document, before the app rebuilds it: a check on the
+    // rebuilt object could never fail, because the rebuild drops unknown fields.
+    const raw = await invokeDevteam({ ...context(), args: ['auth', 'status'] });
+    expect(ranAndAnswered(raw)).toBe(true);
+    if (!ranAndAnswered(raw)) throw new Error('unreachable');
+    const keys = JSON.stringify(Object.keys(raw.document.body));
+    expect(keys).not.toMatch(/token(?!_status)|secret(?!_backend)|password|refresh/i);
+    expect(JSON.stringify(raw.document.body)).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}|sb_secret_/);
   });
 });
 

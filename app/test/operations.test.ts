@@ -216,11 +216,11 @@ describe('what this slice is allowed to run', () => {
   });
 
   it('runs nothing the framework has not classified at all', () => {
-    const { mutating, readOnly } = classificationTables();
+    const { mutating, readOnly, storeNeutral } = classificationTables();
     for (const command of ALLOWED_COMMANDS) {
       const tuple = tupleLiteral(command);
       expect(
-        readOnly.includes(tuple) || mutating.includes(tuple),
+        readOnly.includes(tuple) || mutating.includes(tuple) || storeNeutral.includes(tuple),
         `${command.join(' ')} is in neither compat table — is_mutating() fails closed on it`,
       ).toBe(true);
     }

@@ -47,6 +47,9 @@ describe('input rules mirror the CLI', () => {
     expect(newPasswordProblem('a\nb'.padEnd(12, 'c'))).toBe('unsafe-text');
     // A sign-in presents what was accepted earlier, so a short one is not refused here.
     expect(signInPasswordProblem('short')).toBeNull();
+    // Below SIGN_IN_PASSWORD_MIN no account's password can match, and the value would be too
+    // short to redact safely from the CLI's output.
+    expect(signInPasswordProblem('abc')).toBe('password-length');
     expect(signInPasswordProblem('')).toBe('required');
     expect(signInPasswordProblem('a\rb')).toBe('unsafe-text');
   });

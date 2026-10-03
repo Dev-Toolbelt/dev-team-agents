@@ -359,7 +359,9 @@ describe.skipIf(skipOnWindows)('the IPC handlers', () => {
   it('registers a handler for every account channel', () => {
     const { handlers } = register(context());
     const channels = Object.entries(CHANNELS).filter(([name]) => name.startsWith('auth'));
-    expect(channels.length).toBeGreaterThanOrEqual(21);
+    // Exactly the account channels, both ways: none missing, none registered that the
+    // channel table does not name.
+    expect([...handlers.keys()].sort()).toEqual(channels.map(([, channel]) => channel).sort());
     for (const [, channel] of channels) expect(handlers.has(channel), channel).toBe(true);
   });
 
@@ -394,11 +396,24 @@ describe.skipIf(skipOnWindows)('the IPC handlers', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('drives the held sign-up through its three channels', async () => {
+  it('drives the two-stage sign-up through its three channels', async () => {
     const { call } = register(context());
     expect(await call(CHANNELS.authPasswordSignUpStart, 'ana@example.com', GOOD_PASSWORD, null)).toMatchObject({ ok: true, data: { pending: true } });
-    expect(await call(CHANNELS.authPasswordSignUpFinish, GOOD_CODE)).toMatchObject({ ok: true });
+    const finished = (await call(CHANNELS.authPasswordSignUpFinish, GOOD_CODE)) as { ok: boolean; data?: { signed_in?: boolean } };
+    expect(finished.ok).toBe(true);
+    expect(finished.data?.signed_in).toBe(true);
     await call(CHANNELS.authPasswordSignUpCancel);
+    // Cancelled: nothing is waiting for a code any more.
+    expect(await call(CHANNELS.authPasswordSignUpFinish, GOOD_CODE)).toMatchObject({ ok: false, kind: 'refused' });
+  });
+
+  it('refuses a second browser sign-in while one is running', async () => {
+    const { handlers } = register(context());
+    const first = handlers.get(CHANNELS.authLoginOAuth)?.({}, 'google') as Promise<{ ok: boolean }>;
+    const second = (await handlers.get(CHANNELS.authLoginOAuth)?.({}, 'github')) as { ok: boolean; kind?: string; message?: string };
+    expect(second).toMatchObject({ ok: false, kind: 'refused' });
+    await handlers.get(CHANNELS.authCancelOAuth)?.({});
+    await first;
   });
 });
 
