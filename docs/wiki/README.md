@@ -1,5 +1,5 @@
 <!-- last-updated: 2026-10-02 -->
-**Last entries added:** 9 Windows/cross-platform findings from integration and CI testing (2026-10-02)
+**Last entries added:** 3 Supabase local stack gotchas and 9 Windows/cross-platform findings (2026-10-02)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -18,6 +18,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `bash/bash-source-under-curl-pipe.md` | bash, BASH_SOURCE, curl pipe, stdin, install script, cwd, dirname, relative path, set -u, unbound variable, safe fallback | A piped install script sources from the user's CWD instead of its own directory |
 | `bash/gnu-stat-f-is-filesystem-status.md` | stat, -f, -c, filesystem status, GNU, multi-line output, file-stat.sh, Ubuntu | A stat probe on a GNU system returns multi-line garbage and exits 1 |
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
+| `bash/supabase-local-dev.md` | supabase, cli, config.toml, content_path, email templates, workdir, dev-local.sh, symlink, copy | `supabase start` or `config push` cannot find a template, or the local stack needs a config change |
 | `electron/ipc-channels-need-the-trusted-sender-check.md` | electron, IPC, ipcMain.handle, security, trustedHandler, trustedRenderer, audit trail | After rebasing app work on main, grep for new `ipcMain.handle` calls |
 | `electron/project-naming-scope.md` | project, name, BindRequest, settings.json, app-local, not portable, machine-local, product naming | Deciding whether project names belong in the app-local settings or the CLI's committed record |
 | `electron/third-party-runtime-styles-and-csp.md` | sonner, CSP, content-security-policy, third-party, runtime styles, development vs production, __insertCSS, unsafe-inline | Libraries that inject `<style>` at module load render unstyled when CSP forbids `'unsafe-inline'` |
@@ -40,7 +41,9 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `python/tarfile-extraction-filter.md` | tarfile, extractall, filter, data, tarslip, linkname, symlink, CVE, python 3.14 | Extracting an archive you did not create, or pinning which interpreter CI tests |
 | `render/rendered-paths-must-match-shipped-scripts.md` | render, path rewrite, tool-map.json, adr, script, render_provider.py, opencode, codex, tool_unavailable, docs/development | A path rewrite in tool-map.json breaks commands when shipped scripts don't follow it |
 | `security/credential-guard-heredocs.md` | credential-guard, heredoc, credentials.local.json, session-summary, false positive, false negative, newline, segment, refuse | The credential guard blocks a heredoc that only mentions a credential file, or lets a dump on the line after a heredoc through |
+| `security/local-docker-service-role.md` | secret scanner, secret_scan.py, service_role, jwt, gitignore, .local, git ls-files, package scan | The secret scan flags a file, or you change what it scans |
 | `security/macOS-keychain-add-generic-password-double-entry.md` | macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag, readpassphrase, 128 characters, truncation, tty, security -i | Writing a value to the macOS keychain via `security add-generic-password` in a non-interactive context |
+| `security/test-seam-authz.md` | test seam, SR-44, DEVTEAM_AUTH_TEST_URL, DEVTEAM_AUTH_TEST_KID, DEVTEAM_AUTH_TEST_PUBKEY, DEVTEAM_AUTH_TEST_ANON_KEY, loopback | Pointing the CLI at a local account service, or the seam seems to be ignored |
 | `store/bind-over-a-v2-install.md` | v2, vendored, bind, migrate, doctor, git, tracked, info/exclude, symlink, leftover | A project that used the v2 install was bound instead of migrated, or `git status` shows framework links as modified after a bind |
 | `store/v2-links-materialized-as-copies.md` | v2, migrate, bind, symlink, copy, materialized, dereference, windows, link file, interrupted migration, preflight, quarantine | `bind` says `.claude/...` "was not created by dev-team-agents" on a v2 project, or `migrate` says "no v2 install" on a project with framework copies |
 | `store/pre-root-v2-install.md` | v2, pre-root, .claude/dev-team-agents, migrate, migrate-to-root, bind, project.json, untrack, layout 1 | A project's v2 install sits under `.claude/`, or a bind left `.dev-team-agents/project.json` on a project it refused |
