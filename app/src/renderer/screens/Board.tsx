@@ -7,6 +7,7 @@ import {
   Clock,
   ExternalLink,
   FolderGit2,
+  Loader2,
   Moon,
   Pause,
   Pencil,
@@ -429,7 +430,12 @@ function ProjectCard({ view, name, onOpen }: { view: ProjectView; name: string; 
       className="flex h-full w-full flex-col gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden"
     >
       <span className="flex items-start justify-between gap-2">
-        <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate text-sm font-semibold">{name}</span>
+          {counts.in_progress > 0 ? (
+            <Loader2 className="size-4 shrink-0 animate-spin text-warning" role="img" aria-label={`${counts.in_progress} in progress`} />
+          ) : null}
+        </span>
         <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
           {view.providers.map((provider) => (
             <ProviderIcon key={provider} provider={provider} />
