@@ -112,8 +112,13 @@ bash "$TMP_INSTALLER" "$INSTALL_TARGET"
 # The core update above is never gated, so hook fixes reach a blocked user; re-rendering
 # the provider trees into the project writes there, so it is (ADR-0029 SR-30).
 _PROVIDER_FAILED=0
-# shellcheck source=scripts/lib/auth-gate.sh
-source "$SCRIPTS_DIR/lib/auth-gate.sh"
+if [ -f "$SCRIPTS_DIR/lib/auth-gate.sh" ]; then
+    # shellcheck source=scripts/lib/auth-gate.sh
+    source "$SCRIPTS_DIR/lib/auth-gate.sh"
+else
+    # A tree from before the gate (a rollback or a pinned older ref): nothing to gate with.
+    ag_gate() { echo "$1: account check skipped (this version predates the account gate)" >&2; return 0; }
+fi
 if ag_gate update "$SCRIPTS_DIR"; then
     po_rerender_providers || _PROVIDER_FAILED=1
 else

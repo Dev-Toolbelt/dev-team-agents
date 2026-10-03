@@ -100,11 +100,30 @@ fi
 
 # ── account gate (ADR-0029 SR-30) ───────────────────────────────────
 # The delegated installer gates itself too; this covers a pinned older tarball whose
-# installer predates the gate. A tree without the lib cannot be gated and is skipped.
-if [[ -f "$STAGING/scripts/lib/auth-gate.sh" ]]; then
+# installer predates the gate. The gate comes from THIS script's own tree, never from the
+# downloaded one, so an old `--version` cannot opt out of it or choose its own gate_mode
+# (SR-42). Only when this script runs outside any tree (piped from curl) is the staged lib
+# used; with neither, the CLI on PATH decides through `ag`'s own fallback.
+_IP_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+_IP_GATE_SCRIPTS=""
+for _ip_candidate in "$_IP_SELF_DIR" "$STAGING/scripts"; do
+  if [[ -n "$_ip_candidate" && -f "$_ip_candidate/lib/auth-gate.sh" ]]; then
+    _IP_GATE_SCRIPTS="$_ip_candidate"; break
+  fi
+done
+if [[ -n "$_IP_GATE_SCRIPTS" ]]; then
   # shellcheck source=lib/auth-gate.sh
-  source "$STAGING/scripts/lib/auth-gate.sh"
-  ag_gate install-provider "$STAGING/scripts" || exit $?
+  source "$_IP_GATE_SCRIPTS/lib/auth-gate.sh"
+  ag_gate install-provider "$_IP_GATE_SCRIPTS" || exit $?
+elif command -v devteam >/dev/null 2>&1; then
+  _ip_rc=0
+  _ip_out="$(devteam auth check --json 2>/dev/null)" || _ip_rc=$?
+  if [[ "$_ip_rc" != 0 ]] && printf '%s' "$_ip_out" | grep -q '"gate_mode": *"enforce"'; then
+    echo "install-provider: blocked: the account is not entitled. Run \`devteam auth login\`, then re-run." >&2
+    exit 5
+  fi
+else
+  echo "install-provider: account check skipped (no gate library and no devteam CLI)" >&2
 fi
 
 # ── run the provider installer with --source ────────────────────────
