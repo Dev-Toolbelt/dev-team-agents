@@ -90,3 +90,36 @@ The rule applies in every bind mode, not only `link` and `copy`:
   present, `install-opencode.sh` no longer writes `.dev-team-agents/VERSION` and
   `ensure-claude-framework.sh` no longer recreates `.dev-team-agents/user-data/`, which
   `devteam upgrade` retires.
+
+## Amendment (2026-10-02) — recognising v2 installer output by content
+
+The oldest v2 `install-codex.sh` and `install-opencode.sh` wrote real files and kept no ledger, so
+neither a manifest nor a link vouches for them, and `devteam migrate` refused the first one as foreign.
+"Alternatives considered" rejected a marker because the rendered files carry none the renderer puts
+there on purpose. That still holds; this amendment uses no such marker. It recognises the structure
+the renderer has emitted since its first version, and requires the framework's name in the body too:
+
+| Target | Recognised when |
+|---|---|
+| `.codex/agents/<name>.toml` | top-level `name = "<name>"`, a `developer_instructions = """` block, and the text `dev-team-agents` |
+| `.codex/skills/devteam-<cmd>/` | holds `SKILL.md` and nothing else, frontmatter `name: devteam-<cmd>`, and the text `dev-team-agents` |
+| `.opencode/agents/<name>.md` | frontmatter `mode: subagent` and the text `dev-team-agents` |
+| `.opencode/plugins/dev-team-agents.ts` | the text `dev-team-agents` |
+
+The paths come from the installer's own `--list-targets`, so a name is never matched by the CLI.
+A ledger entry (`.provider-owned-<provider>`) also counts, a directory entry covering what is
+under it, as Decision 2 already says.
+
+- **Only `migrate` acts on it, only to quarantine, always after a preview.** The plan names every
+  file it will move. A file is moved, never deleted, and the ledger goes with it, since `bind` now
+  records those paths itself.
+- **`bind` keeps refusing**, but a recognised render is refused with `details.reason: "v2-install"`,
+  the same code a Claude copy gets, so a client offers Migrate instead of "move it by hand".
+- **A path a v3 manifest claims is never v2 output.** The delegated installers write real files in
+  every mode, so without that exclusion every v3-bound project with Codex or opencode would read as
+  an unmigrated v2 install.
+- **A file the project edited past recognition stays foreign** unless the ledger lists it. Reading
+  is bounded: a regular file, not a link, at most 1 MiB, checked with `lstat` before it is opened.
+
+Plain `bind` trusting the ledger, which Decision 2 implies but `_is_managed_path` does not do, is a
+separate change.
