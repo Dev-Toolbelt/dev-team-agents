@@ -32,6 +32,7 @@ interface WriteOutcome {
  * signed in. Token scopes, rate limits and the site belong to the account screen.
  */
 const PROJECT_ACCOUNT_FACTS: Readonly<Record<string, readonly string[]>> = {
+  cloudflare: ['Token owner', 'Account ID'],
   github: ['Name'],
   jira: ['Account', 'Email'],
 };
