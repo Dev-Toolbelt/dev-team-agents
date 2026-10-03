@@ -121,5 +121,9 @@ under it, as Decision 2 already says.
 - **A file the project edited past recognition stays foreign** unless the ledger lists it. Reading
   is bounded: a regular file, not a link, at most 1 MiB, checked with `lstat` before it is opened.
 
-Plain `bind` trusting the ledger, which Decision 2 implies but `_is_managed_path` does not do, is a
-separate change.
+- **Plain `bind` trusts the ledger too, and only the ledger.** A target the ledger lists (a directory
+  entry covering what is under it) counts as managed in `_preflight`, exactly as `po_conflicts` counts
+  it in the installer, so running `install-<provider>.sh` by hand in a bound project and then binding
+  is not a collision. Once the delegated installs succeed the manifest records those paths and the
+  ledger is quarantined (reported in `retired`): a bind runs the installers with `--owned`, so nothing
+  would update it again. A refused bind leaves it in place. The content check stays `migrate`-only.

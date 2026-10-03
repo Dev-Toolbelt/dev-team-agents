@@ -590,6 +590,10 @@ def _preflight(
         for rel in list(targets) + extra:
             require_inside(root / rel, project_root, what="artifact")
         claimed = set(previous_paths) | set(providers.legacy_owned(previous_artifacts, targets))
+        # The installer's own ledger is proof of ownership in this layer too (ADR-0022,
+        # Decision 2): a standalone install followed by a bind is not a collision.
+        ledger = _provider_ledger(provider_name, project_root)
+        claimed |= {rel for rel in targets if _in_ledger(rel, ledger)}
         existing = []
         for rel in targets:
             dest = root / rel
@@ -1029,6 +1033,16 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             )
         )
         merged.extend(providers.merged_project_files("codex", project_root))
+
+    # The manifest records those paths now, and a bind runs the installers with
+    # `--owned`, so nothing would ever update the ledger again: retired once the
+    # install succeeded, never before, so a refused bind leaves it where it was.
+    for rel in provider_ledgers(project_root, selected):
+        action, destination = _retire_artifact(
+            Path(project_root) / rel, project_id, project_root, group="ledger"
+        )
+        if action == "quarantined":
+            retired.append({"path": rel, "to": str(destination)})
 
     stale = _prune_stale(
         project_root, previous, {item["path"] for item in artifacts}, project_id, version_dir

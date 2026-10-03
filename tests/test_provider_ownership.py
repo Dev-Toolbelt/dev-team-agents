@@ -8,6 +8,7 @@ in `bind.py`, and a stubbed installer would prove only the stub.
 import json
 import os
 import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -49,6 +50,15 @@ V2_OUTPUT = {
     "claude": ".claude/agents/dev-team",
     "opencode": ".opencode/agents/backend-developer.md",
     "codex": ".codex/agents/backend-developer.toml",
+}
+
+#: The ledger a standalone installer writes. Claude has none: it has no installer of
+#: its own, and its files are links into the store that `_is_managed_path` already
+#: recognises — so there is nothing for a bind to trust there.
+LEDGERS = {
+    "claude": None,
+    "opencode": ".dev-team-agents/.provider-owned-opencode",
+    "codex": ".dev-team-agents/.provider-owned-codex",
 }
 
 TOOLS = {"claude": (), "opencode": ("bash", "python3", "jq"), "codex": ("bash", "python3")}
@@ -100,6 +110,7 @@ class ProviderOwnershipTest(StoreTestCase):
         self.assertEqual(set(OWN_FILES), set(providers.ALL_PROVIDERS))
         self.assertEqual(set(COLLISIONS), set(providers.ALL_PROVIDERS))
         self.assertEqual(set(V2_OUTPUT), set(providers.ALL_PROVIDERS))
+        self.assertEqual(set(LEDGERS), set(providers.ALL_PROVIDERS))
         self.assertEqual(set(TOOLS), set(providers.ALL_PROVIDERS))
 
     def _cases(self):
@@ -304,6 +315,77 @@ class ProviderOwnershipTest(StoreTestCase):
         self.assertFalse(
             providers.is_v2_render(".codex/skills/devteam-review", skill, version_dir)
         )
+
+    def _standalone_install(self, root, provider):
+        """`install-<provider>.sh` run by hand in a project bound for Claude only.
+
+        The case the ledger matters for: on an unbound project the installer also
+        vendors `.dev-team-agents/scripts`, which bind refuses first and sends to
+        `migrate`. Bound, the installer writes only its files and its ledger.
+        """
+        bind.bind(root, provider_names=["claude"], mode="link")
+        version_dir = versions.require(versions.resolve(None))
+        script = version_dir / "scripts" / providers.DELEGATED_INSTALLERS[provider]
+        subprocess.run(
+            ["bash", str(script), "--source", str(version_dir)],
+            cwd=str(root),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        ledger = LEDGERS[provider]
+        self.assertTrue((root / ledger).is_file(), ledger)
+        return version_dir
+
+    def test_bind_trusts_the_ledger_a_standalone_install_wrote(self):
+        for provider in self._providers():
+            ledger = LEDGERS[provider]
+            if ledger is None:
+                continue
+            with self.subTest(provider=provider):
+                root = self.new_project("ledger-{}".format(provider))
+                self._standalone_install(root, provider)
+                rel = V2_OUTPUT[provider]
+                # Edited past recognition: only the ledger can vouch for it now.
+                (root / rel).write_text("edited\n", encoding="utf-8")
+                own = OWN_FILES[provider]
+                self._seed(root, own)
+
+                result = bind.bind(root, provider_names=["claude", provider], mode="link")
+                manifest = bind.read_manifest(result["project_id"])
+                claimed = {item["path"] for item in manifest["artifacts"]}
+                self.assertIn(rel, claimed)
+                self.assertNotEqual((root / rel).read_text(encoding="utf-8"), "edited\n")
+                self.assertFalse((root / ledger).exists())
+                self.assertIn(ledger, {item["path"] for item in result["retired"]})
+                for path in own:
+                    self.assertEqual((root / path).read_text(encoding="utf-8"), "mine\n", path)
+                    self.assertNotIn(path, claimed)
+
+    def test_a_refused_bind_leaves_the_ledger_and_a_file_outside_it_is_still_foreign(self):
+        for provider in self._providers():
+            ledger = LEDGERS[provider]
+            if ledger is None:
+                continue
+            with self.subTest(provider=provider):
+                root = self.new_project("ledger-clash-{}".format(provider))
+                self._standalone_install(root, provider)
+                rel = V2_OUTPUT[provider]
+                lines = (root / ledger).read_text(encoding="utf-8").splitlines()
+                (root / ledger).write_text(
+                    "\n".join(line for line in lines if line != rel) + "\n", encoding="utf-8"
+                )
+                (root / rel).write_text("mine\n", encoding="utf-8")
+                before = (root / ledger).read_text(encoding="utf-8")
+
+                manifest_before = bind.read_manifest(project.load(root)["project_id"])
+                with self.assertRaises(ConflictError):
+                    bind.bind(root, provider_names=["claude", provider], mode="link")
+                self.assertEqual((root / rel).read_text(encoding="utf-8"), "mine\n")
+                self.assertEqual((root / ledger).read_text(encoding="utf-8"), before)
+                self.assertEqual(
+                    bind.read_manifest(project.load(root)["project_id"]), manifest_before
+                )
 
     def test_bind_refuses_a_collision_before_writing_anything(self):
         for provider, mode in self._cases():
