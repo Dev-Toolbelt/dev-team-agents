@@ -48,10 +48,13 @@ class FetchError(Exception):
     ``state`` is one of ``invalid_token``, ``rate_limited``, ``unreachable``.
     """
 
-    def __init__(self, state, summary, http_status=None, body=None, retry_after=None):
+    def __init__(self, state, summary, http_status=None, body=None, retry_after=None, reason=None):
         super().__init__(summary)
         self.state = state
         self.summary = summary
+        #: A machine-readable cause when the state alone is too coarse, else ``None``.
+        #: ``"not_json"``: the server answered, but not with JSON.
+        self.reason = reason
         #: Seconds the server asked the caller to wait (``Retry-After``), when it sent a
         #: usable integer, else ``None``.
         self.retry_after = retry_after
@@ -243,7 +246,9 @@ def _send(request, base, deadline, follow_redirects, want_error_body, allow_empt
     try:
         data = json.loads(payload.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        raise FetchError("unreachable", "The server answered with something that is not JSON") from None
+        raise FetchError(
+            "unreachable", "The server answered with something that is not JSON", reason="not_json"
+        ) from None
     return data, response_headers
 
 

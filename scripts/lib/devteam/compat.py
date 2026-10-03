@@ -515,6 +515,10 @@ READ_ONLY = {
 #: declared client — a user must always be able to sign in and out, including from a client
 #: that has fallen behind — but they are not called read-only, because they are not.
 STORE_NEUTRAL = {
+    ("integration", "call"): "sends one request to the integration's API with the stored "
+    "token; with --allow-write it can change the remote account. It writes no declared "
+    "store shape (only an audit line), so a client's schema declaration has nothing to "
+    "protect here; the remote write is gated by --allow-write (ADR-0031)",
     ("auth", "login"): "signs in; writes the machine-local session and entitlement records, "
     "which are not declared store shapes",
     ("auth", "logout"): "removes the machine-local session and entitlement records",

@@ -1,4 +1,4 @@
-"""Account-level integrations with external REST APIs (GitHub, Jira).
+"""Account-level integrations with external REST APIs (GitHub, Jira, Cloudflare).
 
 An integration is not a plugin. A plugin is per-project with committed settings; an
 integration has a secret token (account-level, through `creds`, so ADR-0010's keychain
@@ -32,6 +32,11 @@ Lock order: the integrations lock is the outer one. ``connect`` and ``disconnect
 and then the ``credentials`` lock inside ``creds``; nothing in ``creds`` takes the
 integrations lock, so the order cannot invert. No lock is held across a network call.
 
+Agents reach an API through :func:`call` (ADR-0031), and only on an adapter that sets
+``callable = True``: the CLI resolves the endpoint, reads the token and makes the request,
+so the token never reaches the agent's context. Reads run freely; a write method needs
+``allow_write``, which an agent passes only after the user confirmed that write.
+
 Schemas: ``SCHEMA`` versions the account file and ``SETTINGS_SCHEMA`` the committed project
 binding — separate numbers, because a client must declare each before writing it and the
 two can change independently. The machine-local status file is a cache the CLI alone
@@ -41,6 +46,8 @@ writes; it carries its own ``STATUS_SCHEMA`` and is not part of the client decla
 from __future__ import annotations
 
 import datetime
+import re
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -49,6 +56,7 @@ from ..errors import EnvError, UsageError
 from ..lock import store_lock
 from . import http
 from .base import check_token, is_blank
+from .cloudflare import Cloudflare
 from .github import GitHub
 from .jira import Jira
 
@@ -67,7 +75,17 @@ STATUS_FILE = "integrations-status.json"
 LOCK = "integrations"
 STATES = ("not_connected", "connected", "invalid_token", "rate_limited", "unreachable", "unknown")
 
-_ADAPTERS = {adapter.name: adapter for adapter in (GitHub(), Jira())}
+_ADAPTERS = {adapter.name: adapter for adapter in (Cloudflare(), GitHub(), Jira())}
+CALL_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
+WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+# An absolute API path: RFC 3986 path characters plus `{field}` placeholders. No query,
+# fragment, backslash or whitespace can get through; percent-escapes are checked apart.
+_ENDPOINT_RE = re.compile(r"^/[A-Za-z0-9._~%!$&'()*+,;=:@/{}-]+$")
+_PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
+_ESCAPE_RE = re.compile(r"%([0-9A-Fa-f]{2})")
+# What a percent-escape may never stand for: a separator, a dot, a second escape
+# (`%252e` decodes to `%2e`), or a control character.
+_FORBIDDEN_ESCAPES = frozenset(b"/\\.%") | frozenset(range(0x20)) | {0x7F}
 
 
 def names():
@@ -721,3 +739,206 @@ def resources(name, kind):
             "cannot list {} for {}: {}".format(kind, name, exc.summary),
             hint="Run `devteam integration test {}` to check the connection.".format(name),
         ) from None
+
+
+# ── call ──────────────────────────────────────────────────────────────────────
+
+
+def callable_names():
+    return [n for n in names() if getattr(_ADAPTERS[n], "supports_call", False)]
+
+
+def _call_adapter(name):
+    adapter = get_adapter(name)
+    if not getattr(adapter, "supports_call", False):
+        raise UsageError(
+            "{} does not support `integration call`".format(name),
+            hint="Integrations that do: {}".format(", ".join(callable_names()) or "none"),
+        )
+    return adapter
+
+
+def _check_method(method, allow_write):
+    method = (method or "").upper()
+    if method not in CALL_METHODS:
+        raise UsageError("method must be one of {}".format(", ".join(CALL_METHODS)))
+    if method in WRITE_METHODS and not allow_write:
+        raise UsageError(
+            "{} changes data and needs --allow-write".format(method),
+            hint="Confirm the change with the user first, then repeat the call with --allow-write.",
+        )
+    return method
+
+
+def _check_path(path):
+    """``UsageError`` unless every segment of ``path`` is a plain, non-dot name."""
+    if not isinstance(path, str) or not _ENDPOINT_RE.match(path):
+        raise UsageError(
+            "endpoint must be an absolute API path such as /zones",
+            hint="Pass query parameters with --query key=value, never in the endpoint.",
+        )
+    for escape in _ESCAPE_RE.findall(path):
+        if int(escape, 16) in _FORBIDDEN_ESCAPES:
+            raise UsageError(
+                "endpoint must not percent-encode '/', '\\', '.', '%' or a control character"
+            )
+    if _ESCAPE_RE.sub("", path).count("%"):
+        raise UsageError("endpoint has a malformed percent-escape")
+    for segment in path.split("/")[1:]:
+        if segment in ("", ".", ".."):
+            raise UsageError("endpoint must not contain empty, '.' or '..' segments")
+
+
+def check_endpoint(adapter, endpoint):
+    """The endpoint's shape and placeholder names, checked before any token is read."""
+    _check_path(endpoint)
+    allowed = _placeholder_keys(adapter)
+    for key in _PLACEHOLDER_RE.findall(endpoint):
+        if key not in allowed:
+            raise UsageError(
+                "unknown placeholder {{{}}}".format(key),
+                hint="Placeholders: {}".format(", ".join("{" + k + "}" for k in sorted(allowed))),
+            )
+    if "{" in _PLACEHOLDER_RE.sub("", endpoint) or "}" in _PLACEHOLDER_RE.sub("", endpoint):
+        raise UsageError("endpoint has a malformed placeholder; use {field_name}")
+
+
+def _placeholder_keys(adapter):
+    return {f["key"] for f in adapter.fields if f["key"] != adapter.origin_key}
+
+
+def _forbidden(adapter, path):
+    """The reason ``path`` is never called, or ``None``. Matched on the decoded path, so
+    an escape cannot dodge a pattern."""
+    decoded = urllib.parse.unquote(path)
+    for pattern, reason in getattr(adapter, "forbidden_endpoints", ()):
+        if pattern.search(decoded):
+            return reason
+    return None
+
+
+def resolve_endpoint(adapter, endpoint, values, project_bound=True):
+    """The request path with ``{field}`` placeholders filled, or ``UsageError``.
+
+    Only declared fields other than the origin can be placeholders. Each value is
+    re-validated by the adapter (the account file is hand-editable) and percent-encoded,
+    and the filled path is checked again, so a substitution cannot add a segment.
+    """
+    check_endpoint(adapter, endpoint)
+    scopes = {f["key"]: f["scope"] for f in adapter.fields}
+
+    def fill(match):
+        key = match.group(1)
+        value = values.get(key)
+        if is_blank(value):
+            if scopes[key] == "project" and not project_bound:
+                raise UsageError(
+                    "{{{}}} is a project field and this directory is not a bound project".format(key),
+                    hint="Run the call from the project, or pass --path to it.",
+                )
+            raise UsageError(
+                "{{{}}} is not set".format(key),
+                hint="Run `devteam integration config set {} {} <value>`.".format(adapter.name, key),
+            )
+        try:
+            value = adapter.normalize(key, str(value))
+        except UsageError as exc:
+            raise UsageError(
+                "the configured {} is invalid: {}".format(key, exc.message),
+                hint="Fix it with `devteam integration config set {} {} <value>`.".format(adapter.name, key),
+            ) from None
+        return urllib.parse.quote(value, safe="")
+
+    path = _PLACEHOLDER_RE.sub(fill, endpoint)
+    _check_path(path)
+    reason = _forbidden(adapter, path)
+    if reason:
+        raise UsageError(
+            "{} is never called through `integration call`: {}".format(path, reason),
+            hint="Its response is a credential. Ask the user to do this in the dashboard.",
+        )
+    return path
+
+
+def parse_query_args(pairs):
+    out = []
+    for pair in pairs or []:
+        key, sep, value = pair.partition("=")
+        if not sep or not key:
+            raise UsageError("--query expects key=value, got {!r}".format(pair))
+        out.append((key, value))
+    return out
+
+
+def _audit_call(name, method, endpoint, allow_write, outcome, project_id, http_status=None):
+    """One line per call in the global audit log: what was asked for and how it ended.
+
+    Never the body, the query values or the response; the path alone says which resource.
+    """
+    detail = {"method": method, "endpoint": endpoint, "allow_write": bool(allow_write)}
+    if project_id is not None:
+        detail["project_id"] = project_id
+    if http_status is not None:
+        detail["http_status"] = http_status
+    try:
+        creds.audit(None, "integration-call", token_key(name), outcome=outcome, detail=detail)
+    except OSError:
+        # The trail is best effort, like every other audit line: a full disk must not
+        # turn a finished request into a reported failure.
+        pass
+
+
+def _error_message(adapter, method, path, exc):
+    message = "{} {} failed: {}".format(method, path, exc.summary)
+    describe = getattr(adapter, "describe_error", None)
+    detail = describe(exc.body) if describe and exc.body else None
+    return "{} ({})".format(message, detail) if detail else message
+
+
+def call(name, method, endpoint, query=None, body=None, allow_write=False,
+         project_root=None, project_id=None):
+    """One API request on the user's behalf; the token never leaves this function's callees.
+
+    Returns ``{"integration", "method", "endpoint", "response"}``. An HTTP failure is an
+    ``EnvError`` whose ``details`` carry the status and the API's own error body. Every
+    call, refused or sent, leaves an ``integration-call`` audit line.
+    """
+    adapter = _call_adapter(name)
+    raw_method = (method or "").upper()
+    try:
+        method = _check_method(method, allow_write)
+        if body is not None and method == "GET":
+            raise UsageError("a GET request takes no body")
+        check_endpoint(adapter, endpoint)
+    except UsageError:
+        _audit_call(name, raw_method, endpoint, allow_write, "refused", project_id)
+        raise
+    bound = project_root is not None and project_id is not None
+    # A binding that cannot be read is reported, not treated as unset: "{zone_id} is not
+    # set" would send the user to `config set` for a file that is actually broken.
+    project_values = valid_project_values(adapter, read_project(project_root, name)) if bound else {}
+    account, token, _snapshot = _require_ready(adapter)
+    values = dict(account)
+    values.update(project_values)
+    try:
+        path = resolve_endpoint(adapter, endpoint, values, project_bound=bound)
+    except UsageError:
+        _audit_call(name, method, endpoint, allow_write, "refused", project_id)
+        raise
+    try:
+        data, _headers = http.request_json(
+            method, account[adapter.origin_key], path, adapter.headers(token),
+            body=body, query=query or None,
+        )
+    except http.FetchError as exc:
+        _audit_call(name, method, path, allow_write, "failed", project_id, exc.http_status)
+        details = {"state": exc.state, "http_status": exc.http_status, "response": exc.body}
+        if exc.retry_after is not None:
+            details["retry_after"] = exc.retry_after
+        if exc.reason == "not_json":
+            hint = "This endpoint answers with raw content, not JSON; use the provider's own CLI for it."
+        else:
+            hint = "Run with --json to read the API's full answer in details.response."
+        raise EnvError(_error_message(adapter, method, path, exc), hint=hint, details=details) from None
+    _audit_call(name, method, path, allow_write, "ok", project_id)
+    return {"integration": name, "method": method, "endpoint": path, "response": data}

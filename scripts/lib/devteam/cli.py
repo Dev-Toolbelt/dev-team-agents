@@ -1307,6 +1307,59 @@ def cmd_integration_resources(args, emitter):
     return result, human
 
 
+#: The largest request body `integration call` sends. Far above any JSON a management API
+#: takes, and small enough that a mistaken --data-file cannot ship a large local file.
+CALL_BODY_MAX_BYTES = 1024 * 1024
+
+
+def _reject_constant(name):
+    raise ValueError(name)
+
+
+def _call_body(args):
+    """The JSON request body from ``--data`` or ``--data-file`` (``-`` is stdin), else ``None``."""
+    if args.data is not None and args.data_file is not None:
+        raise UsageError("pass --data or --data-file, not both")
+    if args.data_file is not None:
+        if args.data_file == "-":
+            text = sys.stdin.read(CALL_BODY_MAX_BYTES + 1) if sys.stdin is not None else ""
+        else:
+            try:
+                with open(args.data_file, "r", encoding="utf-8") as handle:
+                    text = handle.read(CALL_BODY_MAX_BYTES + 1)
+            except (OSError, UnicodeDecodeError) as exc:
+                raise UsageError("cannot read --data-file {}: {}".format(args.data_file, exc)) from None
+    elif args.data is not None:
+        text = args.data
+    else:
+        return None
+    if len(text.encode("utf-8")) > CALL_BODY_MAX_BYTES:
+        raise UsageError("the request body is larger than {} bytes".format(CALL_BODY_MAX_BYTES))
+    try:
+        # NaN and Infinity are not JSON: json.dumps would send them as invalid tokens.
+        body = json.loads(text, parse_constant=_reject_constant)
+    except ValueError:
+        raise UsageError("the request body is not valid JSON") from None
+    if not isinstance(body, (dict, list)):
+        raise UsageError("the request body must be a JSON object or array")
+    return body
+
+
+def cmd_integration_call(args, emitter):
+    root, project_id = _integration_project(args)
+    result = integrations.call(
+        args.name,
+        args.method,
+        args.endpoint,
+        query=integrations.parse_query_args(args.query),
+        body=_call_body(args),
+        allow_write=args.allow_write,
+        project_root=root,
+        project_id=project_id,
+    )
+    return result, json.dumps(result["response"], indent=2, sort_keys=True)
+
+
 def _cred_project_id(args):
     """``None`` for the global layer, this project's id otherwise."""
     if getattr(args, "global_layer", False):
@@ -1902,7 +1955,7 @@ def build_parser():
     prefs_unset.set_defaults(func=cmd_prefs_unset)
 
     integration_parser = leaf(
-        sub, "integration", help="account-level connections to GitHub and Jira (token in the secret store)"
+        sub, "integration", help="account-level connections to GitHub, Jira and Cloudflare (token in the secret store)"
     ).add_subparsers(dest="integration_cmd")
 
     def integration_leaf(name, **kwargs):
@@ -1954,8 +2007,29 @@ def build_parser():
     integration_config_unset.set_defaults(func=cmd_integration_config_unset)
     integration_resources = integration_leaf("resources", help="list what a field picker can offer")
     integration_resources.add_argument("name")
-    integration_resources.add_argument("kind", help="github: repos; jira: projects")
+    integration_resources.add_argument("kind", help="github: repos; jira: projects; cloudflare: zones, accounts")
     integration_resources.set_defaults(func=cmd_integration_resources)
+    # allow_abbrev=False: `--allow` must not parse as `--allow-write`, so a permission rule
+    # that matches the literal flag cannot be walked around with a prefix.
+    integration_call = integration_leaf(
+        "call", help="run one API request through the stored token (integrations that opt in)",
+        allow_abbrev=False,
+    )
+    integration_call.add_argument("name")
+    integration_call.add_argument("method", help="GET, POST, PUT, PATCH or DELETE")
+    integration_call.add_argument(
+        "endpoint", help="absolute API path; {field} placeholders take the configured values, e.g. /zones/{zone_id}"
+    )
+    integration_call.add_argument(
+        "--query", action="append", default=[], metavar="KEY=VALUE", help="a query parameter; repeatable"
+    )
+    integration_call.add_argument("--data", help="the JSON request body")
+    integration_call.add_argument("--data-file", metavar="FILE", help="read the JSON body from FILE (- for stdin)")
+    integration_call.add_argument(
+        "--allow-write", action="store_true",
+        help="required for POST, PUT, PATCH and DELETE; pass it only after the user confirmed the change",
+    )
+    integration_call.set_defaults(func=cmd_integration_call)
 
     cred_parser = leaf(
         sub, "cred", help="declare credentials as references; values go to the OS secret store"
@@ -2349,7 +2423,7 @@ def main(argv=None, stdout=None, stderr=None):
         if getattr(args, "command", None) == "integration":
             return emitter.fail(
                 UsageError(
-                    "integration needs a subcommand: list, show, connect, test, disconnect, config, resources"
+                    "integration needs a subcommand: list, show, connect, test, disconnect, config, resources, call"
                 )
             )
         if getattr(args, "command", None) == "cred":
