@@ -19,6 +19,7 @@ from . import auth_gate as gate
 from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
+from .console import stdin_is_console as _stdin_is_console
 from .output import Emitter
 
 PROGRAM = "devteam"
@@ -441,7 +442,7 @@ def cmd_update(args, emitter):
     result = update.run(
         ref=args.ref,
         activate=not args.no_activate,
-        sync=not args.no_sync,
+        sync=not args.no_sync and getattr(args, "account_gate", gate.ALLOWED) != gate.CORE_ONLY,
         force=args.force,
         sha256=args.sha256,
         emitter=emitter,
@@ -699,30 +700,6 @@ def cmd_notifications_watch(args, emitter):
 #: stdin at once; anything slower is not a hook, and waiting on it is what hung every
 #: caller that inherited an open stdin it never wrote to (the contract sweep, a shell).
 HOOK_STDIN_TIMEOUT = 5.0
-
-
-def _stdin_is_console():
-    """Whether stdin is an interactive console a prompt can wait on.
-
-    ``isatty()`` alone is not enough on Windows: the ``NUL`` device is a character device, so a
-    command run with stdin from ``NUL`` (a hook, a script, ``subprocess.DEVNULL``) reports a tty
-    and ``getpass`` then waits on a console that does not exist. Only a handle the console API
-    accepts is one.
-    """
-    stream = sys.stdin
-    if stream is None or not stream.isatty():
-        return False
-    if os.name != "nt":
-        return True
-    try:
-        import ctypes
-        import msvcrt
-
-        mode = ctypes.c_uint32()
-        handle = msvcrt.get_osfhandle(stream.fileno())
-        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
-    except (OSError, ValueError, AttributeError):
-        return False
 
 
 def _read_hook_stdin(timeout=HOOK_STDIN_TIMEOUT):
@@ -2299,7 +2276,7 @@ def main(argv=None, stdout=None, stderr=None):
         return emitter.fail(UsageError("no command given — run `devteam --help`"))
 
     try:
-        gate.apply(command_path, args, emitter)
+        args.account_gate = gate.apply(command_path, args, emitter)
     except DevteamError as exc:
         return emitter.fail(exc)
 

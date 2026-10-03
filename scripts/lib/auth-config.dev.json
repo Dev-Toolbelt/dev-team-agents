@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "_comment": "Repository-only: adds the dev environment and selects it. Never packaged (scripts/lib/strip-tarball.sh, install-cli.sh, the Homebrew formula and the Windows CLI build copy auth-config.json alone), so a released build embeds prod keys only (ADR-0029 SR-27). Delete or rename this file to exercise the prod environment from a checkout.",
+  "environment": "dev",
+  "environments": {
+    "dev": {
+      "supabase_url": "https://REPLACE-ME-DEV.supabase.co",
+      "anon_key": "REPLACE-ME-DEV-ANON-KEY",
+      "entitlement_keys": {
+        "dev-1": "REPLACE-ME-DEV-ED25519-PUBLIC-KEY-BASE64URL"
+      }
+    }
+  }
+}

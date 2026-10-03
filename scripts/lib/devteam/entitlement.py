@@ -91,6 +91,17 @@ SEAM_ENVS = (SEAM_URL_ENV, SEAM_KID_ENV, SEAM_KEY_ENV)
 SEAM_KID_PREFIX = "test-"
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "auth-config.json"
+#: Repository-only sibling that adds the ``dev`` environment. It is never packaged
+#: (``strip-tarball.sh`` and the CLI installers copy only ``auth-config.json``), so a released
+#: build embeds the prod keys alone (SR-27).
+_DEV_CONFIG_PATH = _CONFIG_PATH.with_name("auth-config.dev.json")
+
+GATE_WARN = "warn"
+GATE_ENFORCE = "enforce"
+#: The gate mode of this release, used when ``auth-config.json`` cannot be read. It is flipped
+#: together with the file's ``gate_mode`` (``tests/test_auth_gate.py`` holds them equal), so a
+#: missing or broken config neither locks out a warn release nor opens an enforce one.
+DEFAULT_GATE_MODE = GATE_WARN
 _PLACEHOLDER = "REPLACE-ME"
 _KID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _B64URL_RE = re.compile(r"^[A-Za-z0-9_-]*$")
@@ -114,6 +125,8 @@ class Identity:
     audience: str
     keys: dict = field(default_factory=dict)
     test_seam: bool = False
+    gate_mode: str = DEFAULT_GATE_MODE
+    seam_error: str = None
 
     @property
     def issuer(self):
@@ -190,16 +203,71 @@ def _decode_key(text):
     return raw
 
 
-def load_identity(environ=None, config_path=None):
-    """The compiled identity, plus the test seam when ``DEVTEAM_AUTH_TEST_*`` is set.
+def gate_mode_of(config):
+    """``warn`` or ``enforce`` from a parsed config; an unreadable one is this release's default.
 
-    Reads only the config file shipped with the CLI and the three seam variables, and the
-    seam is read from the environment alone. A seam that names a non-loopback URL, a ``kid``
-    without the ``test-`` prefix or an unusable key is refused with a usage error.
+    A value that is neither is read as ``enforce``: a typo must not open the gate.
     """
-    env = os.environ if environ is None else environ
+    if not isinstance(config, dict):
+        return DEFAULT_GATE_MODE
+    value = config.get("gate_mode", DEFAULT_GATE_MODE)
+    return value if value in (GATE_WARN, GATE_ENFORCE) else GATE_ENFORCE
+
+
+def read_config(config_path=None, dev_path=None):
+    """The compiled config, with the repository-only dev environment merged in when present."""
     config = jsonio.read_json(config_path or _CONFIG_PATH)
     if not isinstance(config, dict):
+        return None
+    dev_file = dev_path if dev_path is not None else (None if config_path else _DEV_CONFIG_PATH)
+    dev = jsonio.read_json(dev_file) if dev_file else None
+    if isinstance(dev, dict):
+        config = dict(config)
+        merged = dict(config.get("environments") or {})
+        merged.update(dev.get("environments") or {})
+        config["environments"] = merged
+        if isinstance(dev.get("environment"), str):
+            config["environment"] = dev["environment"]
+    return config
+
+
+def _seam(env, keys):
+    """``(url, error)`` for the test seam; an unusable seam is ignored and reported, not fatal."""
+    seam = {key: env.get(key) for key in SEAM_ENVS if env.get(key)}
+    if not seam:
+        return None, None
+    missing = [key for key in SEAM_ENVS if key not in seam]
+    if missing:
+        return None, "the test seam needs {}".format(", ".join(SEAM_ENVS))
+    test_url = seam[SEAM_URL_ENV]
+    if not _loopback_host(test_url):
+        return None, "{} must be a loopback URL".format(SEAM_URL_ENV)
+    try:
+        test_url = http_policy.validate_base_url(test_url, SEAM_URL_ENV, allow_loopback_http=True)
+    except (UsageError, EnvError):
+        return None, "{} is not a usable URL".format(SEAM_URL_ENV)
+    if not seam[SEAM_KID_ENV].startswith(SEAM_KID_PREFIX) or not _KID_RE.match(seam[SEAM_KID_ENV]):
+        return None, "{} must start with {!r}".format(SEAM_KID_ENV, SEAM_KID_PREFIX)
+    try:
+        key = _decode_key(seam[SEAM_KEY_ENV])
+    except (TokenError, ValueError):
+        return None, "{} must be a base64url Ed25519 public key".format(SEAM_KEY_ENV)
+    keys[seam[SEAM_KID_ENV]] = key
+    return test_url, None
+
+
+def load_identity(environ=None, config_path=None, dev_path=None):
+    """The compiled identity, plus the test seam when ``DEVTEAM_AUTH_TEST_*`` is set.
+
+    Reads only the config file shipped with the CLI (and its repository-only dev sibling)
+    and the three seam variables, and the seam is read from the environment alone. A seam
+    that names a non-loopback URL, a ``kid`` without the ``test-`` prefix or an unusable key
+    is **ignored** and reported through :func:`seam_warning`, so a stray variable cannot make
+    every command fail; the compiled endpoint stays in force.
+    """
+    env = os.environ if environ is None else environ
+    config = read_config(config_path, dev_path)
+    if config is None:
         raise EnvError("auth-config.json is missing or malformed")
     name = config.get("environment")
     section = (config.get("environments") or {}).get(name)
@@ -212,36 +280,28 @@ def load_identity(environ=None, config_path=None):
         try:
             keys[kid] = _decode_key(text)
         except (TokenError, ValueError):
-            raise EnvError("auth-config.json carries an unusable key for kid {!r}".format(kid))
+            raise EnvError(
+                "auth-config.json carries an unusable key for kid {!r}".format(kid),
+                hint="Public keys are base64url without padding (see infra/supabase/README.md).",
+            )
     url = str(section.get("supabase_url", "")).rstrip("/")
-    seam = {key: env.get(key) for key in SEAM_ENVS if env.get(key)}
-    if seam:
-        missing = [key for key in SEAM_ENVS if key not in seam]
-        if missing:
-            raise UsageError("the test seam needs {}".format(", ".join(SEAM_ENVS)))
-        test_url = seam[SEAM_URL_ENV]
-        if not _loopback_host(test_url):
-            raise UsageError("{} must be a loopback URL".format(SEAM_URL_ENV))
-        test_url = http_policy.validate_base_url(test_url, SEAM_URL_ENV, allow_loopback_http=True)
-        if not seam[SEAM_KID_ENV].startswith(SEAM_KID_PREFIX) or not _KID_RE.match(seam[SEAM_KID_ENV]):
-            raise UsageError("{} must start with {!r}".format(SEAM_KID_ENV, SEAM_KID_PREFIX))
-        try:
-            keys[seam[SEAM_KID_ENV]] = _decode_key(seam[SEAM_KEY_ENV])
-        except (TokenError, ValueError):
-            raise UsageError("{} must be a base64url Ed25519 public key".format(SEAM_KEY_ENV))
-        url = test_url
+    test_url, seam_error = _seam(env, keys)
     return Identity(
         environment=name,
-        supabase_url=url,
+        supabase_url=test_url or url,
         anon_key=str(section.get("anon_key", "")),
         audience=str(config.get("audience", "devteam-cli")),
         keys=keys,
-        test_seam=bool(seam),
+        test_seam=test_url is not None,
+        gate_mode=gate_mode_of(config),
+        seam_error=seam_error,
     )
 
 
 def seam_warning(identity):
-    """The one-line stderr warning every command prints while the seam is active (SR-44)."""
+    """The one-line stderr warning every command prints while the seam is set (SR-44)."""
+    if identity.seam_error:
+        return "warning: account test seam ignored: {}".format(identity.seam_error)
     if not identity.test_seam:
         return None
     return "warning: account test seam active ({}); licence checks are not production checks".format(

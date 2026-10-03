@@ -22,13 +22,14 @@ prints: the callers receive plain dicts and are written not to render them.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 
 from . import creds, entitlement, jsonio, paths
 from . import secrets as secrets_module
 from .auth_gotrue import REASON_SESSION_EXPIRED, Rejected
-from .errors import EnvError
+from .errors import ConflictError, EnvError
 from .lock import store_lock
 
 REF = "account.session.refresh_token"
@@ -117,6 +118,11 @@ def backend_view(meta):
 
 
 def insecure_warning():
+    if os.name == "nt":
+        return (
+            "the session is stored in a plain file in your user profile because no OS "
+            "credential store is available on this machine"
+        )
     return (
         "the session is stored in a plain file (mode 0600) because no OS keychain is "
         "available on this machine"
@@ -238,6 +244,10 @@ def fetch_entitlement(client, identity, access):
     now = int(time.time())
     if result.status != entitlement.STATUS_INVALID:
         update_meta(last_online_check=now, last_online_attempt=now)
+    else:
+        # An unusable token (an unknown kid after a key rotation) is a failed attempt: without
+        # the stamp every command would ask again and exhaust the server's issuance limit.
+        update_meta(last_online_attempt=now)
     return result
 
 
@@ -247,27 +257,28 @@ def sync_entitlement(client, identity):
 
 
 def should_refresh(result, meta, now=None):
-    """Whether an online check is due, given what the cache says and when it last ran."""
+    """Whether an online check is due, given what the cache says and when it last ran.
+
+    A failed attempt backs off for :data:`RETRY_AFTER_FAILURE_SECONDS` whatever the cached
+    status, so an offline machine pays a network timeout at most once per window.
+    """
     now = time.time() if now is None else now
     if meta is None:
         return False
-    if result.status in (entitlement.STATUS_NEEDS_ONLINE_CHECK, entitlement.STATUS_INVALID):
-        return True
     last = meta.get("last_online_check")
     attempt = meta.get("last_online_attempt")
+    if isinstance(attempt, int) and 0 <= now - attempt < RETRY_AFTER_FAILURE_SECONDS and (
+        not isinstance(last, int) or attempt > last
+    ):
+        return False
+    if result.status in (entitlement.STATUS_NEEDS_ONLINE_CHECK, entitlement.STATUS_INVALID):
+        return True
     window = (
         BLOCKED_RECHECK_SECONDS
         if result.status in (entitlement.STATUS_TRIAL_EXPIRED, entitlement.STATUS_BANNED)
         else REFRESH_AFTER_SECONDS
     )
-    stale = not isinstance(last, int) or now < last or now - last >= window
-    if not stale:
-        return False
-    if isinstance(attempt, int) and 0 <= now - attempt < RETRY_AFTER_FAILURE_SECONDS and (
-        not isinstance(last, int) or attempt > last
-    ):
-        return False
-    return True
+    return not isinstance(last, int) or now < last or now - last >= window
 
 
 def note_failed_attempt():
@@ -277,10 +288,26 @@ def note_failed_attempt():
 def clear_local():
     """Remove every local trace of the session; returns what was removed.
 
-    Each step runs even when an earlier one fails (SR-20), and the report says which
-    parts succeeded. The in-memory access token is dropped first.
+    Runs under the session lock, so a refresh in another process cannot write the token back
+    after it was deleted. Each step runs even when an earlier one fails (SR-20), and the
+    report says which parts succeeded; if the lock cannot be taken the steps still run
+    unlocked, because a sign-out must never be refused. The in-memory token is dropped first.
     """
     _forget_memory()
+    base = paths.known_machine_dir()
+    if base is None:
+        # This machine has no id, so no session was ever stored here (the record, the
+        # file-backed secret and the cache all live under the machine subtree); do not
+        # create the store just to find that out.
+        return {"refresh_token_removed": True, "entitlement_removed": True, "session_record_removed": True}
+    try:
+        with store_lock(LOCK_NAME, timeout=LOCK_TIMEOUT):
+            return _clear_steps(base / META_FILE)
+    except ConflictError:
+        return _clear_steps(base / META_FILE)
+
+
+def _clear_steps(meta_file):
     report = {"refresh_token_removed": True, "entitlement_removed": True, "session_record_removed": True}
     meta = read_meta()
     backends = []
@@ -296,14 +323,12 @@ def clear_local():
             report["refresh_token_removed"] = False
     try:
         entitlement.clear_cache()
-    except EnvError:
+    except (EnvError, ConflictError):
         report["entitlement_removed"] = False
     try:
-        with store_lock(LOCK_NAME, timeout=LOCK_TIMEOUT):
-            try:
-                meta_path().unlink()
-            except FileNotFoundError:
-                pass
-    except (EnvError, OSError):
+        meta_file.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
         report["session_record_removed"] = False
     return report

@@ -44,6 +44,8 @@ REASON_NOT_SIGNED_IN = "not_signed_in"
 REASON_RATE_LIMITED = "rate_limited"
 REASON_UNREACHABLE = "unreachable"
 REASON_NOT_CONFIGURED = "not_configured"
+REASON_WEAK_PASSWORD = "weak_password"
+REASON_SERVER_REFUSED = "server_refused"
 
 #: One fixed sentence per reason. Nothing from a response is ever added to these.
 MESSAGES = {
@@ -52,6 +54,7 @@ MESSAGES = {
     REASON_SESSION_EXPIRED: "the session is no longer valid",
     REASON_REJECTED: "the account server rejected the request",
     REASON_NOT_SIGNED_IN: "you are not signed in",
+    REASON_WEAK_PASSWORD: "the account server did not accept this password; choose a stronger one",
 }
 
 
@@ -180,7 +183,7 @@ class Client:
             headers["Authorization"] = "Bearer " + token
         return headers
 
-    def _call(self, method, path, rejected, *, body=None, query=None, token=None):
+    def _call(self, method, path, rejected, *, body=None, query=None, token=None, expire_on=(401,)):
         try:
             data, _headers = http_policy.request_json(
                 method,
@@ -192,16 +195,32 @@ class Client:
                 allow_loopback_http=self.identity.test_seam,
             )
         except http_policy.FetchError as exc:
-            raise self._translate(exc, rejected) from None
+            raise self._translate(exc, rejected, expire_on) from None
         return data
 
     @staticmethod
-    def _translate(exc, rejected):
+    def _translate(exc, rejected, expire_on=(401,)):
+        """Map an HTTP failure to the CLI's errors.
+
+        A call whose rejection means "the session is dead" (``session_expired``) says so only
+        on the statuses in ``expire_on``; any other 4xx from it (a function not deployed, a
+        proxy's 403) is :data:`REASON_SERVER_REFUSED`, an environment error that leaves the
+        local session alone, because the caller clears local state on ``session_expired``.
+        """
         status = exc.http_status
         if exc.state == "rate_limited" or status == 429:
             return RateLimited(exc.retry_after)
         if status is None or status >= 500:
             return unreachable()
+        body = exc.body if isinstance(exc.body, dict) else {}
+        if body.get("error_code") == REASON_WEAK_PASSWORD or body.get("code") == REASON_WEAK_PASSWORD:
+            return Rejected(REASON_WEAK_PASSWORD)
+        if rejected == REASON_SESSION_EXPIRED and status not in expire_on:
+            return EnvError(
+                "the account server refused the request (HTTP {})".format(status),
+                hint="Try again later; if it persists, the account service may be misconfigured.",
+                details={"reason": REASON_SERVER_REFUSED},
+            )
         return Rejected(rejected)
 
     def _session(self, data):
@@ -263,6 +282,7 @@ class Client:
             REASON_SESSION_EXPIRED,
             body={"refresh_token": refresh_token},
             query={"grant_type": "refresh_token"},
+            expire_on=(400, 401),
         )
         return self._session(data)
 

@@ -30,6 +30,7 @@ apply_strip() {
   rm -f  "$extracted/.gitignore"            # repo-level gitignore — not for user projects
   rm -f  "$extracted/scripts/install.sh"    # accessed via curl; never bundled in the package
   rm -f  "$extracted/scripts/install-cli.sh" # CLI bootstrap, accessed via curl (ADR-0028); never bundled
+  rm -f  "$extracted/scripts/lib/auth-config.dev.json" # dev account environment — repo-only (ADR-0029 SR-27)
 
   # Cross-CLI plumbing (opencode/Codex render engine and installer scripts)
   # is now INCLUDED in the slim Claude install so users can add Codex or

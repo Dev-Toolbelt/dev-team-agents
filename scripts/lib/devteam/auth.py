@@ -32,14 +32,13 @@ import time
 from . import auth_gotrue as gotrue
 from . import auth_oauth as oauth
 from . import auth_session as session
-from . import entitlement
+from . import console, entitlement
 from .auth_gotrue import Rejected
 from .errors import EXIT_ENVIRONMENT, EXIT_FINDINGS, DevteamError, EnvError, UsageError
 
 SENT_MESSAGE = (
     "If this address can sign in, a code was sent to it. The code is valid for 10 minutes."
 )
-CONFIRM_ANSWER = "delete"
 
 
 class EntitlementRefusal(DevteamError):
@@ -82,9 +81,7 @@ def _identity(emitter, network=True):
 
 
 def _is_console():
-    from . import cli
-
-    return cli._stdin_is_console()
+    return console.stdin_is_console()
 
 
 def _prompt(text):
@@ -145,8 +142,6 @@ def _account_view(meta):
 
 
 def _state_view(identity, meta, result, online=None, warnings=None):
-    from . import auth_gate
-
     backend, insecure = session.backend_view(meta)
     notes = list(warnings or [])
     if insecure:
@@ -160,7 +155,7 @@ def _state_view(identity, meta, result, online=None, warnings=None):
         "last_online_check": meta.get("last_online_check") if meta else None,
         "secret_backend": backend,
         "secret_backend_insecure": insecure,
-        "gate_mode": auth_gate.gate_mode(),
+        "gate_mode": identity.gate_mode,
         "environment": identity.environment,
         "test_seam": identity.test_seam,
         "warnings": notes,
@@ -243,12 +238,21 @@ def _oauth_session(emitter, identity, client, provider, link_access=None):
     return client.pkce_exchange(outcome["code"], verifier)
 
 
-def _swallow_rejection(call):
-    """Run a request whose rejection must look like success (SR-10). Other errors propagate."""
+def _swallow_rejection(call, rate_limit_too=False):
+    """Run a request whose rejection must look like success (SR-10). Other errors propagate.
+
+    A weak password is not swallowed: hiding it would tell the user a code was sent that
+    never will be. ``rate_limit_too`` also hides a 429, for endpoints whose throttle applies
+    only to registered addresses and would otherwise reveal which ones exist.
+    """
     try:
         call()
-    except Rejected:
-        pass
+    except Rejected as exc:
+        if exc.reason == gotrue.REASON_WEAK_PASSWORD:
+            raise
+    except gotrue.RateLimited:
+        if not rate_limit_too:
+            raise
 
 
 def cmd_login(args, emitter):
@@ -431,7 +435,7 @@ def cmd_password_reset(args, emitter):
     client = gotrue.Client(identity)
     email = gotrue.normalize_email(args.email)
     if not args.finish:
-        _swallow_rejection(lambda: client.recover(email))
+        _swallow_rejection(lambda: client.recover(email), rate_limit_too=True)
         emitter.line(SENT_MESSAGE)
         if args.send_code:
             return {"sent": True, "message": SENT_MESSAGE, "expires_in": 600}, None

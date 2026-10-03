@@ -504,10 +504,15 @@ READ_ONLY = {
     ("catalog", "show"): "read-only browse",
     ("skills", "list"): "reads the providers' global skill directories; creates nothing",
     ("skills", "show"): "reads one global skill; creates nothing",
-    # The account commands write the session and entitlement records, which are machine-local
-    # and not among the shapes a client declares (`store_schemas()`), so no declared client can
-    # misread them. They are never gated: a user must always be able to sign in and out
-    # (ADR-0029 section 3), including from a client that has fallen behind.
+}
+
+
+#: Commands that touch **no declared store shape** but are not reads either: they write
+#: machine-local records (which no client declares, `store_schemas()`) or the remote account.
+#: The account commands (ADR-0029) live here. Like ``READ_ONLY`` they are never refused to a
+#: declared client — a user must always be able to sign in and out, including from a client
+#: that has fallen behind — but they are not called read-only, because they are not.
+STORE_NEUTRAL = {
     ("auth", "login"): "signs in; writes the machine-local session and entitlement records, "
     "which are not declared store shapes",
     ("auth", "logout"): "removes the machine-local session and entitlement records",
@@ -568,7 +573,7 @@ NEEDS_MACHINE_LAYOUT = {
 
 
 def classify(command_path):
-    """``"mutating"``, ``"read-only"``, or ``None`` for a command nobody classified.
+    """``"mutating"``, ``"read-only"``, ``"store-neutral"``, or ``None`` for a command nobody classified.
 
     ``None`` is not a verdict — it is the signal that the tables above have fallen
     behind ``cli.build_parser()``, which ``tests/test_client_gate.py`` fails on by
@@ -580,6 +585,8 @@ def classify(command_path):
         return "mutating"
     if command_path in READ_ONLY:
         return "read-only"
+    if command_path in STORE_NEUTRAL:
+        return "store-neutral"
     return None
 
 
@@ -592,7 +599,7 @@ def is_mutating(command_path):
     of failing closed is borne only by a client that declared *and* is behind; a
     compatible client and a human are unaffected either way.
     """
-    return classify(command_path) != "read-only"
+    return classify(command_path) not in ("read-only", "store-neutral")
 
 
 def render_unsupported(unsupported):
