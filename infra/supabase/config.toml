@@ -34,8 +34,11 @@ minimum_password_length = 10
 password_requirements = ""
 
 [auth.rate_limit]
-# SR-11. Per hour, per IP unless noted.
-email_sent = 30
+# SR-11. Per hour, per IP unless noted. email_sent is project-wide, so it is the ceiling one
+# address-spraying IP can burn for everyone: size it to the SMTP provider's safe hourly volume
+# (well above sign_in_sign_ups x a few hundred IPs). CAPTCHA is not an option: the CLI cannot
+# render one, so per-IP sign_in_sign_ups is the throttle in front of /otp and /signup.
+email_sent = 500
 sms_sent = 0
 anonymous_users = 0
 token_refresh = 150
@@ -116,3 +119,14 @@ enabled = false
 [edge_runtime]
 enabled = true
 policy = "per_worker"
+
+# SR-33: every function verifies the caller's JWT at the platform as well as in code.
+[functions.entitlement]
+verify_jwt = true
+
+[functions.account-delete]
+verify_jwt = true
+
+# Service-role only (SR-35); the handler also compares the bearer with the service key.
+[functions.ban-user]
+verify_jwt = true

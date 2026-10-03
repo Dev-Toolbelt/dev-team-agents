@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertNotEquals } from "@std/assert";
 import { emailHmacHex, normalizeEmail, toHex } from "./normalize.ts";
 
 Deno.test("normalize trims, NFC-composes and lowercases, nothing else", () => {

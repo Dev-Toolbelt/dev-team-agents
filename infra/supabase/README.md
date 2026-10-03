@@ -17,7 +17,7 @@ Two projects, both in `sa-east-1`: `devteam-dev` and `devteam-prod`. Secrets nev
 supabase link --project-ref <ref>        # run once per target
 supabase config push                      # pushes config.toml (auth, rate limits, templates)
 supabase db push                          # migrations
-supabase functions deploy                 # entitlement, account-delete
+supabase functions deploy                 # entitlement, account-delete, ban-user
 supabase secrets set ENTITLEMENT_ED25519_PRIVATE_KEY=... ENTITLEMENT_KID=... BAN_HMAC_KEY=...
 ```
 
@@ -34,7 +34,7 @@ read `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which the platform injects.
 | `BAN_HMAC_KEY` | Random pepper for the email HMAC, 32+ bytes (`openssl rand -base64 48`). Changing it orphans every `banned_identities` and `trial_consumed` row, so treat it as write-once |
 
 ```bash
-supabase functions deploy entitlement account-delete
+supabase functions deploy entitlement account-delete ban-user
 deno test --no-lock -q functions/     # no network, no secrets needed
 ```
 
@@ -56,10 +56,12 @@ one per entry) and make the CLI listener pick from that range. This was not exer
 
 ```bash
 openssl genpkey -algorithm ed25519 -out entitlement.pem
-openssl pkey -in entitlement.pem -pubout -outform DER | tail -c 32 | base64   # public key for the CLI source
+# Public key for scripts/lib/auth-config.json: base64url WITHOUT padding (the CLI rejects anything else).
+openssl pkey -in entitlement.pem -pubout -outform DER | tail -c 32 | base64 | tr '+/' '-_' | tr -d '=\n'
 openssl pkcs8 -topk8 -nocrypt -in entitlement.pem -outform DER | base64       # value of the private key secret
 ```
 
+Check the public key before shipping it: from the repository root, `python3 -c "import sys; sys.path.insert(0, 'scripts/lib'); from devteam import entitlement; print(sorted(entitlement.load_identity().keys))"` must list the new `kid` (an unusable key fails with a message naming it).
 Delete `entitlement.pem` after storing the secret. Never reuse a key across dev and prod.
 Rotation: generate a new pair with a new `kid`, ship a CLI release that embeds both public keys,
 wait until the old CLI versions age out, then `supabase secrets set` the new private key and `ENTITLEMENT_KID`,

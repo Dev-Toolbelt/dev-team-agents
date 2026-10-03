@@ -101,8 +101,15 @@ class MigrationPolicyTest(unittest.TestCase):
         self.assertIn("revoke all on public.profiles, public.licenses, public.app_config", self.sql)
 
     def test_licenses_have_no_client_write_grant(self):
-        self.assertIn("grant select on public.licenses to authenticated", self.sql)
         self.assertNotRegex(self.sql, r"grant (?:insert|update|delete|all)[^;]*on public\.licenses")
+
+    def test_clients_cannot_read_the_moderation_columns_of_their_license(self):
+        grant = re.search(r"grant select \(([^)]*)\)\s+on public\.licenses to authenticated", self.sql)
+        self.assertIsNotNone(grant, "licenses must be granted column by column")
+        columns = {c.strip() for c in grant.group(1).split(",")}
+        self.assertNotIn("ban_reason", columns)
+        self.assertNotIn("banned_at", columns)
+        self.assertNotIn("grant select on public.licenses to authenticated", self.sql)
 
 
 if __name__ == "__main__":

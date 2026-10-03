@@ -2,10 +2,7 @@ import { bearerToken, json, jsonError, logFailure } from "../_shared/http.ts";
 import { emailHmacHex } from "../_shared/normalize.ts";
 import { deriveEntitlement, expirySeconds } from "../_shared/status.ts";
 import { type Claims, signToken, TOKEN_AUDIENCE } from "../_shared/token.ts";
-import type { Deps } from "../_shared/types.ts";
-
-export const RATE_LIMIT_PER_HOUR = 30;
-export const RATE_LIMIT_WINDOW_SECONDS = 3600;
+import { AuthUnavailable, type Deps } from "../_shared/types.ts";
 
 export interface EntitlementDeps extends Deps {
   signingKey: CryptoKey;
@@ -23,8 +20,9 @@ export async function handleEntitlement(req: Request, deps: EntitlementDeps): Pr
     const user = await deps.verifyJwt(jwt);
     if (!user) return jsonError(401, "unauthorized");
 
-    if (!(await deps.store.takeSlot(user.id))) {
-      return jsonError(429, "rate_limited", { "retry-after": String(RATE_LIMIT_WINDOW_SECONDS) });
+    const slot = await deps.store.takeSlot(user.id);
+    if (!slot.allowed) {
+      return jsonError(429, "rate_limited", { "retry-after": String(slot.retryAfter) });
     }
 
     const now = deps.now();
@@ -36,8 +34,15 @@ export async function handleEntitlement(req: Request, deps: EntitlementDeps): Pr
       ? await Promise.all([deps.store.isBanned(hmac), deps.store.getTrialConsumed(hmac)])
       : [false, null];
 
-    const trialStartedAt = license.trial_started_at ?? consumedAt ?? now;
-    if (!license.trial_started_at) await deps.store.setTrialStarted(user.id, trialStartedAt);
+    let trialStartedAt = license.trial_started_at ?? consumedAt ?? now;
+    if (!license.trial_started_at) {
+      await deps.store.setTrialStarted(user.id, trialStartedAt);
+      // A concurrent first call may have won the conditional update; use what was stored.
+      trialStartedAt = (await deps.store.getLicense(user.id))?.trial_started_at ?? trialStartedAt;
+    }
+    // The trial marker is written when the trial starts, keyed by the email it started under,
+    // so changing the address before deleting the account cannot buy a fresh trial (SR-39).
+    if (hmac && config.trial_enabled && !consumedAt) await deps.store.markTrialConsumed(hmac, trialStartedAt);
 
     const derived = deriveEntitlement({ license, config, identityBanned, trialStartedAt, now });
     const iat = Math.floor(now.getTime() / 1000);
@@ -47,7 +52,10 @@ export async function handleEntitlement(req: Request, deps: EntitlementDeps): Pr
       sub: user.id,
       v: 1,
       iat,
-      exp: expirySeconds(iat, config.max_offline_days, derived.status === "trial" ? derived.trialEndsAt : null),
+      exp: Math.max(
+        iat + 1,
+        expirySeconds(iat, config.max_offline_days, derived.status === "trial" ? derived.trialEndsAt : null),
+      ),
       status: derived.status,
       features: derived.features,
     };
@@ -60,6 +68,7 @@ export async function handleEntitlement(req: Request, deps: EntitlementDeps): Pr
     return json(200, { token });
   } catch (err) {
     logFailure("entitlement", err);
+    if (err instanceof AuthUnavailable) return jsonError(503, "auth_unavailable");
     return jsonError(500, "request_failed");
   }
 }

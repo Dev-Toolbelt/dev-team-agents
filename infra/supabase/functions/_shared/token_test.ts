@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { b64Decode, b64urlEncode, type Claims, importSigningKey, signToken, TOKEN_AUDIENCE } from "./token.ts";
 
 const dec = new TextDecoder();

@@ -13,14 +13,19 @@ create function public.take_entitlement_slot(
   p_limit integer,
   p_window_seconds integer
 )
-returns boolean
+returns table (allowed boolean, retry_after integer)
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   v_count integer;
+  v_started timestamptz;
 begin
+  if p_user_id is null or p_limit is null or p_limit < 1
+     or p_window_seconds is null or p_window_seconds < 1 then
+    raise exception 'take_entitlement_slot: p_user_id, p_limit > 0 and p_window_seconds > 0 are required';
+  end if;
   insert into public.entitlement_rate_limits as r (user_id, window_started_at, issued_count)
   values (p_user_id, now(), 1)
   on conflict (user_id) do update
@@ -32,9 +37,14 @@ begin
           when r.window_started_at <= now() - make_interval(secs => p_window_seconds) then 1
           else r.issued_count + 1
         end
-  returning r.issued_count into v_count;
+  returning r.issued_count, r.window_started_at into v_count, v_started;
 
-  return v_count <= p_limit;
+  allowed := v_count <= p_limit;
+  retry_after := greatest(
+    1,
+    ceil(extract(epoch from (v_started + make_interval(secs => p_window_seconds) - now())))::integer
+  );
+  return next;
 end;
 $$;
 

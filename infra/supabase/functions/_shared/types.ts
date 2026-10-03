@@ -26,11 +26,22 @@ export interface Store {
   isBanned(emailHmacHex: string): Promise<boolean>;
   getTrialConsumed(emailHmacHex: string): Promise<Date | null>;
   setTrialStarted(userId: string, at: Date): Promise<void>;
-  takeSlot(userId: string): Promise<boolean>;
+  takeSlot(userId: string): Promise<SlotResult>;
   touchLastSeen(userId: string, at: Date): Promise<void>;
   markBanned(emailHmacHex: string, reason: string): Promise<void>;
   markTrialConsumed(emailHmacHex: string, startedAt: Date): Promise<void>;
   deleteUser(userId: string): Promise<void>;
+  banUser(userId: string, reason: string): Promise<string | null>;
+}
+
+export interface SlotResult {
+  allowed: boolean;
+  retryAfter: number;
+}
+
+/** The auth service could not answer (not "the token is bad"): the caller returns 503. */
+export class AuthUnavailable extends Error {
+  override name = "AuthUnavailable";
 }
 
 export interface Deps {

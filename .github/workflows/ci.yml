@@ -346,9 +346,39 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          deno-version: v2.9.7
 
       - name: Edge Function tests
         run: bash .github/scripts/ci/07-edge-functions.sh
+
+  # SR-31/SR-32: row-level security and grants exercised as the roles a client has, against a
+  # real local Postgres with the auth schema (pgTAP via `supabase test db`). The env values are
+  # placeholders: config.toml reads them through env(), and `db start` runs no auth provider.
+  supabase-db:
+    name: Supabase RLS (pgTAP)
+    runs-on: ubuntu-latest
+    env:
+      SMTP_HOST: localhost
+      SMTP_USER: ci
+      SMTP_PASS: ci
+      SMTP_ADMIN_EMAIL: ci@example.com
+      GOOGLE_CLIENT_ID: ci
+      GOOGLE_CLIENT_SECRET: ci
+      GITHUB_CLIENT_ID: ci
+      GITHUB_CLIENT_SECRET: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up the Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: 2.119.0
+
+      - name: Start the database and apply the migrations
+        run: supabase db start --workdir infra
+
+      - name: RLS and grant tests
+        run: supabase test db --workdir infra

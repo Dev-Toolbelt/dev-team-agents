@@ -1,7 +1,7 @@
 import { bearerToken, json, jsonError, logFailure } from "../_shared/http.ts";
 import { emailHmacHex } from "../_shared/normalize.ts";
 import { isFreshlyAuthenticated } from "../_shared/reauth.ts";
-import type { Deps } from "../_shared/types.ts";
+import { AuthUnavailable, type Deps } from "../_shared/types.ts";
 
 export async function handleAccountDelete(req: Request, deps: Deps): Promise<Response> {
   if (req.method !== "POST") return jsonError(405, "method_not_allowed");
@@ -21,14 +21,16 @@ export async function handleAccountDelete(req: Request, deps: Deps): Promise<Res
       const hmac = await emailHmacHex(deps.banKey, user.email);
       const banned = license?.status === "banned" || (await deps.store.isBanned(hmac));
       if (banned) await deps.store.markBanned(hmac, license?.ban_reason ?? "banned");
-      const existing = await deps.store.getTrialConsumed(hmac);
-      await deps.store.markTrialConsumed(hmac, license?.trial_started_at ?? existing ?? now);
+      // Only a trial that actually started is remembered; an account deleted before its
+      // first license check must not shorten the trial of a later sign-up.
+      if (license?.trial_started_at) await deps.store.markTrialConsumed(hmac, license.trial_started_at);
     }
 
     await deps.store.deleteUser(user.id);
     return json(200, { ok: true });
   } catch (err) {
     logFailure("account-delete", err);
+    if (err instanceof AuthUnavailable) return jsonError(503, "auth_unavailable");
     return jsonError(500, "request_failed");
   }
 }

@@ -1,7 +1,8 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "@std/assert";
 import { b64Decode, importSigningKey } from "../_shared/token.ts";
 import { emailHmacHex } from "../_shared/normalize.ts";
 import { fakeDeps, fakeState, NOW, req, USER } from "../_shared/testing.ts";
+import { AuthUnavailable } from "../_shared/types.ts";
 import { type EntitlementDeps, handleEntitlement } from "./handler.ts";
 
 async function deps(state = fakeState(), user = USER): Promise<EntitlementDeps> {
@@ -66,10 +67,22 @@ Deno.test("deleted account re-registering resumes the consumed trial", async () 
   assertEquals((await payloadOf(await handleEntitlement(req("POST", "good"), await deps(state)))).status, "trial_expired");
 });
 
-Deno.test("rate limit returns 429 with retry-after", async () => {
+Deno.test("rate limit returns 429 with the window's remaining seconds", async () => {
   const res = await handleEntitlement(req("POST", "good"), await deps(fakeState({ slots: 0 })));
   assertEquals(res.status, 429);
-  assert(res.headers.get("retry-after"));
+  assertEquals(res.headers.get("retry-after"), "1234");
+});
+
+Deno.test("an unavailable auth service answers 503 so the CLI keeps its session", async () => {
+  const d = { ...(await deps(fakeState())), verifyJwt: () => Promise.reject(new AuthUnavailable()) };
+  const res = await handleEntitlement(req("POST", "good"), d);
+  assertEquals(res.status, 503);
+});
+
+Deno.test("the trial marker is written when the trial starts", async () => {
+  const state = fakeState({ config: { trial_enabled: true, trial_days: 5, max_offline_days: 7 } });
+  await handleEntitlement(req("POST", "good"), await deps(state));
+  assertEquals(state.consumed.get(await emailHmacHex("test-pepper", "person@example.com")), NOW);
 });
 
 Deno.test("missing license row fails generically", async () => {

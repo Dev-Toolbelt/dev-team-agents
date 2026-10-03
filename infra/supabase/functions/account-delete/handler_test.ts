@@ -1,6 +1,7 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "@std/assert";
 import { emailHmacHex } from "../_shared/normalize.ts";
 import { fakeDeps, fakeState, NOW, req, USER } from "../_shared/testing.ts";
+import { AuthUnavailable } from "../_shared/types.ts";
 import { handleAccountDelete } from "./handler.ts";
 
 const stale = { ...USER, amr: [{ method: "otp", timestamp: Math.floor(NOW.getTime() / 1000) - 3600 }] };
@@ -31,9 +32,35 @@ Deno.test("a body naming another user id is ignored", async () => {
 
 Deno.test("deletion records trial_consumed before deleting the user", async () => {
   const s = fakeState();
+  s.license = { ...s.license!, trial_started_at: NOW };
   await handleAccountDelete(req("POST", "good"), fakeDeps(s));
   assertEquals(s.calls, ["markTrialConsumed", "deleteUser"]);
   assertEquals(s.consumed.get(await hmac()), NOW);
+});
+
+Deno.test("an account deleted before any trial started leaves no trial marker", async () => {
+  const s = fakeState();
+  await handleAccountDelete(req("POST", "good"), fakeDeps(s));
+  assertEquals(s.calls, ["deleteUser"]);
+  assertEquals(s.consumed.size, 0);
+});
+
+Deno.test("a fresh password or OAuth sign-in is not enough to delete", async () => {
+  const fresh = Math.floor(NOW.getTime() / 1000) - 30;
+  for (const method of ["password", "oauth"]) {
+    const user = { ...USER, amr: [{ method: "otp", timestamp: fresh - 60 }, { method, timestamp: fresh }] };
+    const s = fakeState();
+    const res = await handleAccountDelete(req("POST", "good"), fakeDeps(s, user));
+    assertEquals(res.status, 403, method);
+    assertEquals(s.deleted, []);
+  }
+});
+
+Deno.test("an unavailable auth service answers 503, not 401", async () => {
+  const s = fakeState();
+  const deps = { ...fakeDeps(s), verifyJwt: () => Promise.reject(new AuthUnavailable()) };
+  const res = await handleAccountDelete(req("POST", "good"), deps);
+  assertEquals(res.status, 503);
 });
 
 Deno.test("an existing trial start is preserved", async () => {

@@ -35,7 +35,7 @@ export function fakeStore(s: FakeState): Store {
       if (s.license) s.license = { ...s.license, trial_started_at: at };
       return Promise.resolve();
     },
-    takeSlot: () => Promise.resolve(s.slots-- > 0),
+    takeSlot: () => Promise.resolve({ allowed: s.slots-- > 0, retryAfter: 1234 }),
     touchLastSeen: () => Promise.resolve(),
     markBanned: (h) => {
       s.banned.add(h);
@@ -51,6 +51,10 @@ export function fakeStore(s: FakeState): Store {
       s.deleted.push(id);
       s.calls.push("deleteUser");
       return Promise.resolve();
+    },
+    banUser: (id) => {
+      s.calls.push("banUser:" + id);
+      return Promise.resolve(USER.email);
     },
   };
 }

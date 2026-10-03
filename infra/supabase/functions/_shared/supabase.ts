@@ -1,8 +1,11 @@
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import type { AppConfig, AuthedUser, License, Store } from "./types.ts";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { type AppConfig, type AuthedUser, AuthUnavailable, type License, type SlotResult, type Store } from "./types.ts";
 import { b64Decode } from "./token.ts";
 
 const bytea = (hex: string) => `\\x${hex}`;
+
+export const RATE_LIMIT_PER_WINDOW = 30;
+export const RATE_LIMIT_WINDOW_SECONDS = 3600;
 
 export function requireEnv(name: string): string {
   const v = Deno.env.get(name);
@@ -51,10 +54,17 @@ export function createStore(db: SupabaseClient): Store {
       ok(await db.from("licenses").update({ trial_started_at: at.toISOString() })
         .eq("user_id", userId).is("trial_started_at", null));
     },
-    async takeSlot(userId) {
-      return ok(
-        await db.rpc("take_entitlement_slot", { p_user_id: userId, p_limit: 30, p_window_seconds: 3600 }),
-      ) === true;
+    async takeSlot(userId): Promise<SlotResult> {
+      const rows = ok(
+        await db.rpc("take_entitlement_slot", {
+          p_user_id: userId,
+          p_limit: RATE_LIMIT_PER_WINDOW,
+          p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+        }),
+      ) as { allowed: boolean; retry_after: number }[] | null;
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) throw new Error("DbError");
+      return { allowed: row.allowed === true, retryAfter: Math.max(1, Number(row.retry_after) || 1) };
     },
     async touchLastSeen(userId, at) {
       ok(await db.from("profiles").update({ last_seen_at: at.toISOString().slice(0, 10) }).eq("id", userId));
@@ -75,13 +85,25 @@ export function createStore(db: SupabaseClient): Store {
       const { error } = await db.auth.admin.deleteUser(userId);
       if (error) throw new Error("DeleteUserFailed");
     },
+    async banUser(userId, reason) {
+      const email = ok(await db.rpc("ban_user", { p_user_id: userId, p_reason: reason })) as string | null;
+      return typeof email === "string" ? email : null;
+    },
   };
 }
 
 export function verifier(db: SupabaseClient): (token: string) => Promise<AuthedUser | null> {
   return async (token) => {
     const { data, error } = await db.auth.getUser(token);
-    if (error || !data.user) return null;
+    if (error) {
+      // A rejected token is 401/403; anything else (a timeout, a 5xx) is the service being
+      // unavailable, which must not read to the CLI as "your session is dead" (it would sign
+      // the user out on a transient failure).
+      const status = (error as { status?: number }).status;
+      if (status === 401 || status === 403) return null;
+      throw new AuthUnavailable();
+    }
+    if (!data.user) return null;
     const amr = readAmr(token);
     return { id: data.user.id, email: data.user.email ?? null, amr };
   };

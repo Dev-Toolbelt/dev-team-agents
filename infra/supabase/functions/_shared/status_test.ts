@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "@std/assert";
 import { deriveEntitlement, expirySeconds } from "./status.ts";
 import type { AppConfig, License } from "./types.ts";
 

@@ -24,7 +24,11 @@ fi
 
 echo "─ edge functions: deno test ────────────────────────────────"
 deno --version | head -1
-deno test --no-lock -q functions/
+# The functions hold the entitlement signing key and the service-role key, so every
+# dependency is pinned in functions/deno.json and resolved only from functions/deno.lock.
+cd functions
+deno check --frozen ./*/index.ts
+deno test --frozen -q .
 
 echo ""
 echo "edge functions OK ✓"
