@@ -5,9 +5,9 @@
  * renderer supplies values (an address, a code, a password) and never a command. Every
  * argument is re-checked here and again by the operation — a type is a compile-time claim
  * and this is a process boundary. **Nothing the renderer sends is logged or kept**: a code
- * or password lives in the one call that carries it, and the single piece of state this
- * module holds is the child process of a password sign-up that is waiting for its emailed
- * code (`SignUpFlow`), which holds the password only inside that child's own stdin.
+ * or password lives in the one call that carries it. The only state this module holds is
+ * the *address* of a password sign-up waiting for its emailed code (`SignUpFlow`) and which
+ * one-at-a-time operations are running (`exclusive`); no password, code or token.
  */
 
 import {
@@ -32,6 +32,8 @@ import {
   authProfileUpdate,
   authStatus,
 } from '../cli/accountOperations.js';
+import { cancelInFlight } from '../cli/invoke.js';
+import { OAUTH_CANCEL_KEY } from '../cli/accountOperations.js';
 import type { CliContext } from '../cli/operations.js';
 import { AUTH_PROVIDERS } from '../shared/accountRules.js';
 import { CHANNELS, type AuthProvider, type AuthSignUpPending, type AuthState, type OperationResult } from '../shared/api.js';
@@ -67,6 +69,8 @@ const NO_CLI: Failure = {
  */
 export class SignUpFlow {
   private email: string | null = null;
+  /** Bumped by every start and cancel, so a slow earlier start cannot claim the flow. */
+  private generation = 0;
 
   async start(
     context: CliContext,
@@ -75,8 +79,19 @@ export class SignUpFlow {
     name: string | null,
   ): Promise<OperationResult<AuthSignUpPending>> {
     this.cancel();
+    const mine = this.generation;
     const sent = await authPasswordSignUpSend(context, email, password, name);
     if (!sent.ok) return sent;
+    if (mine !== this.generation) {
+      return {
+        ok: false,
+        kind: 'refused',
+        message: 'A newer sign-up replaced this one.',
+        exitCode: null,
+        command: 'devteam auth login',
+        durationMs: 0,
+      };
+    }
     this.email = email;
     return { ...sent, data: { pending: true } };
   }
@@ -100,6 +115,7 @@ export class SignUpFlow {
 
   cancel(): void {
     this.email = null;
+    this.generation += 1;
   }
 }
 
@@ -122,6 +138,35 @@ export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: Sig
     return ctx === null ? NO_CLI : call(ctx);
   }
 
+  /**
+   * Operations that must never run twice at once: a double click or a second window would
+   * otherwise start two browser sign-ins, two links or two deletions. `group` names what
+   * conflicts; the OAuth flows share one, because both own the loopback listener.
+   */
+  const running = new Set<string>();
+  async function exclusive<T>(
+    group: string,
+    command: string,
+    call: () => Promise<OperationResult<T>>,
+  ): Promise<OperationResult<T>> {
+    if (running.has(group)) {
+      return {
+        ok: false,
+        kind: 'refused',
+        message: 'This is already in progress.',
+        exitCode: null,
+        command: `devteam ${command}`,
+        durationMs: 0,
+      };
+    }
+    running.add(group);
+    try {
+      return await call();
+    } finally {
+      running.delete(group);
+    }
+  }
+
   handle(CHANNELS.authStatus, () => withCli(authStatus));
   handle(CHANNELS.authCheck, () => withCli(authCheck));
   handle(CHANNELS.authLogout, () => withCli(authLogout));
@@ -129,8 +174,13 @@ export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: Sig
   handle(CHANNELS.authDeleteStart, () => withCli(authDeleteStart));
 
   handle(CHANNELS.authLoginOAuth, (_event, provider) =>
-    isProvider(provider) ? withCli((ctx) => authLoginOAuth(ctx, provider)) : refusedArgument('auth login'),
+    isProvider(provider)
+      ? exclusive('oauth', 'auth login', () => withCli((ctx) => authLoginOAuth(ctx, provider)))
+      : refusedArgument('auth login'),
   );
+  handle(CHANNELS.authCancelOAuth, () => {
+    cancelInFlight(OAUTH_CANCEL_KEY);
+  });
   handle(CHANNELS.authOtpStart, (_event, email, name) =>
     isString(email) && (name === null || isString(name))
       ? withCli((ctx) => authOtpStart(ctx, email, name))
@@ -147,7 +197,7 @@ export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: Sig
 
   handle(CHANNELS.authPasswordSignUpStart, (_event, email, password, name) =>
     isString(email) && isString(password) && (name === null || isString(name))
-      ? withCli((ctx) => signUp.start(ctx, email, password, name))
+      ? exclusive('sign-up', 'auth login', () => withCli((ctx) => signUp.start(ctx, email, password, name)))
       : refusedArgument('auth login'),
   );
   handle(CHANNELS.authPasswordSignUpFinish, (_event, code) =>
@@ -180,13 +230,17 @@ export function registerAccountIpc(deps: AccountIpcDeps): { readonly signUp: Sig
       : refusedArgument('auth profile email'),
   );
   handle(CHANNELS.authIdentityLink, (_event, provider) =>
-    isProvider(provider) ? withCli((ctx) => authIdentityLink(ctx, provider)) : refusedArgument('auth profile link'),
+    isProvider(provider)
+      ? exclusive('oauth', 'auth profile link', () => withCli((ctx) => authIdentityLink(ctx, provider)))
+      : refusedArgument('auth profile link'),
   );
   handle(CHANNELS.authIdentityUnlink, (_event, provider) =>
     isProvider(provider) ? withCli((ctx) => authIdentityUnlink(ctx, provider)) : refusedArgument('auth profile unlink'),
   );
   handle(CHANNELS.authDeleteConfirm, (_event, code) =>
-    isString(code) ? withCli((ctx) => authDeleteConfirm(ctx, code)) : refusedArgument('auth delete'),
+    isString(code)
+      ? exclusive('delete', 'auth delete', () => withCli((ctx) => authDeleteConfirm(ctx, code)))
+      : refusedArgument('auth delete'),
   );
 
   return { signUp };

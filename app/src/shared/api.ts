@@ -1261,6 +1261,8 @@ export interface DevteamBridge {
   ) => Promise<OperationResult<AuthSignUpPending>>;
   readonly authPasswordSignUpFinish: (code: string) => Promise<OperationResult<AuthState>>;
   readonly authPasswordSignUpCancel: () => Promise<void>;
+  /** End a browser sign-in or link that is still waiting for the person. */
+  readonly authCancelOAuth: () => Promise<void>;
   readonly authPasswordResetStart: (email: string) => Promise<OperationResult<AuthSent>>;
   readonly authPasswordResetFinish: (email: string, code: string, newPassword: string) => Promise<OperationResult<AuthState>>;
   readonly authPasswordChange: (current: string, next: string) => Promise<OperationResult<AuthPasswordChanged>>;
@@ -1792,6 +1794,7 @@ export const CHANNELS = {
   authPasswordSignUpStart: 'devteam:auth-password-sign-up-start',
   authPasswordSignUpFinish: 'devteam:auth-password-sign-up-finish',
   authPasswordSignUpCancel: 'devteam:auth-password-sign-up-cancel',
+  authCancelOAuth: 'devteam:auth-cancel-oauth',
   authPasswordResetStart: 'devteam:auth-password-reset-start',
   authPasswordResetFinish: 'devteam:auth-password-reset-finish',
   authPasswordChange: 'devteam:auth-password-change',

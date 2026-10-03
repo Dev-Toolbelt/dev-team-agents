@@ -124,7 +124,7 @@ import type {
  * CLI's own switch for "check the store only, ignoring the cwd".
  */
 export type CliContext = Required<Pick<InvokeOptions, 'binary' | 'cwd'>> &
-  Pick<InvokeOptions, 'env' | 'timeoutMs' | 'declarationFile' | 'cancelOnQuit'>;
+  Pick<InvokeOptions, 'env' | 'timeoutMs' | 'declarationFile' | 'cancelOnQuit' | 'cancelKey'>;
 // `secretStdin` is deliberately not part of `CliContext`: a context is reused and may be
 // logged, a secret belongs to one invocation only.
 

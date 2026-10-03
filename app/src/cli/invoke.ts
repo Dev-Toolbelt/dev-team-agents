@@ -92,6 +92,12 @@ export interface InvokeOptions {
    */
   readonly cancelOnQuit?: boolean;
   /**
+   * A name `cancelInFlight` can end this child by: a browser sign-in waits for the person
+   * for minutes, and they must be able to give up on it. Only for a child that writes
+   * nothing until its very last step (the CLI stores a session only after the exchange).
+   */
+  readonly cancelKey?: string;
+  /**
    * A secret (an integration API token) for the child's stdin. Written, then stdin is
    * closed. Never put a secret in `args`: argv is visible in the process table and in
    * `command.display`. The value is redacted from everything this function returns; do
@@ -108,7 +114,7 @@ export interface InvokeOptions {
 }
 
 export const REDACTED = '[redacted]';
-const MIN_REDACTABLE = 4;
+export const MIN_REDACTABLE = 4;
 
 /** Replace every occurrence of `secret` (raw and JSON-escaped) in `text`. */
 export function redactSecret(text: string, secret: string | undefined): string {
@@ -204,6 +210,7 @@ function isDocumentedExit(code: number): code is ExitCode {
 
 interface InFlight {
   readonly cancelOnQuit: boolean;
+  readonly cancelKey: string | null;
   /** Resolves when the child has ended, whichever way. */
   readonly ended: Promise<void>;
 }
@@ -223,6 +230,18 @@ export function terminateInFlight(): void {
   for (const [child, entry] of inFlight) {
     if (entry.cancelOnQuit && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
   }
+}
+
+/** SIGTERM the running children started with `cancelKey === key`; returns how many. */
+export function cancelInFlight(key: string): number {
+  let count = 0;
+  for (const [child, entry] of inFlight) {
+    if (entry.cancelKey === key && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM');
+      count += 1;
+    }
+  }
+  return count;
 }
 
 /** True while a child that `terminateInFlight` would not cancel is still running. */
@@ -298,6 +317,7 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
 
   inFlight.set(child, {
     cancelOnQuit: options.cancelOnQuit === true,
+    cancelKey: options.cancelKey ?? null,
     ended: new Promise<void>((resolve) => {
       child.once('close', () => resolve());
       child.once('error', () => resolve());

@@ -46,6 +46,9 @@ function migrateRequest(request: MigrateRequest): Record<string, unknown> {
   };
 }
 
+/** A renderer value as a string, or null when it is not one; main refuses null where text is required. */
+const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
 const bridge: DevteamBridge = {
   buildInfo: () => ipcRenderer.invoke(CHANNELS.buildInfo),
   environment: () => ipcRenderer.invoke(CHANNELS.environment),
@@ -183,41 +186,43 @@ const bridge: DevteamBridge = {
         ...('value' in entry ? { value: entry.value } : {}),
       })),
     ),
-  // The account (ADR-0029). Everything is coerced to a string (or null) here and validated
-  // again in main. A code or password is passed straight through to a single call, which
-  // forwards it to the CLI's stdin; this bridge keeps none of it.
+  // The account (ADR-0029). A value that is not a string becomes null here (never the text
+  // "undefined", which would pass as a display name) and main refuses it. A code or password
+  // is passed straight through to a single call, which forwards it to the CLI's stdin; this
+  // bridge keeps none of it.
   authStatus: () => ipcRenderer.invoke(CHANNELS.authStatus),
   authCheck: () => ipcRenderer.invoke(CHANNELS.authCheck),
-  authLoginOAuth: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authLoginOAuth, String(provider)),
+  authLoginOAuth: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authLoginOAuth, text(provider)),
   authOtpStart: (email: string, name: string | null) =>
-    ipcRenderer.invoke(CHANNELS.authOtpStart, String(email), name === null ? null : String(name)),
-  authOtpVerify: (email: string, code: string) => ipcRenderer.invoke(CHANNELS.authOtpVerify, String(email), String(code)),
+    ipcRenderer.invoke(CHANNELS.authOtpStart, text(email), text(name)),
+  authOtpVerify: (email: string, code: string) => ipcRenderer.invoke(CHANNELS.authOtpVerify, text(email), text(code)),
   authPasswordSignIn: (email: string, password: string) =>
-    ipcRenderer.invoke(CHANNELS.authPasswordSignIn, String(email), String(password)),
+    ipcRenderer.invoke(CHANNELS.authPasswordSignIn, text(email), text(password)),
   authPasswordSignUpStart: (email: string, password: string, name: string | null) =>
-    ipcRenderer.invoke(CHANNELS.authPasswordSignUpStart, String(email), String(password), name === null ? null : String(name)),
-  authPasswordSignUpFinish: (code: string) => ipcRenderer.invoke(CHANNELS.authPasswordSignUpFinish, String(code)),
+    ipcRenderer.invoke(CHANNELS.authPasswordSignUpStart, text(email), text(password), text(name)),
+  authPasswordSignUpFinish: (code: string) => ipcRenderer.invoke(CHANNELS.authPasswordSignUpFinish, text(code)),
   authPasswordSignUpCancel: () => ipcRenderer.invoke(CHANNELS.authPasswordSignUpCancel),
-  authPasswordResetStart: (email: string) => ipcRenderer.invoke(CHANNELS.authPasswordResetStart, String(email)),
+  authPasswordResetStart: (email: string) => ipcRenderer.invoke(CHANNELS.authPasswordResetStart, text(email)),
   authPasswordResetFinish: (email: string, code: string, newPassword: string) =>
-    ipcRenderer.invoke(CHANNELS.authPasswordResetFinish, String(email), String(code), String(newPassword)),
+    ipcRenderer.invoke(CHANNELS.authPasswordResetFinish, text(email), text(code), text(newPassword)),
   authPasswordChange: (current: string, next: string) =>
-    ipcRenderer.invoke(CHANNELS.authPasswordChange, String(current), String(next)),
+    ipcRenderer.invoke(CHANNELS.authPasswordChange, text(current), text(next)),
   authProfileGet: () => ipcRenderer.invoke(CHANNELS.authProfileGet),
-  authProfileUpdate: (name: string) => ipcRenderer.invoke(CHANNELS.authProfileUpdate, String(name)),
-  authEmailChangeStart: (newEmail: string) => ipcRenderer.invoke(CHANNELS.authEmailChangeStart, String(newEmail)),
+  authProfileUpdate: (name: string) => ipcRenderer.invoke(CHANNELS.authProfileUpdate, text(name)),
+  authEmailChangeStart: (newEmail: string) => ipcRenderer.invoke(CHANNELS.authEmailChangeStart, text(newEmail)),
   authEmailChangeConfirm: (newEmail: string, codeNew: string, codeCurrent: string | null) =>
     ipcRenderer.invoke(
       CHANNELS.authEmailChangeConfirm,
-      String(newEmail),
-      String(codeNew),
-      codeCurrent === null ? null : String(codeCurrent),
+      text(newEmail),
+      text(codeNew),
+      text(codeCurrent),
     ),
-  authIdentityLink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityLink, String(provider)),
-  authIdentityUnlink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityUnlink, String(provider)),
+  authIdentityLink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityLink, text(provider)),
+  authIdentityUnlink: (provider: AuthProvider) => ipcRenderer.invoke(CHANNELS.authIdentityUnlink, text(provider)),
   authDeleteStart: () => ipcRenderer.invoke(CHANNELS.authDeleteStart),
-  authDeleteConfirm: (code: string) => ipcRenderer.invoke(CHANNELS.authDeleteConfirm, String(code)),
+  authDeleteConfirm: (code: string) => ipcRenderer.invoke(CHANNELS.authDeleteConfirm, text(code)),
   authLogout: () => ipcRenderer.invoke(CHANNELS.authLogout),
+  authCancelOAuth: () => ipcRenderer.invoke(CHANNELS.authCancelOAuth),
   pickProjectPath: (projectId: ProjectId, picker: PluginFieldPicker) =>
     ipcRenderer.invoke(CHANNELS.pickProjectPath, String(projectId), String(picker)),
   notificationFeed: () => ipcRenderer.invoke(CHANNELS.notificationFeed),

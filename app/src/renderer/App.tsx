@@ -115,137 +115,137 @@ export function App() {
     // ADR-0029: accounts are mandatory. The provider asks the CLI (`auth check`) once a CLI is
     // known to exist; the gate below decides what the answer lets the person see.
     <AccountProvider enabled={!busy && resolution !== null && resolution.found}>
-    <div className="flex h-full flex-col">
-      <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
-        <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          {/* The lockup with the slogan cropped off, not the symbol and not the full
-              composition. The guide warns against the slogan at a size that hurts its
-              legibility, which is why this row carried the symbol alone before —
-              removing the slogan is what makes the lockup usable here at all. The crop
-              is measured, not eyeballed; `build/make-icon.sh` records the alpha bands it
-              was taken from. Height only, so the ratio is never distorted.
+      <div className="flex h-full flex-col">
+        <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
+          <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            {/* The lockup with the slogan cropped off, not the symbol and not the full
+                composition. The guide warns against the slogan at a size that hurts its
+                legibility, which is why this row carried the symbol alone before —
+                removing the slogan is what makes the lockup usable here at all. The crop
+                is measured, not eyeballed; `build/make-icon.sh` records the alpha bands it
+                was taken from. Height only, so the ratio is never distorted.
 
-              Two images rather than one `<picture>`, because the dark variant needs a
-              style the light one must not have. The brand pack has no transparent
-              white-letter horizontal lockup — the guide's *negativa* is white letters and
-              orange on a **solid black** field — and a black rectangle on this header's
-              oklch(0.185) background reads as a pasted box. `mix-blend-screen` makes that
-              black composite away to nothing while leaving the white and the orange
-              intact, so the sanctioned asset is used unmodified rather than a new
-              treatment being invented for it. Screen on the light variant would wash it
-              out, so it is applied to this one only — which a shared `<img>` could not do.
+                Two images rather than one `<picture>`, because the dark variant needs a
+                style the light one must not have. The brand pack has no transparent
+                white-letter horizontal lockup — the guide's *negativa* is white letters and
+                orange on a **solid black** field — and a black rectangle on this header's
+                oklch(0.185) background reads as a pasted box. `mix-blend-screen` makes that
+                black composite away to nothing while leaving the white and the orange
+                intact, so the sanctioned asset is used unmodified rather than a new
+                treatment being invented for it. Screen on the light variant would wash it
+                out, so it is applied to this one only — which a shared `<img>` could not do.
 
-              The name lives in the heading as text: with only one image visible per
-              scheme, an `alt` on either would leave the other scheme's heading unnamed. */}
-          <h1 className="self-center">
-            <span className="sr-only">dev-team-agents</span>
-            <img src={wordmarkLight} alt="" aria-hidden="true" className="h-7 w-auto dark:hidden" />
-            <img
-              src={wordmarkDark}
-              alt=""
-              aria-hidden="true"
-              className="hidden h-7 w-auto mix-blend-screen dark:block"
-            />
-          </h1>
-          {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
-          {build !== null ? <AppVersion version={build.appVersion} /> : null}
-          <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
-          <div className="ml-auto flex items-center gap-2 self-center">
-            <NotificationBell onOpenProject={openProject} />
-            <AccountMenu onOpen={() => setTab('account')} />
+                The name lives in the heading as text: with only one image visible per
+                scheme, an `alt` on either would leave the other scheme's heading unnamed. */}
+            <h1 className="self-center">
+              <span className="sr-only">dev-team-agents</span>
+              <img src={wordmarkLight} alt="" aria-hidden="true" className="h-7 w-auto dark:hidden" />
+              <img
+                src={wordmarkDark}
+                alt=""
+                aria-hidden="true"
+                className="hidden h-7 w-auto mix-blend-screen dark:block"
+              />
+            </h1>
+            {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
+            {build !== null ? <AppVersion version={build.appVersion} /> : null}
+            <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
+            <div className="ml-auto flex items-center gap-2 self-center">
+              <NotificationBell onOpenProject={openProject} />
+              <AccountMenu onOpen={() => setTab('account')} />
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* `relative` makes this the containing block of anything absolutely positioned inside
-          (every `sr-only` text): without it they were placed against the page and stretched
-          the body into a second scrollbar. `min-h-0` keeps the flex child inside the window. */}
-      <main className="relative min-h-0 flex-1 overflow-auto px-6 py-5">
-        {build !== null && !build.codeSigned && build.packaged ? <UnsignedBuildNotice /> : null}
+        {/* `relative` makes this the containing block of anything absolutely positioned inside
+            (every `sr-only` text): without it they were placed against the page and stretched
+            the body into a second scrollbar. `min-h-0` keeps the flex child inside the window. */}
+        <main className="relative min-h-0 flex-1 overflow-auto px-6 py-5">
+          {build !== null && !build.codeSigned && build.packaged ? <UnsignedBuildNotice /> : null}
 
-        {/* Above the no-CLI branch on purpose: a malformed settings file is one reason the
-            search found nothing, and the user needs both facts on the same screen. */}
-        <EnvironmentBanner environment={environment} busy={busy} />
+          {/* Above the no-CLI branch on purpose: a malformed settings file is one reason the
+              search found nothing, and the user needs both facts on the same screen. */}
+          <EnvironmentBanner environment={environment} busy={busy} />
 
-        {busy ? (
-          <Loading what="the first-run checks" />
-        ) : loadError !== null ? (
-          <Alert ref={loadErrorRef} tabIndex={-1} variant="destructive" className="outline-hidden">
-            <CircleAlert />
-            <AlertTitle>The app could not finish its start-up checks</AlertTitle>
-            <AlertDescription>
-              <p>the app could not reach its own main process: {loadError}</p>
-              <Button variant="outline" size="sm" onClick={() => void load()}>
-                Try again
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : resolution === null || !resolution.found ? (
-          <NoCli resolution={resolution} onRetry={() => void load()} />
-        ) : (
-          <AccountGate onOpenAccount={() => setTab('account')}>
-            <HandshakeBanner handshake={handshake} />
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList>
-                <TabsTrigger value="projects">Projects</TabsTrigger>
-                <TabsTrigger value="board">Board</TabsTrigger>
-                <TabsTrigger value="catalog">Catalog</TabsTrigger>
-                <TabsTrigger value="skills">Global Skills</TabsTrigger>
-                <TabsTrigger value="integrations">Integrations</TabsTrigger>
-                <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
-                <TabsTrigger value="account">Account</TabsTrigger>
-              </TabsList>
-              {/* Kept mounted while another tab is shown: the project settings screen lives
-                  inside this tab, and unmounting it would silently drop unsaved edits. */}
-              <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
-                <ErrorBoundary label="The Projects screen" resetKey={tab}>
-                  <Projects
-                    environment={environment}
-                    active={tab === 'projects'}
-                    openRequest={openRequest}
-                    onOpenIntegrations={() => setTab('integrations')}
-                    integrationsNonce={integrationsNonce}
-                  />
-                </ErrorBoundary>
-              </TabsContent>
-              {/* Kept mounted so the live feed keeps streaming; leaving the tab still returns
-                  it to the overview (see `Board`). */}
-              <TabsContent value="board" forceMount className="pt-4 data-[state=inactive]:hidden">
-                <Board active={tab === 'board'} />
-              </TabsContent>
-              <TabsContent value="catalog" className="pt-4">
-                <ErrorBoundary label="The Catalog screen">
-                  <Catalog />
-                </ErrorBoundary>
-              </TabsContent>
-              <TabsContent value="skills" className="pt-4">
-                <ErrorBoundary label="The Global Skills screen">
-                  <Skills environment={environment} />
-                </ErrorBoundary>
-              </TabsContent>
-              {/* Kept mounted: a typed token or an edited account field is a draft. */}
-              <TabsContent value="integrations" forceMount className="pt-4 data-[state=inactive]:hidden">
-                <ErrorBoundary label="The Integrations screen">
-                  <Integrations environment={environment} active={tab === 'integrations'} onAccountChanged={onAccountChanged} />
-                </ErrorBoundary>
-              </TabsContent>
-              <TabsContent value="doctor" className="pt-4">
-                <ErrorBoundary label="The Diagnosis screen">
-                  <Doctor />
-                </ErrorBoundary>
-              </TabsContent>
-              <TabsContent value="account" className="pt-4">
-                <ErrorBoundary label="The Account screen">
-                  <Profile />
-                </ErrorBoundary>
-              </TabsContent>
-            </Tabs>
-          </AccountGate>
-        )}
-      </main>
-      {/* Write results land here, outside every layout — see `toasts.tsx`. */}
-      <Toaster position="bottom-right" richColors />
-    </div>
+          {busy ? (
+            <Loading what="the first-run checks" />
+          ) : loadError !== null ? (
+            <Alert ref={loadErrorRef} tabIndex={-1} variant="destructive" className="outline-hidden">
+              <CircleAlert />
+              <AlertTitle>The app could not finish its start-up checks</AlertTitle>
+              <AlertDescription>
+                <p>the app could not reach its own main process: {loadError}</p>
+                <Button variant="outline" size="sm" onClick={() => void load()}>
+                  Try again
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : resolution === null || !resolution.found ? (
+            <NoCli resolution={resolution} onRetry={() => void load()} />
+          ) : (
+            <AccountGate onOpenAccount={() => setTab('account')}>
+              <HandshakeBanner handshake={handshake} />
+              <Tabs value={tab} onValueChange={setTab}>
+                <TabsList>
+                  <TabsTrigger value="projects">Projects</TabsTrigger>
+                  <TabsTrigger value="board">Board</TabsTrigger>
+                  <TabsTrigger value="catalog">Catalog</TabsTrigger>
+                  <TabsTrigger value="skills">Global Skills</TabsTrigger>
+                  <TabsTrigger value="integrations">Integrations</TabsTrigger>
+                  <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
+                  <TabsTrigger value="account">Account</TabsTrigger>
+                </TabsList>
+                {/* Kept mounted while another tab is shown: the project settings screen lives
+                    inside this tab, and unmounting it would silently drop unsaved edits. */}
+                <TabsContent value="projects" forceMount className="pt-4 data-[state=inactive]:hidden">
+                  <ErrorBoundary label="The Projects screen" resetKey={tab}>
+                    <Projects
+                      environment={environment}
+                      active={tab === 'projects'}
+                      openRequest={openRequest}
+                      onOpenIntegrations={() => setTab('integrations')}
+                      integrationsNonce={integrationsNonce}
+                    />
+                  </ErrorBoundary>
+                </TabsContent>
+                {/* Kept mounted so the live feed keeps streaming; leaving the tab still returns
+                    it to the overview (see `Board`). */}
+                <TabsContent value="board" forceMount className="pt-4 data-[state=inactive]:hidden">
+                  <Board active={tab === 'board'} />
+                </TabsContent>
+                <TabsContent value="catalog" className="pt-4">
+                  <ErrorBoundary label="The Catalog screen">
+                    <Catalog />
+                  </ErrorBoundary>
+                </TabsContent>
+                <TabsContent value="skills" className="pt-4">
+                  <ErrorBoundary label="The Global Skills screen">
+                    <Skills environment={environment} />
+                  </ErrorBoundary>
+                </TabsContent>
+                {/* Kept mounted: a typed token or an edited account field is a draft. */}
+                <TabsContent value="integrations" forceMount className="pt-4 data-[state=inactive]:hidden">
+                  <ErrorBoundary label="The Integrations screen">
+                    <Integrations environment={environment} active={tab === 'integrations'} onAccountChanged={onAccountChanged} />
+                  </ErrorBoundary>
+                </TabsContent>
+                <TabsContent value="doctor" className="pt-4">
+                  <ErrorBoundary label="The Diagnosis screen">
+                    <Doctor />
+                  </ErrorBoundary>
+                </TabsContent>
+                <TabsContent value="account" className="pt-4">
+                  <ErrorBoundary label="The Account screen">
+                    <Profile />
+                  </ErrorBoundary>
+                </TabsContent>
+              </Tabs>
+            </AccountGate>
+          )}
+        </main>
+        {/* Write results land here, outside every layout — see `toasts.tsx`. */}
+        <Toaster position="bottom-right" richColors />
+      </div>
     </AccountProvider>
   );
 }

@@ -90,18 +90,27 @@ export function newPasswordProblem(value: string): FieldProblem | null {
   return null;
 }
 
+/**
+ * The shortest password worth sending at sign-in. Every account's password was set under the
+ * 10-character policy, so a shorter one cannot be right; refusing it here also keeps a value
+ * too short to redact safely (`MIN_REDACTABLE` in `cli/invoke.ts`) out of a child's stdin.
+ */
+export const SIGN_IN_PASSWORD_MIN = 4;
+
 /** A password being **presented**: no policy beyond what can travel on one stdin line. */
 export function signInPasswordProblem(value: string): FieldProblem | null {
   if (value === '') return 'required';
   // eslint-disable-next-line no-control-regex
   if (value.length > SIGN_IN_PASSWORD_MAX || /[\r\n\u0000]/.test(value)) return 'unsafe-text';
+  if (value.length < SIGN_IN_PASSWORD_MIN) return 'password-length';
   return null;
 }
 
 export function displayNameProblem(value: string): FieldProblem | null {
   const text = value.normalize('NFC').trim();
   if (text === '') return 'required';
-  if (text.length > DISPLAY_NAME_MAX || CONTROL.test(text) || text.startsWith('-')) return 'name-invalid';
+  // Code points, as the CLI counts them, not UTF-16 units: an emoji is one character.
+  if ([...text].length > DISPLAY_NAME_MAX || CONTROL.test(text) || text.startsWith('-')) return 'name-invalid';
   return null;
 }
 

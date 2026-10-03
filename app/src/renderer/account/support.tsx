@@ -137,7 +137,11 @@ export function Field({
           id={id}
           type={secret && !shown ? 'password' : type}
           value={value}
-          disabled={disabled}
+          // Read-only rather than disabled while a call runs: a disabled input drops focus, so
+          // after a failed submit the keyboard user would land on <body> instead of the field.
+          readOnly={disabled}
+          aria-disabled={disabled || undefined}
+          className={disabled ? 'opacity-60' : undefined}
           autoComplete={autoComplete ?? 'off'}
           autoFocus={autoFocus}
           spellCheck={false}

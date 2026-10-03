@@ -17,9 +17,11 @@ import { SignIn } from './SignIn.js';
 import { currentLocale, currentTranslator, type Translate } from './strings.js';
 import { Avatar, ErrorLine, Field, Section, describeFailure, useCall } from './support.js';
 
-const PROVIDER_LABEL: Readonly<Record<string, string>> = { google: 'Google', github: 'GitHub', email: 'Email' };
+const PROVIDER_LABEL: Readonly<Record<string, string>> = { google: 'Google', github: 'GitHub' };
 const LINKABLE: readonly AuthProvider[] = ['google', 'github'];
-const providerLabel = (provider: string): string => PROVIDER_LABEL[provider] ?? provider;
+/** Brand names stay as they are; the email method is a word, so it is translated. */
+const providerLabel = (t: Translate, provider: string): string =>
+  provider === 'email' ? t('profile.providerEmail') : (PROVIDER_LABEL[provider] ?? provider);
 
 /**
  * The Account tab. Signed out it is the sign-in screen (so the banner of `warn` mode has
@@ -47,7 +49,8 @@ function SignedIn({ state }: { state: AuthState }) {
   async function signOut() {
     const done = await out.run(() => window.devteam.authLogout());
     if (done !== null) {
-      toast.success(t('profile.signedOut'));
+      if (done.server_revoked === false) toast.warning(t('profile.signedOutLocalOnly'));
+      else toast.success(t('profile.signedOut'));
       await account.refresh();
     }
   }
@@ -190,6 +193,7 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
   const call = useCall(t);
   const [working, setWorking] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<AuthProvider | null>(null);
   const linked = new Set(identities.map((identity) => identity.provider));
   const onlyOne = identities.length <= 1;
 
@@ -199,18 +203,24 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
     const done = await call.run(() => window.devteam.authIdentityLink(provider));
     setWorking(null);
     if (done !== null) {
-      setNotice(t('profile.linked', { provider: providerLabel(provider) }));
+      setNotice(t('profile.linked', { provider: providerLabel(t, provider) }));
       onChanged();
     }
   }
 
   async function unlink(provider: AuthProvider) {
+    // Unlinking is a step a person should mean: the first click asks, the second does it.
+    if (confirming !== provider) {
+      setConfirming(provider);
+      return;
+    }
+    setConfirming(null);
     setWorking(`unlink-${provider}`);
     setNotice(null);
     const done = await call.run(() => window.devteam.authIdentityUnlink(provider));
     setWorking(null);
     if (done !== null) {
-      setNotice(t('profile.unlinked', { provider: providerLabel(provider) }));
+      setNotice(t('profile.unlinked', { provider: providerLabel(t, provider) }));
       onChanged();
     }
   }
@@ -218,9 +228,9 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
   return (
     <Section title={t('profile.identities')}>
       <ul className="space-y-2">
-        {identities.map((identity) => (
-          <li key={`${identity.provider}-${identity.id ?? ''}`} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium">{providerLabel(identity.provider)}</span>
+        {identities.map((identity, index) => (
+          <li key={identity.id ?? `${identity.provider}-${index}`} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium">{providerLabel(t, identity.provider)}</span>
             {identity.email !== null ? <span className="text-muted-foreground">{identity.email}</span> : null}
             {LINKABLE.includes(identity.provider as AuthProvider) ? (
               <Button
@@ -232,7 +242,9 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
                 onClick={() => void unlink(identity.provider as AuthProvider)}
               >
                 {working === `unlink-${identity.provider}` ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-                {t('profile.unlink', { provider: providerLabel(identity.provider) })}
+                {confirming === identity.provider
+                  ? t('profile.unlinkConfirm', { provider: providerLabel(t, identity.provider) })
+                  : t('profile.unlink', { provider: providerLabel(t, identity.provider) })}
               </Button>
             ) : null}
           </li>
@@ -242,13 +254,16 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
         {LINKABLE.filter((provider) => !linked.has(provider)).map((provider) => (
           <Button key={provider} variant="outline" size="sm" disabled={call.busy} onClick={() => void link(provider)}>
             {working === `link-${provider}` ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
-            {t('profile.link', { provider: providerLabel(provider) })}
+            {t('profile.link', { provider: providerLabel(t, provider) })}
           </Button>
         ))}
       </div>
       {working?.startsWith('link-') ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           {t('signin.browserWaiting')}
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => void window.devteam.authCancelOAuth()}>
+            {t('signin.cancel')}
+          </Button>
         </p>
       ) : null}
       <ErrorLine>{call.error}</ErrorLine>

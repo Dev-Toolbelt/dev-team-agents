@@ -27,6 +27,11 @@ export interface AccountValue {
 
 const AccountContext = createContext<AccountValue | null>(null);
 
+/** Re-ask on focus at most this often: focus events come in bursts. */
+export const FOCUS_RECHECK_MS = 60_000;
+/** And while the window stays open, so a trial that ends or a ban is seen without a restart. */
+export const PERIODIC_RECHECK_MS = 15 * 60_000;
+
 export function viewOf(result: OperationResult<AuthState>): AccountView {
   if (!result.ok) return { kind: 'unknown' };
   const state = result.data;
@@ -37,13 +42,16 @@ export function viewOf(result: OperationResult<AuthState>): AccountView {
 
 /**
  * Holds the one answer to "is this account entitled?" (`auth check`), loaded when `enabled`
- * (once a CLI exists to ask) and refreshed on demand. Nothing here keeps a credential: the
- * document has none.
+ * (once a CLI exists to ask), refreshed on demand, when the window regains focus (throttled)
+ * and every `PERIODIC_RECHECK_MS`, so the gate follows a trial that ends or a ban while the
+ * app is open. Each ask is cheap: the CLI answers from its cache and goes online only when
+ * due. Nothing here keeps a credential: the document has none.
  */
 export function AccountProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const [view, setView] = useState<AccountView>({ kind: 'loading' });
   const [mode, setMode] = useState<AuthGateMode>(DEFAULT_GATE_MODE);
   const generation = useRef(0);
+  const lastAsked = useRef(0);
 
   const take = useCallback((result: OperationResult<AuthState>) => {
     setView(viewOf(result));
@@ -52,6 +60,7 @@ export function AccountProvider({ enabled, children }: { enabled: boolean; child
 
   const refresh = useCallback(async () => {
     const mine = ++generation.current;
+    lastAsked.current = Date.now();
     let result: OperationResult<AuthState>;
     try {
       result = await window.devteam.authCheck();
@@ -71,7 +80,19 @@ export function AccountProvider({ enabled, children }: { enabled: boolean; child
   );
 
   useEffect(() => {
-    if (enabled) void refresh();
+    if (!enabled) return undefined;
+    void refresh();
+    const onFocus = () => {
+      if (document.visibilityState !== 'hidden' && Date.now() - lastAsked.current >= FOCUS_RECHECK_MS) void refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    const timer = window.setInterval(() => void refresh(), PERIODIC_RECHECK_MS);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      window.clearInterval(timer);
+    };
   }, [enabled, refresh]);
 
   const value = useMemo<AccountValue>(

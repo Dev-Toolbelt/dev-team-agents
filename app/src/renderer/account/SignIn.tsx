@@ -198,9 +198,12 @@ function Choose({
             {t('signin.github')}
           </Button>
           {oauth !== null ? (
-            <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+            <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               {t('signin.browserWaiting')}
+              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => void window.devteam.authCancelOAuth()}>
+                {t('signin.cancel')}
+              </Button>
             </p>
           ) : null}
         </div>
@@ -327,7 +330,6 @@ function CodeStep({
   onBack,
   onSubmit,
   onDone,
-  onFailed,
 }: {
   t: Translate;
   title: string;
@@ -337,7 +339,6 @@ function CodeStep({
   onBack: () => void;
   onSubmit: (code: string) => Promise<OperationResult<AuthState>>;
   onDone: (state: AuthState) => void;
-  onFailed?: () => void;
 }) {
   const [code, setCode] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -349,7 +350,6 @@ function CodeStep({
     if (codeProblem(code) !== null) return;
     const state = await call.run(() => onSubmit(code));
     if (state !== null) onDone(state);
-    else onFailed?.();
   }
 
   return (

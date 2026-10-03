@@ -38,6 +38,11 @@ export function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
 
   async function deleteNow(event: FormEvent) {
     event.preventDefault();
+    // Enter on the first step (the typed word) means "send the code", not a silent no-op.
+    if (!sent) {
+      await sendCode();
+      return;
+    }
     setAttempted(true);
     if (!confirmed || codeProblem(code) !== null) return;
     const done = await call.run(() => window.devteam.authDeleteConfirm(code));

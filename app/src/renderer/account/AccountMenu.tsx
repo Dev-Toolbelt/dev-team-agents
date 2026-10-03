@@ -7,12 +7,22 @@ import { Avatar } from './support.js';
 /**
  * The header's account control: the person's initials (never a picture: the renderer's CSP
  * is `img-src 'self' data:` and the app makes no network request of its own), opening the
- * Account tab. Signed out, a plain "Sign in" button. Renders nothing until the first answer.
+ * Account tab. Signed out, a plain "Sign in" button; when the check failed, a neutral
+ * "Account" one. Renders nothing until the first answer.
  */
 export function AccountMenu({ onOpen }: { onOpen: () => void }) {
   const t = currentTranslator();
   const { state, view } = useAccount();
   if (view.kind === 'loading') return null;
+  // The check failed (a timeout, no account server): the person may well be signed in, so
+  // offer the Account tab without claiming either way.
+  if (view.kind === 'unknown') {
+    return (
+      <Button variant="outline" size="sm" onClick={onOpen}>
+        {t('account.tab')}
+      </Button>
+    );
+  }
   if (state === null) {
     return (
       <Button variant="outline" size="sm" onClick={onOpen}>

@@ -36,6 +36,7 @@ export function EmailChange({
     setCodeNew('');
     setCodeCurrent('');
     setAttempted(false);
+    setMessage(null);
     call.setError(null);
   }
 

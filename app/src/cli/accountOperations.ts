@@ -51,6 +51,12 @@ import { argvProblem, run, toOperationResult, type CliContext } from './operatio
 
 /** A browser sign-in waits up to five minutes for the callback; the child gets a little more. */
 export const OAUTH_TIMEOUT_MS = 6 * 60_000;
+/**
+ * The name a browser sign-in or link runs under, so `authCancelOAuth` can end it. Both write
+ * nothing until the code exchange at the very end, so ending one early leaves no state behind;
+ * they are also ended on quit, rather than holding the app open for minutes.
+ */
+export const OAUTH_CANCEL_KEY = 'auth-oauth';
 
 const STATUSES: readonly EntitlementStatus[] = [
   'active',
@@ -218,7 +224,11 @@ const providerProblem = (provider: unknown): string | null =>
 export function authLoginOAuth(context: CliContext, provider: AuthProvider): Promise<OperationResult<AuthState>> {
   const problem = providerProblem(provider);
   if (problem !== null) return Promise.resolve(refused('auth login', problem));
-  return run({ ...context, timeoutMs: OAUTH_TIMEOUT_MS }, ['auth', 'login', providerFlag(provider)], asAuthState);
+  return run(
+    { ...context, timeoutMs: OAUTH_TIMEOUT_MS, cancelOnQuit: true, cancelKey: OAUTH_CANCEL_KEY },
+    ['auth', 'login', providerFlag(provider)],
+    asAuthState,
+  );
 }
 
 export function authOtpStart(context: CliContext, email: string, name: string | null): Promise<OperationResult<AuthSent>> {
@@ -370,7 +380,11 @@ export function authEmailChangeConfirm(
 export function authIdentityLink(context: CliContext, provider: AuthProvider): Promise<OperationResult<AuthIdentityLinked>> {
   const problem = providerProblem(provider);
   if (problem !== null) return Promise.resolve(refused('auth profile link', problem));
-  return run({ ...context, timeoutMs: OAUTH_TIMEOUT_MS }, ['auth', 'profile', 'link', providerFlag(provider)], asLinked);
+  return run(
+    { ...context, timeoutMs: OAUTH_TIMEOUT_MS, cancelOnQuit: true, cancelKey: OAUTH_CANCEL_KEY },
+    ['auth', 'profile', 'link', providerFlag(provider)],
+    asLinked,
+  );
 }
 
 export function authIdentityUnlink(context: CliContext, provider: AuthProvider): Promise<OperationResult<AuthIdentityUnlinked>> {

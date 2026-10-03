@@ -11,6 +11,8 @@
  * the command line and so the address.
  */
 
+import { CODE_LENGTH, PASSWORD_MAX_CHARS, PASSWORD_MIN_CHARS } from '../../shared/accountRules.js';
+
 const en = {
   // shell
   'account.loading': 'Checking your account…',
@@ -103,6 +105,8 @@ const en = {
   'profile.identities': 'Sign-in methods',
   'profile.link': 'Link {provider}',
   'profile.unlink': 'Unlink {provider}',
+  'profile.unlinkConfirm': 'Click again to unlink {provider}',
+  'profile.providerEmail': 'Email',
   'profile.linked': '{provider} linked.',
   'profile.unlinked': '{provider} unlinked.',
   'profile.password': 'Password',
@@ -112,6 +116,7 @@ const en = {
   'profile.passwordChanged': 'Password changed. Other devices were signed out.',
   'profile.passwordChangedPartial': 'Password changed. Other devices could not be signed out; do it from them.',
   'profile.signOut': 'Sign out',
+  'profile.signedOutLocalOnly': 'Signed out on this computer. The server could not be reached to end the session there.',
   'profile.signedOut': 'Signed out.',
   'profile.license': 'License',
   'profile.license.active': 'Active',
@@ -132,11 +137,10 @@ const en = {
   // fields
   'field.required': 'This field is required.',
   'field.email-invalid': 'That does not look like an email address.',
-  'field.code-invalid': 'The code is 8 digits.',
-  'field.password-length': 'The password must be 10 to 64 characters.',
+  'field.code-invalid': 'The code is {digits} digits.',
+  'field.password-length': 'The password must be {min} to {max} characters.',
   'field.name-invalid': 'The name must be 1 to 80 characters and cannot start with a dash.',
   'field.unsafe-text': 'That text contains characters that cannot be used.',
-  'field.confirm-mismatch': 'That does not match.',
   'field.show': 'Show',
   'field.hide': 'Hide',
   // errors (generic)
@@ -245,6 +249,8 @@ const ptBR: Record<StringKey, string> = {
   'profile.identities': 'Formas de entrar',
   'profile.link': 'Vincular {provider}',
   'profile.unlink': 'Desvincular {provider}',
+  'profile.unlinkConfirm': 'Clique de novo para desvincular {provider}',
+  'profile.providerEmail': 'E-mail',
   'profile.linked': '{provider} vinculado.',
   'profile.unlinked': '{provider} desvinculado.',
   'profile.password': 'Senha',
@@ -254,6 +260,7 @@ const ptBR: Record<StringKey, string> = {
   'profile.passwordChanged': 'Senha alterada. Os outros dispositivos foram desconectados.',
   'profile.passwordChangedPartial': 'Senha alterada. Não foi possível desconectar os outros dispositivos; faça isso neles.',
   'profile.signOut': 'Sair',
+  'profile.signedOutLocalOnly': 'Você saiu neste computador. Não foi possível falar com o servidor para encerrar a sessão lá.',
   'profile.signedOut': 'Você saiu da conta.',
   'profile.license': 'Licença',
   'profile.license.active': 'Ativa',
@@ -272,11 +279,10 @@ const ptBR: Record<StringKey, string> = {
   'delete.cancel': 'Cancelar',
   'field.required': 'Este campo é obrigatório.',
   'field.email-invalid': 'Isso não parece um endereço de e-mail.',
-  'field.code-invalid': 'O código tem 8 dígitos.',
-  'field.password-length': 'A senha deve ter de 10 a 64 caracteres.',
+  'field.code-invalid': 'O código tem {digits} dígitos.',
+  'field.password-length': 'A senha deve ter de {min} a {max} caracteres.',
   'field.name-invalid': 'O nome deve ter de 1 a 80 caracteres e não pode começar com hífen.',
   'field.unsafe-text': 'Esse texto tem caracteres que não podem ser usados.',
-  'field.confirm-mismatch': 'Isso não confere.',
   'field.show': 'Mostrar',
   'field.hide': 'Ocultar',
   'error.invalid_credentials': 'O e-mail ou a senha não estão corretos.',
@@ -304,12 +310,19 @@ export function localeFrom(language: string | undefined): Locale {
 
 export type Translate = (key: StringKey, vars?: Readonly<Record<string, string>>) => string;
 
+/** Values every message may name, taken from the rules rather than repeated in the text. */
+const RULE_VARS: Readonly<Record<string, string>> = {
+  digits: String(CODE_LENGTH),
+  min: String(PASSWORD_MIN_CHARS),
+  max: String(PASSWORD_MAX_CHARS),
+};
+
 export function translator(locale: Locale): Translate {
   const table: Readonly<Record<StringKey, string>> = locale === 'pt-BR' ? ptBR : en;
-  return (key, vars) =>
-    vars === undefined
-      ? table[key]
-      : table[key].replace(/\{(\w+)\}/g, (match, name: string) => vars[name] ?? match);
+  return (key, vars) => {
+    const values = vars === undefined ? RULE_VARS : { ...RULE_VARS, ...vars };
+    return table[key].replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
+  };
 }
 
 /** The translator for this window's language. Read at call time so a test can set it per case. */
