@@ -18,6 +18,7 @@ import base64
 import json
 import os
 import re
+import subprocess
 import sys
 
 JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.(eyJ[A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{16,}")
@@ -47,23 +48,51 @@ def scan_text(text):
     return found
 
 
-def scan_tree(root):
-    findings = []
+def _git_candidates(root):
+    """Files git could commit under ``root`` (tracked, or untracked and not ignored).
+
+    ``None`` when ``root`` is not the top of a git work tree. Ignored files are left out on
+    purpose: a local Supabase stack writes its public demo service-role key under the
+    gitignored ``infra/supabase/.local/``, which can never reach a commit or a package.
+    """
+    try:
+        top = subprocess.run(
+            ["git", "-C", root, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if os.path.realpath(top) != os.path.realpath(root):
+            return None
+        listed = subprocess.run(
+            ["git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            capture_output=True, check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [os.path.join(root, name) for name in listed.decode("utf-8", "replace").split("\0") if name]
+
+
+def _walk(root):
     for directory, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for name in files:
-            path = os.path.join(directory, name)
-            try:
-                if os.path.getsize(path) > MAX_BYTES:
-                    continue
-                with open(path, "rb") as handle:
-                    raw = handle.read()
-            except OSError:
+            yield os.path.join(directory, name)
+
+
+def scan_tree(root):
+    findings = []
+    candidates = _git_candidates(root)
+    for path in _walk(root) if candidates is None else candidates:
+        try:
+            if os.path.getsize(path) > MAX_BYTES:
                 continue
-            if b"\0" in raw[:4096]:
-                continue
-            for number, kind in scan_text(raw.decode("utf-8", errors="replace")):
-                findings.append("{}:{}: {}".format(os.path.relpath(path, root), number, kind))
+            with open(path, "rb") as handle:
+                raw = handle.read()
+        except OSError:
+            continue
+        if b"\0" in raw[:4096]:
+            continue
+        for number, kind in scan_text(raw.decode("utf-8", errors="replace")):
+            findings.append("{}:{}: {}".format(os.path.relpath(path, root), number, kind))
     return findings
 
 
