@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  BREW_CANDIDATES,
+  BREW_FORMULA,
+  INSTALL_SCRIPT_COMMAND,
   MAX_INSTALLER_BYTES,
   RELEASE_AUTHOR,
   RELEASES_URL,
@@ -164,11 +167,60 @@ describe('installCli', () => {
     expect(readdirSync(temp)).toEqual([]);
   });
 
-  it('does nothing off Windows or on an architecture with no installer', async () => {
-    const mac = deps({ platform: 'darwin' });
-    expect((await installCli(mac)).outcome).toBe('unsupported');
-    expect(mac.fetch).not.toHaveBeenCalled();
+  it('does nothing off Windows and macOS or on an architecture with no installer', async () => {
+    const linux = deps({ platform: 'linux' });
+    expect((await installCli(linux)).outcome).toBe('unsupported');
+    expect(linux.fetch).not.toHaveBeenCalled();
     expect((await installCli(deps({ arch: 'ia32' }))).outcome).toBe('unsupported');
+  });
+
+  describe('on macOS (ADR-0030)', () => {
+    const macDeps = (overrides: Partial<InstallerDeps> = {}) =>
+      deps({ platform: 'darwin', arch: 'arm64', ...overrides });
+
+    it('runs `brew install` of the tap formula, by absolute path and with no download, when Homebrew is present', async () => {
+      const runBrew = vi.fn(() => Promise.resolve({ code: 0, output: '' }));
+      const isExecutable = vi.fn((path: string) => Promise.resolve(path === '/opt/homebrew/bin/brew'));
+      const mac = macDeps({ runBrew, isExecutable });
+
+      const result = await installCli(mac);
+
+      expect(result.outcome).toBe('installed');
+      expect(runBrew).toHaveBeenCalledWith('/opt/homebrew/bin/brew', ['install', BREW_FORMULA]);
+      expect(BREW_FORMULA).toBe('dev-toolbelt/devteam/devteam');
+      expect(mac.fetch).not.toHaveBeenCalled();
+    });
+
+    it('finds Homebrew at the Intel location too, trying the Apple-silicon one first', async () => {
+      const runBrew = vi.fn(() => Promise.resolve({ code: 0, output: '' }));
+      const isExecutable = vi.fn((path: string) => Promise.resolve(path === '/usr/local/bin/brew'));
+
+      await installCli(macDeps({ runBrew, isExecutable }));
+
+      expect(isExecutable.mock.calls.map((call) => call[0])).toEqual([...BREW_CANDIDATES]);
+      expect(runBrew).toHaveBeenCalledWith('/usr/local/bin/brew', ['install', BREW_FORMULA]);
+    });
+
+    it('shows the exact script command, and downloads nothing, when Homebrew is absent', async () => {
+      const runBrew = vi.fn();
+      const mac = macDeps({ runBrew, isExecutable: () => Promise.resolve(false) });
+
+      const result = await installCli(mac);
+
+      expect(result.outcome).toBe('manual');
+      expect(result.command).toBe(INSTALL_SCRIPT_COMMAND);
+      expect(runBrew).not.toHaveBeenCalled();
+      expect(mac.fetch).not.toHaveBeenCalled();
+    });
+
+    it('reports Homebrew’s failure with its output and offers the script command instead', async () => {
+      const runBrew = vi.fn(() => Promise.resolve({ code: 1, output: 'Error: No available formula' }));
+      const result = await installCli(macDeps({ runBrew, isExecutable: () => Promise.resolve(true) }));
+
+      expect(result.outcome).toBe('failed');
+      expect(result.message).toContain('No available formula');
+      expect(result.command).toBe(INSTALL_SCRIPT_COMMAND);
+    });
   });
 
   it('reports a failure, and runs nothing, when GitHub answers an error or garbage', async () => {

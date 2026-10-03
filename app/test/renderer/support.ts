@@ -21,8 +21,10 @@ import type {
   BackgroundSettings,
   DevteamBridge,
   NotificationFeed,
+  DetectReport,
   DoctorReport,
   EnvironmentReport,
+  StartReport,
   HandshakeView,
   OperationResult,
   PluginConfigChange,
@@ -269,6 +271,39 @@ export function notV2(): Extract<OperationResult<never>, { ok: false }> {
   return fail('/chosen/dir has no vendored v2 install to migrate', { kind: 'usage', exitCode: 2 });
 }
 
+export function detectReport(overrides: Partial<DetectReport> = {}): DetectReport {
+  return {
+    path: '/work/my-app',
+    providers: {
+      installed: [{ name: 'claude', binary: '/usr/local/bin/claude', version: '2.1.0' }],
+      in_project: [],
+      suggested: 'claude',
+    },
+    stack: { primary: 'node', all: ['node'], signals: ['package.json'] },
+    project_type: { suggested: 'maintenance', confidence: 'high', reasons: ['has a git history'] },
+    first_task: {
+      kind: 'audit',
+      target: 'src',
+      label: 'Audit this module',
+      read_only: true,
+      launch: { provider: 'claude', argv: ['claude', '--permission-mode', 'plan', '/devteam:audit src --report-only'] },
+    },
+    ...overrides,
+  };
+}
+
+export function startReport(overrides: Partial<StartReport> = {}): StartReport {
+  const detect = overrides.detect ?? detectReport();
+  return {
+    bound: true,
+    project_id: 'proj-new',
+    detect,
+    featured_commands: ['plan', 'fix', 'review', 'commit', 'pr'],
+    first_task: detect.first_task,
+    ...overrides,
+  };
+}
+
 export function doctorReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
   return {
     status: 'ok',
@@ -458,6 +493,14 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     catalogListing: vi.fn(),
     catalogEntry: vi.fn(),
     doctor: vi.fn(() => Promise.resolve(ok(doctorReport()))),
+    doctorMachine: vi.fn(() => Promise.resolve(ok(doctorReport()))),
+    runMachineFix: vi.fn(() => Promise.resolve({ ran: false as const, message: 'not stubbed' })),
+    detectProject: vi.fn(() => Promise.resolve(ok(detectReport()))),
+    startProject: vi.fn(() => Promise.resolve(ok(startReport()))),
+    launchFirstTask: vi.fn(() => Promise.resolve({ launched: true as const })),
+    // Completed by default: the existing screens' tests mount the tabbed app, not the wizard.
+    onboardingState: vi.fn(() => Promise.resolve({ completed: true })),
+    completeOnboarding: vi.fn(() => Promise.resolve({ completed: true })),
     chooseProjectDirectory: vi.fn(() => Promise.resolve(({ chosen: false }) as const)),
     bindProject: vi.fn(() => Promise.resolve(ok(bindReport()))),
     unbindProject: vi.fn(() => Promise.resolve(ok(unbindReport()))),

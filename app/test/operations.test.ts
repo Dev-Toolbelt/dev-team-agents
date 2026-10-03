@@ -207,6 +207,9 @@ describe('what this slice is allowed to run', () => {
       'notifications ack',
       'skills install',
       'skills remove',
+      // ADR-0030: `start` sets the chosen folder up for the framework. `detect` only reads and
+      // is in READ_ONLY_COMMANDS.
+      'start',
     ]);
     for (const command of GATED_COMMANDS) {
       const tuple = tupleLiteral(command);

@@ -199,8 +199,22 @@ describe('App — the no-CLI screen offers to install the CLI on Windows (ADR-00
     expect(await screen.findByRole('status')).toHaveTextContent(/is installed\. The app has not found it yet/);
   });
 
-  it('is not offered on macOS, where the remedy gives the commands instead', async () => {
+  it('is offered on macOS too (ADR-0030), alongside the remedy, and shows the command it could not run', async () => {
     vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    const user = userEvent.setup();
+    const installCli = vi.fn(() =>
+      Promise.resolve({ outcome: 'manual' as const, message: 'Homebrew was not found.', command: 'curl -fsSL https://example.test/i.sh | bash' }),
+    );
+    installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())), installCli }));
+
+    render(<App />);
+    expect(await screen.findByText('No devteam CLI on this host')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Install the CLI' }));
+    expect(await screen.findByLabelText('Command')).toHaveTextContent('curl -fsSL https://example.test/i.sh | bash');
+  });
+
+  it('is not offered on other systems', async () => {
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('Linux x86_64');
     installBridge(fakeBridge({ resolveCli: vi.fn(() => Promise.resolve(cliResolutionNotFound())) }));
 
     render(<App />);

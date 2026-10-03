@@ -151,6 +151,46 @@ switch (command) {
     process.exit(0);
     break;
 
+  // ADR-0030. `detect` and `start` answer for whatever `--path` they are given; the launch argv
+  // carries a space and a `$`, which is what the launch map really holds for Codex.
+  case 'detect':
+  case 'start': {
+    const detect = {
+      path: flagValue('--path') ?? PROJECT_PATH,
+      providers: { installed: [{ name: 'claude', binary: 'claude', version: '2.1.0' }], in_project: [], suggested: flagValue('--provider') ?? 'claude' },
+      stack: { primary: 'node', all: ['node'], signals: ['package.json'] },
+      project_type: { suggested: flagValue('--type') ?? 'maintenance', confidence: 'high', reasons: ['has a git history'] },
+      first_task: {
+        kind: 'audit',
+        target: 'src',
+        label: 'Audit this module',
+        read_only: true,
+        launch: { provider: flagValue('--provider') ?? 'claude', argv: ['claude', '--permission-mode', 'plan', '$devteam-audit src --report-only'] },
+      },
+    };
+    emit(
+      command === 'detect'
+        ? { ok: true, ...detect }
+        : { ok: true, bound: true, project_id: PROJECT_ID, detect, featured_commands: ['plan', 'fix', 'review', 'commit', 'pr'], first_task: detect.first_task },
+    );
+    process.exit(0);
+    break;
+  }
+
+  case 'doctor':
+    emit({
+      ok: true,
+      status: 'warn',
+      findings: [
+        { level: 'warn', category: 'git', message: 'git is not installed', fix: 'brew install git', auto_fixable: true },
+        { level: 'warn', category: 'provider', message: 'No AI coding tool found', fix: 'npm install -g @anthropic-ai/claude-code', auto_fixable: false },
+        { level: 'ok', category: 'python', message: 'Python 3.12', fix: null, auto_fixable: false },
+      ],
+      actions: [],
+    });
+    process.exit(1);
+    break;
+
   case 'bind': {
     const path = args[1] ?? PROJECT_PATH;
     const providers = [];

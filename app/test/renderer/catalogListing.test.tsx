@@ -128,3 +128,44 @@ describe('Catalog listing', () => {
     expect(screen.queryByLabelText('Filter skills by category')).not.toBeInTheDocument();
   });
 });
+
+describe('Catalog listing — featured commands (ADR-0030)', () => {
+  const featuredEntry = (name: string): CatalogEntry => ({ ...entry(name), featured: true });
+  const five = ['plan', 'fix', 'review', 'commit', 'pr'].map(featuredEntry);
+
+  it('shows only the featured commands by default, with a toggle naming the full count', async () => {
+    serve('commands', [entry('adr'), ...five, entry('version')]);
+    render(<Listing kind="commands" />);
+
+    await screen.findByText('plan');
+    expect(names(document.body)).toEqual(['commit', 'fix', 'plan', 'pr', 'review']);
+    expect(screen.getByRole('button', { name: 'Show all commands (7)' })).toBeInTheDocument();
+  });
+
+  it('shows every command after the toggle, and goes back', async () => {
+    serve('commands', [entry('adr'), ...five, entry('version')]);
+    render(<Listing kind="commands" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all commands (7)' }));
+    expect(names(document.body)).toHaveLength(7);
+    fireEvent.click(screen.getByRole('button', { name: 'Show featured commands (5)' }));
+    expect(names(document.body)).toHaveLength(5);
+  });
+
+  it('falls back to every command, with no toggle, when none is marked featured', async () => {
+    serve('commands', [entry('version'), entry('adr'), entry('plan')]);
+    render(<Listing kind="commands" />);
+
+    await screen.findByText('adr');
+    expect(names(document.body)).toEqual(['adr', 'plan', 'version']);
+    expect(screen.queryByRole('button', { name: /Show (all|featured) commands/ })).not.toBeInTheDocument();
+  });
+
+  it('does not narrow agents', async () => {
+    serve('agents', [{ ...entry('qa-specialist'), featured: true }, entry('backend-developer')]);
+    render(<Listing kind="agents" />);
+
+    await screen.findByText('qa-specialist');
+    expect(names(document.body)).toEqual(['backend-developer', 'qa-specialist']);
+  });
+});
