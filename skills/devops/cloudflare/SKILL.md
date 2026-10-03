@@ -20,7 +20,12 @@ description: Cloudflare — DNS, Workers, Pages, Tunnels, WAF, R2, KV.
 | R2 operations | API Token with `Account:Workers R2 Storage:Edit` scope |
 | KV operations | API Token with `Account:Workers KV Storage:Edit` scope |
 
-Always request **scoped API Tokens** — never the Global API Key. Set TTL and IP restrictions where practical. Store as `$CLOUDFLARE_API_TOKEN` (+ `$CLOUDFLARE_ACCOUNT_ID` and `$CLOUDFLARE_ZONE_ID` for zone-level operations).
+Always request **scoped API Tokens** — never the Global API Key. Set TTL and IP restrictions where practical.
+
+| Who calls the API | Where the token lives |
+|---|---|
+| **An agent, in this session** | The `cloudflare` integration: the user runs `devteam integration connect cloudflare` in their own terminal, and the agent calls through `devteam integration call`. Load `skills/integrations/cloudflare-api/SKILL.md` — never ask for the token in chat or have it exported |
+| CI, Wrangler, application code | A CI/platform secret exposed as `$CLOUDFLARE_API_TOKEN` (+ `$CLOUDFLARE_ACCOUNT_ID`, `$CLOUDFLARE_ZONE_ID`) |
 
 ---
 
@@ -80,7 +85,7 @@ Load `references/dns-and-pages.md` for: DNS CRUD API examples, Pages deploy and 
 ## Before Declaring Done
 
 - [ ] Scoped API Token used (not Global API Key); token stored in secret manager
-- [ ] `.env` excluded from git; `CLOUDFLARE_API_TOKEN` referenced as env var
+- [ ] `.env` excluded from git; `CLOUDFLARE_API_TOKEN` referenced as env var in CI and code; agent-run API calls went through `devteam integration call`
 - [ ] Workers secrets set via `wrangler secret put` — not in `wrangler.toml`
 - [ ] DNS records confirmed with correct `proxied` setting
 - [ ] WAF/rate limiting rules tested in `simulate` mode before enforcing

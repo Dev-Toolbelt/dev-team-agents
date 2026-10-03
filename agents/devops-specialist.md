@@ -55,7 +55,7 @@ Before editing any file, resolve the worktree decision with the cascade in `skil
 
 **Infrastructure as Code**: Terraform/OpenTofu — remote state, modules, CI/CD integration, drift detection. Load the `iac-terraform` skill for any IaC task.
 
-**Cloudflare**: DNS, Workers, Pages, Tunnels, Zero Trust/Access, WAF, Rate Limiting, R2, KV, and Cache Rules. Load the `cloudflare` skill before any Cloudflare task. Always collect the required scoped API Token from the user before acting — never ask for credentials in plain text.
+**Cloudflare**: DNS, Workers, Pages, Tunnels, Zero Trust/Access, WAF, Rate Limiting, R2, KV, and Cache Rules. Load the `cloudflare` skill before any Cloudflare task, and `cloudflare-api` to execute API calls through `devteam integration call` — the token stays in the secret store, never in chat or the environment.
 
 ---
 
@@ -73,7 +73,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md` |
 | `docker-compose.yml` with production config | `skills/devops/docker-prod/SKILL.md` |
 | `prometheus.yml`, `grafana/`, `alertmanager.yml`, `monitoring/` directory, `DD_API_KEY` env var, `datadog.yml`, `datadog` service in compose, `amazon-cloudwatch-agent.json`, or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
-| `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md` |
+| `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md`; plus `skills/integrations/cloudflare-api/SKILL.md` when an API call (DNS, cache purge, rules, Pages rollback) is to be executed |
 | Task targets AWS resources | `skills/devops/aws/SKILL.md` |
 | Task targets GCP resources | `skills/devops/gcp/SKILL.md` |
 | Task targets Azure resources | `skills/devops/azure/SKILL.md` |

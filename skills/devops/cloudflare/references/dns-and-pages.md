@@ -1,5 +1,7 @@
 # Cloudflare DNS, Pages & Tunnels Reference
 
+> The `curl` examples below are for scripts and CI, where the token is a pipeline secret. An agent executing these calls itself uses `devteam integration call cloudflare …` instead — see `skills/integrations/cloudflare-api/SKILL.md`.
+
 ## DNS Management
 
 ### Common Record Operations
