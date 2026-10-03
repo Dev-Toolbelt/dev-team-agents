@@ -13,6 +13,7 @@ import { SaveBar } from '../SaveBar.js';
 import { unreachable, useAction } from '../useOperation.js';
 import { INTEGRATION_COMMANDS } from '../writeActionGating.js';
 import { FieldRow } from './FieldRow.js';
+import { IntegrationLogo } from './IntegrationLogo.js';
 import { changedValues, fieldStates, standingOf, type FieldDrafts } from './model.js';
 import { TokenInput } from './TokenInput.js';
 
@@ -259,6 +260,7 @@ export function IntegrationCard({
     <CardShell
       titleId={`${uid}-title`}
       title={view.title}
+      icon={<IntegrationLogo name={name} />}
       description={view.description}
       standing={standing}
       notices={notices}

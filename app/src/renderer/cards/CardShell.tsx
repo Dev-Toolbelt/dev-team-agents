@@ -20,6 +20,7 @@ export type Standing = {
 export function CardShell({
   titleId,
   title,
+  icon,
   description,
   standing,
   badges,
@@ -33,6 +34,8 @@ export function CardShell({
 }: {
   titleId: string;
   title: string;
+  /** A mark drawn in a tile before the title (an integration's logo). */
+  icon?: React.ReactNode;
   description: string;
   standing: Standing;
   /** Extra badges beside the standing one. */
@@ -67,17 +70,22 @@ export function CardShell({
       <Collapsible open={expanded} onOpenChange={onOpenChange}>
         <header className="px-5 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 id={titleId} className="font-semibold">
-                  {title}
-                </h3>
-                <Badge variant={standing.variant} className={cn('font-normal', standing.className)}>
-                  {standing.label}
-                </Badge>
-                {badges}
+            <div className="flex min-w-0 items-start gap-3">
+              {icon !== undefined ? (
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted/40">{icon}</span>
+              ) : null}
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 id={titleId} className="font-semibold">
+                    {title}
+                  </h3>
+                  <Badge variant={standing.variant} className={cn('font-normal', standing.className)}>
+                    {standing.label}
+                  </Badge>
+                  {badges}
+                </div>
+                <p className="text-sm text-muted-foreground">{description}</p>
               </div>
-              <p className="text-sm text-muted-foreground">{description}</p>
             </div>
             <div className="flex items-center gap-2">
               {lockedReason !== null ? (
