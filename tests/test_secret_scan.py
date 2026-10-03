@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,6 +46,17 @@ class SecretScanTest(unittest.TestCase):
             (Path(tmp) / "leak.env").write_text("SERVICE={}\n".format(jwt("service_role")))
             findings = scan.scan_tree(tmp)
         self.assertEqual(findings, ["leak.env:1: service_role JWT"])
+
+    def test_in_a_git_tree_ignored_files_are_skipped_and_untracked_ones_scanned(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            (Path(tmp) / ".gitignore").write_text("ignored/\n")
+            (Path(tmp) / "ignored").mkdir()
+            (Path(tmp) / "ignored" / "docker.env").write_text("K={}\n".format(jwt("service_role")))
+            (Path(tmp) / "new.env").write_text("K={}\n".format(jwt("service_role")))
+            findings = scan.scan_tree(os.path.realpath(tmp))
+        self.assertEqual(findings, ["new.env:1: service_role JWT"])
 
     def test_this_repository_is_clean(self):
         self.assertEqual(scan.scan_tree(str(ROOT)), [])

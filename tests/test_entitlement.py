@@ -457,6 +457,16 @@ class LoadIdentityTest(unittest.TestCase):
         loaded = ent.load_identity(environ=self.seam(**{ent.SEAM_KID_ENV: "prod-1"}), config_path=path)
         self.assertNotIn("prod-1", [k for k in loaded.keys if k.startswith("test-")])
 
+    def test_the_seam_anon_key_applies_only_with_a_valid_seam(self):
+        path = self.config(self.dir.name)
+        compiled = ent.load_identity(environ={}, config_path=path).anon_key
+        anon = {ent.SEAM_ANON_KEY_ENV: "local-anon"}
+        self.assertEqual(ent.load_identity(environ=self.seam(**anon), config_path=path).anon_key, "local-anon")
+        self.assertEqual(ent.load_identity(environ=self.seam(), config_path=path).anon_key, compiled)
+        self.assertEqual(ent.load_identity(environ=anon, config_path=path).anon_key, compiled)
+        invalid = self.seam(**dict(anon, **{ent.SEAM_KID_ENV: "prod-1"}))
+        self.assertEqual(ent.load_identity(environ=invalid, config_path=path).anon_key, compiled)
+
     def test_gate_mode_comes_from_the_config_and_defaults_to_the_release_mode(self):
         import json as _json
         path = self.config(self.dir.name)

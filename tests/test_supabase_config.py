@@ -63,6 +63,27 @@ class SupabaseConfigTest(unittest.TestCase):
         self.assertEqual(self.cfg["auth"]["password_requirements"], '""')
 
 
+    def test_email_templates_resolve_from_the_cli_workdir(self):
+        # The Supabase CLI resolves content_path from the directory holding supabase/, not
+        # from supabase/ itself, so `./templates/...` fails `supabase start` and `config push`.
+        for section, values in self.cfg.items():
+            if "content_path" in values:
+                with self.subTest(section=section):
+                    path = values["content_path"].strip('"')
+                    self.assertTrue(path.startswith("./supabase/"), path)
+                    self.assertTrue((INFRA.parent / path).resolve() == (INFRA / path[len("./supabase/"):]).resolve())
+                    self.assertTrue((INFRA / path[len("./supabase/"):]).is_file(), path)
+
+    def test_the_sections_dev_local_switches_off_are_on_in_the_committed_config(self):
+        # dev-local.sh rewrites exactly `enabled = true` on the line after each header and
+        # refuses to start otherwise; the committed file keeps all three on for the cloud.
+        text = (INFRA / "config.toml").read_text(encoding="utf-8")
+        for section in ("auth.email.smtp", "auth.external.google", "auth.external.github"):
+            with self.subTest(section=section):
+                self.assertIn("[{}]\nenabled = true\n".format(section), text)
+        self.assertIn("auth.external.github", (INFRA / "dev-local.sh").read_text(encoding="utf-8"))
+
+
 @unittest.skipUnless(INFRA.is_dir(), "infra/supabase is not part of this tree")
 class MigrationPolicyTest(unittest.TestCase):
     @classmethod
