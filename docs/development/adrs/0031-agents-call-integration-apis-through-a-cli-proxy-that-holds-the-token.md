@@ -145,10 +145,11 @@ agent into a write. Three things stand against it:
 - the confirmation step in §4
 - the forbidden endpoints in §5, which hold even when the agent is fooled
 
-A provider-native confirmation for write calls, one the agent cannot answer itself, is the remaining
-gap. The only hook signal the three providers share is a block, so it cannot come from a hook. It is a
-follow-up: `bind` writing each provider's own "ask" rule for a write call (Claude Code permissions,
-opencode `permission.bash`, a Codex prompt rule).
+A provider-native confirmation for write calls, one the agent cannot answer itself, was the remaining
+gap. [ADR-0032](0032-bind-writes-provider-native-ask-rules-for-integration-writes.md) closes it: `bind`
+and the installers write each provider's own "ask" rule for a write call (Claude Code
+`permissions.ask`, opencode `permission.bash`, a Codex `prefix_rule`), and `call` refuses a write that
+is not in the form those rules match.
 
 ## Provider parity
 
