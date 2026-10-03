@@ -1,7 +1,8 @@
-"""ADR-0023: the `devteam integration` CLI, its storage layers and its HTTP policy.
+"""ADR-0023 / ADR-0031: the `devteam integration` CLI, its storage layers, its HTTP policy
+and the `call` proxy agents use.
 
-A local fake server (``http.server`` on 127.0.0.1 in a thread) emulates the GitHub and
-Jira APIs; the loopback-http escape hatch is switched on through the environment for the
+A local fake server (``http.server`` on 127.0.0.1 in a thread) emulates the GitHub, Jira
+and Cloudflare APIs; the loopback-http escape hatch is switched on through the environment for the
 tests that need it. Every test runs against a temp store and a temp bound project passed
 with ``--path``, so resolution can never walk up into the real repository.
 
@@ -24,13 +25,15 @@ import unittest
 from unittest import mock
 import urllib.request
 
-from devteam_support import StoreTestCase
+from devteam_support import REPO_ROOT, StoreTestCase
+import test_json_contract
 
-from devteam import bind, paths, project
+from devteam import bind, creds, paths, project
 from devteam import update as update_module
 from devteam.errors import EnvError, UsageError
 from devteam.integrations import http as ihttp
 from devteam import integrations
+from devteam.integrations import cloudflare as cloudflare_adapter
 from devteam.lock import store_lock
 
 TOKEN = "ghp_PLANTED-token-9d2f7c41"
@@ -51,8 +54,15 @@ class FakeServer:
 
             def do_GET(self):
                 path = self.path.split("?", 1)[0]
-                outer.log.append({"path": path, "query": self.path, "headers": {k.title(): v for k, v in self.headers.items()}})
-                code, headers, body = outer.routes.get(path, (404, {}, {"message": "nope"}))
+                length = int(self.headers.get("Content-Length") or 0)
+                sent = self.rfile.read(length) if length else b""
+                outer.log.append({
+                    "method": self.command, "path": path, "query": self.path,
+                    "headers": {k.title(): v for k, v in self.headers.items()},
+                    "body": sent.decode("utf-8") if sent else None,
+                })
+                route = outer.routes.get((self.command, path)) or outer.routes.get(path)
+                code, headers, body = route or (404, {}, {"message": "nope"})
                 if not isinstance(body, bytes):
                     body = json.dumps(body).encode("utf-8")
                 self.send_response(code)
@@ -62,6 +72,8 @@ class FakeServer:
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+
+            do_POST = do_PUT = do_PATCH = do_DELETE = do_GET
 
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -164,7 +176,7 @@ class ViewShapeTest(IntegrationTestCase):
 
         self.assertEqual(code, 0)
         self.assertIsNone(body["project_id"])
-        self.assertEqual([v["name"] for v in body["integrations"]], ["github", "jira"])
+        self.assertEqual([v["name"] for v in body["integrations"]], ["cloudflare", "github", "jira"])
         for view in body["integrations"]:
             self.assertIsNone(view["project"])
             self.assertFalse(view["project_configured"])
@@ -1033,7 +1045,7 @@ class StatusFileToleranceTest(IntegrationTestCase):
 
             self.assertEqual((code, list_code), (0, 0))
             self.assertEqual(body["integration"]["status"]["state"], "unknown")
-            self.assertEqual(len(listed["integrations"]), 2)
+            self.assertEqual(len(listed["integrations"]), len(integrations.names()))
 
     def test_the_next_write_sets_the_unreadable_file_aside_instead_of_deleting_it(self):
         self.connect_github()
@@ -1288,3 +1300,368 @@ class JiraSiteUrlTest(IntegrationTestCase):
         self.assertEqual(code, 2)
         self.assertIn("not an API path", out + err)
         self.assertIsNone(integrations.token_reference("jira"))
+
+
+ACCOUNT = "0123456789abcdef0123456789abcdef"
+ZONE = "fedcba9876543210fedcba9876543210"
+
+
+def cf(result, **extra):
+    """A Cloudflare v4 success envelope."""
+    body = {"success": True, "errors": [], "messages": [], "result": result}
+    body.update(extra)
+    return body
+
+
+class CloudflareTestCase(IntegrationTestCase):
+    def cloudflare_routes(self, status="active", expires=None):
+        self.server.routes["/user/tokens/verify"] = (
+            200, {}, cf({"id": "tok", "status": status, "expires_on": expires}),
+        )
+
+    def connect_cloudflare(self, token=TOKEN, extra=()):
+        self.cloudflare_routes()
+        return self.cli(
+            "connect", "cloudflare", "--field", "api_url={}".format(self.server.url), *extra,
+            input_text=token,
+        )
+
+    def bind_zone(self):
+        code, _b, _o, err = self.cli("config", "set", "cloudflare", "zone_id", ZONE)
+        self.assertEqual(code, 0, err)
+
+
+class CloudflareAdapterTest(CloudflareTestCase):
+    def test_connect_verifies_a_user_token_with_bearer_auth(self):
+        code, body, _o, err = self.connect_cloudflare()
+        self.assertEqual(code, 0, err)
+        self.assertTrue(body["test"]["ok"])
+        self.assertEqual(body["test"]["state"], "connected")
+        self.assertEqual(self.server.log[-1]["headers"]["Authorization"], "Bearer " + TOKEN)
+        facts = {f["label"]: f["value"] for f in body["test"]["facts"]}
+        self.assertEqual(facts["Token owner"], "user")
+        self.assertEqual(facts["Expires"], "never")
+        self.assert_token_absent()
+
+    def test_an_account_owned_token_is_verified_on_its_account(self):
+        path = "/accounts/{}/tokens/verify".format(ACCOUNT)
+        self.server.routes["/user/tokens/verify"] = (401, {}, {"success": False, "errors": []})
+        self.server.routes[path] = (200, {}, cf({"id": "tok", "status": "active"}))
+        code, body, _o, err = self.cli(
+            "connect", "cloudflare", "--field", "api_url={}".format(self.server.url),
+            "--field", "account_id={}".format(ACCOUNT.upper()), input_text=TOKEN,
+        )
+        self.assertEqual(code, 0, err)
+        self.assertTrue(body["test"]["ok"])
+        self.assertEqual(self.server.log[-1]["path"], path)
+        self.assertEqual(body["integration"]["account"]["account_id"], ACCOUNT)
+
+    def test_a_disabled_token_is_invalid(self):
+        self.cloudflare_routes(status="disabled")
+        _c, body, _o, _e = self.cli(
+            "connect", "cloudflare", "--field", "api_url={}".format(self.server.url), input_text=TOKEN,
+        )
+        self.assertFalse(body["test"]["ok"])
+        self.assertEqual(body["test"]["state"], "invalid_token")
+
+    def test_ids_must_be_32_hex_characters(self):
+        code, _b, _o, _e = self.cli("config", "set", "cloudflare", "zone_id", "example.com")
+        self.assertEqual(code, 2)
+
+    def test_zones_resource_lists_id_and_name_and_reports_more_pages(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (
+            200, {}, cf([{"id": ZONE, "name": "example.com"}],
+                        result_info={"page": 1, "total_pages": 2}),
+        )
+        code, body, _o, err = self.cli("resources", "cloudflare", "zones")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(body["items"], [{"value": ZONE, "label": "example.com"}])
+        self.assertTrue(body["truncated"])
+
+
+class IntegrationCallTest(CloudflareTestCase):
+    def test_get_resolves_placeholders_and_passes_the_query(self):
+        self.connect_cloudflare()
+        self.bind_zone()
+        path = "/zones/{}/dns_records".format(ZONE)
+        self.server.routes[path] = (200, {}, cf([{"id": "rec", "name": "www.example.com"}]))
+        code, body, _o, err = self.cli(
+            "call", "cloudflare", "get", "/zones/{zone_id}/dns_records", "--query", "type=A",
+        )
+        self.assertEqual(code, 0, err)
+        # The payload agents parse: pinned in the contract module so a change is deliberate.
+        self.assertEqual(set(body), test_json_contract.AGENT_FACING_KEYS["integration call"])
+        self.assertEqual(body["method"], "GET")
+        self.assertEqual(body["endpoint"], path)
+        self.assertEqual(body["response"]["result"][0]["id"], "rec")
+        self.assertIn("type=A", self.server.log[-1]["query"])
+        self.assertEqual(self.server.log[-1]["headers"]["Authorization"], "Bearer " + TOKEN)
+        self.assert_token_absent()
+
+    def test_a_write_without_allow_write_sends_nothing(self):
+        self.connect_cloudflare()
+        self.bind_zone()
+        before = len(self.server.log)
+        code, body, _o, _e = self.cli(
+            "call", "cloudflare", "DELETE", "/zones/{zone_id}/dns_records/abc",
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("--allow-write", body["error"])
+        self.assertEqual(len(self.server.log), before)
+
+    def test_a_write_with_allow_write_sends_the_json_body(self):
+        self.connect_cloudflare()
+        self.bind_zone()
+        path = "/zones/{}/purge_cache".format(ZONE)
+        self.server.routes[("POST", path)] = (200, {}, cf({"id": ZONE}))
+        code, body, _o, err = self.cli(
+            "call", "cloudflare", "POST", "/zones/{zone_id}/purge_cache",
+            "--data-file", "-", "--allow-write", input_text='{"files": ["https://example.com/a"]}',
+        )
+        self.assertEqual(code, 0, err)
+        sent = self.server.log[-1]
+        self.assertEqual(sent["method"], "POST")
+        self.assertEqual(json.loads(sent["body"]), {"files": ["https://example.com/a"]})
+        self.assertEqual(body["response"]["result"]["id"], ZONE)
+        self.assert_token_absent()
+
+    def test_an_api_error_exits_3_with_the_apis_own_errors(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (
+            400, {}, {"success": False, "errors": [{"code": 1001, "message": "bad zone"}]},
+        )
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones")
+        self.assertEqual(code, 3)
+        self.assertEqual(body["details"]["http_status"], 400)
+        self.assertEqual(body["details"]["response"]["errors"][0]["code"], 1001)
+        self.assert_token_absent()
+
+    def test_endpoints_that_could_leave_the_api_path_are_refused(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        for endpoint in (
+            "zones", "https://evil.example/zones", "/zones?per_page=5", "/zones#x",
+            "/zones/../user", "/zones/%2e%2e/user", "//evil.example/zones", "/zones/ x",
+        ):
+            with self.subTest(endpoint=endpoint):
+                code, _b, _o, _e = self.cli("call", "cloudflare", "GET", endpoint)
+                self.assertEqual(code, 2)
+        self.assertEqual(len(self.server.log), before)
+
+    def test_placeholders_must_be_declared_and_set(self):
+        self.connect_cloudflare()
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones/{zone_id}")
+        self.assertEqual(code, 2)
+        self.assertIn("is not set", body["error"])
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/x/{api_url}")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown placeholder", body["error"])
+
+    def test_an_adapter_without_opt_in_refuses_call(self):
+        self.connect_github()
+        code, body, _o, _e = self.cli("call", "github", "GET", "/user")
+        self.assertEqual(code, 2)
+        self.assertIn("cloudflare", body["hint"])
+
+    def test_without_a_token_nothing_is_sent(self):
+        code, _b, _o, _e = self.cli("call", "cloudflare", "GET", "/zones")
+        self.assertEqual(code, 2)
+        self.assertEqual(self.server.log, [])
+
+    def test_a_get_with_a_body_and_a_non_json_body_are_refused(self):
+        self.connect_cloudflare()
+        code, _b, _o, _e = self.cli("call", "cloudflare", "GET", "/zones", "--data", "{}")
+        self.assertEqual(code, 2)
+        code, _b, _o, _e = self.cli(
+            "call", "cloudflare", "POST", "/zones", "--data", "not json", "--allow-write",
+        )
+        self.assertEqual(code, 2)
+
+
+class IntegrationCallHardeningTest(CloudflareTestCase):
+    """Review findings on ADR-0031: what `call` refuses, records and reports."""
+
+    def audit_lines(self):
+        log = paths.audit_log(creds._audit_scope(None))
+        if not log.exists():
+            return []
+        lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line]
+        return [line for line in lines if line["action"] == "integration-call"]
+
+    def test_encoded_separators_dots_and_controls_are_refused_before_the_token_is_read(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        for endpoint in (
+            "/zones/..%2f..%2fuser", "/zones/a%2Fb", "/zones/%5c..", "/zones/a%0ab",
+            "/zones/%252e%252e", "/zones/%2e", "/zones/%zz", "/zones/{nope",
+        ):
+            with self.subTest(endpoint=endpoint):
+                code, _b, _o, _e = self.cli("call", "cloudflare", "GET", endpoint)
+                self.assertEqual(code, 2)
+        self.assertEqual(len(self.server.log), before)
+        self.assertTrue(all(line["outcome"] == "refused" for line in self.audit_lines()))
+
+    def test_endpoints_that_return_a_credential_are_refused_even_with_allow_write(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        for method, endpoint in (
+            ("GET", "/accounts/{}/cfd_tunnel/abc/token".format(ACCOUNT)),
+            ("POST", "/user/tokens"),
+            ("PUT", "/user/tokens/abc/value"),
+            ("POST", "/accounts/{}/tokens".format(ACCOUNT)),
+            ("POST", "/accounts/{}/access/service_tokens/abc/rotate".format(ACCOUNT)),
+            ("GET", "/user/%61pi_key"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                code, body, _o, _e = self.cli("call", "cloudflare", method, endpoint, "--allow-write")
+                self.assertEqual(code, 2)
+                self.assertIn("never called", body["error"])
+        self.assertEqual(len(self.server.log), before)
+
+    def test_token_verify_stays_callable(self):
+        self.connect_cloudflare()
+        code, _b, _o, err = self.cli("call", "cloudflare", "GET", "/user/tokens/verify")
+        self.assertEqual(code, 0, err)
+
+    def test_an_abbreviated_allow_write_is_not_accepted(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        code, _b, _o, _e = self.cli("call", "cloudflare", "DELETE", "/zones/x", "--allow")
+        self.assertEqual(code, 2)
+        self.assertEqual(len(self.server.log), before)
+
+    def test_every_call_is_audited_with_method_and_endpoint_never_the_body(self):
+        self.connect_cloudflare()
+        self.bind_zone()
+        path = "/zones/{}/purge_cache".format(ZONE)
+        self.server.routes[("POST", path)] = (200, {}, cf({"id": ZONE}))
+        self.cli("call", "cloudflare", "POST", "/zones/{zone_id}/purge_cache",
+                 "--data", '{"files": ["https://example.com/secret-ish"]}', "--allow-write")
+        self.cli("call", "cloudflare", "DELETE", "/zones/{zone_id}")
+        lines = self.audit_lines()
+        self.assertEqual([line["outcome"] for line in lines], ["ok", "refused"])
+        self.assertEqual(lines[0]["detail"]["method"], "POST")
+        self.assertEqual(lines[0]["detail"]["endpoint"], path)
+        self.assertTrue(lines[0]["detail"]["allow_write"])
+        self.assertEqual(lines[0]["detail"]["project_id"], self.pid)
+        self.assertFalse(lines[1]["detail"]["allow_write"])
+        log = paths.audit_log(creds._audit_scope(None)).read_text(encoding="utf-8")
+        self.assertNotIn("secret-ish", log)
+        self.assertNotIn(TOKEN, log)
+
+    def test_a_hand_edited_account_id_is_revalidated(self):
+        self.connect_cloudflare(extra=("--field", "account_id={}".format(ACCOUNT)))
+        account_file = integrations.account_path("cloudflare")
+        data = json.loads(account_file.read_text(encoding="utf-8"))
+        data["config"]["account_id"] = ".."
+        account_file.write_text(json.dumps(data), encoding="utf-8")
+        before = len(self.server.log)
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/accounts/{account_id}/workers/scripts")
+        self.assertEqual(code, 2)
+        self.assertIn("account_id is invalid", body["error"])
+        self.assertEqual(len(self.server.log), before)
+
+    def test_a_corrupt_binding_is_reported_not_read_as_unset(self):
+        self.connect_cloudflare()
+        binding = integrations.project_path(self.root, "cloudflare")
+        binding.parent.mkdir(parents=True, exist_ok=True)
+        binding.write_text("{not json", encoding="utf-8")
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones/{zone_id}")
+        self.assertEqual(code, 3)
+        self.assertNotIn("is not set", body["error"])
+
+    def test_a_project_placeholder_outside_a_bound_project_says_so(self):
+        self.connect_cloudflare()
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones/{zone_id}", path=self.plain)
+        self.assertEqual(code, 2)
+        self.assertIn("not a bound project", body["error"])
+
+    def test_a_changed_origin_sends_nothing(self):
+        self.connect_cloudflare()
+        other = FakeServer()
+        self.addCleanup(other.stop)
+        self.cli("config", "set", "cloudflare", "api_url", other.url)
+        code, _b, _o, _e = self.cli("call", "cloudflare", "GET", "/zones")
+        self.assertEqual(code, 2)
+        self.assertEqual(other.log, [])
+
+    def test_a_redirect_is_refused(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (302, {"Location": self.server.url + "/elsewhere"}, {})
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones")
+        self.assertEqual(code, 3)
+        self.assertNotIn("/elsewhere", [entry["path"] for entry in self.server.log])
+        self.assert_token_absent()
+
+    def test_an_empty_success_body_reads_as_an_empty_object(self):
+        self.connect_cloudflare()
+        self.server.routes[("DELETE", "/zones/abc")] = (204, {}, b"")
+        code, body, _o, err = self.cli("call", "cloudflare", "DELETE", "/zones/abc", "--allow-write")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(body["response"], {})
+
+    def test_a_rate_limit_carries_retry_after(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (429, {"Retry-After": "30"}, {"success": False, "errors": []})
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones")
+        self.assertEqual(code, 3)
+        self.assertEqual(body["details"]["state"], "rate_limited")
+        self.assertEqual(body["details"]["retry_after"], 30)
+
+    def test_a_non_json_success_points_at_the_providers_cli(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones/abc/dns_records/export"] = (200, {}, b"example.com. 300 IN A 1.2.3.4")
+        code, body, _o, _e = self.cli("call", "cloudflare", "GET", "/zones/abc/dns_records/export")
+        self.assertEqual(code, 3)
+        self.assertIn("raw content", body["hint"])
+
+    def test_account_id_placeholder_is_filled(self):
+        self.connect_cloudflare(extra=("--field", "account_id={}".format(ACCOUNT)))
+        path = "/accounts/{}/workers/scripts".format(ACCOUNT)
+        self.server.routes[path] = (200, {}, cf([]))
+        code, body, _o, err = self.cli("call", "cloudflare", "GET", "/accounts/{account_id}/workers/scripts")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(body["endpoint"], path)
+
+    def test_human_mode_shows_the_apis_own_error(self):
+        self.connect_cloudflare()
+        self.server.routes["/zones"] = (
+            400, {}, {"success": False, "errors": [{"code": 1001, "message": "bad zone"}]},
+        )
+        code, out, err = self.run_cli("integration", "call", "cloudflare", "GET", "/zones", "--path", str(self.root))
+        self.assertEqual(code, 3)
+        self.assertIn("[1001] bad zone", out + err)
+
+    def test_bodies_that_are_not_strict_json_or_too_large_are_refused(self):
+        self.connect_cloudflare()
+        before = len(self.server.log)
+        code, _b, _o, _e = self.cli("call", "cloudflare", "POST", "/zones", "--data", '{"a": NaN}', "--allow-write")
+        self.assertEqual(code, 2)
+        big = json.dumps({"a": "x" * (1024 * 1024)})
+        code, _b, _o, _e = self.cli("call", "cloudflare", "POST", "/zones", "--data-file", "-",
+                                     "--allow-write", input_text=big)
+        self.assertEqual(code, 2)
+        self.assertEqual(len(self.server.log), before)
+
+    def test_json_array_bodies_are_sent(self):
+        self.connect_cloudflare()
+        self.server.routes[("POST", "/bulk")] = (200, {}, cf(None))
+        code, _b, _o, err = self.cli("call", "cloudflare", "POST", "/bulk", "--data", '["a", "b"]', "--allow-write")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(self.server.log[-1]["body"]), ["a", "b"])
+
+    def test_api_url_only_accepts_cloudflare_hosts(self):
+        adapter = cloudflare_adapter.Cloudflare()
+        self.assertEqual(adapter.normalize("api_url", "https://api.cloudflare.com/client/v4/"),
+                         "https://api.cloudflare.com/client/v4")
+        adapter.normalize("api_url", "https://api.fed.cloudflare.com/client/v4")
+        for url in ("https://evil.example/client/v4", "https://api.cloudflare.com/client/v3",
+                    "https://api.cloudflare.com:8443/client/v4"):
+            with self.subTest(url=url), self.assertRaises(UsageError):
+                adapter.normalize("api_url", url)
+
+    def test_the_desktop_app_cannot_run_call(self):
+        operations = (REPO_ROOT / "app" / "src" / "cli" / "operations.ts").read_text(encoding="utf-8")
+        self.assertIn("['integration', 'resources']", operations)
+        self.assertNotIn("['integration', 'call']", operations)

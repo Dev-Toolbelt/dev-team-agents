@@ -41,6 +41,13 @@ VALID_EXIT_CODES = {
     errors.EXIT_CONFLICT,
 }
 
+# Payloads agents parse rather than the app (ADR-0031): `--json` is public output either
+# way. Exercised against a fake API server in `test_integrations.IntegrationCallTest`,
+# which is where a live success response can be produced.
+AGENT_FACING_KEYS = {
+    "integration call": {"integration", "method", "endpoint", "response"},
+}
+
 # Commands the bulk sweep invokes with no other arguments. Both are excluded,
 # named explicitly rather than silently skipped:
 #   - `update` reaches the network to fetch a release; run offline it can hang
@@ -1194,7 +1201,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
         payload = self._run_ok("integration", "list", "--path", str(self.project_root), "--json")
         self._assert_exact_keys("integration list", payload, self.EXPECTED["integration list"])
         self._assert_no_secret_like_keys("integration list", payload)
-        self.assertEqual({v["name"] for v in payload["integrations"]}, {"github", "jira"})
+        self.assertEqual({v["name"] for v in payload["integrations"]}, {"cloudflare", "github", "jira"})
         for view in payload["integrations"]:
             self._assert_record_keys("integration.view", view, self.EXPECTED["integration.view"])
             self._assert_record_keys("integration.auth", view["auth"], self.EXPECTED["integration.auth"])

@@ -89,3 +89,22 @@ class CredentialGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@requires_bash()
+class IntegrationTokenGuardTest(unittest.TestCase):
+    """ADR-0031: an integration token is the CLI's to use, never an agent's to print."""
+
+    def test_reading_an_integration_token_is_refused(self):
+        result = run_guard("devteam cred get integration.cloudflare.token")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("devteam integration call", result.stderr)
+        self.assertNotIn("integration.cloudflare.token", result.stderr)
+
+    def test_reading_another_credential_is_still_allowed(self):
+        result = run_guard("devteam cred get deploy.staging.password")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_call_proxy_itself_is_allowed(self):
+        result = run_guard("devteam integration call cloudflare GET /zones --json")
+        self.assertEqual(result.returncode, 0, result.stderr)
