@@ -20,6 +20,8 @@ test -f docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 
 Report the detected mode to the user before delegating, so they know whether existing configuration is at stake.
 
+On `FIRST_RUN`, also run `devteam detect --json` once and pass its `data` (providers, stack, project type, first task) to the agent: the flow uses what was detected and asks only where `project_type.confidence` is `low`. If the command is unavailable, say nothing and let the agent fall back to its own scan.
+
 ---
 
 ## Step 2 — Spawn the agent

@@ -17,11 +17,13 @@ You are running the **`/devteam:audit`** command.
 
 **Observational Analysis Principle:** The audit is a diagnostic — it analyzes the software as it currently behaves. Agents must NOT propose changes that alter existing business logic, introduce new business rules, or modify the intended behavior of the system. Findings must be grounded in the current codebase context: bugs, missing guards, security gaps, and quality issues that exist today. If a finding requires inventing a new business rule or changing what the software is supposed to do, it is out of scope.
 
+**Report-only mode:** when `$ARGUMENTS` contains `--report-only`, strip the flag and run read-only (the first-run path, ADR-0030): ask nothing, skip Steps 1 and 2 (no scope quiz, worktree, or branch), write no file, and in Step 5 print the report in the conversation and stop — no `docs/audit/` file, no follow-up quiz, no learn nudge. Target `.` means the project root; accept the target as given.
+
 ---
 
 ## Step 0 — Resolve audit target
 
-If `$ARGUMENTS` already names a target (e.g., `auth`, `billing`, `notifications`, `search`, `api`, `admin`), use it as `<module>` and skip this step.
+If `$ARGUMENTS` already names a target (e.g., `auth`, `billing`, `api`, `admin`), use it as `<module>` and skip this step.
 
 If `$ARGUMENTS` is **empty**, ask the user with `AskUserQuestion` (single-select with "Other" option for free-text):
 

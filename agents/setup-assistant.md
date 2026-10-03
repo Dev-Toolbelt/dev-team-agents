@@ -61,7 +61,7 @@ test -f docs/project.md && echo "REFRESH" || echo "FIRST_RUN"
 
 ### Step 1 — Scan What Exists
 
-Load `skills/shared/setup-scan/SKILL.md`. Run all scan commands, check skill availability, and run Project Docs Discovery. Summarize findings before asking questions.
+**FIRST_RUN:** run `devteam detect --json` first (`data.providers`, `data.stack`, `data.project_type`) and use it instead of asking; if the command is unavailable, fall back to the scan alone. Then load `skills/shared/setup-scan/SKILL.md`, run all scan commands, check skill availability, and run Project Docs Discovery. Summarize findings before asking questions.
 
 **Docker Compose command form:** only when the scan finds a compose file, apply the Docker Compose probe from the already-loaded `stack-detection` skill and record its result in the project's `CLAUDE.md` as `DOCKER_COMPOSE: <form>` so no agent re-probes.
 
@@ -79,12 +79,12 @@ Audit sections: project overview · repository health (README/CLAUDE.md/AGENTS.m
 
 Load `skills/shared/discovery-mode/SKILL.md` to guide the project classification decision (new / unfinished / maintenance / inherited).
 
-Use the `AskUserQuestion` tool with options:
+Take the type from `devteam detect` (`project_type.suggested`; map `unfinished` → `inherited`) and state it with its `reasons`. **Ask only when `confidence` is `low` or detect was unavailable** — use `AskUserQuestion` with the detected value first and labelled "(Recommended)", then the others:
 - **New project** — starting from scratch
 - **Unfinished / inherited** — taking over from another team
 - **Maintenance / evolution** — production project, adding features or fixing bugs
 
-After the user selects, ask a brief follow-up question in plain text for a short description if needed.
+Likewise record the primary stack from `stack.primary` and the provider from `providers.suggested` without asking; ask only if they are null or the user disputes them. Ask for a short description in plain text only if needed.
 
 Record as `PROJECT_TYPE: [new|inherited|maintenance]` in CLAUDE.md.
 
