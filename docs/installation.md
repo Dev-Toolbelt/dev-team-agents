@@ -187,7 +187,7 @@ You'll be prompted to choose a sign-in method:
 | **Google OAuth** | Sign in with your Google account. Opens your system browser with PKCE security. |
 | **GitHub OAuth** | Sign in with your GitHub account. Opens your system browser with PKCE security. |
 
-Your refresh token is stored securely in the OS keychain (never persists the access token). After signing in, you can work **offline for up to 7 days** without a network connection. An online check is required after that to refresh your license.
+Your refresh token is stored in the Keychain on macOS and with DPAPI on Windows; on Linux it is a 0600 file, reported as insecure by `devteam auth status`. The access token is never persisted. After signing in, you can work **offline for up to 7 days** without a network connection. An online check is required after that to refresh your license.
 
 **In this release**, the account requirement is announced but not enforced — you'll see a banner reminder, but commands run anyway. **The next minor release will enforce it**, blocking gated commands until you sign in.
 

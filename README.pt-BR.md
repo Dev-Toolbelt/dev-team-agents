@@ -76,7 +76,7 @@ Você será perguntado qual método quer usar para entrar:
 | Google OAuth | Entre com sua conta Google; abre seu navegador de sistema. |
 | GitHub OAuth | Entre com sua conta GitHub; abre seu navegador de sistema. |
 
-O token de atualização é armazenado de forma segura na sua máquina (keychain do SO no Linux, macOS, Windows). Você pode revogá-lo a qualquer momento com `devteam auth logout`.
+O token de atualização é armazenado na sua máquina: no Keychain no macOS, com DPAPI no Windows e, no Linux, em um arquivo 0600, que `devteam auth status` informa como inseguro porque lá não há keychain do SO. Você pode revogá-lo a qualquer momento com `devteam auth logout`.
 
 ### O que funciona offline
 

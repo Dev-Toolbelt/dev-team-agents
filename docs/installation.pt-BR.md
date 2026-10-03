@@ -187,7 +187,7 @@ Você será perguntado qual método quer usar para entrar:
 | **Google OAuth** | Entre com sua conta Google. Abre seu navegador de sistema com segurança PKCE. |
 | **GitHub OAuth** | Entre com sua conta GitHub. Abre seu navegador de sistema com segurança PKCE. |
 
-Seu token de atualização é armazenado com segurança no keychain do SO (nunca persiste o token de acesso). Depois de entrar, você pode trabalhar **offline por até 7 dias** sem uma conexão de rede. Uma verificação online é necessária depois disso para atualizar sua licença.
+Seu token de atualização é armazenado no Keychain no macOS e com DPAPI no Windows; no Linux é um arquivo 0600, informado como inseguro por `devteam auth status`. O token de acesso nunca é persistido. Depois de entrar, você pode trabalhar **offline por até 7 dias** sem uma conexão de rede. Uma verificação online é necessária depois disso para atualizar sua licença.
 
 **Nesta versão**, a exigência da conta é anunciada mas não é obrigatória — você verá um banner lembrando, mas os comandos rodam mesmo assim. **A próxima versão minor vai obrigá-lo**, bloqueando comandos gated até que você entre.
 

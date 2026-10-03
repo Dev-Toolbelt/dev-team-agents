@@ -378,7 +378,12 @@ listener), on top of `entitlement.py`. None imports telemetry.
   `true`, and a warning is printed. A refresh runs under the `auth-session` store lock; a process
   that waited re-reads the stored token. Threads of one process share one exchange.
 - **Stale and retry.** A usable license is refreshed when its last online check is over 24 hours old
-  (1 hour for `trial_expired`/`banned`), and a failed attempt is not repeated for 15 minutes.
+  (1 hour for `trial_expired`/`banned`). A failed attempt — including one that returned an unusable
+  token — is not repeated for 15 minutes **whatever the cached status**, so an offline machine pays
+  a network timeout at most once per window. Only a rejected refresh token (400/401) or a 401 from
+  `/user` or the entitlement function ends the session; any other 4xx is `server_refused`, an
+  environment error that keeps it. Logout runs under the session lock and, on a machine with no
+  id yet, touches nothing.
 - **Errors.** One fixed sentence per failure; a response body is never echoed. `1` rejected by the
   server (wrong credential or code, dead session, not signed in), `2` usage (bad flag, password
   outside 10-64 characters / 72 bytes, a code that is not 8 digits), `3` environment (unreachable,
@@ -393,33 +398,44 @@ listener), on top of `entitlement.py`. None imports telemetry.
   installers parse one schema. `entitlement.status` is one of `active`, `trial`, `trial_expired`,
   `banned`, `needs_online_check`, `signed_out`, `invalid`.
 - **Test seam.** `DEVTEAM_AUTH_TEST_URL` / `_KID` / `_PUBKEY` (loopback URL, `test-` key id) point the
-  CLI at a fake server; every command then warns on stderr and reports `test_seam: true`. Nothing
-  else — no file, preference or other variable — changes the endpoint or the keys.
-- **Client gate.** Every `auth` leaf is `READ_ONLY` in `compat.py`: it writes only machine-local
-  session records that are not declared store shapes, and a user must always be able to sign in.
+  CLI at a fake server; every command then warns on stderr and reports `test_seam: true`. An
+  unusable seam (a remote URL, a key id without `test-`, a partial set) is **ignored** with a
+  `test seam ignored` warning, so a stray variable can neither redirect the CLI nor fail every
+  command. Nothing else — no project file, preference or other variable — changes the endpoint.
+- **Environments.** `scripts/lib/auth-config.json` carries the `prod` environment only. The
+  repository-only `scripts/lib/auth-config.dev.json` adds and selects `dev`; `strip-tarball.sh`
+  drops it and no CLI installer copies it, so a released build embeds prod keys alone (SR-27).
+- **Client gate.** Every `auth` leaf is `STORE_NEUTRAL` in `compat.py`: never refused to a declared
+  client (a user must always be able to sign in), but not called read-only, because it writes
+  machine-local session records and the remote account rather than declared store shapes.
 - **Account gate** (`auth_gate.py`, SR-30). `main()` calls `gate.apply()` after the group-usage check and
   before the handler, in-process through `auth.cmd_check` (no subprocess), so its decision, exit
   codes and message are `auth check`'s. The exempt list is an **allowlist on the parsed command
   path** (`auth_gate.EXEMPT`): `auth *`, `version`, `path`, `compat`, `doctor`, `unbind`, `uninstall`,
-  `export`, `quarantine restore`. Everything else, including a command added later, is gated;
-  `tests/test_auth_gate.py` walks the real parser to prove it. `gate_mode` in the compiled
-  `scripts/lib/auth-config.json` is `warn` (default, and when the key is absent) or `enforce`
-  (any other value reads as `enforce`, so a typo never opens the gate). `warn` prints one stderr
-  line and runs the command, leaving the `--json` document unchanged; `enforce` refuses with exit
-  1 (not entitled) or 3 (an online check is needed and could not be made) and the remedy
-  `devteam auth login`. A cached license inside its offline window is entitled, so it never
-  blocks. While blocked, `devteam update` still installs the core (hook fixes must reach blocked
-  users) but its project sync is withheld; `sync`, `bind`, `upgrade` and `migrate` stay gated.
+  `export`, `quarantine restore`, and the hook plumbing `tasks *`. Everything else, including a
+  command added later, is gated; `tests/test_auth_gate.py` walks the real parser to prove it.
+  `gate_mode` is `Identity.gate_mode`, read from the compiled `scripts/lib/auth-config.json`: `warn`
+  or `enforce`, any other value reads as `enforce` (a typo never opens the gate), and an unreadable
+  file falls back to `entitlement.DEFAULT_GATE_MODE` — the release's own mode, flipped together with
+  the file (a test holds them equal). `warn` runs the command whatever the check says, **even when
+  the check cannot run**, leaves the `--json` document unchanged, and prints its notice only when
+  stderr is a terminal; `enforce` refuses with exit 1 (not entitled) or 3 (an online check is needed
+  and could not be made), the remedy `devteam auth login`, and `details.gate = "account"`. A cached
+  license inside its offline window is entitled, so it never blocks. While blocked, `devteam update`
+  still installs the core (hook fixes must reach blocked users): the gate returns `CORE_ONLY` and the
+  handler skips the project sync; `sync`, `bind`, `upgrade` and `migrate` stay gated.
   The gate runs after the one-time layout adoption, so a refusal does not skip a store migration.
 - **Installers.** `install-opencode.sh`, `install-codex.sh`, `install-provider.sh` and `update.sh`
   (before it re-renders the opencode/Codex trees; the core update above is never gated) source
   `scripts/lib/auth-gate.sh` and call `ag_gate` before their first write: it runs
   `devteam auth check --json` (the tree's own `scripts/cli/devteam`, else `devteam` on PATH),
-  reads `gate_mode` from the same config, and returns 0 (proceed) or **5** (blocked, `enforce`
-  only). Exits 1, 3 and 4 from `check` are blocked-class; any other exit, or no CLI at all, cannot
-  be decided: `warn` skips with a stderr note, `enforce` blocks (SR-42), so a missing or broken CLI
-  never opens the gate. `--dry-run` and `--list-targets`
-  are never gated. `tests/test_installer_gate.py` iterates `ALL_PROVIDERS` with a per-provider map.
+  takes `gate_mode` from that answer (falling back to the config, then to `AG_DEFAULT_MODE`, held
+  equal to `DEFAULT_GATE_MODE` by a test), and returns 0 (proceed) or **5** (blocked, `enforce`
+  only). Exits 1 and 3 from `check` are blocked-class; exit 4 (lock busy), any other exit, or no CLI
+  at all cannot be decided: `warn` skips with a stderr note, `enforce` blocks (SR-42).
+  `install-provider.sh` sources the gate from **its own tree**, never from the downloaded one, so an
+  old `--version` cannot opt out; `update.sh` tolerates a tree that predates the gate. `--dry-run`
+  and `--list-targets` are never gated. `tests/test_installer_gate.py` iterates `ALL_PROVIDERS` with a per-provider map.
 
 ## Compatibility block in `version`
 

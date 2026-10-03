@@ -108,7 +108,7 @@ and the renderer's CSP stays `connect-src 'none'` / `img-src 'self' data:` (the 
 person's initials, never a picture).
 
 - **Sign in** — Google and GitHub (the CLI opens the system browser and waits up to five minutes
-  for its loopback callback), an emailed 8-digit code, or email and password, with sign-up
+  for its loopback callback; **Cancel** ends the wait, and so does quitting the app), an emailed 8-digit code, or email and password, with sign-up
   (the password, then the emailed code, as two CLI runs) and a forgotten-password reset (send a code, then the code
   and a new password).
 - **Blocked** — a signed-in account that is not entitled (`trial_expired`, `banned`,
@@ -117,10 +117,12 @@ person's initials, never a picture).
 - **Gate mode** — in `enforce` the sign-in or blocked screen **replaces** the app; in `warn` the
   app stays usable under a dismissible banner that opens the Account tab. `gate_mode` is compiled
   into the CLI's `auth-config.json` and reported in the `auth status` and `auth check` documents;
-  the app reads it from there and acts as `warn` until the first document arrives.
+  the app reads it from there and acts as `warn` until the first document arrives. The check
+  re-runs when the window regains focus (at most once a minute) and every 15 minutes, so a trial
+  that ends or a ban is seen without a restart; a failed check shows a neutral "Account" button.
 - **Account tab** (and the initials button in the header) — display name, email change (a code to
-  the new address, optionally one to the old), linked providers (link and unlink; the last one
-  cannot be removed), password change, sign out, and account deletion, which needs the typed word
+  the new address, optionally one to the old), linked providers (link and unlink, which asks for a
+  second click; the last one cannot be removed), password change, sign out, and account deletion, which needs the typed word
   "delete" and a fresh emailed code before anything is sent.
 
 **Secrets travel on stdin only.** A code or a password is written to the child's stdin for that one
@@ -134,7 +136,8 @@ stdin). Nothing secret is held between them; the main process remembers only the
 the unconfirmed account. Fields are validated on submit with the CLI's own rules
 (`src/shared/accountRules.ts`); failures are generic sentences chosen from the CLI's
 `details.reason`, never its text (which carries the address), and never say whether an address is
-registered. The screens are in English and Brazilian Portuguese, chosen from the OS language
+registered. A browser sign-in or link, a sign-up and a deletion never run twice at once (a double
+click or a second window is refused). The screens are in English and Brazilian Portuguese, chosen from the OS language
 (`src/renderer/account/strings.ts`).
 
 ## The app's own data

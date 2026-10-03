@@ -445,11 +445,7 @@ discovering commands from the real parser rather than a hardcoded list.
 
 → See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) for the store layout, bind modes, the command table,
 the `--json` contract and exit codes, and the contributor rules.
-
-### Accounts and Licensing
-
-A signed-in account gates the framework ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)): `devteam auth login`, gate mode `warn` then `enforce`.
-→ See [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) § Account for the commands, session storage, the gate and its exempt list, and the test seam.
+**Accounts** ([ADR-0029](docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)): a signed-in account gates the CLI, `warn` then `enforce`; see [`CLAUDE-md/cli.md`](CLAUDE-md/cli.md) § Account.
 
 ---
 

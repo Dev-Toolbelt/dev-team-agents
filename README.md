@@ -76,7 +76,7 @@ You'll be prompted to choose a sign-in method:
 | Google OAuth | Sign in with your Google account; opens your system browser. |
 | GitHub OAuth | Sign in with your GitHub account; opens your system browser. |
 
-The refresh token is stored securely on your machine (OS keychain on Linux, macOS, Windows). You can revoke it at any time with `devteam auth logout`.
+The refresh token is stored on your machine: in the Keychain on macOS, with DPAPI on Windows, and on Linux in a 0600 file, which `devteam auth status` reports as insecure because no OS keychain is available there. You can revoke it at any time with `devteam auth logout`.
 
 ### What works offline
 

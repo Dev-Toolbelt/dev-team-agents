@@ -83,10 +83,23 @@ A signed-in account with a usable entitlement (§ 4) is required to run the fram
 
 - Gated: every `devteam` subcommand not on the exempt list. The list is an allowlist matched on
   the parsed command path, so a subcommand added later is gated by default (SR-30).
-- Never gated: `auth *`, `version`, `help`, `path`, `compat`, `doctor` (diagnosis), the removal
-  paths `unbind`, `uninstall` and quarantine restore, and `export` of the user's own data. A user
-  must always be able to sign in, diagnose a problem, take their data and leave cleanly.
-  Uninstalling is never blocked.
+- Never gated: `auth *`, `version`, `path`, `compat`, `doctor` (diagnosis), the removal paths
+  `unbind`, `uninstall` and quarantine restore, `export` of the user's own data, and the hook
+  plumbing `tasks *` (a PreToolUse hook runs it on every tool call, and a hook must never wait on
+  a lock or the network). `--help` is argparse's, never a command. A user must always be able to
+  sign in, diagnose a problem, take their data and leave cleanly. Uninstalling is never blocked.
+- **Updates while blocked.** `update` installs the core store even for a blocked user, so a fix to
+  a hook reaches them; the project sync it would run is withheld. The gate reports that verdict
+  (`CORE_ONLY`) and the `update` handler reads it; the gate never edits the parsed arguments.
+- **Warn mode is warn whatever happens.** In the announce-only release a gated command runs even
+  when the check itself cannot (a missing or broken config, a lock conflict), and the notice is
+  shown only when stderr is a terminal: a script, a hook or the app captures stderr, and the app
+  renders its own banner. An unreadable config falls back to `entitlement.DEFAULT_GATE_MODE`, the
+  mode the release ships, flipped together with `auth-config.json` (a test holds them equal).
+- A gate refusal carries `details.gate = "account"`, so a client can tell it from the exit 1 that
+  `doctor` and `cred check` use for findings. In `compat` the account commands are classed
+  `STORE_NEUTRAL`: never refused to a declared client, but not called read-only, because they
+  write machine-local records and the remote account.
 
 **Delegated providers are enforced too**, under the Provider Parity Rule. The opencode and Codex
 installers and `update.sh` reach the user's tree without going through `bind`, so they call
@@ -343,7 +356,9 @@ fake IdP issues so tests can grep every output for it.
 26. **Replay.** A token copied from another account fails the `sub` check. A token copied to another
     machine together with that account's session is account sharing, which § 8 accepts. A `banned`
     or `trial_expired` token is cached like any other, so offline the block still shows its reason.
-27. **Keys.** `dev` and `prod` use different key pairs; a `prod` build embeds only `prod` keys. The
+27. **Keys.** `dev` and `prod` use different key pairs; a `prod` build embeds only `prod` keys:
+    `scripts/lib/auth-config.json` carries the `prod` environment alone, and the `dev` one lives in
+    the repository-only `auth-config.dev.json`, which no distribution path copies. The
     private key is generated offline, held only as the Edge Function secret plus an offline backup in
     the maintainers' password manager, and never committed. Rotation: ship the next public key as
     `next` one release ahead, then switch signing. A leaked private key is answered by a release that
@@ -376,9 +391,13 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     (malleability), reject a point encoding with `y >= p` or with `x == 0` and the sign bit set, reject
     a point not on the curve. Use the cofactorless equation `[S]B == R + [k]A` with `k =
     SHA-512(R || A || M) mod L`, comparing in projective coordinates. Constant time is not required:
-    every input is public. *Test:* all five RFC 8032 § 7.1 vectors pass; negative vectors fail —
-    each byte of a valid signature flipped, `S + L`, non-canonical `R` and `A`, small-order `A`, and
-    the Wycheproof EdDSA set vendored as test data under `tests/`.
+    every input is public. *Test:* the RFC 8032 § 7.1 vectors that can be reproduced offline pass
+    (TEST 1024's message is not, and stays a skipped test naming why); negative vectors fail — each
+    byte of a valid signature flipped, `S + L`, non-canonical `R` and `A`, small-order `A`. The
+    Wycheproof categories (all eight torsion points as `A` and `R`, `S` at and past `L`, non-canonical
+    `y` and sign-bit-on-zero, mixed order, empty and all-`0xff` input) are **built at test time with a
+    test-only signer** rather than vendored, because no offline copy of the Wycheproof file exists for
+    this repository to pin.
 
 ### F. The gate, and Supabase: RLS, Edge Functions, secrets
 
@@ -394,9 +413,11 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     column-level `UPDATE` granted on `display_name` alone, so a client cannot write any other column.
     `licenses`: select own row only; no insert, update or delete for `anon` or `authenticated`.
     `app_config` and `banned_identities`: no policy and `REVOKE ALL` from `anon` and `authenticated`.
-    *Test:* SQL tests (pgTAP or plain SQL in CI against a local Supabase) assert that a second user
-    reads nothing of the first, that `display_name` is the only writable column, and that the last two
-    tables return permission errors.
+    `licenses` is granted **column by column**: a client never reads `ban_reason` or `banned_at`.
+    *Test:* pgTAP in `infra/supabase/tests/database/`, run by the `supabase-db` CI job against a local
+    Supabase (`supabase test db`), asserts that a second user reads nothing of the first, that
+    `display_name` is the only writable column, that the moderation columns and the service tables
+    return permission errors, and that the rate limiter is service-role only.
 32. **Database functions.** Any trigger or function that is `SECURITY DEFINER` sets
     `search_path = ''` and schema-qualifies every name. Views use `security_invoker = true`.
     *Test:* a CI query over `pg_proc` and `pg_class` options.
@@ -409,12 +430,17 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     HMAC ban list (SR-38) for the caller's current email, so a banned identity that re-registers is
     banned again. Issuance is rate-limited per user. *Test:* re-registering a banned email yields
     `banned`.
-35. **Ban procedure.** A ban sets `licenses.status = banned`, sets the auth user's `banned_until`
-    (so refresh fails), and revokes all sessions. All three steps go in a runbook.
+35. **Ban procedure.** A ban is one call to the service-role-only `ban-user` Edge Function, so no step
+    can be skipped: it sets `licenses.status = banned`, sets the auth user's `banned_until` to a
+    far-future date (never `infinity`, which GoTrue cannot scan), revokes all sessions (the SQL
+    function `public.ban_user`), and writes the email HMAC (SR-38), which survives a later deletion.
+    The function is the only holder of the pepper. *Test:* the function's own tests.
 36. **`service_role` never ships.** It exists only in the Supabase dashboard and as Edge Function
     environment. CI secret scanning carries rules for a legacy JWT whose payload has
-    `"role":"service_role"` and for `sb_secret_` keys; the package check fails if either appears in the
-    tarball. *Test:* a seeded positive in the scanner's own test.
+    `"role":"service_role"` and for `sb_secret_` keys (`.github/scripts/ci/secret_scan.py`, run by the
+    packaging gate over the repository and over the tree `apply_strip` produces); the same gate fails
+    if the repository-only `auth-config.dev.json` reaches the package (SR-27). *Test:* seeded positives
+    built at runtime in `tests/test_secret_scan.py`, so no credential-shaped string is committed.
 
 ### G. Account deletion, ban list and LGPD
 
@@ -424,7 +450,10 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     judges freshness from the access JWT: its newest `amr` entry must be at most 300 seconds old. The CLI
     therefore obtains the fresh code by signing in again with an email OTP (`verifyOtp`), whose session
     carries that `amr` entry, and calls the function with that access token. A refreshed token keeps its
-    original `amr` timestamp, so a stolen long-lived session cannot pass. *Test:* the function refuses a deletion without a valid reauthentication nonce.
+    original `amr` timestamp, so a stolen long-lived session cannot pass. The newest `amr` entry must
+    also be method `otp`: a fresh password or OAuth sign-in is not enough, or a stolen session could
+    link the attacker's own provider, get a fresh entry and delete the account. *Test:* the function
+    refuses a stale entry and a fresh non-`otp` one.
 38. **Ban list is a keyed HMAC.** `banned_identities.email_hmac = HMAC-SHA256(pepper,
     normalize(email))`, with the pepper as an Edge Function secret, never in the database. `normalize`
     is trim, NFC, lowercase. Plus-addressing and Gmail dots are **not** folded: folding risks banning
@@ -432,7 +461,9 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     else. *Test:* the stored value differs from `SHA-256(email)` and is stable across case and
     whitespace.
 39. **Trial reset by deletion.** Before `trial_enabled` is ever turned on, deleting an account must
-    not reset its trial: keep the same HMAC with reason `trial_consumed` for at most 12 months, named
+    not reset its trial: keep the same HMAC with reason `trial_consumed` for at most 12 months. It is
+    written **when the trial starts**, under the address it started with, so changing the address
+    before deleting buys nothing; an account deleted before any trial started leaves no marker. Named
     in PRIVACY.md under legitimate interest in fraud prevention (LGPD art. 7, IX). *Test:* delete, then
     re-register with the same email, resolves the trial as already started.
 40. **LGPD obligations.** PRIVACY.md and the Terms ship in the release that announces the
@@ -469,11 +500,12 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
 
 ### Open points
 
-- **Updates for blocked users.** `update` is gated, so a `trial_expired` or `banned` user stops
-  receiving framework updates, while their hooks keep running (§ 3). If a release ever fixes a
-  security defect in a hook, those users keep the defect. Recommendation: let the core store update
-  itself while blocked, and keep projecting into project trees (`sync`, delegated installers) gated.
-  Product decision, not taken here.
+- **Updates for blocked users.** Decided (§ 3): the core store updates itself while blocked; `sync`
+  and the delegated installers stay gated.
+- **Email quota.** `email_sent` is project-wide, so one IP spraying addresses can use the hour's
+  quota for everyone. CAPTCHA is not an option (the CLI cannot render one); the mitigation is sizing
+  `email_sent` to the SMTP provider's volume and the per-IP `sign_in_sign_ups` limit. Revisit with an
+  edge throttle if abuse appears.
 - **Email folding for the ban list.** Folding Gmail dots and `+tag` would catch more re-registration,
   at the risk of false bans. Left unfolded (SR-38) until abuse shows it is needed.
 - **Headless OAuth.** Printing the authorize URL for use on another device cannot work with a
