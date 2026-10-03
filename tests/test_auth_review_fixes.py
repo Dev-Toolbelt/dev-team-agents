@@ -124,5 +124,30 @@ class NoticeOnlyAtATerminalTest(unittest.TestCase):
         self.assertEqual(captured.getvalue(), "")
         self.assertIn("hello", terminal.getvalue())
 
+class ProfileAndPasswordEdgesTest(AuthTestCase):
+    def test_a_rename_that_matched_no_row_is_not_reported_as_done(self):
+        from devteam import auth_gotrue as gotrue
+        from devteam.auth_gotrue import Rejected
+
+        self.sign_in()
+        client = gotrue.Client(entitlement.load_identity())
+        access = session.access_token(client)
+        with self.assertRaises(Rejected):
+            client.profile_set_name(access, "00000000-0000-0000-0000-000000000000", "Someone")
+
+    def test_a_refused_new_password_ends_the_recovery_session(self):
+        self.idp.add_user(EMAIL)
+        code, body, _ = self.run_json("auth", "password", "reset", "--email", EMAIL, "--send-code")
+        self.assertEqual(code, 0, body)
+        self.idp.forced["/auth/v1/user"] = (422, {"error_code": "same_password"})
+        code, body, _ = self.run_json(
+            "auth", "password", "reset", "--email", EMAIL, "--finish",
+            input_text="24681357\n" + "a-brand-new-password\n",
+        )
+        self.assertEqual(code, 1, body)
+        self.assertEqual(body["details"]["reason"], "password_rejected")
+        self.assertTrue(self.idp.logouts, "the recovery session must be revoked")
+
+
 if __name__ == "__main__":
     unittest.main()

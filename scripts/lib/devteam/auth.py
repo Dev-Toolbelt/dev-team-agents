@@ -422,6 +422,18 @@ def cmd_check(args, emitter):
 # ── passwords ─────────────────────────────────────────────────────────────────
 
 
+def _end_session_quietly(client, access_token):
+    """Revoke a session opened only to change a password, when the change did not happen.
+
+    Otherwise a recovery or re-authentication session would stay live on the server for its
+    full lifetime with nothing on this machine holding it.
+    """
+    try:
+        client.logout(access_token, "local")
+    except DevteamError:
+        pass
+
+
 def _revoke_others(client, access_token):
     try:
         client.logout(access_token, "others")
@@ -445,6 +457,7 @@ def cmd_password_reset(args, emitter):
     try:
         client.update_user(sess["access_token"], {"password": password})
     except Rejected:
+        _end_session_quietly(client, sess["access_token"])
         raise Rejected("password_rejected", "the password was not accepted") from None
     others = _revoke_others(client, sess["access_token"])
     warnings = [] if others else ["other sessions could not be revoked; sign out elsewhere"]
@@ -475,6 +488,7 @@ def cmd_password_change(args, emitter):
     try:
         client.update_user(fresh["access_token"], {"password": new})
     except Rejected:
+        _end_session_quietly(client, fresh["access_token"])
         raise Rejected("password_rejected", "the password was not accepted") from None
     others = _revoke_others(client, fresh["access_token"])
     session.save_session(fresh, meta.get("provider") or "email")

@@ -451,6 +451,8 @@ class FakeIdP:
         if method == "PATCH":
             if set(body) != {"display_name"}:
                 return (403, {"error_code": "42501"})
+            if query.get("id") != "eq." + user["id"]:
+                return (200, [])  # RLS: another user's row matches nothing
             user["display_name"] = body["display_name"]
             return (200, [{"display_name": body["display_name"]}])
         return (405, {})

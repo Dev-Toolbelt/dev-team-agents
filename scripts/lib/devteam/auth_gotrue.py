@@ -183,13 +183,16 @@ class Client:
             headers["Authorization"] = "Bearer " + token
         return headers
 
-    def _call(self, method, path, rejected, *, body=None, query=None, token=None, expire_on=(401,)):
+    def _call(self, method, path, rejected, *, body=None, query=None, token=None, expire_on=(401,), prefer=None):
+        headers = self._headers(token)
+        if prefer:
+            headers["Prefer"] = prefer
         try:
             data, _headers = http_policy.request_json(
                 method,
                 self.base,
                 path,
-                self._headers(token),
+                headers,
                 body=body,
                 query=query,
                 allow_loopback_http=self.identity.test_seam,
@@ -366,13 +369,20 @@ class Client:
         return rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
 
     def profile_set_name(self, access_token, user_id, display_name):
+        """Rename the caller's profile. A PATCH that matched no row is a rejection, not success."""
+        if not _UUID_RE.match(str(user_id)):
+            raise UsageError("that is not an account id")
         rows = self._call(
             "PATCH",
-            "/rest/v1/profiles?id=eq." + user_id,
+            "/rest/v1/profiles",
             REASON_REJECTED,
             body={"display_name": display_name},
+            query={"id": "eq." + user_id, "select": "id"},
             token=access_token,
+            prefer="return=representation",
         )
+        if not isinstance(rows, list) or not rows:
+            raise Rejected(REASON_REJECTED, "the profile was not updated")
         return rows
 
     # -- Edge Functions -------------------------------------------------------
