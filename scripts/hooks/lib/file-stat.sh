@@ -22,7 +22,7 @@ dt_file_size()  { _dt_stat_num %s %z "$1"; }
 dt_date_to_epoch() {
     local d="$1" v
     v=$(date -d "$d" +%s 2>/dev/null) || v=""
-    case "$v" in ''|*[!0-9]*) v=$(date -j -f "%Y-%m-%d" "$d" +%s 2>/dev/null) || v="" ;; esac
+    case "$v" in ''|*[!0-9]*) v=$(date -j -f "%Y-%m-%d %H:%M:%S" "$d 00:00:00" +%s 2>/dev/null) || v="" ;; esac
     case "$v" in ''|*[!0-9]*)
         v=$(python3 -c 'import sys,calendar,time;print(calendar.timegm(time.strptime(sys.argv[1],"%Y-%m-%d")))' "$d" 2>/dev/null) || v="" ;;
     esac

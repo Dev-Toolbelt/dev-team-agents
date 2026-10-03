@@ -63,6 +63,10 @@ class InstallCliTest(unittest.TestCase):
         self.assertEqual(listed.returncode, 0, listed.stderr)
         self.assertIn('"current"', listed.stdout)
 
+    def test_the_account_identity_ships_beside_the_package(self):
+        self.assertEqual(self._install().returncode, 0)
+        self.assertTrue((self.tmp / "cli" / "scripts" / "lib" / "auth-config.json").is_file())
+
     def test_the_launcher_names_the_verified_interpreter_by_absolute_path(self):
         self.assertEqual(self._install().returncode, 0)
         launcher = self.bin.read_text(encoding="utf-8")
