@@ -1,5 +1,7 @@
 /**
- * "Install the CLI" on Windows: fetch the newest CLI installer, check it, run it (ADR-0028).
+ * "Install the CLI" (ADR-0028). On macOS: `brew install` from the tap, or the exact script
+ * command to run when Homebrew is absent (see `installCliMac`). On Windows: fetch the newest
+ * CLI installer, check it, run it.
  *
  * The app still ships no CLI (ADR-0011): it installs the newest *published* one, never a
  * copy of its own. `devteam update` later moves the framework in the store, not the CLI;
@@ -20,7 +22,8 @@
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { CliInstallResult } from '../shared/api.js';
@@ -134,6 +137,83 @@ export interface InstallerDeps {
   readonly fetch: typeof fetch;
   /** Runs the installer and resolves with its exit code. */
   readonly runInstaller: (path: string) => Promise<number | null>;
+  /** macOS: whether an executable exists at an absolute path. */
+  readonly isExecutable?: (path: string) => Promise<boolean>;
+  /** macOS: runs `brew` (absolute path, no shell) and resolves with its exit code and output tail. */
+  readonly runBrew?: (brew: string, args: readonly string[]) => Promise<{ code: number | null; output: string }>;
+}
+
+/**
+ * macOS (ADR-0028 § 4): Homebrew's tap, when Homebrew is there.
+ *
+ * Looked for at its two absolute homes rather than on `PATH`: an app started from Finder has a
+ * minimal `PATH` that omits both. The formula name is the tap's published one.
+ */
+export const BREW_CANDIDATES: readonly string[] = Object.freeze(['/opt/homebrew/bin/brew', '/usr/local/bin/brew']);
+export const BREW_FORMULA = 'dev-toolbelt/devteam/devteam';
+
+/**
+ * The script channel for a Mac without Homebrew. `install-cli.sh` is not a release asset and
+ * has no checksum of its own (ADR-0028's recorded limit), so the app does not download it: it
+ * shows the exact command, which the user runs in a terminal and can read first.
+ */
+export const INSTALL_SCRIPT_COMMAND =
+  'curl -fsSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-cli.sh | bash';
+
+async function installCliMac(deps: InstallerDeps): Promise<CliInstallResult> {
+  const isExecutable = deps.isExecutable ?? defaultIsExecutable;
+  let brew: string | null = null;
+  for (const candidate of BREW_CANDIDATES) {
+    if (await isExecutable(candidate)) {
+      brew = candidate;
+      break;
+    }
+  }
+  if (brew === null || deps.runBrew === undefined) {
+    return {
+      outcome: 'manual',
+      message: 'Homebrew was not found. Open Terminal, paste this command and press Return; then come back and choose Look again.',
+      command: INSTALL_SCRIPT_COMMAND,
+    };
+  }
+  const result = await deps.runBrew(brew, ['install', BREW_FORMULA]);
+  if (result.code === 0) return { outcome: 'installed', message: 'devteam is installed.' };
+  const tail = result.output.trim().slice(-300);
+  return {
+    outcome: 'failed',
+    message: `Homebrew could not install it (exit ${String(result.code)})${tail === '' ? '.' : `: ${tail}`} The command below installs it without Homebrew.`,
+    command: INSTALL_SCRIPT_COMMAND,
+  };
+}
+
+async function defaultIsExecutable(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The real `brew` run: no shell, output kept as a short tail, killed after a generous deadline. */
+export function runBrewProcess(brew: string, args: readonly string[]): Promise<{ code: number | null; output: string }> {
+  return new Promise((resolve) => {
+    let output = '';
+    const child = spawn(brew, [...args], {
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 15 * 60_000,
+      // Homebrew must not stop to ask: there is no terminal to answer.
+      env: { ...process.env, HOMEBREW_NO_AUTO_UPDATE: '1', HOMEBREW_NO_ANALYTICS: '1', NONINTERACTIVE: '1' },
+    });
+    const keep = (chunk: Buffer) => {
+      output = (output + chunk.toString('utf8')).slice(-2000);
+    };
+    child.stdout.on('data', keep);
+    child.stderr.on('data', keep);
+    child.once('error', (error) => resolve({ code: null, output: error.message }));
+    child.once('close', (code) => resolve({ code, output }));
+  });
 }
 
 async function get(deps: InstallerDeps, url: string, timeoutMs = API_TIMEOUT_MS): Promise<Response> {
@@ -150,9 +230,10 @@ async function get(deps: InstallerDeps, url: string, timeoutMs = API_TIMEOUT_MS)
 }
 
 export async function installCli(deps: InstallerDeps): Promise<CliInstallResult> {
+  if (deps.platform === 'darwin') return installCliMac(deps);
   const arch = installerArch(deps.arch);
   if (deps.platform !== 'win32' || arch === null) {
-    return { outcome: 'unsupported', message: 'The app installs the CLI on Windows (x64, arm64) only.' };
+    return { outcome: 'unsupported', message: 'The app installs the CLI on Windows (x64, arm64) and macOS only.' };
   }
 
   let choice: InstallerChoice | null;

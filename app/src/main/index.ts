@@ -17,7 +17,9 @@ import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
-import { installCli, runInstallerProcess } from './cliInstaller.js';
+import { installCli, runBrewProcess, runInstallerProcess } from './cliInstaller.js';
+import { launchInTerminal, startDetached } from './firstTaskLauncher.js';
+import { runMachineFix } from './machineFix.js';
 import { windowSize } from './windowSize.js';
 import { hardenContents, hardenSession, resolveDevServer, windowWebPreferences, type RendererTarget } from './security.js';
 import { createFileLog, describeError, type FileLog } from './logFile.js';
@@ -458,7 +460,11 @@ function onReady(): void {
         tempDir: app.getPath('temp'),
         fetch: globalThis.fetch,
         runInstaller: runInstallerProcess,
+        runBrew: runBrewProcess,
       }),
+    runFix: (fix, cliPath) => runMachineFix({ platform: process.platform, env: process.env, cliPath }, fix),
+    launchTerminal: (cwd, argv) =>
+      launchInTerminal({ platform: process.platform, tempDir: app.getPath('temp'), start: startDetached }, cwd, argv),
     onResolved: (resolution) => {
       setAbout(resolution);
       // A different CLI may mean a different store: start the stream again against it.

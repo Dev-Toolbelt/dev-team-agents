@@ -20,6 +20,9 @@ import { Profile } from './account/Profile.js';
 import { Skills } from './screens/Skills.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Loading } from './Problem.js';
+import { InstallCliButton } from './InstallCliButton.js';
+import { Onboarding } from './onboarding/Onboarding.js';
+import { shouldRun } from './onboarding/steps.js';
 import { isPrerelease } from '../shared/appVersion.js';
 import { hostPlatformFrom } from '../shared/directoryPaths.js';
 // From derived/, never from the brand source beside it: Vite emits whatever it is handed,
@@ -32,7 +35,6 @@ import lockupLight from './logo/derived/horizontal-light-720.png';
 import lockupDark from './logo/derived/horizontal-dark-720.png';
 import type {
   BuildInfo,
-  CliInstallResult,
   CliResolution,
   EnvironmentReport,
   HandshakeView,
@@ -54,6 +56,10 @@ export function App() {
   const [environment, setEnvironment] = useState<EnvironmentReport | null>(null);
   const [handshake, setHandshake] = useState<OperationResult<HandshakeView> | null>(null);
   const [busy, setBusy] = useState(true);
+  // First run (ADR-0030): shown until the wizard is finished or the person already has a project.
+  // `completed: true` is the safe default, so a failed read never blocks the app behind a wizard.
+  const [onboardingDone, setOnboardingDone] = useState(true);
+  const [hasProjects, setHasProjects] = useState(false);
   // A startup call that rejects (IPC down, main process gone) is shown with a retry rather
   // than left as an endless "Looking for a devteam CLI…".
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,6 +70,16 @@ export function App() {
   const [integrationsNonce, setIntegrationsNonce] = useState(0);
   const onAccountChanged = useCallback(() => setIntegrationsNonce((n) => n + 1), []);
   const [openRequest, setOpenRequest] = useState<{ projectId: string; nonce: number } | null>(null);
+
+  async function finishOnboarding() {
+    try {
+      await window.devteam.completeOnboarding();
+    } catch {
+      // The flag is a convenience; the tabs open either way.
+    }
+    setOnboardingDone(true);
+    setTab('projects');
+  }
 
   function openProject(projectId: string) {
     setTab('projects');
@@ -96,6 +112,12 @@ export function App() {
       const [info, resolved] = await Promise.all([window.devteam.buildInfo(), window.devteam.resolveCli()]);
       setBuild(info);
       setResolution(resolved);
+      const [state, projects] = await Promise.all([
+        window.devteam.onboardingState().catch(() => ({ completed: true })),
+        resolved.found ? window.devteam.listProjects().catch(() => null) : Promise.resolve(null),
+      ]);
+      setOnboardingDone(state.completed);
+      setHasProjects(projects !== null && projects.ok && projects.data.projects.length > 0);
       // After `resolveCli`, which re-reads the settings file and re-attempts the declaration.
       setEnvironment(await window.devteam.environment());
       // The handshake is only meaningful once a CLI exists to ask.
@@ -149,7 +171,12 @@ export function App() {
             </h1>
             {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
             {build !== null ? <AppVersion version={build.appVersion} /> : null}
-            <CliLine resolution={resolution} busy={busy} onRetry={() => void load()} />
+            <CliLine
+              resolution={resolution}
+              busy={busy}
+              onRetry={() => void load()}
+              hideStore={!busy && shouldRun({ completed: onboardingDone, hasProjects })}
+            />
             <div className="ml-auto flex items-center gap-2 self-center">
               <NotificationBell onOpenProject={openProject} />
               <AccountMenu onOpen={() => setTab('account')} />
@@ -180,6 +207,13 @@ export function App() {
                 </Button>
               </AlertDescription>
             </Alert>
+          ) : shouldRun({ completed: onboardingDone, hasProjects }) ? (
+            <Onboarding
+              cliFound={resolution !== null && resolution.found}
+              onRetry={() => void load()}
+              onFinished={() => void finishOnboarding()}
+              onOpenAccount={() => setTab('account')}
+            />
           ) : resolution === null || !resolution.found ? (
             <NoCli resolution={resolution} onRetry={() => void load()} />
           ) : (
@@ -275,10 +309,13 @@ function CliLine({
   resolution,
   busy,
   onRetry,
+  hideStore,
 }: {
   resolution: CliResolution | null;
   busy: boolean;
   onRetry: () => void;
+  /** The first run shows no store version: it is the framework's vocabulary (ADR-0030 section 3). */
+  hideStore: boolean;
 }) {
   if (busy || resolution === null) {
     return <span className="text-xs text-muted-foreground">Looking for a devteam CLI…</span>;
@@ -294,6 +331,7 @@ function CliLine({
       </span>
     );
   }
+  if (hideStore) return null;
   return (
     <span className="text-xs text-muted-foreground">store {resolution.cli.storeVersion ?? 'not installed'}</span>
   );
@@ -414,7 +452,7 @@ function NoCli({ resolution, onRetry }: { resolution: CliResolution | null; onRe
             ))}
           </ul>
           <div className="flex flex-wrap items-center gap-2">
-            {hostPlatform() === 'win32' ? <InstallCliButton onInstalled={onRetry} /> : null}
+            {hostPlatform() === 'win32' || hostPlatform() === 'darwin' ? <InstallCliButton onInstalled={onRetry} /> : null}
             <Button variant="outline" size="sm" onClick={onRetry}>
               Look again
             </Button>
@@ -489,48 +527,6 @@ function HandshakeBanner({ handshake }: { handshake: OperationResult<HandshakeVi
 /** Read at render time, not module load, so a test can set the platform per case. */
 function hostPlatform() {
   return hostPlatformFrom(typeof navigator === 'undefined' ? undefined : navigator.platform);
-}
-
-/**
- * "Install the CLI" (ADR-0028), Windows only: the main process downloads the newest CLI
- * installer from GitHub, checks its SHA-256 and runs its wizard. On success the app looks
- * again, which finds the CLI in the installer's directory even though this process
- * started with the old PATH.
- */
-function InstallCliButton({ onInstalled }: { onInstalled: () => void }) {
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<CliInstallResult | null>(null);
-
-  const install = async () => {
-    setRunning(true);
-    setResult(null);
-    try {
-      const outcome = await window.devteam.installCli();
-      setResult(outcome);
-      if (outcome.outcome === 'installed') onInstalled();
-    } catch (error) {
-      setResult({ outcome: 'failed', message: `The install could not be started: ${String(error)}` });
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <>
-      <Button size="sm" onClick={() => void install()} disabled={running}>
-        {running ? 'Installing the CLI…' : 'Install the CLI'}
-      </Button>
-      {/* Still on this screen after an install means the CLI was not found: say so, rather
-          than letting a successful install look like nothing happened. */}
-      {result !== null ? (
-        <p role="status" className="basis-full">
-          {result.outcome === 'installed'
-            ? `${result.message} The app has not found it yet: choose Look again, or restart the app.`
-            : result.message}
-        </p>
-      ) : null}
-    </>
-  );
 }
 
 /**

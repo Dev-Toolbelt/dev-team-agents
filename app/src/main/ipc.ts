@@ -32,6 +32,7 @@ import {
   catalogListing,
   catalogSummary,
   doctor,
+  doctorMachine,
   installSkill,
   credentialsLocalInit,
   credentialsLocalPatch,
@@ -73,6 +74,7 @@ import {
   type CliContext,
 } from '../cli/operations.js';
 import { resolveDevteam, type Resolution } from '../cli/resolve.js';
+import { detect, start } from '../cli/onboardingOperations.js';
 import { registerAccountIpc } from './accountIpc.js';
 import {
   PLUGIN_ACTION_ID,
@@ -84,7 +86,8 @@ import {
 } from '../shared/pluginRules.js';
 import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
 import { trustedHandler, type RendererTarget } from './security.js';
-import { readSettings, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
+import { readSettings, writeOnboardingCompleted, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
+import { launchArgvProblem } from './firstTaskLauncher.js';
 import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, type ProjectFoldersAnswer } from '../shared/projectFolders.js';
 import { PROVIDERS } from '../shared/providers.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
@@ -99,7 +102,16 @@ import {
   type CliResolution,
   type DeclarationState,
   type DirectoryChoice,
+  type DetectReport,
+  type DoctorReport,
   type EnvironmentReport,
+  type FirstTaskLaunch,
+  type LaunchFirstTaskAnswer,
+  type MachineFixAnswer,
+  type OnboardingState,
+  type ProjectType,
+  type StartReport,
+  PROJECT_TYPES,
   type HandshakeView,
   type OperationResult,
   type PinReport,
@@ -299,6 +311,10 @@ export interface IpcDependencies {
   readonly dialogIcon?: NativeImage | null;
   /** "Install the CLI" (ADR-0028, `cliInstaller.ts`); absent means the action is unsupported. */
   readonly installCli?: () => Promise<CliInstallResult>;
+  /** Runs a machine-prerequisite fix (`machineFix.ts`); absent means fixes are unsupported. */
+  readonly runFix?: (fix: string, cliPath: string | null) => Promise<MachineFixAnswer>;
+  /** Opens the first task in the user's terminal (`firstTaskLauncher.ts`); absent means unsupported. */
+  readonly launchTerminal?: (cwd: string, argv: readonly string[]) => Promise<LaunchFirstTaskAnswer>;
 }
 
 const NO_CLI: OperationResult<never> = {
@@ -723,6 +739,112 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     const gated = await gatedContext('doctor');
     if (!gated.ready) return gated.problem;
     return doctor(gated.ctx);
+  });
+
+  // ── first run (ADR-0030) ────────────────────────────────────────────────────
+
+  /**
+   * What the last `doctorMachine` answer offered as a fix, by finding index: the one place a
+   * fix command lives. The renderer names an index and never sends a command, so nothing it
+   * sends can become a process.
+   */
+  let machineFixes: readonly { readonly fix: string | null; readonly autoFixable: boolean }[] = [];
+
+  /**
+   * The first task the last `detectProject` / `startProject` reported for each folder this
+   * session offered. `launchFirstTask` runs the launch kept here, never an argv the renderer
+   * could have edited, and `start` (which carries the chosen provider) replaces `detect`'s.
+   */
+  const firstTasks = new Map<string, FirstTaskLaunch | null>();
+
+  handle(CHANNELS.doctorMachine, async (): Promise<OperationResult<DoctorReport>> => {
+    const gated = await gatedContext('doctor');
+    if (!gated.ready) return gated.problem;
+    const result = await doctorMachine(gated.ctx);
+    machineFixes = result.ok
+      ? result.data.findings.map((finding) => ({ fix: finding.fix ?? null, autoFixable: finding.auto_fixable === true }))
+      : [];
+    return result;
+  });
+
+  handle(CHANNELS.runMachineFix, async (_event, index: unknown): Promise<MachineFixAnswer> => {
+    if (typeof index !== 'number' || !Number.isInteger(index)) return { ran: false, message: 'That fix is not one this app offered.' };
+    const entry = machineFixes[index];
+    if (entry === undefined || entry.fix === null || !entry.autoFixable) {
+      return { ran: false, message: 'That fix is not one this app offered.' };
+    }
+    if (deps.runFix === undefined) return { ran: false, message: 'This build cannot run fixes. Copy the command and run it yourself.' };
+    const resolved = await ensureResolution();
+    return deps.runFix(entry.fix, resolved.found ? resolved.cli.path : null);
+  });
+
+  handle(CHANNELS.detectProject, async (_event, path: unknown): Promise<OperationResult<DetectReport>> => {
+    if (typeof path !== 'string' || !offeredDirectories.has(path)) {
+      return refusedRequest('detect', 'this app never offered that directory; call chooseProjectDirectory first');
+    }
+    const ctx = await context();
+    if (ctx === null) return NO_CLI;
+    const result = await detect(ctx, path);
+    if (result.ok) firstTasks.set(path, result.data.first_task?.launch ?? null);
+    return result;
+  });
+
+  handle(CHANNELS.startProject, async (_event, request: unknown): Promise<OperationResult<StartReport>> => {
+    if (request === null || typeof request !== 'object') return refusedRequest('start', 'a start request must be an object');
+    const raw = request as Record<string, unknown>;
+    const path = raw['path'];
+    if (typeof path !== 'string' || !offeredDirectories.has(path)) {
+      return refusedRequest('start', 'this app never offered that directory; call chooseProjectDirectory first');
+    }
+    let provider: BindProvider | undefined;
+    if (raw['provider'] !== undefined) {
+      if (!PROVIDERS.includes(raw['provider'] as BindProvider)) return refusedRequest('start', 'that is not a provider this app knows');
+      provider = raw['provider'] as BindProvider;
+    }
+    let type: ProjectType | undefined;
+    if (raw['type'] !== undefined) {
+      if (!PROJECT_TYPES.includes(raw['type'] as ProjectType)) return refusedRequest('start', 'that is not a project type');
+      type = raw['type'] as ProjectType;
+    }
+    const gated = await gatedContext('start');
+    if (!gated.ready) return gated.problem;
+    const result = await start(gated.ctx, path, {
+      ...(provider !== undefined ? { provider } : {}),
+      ...(type !== undefined ? { type } : {}),
+    });
+    if (result.ok) firstTasks.set(path, result.data.first_task?.launch ?? null);
+    return result;
+  });
+
+  handle(CHANNELS.launchFirstTask, async (_event, path: unknown): Promise<LaunchFirstTaskAnswer> => {
+    if (typeof path !== 'string' || !offeredDirectories.has(path)) {
+      return { launched: false, message: 'This app never offered that folder.' };
+    }
+    const launch = firstTasks.get(path);
+    if (launch === undefined || launch === null) {
+      return { launched: false, message: 'This provider has no read-only mode, so the app does not open it for you.' };
+    }
+    const problem = launchArgvProblem(launch.argv);
+    if (problem !== null) return { launched: false, message: problem };
+    if (deps.launchTerminal === undefined) return { launched: false, message: 'This build cannot open a terminal.' };
+    return deps.launchTerminal(path, launch.argv);
+  });
+
+  handle(CHANNELS.onboardingState, async (): Promise<OnboardingState> => {
+    const current = await ensureSettings();
+    return { completed: current.onboardingCompleted };
+  });
+
+  handle(CHANNELS.completeOnboarding, async (): Promise<OnboardingState> => {
+    try {
+      await writeOnboardingCompleted(deps.userDataDir);
+    } catch {
+      // The flag is a convenience: a failed write means the wizard may show again, which is
+      // better than blocking the user on their own settings file.
+    } finally {
+      settings = null;
+    }
+    return { completed: true };
   });
 
   // ── write actions ────────────────────────────────────────────────────────────

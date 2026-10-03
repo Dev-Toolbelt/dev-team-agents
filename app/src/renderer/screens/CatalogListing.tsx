@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Empty, Loading, Problem } from '../Problem.js';
@@ -36,12 +37,19 @@ function compareCategories(a: string, b: string): number {
 export function Listing({ kind }: { kind: CatalogKind }) {
   const [filter, setFilter] = useState('');
   const [category, setCategory] = useState(ALL_CATEGORIES);
+  // Component state only: the app has no per-viewer persistence pattern for view toggles.
+  const [showAllCommands, setShowAllCommands] = useState(false);
   const { state } = useOperation(() => window.devteam.catalogListing(kind), [kind]);
 
   const all = useMemo(() => {
     if (state.phase !== 'done' || !state.result.ok) return [];
     return [...state.result.data.entries].sort(byName);
   }, [state]);
+
+  // ADR-0030 section 5: commands show the featured five by default. A store that marks none
+  // as featured (an older version) shows every command rather than an empty list.
+  const featured = useMemo(() => all.filter((entry) => entry.featured === true), [all]);
+  const visible = kind === 'commands' && featured.length > 0 && !showAllCommands ? featured : all;
 
   const categories = useMemo(() => [...new Set(all.map(categoryOf))].sort(compareCategories), [all]);
   // A selection the current listing no longer has (e.g. after a reload) falls back to all,
@@ -50,14 +58,14 @@ export function Listing({ kind }: { kind: CatalogKind }) {
 
   const entries = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    return all.filter(
+    return visible.filter(
       (entry) =>
         (activeCategory === ALL_CATEGORIES || categoryOf(entry) === activeCategory) &&
         (needle === '' ||
           entry.name.toLowerCase().includes(needle) ||
           (entry.description ?? '').toLowerCase().includes(needle)),
     );
-  }, [all, filter, activeCategory]);
+  }, [visible, filter, activeCategory]);
 
   if (state.phase === 'loading') return <Loading what={`devteam catalog ${kind}`} />;
   if (!state.result.ok) return <Problem problem={state.result} />;
@@ -76,6 +84,11 @@ export function Listing({ kind }: { kind: CatalogKind }) {
           aria-label={`Filter ${kind}`}
           className="max-w-sm"
         />
+        {kind === 'commands' && featured.length > 0 ? (
+          <Button type="button" variant="outline" aria-pressed={showAllCommands} onClick={() => setShowAllCommands((on) => !on)}>
+            {showAllCommands ? `Show featured commands (${featured.length})` : `Show all commands (${all.length})`}
+          </Button>
+        ) : null}
         {groupsByCategory ? (
           <select
             value={activeCategory}

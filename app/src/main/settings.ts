@@ -57,6 +57,11 @@ export interface AppSettings {
    * malformed value into a `problem`.
    */
   readonly projectFolders: ProjectFolders;
+  /**
+   * Whether the first-run wizard has been finished (ADR-0030). App-local and never a framework
+   * preference: it says what this app has shown this user, not how the framework behaves.
+   */
+  readonly onboardingCompleted: boolean;
 }
 
 export const DEFAULT_BOARD_SETTINGS: BoardSettings = Object.freeze({
@@ -125,16 +130,17 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
       openAtLogin: false,
       board: DEFAULT_BOARD_SETTINGS,
       projectFolders: NO_FOLDERS,
+      onboardingCompleted: false,
     };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS };
+    return { cliPath: undefined, path, problem: `is not valid JSON: ${String(error)}`, projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS, onboardingCompleted: false };
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS };
+    return { cliPath: undefined, path, problem: 'is not a JSON object', projectNames: NO_NAMES, openAtLogin: false, board: DEFAULT_BOARD_SETTINGS, projectFolders: NO_FOLDERS, onboardingCompleted: false };
   }
   const record = parsed as Record<string, unknown>;
   // Read independently of the `cliPath` checks below, so a bad `cliPath` never costs the
@@ -144,13 +150,15 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
   const openAtLogin = record['openAtLogin'] === true;
   const board = readBoardSettings(record);
   const projectFolders = normalizeProjectFolders(record['projectFolders']);
+  // Same rule as `openAtLogin`: only a literal `true` is "done", so a damaged value runs the wizard again.
+  const onboardingCompleted = record['onboardingCompleted'] === true;
 
   const value = record['cliPath'];
-  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin, board, projectFolders };
+  if (value === undefined) return { cliPath: undefined, path, problem: undefined, projectNames, openAtLogin, board, projectFolders, onboardingCompleted };
   if (typeof value !== 'string' || value.trim() === '') {
-    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin, board, projectFolders };
+    return { cliPath: undefined, path, problem: '`cliPath` is not a non-empty string', projectNames, openAtLogin, board, projectFolders, onboardingCompleted };
   }
-  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin, board, projectFolders };
+  return { cliPath: value.trim(), path, problem: undefined, projectNames, openAtLogin, board, projectFolders, onboardingCompleted };
 }
 
 /**
@@ -186,6 +194,11 @@ export async function writeProjectFolders(userDataDir: string, projectFolders: P
   await writeSettings(userDataDir, () => ({ projectFolders }));
 }
 
+/** Record that the first-run wizard was finished. */
+export async function writeOnboardingCompleted(userDataDir: string): Promise<void> {
+  await writeSettings(userDataDir, () => ({ onboardingCompleted: true }));
+}
+
 /** Record the board's thresholds. The caller validates with `boardSettingsProblem` first. */
 export async function writeBoardSettings(userDataDir: string, board: BoardSettings): Promise<void> {
   await writeSettings(userDataDir, () => ({ board }));
@@ -216,7 +229,7 @@ let writeChain: Promise<unknown> = Promise.resolve();
  */
 function writeSettings(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders' | 'onboardingCompleted'>>,
 ): Promise<void> {
   const run = writeChain.then(() => writeSettingsNow(userDataDir, patchFrom));
   // The chain continues past a failure; the failure itself still reaches this caller.
@@ -226,7 +239,7 @@ function writeSettings(
 
 async function writeSettingsNow(
   userDataDir: string,
-  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders'>>,
+  patchFrom: (current: AppSettings) => Partial<Pick<AppSettings, 'projectNames' | 'openAtLogin' | 'board' | 'projectFolders' | 'onboardingCompleted'>>,
 ): Promise<void> {
   const path = join(userDataDir, SETTINGS_FILE_NAME);
   const current = await readSettings(userDataDir);
@@ -247,6 +260,7 @@ async function writeSettingsNow(
   if (board.directTodoTtlHours !== DEFAULT_BOARD_SETTINGS.directTodoTtlHours) payload['boardDirectTodoTtlHours'] = board.directTodoTtlHours;
   const projectFolders = patch.projectFolders ?? current.projectFolders;
   if (!isEmptyFolders(projectFolders)) payload['projectFolders'] = projectFolders;
+  if (patch.onboardingCompleted ?? current.onboardingCompleted) payload['onboardingCompleted'] = true;
 
   const tempPath = join(userDataDir, `.${SETTINGS_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
   await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {

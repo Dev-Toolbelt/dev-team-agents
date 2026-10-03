@@ -24,6 +24,7 @@
 
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { ACCOUNT_COMMANDS, ACCOUNT_SHAPES } from './accountCommands.js';
+import { ONBOARDING_GATED_COMMANDS, ONBOARDING_READ_ONLY_COMMANDS, ONBOARDING_SHAPES } from './onboardingCommands.js';
 import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
 import { CREDENTIALS_SAVED_UNREADABLE } from '../shared/api.js';
@@ -157,6 +158,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['tasks', 'watch'],
   // ADR-0029. Every `auth` leaf is `compat.STORE_NEUTRAL`; see `accountCommands.ts`.
   ...ACCOUNT_COMMANDS,
+  // ADR-0030. `detect` inspects a folder and the PATH and writes nothing.
+  ...ONBOARDING_READ_ONLY_COMMANDS,
 ]);
 
 /**
@@ -233,6 +236,8 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['notifications', 'ack'],
   ['skills', 'install'],
   ['skills', 'remove'],
+  // ADR-0030: the first-run action. It sets the chosen folder up, which is a write.
+  ...ONBOARDING_GATED_COMMANDS,
 ]);
 
 /**
@@ -299,7 +304,8 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'catalog commands': { operands: 0, flags: { '--path': 'value' } },
   'catalog show': { operands: 1, flags: { '--path': 'value' } },
   // `--no-project`: "check the store only, ignoring the cwd". Never `--reassign-identity`.
-  doctor: { operands: 0, flags: { '--no-project': 'bare' } },
+  // `--machine`: the machine prerequisites only (git, Python, providers), each with its fix.
+  doctor: { operands: 0, flags: { '--no-project': 'bare', '--machine': 'bare' } },
   // The one positional is the directory to bind — the path `chooseProjectDirectory`
   // offered, never one the renderer typed. See `main/ipc.ts` -> `resolveProject`.
   bind: { operands: 1, flags: { '--provider': 'repeatable', '--mode': 'value', '--pin': 'value' } },
@@ -376,6 +382,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
   // ADR-0029: the account. No flag carries a secret; a code or password goes over stdin.
   ...ACCOUNT_SHAPES,
+  ...ONBOARDING_SHAPES,
 });
 
 const MAX_COMMAND_WORDS = 3;
@@ -740,29 +747,48 @@ export function doctor(context: CliContext): Promise<OperationResult<DoctorRepor
   // launched from — `ok` from inside a bound project, `warn` with "/ is not a bound
   // project" from a Finder launch. This build has no project picker, so "no project" is
   // the true answer and the Diagnosis screen states it.
-  return run(context, ['doctor', '--no-project'], (body) => {
-    if (typeof body['status'] !== 'string') return 'no string `status`';
-    if (!Array.isArray(body['findings'])) return 'no `findings` array';
-    if (!Array.isArray(body['actions'])) return 'no `actions` array';
-    const findings: DoctorFinding[] = [];
-    for (const raw of body['findings']) {
-      if (!isRecord(raw)) return 'a finding is not an object';
-      findings.push({
-        level: typeof raw['level'] === 'string' ? raw['level'] : 'unknown',
-        category: typeof raw['category'] === 'string' ? raw['category'] : 'unknown',
-        message: typeof raw['message'] === 'string' ? raw['message'] : '',
-        ...(typeof raw['hint'] === 'string' ? { hint: raw['hint'] } : {}),
-      });
-    }
-    return {
-      status: body['status'],
-      findings,
-      // `actions` is a list of things doctor *did*. Rendered as text; shape is not pinned
-      // per-item by the contract test, so anything non-string is stringified rather than
-      // dropped — a repair the app silently hid would be worse than an ugly line.
-      actions: body['actions'].map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry))),
-    };
-  });
+  return run(context, ['doctor', '--no-project'], (body) => parseDoctor(body, false));
+}
+
+/**
+ * `devteam doctor --machine` (ADR-0030): git, Python and the providers, each finding with the
+ * `fix` that repairs it and whether that fix is `auto_fixable`. A finding with neither key is
+ * read as "no fix known, not safe to run", so an older CLI degrades to the plain report.
+ */
+export function doctorMachine(context: CliContext): Promise<OperationResult<DoctorReport>> {
+  return run(context, ['doctor', '--machine'], (body) => parseDoctor(body, true));
+}
+
+function parseDoctor(body: Record<string, unknown>, machine: boolean): DoctorReport | string {
+  if (typeof body['status'] !== 'string') return 'no string `status`';
+  if (!Array.isArray(body['findings'])) return 'no `findings` array';
+  if (!machine && !Array.isArray(body['actions'])) return 'no `actions` array';
+  const findings: DoctorFinding[] = [];
+  for (const raw of body['findings']) {
+    if (!isRecord(raw)) return 'a finding is not an object';
+    findings.push({
+      level: typeof raw['level'] === 'string' ? raw['level'] : 'unknown',
+      category: typeof raw['category'] === 'string' ? raw['category'] : 'unknown',
+      message: typeof raw['message'] === 'string' ? raw['message'] : '',
+      ...(typeof raw['hint'] === 'string' ? { hint: raw['hint'] } : {}),
+      ...(machine
+        ? {
+            fix: typeof raw['fix'] === 'string' && raw['fix'].trim() !== '' ? raw['fix'] : null,
+            // Only a literal `true` counts: anything else is shown, never run.
+            auto_fixable: raw['auto_fixable'] === true,
+          }
+        : {}),
+    });
+  }
+  const actions = Array.isArray(body['actions']) ? body['actions'] : [];
+  return {
+    status: body['status'],
+    findings,
+    // `actions` is a list of things doctor *did*. Rendered as text; shape is not pinned
+    // per-item by the contract test, so anything non-string is stringified rather than
+    // dropped — a repair the app silently hid would be worse than an ugly line.
+    actions: actions.map((entry) => (typeof entry === 'string' ? entry : JSON.stringify(entry))),
+  };
 }
 
 // ── write actions ────────────────────────────────────────────────────────────
@@ -2267,6 +2293,8 @@ function asEntry(raw: Record<string, unknown>, name: string): CatalogEntry {
     ...('tier' in raw ? { tier: asNullableString(raw['tier']) } : {}),
     ...('model' in raw ? { model: asNullableString(raw['model']) } : {}),
     ...('category' in raw ? { category: asNullableString(raw['category']) } : {}),
+    ...(raw['featured'] === true ? { featured: true } : {}),
+    ...(Array.isArray(raw['related']) ? { related: asStringArray(raw['related']) } : {}),
     // `catalog.py` → `_malformed()` sets both. Carried so the row can say *which* entry
     // the summary's `malformed` count is counting.
     ...(raw['malformed'] === true ? { malformed: true } : {}),

@@ -35,6 +35,7 @@ import {
   type SkillInstallRequest,
   type SkillProviderFilter,
   type SkillRemoveRequest,
+  type StartRequest,
 } from '../shared/api.js';
 
 function migrateRequest(request: MigrateRequest): Record<string, unknown> {
@@ -68,6 +69,22 @@ const bridge: DevteamBridge = {
   catalogListing: (kind: CatalogKind) => ipcRenderer.invoke(CHANNELS.catalogListing, String(kind)),
   catalogEntry: (name: string) => ipcRenderer.invoke(CHANNELS.catalogEntry, String(name)),
   doctor: () => ipcRenderer.invoke(CHANNELS.doctor),
+
+  // First run (ADR-0030). A fix is named by index and a launch by folder: the command each
+  // runs is the one main kept from the CLI's own answer, so nothing a command is made of
+  // crosses this bridge.
+  doctorMachine: () => ipcRenderer.invoke(CHANNELS.doctorMachine),
+  runMachineFix: (index: number) => ipcRenderer.invoke(CHANNELS.runMachineFix, Number(index)),
+  detectProject: (path: string) => ipcRenderer.invoke(CHANNELS.detectProject, String(path)),
+  startProject: (request: StartRequest) =>
+    ipcRenderer.invoke(CHANNELS.startProject, {
+      path: String(request.path),
+      ...(request.provider !== undefined ? { provider: String(request.provider) } : {}),
+      ...(request.type !== undefined ? { type: String(request.type) } : {}),
+    }),
+  launchFirstTask: (path: string) => ipcRenderer.invoke(CHANNELS.launchFirstTask, String(path)),
+  onboardingState: () => ipcRenderer.invoke(CHANNELS.onboardingState),
+  completeOnboarding: () => ipcRenderer.invoke(CHANNELS.completeOnboarding),
 
   // Write actions. Every argument is rebuilt into a plain, minimal object here rather
   // than passed through — the main process validates it again regardless (see

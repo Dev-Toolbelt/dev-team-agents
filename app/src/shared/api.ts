@@ -219,6 +219,10 @@ export interface CatalogEntry {
   readonly tier?: string | null;
   readonly model?: string | null;
   readonly category?: string | null;
+  /** ADR-0030 section 5: one of the five commands a new user is shown. Absent means not featured. */
+  readonly featured?: boolean;
+  /** Commands suggested after this one has been used (commands only). */
+  readonly related?: readonly string[];
   /**
    * `catalog.py` → `_malformed()`: the file was found and could not be read as its kind.
    * Its `name` is a best-effort fallback from the path, and `error` says why. Carried
@@ -248,6 +252,10 @@ export interface DoctorFinding {
   readonly category: string;
   readonly message: string;
   readonly hint?: string;
+  /** `doctor --machine`: the command that repairs this finding, or `null` when none is known. */
+  readonly fix?: string | null;
+  /** `doctor --machine`: whether the fix is safe to run after one click. Anything else is shown, never run. */
+  readonly auto_fixable?: boolean;
 }
 
 export interface DoctorReport {
@@ -1122,10 +1130,94 @@ export interface SkillRemoveReport {
 
 /** What "Install the CLI" did (ADR-0028). Windows only; `unsupported` everywhere else. */
 export interface CliInstallResult {
-  readonly outcome: 'installed' | 'cancelled' | 'failed' | 'checksum-mismatch' | 'no-release' | 'unsupported';
+  /** `manual`: the app cannot install it here (macOS without Homebrew); `command` is what to run. */
+  readonly outcome: 'installed' | 'cancelled' | 'failed' | 'checksum-mismatch' | 'no-release' | 'unsupported' | 'manual';
   readonly message: string;
+  /** A command line the user can copy, when the app could not run it itself. */
+  readonly command?: string;
   /** The release the installer came from, once one was chosen. */
   readonly version?: string;
+}
+
+// ── first-run onboarding (ADR-0030) ──────────────────────────────────────────
+
+export interface DetectedProvider {
+  readonly name: string;
+  readonly binary: string;
+  readonly version: string | null;
+}
+
+export interface ProviderDetection {
+  readonly installed: readonly DetectedProvider[];
+  readonly in_project: readonly string[];
+  readonly suggested: string | null;
+}
+
+export interface StackDetection {
+  readonly primary: string | null;
+  readonly all: readonly string[];
+  readonly signals: readonly string[];
+}
+
+export type ProjectType = 'new' | 'unfinished' | 'maintenance';
+export const PROJECT_TYPES: readonly ProjectType[] = Object.freeze(['new', 'unfinished', 'maintenance']);
+
+export interface ProjectTypeSuggestion {
+  readonly suggested: ProjectType;
+  readonly confidence: 'high' | 'low';
+  readonly reasons: readonly string[];
+}
+
+/** How to open a provider on the first task. Read-only is enforced by the provider's own flags. */
+export interface FirstTaskLaunch {
+  readonly provider: string;
+  readonly argv: readonly string[];
+}
+
+export interface FirstTask {
+  readonly kind: 'audit' | 'review';
+  readonly target: string;
+  readonly label: string;
+  readonly read_only: true;
+  /** `null` for a provider with no read-only mode: the app offers the command to copy and runs nothing. */
+  readonly launch: FirstTaskLaunch | null;
+}
+
+export interface DetectReport {
+  readonly path: string;
+  readonly providers: ProviderDetection;
+  readonly stack: StackDetection;
+  readonly project_type: ProjectTypeSuggestion;
+  readonly first_task: FirstTask | null;
+}
+
+export interface StartReport {
+  readonly bound: boolean;
+  readonly project_id: string;
+  readonly detect: DetectReport;
+  readonly featured_commands: readonly string[];
+  readonly first_task: FirstTask | null;
+}
+
+/** What the first-run screen asks `devteam start` to do. `path` must be one the folder picker offered. */
+export interface StartRequest {
+  readonly path: string;
+  readonly provider?: Provider;
+  readonly type?: ProjectType;
+}
+
+export type MachineFixAnswer =
+  | { readonly ran: true; readonly succeeded: boolean; readonly message: string }
+  | { readonly ran: false; readonly message: string };
+
+export type LaunchFirstTaskAnswer =
+  | { readonly launched: true }
+  /** Not started: the reason. The screen offers the command to copy instead. */
+  | { readonly launched: false; readonly message: string };
+
+/** The first-run flag. App-local (`settings.json`), never a framework preference. */
+export interface OnboardingState {
+  readonly completed: boolean;
 }
 
 export interface DevteamBridge {
@@ -1140,6 +1232,18 @@ export interface DevteamBridge {
   readonly catalogListing: (kind: CatalogKind) => Promise<OperationResult<CatalogListing>>;
   readonly catalogEntry: (name: string) => Promise<OperationResult<CatalogDetail>>;
   readonly doctor: () => Promise<OperationResult<DoctorReport>>;
+  /** `doctor --machine`: git, Python and the providers, each finding with its fix. */
+  readonly doctorMachine: () => Promise<OperationResult<DoctorReport>>;
+  /** Runs the fix of finding `index` of the last `doctorMachine` answer, only when that finding is auto-fixable. */
+  readonly runMachineFix: (index: number) => Promise<MachineFixAnswer>;
+  /** What is in the folder. `path` must be one `chooseProjectDirectory` handed back. */
+  readonly detectProject: (path: string) => Promise<OperationResult<DetectReport>>;
+  /** Sets the folder up and says what to do first. Same path rule as `detectProject`. */
+  readonly startProject: (request: StartRequest) => Promise<OperationResult<StartReport>>;
+  /** Opens the provider in the user's terminal on the first task last reported for `path`. */
+  readonly launchFirstTask: (path: string) => Promise<LaunchFirstTaskAnswer>;
+  readonly onboardingState: () => Promise<OnboardingState>;
+  readonly completeOnboarding: () => Promise<OnboardingState>;
   /**
    * The app's own names for bound projects, keyed by `project_id`. Spawns nothing.
    *
@@ -1758,6 +1862,13 @@ export const CHANNELS = {
   catalogListing: 'devteam:catalog-listing',
   catalogEntry: 'devteam:catalog-entry',
   doctor: 'devteam:doctor',
+  doctorMachine: 'devteam:doctor-machine',
+  runMachineFix: 'devteam:run-machine-fix',
+  detectProject: 'devteam:detect-project',
+  startProject: 'devteam:start-project',
+  launchFirstTask: 'devteam:launch-first-task',
+  onboardingState: 'devteam:onboarding-state',
+  completeOnboarding: 'devteam:complete-onboarding',
   projectNames: 'devteam:project-names',
   projectFolders: 'devteam:project-folders',
   saveProjectFolders: 'devteam:save-project-folders',
