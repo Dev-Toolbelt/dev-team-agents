@@ -4,7 +4,7 @@
 #
 #   bash infra/supabase/dev-local.sh up       # start (first run pulls the images)
 #   eval "$(bash infra/supabase/dev-local.sh env)"
-#   devteam auth login                        # codes arrive in Mailpit, http://127.0.0.1:54324
+#   devteam auth login --email you@example.test   # codes arrive in Mailpit, http://127.0.0.1:54324
 #   bash infra/supabase/dev-local.sh down     # stop, keeping the database
 #   bash infra/supabase/dev-local.sh reset    # stop and drop the local database
 #
@@ -16,6 +16,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL="$HERE/.local"
+UNUSED_SERVICES="realtime,storage-api,imgproxy,studio"
 WORKDIR="$LOCAL"           # the CLI reads $WORKDIR/supabase/config.toml
 PROJECT="$LOCAL/supabase"
 SECRETS="$LOCAL/secrets"
@@ -84,9 +85,11 @@ cmd_up() {
     sync_project
     make_secrets
     sb stop >/dev/null 2>&1 || true
-    sb start
+    # The account service needs only auth, the database, the gateway, edge functions and
+    # Mailpit; the others are unused here and can fail the start's health check.
+    sb start --exclude "$UNUSED_SERVICES"
     # shellcheck disable=SC2016  # the eval line is printed for the user to run, unexpanded.
-    printf '\nReady. Next:\n  eval "$(bash %s env)"\n  devteam auth login\n' "${BASH_SOURCE[0]}"
+    printf '\nReady. Next:\n  eval "$(bash %s env)"\n  devteam auth login --email you@example.test\n' "${BASH_SOURCE[0]}"
     printf 'Mail (sign-in and reset codes): http://127.0.0.1:54324\n'
 }
 

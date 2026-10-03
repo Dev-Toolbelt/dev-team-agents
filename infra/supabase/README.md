@@ -11,10 +11,11 @@ OAuth app or SMTP. Needs Docker and the Supabase CLI (`brew install supabase/tap
 ```bash
 bash infra/supabase/dev-local.sh up          # first run pulls the images
 eval "$(bash infra/supabase/dev-local.sh env)"
-python3 scripts/cli/devteam auth login       # e-mail code or password
+python3 scripts/cli/devteam auth login --email you@example.test             # 8-digit code
+python3 scripts/cli/devteam auth login --email you@example.test --password  # password (add --signup to create)
 ```
 
-- Mail (sign-in, confirmation, reset codes) lands in Mailpit: http://127.0.0.1:54324. Studio: http://127.0.0.1:54323.
+- Mail (sign-in, confirmation, reset codes) lands in Mailpit: http://127.0.0.1:54324. Realtime, Storage, imgproxy and Studio are not started (the account service does not use them).
 - `up` runs from a generated copy in `.local/` (gitignored) with SMTP, Google and GitHub off; the committed
   `config.toml` is never edited, so a `config push` cannot inherit a local setting. Google and GitHub need real OAuth apps.
 - `up` also creates a local Ed25519 key (kid `test-local`) and ban pepper in `.local/secrets/`, and sets
