@@ -1,0 +1,125 @@
+name: winget manifests
+
+# Reusable (workflow_call) — called by release.yml for the CLI (v* tags) and the desktop
+# app (app-v* tags, only when the build is signed). Renders the tracked winget scaffold
+# (packaging/winget/manifests/…/0.0.0) at the real version, with the InstallerUrl and
+# InstallerSha256 of the installers ALREADY PUBLISHED on the tag's GitHub release (the
+# digests are read from that release's SHA256SUMS.txt, never recomputed), runs the repo's
+# own consistency gate over the result, and runs `winget validate` on a Windows runner.
+#
+# It never submits anything. The rendered manifests are a workflow artifact; opening the
+# PR against microsoft/winget-pkgs is manual (packaging/README.md § Submitting to winget).
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: "Devteam (CLI) or DevteamApp (desktop app)"
+        required: true
+        type: string
+      tag:
+        description: "Release tag the installers are attached to: vX.Y.Z or app-vX.Y.Z"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: Render the ${{ inputs.package }} manifests for ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.meta.outputs.artifact }}
+      dir: ${{ steps.meta.outputs.dir }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Ruby (the packaging gate syntax-checks the formulas)
+        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: "3.3"
+
+      - name: Fetch the release's SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir sums
+          cat sums/SHA256SUMS.txt
+
+      - name: Render
+        id: meta
+        env:
+          PACKAGE: ${{ inputs.package }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/release/render-winget-manifests.py \
+            --package "$PACKAGE" --tag "$TAG" --sums sums/SHA256SUMS.txt --out rendered
+          VERSION="${TAG#app-}"
+          VERSION="${VERSION#v}"
+          echo "artifact=winget-manifests-${PACKAGE}-${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "dir=rendered/d/DevToolbelt/${PACKAGE}/${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Run the repository's winget consistency gate over the rendered tree
+        run: |
+          set -euo pipefail
+          WINGET_ROOT=rendered PACKAGING_WINGET_ONLY=1 bash .github/scripts/ci/04-packaging.sh
+
+      - name: Upload the rendered manifests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: rendered
+          if-no-files-found: error
+
+  validate:
+    name: winget validate (${{ inputs.package }})
+    needs: render
+    runs-on: windows-latest
+    steps:
+      - name: Download the rendered manifests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.render.outputs.artifact }}
+          path: rendered
+
+      # Server images do not always ship winget. Bootstrap it with Microsoft's own module
+      # when it is missing, and fail with a plain message if that does not work.
+      - name: Make sure winget is available
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Refresh-Path {
+            $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+              [Environment]::GetEnvironmentVariable('Path', 'User') + ';' +
+              (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps')
+          }
+          Refresh-Path
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-Host 'winget not found; bootstrapping with Microsoft.WinGet.Client'
+            Install-PackageProvider -Name NuGet -Force | Out-Null
+            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+            Repair-WinGetPackageManager -AllUsers
+            Refresh-Path
+          }
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw 'winget is not available on this runner and could not be bootstrapped; cannot run winget validate.'
+          }
+          winget --version
+
+      - name: winget validate
+        shell: pwsh
+        env:
+          MANIFEST_DIR: ${{ needs.render.outputs.dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path 'rendered' ($env:MANIFEST_DIR -replace '^rendered/', '')
+          Get-ChildItem $dir | Format-Table Name, Length
+          winget validate --manifest $dir
+          if ($LASTEXITCODE -ne 0) { throw "winget validate exited with $LASTEXITCODE" }

@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  # Validates the name of the tag being pushed, and only that tag: the job runs
+  # Validates the name of the tag being pushed (vX.Y.Z, or app-vX.Y.Z for the desktop app), and only that tag: the job runs
   # on the `push` tag event, so `github.ref` is always the ref just created. It
   # never enumerates existing tags, which is why the two already-published
   # malformed tags (v.1.1.0, v.1.3.13) cannot retroactively fail CI — they are
@@ -45,9 +45,9 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Pushed tag: $TAG"
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if ! printf '%s' "$TAG" | grep -Eq '^(app-)?v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::error::Invalid tag name '$TAG'."
-            echo "Tags must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (e.g. v1.4.0) per CLAUDE-md/versioning.md."
+            echo "Tags must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (e.g. v1.4.0) per CLAUDE-md/versioning.md, or ^app-v[0-9]+\.[0-9]+\.[0-9]+$ for a desktop app release (ADR-0027)."
             echo "Common mistake: a dot after the 'v' (v.1.4.0) — as in the published v.1.1.0 and v.1.3.13."
             echo "Delete the bad tag and re-push a correct one:"
             echo "  git tag -d $TAG && git push origin :refs/tags/$TAG"

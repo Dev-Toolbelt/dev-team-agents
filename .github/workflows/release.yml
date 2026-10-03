@@ -20,18 +20,20 @@ name: Release
 # what Homebrew downloads. Hashing the real download is the only way the
 # sha256 in the formula is guaranteed correct.
 #
-# What this workflow does NOT do (see packaging/README.md for the manual
-# steps and why they cannot be automated here):
+# What this workflow does NOT do (see packaging/README.md for the manual steps and
+# why they cannot be automated here):
 #   - publish to the Homebrew tap without HOMEBREW_TAP_TOKEN — the
-#     `publish-homebrew-tap` job below skips itself, loudly, when that secret
-#     is absent
-#   - touch packaging/homebrew/devteam-app.rb (the app has no build/release)
-#   - touch packaging/winget/ (winget publication is itself a reviewed PR to
-#     microsoft/winget-pkgs; the Windows installers' digests are in the
-#     release's SHA256SUMS.txt, for whoever opens that PR)
+#     `publish-homebrew-tap` job FAILS with a message naming the secret
+#   - submit anything to microsoft/winget-pkgs: the winget manifests (CLI, and the app
+#     when its Windows build is signed) are rendered, gated and `winget validate`d into
+#     workflow artifacts; the PR is opened by hand
+#   - publish the app's cask: it is rendered as an artifact only when the macOS dmg
+#     passed stapler and spctl in the job
 #
-# It DOES build the Windows CLI installers (ADR-0028) in its own job,
-# `windows-cli-installer`, and attaches them to the tag's release.
+# `v*.*.*` tags release the framework and the Windows CLI installers (ADR-0028).
+# `app-v*.*.*` tags release the desktop app (ADR-0011, ADR-0027): a universal dmg and NSIS
+# installers, signed and notarised only when the credentials listed in packaging/README.md
+# exist, otherwise an unsigned prerelease beta. Every framework job skips on an app tag.
 #
 # It opens a PR in THIS repository with the formula's url/sha256 updated, so a
 # maintainer reviews the diff before it lands — never pushes to main directly.
@@ -49,7 +51,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v*.*.*", "app-v*.*.*"]
 
 # Read-only by default; each job that writes says so itself, and no more than it needs.
 permissions:
@@ -58,9 +60,13 @@ permissions:
 jobs:
   bump-homebrew-formula:
     name: Compute release sha256 and update the Homebrew formula
+    if: ${{ !startsWith(github.ref_name, 'app-v') }}
+    # Read-only: this job computes and rewrites in its own workspace and hands the
+    # result on as an artifact. Opening the PR is `open-formula-pr`'s job, kept apart
+    # so a repository that forbids Actions from creating PRs (the org default) cannot
+    # fail THIS job and, through `needs`, skip the verify and publish jobs.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     runs-on: ubuntu-latest
 
     # Published so the verify job below re-uses the tag, url and digest THIS job
@@ -95,7 +101,7 @@ jobs:
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Download the release tarball (the same URL Homebrew and scripts/install.sh use)
         id: download
@@ -172,7 +178,32 @@ jobs:
           ruby -c packaging/homebrew/devteam.rb
           ruby -c packaging/homebrew/devteam-app.rb
 
-      - name: Open a PR with the formula bump
+  # ── The reviewable PR (never blocks the publish path) ────────────────────────
+  # Separate from the bump job on purpose. `gh pr create` from a workflow needs the
+  # repository setting "Allow GitHub Actions to create and approve pull requests",
+  # which is OFF by default for organisations — so on the first real run this step
+  # is the likeliest to fail. As a step of the bump job it would have failed that job
+  # and, via `needs`, skipped the macOS verification and the tap publish. Here a
+  # failure leaves the pushed branch in place and says what to flip.
+  open-formula-pr:
+    name: Open a PR with the formula bump
+    needs: bump-homebrew-formula
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TAG: ${{ needs.bump-homebrew-formula.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download the rewritten formula
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bumped-homebrew-formula
+          path: bumped-formula
+
+      - name: Push a branch and open the PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -182,6 +213,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          cp bumped-formula/devteam.rb packaging/homebrew/devteam.rb
           if git diff --quiet -- packaging/homebrew/devteam.rb; then
             echo "Formula already up to date for ${TAG}; nothing to open a PR for."
             exit 0
@@ -192,11 +224,13 @@ jobs:
           git commit -m "chore(packaging): bump devteam formula to ${TAG}"
           git push origin "$BRANCH" --force
 
-          # Written with printf (one call per line, all inside the YAML
-          # block scalar at its own indentation) rather than a literal
-          # multi-line string — a raw newline inside a quoted string here
-          # would dedent to column 0 and terminate the YAML `run: |` block
-          # early, corrupting the rest of this step.
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')" ]; then
+            echo "A PR for $BRANCH is already open."
+            exit 0
+          fi
+
+          # printf per line, not a multi-line string: a raw newline inside a quoted
+          # string here would dedent to column 0 and end the YAML block scalar.
           PR_BODY_FILE="$(mktemp)"
           {
             printf '%s\n' "Automated by .github/workflows/release.yml after ${TAG} was pushed."
@@ -205,18 +239,18 @@ jobs:
             printf '%s\n' "- \`url\` → the \`${TAG}\` release tarball (GitHub's own tag archive)"
             printf '%s\n' "- \`sha256\` → computed from that exact downloaded artifact, never hand-written"
             printf '\n'
-            printf '%s\n' "Still manual after this merges (see packaging/README.md):"
-            printf '%s\n' "- winget: a PR to microsoft/winget-pkgs, with the digests from this release's SHA256SUMS.txt"
-            printf '%s\n' "- everything for \`devteam-app.rb\` (no signed app build exists yet)"
-            printf '\n'
-            printf '%s\n' "Once the macOS job installs this formula from the real tarball, the \`publish-homebrew-tap\` job copies it to Dev-Toolbelt/homebrew-devteam (when HOMEBREW_TAP_TOKEN is set). Merge this PR so the source of truth matches the tap."
+            printf '%s\n' "The tap itself is published by the \`publish-homebrew-tap\` job (needs HOMEBREW_TAP_TOKEN); merge this PR so the source of truth matches the tap."
+            printf '%s\n' "winget manifests for this release are artifacts of the same run; submission to microsoft/winget-pkgs stays manual (packaging/README.md)."
           } > "$PR_BODY_FILE"
 
-          gh pr create \
+          if ! gh pr create \
             --title "chore(packaging): bump Homebrew formula to ${TAG}" \
             --body-file "$PR_BODY_FILE" \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH"; then
+            echo "::error::Branch $BRANCH was pushed but the PR could not be created. If the message above says 'not permitted to create or approve pull requests', enable Settings > Actions > General > Workflow permissions > 'Allow GitHub Actions to create and approve pull requests', or open the PR by hand from that branch. The tap publish is unaffected."
+            exit 1
+          fi
 
   verify-formula-against-the-real-tarball:
     name: Check the rewritten formula's bytes, then brew-install against the real tarball
@@ -369,6 +403,25 @@ jobs:
           echo "verified: url and sha256 rewritten to this release's values; every other byte unchanged"
           rm -f tracked.normalised bumped.normalised
 
+      # verify-formula-locally.sh needs Homebrew >= 7 (brew trust, tap-only formula
+      # loading) and the runner image ships whatever it shipped on build day. Make a
+      # too-old brew an early, clear failure — or update it once — instead of dying
+      # mid-script at `brew trust`.
+      - name: Ensure Homebrew >= 7
+        run: |
+          set -euo pipefail
+          major() { brew --version | head -1 | sed -E 's/^Homebrew ([0-9]+).*/\1/'; }
+          echo "Homebrew on this runner: $(brew --version | head -1)"
+          if [ "$(major)" -lt 7 ]; then
+            echo "Homebrew < 7; running one 'brew update' (the verify script itself never updates)."
+            brew update
+            echo "Homebrew now: $(brew --version | head -1)"
+          fi
+          if [ "$(major)" -lt 7 ]; then
+            echo "::error::verify-formula-locally.sh requires Homebrew >= 7 and this runner has $(brew --version | head -1)."
+            exit 1
+          fi
+
       - name: Verify the formula end to end (brew install + the formula's own test)
         run: |
           set -euo pipefail
@@ -387,6 +440,7 @@ jobs:
   windows-cli-installer:
     name: Build, smoke-test and attach the Windows CLI installers
     runs-on: windows-latest
+    if: ${{ !startsWith(github.ref_name, 'app-v') }}
     permissions:
       contents: write
     defaults:
@@ -452,13 +506,17 @@ jobs:
           if (-not $gone) { throw 'uninstall left bin on the user PATH, or devteam.exe on disk' }
           if (-not (Test-Path (Join-Path $env:DEVTEAM_HOME 'core'))) { throw 'uninstall removed the store, which it must never touch' }
 
+      # Draft first, publish after the assets are in: with the repository's immutable
+      # releases setting on (ADR-0027 requires it), a published release accepts no new
+      # assets. A release that already exists as a draft is reused; one that is already
+      # published (a re-run) only takes the upload if the setting allows it.
       - name: Attach the installers to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --verify-tag --title "$TAG" \
+            gh release create "$TAG" --draft --verify-tag --title "$TAG" \
               --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md). Windows: devteam-setup-${VERSION}-<arch>.exe installs the devteam CLI with its own Python (ADR-0028); check it against SHA256SUMS.txt."
           fi
           gh release upload "$TAG" \
@@ -466,6 +524,21 @@ jobs:
             "dist/devteam-setup-${VERSION}-arm64.exe" \
             dist/SHA256SUMS.txt \
             --clobber
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$TAG" --draft=false
+          fi
+
+  # The winget manifests for the CLI at this release's real version, URLs and digests,
+  # validated, as a workflow artifact. Submission to microsoft/winget-pkgs is manual.
+  winget-cli-manifests:
+    name: winget manifests for the CLI
+    needs: windows-cli-installer
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget-manifests.yml
+    with:
+      package: Devteam
+      tag: ${{ github.ref_name }}
 
   # ── Publish the verified formula to the tap ──────────────────────────────────
   # Runs only after the macOS job installed the rewritten formula from the real
@@ -475,13 +548,25 @@ jobs:
   #
   # Needs HOMEBREW_TAP_TOKEN: a fine-grained token with Contents read/write on
   # Dev-Toolbelt/homebrew-devteam only. GITHUB_TOKEN cannot push to another
-  # repository. Without the secret the job says so and succeeds, so a release is
-  # never blocked by it; the formula is then copied by hand (packaging/README.md).
+  # repository. WITHOUT it this job FAILS with a message saying what to create —
+  # a release that cannot reach the channel it exists for should not look green.
+  # Every other job in the workflow is independent of this one.
   publish-homebrew-tap:
     name: Publish the verified formula to Dev-Toolbelt/homebrew-devteam
     needs: [bump-homebrew-formula, verify-formula-against-the-real-tarball]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      - name: Require HOMEBREW_TAP_TOKEN
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::error title=HOMEBREW_TAP_TOKEN missing::The tap was NOT updated. Create a fine-grained personal access token with Contents Read and write on Dev-Toolbelt/homebrew-devteam only, store it as the repository secret HOMEBREW_TAP_TOKEN, and re-run this job. Or copy devteam.rb from the bumped-homebrew-formula artifact to Formula/devteam.rb in the tap by hand."
+            exit 1
+          fi
+
       - name: Download the rewritten formula
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -494,18 +579,35 @@ jobs:
           TAG: ${{ needs.bump-homebrew-formula.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ -z "${TAP_TOKEN:-}" ]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN is not set — the tap was NOT updated. Copy bumped-formula/devteam.rb to Dev-Toolbelt/homebrew-devteam/Formula/ by hand."
-            exit 0
-          fi
-          # The token goes in a header for these two commands only — never into the
+          TAP_REPO="Dev-Toolbelt/homebrew-devteam"
+          # The token goes in a header for these commands only — never into the
           # remote URL, where it would be written to tap/.git/config.
-          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
-          echo "::add-mask::$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
-          git -c http.extraHeader="$AUTH" clone --quiet https://github.com/Dev-Toolbelt/homebrew-devteam.git tap
-          mkdir -p tap/Formula
-          cp bumped-formula/devteam.rb tap/Formula/devteam.rb
+          B64="$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
+          echo "::add-mask::$B64"
+          AUTH="AUTHORIZATION: basic $B64"
+
+          # `brew tap` needs the repository to be public for every user but the
+          # token's owner; say so rather than let the release look finished.
+          PRIVATE="$(GH_TOKEN="$TAP_TOKEN" gh api "repos/${TAP_REPO}" --jq '.private' 2>/dev/null || echo unknown)"
+          case "$PRIVATE" in
+            true)    echo "::warning::${TAP_REPO} is PRIVATE: brew tap Dev-Toolbelt/devteam will fail for everyone except collaborators. Make it public." ;;
+            unknown) echo "::warning::Could not read ${TAP_REPO} with this token (no access, or the repository does not exist); the clone below will say which." ;;
+          esac
+
+          if ! git -c http.extraHeader="$AUTH" clone --quiet "https://github.com/${TAP_REPO}.git" tap; then
+            echo "::error::Cannot clone ${TAP_REPO}. Check that the repository exists and that HOMEBREW_TAP_TOKEN is a fine-grained token granted to THAT repository with Contents Read and write."
+            exit 1
+          fi
           cd tap
+          # An empty tap has no branch yet and the runner's git would name it
+          # 'master'; Homebrew taps and GitHub default to 'main'.
+          BRANCH="$(git symbolic-ref --short -q HEAD || true)"
+          if [ -z "$BRANCH" ] || ! git rev-parse -q --verify HEAD >/dev/null; then
+            BRANCH="main"
+            git checkout -q -B "$BRANCH"
+          fi
+          mkdir -p Formula
+          cp ../bumped-formula/devteam.rb Formula/devteam.rb
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/devteam.rb
@@ -514,5 +616,367 @@ jobs:
             exit 0
           fi
           git commit --quiet -m "devteam ${TAG#v}"
-          git -c http.extraHeader="$AUTH" push --quiet origin HEAD
-          echo "Published devteam ${TAG} to Dev-Toolbelt/homebrew-devteam."
+          if ! git -c http.extraHeader="$AUTH" push --quiet origin "HEAD:refs/heads/${BRANCH}"; then
+            echo "::error::Push to ${TAP_REPO}@${BRANCH} was rejected. The token needs Contents Read and write on that repository, and ${BRANCH} must not be a protected branch that blocks it."
+            exit 1
+          fi
+          echo "Published devteam ${TAG} to ${TAP_REPO}."
+
+  # ═══ The desktop app (ADR-0011, ADR-0027) — `app-vX.Y.Z` tags ═══════════════════
+  # One job chain, three outcomes depending on which secrets exist (packaging/README.md
+  # lists them). Nothing is ever CLAIMED signed because a secret was present: the artifact
+  # is inspected, and only an inspected result sets the outputs the cask and winget jobs
+  # read.
+  #   no secrets       -> unsigned build, published as a PRERELEASE beta (ADR-0027). No cask,
+  #                       no winget.
+  #   mac secrets      -> signed + notarised dmg, verified with stapler and spctl; the cask is
+  #                       rendered with the real version and digest.
+  #   windows secrets  -> Authenticode-signed installers, verified; the winget manifests are
+  #                       rendered and validated.
+  # Rendering is not publishing: the cask goes to the tap, and the manifests to
+  # microsoft/winget-pkgs, by hand.
+  app-prepare:
+    name: Validate the app tag and detect signing credentials
+    if: ${{ startsWith(github.ref_name, 'app-v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      mac_sign: ${{ steps.creds.outputs.mac_sign }}
+      win_sign: ${{ steps.creds.outputs.win_sign }}
+    steps:
+      - name: Validate tag matches app-vX.Y.Z
+        id: tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          if ! printf '%s' "$TAG" | grep -Eq '^app-v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' does not match ^app-v[0-9]+\.[0-9]+\.[0-9]+$ — refusing to build the app."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#app-v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+        with:
+          node-version-file: app/.nvmrc
+
+      # ADR-0027 § 2: the tag must be exactly app-v<package.json version> on a clean tree.
+      # Run BEFORE any build step edits the working copy.
+      - name: Release guard (tag equals app/package.json version, clean tree)
+        working-directory: app
+        run: node scripts/release-guard.mjs
+
+      # Booleans only — the values themselves never leave the steps that need them.
+      - name: Detect which signing credentials exist
+        id: creds
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mac_sign=false
+          if [ -n "${MAC_CSC_LINK:-}" ] && [ -n "${MAC_CSC_KEY_PASSWORD:-}" ]; then
+            if { [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; } \
+              || { [ -n "${APPLE_API_KEY_P8:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; }; then
+              mac_sign=true
+            else
+              echo "::warning::MAC_CSC_LINK is set but no notarisation credentials are (APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID, or APPLE_API_KEY_P8 + APPLE_API_KEY_ID + APPLE_API_ISSUER). A signed-but-unnotarised dmg still triggers Gatekeeper, so the macOS build stays unsigned."
+            fi
+          fi
+          win_sign=false
+          if [ -n "${WIN_CSC_LINK:-}" ] && [ -n "${WIN_CSC_KEY_PASSWORD:-}" ]; then
+            win_sign=true
+          fi
+          echo "mac_sign=$mac_sign" >> "$GITHUB_OUTPUT"
+          echo "win_sign=$win_sign" >> "$GITHUB_OUTPUT"
+          echo "macOS signing+notarisation credentials present: $mac_sign"
+          echo "Windows signing credentials present: $win_sign"
+
+  app-build-mac:
+    name: Build the universal dmg (signed + notarised when credentials exist)
+    needs: app-prepare
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    outputs:
+      notarised: ${{ steps.verify.outputs.notarised }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Export signing credentials to the build, only when all are present
+        if: needs.app-prepare.outputs.mac_sign == 'true'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          {
+            echo "CSC_LINK=$MAC_CSC_LINK"
+            echo "CSC_KEY_PASSWORD=$MAC_CSC_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            {
+              echo "APPLE_ID=$APPLE_ID"
+              echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+              echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+          else
+            KEY_FILE="$RUNNER_TEMP/AuthKey.p8"
+            printf '%s' "$APPLE_API_KEY_P8" > "$KEY_FILE"
+            chmod 600 "$KEY_FILE"
+            {
+              echo "APPLE_API_KEY=$KEY_FILE"
+              echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+              echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+            } >> "$GITHUB_ENV"
+          fi
+
+      # The repository keeps CODE_SIGNED = false. A build that holds credentials flips it in
+      # THIS working copy so the app's own banner matches the artifact — and the verify step
+      # below fails the job if the artifact turns out not to be notarised.
+      - name: Stamp CODE_SIGNED for a credentialed build (working copy only)
+        if: needs.app-prepare.outputs.mac_sign == 'true'
+        run: node .github/scripts/release/stamp-code-signed.cjs app/src/main/build-info.ts
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build
+        working-directory: app
+        run: npm run dist:mac
+
+      - name: Verify the dmg a user would download (stapler + spctl)
+        id: verify
+        run: |
+          set -euo pipefail
+          DMG="app/release/dev-team-agents-${{ needs.app-prepare.outputs.version }}.dmg"
+          [ -f "$DMG" ] || { echo "::error::$DMG was not produced."; exit 1; }
+          if [ "${{ needs.app-prepare.outputs.mac_sign }}" = "true" ]; then
+            bash .github/scripts/release/verify-mac-notarised.sh "$DMG"
+            echo "notarised=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing credentials: the dmg is unsigned, which is the ADR-0027 beta."
+            echo "notarised=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the dmg
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: app-mac
+          path: app/release/dev-team-agents-${{ needs.app-prepare.outputs.version }}.dmg
+          if-no-files-found: error
+
+  app-build-win:
+    name: Build the NSIS installers (Authenticode-signed when credentials exist)
+    needs: app-prepare
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      signed: ${{ steps.verify.outputs.signed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Export signing credentials to the build, only when both are present
+        if: needs.app-prepare.outputs.win_sign == 'true'
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          {
+            echo "WIN_CSC_LINK=$WIN_CSC_LINK"
+            echo "WIN_CSC_KEY_PASSWORD=$WIN_CSC_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Stamp CODE_SIGNED for a credentialed build (working copy only)
+        if: needs.app-prepare.outputs.win_sign == 'true'
+        run: node .github/scripts/release/stamp-code-signed.cjs app/src/main/build-info.ts
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build
+        working-directory: app
+        run: npm run dist:win
+
+      - name: Verify the Authenticode signature of every installer
+        id: verify
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.app-prepare.outputs.version }}
+          EXPECT_SIGNED: ${{ needs.app-prepare.outputs.win_sign }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $names = @("dev-team-agents-Setup-$env:VERSION.exe", "dev-team-agents-Setup-$env:VERSION-x64.exe", "dev-team-agents-Setup-$env:VERSION-arm64.exe")
+          $allValid = $true
+          foreach ($name in $names) {
+            $path = Join-Path 'app/release' $name
+            if (-not (Test-Path $path)) { throw "$path was not produced" }
+            $sig = Get-AuthenticodeSignature -LiteralPath $path
+            Write-Host "$name : $($sig.Status)"
+            if ($sig.Status -ne 'Valid') { $allValid = $false }
+          }
+          if ($env:EXPECT_SIGNED -eq 'true' -and -not $allValid) {
+            throw 'Signing credentials were provided but not every installer has a valid Authenticode signature.'
+          }
+          $signed = if ($env:EXPECT_SIGNED -eq 'true' -and $allValid) { 'true' } else { 'false' }
+          "signed=$signed" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: app-win
+          path: |
+            app/release/dev-team-agents-Setup-${{ needs.app-prepare.outputs.version }}.exe
+            app/release/dev-team-agents-Setup-${{ needs.app-prepare.outputs.version }}-x64.exe
+            app/release/dev-team-agents-Setup-${{ needs.app-prepare.outputs.version }}-arm64.exe
+          if-no-files-found: error
+
+  app-publish:
+    name: Write SHA256SUMS.txt and publish the app release
+    needs: [app-prepare, app-build-mac, app-build-win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      mac_notarised: ${{ needs.app-build-mac.outputs.notarised }}
+      win_signed: ${{ needs.app-build-win.outputs.signed }}
+    steps:
+      - name: Download the built installers
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Write SHA256SUMS.txt
+        working-directory: release
+        env:
+          VERSION: ${{ needs.app-prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          FILES="dev-team-agents-${VERSION}.dmg dev-team-agents-Setup-${VERSION}.exe dev-team-agents-Setup-${VERSION}-x64.exe dev-team-agents-Setup-${VERSION}-arm64.exe"
+          for f in $FILES; do [ -f "$f" ] || { echo "::error::$f is missing from the build artifacts."; exit 1; }; done
+          sha256sum $FILES > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish the release (draft, upload, then publish — immutable-release safe)
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.app-prepare.outputs.tag }}
+          VERSION: ${{ needs.app-prepare.outputs.version }}
+          MAC_NOTARISED: ${{ needs.app-build-mac.outputs.notarised }}
+          WIN_SIGNED: ${{ needs.app-build-win.outputs.signed }}
+        run: |
+          set -euo pipefail
+          FLAGS=""
+          if [ "$MAC_NOTARISED" = "true" ] && [ "$WIN_SIGNED" = "true" ]; then
+            NOTES="Dev Team Agents ${VERSION}: signed and notarised on macOS, Authenticode-signed on Windows. Check each download against SHA256SUMS.txt. The app needs the devteam CLI (ADR-0011)."
+          else
+            FLAGS="--prerelease"
+            NOTES="BETA — NOT FULLY SIGNED. macOS notarised: ${MAC_NOTARISED}. Windows signed: ${WIN_SIGNED}. Where a platform is unsigned the OS will warn; verify the download against SHA256SUMS.txt first and follow app/README.md, section Direct-download beta (ADR-0027). The app needs the devteam CLI (ADR-0011)."
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            # shellcheck disable=SC2086
+            gh release create "$TAG" --draft --verify-tag --title "Dev Team Agents ${VERSION}" --notes "$NOTES" $FLAGS
+          fi
+          gh release upload "$TAG" \
+            "dev-team-agents-${VERSION}.dmg" \
+            "dev-team-agents-Setup-${VERSION}.exe" \
+            "dev-team-agents-Setup-${VERSION}-x64.exe" \
+            "dev-team-agents-Setup-${VERSION}-arm64.exe" \
+            SHA256SUMS.txt \
+            --clobber
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$TAG" --draft=false
+          fi
+
+  # Only for a dmg that stapler and spctl accepted in app-build-mac.
+  app-cask:
+    name: Render the Homebrew cask at the real version and digest
+    needs: [app-prepare, app-publish]
+    if: needs.app-publish.outputs.mac_notarised == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: "3.3"
+
+      - name: Render and syntax-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.app-prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir sums
+          python3 .github/scripts/release/render-app-cask.py --tag "$TAG" --sums sums/SHA256SUMS.txt --out devteam-app.rb
+          ruby -c devteam-app.rb
+          cat devteam-app.rb
+
+      - name: Upload the cask
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: homebrew-cask-devteam-app
+          path: devteam-app.rb
+          if-no-files-found: error
+
+  # Only when every Windows installer verified as Authenticode-signed.
+  winget-app-manifests:
+    name: winget manifests for the app
+    needs: [app-prepare, app-publish]
+    if: needs.app-publish.outputs.win_signed == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget-manifests.yml
+    with:
+      package: DevteamApp
+      tag: ${{ github.ref_name }}

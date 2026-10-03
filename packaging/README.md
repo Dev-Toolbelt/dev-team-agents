@@ -1,6 +1,6 @@
 # Runbook: Publishing devteam to Homebrew and winget
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-02
 **Owner:** dev-team-agents maintainers
 **Estimated time:** 30–90 minutes per channel, first time; ~10 minutes per channel on a routine release once the manual accounts below are set up
 
@@ -41,9 +41,9 @@ excludes `dist/` and `release/`), no CI job produces one —
 `.github/scripts/ci/05-app.sh` runs `typecheck`, `lint` and `test` and
 deliberately never `dist:mac`, because "one that builds an unsigned artifact is
 shipping, not checking" — and the build is unsigned by configuration, not by
-accident: `app/electron-builder.yml` sets `mac.identity: null` and
-`mac.notarize: false`, and `app/build/after-build.cjs` prints
-`UNSIGNED, UNNOTARISED BUILD — DIRECT-DOWNLOAD BETA ONLY` after every artifact
+accident: `app/electron-builder.yml` signs and notarises only when the environment
+carries credentials (none exist yet), and `app/build/after-build.cjs` prints
+`UNSIGNED, UNNOTARISED BUILD — DIRECT-DOWNLOAD BETA ONLY` after every artifact built without them
 ([ADR-0027](../docs/development/adrs/0027-the-desktop-app-ships-an-unsigned-direct-download-beta-until-it-is-signed.md)
 allows publishing it as a beta GitHub Release from an `app-v*` tag with
 `SHA256SUMS.txt` beside it — never through this directory's cask or manifests;
@@ -75,6 +75,72 @@ tags**. `ci.yml`'s own header states that trade-off and how to opt in (open a
 draft PR). An earlier version of this file said "on every push" in four places;
 it was simply false.
 
+## What is left for the maintainer (by hand, and by exact name)
+
+`release.yml` is written so that once the items below exist, **one tag push publishes
+everything it can with no further code change**: `vX.Y.Z` for the framework and the CLI
+channels, `app-vX.Y.Z` for the desktop app. Nothing in this section has been done, and
+the workflow has never run — read § What is unverified before relying on any line of it.
+
+### One-time: repository settings (Settings of `Dev-Toolbelt/dev-team-agents`)
+
+- [ ] **Actions → General → Workflow permissions → "Allow GitHub Actions to create and
+      approve pull requests".** Off by default for organisations; without it
+      `open-formula-pr` fails (the tap publish is unaffected, the branch is still pushed)
+- [ ] **Immutable releases on**, before the first publish (ADR-0027 § 4). The workflow
+      creates each release as a draft, uploads, then publishes, so it is compatible
+- [ ] **Make `Dev-Toolbelt/homebrew-devteam` public.** It was created private; `brew tap`
+      fails for every user until it is public
+
+### One-time: repository secrets (Settings → Secrets and variables → Actions)
+
+| Secret | Needed for | Without it |
+|--------|-----------|------------|
+| `HOMEBREW_TAP_TOKEN` | `publish-homebrew-tap`: a fine-grained token, Contents read/write on `Dev-Toolbelt/homebrew-devteam` only | the job **fails** with a message naming the secret; the formula is then copied by hand |
+| `MAC_CSC_LINK` | macOS signing: base64 of the exported Developer ID Application `.p12` (`base64 -i cert.p12`) | the dmg is built **unsigned** |
+| `MAC_CSC_KEY_PASSWORD` | the `.p12`'s password | same |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarisation, Apple-ID variant | no notarisation → the macOS build stays unsigned (a signed-but-not-notarised dmg still trips Gatekeeper) |
+| `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | notarisation, API-key variant (contents of the `.p8`, key id, issuer id) — use **either** this set or the Apple-ID set | same |
+| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows installer signing: base64 `.pfx` and its password | the installers are built **unsigned** |
+
+No secret is ever needed for an unsigned build: that is the ADR-0027 beta, published as a
+GitHub **prerelease**. Caveat on `WIN_CSC_*`: since the 2023 CA/B Forum rule new
+Authenticode certificates live on hardware or in a cloud HSM and **cannot be exported to a
+`.pfx`**. If that is the certificate you will hold, a `.pfx` secret does not apply and a
+different mechanism (for example Azure Trusted Signing through electron-builder's
+`win.azureSignOptions`) has to be wired — not done here.
+
+### One-time: accounts
+
+- [ ] **Apple Developer Program** membership; a **Developer ID Application** certificate
+      exported as `.p12`; an app-specific password or an App Store Connect API key
+      for `notarytool`
+- [ ] **A code-signing certificate for Windows** (see the caveat above)
+- [ ] **A GitHub personal access token with `public_repo`** for `wingetcreate`, kept on
+      the machine that submits (`wingetcreate token --store`), never in this repository
+
+### Every release
+
+| Release | You push | The workflow produces | You do by hand |
+|---------|----------|-----------------------|----------------|
+| Framework + CLI | `vX.Y.Z` | the formula-bump PR, the macOS verification, the tap publish, the Windows CLI installers on the release, and the CLI's **winget manifests** (validated) as the artifact `winget-manifests-Devteam-X.Y.Z` | merge the formula PR; submit the winget manifests (below) |
+| Desktop app | `app-vX.Y.Z` (must equal `app/package.json`'s `version`; `release-guard.mjs` enforces it) | the dmg and NSIS installers, `SHA256SUMS.txt`, a GitHub release (prerelease unless **both** platforms are verified signed). Only if the dmg passed `stapler` + `spctl`: the cask as `homebrew-cask-devteam-app`. Only if every installer verified Authenticode `Valid`: `winget-manifests-DevteamApp-X.Y.Z` | copy the cask to `Casks/devteam-app.rb` in the tap; submit the app's winget manifests **after** the CLI's (its manifest depends on `DevToolbelt.Devteam`) |
+
+### Submitting to winget (manual, the exact command)
+
+The manifests are in the run's artifact `winget-manifests-<Package>-<version>` (Actions
+UI, or `gh run download <run-id> -n winget-manifests-Devteam-X.Y.Z -D wm`). Then:
+
+```bash
+winget install Microsoft.WingetCreate           # once
+wingetcreate submit --token <PAT with public_repo> \
+  wm/d/DevToolbelt/Devteam/X.Y.Z                # the directory holding the three .yaml files
+```
+
+`wingetcreate submit` forks `microsoft/winget-pkgs`, pushes the manifests and opens the
+PR; Microsoft's validation pipeline and a human review follow. The CLI's first submission
+creates the package; the app's follows once `DevToolbelt.Devteam` is accepted.
+
 ## What's in this directory
 
 | Path | What it is | Status |
@@ -87,6 +153,9 @@ it was simply false.
 | `../.github/scripts/ci/04-packaging.sh` | The CI gate for this directory: `ruby -c` on both formulas, plus the winget manifest contract | Runs on every pull request and on pushes to `main`/tags (the `packaging` job in `ci.yml`). Two advisories fire today, deliberately — see below. |
 | `../.github/scripts/release/bump-homebrew-formula.sh` | Rewrites the formula's `url`/`sha256` to a released tag and digest | Covered by `tests/test_release_bump.py` (23 tests, green). The **workflow** that calls it has still never run. |
 | `../.github/workflows/release.yml` | On a `vX.Y.Z` tag push, downloads that tag's release tarball, hashes it, opens a PR bumping the formula, uploads the rewritten formula as an artifact, then on `macos-latest` asserts that artifact's `url`/`sha256` against the computed digest and that nothing else in the file changed, and brew-installs it against the real tarball | Automated, but unrun — no tag has been pushed since the workflow was added (the newest tag predates the commit that added it). **The `macos-latest` job is not a gate**: the bump job opens the PR in its own last step, so the PR is already open while the job runs, and no branch rule marks the check required. Its own `RESIDUAL` block says so. |
+| `../.github/workflows/winget-manifests.yml` | Reusable workflow: renders a winget scaffold at the real version with the digests from the release's `SHA256SUMS.txt`, runs the `04-packaging.sh` winget gate over it, uploads it, and runs `winget validate` on `windows-latest` | Written, never run. The renderer is tested (`tests/test_release_render.py`); the Windows job is not |
+| `../.github/scripts/release/render-winget-manifests.py`, `render-app-cask.py` | The renderers behind that workflow and the app's cask job | `tests/test_release_render.py` drives both, and runs the real gate over the rendered winget tree |
+| `../.github/scripts/release/verify-mac-notarised.sh`, `stamp-code-signed.cjs` | Mounts the dmg and runs `codesign`, `stapler validate`, `spctl`; flips `CODE_SIGNED` in the CI working copy only | The negative path was run locally (an ad-hoc-signed dmg fails all but the first check, exit 1). The positive path needs a notarised build and has never run |
 
 ## Version source of truth
 
@@ -176,7 +245,9 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 - [ ] **`HOMEBREW_TAP_TOKEN`** as a repository secret here: a fine-grained token with
       Contents read/write on `Dev-Toolbelt/homebrew-devteam` only. `release.yml`'s
       `publish-homebrew-tap` job pushes the verified formula with it; `GITHUB_TOKEN`
-      cannot push to another repository. Without it the job warns and skips
+      cannot push to another repository. Without it the job **fails** with a message
+      naming the secret
+- [ ] **Actions may create pull requests** (repository setting) — see § What is left
 
 ### Homebrew — app cask (`devteam-app.rb`)
 
@@ -185,18 +256,18 @@ prerequisites the repository owner holds; nothing in this session advanced any o
       `release/dev-team-agents-<version>.dmg` containing a universal
       `Dev Team Agents.app`. **This box is ticked for existence only** — the
       build is unsigned, no CI job runs it, and no artifact is committed
-- [ ] A step that stamps `app/package.json`'s `version` from the `app-v*` git tag
-      at build time. Without it the dmg filename and this cask's `version` are two
-      hand-maintained strings for one value; see the cask's own header for the rule
-      and § Version source of truth for why the tag is the authority
-- [ ] An Apple Developer ID (paid Apple Developer Program membership) to sign the
-      `.dmg`, and `mac.identity`/`mac.notarize` in `app/electron-builder.yml`
-      flipped off their `null`/`false` placeholders, plus `CODE_SIGNED` in
-      `app/src/main/build-info.ts` flipped to `true` in the same change — the app
-      states its own signing status from that constant, in the UI and on startup
-- [ ] An app-specific password (or API key) for `notarytool` to notarise the signed
-      build — generated from the Apple ID account, not something CI can create for
-      itself
+- [x] The tag is the version authority: `release-guard.mjs` (run by the `app-prepare` job)
+      refuses an `app-v*` tag that differs from `app/package.json`'s `version` or a dirty
+      tree, and the cask's `version` is then rendered from that same tag
+- [ ] An Apple Developer ID (paid Apple Developer Program membership), exported as a
+      `.p12` into the secrets `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD`. **No config edit is
+      needed any more**: `app/electron-builder.yml` signs when the environment carries
+      credentials and builds unsigned when it does not (ADR-0027)
+- [ ] Notarisation credentials (`APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` +
+      `APPLE_TEAM_ID`, or `APPLE_API_KEY_P8` + `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`) —
+      generated from the Apple account, not something CI can create for itself
+- [ ] A first `app-v*` release that ran with both, and whose `app-build-mac` job passed
+      `verify-mac-notarised.sh`. Only then is the rendered cask worth copying to the tap
 - [ ] The same tap repository as above (a cask lives in `Casks/`, alongside
       `Formula/`, in one tap)
 
@@ -209,7 +280,9 @@ prerequisites the repository owner holds; nothing in this session advanced any o
       `windows-cli-installer` job, which also attaches the installers and their
       `SHA256SUMS.txt` to the tag's release
 - [ ] A code-signing certificate (Authenticode). winget does not require signing, but
-      the unsigned installer triggers SmartScreen for every user, as the app does
+      the unsigned installer triggers SmartScreen for every user, as the app does.
+      The **CLI installer's signing is not wired** (`release.yml` builds it unsigned); only
+      the app's installers sign, from `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
 - [ ] A GitHub account able to open a pull request against
       `microsoft/winget-pkgs` (public repo, no special access needed — just review)
 
@@ -222,16 +295,14 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 - [x] **A decided Windows packaging shape.** NSIS, per-user, unsigned by
       configuration — see [§ The Windows app installer shape — decided](#the-windows-app-installer-shape--decided).
       `app/electron-builder.yml` now has `win` and `nsis` blocks
-- [ ] A Windows build of the app. The shape is decided; nothing has built it. No CI
-      job runs `electron-builder --win` any more than `.github/scripts/ci/05-app.sh`
-      runs `dist:mac` for macOS — building an artifact is a release action, not a
-      check
-- [ ] Windows code-signing (Authenticode) for the `.exe` that build produces.
-      Recommended, not required, by NSIS — SmartScreen warns on an unsigned
-      installer rather than refusing it, the same trade-off the unsigned macOS
-      `.dmg` already ships
-- [ ] Real `InstallerUrl`/`InstallerSha256` values once that build exists, and a
-      reviewed pull request to `microsoft/winget-pkgs`, same process as the CLI
+- [ ] A Windows build of the app. The `app-build-win` job builds it on `app-v*` tags; it
+      has never run
+- [ ] Windows code-signing (Authenticode) via `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
+      (see the exportability caveat in § What is left). Without it the installers are
+      unsigned, SmartScreen warns, and **no app winget manifest is rendered**
+- [ ] The rendered `winget-manifests-DevteamApp-<version>` artifact (real URLs and
+      digests, from a verified-signed release) submitted with `wingetcreate submit`,
+      after the CLI's package is accepted
 
 ## The Windows installer shape for the CLI — decided (ADR-0028)
 
@@ -308,7 +379,7 @@ are.
 | `homebrew/devteam.rb` | `url "...tags/vX.Y.Z.tar.gz"` | The real tag | `.github/scripts/release/bump-homebrew-formula.sh`, called by `release.yml`, from `github.ref_name` on tag push |
 | `homebrew/devteam.rb` | `sha256 "REPLACE_WITH_SHA256_OF_RELEASE_TARBALL"` | 64-char hex digest | The same script, automatically — `sha256sum` of the downloaded tag tarball, never hand-written. The script refuses anything that is not 64 lowercase hex characters |
 | `homebrew/devteam-app.rb` | Entire file marked UNRELEASED | A real cask, once a **signed** build exists | Manual — write it against the actual signed, notarised `.dmg`; do not just fill in these placeholders. The header no longer claims the app is absent: `app/` exists and builds an unsigned dmg |
-| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | The `app-v*` git tag, via a build step that stamps `app/package.json` from it. **Coupled**: `dmg.artifactName: dev-team-agents-${version}.dmg` derives the dmg filename from `app/package.json`'s `version` while the cask's `url` derives it from this line, so the two must be one string at release time. They disagree today on purpose (`0.0.0` vs `0.0.0-unreleased`) and must not be reconciled by hand — see the cask header |
+| `homebrew/devteam-app.rb` | `version "0.0.0-unreleased"` | The app's real release tag (e.g. `app-v1.0.0`) | The `app-v*` tag, which `release-guard.mjs` requires to equal `app/package.json`'s `version`; `render-app-cask.py` writes it into the cask. **Coupled**: `dmg.artifactName: dev-team-agents-${version}.dmg` derives the dmg filename from `app/package.json`'s `version` while the cask's `url` derives it from this line, so the two must be one string at release time. They disagree today on purpose (`0.0.0` vs `0.0.0-unreleased`) and must not be reconciled by hand — see the cask header |
 | `homebrew/devteam-app.rb` | `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"` | 64-char hex digest of the real notarised `.dmg` | Manual — hash the actual release artifact once it exists; do not reuse the CLI formula's automation blindly, since a cask's artifact is signed/notarised and that should be verified, not just hashed. **Never the digest of a local unsigned build**, which is a different artifact with the same filename |
 | `homebrew/devteam-app.rb` | ~~`depends_on macos: ">= :big_sur"`~~ — **no longer a placeholder** | `">= :ventura"`, measured | `app/node_modules/electron/dist/Electron.app/Contents/Info.plist` → `LSMinimumSystemVersion` **13.0** for Electron 44.5.1, mirrored by `mac.minimumSystemVersion: '13.0'` in `app/electron-builder.yml`. Big Sur was wrong in the dangerous direction: it licensed an install on a system the app cannot launch on. **Re-measure on every Electron major** — the floor moves with it, nothing checks the pair, and this is the one row in this table that comes back |
 | `homebrew/devteam-app.rb` | ~~placeholder bundle id in `zap trash:`~~ — **no longer a placeholder** | `com.devtoolbelt.dev-team-agents-app` | `appId` in `app/electron-builder.yml`; `app "Dev Team Agents.app"` likewise matches its `productName`. Both confirmed against the build config, both still unchecked by any gate |
@@ -353,7 +424,8 @@ git push origin vX.Y.Z
 ```
 
 **Expected output:** CI's `tag-name` job validates the tag shape; `release.yml`
-triggers on the same push.
+triggers on the same push. (An app release is tagged `app-vX.Y.Z` instead; CI's
+`tag-name` job accepts both shapes, and every framework job skips on an app tag.)
 
 **Do not create the GitHub release by hand.** `release.yml`'s `windows-cli-installer` job
 creates it, and the app's "Install the CLI" accepts only a release whose author is
@@ -361,12 +433,13 @@ creates it, and the app's "Install the CLI" accepts only a release whose author 
 never offered. Turn on immutable releases once per repository, so a published asset cannot be
 swapped afterwards.
 
-### 2. Let `release.yml` open its PR, and watch its second job
+### 2. Let `release.yml` open its PR, and watch the macOS job
 
-The first job downloads the tag's tarball, hashes it, runs
-`bump-homebrew-formula.sh`, and opens
-`chore(packaging): bump Homebrew formula to vX.Y.Z` against this repo. The second
-job (`macos-latest`) then downloads the formula the bump job uploaded, asserts its
+The first job downloads the tag's tarball, hashes it and runs
+`bump-homebrew-formula.sh`; a separate job, `open-formula-pr`, opens
+`chore(packaging): bump Homebrew formula to vX.Y.Z` against this repo (separate so that a
+repository which forbids Actions from creating PRs cannot stop the verification and the
+tap publish). The macOS job (`macos-latest`, which first makes sure Homebrew is >= 7) then downloads the formula the bump job uploaded, asserts its
 `url` and `sha256` equal the digest that job computed, that the url ends in this
 tag, and that **nothing else in the file changed** (both files normalised and
 diffed) — then runs `verify-formula-locally.sh` in release mode against that exact
@@ -375,10 +448,10 @@ URL and digest: a real `brew install` of the formula the PR proposes.
 **Expected output:** a PR modifying only `packaging/homebrew/devteam.rb`'s `url`
 and `sha256` lines, and a green `macos-latest` check on the release run.
 
-> **That check is not a gate, and must not be read as one.** The PR is opened by
-> the bump job's own last step, so it is already open while the `macos-latest` job
-> runs, and no branch rule marks the check required. It informs the human who
-> merges; it stops nothing. And neither job has ever executed: the bump logic is
+> **That check is not a gate on the PR, and must not be read as one.** The PR is
+> opened in parallel with the `macos-latest` job and no branch rule marks the check
+> required; it informs the human who merges. It does gate the tap: `publish-homebrew-tap`
+> needs it. And neither job has ever executed: the bump logic is
 > covered by `tests/test_release_bump.py`, the Actions run itself by nothing.
 
 ### 3. Review and merge that PR
@@ -392,8 +465,9 @@ does not install; do not merge on the strength of the textual diff alone.
 
 `release.yml`'s `publish-homebrew-tap` job copies the formula the bump job produced —
 the bytes the macOS job installed and tested — to `Formula/devteam.rb` in
-`Dev-Toolbelt/homebrew-devteam` and pushes it. Without `HOMEBREW_TAP_TOKEN` it warns
-and skips; then do it by hand:
+`Dev-Toolbelt/homebrew-devteam` and pushes it (to the tap's default branch; an empty tap
+gets `main`). Without `HOMEBREW_TAP_TOKEN` it **fails** with a message naming the secret;
+then do it by hand:
 
 ```bash
 # Inside a checkout of the homebrew-devteam tap repo:
@@ -407,11 +481,25 @@ version. **Unverified** — no release has run this job yet.
 
 ### 5. winget (manual, PR-gated)
 
-`release.yml` builds the CLI installers and attaches them to the release. Update `PackageVersion`
-and the version directory, fill in the real `InstallerUrl`/`InstallerSha256` values,
-then open a PR against `microsoft/winget-pkgs` following their contribution guide.
-This step cannot be automated from this repository — it is review by Microsoft,
-against Microsoft's repo.
+`release.yml` builds the CLI installers and attaches them to the release, then its
+`winget-cli-manifests` job renders the three manifests at this version (directory,
+`PackageVersion`, `InstallerUrl`, `InstallerSha256` — the four edits `04-packaging.sh`
+enforces — with digests read from the release's `SHA256SUMS.txt`), runs that gate over
+them and runs `winget validate` on a Windows runner. Download the artifact and run
+`wingetcreate submit` as written in § What is left. This step cannot be automated from
+this repository — it is review by Microsoft, against Microsoft's repo.
+
+### 6. The desktop app (`app-vX.Y.Z`)
+
+`app-prepare` checks the tag and runs `release-guard.mjs`, and detects which secrets exist
+(booleans only). `app-build-mac` and `app-build-win` build; with credentials, electron-builder
+signs (and notarises on macOS), `app/build/after-build.cjs` inspects the result and **fails the
+build** when credentials were supplied but the artifact does not verify, and the job then
+checks the artifact a user would download: `verify-mac-notarised.sh` (`codesign`, `stapler
+validate`, `spctl -a -vvv`) on the dmg, `Get-AuthenticodeSignature` on each installer.
+`app-publish` writes `SHA256SUMS.txt` and publishes the release as a draft-then-publish
+(immutable-release safe) — a **prerelease** unless both platforms verified. `app-cask` and
+`winget-app-manifests` run only for a platform that verified, and only render artifacts.
 
 ## Verification
 
@@ -575,6 +663,11 @@ belong in this table.
 | Both formulas are valid ruby, and the winget manifests agree with each other and with their version directory | `.github/scripts/ci/04-packaging.sh`, blocking, in the `packaging` job of `ci.yml`, on every pull request and on pushes to `main`/tags. It checks `ruby -c`; and for winget: YAML parse, classification by **declared** `ManifestType` (not by filename — a spec-correct additional `locale` manifest is legal, and there may be N of them beside the one `defaultLocale`), the filename then checked against that type, the required-field set per type, agreement of `PackageIdentifier`/`PackageVersion`/`ManifestVersion` across the files, the version-directory name matching `PackageVersion`, digest format, and `InstallerUrl` ↔ version agreement including a refusal of a half-done bump in either direction |
 | An `InstallerUrl` cannot be pointed somewhere other than this project's releases | Same gate. The origin is **derived** from `scripts/install.sh`'s own `GITHUB_OWNER`/`GITHUB_REPO` — a file outside `packaging/`, so the edit that redirects the InstallerUrls cannot move the goalpost with them — and failure to read it is exit 2, not a finding. The URL is parsed rather than substring-matched: the tag is the first path segment after `…/download/` and must equal `v<PackageVersion>` exactly, so `v1.0.0-rc1` no longer satisfies `1.0.0` |
 | A 64-zero `InstallerSha256` cannot reach a release | Same gate, blocking, with no manual promotion step: the zeros digest is licensed only while `PackageVersion` **and** the URL tag are both still the scaffold placeholders. Once both are real it fails; a half-bump is itself a blocking finding, so there is no path through the middle |
+| The winget renderer produces the four coordinated edits for both packages, refuses a digest missing from `SHA256SUMS.txt` and a tag of the wrong shape, and its output passes the repository's own winget gate (while a directory left at `0.0.0` fails it) | `tests/test_release_render.py::WingetRenderTest`, which runs `04-packaging.sh` over the rendered tree via `WINGET_ROOT` / `PACKAGING_WINGET_ONLY` |
+| The app cask renderer changes only `version` and `sha256`, drops the scaffold's comments, and its output parses | `tests/test_release_render.py::CaskRenderTest` |
+| An unsigned or ad-hoc-signed dmg cannot pass `verify-mac-notarised.sh` | Run locally against an ad-hoc-signed test dmg: three of four checks fail, exit 1. Only the negative path has run |
+| `after-build.cjs` prints the UNSIGNED banner and records `unsigned` when credentials are absent, and throws when credentials are present but the artifact cannot be verified | Run directly against synthetic build contexts; not under electron-builder |
+| Every `run:` block in the three workflows parses as shell, and every `needs:` names a job | A local script (`bash -n` over each block, YAML load); not `actionlint`, which was not installed |
 | Every shell script in this directory is shellchecked | `.github/scripts/ci/01-lint.sh` — its target set is `scripts helpers .github/scripts packaging`, 67 `*.sh` files, up from 55. Nothing under `packaging/` or `.github/scripts/` was linted by any gate before that change, so `verify-formula-locally.sh` and the release/CI scripts were unchecked when they were written |
 | `manifestVersion 1.12.0`, the required-field sets, and the `InstallerType`/`NestedInstallerType` enums are what the manifests and this runbook say they are | Read from `microsoft/winget-cli`'s schema file for v1.12.0, confirmed 2026-09-28 (URL in the Windows-shape section above) |
 
@@ -585,7 +678,10 @@ belong in this table.
 | `brew install` from a **published tap** | There is no `homebrew-devteam` tap repository. `verify-formula-locally.sh` removes the *tap-less* obstacle: Homebrew 7 rejects a formula file that is **not inside a tap** ("Homebrew requires formulae to be in a tap"), and separately disables `brew audit <path>` outright in favour of `brew audit <name>`, and refuses to load a formula from an untrusted tap. So the script creates a throwaway tap, trusts it inside a sandboxed `trust.json`, and installs from a path **inside that tap** — `brew install --build-from-source <tap>/Formula/devteam.rb` is a file-path install and it works, because the path is in a tap. What that cannot reach is the published path: nobody has ever run `brew tap` against a real repository and installed this formula from it |
 | `brew install` of a **real release tarball** | The formula's `url` and `sha256` are still placeholders, and no release tarball exists for any digest to describe. The local verification installs from `git archive … HEAD` — committed sources, the same file layout but not the same bytes GitHub's codeload serves. Worth naming precisely, because it is the gap inside the gap: the recorded run packaged **committed** sources while testing a formula copy whose own edits were **uncommitted**, so what was installed and what was audited did not come from the same tree state. `release.yml`'s `macos-latest` job closes the codeload half on the first tag that is pushed |
 | `release.yml` itself running end to end | It has never been triggered — the newest tag in this repository predates the commit that added the workflow. Its rewrite logic is no longer the unverified part: that lives in `bump-homebrew-formula.sh` with 23 tests. What is untested is the Actions run — the tag validation step, GitHub's codeload timing and retry loop, the PR creation, the artifact hand-off, and the digest passed between the two jobs. And the `macos-latest` job is **not a gate** even once it runs: the PR is opened by the bump job's last step, so it is already open while the job runs, and no branch rule marks the check required. A red check is a signal to whoever merges |
-| macOS code signing and notarisation of the app | Needs an Apple Developer ID and an app-specific password/API key — account-level access this environment does not have and should not be given |
+| macOS code signing and notarisation of the app | The wiring exists (`electron-builder.yml`, `after-build.cjs`, `app-build-mac`) but needs an Apple Developer ID and notarisation credentials — account-level access this environment does not have and should not be given. Whether electron-builder 26.15.3 notarises by default from the `APPLE_*` variables with `mac.notarize` unset, and whether its default entitlements pass notarisation, are read from its documentation, not run |
+| The `app-*` jobs, the `winget-*` jobs and `open-formula-pr` | Never executed. Specifically unconfirmed: that `winget` exists or can be bootstrapped on `windows-latest`; that `winget validate` accepts the `PackageDependencies` shape; that `Homebrew` on `macos-latest` can be brought to >= 7 with one `brew update`; that `choco install nsis --version 3.13.0` resolves; the draft-then-publish flow against the immutable-releases setting; the `CODE_SIGNED` stamp; the unpinned `actions/setup-node@v4` (the other actions are SHA-pinned) |
+| `brew audit --cask` on the rendered cask | Not run anywhere: the render job checks `ruby -c` only. Run it on the tap once a notarised cask exists |
+| The app's own signing banner | `app/src/main/build-info.ts` keeps `CODE_SIGNED = false`; the release jobs flip it in the CI working copy for a credentialed build. That makes the packaged app say "signed" only if the job's verification passes — but the mechanism is a text substitution nobody has run in CI |
 | `brew audit --cask` / any install of `devteam-app.rb` | The app now exists and builds, so the reason has moved: what is absent is a **signed, notarised** `.dmg` at a real version, published at a `url` that resolves. An unsigned local build cannot stand in — `brew audit --cask` verifies a Developer ID signature and a notarisation ticket, which an ad-hoc-signed build does not have, so the audit's correct verdict on it is *reject*. The cask also still points at a 404 and carries `sha256 "NO_RELEASE_SHA256_DOES_NOT_EXIST_YET"`. **Static checking is not blocked, and is not clean:** `brew style` on the cask reports four genuine cask-cop findings today (`Cask/StanzaOrder` ×2, `Cask/StanzaGrouping`, `Cask/ArrayAlphabetization`), all unfixed — see § Verification. What is no longer unverified: the macOS floor and the bundle id, both now read off `app/electron-builder.yml` and the pinned Electron's `Info.plist` rather than guessed |
 | Whether the dmg filename the cask builds is the one the build produces | The two `version` values that decide it are hand-maintained in two files and no step derives either from the `app-v*` tag. Nothing compares them: `04-packaging.sh` runs `ruby -c` on the cask and never reads `app/package.json`, and `05-app.sh` never reads the cask. A release whose stamping step is missing produces a cask whose `url` 404s for a reason that looks like a mirror problem |
 | The app on winget, published | The manifest scaffold now exists (M4.3 closeout) — this row is no longer "there is no manifest", it is "the manifest has never been validated or installed". No Windows build of the app has ever been produced, so `InstallerUrl`/`InstallerSha256` are placeholders and there is nothing for `winget validate` to fetch yet |

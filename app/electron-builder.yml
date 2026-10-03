@@ -1,12 +1,32 @@
 # electron-builder configuration.
 #
-# UNSIGNED BY DESIGN, FOR NOW. `mac.identity: null` disables code signing and
-# `afterAllArtifactBuild` prints a banner saying so, because the alternative is a `.dmg`
-# that looks shippable and is not. ADR-0011 requires macOS artifacts to be signed and
-# notarised; its M4.1 amendment records that this is "blocked on signing credentials the
-# repository owner holds". Wiring signing means an Apple Developer ID plus an
-# app-specific password or API key for `notarytool`, and flipping `CODE_SIGNED` in
-# `src/main/build-info.ts` — none of which can be done from this repository today.
+# SIGNING IS DRIVEN BY THE ENVIRONMENT, AND OFF BY DEFAULT (ADR-0027, ADR-0011).
+# Nothing in this file names a certificate or an Apple identity, and no secret ever lives
+# here. electron-builder signs and notarises only when it finds credentials, so the same
+# file produces:
+#
+#   - no credentials (every local build, and CI without the secrets): UNSIGNED, exactly as
+#     before — an ad-hoc signature on the arm64 half of the universal dmg and nothing else,
+#     and `afterAllArtifactBuild` prints the UNSIGNED banner;
+#   - credentials present: a signed and, on macOS with the Apple credentials, notarised
+#     build, which `build/after-build.cjs` then INSPECTS (codesign, stapler,
+#     Get-AuthenticodeSignature) and only then reports as signed. Credentials that did not
+#     yield a verifiably signed artifact fail the build instead of shipping quietly.
+#
+# macOS  CSC_LINK (base64 .p12 or path) + CSC_KEY_PASSWORD   -> Developer ID Application signing
+#        APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID
+#          or APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER   -> notarisation (notarytool)
+# Windows WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD (Authenticode .pfx)  -> installer signing
+#
+# `mac.identity` and `mac.notarize` are therefore deliberately NOT set: `identity: null`
+# would switch signing off for everyone, including the release workflow that holds the
+# credentials. The cost is that a developer with a Developer ID certificate in their login
+# keychain signs a local `dist:mac` too — a signed build of this source is not a problem;
+# claiming one that is not signed would be, and `CODE_SIGNED` in `src/main/build-info.ts`
+# stays `false` in the repository (the release workflow stamps it only after credentials
+# are present, and the build is then verified). The Homebrew cask and winget stay on their
+# placeholders until a verified signed and notarised release has actually been published
+# (packaging/README.md).
 #
 # NAMES. `productName` is the name a user sees: the `.app` bundle, CFBundleName, the menu-bar
 # title, the Windows installer's title, its install directory and the Start menu entry. The
@@ -93,12 +113,9 @@ mac:
     - target: dmg
       arch:
         - universal
-  # Signing OFF. See the header.
-  identity: null
-  # `notarize` is a distinct step and is equally unavailable.
-  notarize: false
-  # No entitlements file: without signing, entitlements are inert, and shipping one would
-  # suggest a hardened-runtime configuration that has never been exercised.
+  # Signing and notarisation: environment-driven, see the header. `hardenedRuntime` and the
+  # entitlements are electron-builder's defaults, which are what Electron needs to pass
+  # notarisation; they have never been exercised against a real Apple account.
   extendInfo:
     # The app never loads remote content, so ATS exceptions are not needed and are not
     # added. Declared here so the absence is visibly deliberate.
@@ -113,7 +130,7 @@ dmg:
   # The fixed slug, not ${productName}: see NAMES in the header.
   artifactName: dev-team-agents-${version}.dmg
 
-# WINDOWS SHAPE — DECIDED (M4.3 closeout), UNSIGNED BY CONFIGURATION.
+# WINDOWS SHAPE — DECIDED (M4.3 closeout); signing comes from the environment.
 #
 # Target: NSIS producing a single per-user installer .exe, one per architecture. Weighed
 # against the other two electron-builder can produce:
@@ -140,19 +157,19 @@ dmg:
 # Update/uninstall: NSIS's generated uninstaller is what Add/Remove Programs calls; nothing
 # here implements auto-update (electron-updater is not wired — out of scope for this decision).
 #
-# Signing stays OFF, explicitly, the same way `mac.identity: null` does it above: no
-# `win.certificateFile`/`certificatePassword` keys are set (there is no Authenticode
-# certificate — see the mac block's header and packaging/README.md), and
-# `forceCodeSigning: false` makes a future accidental signing attempt a no-op instead of a
-# build failure if electron-builder ever finds credentials on a build machine's keychain by
-# surprise.
+# Signing is environment-driven here too (header): WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD sign the
+# installers; without them the build is unsigned and says so. A `.pfx` can only be exported
+# from certificates issued before the 2023 CA/B Forum hardware-key rule — a certificate held
+# on an HSM or in a cloud service (for example Azure Trusted Signing, which electron-builder
+# supports through `win.azureSignOptions`) needs a different mechanism, not wired here.
+# `forceCodeSigning: false` keeps a build with no credentials from failing.
 win:
   target:
     - target: nsis
       arch:
         - x64
         - arm64
-  # No certificateFile / certificatePassword — deliberately absent. See header above.
+  # No certificateFile / certificatePassword in the file: they come from the environment.
   forceCodeSigning: false
 
 nsis:

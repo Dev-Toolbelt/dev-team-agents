@@ -29,7 +29,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 HOMEBREW_DIR="packaging/homebrew"
-WINGET_ROOT="packaging/winget/manifests"
+# Overridable so release.yml can run THIS gate over the manifests it just rendered for a
+# real release (render-winget-manifests.py), not only over the tracked scaffold.
+# PACKAGING_WINGET_ONLY=1 stops after the winget contract check, which is all that
+# job has files for.
+WINGET_ROOT="${WINGET_ROOT:-packaging/winget/manifests}"
 
 # Where the expected release origin is DERIVED from, not declared. See
 # RELEASE_PREFIX in the winget program below for why this file and not another.
@@ -729,12 +733,18 @@ for version_dir in sorted(groups):
             # winget would then ship the release candidate as the release — and
             # would equally accept `v1.0.0.1` or `v11.0.0`. There is exactly one
             # correct tag for a version, so compare against it.
-            if url_tag != "v" + pkg_version:
+            # The desktop app's releases are tagged `app-v<version>` (ADR-0027), the CLI's
+            # `v<version>`; each is still exactly ONE tag per version.
+            if str(doc.get("PackageIdentifier", "")).endswith("DevteamApp"):
+                allowed_tags = ("app-v" + pkg_version,)
+            else:
+                allowed_tags = ("v" + pkg_version,)
+            if url_tag not in allowed_tags:
                 fail("%s: the InstallerUrl release tag is %r, but PackageVersion "
                      "%r requires exactly %r — a tag that merely CONTAINS the "
                      "version (v%s-rc1, v%s.1) publishes a different build under "
                      "this version. %s"
-                     % (where, url_tag, pkg_version, "v" + pkg_version,
+                     % (where, url_tag, pkg_version, " or ".join(allowed_tags),
                         pkg_version, pkg_version, url))
 
 if findings:
@@ -749,6 +759,11 @@ PY
 }
 
 blocking "winget: manifest contract" winget_checks
+
+if [ "${PACKAGING_WINGET_ONLY:-}" = "1" ]; then
+  echo "PACKAGING_WINGET_ONLY=1 — stopping after the winget contract check."
+  exit 0
+fi
 
 # ── Advisory ────────────────────────────────────────────────────────────────
 

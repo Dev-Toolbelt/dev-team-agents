@@ -8,9 +8,11 @@
 # built; nothing in the tree is that artifact (`app/.gitignore` excludes
 # `release/`) and no CI job produces one. What does not exist is a
 # **signed, notarised** artifact or a real version: `app/electron-builder.yml`
-# sets `mac.identity: null` and `mac.notarize: false`, so every build is
-# unsigned, announced as such by `app/build/after-build.cjs`, and would be
-# rejected by `brew audit --cask` on sight. Do not publish this cask, and do
+# signs only when the environment carries credentials, and none exist yet, so
+# every build is unsigned, announced as such by `app/build/after-build.cjs`,
+# and would be rejected by `brew audit --cask` on sight. When a notarised build
+# ships, `release.yml` renders this file at the real version and digest as an
+# artifact (render-app-cask.py); that rendering is what gets published. Do not publish this cask, and do
 # not treat its presence — or the existence of a local build — as evidence the
 # app is installable by anyone.
 # ═══════════════════════════════════════════════════════════════════════════
