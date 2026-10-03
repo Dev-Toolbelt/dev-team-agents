@@ -32,6 +32,22 @@ node node_modules/electron/install.js
 Confirm with `./node_modules/.bin/electron --version`, which prints a version only when
 the binary is actually there.
 
+## First-Run Wizard (ADR-0030)
+
+When the app opens for the first time, or when no projects are bound yet, it walks through the first-run setup:
+
+1. **Install the CLI** — Windows: the verified `devteam-setup-*.exe` (ADR-0028). macOS: `brew install dev-toolbelt/devteam/devteam` when Homebrew is found, otherwise the `install-cli.sh` command to copy. Sign-in needs the CLI (ADR-0029), so this comes first.
+2. **Sign in** — the existing account screens; the CLI owns the session.
+3. **Machine check** — `devteam doctor --machine`. "Fix" appears only for `auto_fixable` findings and runs nothing without a click; provider installs are shown with a copy button, never run. The step skips itself when nothing needs attention.
+4. **Choose a folder, then confirm** — `devteam detect` fills in provider, stack and project type; each can be changed. Confirming runs `devteam start`.
+5. **Start the first task** — a read-only `audit --report-only` or `review`, opened in Terminal (macOS) or Windows Terminal / cmd (Windows) with the provider's read-only mode from `scripts/lib/first-task.json`. Linux and any launch failure fall back to "Copy command".
+
+After sign-in that is three clicks: folder, confirm, start. Finishing writes `onboardingCompleted` to the app settings.
+
+After the first task completes, **Advanced settings** appears: bind mode, worktree preference, notifications, and language.
+
+---
+
 ## Run
 
 The app has to find a `devteam` CLI, and it will not invent one. In a checkout where the

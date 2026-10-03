@@ -62,3 +62,18 @@ rules are unchanged — this is a move, not a rewrite.
 
 **Code Reviewer roles:** `code-reviewer` is the entry-point router for `/devteam:review`. Before anything else it loads `skills/shared/review-router/SKILL.md`, which classifies the git diff as `BACKEND`, `FRONTEND`, or `BOTH`. It then proceeds as `backend-reviewer` (`BACKEND`), as `frontend-reviewer` (`FRONTEND`), or emits the parallel routing message and stops (`BOTH`). An explicit argument (`/review backend`, `/review frontend`, `/review both`) overrides classification. The router does not duplicate the structural checks of the specialists — it coordinates and synthesizes their outputs into a single review verdict.
 
+
+---
+
+## Featured commands and progressive reveal
+
+Design: [ADR-0030](../docs/development/adrs/0030-first-run-onboarding-detects-instead-of-asking-and-starts-with-a-read-only-task.md) section 5. Nothing here hides or removes a command; every command stays installed on every provider.
+
+| Key in `scripts/lib/commands.json` | Meaning |
+|---|---|
+| `featured: true` | One of the five a new user is shown: `plan`, `fix`, `review`, `commit`, `pr`. Exactly five carry it; the key is absent on the rest. |
+| `related: [...]` | Commands suggested once this one has been used. Every target must exist in `commands/`. |
+
+- **Reveal rule** (`scripts/lib/devteam/command_usage.py`): related commands of the commands already used, minus featured, minus already used, ordered by the source command's usage count; the banner shows at most three.
+- **Usage record**: `command-usage.json`, machine-local (see `CLAUDE-md/user-data.md`), written by `scripts/hooks/user-prompt-submit/03-command-usage.sh`, which every provider reaches through its own `UserPromptSubmit` wiring.
+- **Surfaces**: the session-start banner (`Start with:` / `Also try:`, in the provider's own syntax) and `devteam catalog commands [--featured]` (`featured` and `related` per entry). The render engine writes a `codex-featured` marker into the Codex command skill; Claude Code (symlinked source) and opencode (config entry has no such field) get no marker. Descriptions are never edited.

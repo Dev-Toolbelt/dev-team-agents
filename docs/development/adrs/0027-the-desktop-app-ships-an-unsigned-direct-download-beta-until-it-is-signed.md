@@ -113,3 +113,20 @@ is worse, which is acceptable for a beta that is meant to reach few people.
 > no command that cannot work — still holds: neither a `brew install` nor a `winget install` line is
 > shown until those channels are published. Both installers work only from the first release that
 > contains the CLI; every earlier tag predates it.
+
+> **Note (2026-10-02) — signing is wired and gated on credentials; the status stays Accepted.**
+> `app/electron-builder.yml` no longer disables signing: electron-builder signs and notarises
+> macOS (`CSC_LINK`/`CSC_KEY_PASSWORD` plus `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID`
+> or an API key) and signs the Windows installers (`WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD`) only when
+> those variables exist, and builds exactly the unsigned beta described above when they do not.
+> `app/build/after-build.cjs` inspects the artifact (`codesign`, `stapler`, Authenticode) and fails
+> the build when credentials were supplied but the result does not verify; it prints the UNSIGNED
+> banner whenever credentials were absent. An `app-v*` tag in `.github/workflows/release.yml` builds
+> both platforms, verifies the dmg with `stapler validate` and `spctl`, writes `SHA256SUMS.txt`, and
+> publishes the release (a prerelease unless both platforms verified). Only a verified platform
+> renders its Homebrew cask or winget manifests, and only as workflow artifacts. `CODE_SIGNED` stays
+> `false` in the repository; the credentialed CI build flips it in its own working copy. **Nothing
+> here has run against a real Apple or Authenticode credential**, no cask or winget manifest is
+> published, and this ADR's conditions, including decision 1's "nothing unsigned goes to the cask or
+> winget", stay in force until a verified signed release has actually shipped. Operator steps:
+> `packaging/README.md` § What is left for the maintainer.

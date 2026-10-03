@@ -16,6 +16,28 @@ Each agent has a defined role, expertise, and workflow integration. What makes i
 
 ---
 
+## Quick Start — First result in under 10 minutes
+
+### Desktop app (macOS / Windows)
+
+1. Download the app from the [releases page](https://github.com/Dev-Toolbelt/dev-team-agents/releases) and open it — it installs the CLI for you
+2. Sign in
+3. The app checks git, Python and your AI provider (Claude Code, Codex or opencode), and offers to fix what it can
+4. Choose a project folder, confirm what was detected, and start your first task
+
+The first task only reads your code: audit a module, or review your latest changes, in the provider's read-only mode.
+
+### CLI only
+
+```bash
+brew install dev-toolbelt/devteam/devteam    # macOS, once the first release is published
+winget install DevToolbelt.Devteam           # Windows, once the first release is published
+bash scripts/install-cli.sh --from .         # today: from a clone
+devteam start                                # inside your project
+```
+
+Start with five commands — `plan`, `fix`, `review`, `commit`, `pr`. The rest appear as you use them.
+
 ## Prerequisites
 
 **Python 3** must be installed on your system — it powers the render engine, graphify, and safe JSON merges into `settings.json`. Nothing else is required beyond your CLI of choice.

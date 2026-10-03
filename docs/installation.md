@@ -38,6 +38,42 @@ Pass any version tag to install that exact version regardless of what is current
 
 ---
 
+## First-Run Setup
+
+After installing the CLI, set up your first project with:
+
+```bash
+devteam start
+```
+
+This command:
+1. **Detects** your machine (git, Python, installed providers)
+2. **Suggests** a project type (new, unfinished, maintenance)
+3. **Sets the project up** with defaults and prints the five commands to start with and a read-only first task (`audit` or `review`) to run in your provider
+
+All detected values can be overridden with flags:
+- `--path <dir>` — project directory (default: current directory)
+- `--provider claude|opencode|codex` — override the detected CLI provider
+- `--type new|unfinished|maintenance` — override the project type suggestion
+
+**To inspect what would be detected without running the setup:**
+
+```bash
+devteam detect [--path <dir>]
+```
+
+This reports the stack, providers on your machine, providers the project uses, and the suggested project type, all in JSON when `--json` is passed.
+
+**To check machine prerequisites only:**
+
+```bash
+devteam doctor --machine
+```
+
+This reports git, Python and providers, each with a `fix` command when needed and an `auto_fixable` flag. The desktop app offers a "Fix" button only for auto-fixable findings.
+
+---
+
 ## Where preferences live
 
 Every setting below is a key in the preference schema (`scripts/lib/preferences-defaults.json`). Where you change it depends on how the project is installed:

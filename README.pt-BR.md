@@ -16,6 +16,28 @@ Cada agente tem um papel definido, expertise e integração com workflows. O que
 
 ---
 
+## Começo rápido — Primeiro resultado em menos de 10 minutos
+
+### App desktop (macOS / Windows)
+
+1. Baixe o app na [página de releases](https://github.com/Dev-Toolbelt/dev-team-agents/releases) e abra — ele instala a linha de comando para você
+2. Faça login
+3. O app verifica git, Python e seu provedor de IA (Claude Code, Codex ou opencode), e oferece corrigir o que for possível
+4. Escolha a pasta do projeto, confirme o que foi detectado e inicie a primeira tarefa
+
+A primeira tarefa só lê o código: auditar um módulo ou revisar suas últimas mudanças, no modo somente leitura do provedor.
+
+### Só a linha de comando
+
+```bash
+brew install dev-toolbelt/devteam/devteam    # macOS, quando o primeiro release for publicado
+winget install DevToolbelt.Devteam           # Windows, quando o primeiro release for publicado
+bash scripts/install-cli.sh --from .         # hoje: a partir de um clone
+devteam start                                # dentro do seu projeto
+```
+
+Comece com cinco comandos — `plan`, `fix`, `review`, `commit`, `pr`. Os outros aparecem conforme você usa.
+
 ## Pré-requisitos
 
 **Python 3** precisa estar instalado no sistema — ele alimenta o motor de renderização, o graphify e os merges seguros de JSON no `settings.json`. Nada além do seu CLI de escolha é necessário.

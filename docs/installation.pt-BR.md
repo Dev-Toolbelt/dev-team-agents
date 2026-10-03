@@ -38,6 +38,42 @@ Passe qualquer tag de versão para instalar exatamente aquela versão, independe
 
 ---
 
+## Configuração de Primeira Execução
+
+Após instalar a CLI, configure seu primeiro projeto com:
+
+```bash
+devteam start
+```
+
+Este comando:
+1. **Detecta** sua máquina (git, Python, provedores instalados)
+2. **Sugere** um tipo de projeto (novo, inacabado, manutenção)
+3. **Configura o projeto** com os padrões e mostra os cinco comandos para começar e uma primeira tarefa somente leitura (`audit` ou `review`) para rodar no seu provedor
+
+Todos os valores detectados podem ser substituídos com flags:
+- `--path <dir>` — diretório do projeto (padrão: diretório atual)
+- `--provider claude|opencode|codex` — substitui a CLI provider detectada
+- `--type new|unfinished|maintenance` — substitui a sugestão de tipo de projeto
+
+**Para inspecionar o que seria detectado sem executar a configuração:**
+
+```bash
+devteam detect [--path <dir>]
+```
+
+Isso relata a stack, provedores na sua máquina, provedores que o projeto usa e o tipo de projeto sugerido, tudo em JSON quando `--json` é passado.
+
+**Para verificar apenas os pré-requisitos da máquina:**
+
+```bash
+devteam doctor --machine
+```
+
+Isso relata git, Python e provedores, cada um com um comando `fix` quando necessário e um flag `auto_fixable`. O app desktop oferece um botão "Corrigir" apenas para findings auto_fixable.
+
+---
+
 ## Onde ficam as preferências
 
 Cada configuração abaixo é uma chave do schema de preferências (`scripts/lib/preferences-defaults.json`). Onde você a altera depende de como o projeto foi instalado:

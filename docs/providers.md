@@ -161,6 +161,7 @@ Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, s
 | Merge `gh pr merge` / `glab mr merge` | `PostToolUse` on `Bash`, output contains success marker | `PostToolUse` on `Bash`, output contains success marker | `tool.execute.after` on `bash` |
 | Merge `/devteam:merge` (`git merge <ref>`) | `PostToolUse` on `Bash`, command contains `git merge`, success = no `CONFLICT`/`fatal`/`error:` in output | `PostToolUse` on `Bash` | `tool.execute.after` on `bash` |
 | Issue refs in prompt | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message` → `{session_id, prompt}` |
+| Command use (`command-usage.json`, ADR-0030) | `UserPromptSubmit`, `prompt` (`/devteam:<name>`) | `UserPromptSubmit`, `prompt` (`$devteam-<name>`) | plugin `chat.message` → `{session_id, prompt}`; same unverified raw-vs-expanded caveat as review commands |
 | Branch name refs | Hook call's `branch` (git `rev-parse --abbrev-ref HEAD`) | Hook call's `branch` | Hook call's `branch` |
 
 Claude Code: `PostToolUseFailure` on matchers `Agent|Task|Bash|mcp__.*create_pull_request` carries gh's non-zero "already exists" form and can only CREATE a PR/MR mark (failure events never record merges); field read order is the first present of `tool_response`, `tool_output`, `output`, `error` (the Claude failure payload is not verified live).
