@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -288,6 +289,100 @@ def legacy_owned(previous_artifacts, targets):
         if any(rel == d or rel.startswith(d + "/") for d in legacy_dirs):
             owned.append(rel)
     return owned
+
+
+#: Every file a delegated installer renders names the framework somewhere in its body.
+V2_RENDER_MARKER = "dev-team-agents"
+
+#: A rendered agent, skill or plugin is a few hundred lines; anything larger is not one.
+_RENDER_MAX_BYTES = 1 << 20
+
+
+def read_regular_file(path, limit=_RENDER_MAX_BYTES):
+    """Text of ``path`` when it is a small regular file and not a link, else ``None``.
+
+    ``lstat`` first: a FIFO would block the read and a link could point at
+    ``/dev/zero``, and this runs on a project the CLI has not vetted yet.
+    """
+    try:
+        info = os.lstat(str(path))
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            return None
+        with open(str(path), encoding="utf-8") as stream:
+            return stream.read(limit)
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _has_marker(text):
+    return text is not None and V2_RENDER_MARKER in text.lower()
+
+
+def _frontmatter(text):
+    """``key: value`` pairs of a leading YAML frontmatter block, or ``None``."""
+    lines = (text or "").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    fields = {}
+    for line in lines[1:80]:
+        if line.strip() == "---":
+            return fields
+        key, sep, value = line.partition(":")
+        if sep and not line.startswith((" ", "\t")):
+            fields[key.strip()] = value.strip().strip("\"'")
+    return None
+
+
+def _toml_top_level(text):
+    """Top-level ``key = "value"`` pairs before the first multi-line string."""
+    fields = {}
+    for line in (text or "").splitlines():
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        value = value.strip()
+        if value.startswith('"""'):
+            fields[key.strip()] = '"""'
+            break
+        fields[key.strip()] = value.strip('"')
+    return fields
+
+
+def is_v2_render(rel, dest, version_dir):
+    """True when ``dest`` is a delegated provider file a v2 installer rendered.
+
+    The v2 `install-codex.sh` and `install-opencode.sh` wrote real files, and the
+    oldest of them kept no ledger. A target path from ``--list-targets`` already
+    carries a framework name, so only the content is judged here: the structure the
+    renderer has emitted since its first version **and** the framework marker. A
+    project's own file at the same path, or an edited render that lost either,
+    is not taken for the framework's.
+    """
+    dest = Path(dest)
+    rel = Path(rel)
+    if rel.parent.as_posix() == ".codex/agents" and rel.suffix == ".toml":
+        text = read_regular_file(dest)
+        fields = _toml_top_level(text)
+        return (
+            _has_marker(text)
+            and fields.get("name") == rel.stem
+            and fields.get("developer_instructions") == '"""'
+        )
+    if rel.parent.as_posix() == ".codex/skills" and rel.name.startswith("devteam-"):
+        # The renderer writes one SKILL.md per command and nothing else: a skill
+        # holding anything more has been extended by the project and stays its own.
+        if dest.is_symlink() or not dest.is_dir():
+            return False
+        if [item.name for item in dest.iterdir()] != ["SKILL.md"]:
+            return False
+        text = read_regular_file(dest / "SKILL.md")
+        return _has_marker(text) and (_frontmatter(text) or {}).get("name") == rel.name
+    if rel.parent.as_posix() == ".opencode/agents" and rel.suffix == ".md":
+        text = read_regular_file(dest)
+        return _has_marker(text) and (_frontmatter(text) or {}).get("mode") == "subagent"
+    if rel.as_posix() == OPENCODE_PLUGIN_FILE:
+        return _has_marker(read_regular_file(dest))
+    return False
 
 
 #: Files the installers **merge into** rather than own: the project's own config,

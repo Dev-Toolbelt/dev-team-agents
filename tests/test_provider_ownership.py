@@ -14,7 +14,7 @@ from pathlib import Path
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
 from devteam import bind, migrate, project, providers, registry, versions
-from devteam.errors import ConflictError
+from devteam.errors import ConflictError, UsageError
 
 #: Files a project authored itself, next to (never on top of) the framework's
 #: artifacts. One entry per provider in `providers.ALL_PROVIDERS` — the parity
@@ -39,6 +39,14 @@ OWN_FILES = {
 #: A project-owned path at a name the framework writes: the bind must refuse it.
 COLLISIONS = {
     "claude": ".claude/skills/project-context/SKILL.md",
+    "opencode": ".opencode/agents/backend-developer.md",
+    "codex": ".codex/agents/backend-developer.toml",
+}
+
+#: A file a v2 installer rendered as real content, with no ledger and no manifest
+#: vouching for it: `migrate` must recognise it, quarantine it and reinstall.
+V2_OUTPUT = {
+    "claude": ".claude/agents/dev-team",
     "opencode": ".opencode/agents/backend-developer.md",
     "codex": ".codex/agents/backend-developer.toml",
 }
@@ -91,6 +99,7 @@ class ProviderOwnershipTest(StoreTestCase):
     def test_every_provider_has_a_parity_case(self):
         self.assertEqual(set(OWN_FILES), set(providers.ALL_PROVIDERS))
         self.assertEqual(set(COLLISIONS), set(providers.ALL_PROVIDERS))
+        self.assertEqual(set(V2_OUTPUT), set(providers.ALL_PROVIDERS))
         self.assertEqual(set(TOOLS), set(providers.ALL_PROVIDERS))
 
     def _cases(self):
@@ -149,6 +158,152 @@ class ProviderOwnershipTest(StoreTestCase):
                     if not rel.startswith(path + "/"):
                         self.assertFalse((root / path).is_symlink(), path)
                 self.assertIsNone(registry.get(project.load(root)["project_id"]))
+
+    def _v2_project(self, name, provider):
+        """A v2 install whose provider files are real copies nothing vouches for."""
+        from test_migrate_doctor import materialize_v2_links
+
+        root = self.new_project(name)
+        selected = sorted({"claude", provider})
+        bind.bind(root, provider_names=selected, mode="vendored")
+        bind.unbind(root, keep_artifacts=True)
+        bind.manifest_file(project.load(root)["project_id"]).unlink()
+        materialize_v2_links(root)
+        for ledger in (root / project.PROJECT_DIR).glob(".provider-owned-*"):
+            ledger.unlink()
+        return root, selected
+
+    def test_migrate_takes_over_the_files_a_v2_installer_rendered(self):
+        for provider in self._providers():
+            with self.subTest(provider=provider):
+                root, selected = self._v2_project("v2-output-{}".format(provider), provider)
+                rel = V2_OUTPUT[provider]
+                self.assertTrue((root / rel).exists() and not (root / rel).is_symlink())
+                own = OWN_FILES[provider]
+                self._seed(root, own)
+
+                preview = migrate.plan(root, provider_names=selected, mode="link")
+                self.assertIn(rel, preview["v2_copies"])
+                for path in own:
+                    self.assertNotIn(path, preview["v2_copies"])
+
+                result = migrate.apply(root, provider_names=selected, mode="link")
+                moved = {item["from"] for item in result["quarantined"]}
+                self.assertIn(rel, moved)
+                self.assertTrue((root / rel).exists(), rel)
+                for path in own:
+                    self.assertEqual((root / path).read_text(encoding="utf-8"), "mine\n", path)
+                    self.assertNotIn(path, moved)
+
+    def test_a_project_file_at_a_v2_output_path_is_not_taken_for_the_framework(self):
+        version_dir = versions.require(versions.resolve(None))
+        # Each one names the framework, so only the renderer's structure tells them apart.
+        lookalikes = {
+            "claude": ("---\nname: dev-team\n---\nsee dev-team-agents\n",),
+            "opencode": (
+                "---\ndescription: my own backend agent\n---\nsee dev-team-agents\n",
+                "---\ndescription: x\nmode: primary\n---\nsee dev-team-agents\n",
+            ),
+            "codex": (
+                'name = "backend-developer"\ndescription = "mine"\n',
+                'name = "other"\ndeveloper_instructions = """\ndev-team-agents\n"""\n',
+                'description = "x"\ndeveloper_instructions = """\nname = "backend-developer"\n'
+                'dev-team-agents\n"""\n',
+            ),
+        }
+        self.assertEqual(set(lookalikes), set(providers.ALL_PROVIDERS))
+        for provider in providers.ALL_PROVIDERS:
+            for index, text in enumerate(lookalikes[provider]):
+                with self.subTest(provider=provider, case=index):
+                    root = self.new_project("lookalike-{}-{}".format(provider, index))
+                    rel = V2_OUTPUT[provider]
+                    self._seed(root, [rel], text=text)
+                    self.assertFalse(providers.is_v2_render(rel, root / rel, version_dir))
+
+    def test_every_file_an_installer_renders_is_recognised_as_a_render(self):
+        # Not one sample file: every target, so a command whose source never names the
+        # framework cannot slip through and bring the original refusal back.
+        for provider in self._providers():
+            if provider not in providers.DELEGATED_INSTALLERS:
+                continue
+            with self.subTest(provider=provider):
+                root = self.new_project("renders-{}".format(provider))
+                result = bind.bind(root, provider_names=[provider], mode="link")
+                version_dir = versions.require(versions.resolve(None))
+                targets = providers.delegated_targets(provider, version_dir, root)
+                real = [rel for rel in targets if not (root / rel).is_symlink()]
+                self.assertTrue(real)
+                missed = [
+                    rel for rel in real if not providers.is_v2_render(rel, root / rel, version_dir)
+                ]
+                self.assertEqual(missed, [])
+                bind.unbind(root)
+                self.assertTrue(result["project_id"])
+
+    def test_a_v3_bind_is_not_taken_for_a_v2_install(self):
+        # A v3 bind writes the same real files; its manifest claims them.
+        for provider, mode in self._cases():
+            with self.subTest(provider=provider, mode=mode):
+                root = self.new_project("bound-{}-{}".format(provider, mode))
+                bind.bind(root, provider_names=[provider], mode=mode)
+                if mode == "vendored":
+                    continue  # refused by its own guard, covered in test_migrate_doctor
+                with self.assertRaises(UsageError):
+                    migrate.plan(root, provider_names=[provider], mode=mode)
+
+    def test_bind_points_a_v2_render_at_migrate(self):
+        for provider in self._providers():
+            if provider not in providers.DELEGATED_INSTALLERS:
+                continue
+            with self.subTest(provider=provider):
+                root, selected = self._v2_project("v2-bind-{}".format(provider), provider)
+                # The vendored tree has its own refusal; leave only the provider files.
+                for name in migrate.detect(root)["vendored_trees"]:
+                    shutil.rmtree(str(root / project.PROJECT_DIR / name))
+                identity = project.load(root)["project_id"]
+                registry_before = registry.get(identity)
+                code, out, _ = self.run_cli(
+                    "--json", "bind", str(root), "--provider", provider, "--mode", "link"
+                )
+                self.assertEqual(code, 4)
+                payload = json.loads(out)
+                self.assertEqual(payload["details"]["reason"], bind.V2_INSTALL_REASON)
+                self.assertIn("/.{}/".format(provider), payload["details"]["path"], payload)
+                self.assertEqual(registry.get(identity), registry_before)
+
+    def test_migrate_takes_a_ledgered_file_and_quarantines_the_ledger(self):
+        for provider in self._providers():
+            if provider not in providers.DELEGATED_INSTALLERS:
+                continue
+            with self.subTest(provider=provider):
+                root, selected = self._v2_project("v2-ledger-{}".format(provider), provider)
+                rel = V2_OUTPUT[provider]
+                # Edited past recognition, but the installer's own ledger vouches for it.
+                (root / rel).write_text("edited\n", encoding="utf-8")
+                ledger = "{}/.provider-owned-{}".format(project.PROJECT_DIR, provider)
+                (root / ledger).write_text(rel + "\n", encoding="utf-8")
+
+                # No explicit providers: detection must still see the v2 output.
+                preview = migrate.plan(root, mode="link")
+                self.assertIn(provider, preview["providers"])
+                self.assertIn(rel, preview["v2_copies"])
+                self.assertIn(ledger, preview["v2_copies"])
+
+                result = migrate.apply(root, mode="link")
+                moved = {item["from"] for item in result["quarantined"]}
+                self.assertTrue({rel, ledger} <= moved)
+                self.assertFalse((root / ledger).exists())
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs mkfifo")
+    def test_a_fifo_in_a_skill_does_not_hang_the_plan(self):
+        version_dir = versions.require(versions.resolve(None))
+        root = self.new_project("fifo")
+        skill = root / ".codex" / "skills" / "devteam-review"
+        skill.mkdir(parents=True)
+        os.mkfifo(str(skill / "SKILL.md"))
+        self.assertFalse(
+            providers.is_v2_render(".codex/skills/devteam-review", skill, version_dir)
+        )
 
     def test_bind_refuses_a_collision_before_writing_anything(self):
         for provider, mode in self._cases():

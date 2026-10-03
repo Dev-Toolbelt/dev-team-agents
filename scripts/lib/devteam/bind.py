@@ -458,6 +458,72 @@ def v2_copies(version_dir, project_root):
     ]
 
 
+def _provider_ledger(provider, project_root):
+    """Paths a standalone v2 installer recorded as its own, or an empty set."""
+    ledger = Path(project_root) / project.PROJECT_DIR / (".provider-owned-" + provider)
+    text = providers.read_regular_file(ledger)
+    return {line.strip().rstrip("/") for line in (text or "").splitlines() if line.strip()}
+
+
+def _in_ledger(rel, ledger):
+    # An old ledger recorded whole directories, like the old manifest did.
+    return any(rel == entry or rel.startswith(entry + "/") for entry in ledger)
+
+
+def provider_ledgers(project_root, provider_names):
+    """Project-relative ledger files the selected delegated providers left behind."""
+    root = Path(project_root)
+    found = []
+    for provider_name in provider_names:
+        if provider_name not in providers.DELEGATED_INSTALLERS:
+            continue
+        rel = "{}/.provider-owned-{}".format(project.PROJECT_DIR, provider_name)
+        if (root / rel).is_file() and not (root / rel).is_symlink():
+            found.append(rel)
+    return found
+
+
+def v2_delegated_copies(version_dir, project_root, provider_names, claimed=frozenset(), targets=None):
+    """Every delegated-provider target holding real v2 installer output, project-relative.
+
+    A target counts when it is real content that no bind manifest claims (``claimed``:
+    a v3 bind writes these same files, and they are its own, not a v2 install's) and
+    either the installer's ledger lists it or its content is recognisably a render
+    (:func:`providers.is_v2_render`). A target under a symlinked parent is left to the
+    preflight, which refuses it. ``targets`` reuses a ``{provider: [rel]}`` already
+    computed, so the installer is not asked twice.
+    """
+    root = Path(project_root)
+    found = []
+    for provider_name in provider_names:
+        if provider_name not in providers.DELEGATED_INSTALLERS:
+            continue
+        ledger = _provider_ledger(provider_name, project_root)
+        listed = (targets or {}).get(provider_name)
+        if listed is None:
+            listed = providers.delegated_targets(provider_name, version_dir, project_root)
+        for rel in listed:
+            dest = root / rel
+            if rel in claimed or dest.is_symlink() or not dest.exists():
+                continue
+            try:
+                require_inside(dest, project_root, what="artifact")
+            except ConflictError:
+                continue
+            if _in_ledger(rel, ledger) or providers.is_v2_render(rel, dest, version_dir):
+                found.append(rel)
+    return found
+
+
+def _v2_delegated_error(dest, rel):
+    return ConflictError(
+        "{} is a v2 installer's {}, where this bind installs it".format(dest, rel),
+        hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+        "old file into a dated quarantine rather than deleting it.",
+        details={"path": str(dest), "reason": V2_INSTALL_REASON},
+    )
+
+
 def _preflight(
     version_dir,
     project_root,
@@ -527,9 +593,11 @@ def _preflight(
         existing = []
         for rel in targets:
             dest = root / rel
-            if not (dest.exists() or dest.is_symlink()):
+            if rel in vacated or not (dest.exists() or dest.is_symlink()):
                 continue
             if not _is_managed_path(rel, dest, claimed, project_root):
+                if providers.is_v2_render(rel, dest, version_dir):
+                    raise _v2_delegated_error(dest, rel)
                 raise _foreign_path_error(dest)
             existing.append(rel)
         delegated[provider_name] = targets

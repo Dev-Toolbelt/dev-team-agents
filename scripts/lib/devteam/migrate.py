@@ -27,9 +27,13 @@ Two v2 shapes are converted:
 
 Either shape can also carry its ``.claude/`` links as **real copies** — a tool that
 copied the project dereferencing links, or a checkout without symlink support,
-materialized them (see ``bind.v2_copy``). Those copies are quarantined with the
-tree. A project left with only the copies — an earlier migration that quarantined
-the tree and then had its bind refused on them — is migrated the same way.
+materialized them (see ``bind.v2_copy``) — and the real files a v2 Codex or
+opencode installer rendered under ``.codex/`` or ``.opencode/`` (see
+``providers.is_v2_render``), with the ledger that installer may have kept. Those
+copies are quarantined with the tree. A project left with only the copies — an
+earlier migration that quarantined the tree and then had its bind refused on
+them — is migrated the same way. Files a v3 bind manifest claims are never copies:
+they are that bind's own output.
 
 Every check the bind runs happens before the first move: a refused bind leaves the
 project exactly as it was found.
@@ -325,8 +329,11 @@ def _git_tracked_many(project_root, relatives):
 
 
 def _copy_group(rel):
-    """Quarantine group for a v2 copy: its `.claude/` folder, kept apart from the tree."""
-    return "v2-install/claude/{}".format(Path(rel).parent.name)
+    """Quarantine group for a v2 copy: its provider folder, kept apart from the tree."""
+    path = Path(rel)
+    if path.parent.as_posix() == project.PROJECT_DIR:
+        return "v2-install"  # a provider ledger, beside the tree it belonged to
+    return "v2-install/{}/{}".format(path.parts[0].lstrip("."), path.parent.name)
 
 
 def plan(root=None, provider_names=None, mode="auto", pin=None):
@@ -340,7 +347,15 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
     version_dir = versions.require(
         versions.resolve(pin if pin is not None else (entry or {}).get("pin"))
     )
+    selected = list(provider_names) if provider_names else providers.detect(project_root)
+    manifest = bind_module.read_manifest(known_id) if known_id is not None else {}
+    claimed = {item.get("path") for item in manifest.get("artifacts", [])}
     copies = bind_module.v2_copies(version_dir, project_root)
+    delegated = bind_module.v2_delegated_copies(version_dir, project_root, selected, claimed=claimed)
+    copies += delegated
+    if delegated:
+        # Its ledger would go on vouching for paths the bind now records itself.
+        copies += bind_module.provider_ledgers(project_root, selected)
     if not found["is_v2"] and not copies:
         raise UsageError(
             "{} has no vendored v2 install to migrate".format(project_root),
@@ -361,7 +376,6 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
             ),
         )
 
-    selected = list(provider_names) if provider_names else providers.detect(project_root)
     install_rel = found["install_dir"]
     memory = _memory_moves(project_root, found)
     added = _context_paths_added(project_root, found)
@@ -408,9 +422,11 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
     for name in found["vendored_trees"] + found["vendored_files"]:
         actions.append("move {}/{} into the data-store quarantine".format(install_rel, name))
     if copies:
+        # Every file by name: a file the project edited would otherwise be replaced
+        # under a folder name nobody looked inside.
         actions.append(
-            "move {} real copy(ies) of the v2 install's .claude/ links ({}) into the "
-            "data-store quarantine".format(len(copies), ", ".join(sorted({str(Path(c).parent) for c in copies})))
+            "move {} real copy(ies) of the v2 install's provider files into the "
+            "data-store quarantine: {}".format(len(copies), ", ".join(sorted(copies)))
         )
     actions.append("bind providers: {} (mode={})".format(", ".join(selected), mode))
     if found["layout"] == LAYOUT_PRE_ROOT:
@@ -592,6 +608,11 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
                 {"from": "{}/{}".format(preview["install_dir"], name), "to": str(destination)}
             )
     for rel in preview["v2_copies"]:
+        # Checked again at the move: the plan was read before the bind's preflight,
+        # and a parent swapped for a link since would carry the move out of the tree.
+        source = bind_module.require_inside(project_root / rel, project_root, what="v2 copy")
+        if source.is_symlink():
+            continue
         destination = quarantine.move(
             project_root / rel, project_id, group=_copy_group(rel), stamp=stamp
         )
