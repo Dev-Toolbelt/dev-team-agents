@@ -47,6 +47,7 @@ devteam integration call cloudflare <METHOD> <endpoint> [--query k=v]… [--data
 
 | Rule | Detail |
 |---|---|
+| Form | Writes are exactly `devteam integration call cloudflare <METHOD> <endpoint> …`: method in upper case, right after `cloudflare`, every option after the endpoint. Any other form of a write is refused (exit 2) |
 | Endpoint | Absolute path after `/client/v4`, e.g. `/zones/{zone_id}/dns_records`. No query string: use `--query` |
 | Placeholders | `{zone_id}` and `{account_id}` take the configured values. Put other IDs in literally |
 | Output | `--json` → `{ok, integration, method, endpoint, response}`. `response` is the Cloudflare envelope `{success, errors, messages, result, result_info}` |
@@ -68,7 +69,7 @@ Find the endpoint in [references/endpoints.md](references/endpoints.md). Follow 
 
 1. **Read first.** GET the current state of what will change (the record, the ruleset, the setting).
 2. **Confirm with `AskUserQuestion`.** Show the zone or account name, method, endpoint, the JSON body and the before → after effect. Options: *Apply* / *Cancel*. One confirmation covers one call, or one explicitly listed batch. It never covers "and anything else needed".
-3. **Call with `--allow-write`.**
+3. **Call with `--allow-write`.** The provider then asks the user again in its own prompt (ADR-0032); that approval is the user's, not yours. If the call is denied, stop and report it — never retry it in another form.
 4. **Read back** and report whether the result matches what was confirmed.
 
 High-impact calls need their own confirmation, never bundled with others, and the impact stated in the question:
