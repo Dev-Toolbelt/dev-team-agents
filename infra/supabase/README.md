@@ -3,6 +3,28 @@
 Config as code for the accounts service. Dev-only: `infra/` is not shipped to user projects.
 Two projects, both in `sa-east-1`: `devteam-dev` and `devteam-prod`. Secrets never enter git.
 
+## Local development
+
+Run the whole account service in Docker and point a checkout's CLI at it, with no cloud project,
+OAuth app or SMTP. Needs Docker and the Supabase CLI (`brew install supabase/tap/supabase`).
+
+```bash
+bash infra/supabase/dev-local.sh up          # first run pulls the images
+eval "$(bash infra/supabase/dev-local.sh env)"
+python3 scripts/cli/devteam auth login       # e-mail code or password
+```
+
+- Mail (sign-in, confirmation, reset codes) lands in Mailpit: http://127.0.0.1:54324. Studio: http://127.0.0.1:54323.
+- `up` runs from a generated copy in `.local/` (gitignored) with SMTP, Google and GitHub off; the committed
+  `config.toml` is never edited, so a `config push` cannot inherit a local setting. Google and GitHub need real OAuth apps.
+- `up` also creates a local Ed25519 key (kid `test-local`) and ban pepper in `.local/secrets/`, and sets
+  `ENTITLEMENT_ISSUER` to the URL the CLI calls (inside the stack `SUPABASE_URL` is the gateway's internal address).
+- `env` prints the test seam (`DEVTEAM_AUTH_TEST_URL`, `_KID`, `_PUBKEY`, `_ANON_KEY`) and a throwaway
+  `DEVTEAM_HOME`, so the local account never mixes with your real store. Every command then warns that the seam is active.
+- `down` stops the stack and keeps the database; `reset` drops it. Re-run `up` after editing a migration or function.
+- One failed online check makes the CLI wait 900 s before the next (`RETRY_AFTER_FAILURE_SECONDS`). `devteam auth logout` and sign in again to retry at once.
+- The desktop app does not pass the seam variables to the CLI, so it cannot use the local stack yet.
+
 ## Provision
 
 1. Create each project in the dashboard (region `sa-east-1`, strong DB password stored in your vault).
@@ -31,6 +53,7 @@ read `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which the platform injects.
 |--------|-------|
 | `ENTITLEMENT_ED25519_PRIVATE_KEY` | Base64 of the PKCS#8 DER private key (see the keypair section) |
 | `ENTITLEMENT_KID` | Key id placed in the token header; must match a public key embedded in the CLI |
+| `ENTITLEMENT_ISSUER` | Optional. The `iss` of signed tokens; defaults to `SUPABASE_URL`'s origin, which is right in the cloud. Only `dev-local.sh` sets it |
 | `BAN_HMAC_KEY` | Random pepper for the email HMAC, 32+ bytes (`openssl rand -base64 48`). Changing it orphans every `banned_identities` and `trial_consumed` row, so treat it as write-once |
 
 ```bash

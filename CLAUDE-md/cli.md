@@ -398,7 +398,9 @@ listener), on top of `entitlement.py`. None imports telemetry.
   installers parse one schema. `entitlement.status` is one of `active`, `trial`, `trial_expired`,
   `banned`, `needs_online_check`, `signed_out`, `invalid`.
 - **Test seam.** `DEVTEAM_AUTH_TEST_URL` / `_KID` / `_PUBKEY` (loopback URL, `test-` key id) point the
-  CLI at a fake server; every command then warns on stderr and reports `test_seam: true`. An
+  CLI at a fake server or a local `supabase start` stack (`infra/supabase/dev-local.sh`), with the
+  optional `DEVTEAM_AUTH_TEST_ANON_KEY` for that stack's gateway; every command then warns on stderr
+  and reports `test_seam: true`. An
   unusable seam (a remote URL, a key id without `test-`, a partial set) is **ignored** with a
   `test seam ignored` warning, so a stray variable can neither redirect the CLI nor fail every
   command. Nothing else — no project file, preference or other variable — changes the endpoint.

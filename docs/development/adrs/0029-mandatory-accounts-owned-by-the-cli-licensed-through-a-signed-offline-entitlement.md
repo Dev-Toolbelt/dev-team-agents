@@ -495,8 +495,10 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     file or preference. It accepts only a loopback IdP URL and a test public key with `kid` prefix
     `test-`, a prefix a `prod` key never uses. When active, every command prints a one-line warning
     to stderr and `auth status --json` reports `"test_seam": true`. The bypass it gives the local user
-    is the risk § 8 accepts. *Test:* a non-loopback URL with the seam on is refused; the warning and
-    field are present.
+    is the risk § 8 accepts. An optional `DEVTEAM_AUTH_TEST_ANON_KEY` replaces the public `apikey`
+    only while the seam is valid, so a local `supabase start` gateway accepts the requests; on its
+    own it changes nothing. *Test:* a non-loopback URL with the seam on is refused; the warning and
+    field are present; the anon key is ignored without a valid seam.
 
 ### Open points
 
