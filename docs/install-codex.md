@@ -30,6 +30,19 @@ $devteam-plan do a plan
 
 You can also open `/skills` and select `devteam-plan`.
 
+## Interactive choices in Default mode
+
+In Codex Default mode, `AskUserQuestion` prompts and plan-approval gates (e.g., `$devteam-learn`) fall back to numbered lists in conversation by default. To enable interactive choosers, add the experimental flag to `~/.codex/config.toml`:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
+**Why?** Codex registers `request_user_input` but rejects it in Default mode unless this flag is set. The Codex developers are considering making this the default; it is currently experimental and off by default.
+
+**Note:** `devteam doctor` warns when this flag is absent. `devteam` never writes this file — you set it yourself (per ADR-0022 and ADR-0033). The devteam harness respects the `request_user_input_async` tool as an alternative when it is available.
+
 ## First-time trust flow
 
 Codex requires non-managed hooks to be reviewed before they run. On first use:
