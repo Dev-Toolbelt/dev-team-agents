@@ -32,6 +32,14 @@ node node_modules/electron/install.js
 Confirm with `./node_modules/.bin/electron --version`, which prints a version only when
 the binary is actually there.
 
+On macOS, `npm start` and `npm run dev:app` first run `scripts/brand-dev-electron.mjs`,
+which gives the `Electron.app` under `node_modules` the app's name and icon (and re-signs
+it ad hoc). Without that, the menu bar, ⌘-Tab, Activity Monitor and notifications say
+"Electron" in development: macOS reads them from the running bundle, which `app.setName`
+cannot change. A packaged build brands its own bundle and never runs the script. A fresh
+`npm ci` restores the stock bundle and the next start brands it again; if the Dock still
+shows the old icon, quit the app and start it again.
+
 ## First-Run Wizard (ADR-0030)
 
 When the app opens for the first time, or when no projects are bound yet, it walks through the first-run setup:
