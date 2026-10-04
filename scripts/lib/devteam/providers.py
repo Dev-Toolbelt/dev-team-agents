@@ -384,7 +384,7 @@ def is_v2_render(rel, dest, version_dir):
         return _has_marker(text) and (_frontmatter(text) or {}).get("name") == rel.name
     if rel.parent.as_posix() == ".opencode/agents" and rel.suffix == ".md":
         text = read_regular_file(dest)
-        return _has_marker(text) and (_frontmatter(text) or {}).get("mode") == "subagent"
+        return _has_marker(text) and (_frontmatter(text) or {}).get("mode") in _OPENCODE_AGENT_MODES
     if rel.as_posix() == OPENCODE_PLUGIN_FILE:
         return _has_marker(read_regular_file(dest))
     if rel.as_posix() == permissions.CODEX_RULES_FILE:
@@ -487,6 +487,9 @@ CODEX_MANAGED_EVENTS = (
     "Stop",
     "SessionEnd",
 )
+# "subagent" is what earlier renders wrote (migrate must still take them over); "all" is current.
+_OPENCODE_AGENT_MODES = ("subagent", "all")
+
 #: Where `install-opencode.sh` copies the plugin that wires opencode's hooks.
 OPENCODE_PLUGIN_FILE = ".opencode/plugins/dev-team-agents.ts"
 #: The slash commands `install-opencode.sh` registers are keyed ``devteam:<name>``.

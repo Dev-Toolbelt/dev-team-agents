@@ -192,6 +192,11 @@ def soften_plan_gate(body, provider, plan_gate_setting):
 # Patterns found in agent/command bodies that reference Claude-specific
 # tools or idioms. Each is replaced with the Codex equivalent.
 
+_CODEX_STRUCTURED_CHOICE_DEFAULT = (
+    "Codex's structured user-input tool (`request_user_input`, or "
+    "`request_user_input_async` where the current surface lists that instead)"
+)
+
 _CODEX_BODY_REPLACEMENTS = [
     (r'\bTodoWrite\b', 'update_plan'),
     (r'\bthe Task tool\b', 'spawn_agent'),
@@ -200,50 +205,53 @@ _CODEX_BODY_REPLACEMENTS = [
     (r'\bUse the Task tool\b', 'Use spawn_agent'),
     (r'\bTask tool\b', 'spawn_agent'),
     (r'\b`Task` tool\b', 'spawn_agent'),
-    # question tool phrasing (opencode-specific name; Codex uses request_user_input)
-    (r'\bthe `question` tool\b', "`request_user_input` (Plan mode)"),
-    (r'\b`question` tool\b', "`request_user_input` (Plan mode)"),
-    (r'\bquestion tool\b', "`request_user_input` (Plan mode)"),
     # Hook references that are Claude-specific
     (r'\.claude/settings\.json', '.codex/hooks.json'),
 ]
 
 
+def codex_structured_choice(tool_map=None):
+    """The one phrase every rendered Codex question reference resolves to."""
+    if tool_map:
+        phrase = tool_map.get("providers", {}).get("codex", {}).get("structured_choice")
+        if phrase:
+            return phrase
+    return _CODEX_STRUCTURED_CHOICE_DEFAULT
+
+
 def codex_question_fallback_clause(interaction_mode):
     if interaction_mode == "required":
         return (
-            "if it is unavailable in the current surface, tell the user to "
-            "switch this task to `/plan` and retry so Codex can show the "
-            "interactive chooser"
+            "if neither tool is listed in this turn, tell the user to switch "
+            "this task to `/plan` (or enable `[features] "
+            "default_mode_request_user_input = true` in `~/.codex/config.toml`) "
+            "and retry so Codex can show the interactive chooser"
         )
     return (
-        "if it is unavailable in the current surface, ask the same question "
-        "directly in the conversation, preserving the same options and the "
-        "same recommended choice"
+        "if neither tool is listed in this turn, ask the same question directly "
+        "in the conversation as a numbered list, preserving the same options and "
+        "the same recommended choice, and mention once that adding `[features] "
+        "default_mode_request_user_input = true` to `~/.codex/config.toml` turns "
+        "it into an interactive chooser"
     )
 
 
-def codex_question_replacements(interaction_mode):
+def codex_question_replacements(interaction_mode, tool_map=None):
+    tool = codex_structured_choice(tool_map)
     fallback = codex_question_fallback_clause(interaction_mode)
+    ask = r'`?AskUserQuestion`?'
     return [
-        (r'\buse the `AskUserQuestion` tool with options:\b',
-         f"use the `request_user_input` tool (Plan mode) with the same options; {fallback}:"),
-        (r'\buse the \*\*`AskUserQuestion`\*\* tool with a single question:\b',
-         f"use the **`request_user_input`** tool (Plan mode) for the same single question; {fallback}:"),
-        (r'\buse the \*\*`AskUserQuestion`\*\* tool to offer a health check:\b',
-         f"use the **`request_user_input`** tool (Plan mode) to offer the same health check; {fallback}:"),
-        (r'\buse `AskUserQuestion` for every question with a finite set of answers\b',
-         f"use the `request_user_input` tool (Plan mode) for every question with a finite set of answers; {fallback}"),
-        (r'\bvia `AskUserQuestion`\b', "via `request_user_input` (Plan mode)"),
-        (r'\bwith `AskUserQuestion`\b', "with `request_user_input` (Plan mode)"),
-        (r'\bvia AskUserQuestion\b', "via `request_user_input` (Plan mode)"),
-        (r'\bwith AskUserQuestion\b', "with `request_user_input` (Plan mode)"),
-        (r'\bthe `AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
-        (r'\b`AskUserQuestion` tool\b', "`request_user_input` (Plan mode)"),
-        (r'\bAskUserQuestion\b', "`request_user_input` (Plan mode)"),
-        (r'\bthe `question` tool\b', "`request_user_input` (Plan mode)"),
-        (r'\b`question` tool\b', "`request_user_input` (Plan mode)"),
-        (r'\bquestion tool\b', "`request_user_input` (Plan mode)"),
+        (rf'\buse (?:the )?\*\*{ask}\*\* tool with a single question:',
+         f"use {tool} for the same single question; {fallback}:"),
+        (rf'\buse (?:the )?\*\*{ask}\*\* tool to offer a health check:',
+         f"use {tool} to offer the same health check; {fallback}:"),
+        (rf'\buse (?:the )?{ask} tool with options:',
+         f"use {tool} with the same options; {fallback}:"),
+        (rf'\buse {ask} for every question with a finite set of answers',
+         f"use {tool} for every question with a finite set of answers; {fallback}"),
+        (rf'\*\*{ask}\*\*(?: tool)?', f"**{tool}**"),
+        (rf'(?:\bthe )?{ask}(?: tool)?', tool),
+        (r'(?:\bthe )?`?question`? tool\b', tool),
     ]
 
 
@@ -320,14 +328,14 @@ def rewrite_codex_question_blocks(body):
 
     return _CODEX_JSON_BLOCK_RE.sub(_replace, body)
 
-def apply_codex_body_rewrites(body, interaction_mode="optional"):
+def apply_codex_body_rewrites(body, interaction_mode="optional", tool_map=None):
     """Apply all Codex-specific text replacements to the body.
     
     Runs BEFORE the preamble is prepended, so the body is self-contained
     and references only Codex-native tools and paths.
     """
     result = body
-    replacements = codex_question_replacements(interaction_mode) + _CODEX_BODY_REPLACEMENTS
+    replacements = codex_question_replacements(interaction_mode, tool_map) + _CODEX_BODY_REPLACEMENTS
     for pattern, replacement in replacements:
         flags = re.IGNORECASE
         if r'\n' in pattern:
@@ -795,8 +803,9 @@ def tool_conventions_note(provider, tool_map):
         note_lines.append("> · (no renames — tool references are native or "
                           "self-explanatory in this provider.)")
     else:
+        structured = prov_entry.get("structured_choice", "")
         for line in idioms:
-            note_lines.append(f"> {line}")
+            note_lines.append(f"> {line.replace('{structured_choice}', structured)}")
     note_lines.append("")
     return "\n".join(note_lines)
 
@@ -848,9 +857,8 @@ def render_agent_claude(name, fm, body, src_path):
 
 def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     desc = fm.get("description", "").strip()
-    tools_list = [t.strip() for t in (fm.get("tools", "") or "").split(",") if t.strip()]
-    permission = _opencode_permission(tools_list)
-    fm_lines = ["---", f"description: {desc}", "mode: subagent"]
+    permission = _opencode_permission()
+    fm_lines = ["---", f"description: {desc}", "mode: all"]
     if model_id:
         fm_lines.append(f"model: {model_id}")
     if effort:
@@ -871,40 +879,16 @@ def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     return {"path": f".opencode/agents/{name}.md", "content": content}
 
 
-def _opencode_permission(tools_list):
-    """Maps Claude `tools:` list → opencode `permission:` object.
+def _opencode_permission():
+    """Canonical `permission:` object for every rendered opencode agent.
 
-    Every agent is allowed to spawn subagents via the `task` tool, regardless
-    of whether its Claude `tools:` line lists `Task`. Per the framework's
-    agent design, any agent may delegate. Without this, opencode would
-    prompt before each `task` call.
+    The agents' `tools:` frontmatter key no longer exists, so permissions
+    cannot be derived from it; deriving them anyway rendered every agent as
+    `bash: deny` with no `question`. `task` lets any agent delegate, `question`
+    lets plan approvals and finite-choice decisions reach the user, and shell
+    access prompts instead of being denied.
     """
-    perm = {"task": "allow"}
-    has_bash = False
-    for t in tools_list:
-        t = t.strip()
-        if t == "Read":
-            perm["read"] = "allow"
-        elif t in ("Write", "Edit"):
-            perm["edit"] = "allow"
-        elif t == "Glob":
-            perm["glob"] = "allow"
-        elif t == "Grep":
-            perm["grep"] = "allow"
-        elif t == "Bash":
-            has_bash = True
-            perm["bash"] = "ask"
-        elif t == "WebSearch":
-            perm["websearch"] = "allow"
-        elif t == "WebFetch":
-            perm["webfetch"] = "allow"
-        elif t == "AskUserQuestion":
-            perm["question"] = "allow"
-        elif t == "TodoWrite":
-            perm["todowrite"] = "allow"
-    if not has_bash:
-        perm["bash"] = "deny"
-    return perm
+    return {"task": "allow", "question": "allow", "bash": "ask"}
 
 
 def render_agent_codex(name, fm, body, model_id, effort, tool_map):
@@ -916,7 +900,7 @@ def render_agent_codex(name, fm, body, model_id, effort, tool_map):
         model_id_short = model_id
     # Apply path rewrites and Codex body rewrites
     body = apply_path_rewrites(body, "codex", tool_map)
-    body = apply_codex_body_rewrites(body, "optional")
+    body = apply_codex_body_rewrites(body, "optional", tool_map)
     body = apply_tool_rewrites(body, "codex", tool_map)
     # Last, so the banner's resolved values are authoritative over any rewrite.
     body = render_run_banner(body, model_id, effort, "codex")
@@ -981,7 +965,7 @@ def render_command_codex(name, meta, body, model_id, effort, tool_map):
     # Apply path rewrites, Codex body rewrites, and plan gate softening
     body = apply_path_rewrites(body, "codex", tool_map)
     body = apply_codex_command_specialization(name, body)
-    body = apply_codex_body_rewrites(body, interaction_mode)
+    body = apply_codex_body_rewrites(body, interaction_mode, tool_map)
     body = apply_tool_rewrites(body, "codex", tool_map)
     body = soften_plan_gate(body, "codex", meta.get("plan_gate", "conditional"))
     desc = meta.get("description", "")
