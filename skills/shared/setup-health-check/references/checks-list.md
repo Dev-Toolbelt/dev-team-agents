@@ -294,12 +294,19 @@ for path, expected_mode in checks:
         missing.append(f"{path.name}:MISSING")
         continue
     text = path.read_text()
-    has_request = "`request_user_input`" in text
+    has_request = "`request_user_input_async`" in text
     has_mode_marker = f"<!-- codex-interaction-mode: {expected_mode} -->" in text
-    has_direct_fallback = "ask the same question directly in the conversation, preserving the same options and the same recommended choice" in text
-    has_plan_retry = "switch this task to `/plan` and retry" in text
+    has_direct_fallback = (
+        "ask the same question directly in the conversation" in text
+        and "default_mode_request_user_input" in text
+    )
+    has_plan_retry = "switch this task to `/plan`" in text
+    pinned_plan_mode = "(Plan mode)" in text
+    nested_backticks = "``request_user_input" in text
     if (
         has_request
+        and not pinned_plan_mode
+        and not nested_backticks
         and has_mode_marker
         and ((expected_mode == "optional" and has_direct_fallback and not has_plan_retry)
              or (expected_mode == "required" and has_plan_retry))
@@ -309,6 +316,10 @@ for path, expected_mode in checks:
         parts = []
         if not has_request:
             parts.append("missing_request_user_input")
+        if pinned_plan_mode:
+            parts.append("pinned_plan_mode")
+        if nested_backticks:
+            parts.append("nested_backticks")
         if not has_mode_marker:
             parts.append("missing_interaction_mode_marker")
         if expected_mode == "optional" and not has_direct_fallback:
@@ -321,6 +332,30 @@ for path, expected_mode in checks:
 
 for item in missing:
     print(item)
+PY
+
+# Codex Default mode interactive chooser flag (WARN only, read-only: never edit ~/.codex/config.toml)
+python3 - <<'PY'
+import re
+from pathlib import Path
+
+config = Path.home() / ".codex" / "config.toml"
+try:
+    text = config.read_text()
+except OSError:
+    text = None
+enabled = False
+if text:
+    dotted = re.search(r"^\s*features\.default_mode_request_user_input\s*=\s*true\b", text, re.M)
+    header = re.search(r"^\[features\]\s*$", text, re.M)
+    if header:
+        body = text[header.end():]
+        nxt = re.search(r"^\s*\[", body, re.M)
+        body = body[: nxt.start()] if nxt else body
+        enabled = bool(re.search(r"^\s*default_mode_request_user_input\s*=\s*true\b", body, re.M))
+    enabled = enabled or bool(dotted)
+print("codex-default-mode-questions:OK" if enabled else
+      "codex-default-mode-questions:WARN: add `[features] default_mode_request_user_input = true` to ~/.codex/config.toml for the interactive chooser (devteam never writes it)")
 PY
 
 # Agent TOML model / effort mapping against tiers.json + agent_effort overrides

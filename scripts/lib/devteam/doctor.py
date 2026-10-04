@@ -90,6 +90,14 @@ def _ask_rule_findings(root, bound, manifest):
             ))
         else:
             findings.append(_finding(OK, "permissions", "integration writes ask before running (Codex)"))
+        if permissions.codex_default_mode_questions_enabled() is not True:
+            findings.append(_finding(
+                WARN, "permissions",
+                "Codex Default mode rejects the interactive chooser, so devteam questions fall back to a "
+                "plain-text numbered list; devteam does not write ~/.codex/config.toml",
+                "Add `[features] default_mode_request_user_input = true` to `~/.codex/config.toml` "
+                "to get the interactive chooser.",
+            ))
     return findings
 
 

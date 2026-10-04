@@ -240,3 +240,30 @@ def codex_project_trusted(project_root, home=None):
         trust = re.search(r'^\s*trust_level\s*=\s*"([^"]*)"', body, re.M)
         return bool(trust) and trust.group(1) == "trusted"
     return False
+
+
+def codex_default_mode_questions_enabled(home=None):
+    """Whether ``[features] default_mode_request_user_input = true`` is set in ``~/.codex/config.toml``.
+
+    True when enabled, False when the file is readable but the key is absent or false,
+    ``None`` when the file cannot be read. Regex-based for the same reason as
+    ``codex_project_trusted``. devteam only reads this file; it never writes it.
+    """
+    home = Path(home) if home else Path(os.path.expanduser("~"))
+    config = home / ".codex" / "config.toml"
+    try:
+        text = config.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    key = "default_mode_request_user_input"
+    dotted = re.search(r"^\s*features\.{}\s*=\s*(true|false)\b".format(key), text, re.M)
+    if dotted and dotted.group(1) == "true":
+        return True
+    header = re.search(r"^\[features\]\s*(?:#.*)?$", text, re.M)
+    if not header:
+        return False
+    body = text[header.end():]
+    nxt = re.search(r"^\s*\[", body, re.M)
+    body = body[: nxt.start()] if nxt else body
+    value = re.search(r"^\s*{}\s*=\s*(true|false)\b".format(key), body, re.M)
+    return bool(value) and value.group(1) == "true"
