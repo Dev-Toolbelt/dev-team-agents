@@ -15,6 +15,13 @@ import type { CliResolution, CliSource } from '../shared/api.js';
 /** What the user sees in every menu, title and About panel. Not the package or bundle id. */
 export const DISPLAY_NAME = 'Dev Team Agents';
 
+/**
+ * `appId` in `electron-builder.yml`, which a test keeps equal. Windows files a toast under
+ * the process's AppUserModelID; left unset, Electron's default makes every notification
+ * read "electron.app.Dev Team Agents" instead of the app's name and icon.
+ */
+export const APP_ID = 'com.devtoolbelt.dev-team-agents-app';
+
 const SOURCE_LABEL: Record<CliSource, string> = {
   configured: 'configured path',
   path: 'PATH',

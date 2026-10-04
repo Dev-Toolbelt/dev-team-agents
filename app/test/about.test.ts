@@ -2,9 +2,12 @@
  * The native About panel's text. It replaced an in-app tab as the answer to "which
  * `devteam` is this?" (ADR-0011), so each state of the resolution must say something true.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { DISPLAY_NAME, aboutCredits, type AboutFacts } from '../src/main/about.js';
+import { APP_ID, DISPLAY_NAME, aboutCredits, type AboutFacts } from '../src/main/about.js';
 
 const facts: AboutFacts = {
   appVersion: '0.0.0',
@@ -37,5 +40,12 @@ describe('aboutCredits', () => {
 
   it('uses the product name users read, not the package name', () => {
     expect(DISPLAY_NAME).toBe('Dev Team Agents');
+  });
+});
+
+describe('APP_ID', () => {
+  it('is the appId electron-builder stamps on the packaged build', () => {
+    const config = readFileSync(fileURLToPath(new URL('../electron-builder.yml', import.meta.url)), 'utf8');
+    expect(config).toMatch(new RegExp(`^appId: ${APP_ID.replace(/\./g, '\\.')}$`, 'm'));
   });
 });

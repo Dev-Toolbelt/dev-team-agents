@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 
 import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, screen, session, shell } from 'electron';
 
-import { DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
+import { APP_ID, DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
@@ -371,6 +371,8 @@ app.setPath('userData', join(app.getPath('appData'), 'dev-team-agents-app'));
 // the project names among them — to a directory nothing reads. The literal keeps the
 // directory where it has always been; the name below is display only.
 app.setName(DISPLAY_NAME);
+// Windows only: the identity a toast is filed under (see `APP_ID`). Before any notification.
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 logDirectoryFinal = true;
 
 // One instance: a second would run a second `watch` and show every notification twice.
