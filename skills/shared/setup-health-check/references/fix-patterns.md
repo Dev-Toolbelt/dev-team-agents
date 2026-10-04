@@ -130,7 +130,7 @@ When any of the following Codex checks fail:
 - missing generated `$devteam-*` skill dirs
 - generated `$devteam-*` skill frontmatter names do not match their folder basenames
 - legacy project-local `.codex/prompts/devteam-*.md` aliases still exist
-- rendered Codex command skills still use the pre-`request_user_input` quiz generation (missing `request_user_input`, missing `/plan` retry guidance, or still instructing degraded plain-text choice rendering)
+- rendered Codex command skills carry a stale structured-choice generation (missing `request_user_input_async`, a pinned "(Plan mode)" phrase, nested backticks around the tool name, a missing `default_mode_request_user_input` hint in optional commands, or missing `/plan` guidance in required ones)
 - mismatched `.codex/agents/*.toml` `model` / `model_reasoning_effort`
 
 re-render and reinstall the Codex provider:
@@ -142,6 +142,19 @@ bash .dev-team-agents/scripts/install-codex.sh
 This is the canonical repair because the Codex install is rendered output. Fixing
 individual prompt, skill, TOML, or hook files by hand invites drift from the
 canonical source in `agents/`, `commands/`, `skills/`, and `scripts/lib/*.json`.
+
+### Codex Default mode chooser flag
+
+When `codex-default-mode-questions:WARN` is reported, tell the user to add this to
+`~/.codex/config.toml`:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
+Never edit `~/.codex/config.toml` or `.codex/config.toml` automatically; that is user
+configuration, not a file the installer owns.
 
 ## Auto-fix for non-executable scripts
 

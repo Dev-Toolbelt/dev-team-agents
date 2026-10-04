@@ -46,10 +46,22 @@ FORBIDDEN_PATTERNS=(
     "<!-- model:"
 )
 
+# Regression patterns: literal matches, never auto-fixed. The fix is a re-render.
+RENDER_REGRESSION_PATTERNS=(
+    '``request_user_input'
+    '`request_user_input` (Plan mode)'
+)
+
 check_file() {
     local file="$1"
     local name
     name=$(basename "$file")
+    for pattern in "${RENDER_REGRESSION_PATTERNS[@]}"; do
+        if grep -qF -- "$pattern" "$file" 2>/dev/null; then
+            echo "  ✗ $name: contains '$pattern' (renderer regression; run 'devteam sync' to re-render)"
+            ISSUES=$((ISSUES + 1))
+        fi
+    done
     for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
         if grep -qF "$pattern" "$file" 2>/dev/null; then
             echo "  ✗ $name: contains '$pattern'"
@@ -96,9 +108,9 @@ fi
 SKILLS_DIR="$TARGET/skills"
 if [ -d "$SKILLS_DIR" ]; then
     echo "--- skills/ ---"
-    find "$SKILLS_DIR" -type f -name 'SKILL.md' | while read -r f; do
+    while IFS= read -r f; do
         check_file "$f"
-    done
+    done < <(find "$SKILLS_DIR" -type f -name 'SKILL.md')
 fi
 
 echo ""

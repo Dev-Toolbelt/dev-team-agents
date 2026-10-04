@@ -13,8 +13,8 @@
     "opt_out": "No plan gate. Used for thin runner commands (update, symlinks)."
   },
   "_interaction_mode_values": {
-    "required": "Structured choices are a hard part of the command UX. Codex should keep the interactive chooser requirement and route the user to /plan when unavailable.",
-    "optional": "Structured choices are preferred, but the command must still work in normal Codex mode by asking the same question directly in conversation when the chooser is unavailable.",
+    "required": "Structured choices are a hard part of the command UX. Codex should keep the interactive chooser requirement and, when neither request_user_input nor request_user_input_async is listed in the turn, route the user to /plan (or the default_mode_request_user_input feature flag).",
+    "optional": "Structured choices are preferred, but the command must still work in normal Codex mode by asking the same question directly in conversation as a numbered list when neither request_user_input nor request_user_input_async is listed in the turn.",
     "none": "The command should not rely on structured choices at all."
   },
   "commands": {

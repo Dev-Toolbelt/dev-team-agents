@@ -22,6 +22,10 @@ Restart opencode. Type:
 
 The UX is identical to Claude Code — same slash commands, same delegation flow.
 
+## Agent rendering and permissions
+
+opencode agents render with `mode: all`, which means they run in your primary session rather than as isolated subtasks. This allows agents to ask questions using `AskUserQuestion` and to be visible in the agent switcher. Permissions are automatically wired with a canonical set: `task: allow` (for spawning commands), `question: allow` (for interactive prompts), and `bash: ask` (for shell commands). These permissions are not derived from agent frontmatter — the installer writes them globally once (see ADR-0033).
+
 ## Working from a local clone
 
 Skip the curl-pipe and point directly at the repo:
