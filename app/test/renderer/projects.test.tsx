@@ -1676,3 +1676,63 @@ describe('Projects — a project out of step with its registration is offered Re
     expect(screen.queryByRole('button', { name: /repair…/i })).not.toBeInTheDocument();
   });
 });
+
+describe('Projects — sorted by display name', () => {
+  /** Row names in document order; each row's first cell leads with the display name. */
+  function names(container: ParentNode = document): string[] {
+    return Array.from(container.querySelectorAll('tbody tr'))
+      .filter((row) => !row.hasAttribute('data-folder-header'))
+      .map((row) => row.textContent ?? '');
+  }
+
+  it('orders case-insensitively and numerically, with a custom name beating the folder name', async () => {
+    const projects = [
+      project({ project_id: 'p10', path: '/repo/proj10' }),
+      project({ project_id: 'p2', path: '/repo/proj2' }),
+      project({ project_id: 'pb', path: '/repo/Beta' }),
+      project({ project_id: 'pa', path: '/repo/zzz-folder' }),
+    ];
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))),
+        projectNames: vi.fn(() => Promise.resolve({ pa: 'alpha' })),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    await screen.findByText('alpha');
+
+    const rows = names();
+    const at = (needle: string) => rows.findIndex((text) => text.includes(needle));
+    expect(at('alpha')).toBeLessThan(at('Beta'));
+    expect(at('Beta')).toBeLessThan(at('proj2'));
+    expect(at('proj2')).toBeLessThan(at('proj10'));
+    expect(at('zzz-folder')).toBe(-1);
+  });
+
+  it('orders the rows inside a folder the same way', async () => {
+    const projects = [
+      project({ project_id: 'p1', path: '/repo/proj10' }),
+      project({ project_id: 'p2', path: '/repo/proj2' }),
+      project({ project_id: 'p3', path: '/repo/Apple' }),
+    ];
+    installBridge(
+      fakeBridge({
+        listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects }))),
+        projectFolders: vi.fn(() =>
+          Promise.resolve({ folders: [{ id: 'sites', name: 'Sites', parentId: null, collapsed: false }], membership: { p1: 'sites', p2: 'sites', p3: 'sites' } }),
+        ),
+      }),
+    );
+
+    render(<Projects environment={environment()} />);
+    const header = await screen.findByText('Sites');
+    const body = header.closest('tbody')!;
+    await vi.waitFor(() => expect(names(body)).toHaveLength(3));
+
+    const rows = names(body);
+    const at = (needle: string) => rows.findIndex((text) => text.includes(needle));
+    expect(at('Apple')).toBeLessThan(at('proj2'));
+    expect(at('proj2')).toBeLessThan(at('proj10'));
+  });
+});

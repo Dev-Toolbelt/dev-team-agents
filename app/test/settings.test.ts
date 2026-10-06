@@ -12,7 +12,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETTINGS_FILE_NAME, readSettings, writeOpenAtLogin, writeProjectFolders, writeProjectName } from '../src/main/settings.js';
+import { SETTINGS_FILE_NAME, clearProjectName, readSettings, writeOpenAtLogin, writeProjectFolders, writeProjectName } from '../src/main/settings.js';
 
 let dir: string;
 
@@ -347,5 +347,44 @@ describe('the round trip: a settings problem must survive into EnvironmentReport
     expect(report.settings.cliPathConfigured).toBe(false);
 
     vi.doUnmock('electron');
+  });
+});
+
+describe('clearProjectName', () => {
+  it('round-trips with writeProjectName and keeps every other key', async () => {
+    // Arrange
+    await writeFile(join(dir, SETTINGS_FILE_NAME), JSON.stringify({ cliPath: '/usr/local/bin/devteam' }), 'utf8');
+    await writeProjectName(dir, 'p1', 'One');
+    await writeProjectName(dir, 'p2', 'Two');
+    expect((await readSettings(dir)).projectNames).toEqual({ p1: 'One', p2: 'Two' });
+
+    // Act
+    await clearProjectName(dir, 'p1');
+
+    // Assert
+    const after = await readSettings(dir);
+    expect(after.projectNames).toEqual({ p2: 'Two' });
+    expect(after.cliPath).toBe('/usr/local/bin/devteam');
+  });
+
+  it('is a no-op for an id with no stored name', async () => {
+    // Arrange
+    await writeProjectName(dir, 'p1', 'One');
+    const before = await readFile(join(dir, SETTINGS_FILE_NAME), 'utf8');
+
+    // Act
+    await clearProjectName(dir, 'absent');
+
+    // Assert
+    expect((await readSettings(dir)).projectNames).toEqual({ p1: 'One' });
+    expect(await readFile(join(dir, SETTINGS_FILE_NAME), 'utf8')).toBe(before);
+  });
+
+  it('is a no-op when the settings file does not exist', async () => {
+    // Act
+    await clearProjectName(dir, 'absent');
+
+    // Assert
+    expect((await readSettings(dir)).projectNames).toEqual({});
   });
 });

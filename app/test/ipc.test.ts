@@ -337,6 +337,95 @@ describe('bindProject stores a name only after the bind succeeds, and never in t
   });
 });
 
+// ── renameProject — the app's own record, validated and checked against the registry ──
+
+describe('renameProject', () => {
+  async function stored(): Promise<Record<string, unknown>> {
+    const raw = JSON.parse(await readFile(join(dir, 'settings.json'), 'utf8')) as { projectNames?: Record<string, unknown> };
+    return raw.projectNames ?? {};
+  }
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('sets a trimmed name and projectNames() reflects it, then null resets it', async () => {
+    // Arrange
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const rename = handlers.get(CHANNELS.renameProject)!;
+
+    // Act
+    const set = await rename(TRUSTED, 'proj-1', '  Storefront  ');
+
+    // Assert
+    expect(set).toEqual({ ok: true });
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({ 'proj-1': 'Storefront' });
+
+    // Act
+    const reset = await rename(TRUSTED, 'proj-1', null);
+
+    // Assert
+    expect(reset).toEqual({ ok: true });
+    expect(await handlers.get(CHANNELS.projectNames)?.(TRUSTED)).toEqual({});
+    expect(await stored()).toEqual({});
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses an id the CLI list does not know, without writing', async () => {
+    // Arrange
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+
+    // Act
+    const answer = await handlers.get(CHANNELS.renameProject)?.(TRUSTED, 'stray-id', 'Name');
+
+    // Assert
+    expect(answer).toMatchObject({ ok: false, message: expect.stringMatching(/not bound/) });
+    expect(await stored()).toEqual({});
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('refuses invalid names before touching the registry or the file', async () => {
+    // Arrange
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const rename = handlers.get(CHANNELS.renameProject)!;
+
+    // Act / Assert
+    expect(await rename(TRUSTED, 'proj-1', '   ')).toMatchObject({ ok: false, message: expect.stringMatching(/needs a name/) });
+    expect(await rename(TRUSTED, 'proj-1', 'x'.repeat(121))).toMatchObject({ ok: false, message: expect.stringMatching(/at most 120/) });
+    expect(await rename(TRUSTED, 'proj-1', 'a\u0000b')).toMatchObject({ ok: false, message: expect.stringMatching(/control/) });
+    expect(await rename(TRUSTED, 'proj-1', 42)).toMatchObject({ ok: false, message: expect.stringMatching(/not text/) });
+    expect(await rename(TRUSTED, 'proj-1', undefined)).toMatchObject({ ok: false });
+    expect(await stored()).toEqual({});
+  });
+
+  it('refuses an empty, oversized or non-string id', async () => {
+    // Arrange
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const rename = handlers.get(CHANNELS.renameProject)!;
+
+    // Act / Assert
+    for (const id of ['', 'i'.repeat(129), 7, null, undefined]) {
+      expect(await rename(TRUSTED, id, 'Name')).toMatchObject({ ok: false, message: expect.stringMatching(/could not be identified/) });
+    }
+    expect(await stored()).toEqual({});
+  });
+
+  it.skipIf(skipOnWindows)('refuses, writing nothing, when the project list cannot be read', async () => {
+    // Arrange: a CLI that answers everything but fails `list`
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    const wrapper = join(dir, 'devteam-no-list');
+    await writeFile(wrapper, `#!/bin/sh\ncase " $* " in *" list "*) exit 1;; esac\nexec '${FAKE_BINARY}' "$@"\n`, 'utf8');
+    await chmod(wrapper, 0o755);
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: wrapper }), 'utf8');
+    registerIpc({ userDataDir: dir, appVersion: '0.0.0-test', electronVersion: '39.8.10', packaged: false, trustedRenderer: TRUSTED_RENDERER });
+
+    // Act
+    const answer = await handlers.get(CHANNELS.renameProject)?.(TRUSTED, 'proj-1', 'Name');
+
+    // Assert
+    expect(answer).toMatchObject({ ok: false, message: expect.stringMatching(/could not be read/) });
+    expect(await stored()).toEqual({});
+  });
+});
+
 // ── project_id resolution — the security property every non-bind write action rests on ──
 
 describe('write actions resolve project_id against list, never trust a path from the renderer', () => {
