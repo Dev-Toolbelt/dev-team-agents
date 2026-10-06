@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`devteam bind` on a pre-v2.1.0 install now carries `reason: v2-install`.** The refusal for a project still installed at `.claude/dev-team-agents/` set only `details.path`, so the desktop app never offered its migrate repair there, though the remedy is the same `devteam migrate`. Additive `--json` key; every provider.
 - **`devteam migrate` no longer refuses a v2 install committed from Windows Git Bash.** There `ln -s` without symlink permission writes each v2 link as a small regular file holding an `IntxLNK\x01` + UTF-16LE stub (Cygwin's `!<symlink>` is the other variant), which `bind` read as project content and refused with exit 4 "already exists and was not created by dev-team-agents". `providers.read_link_stub()` now decodes those and git's own plain-text link files; a stub counts only when it is a regular file of at most 4096 bytes inside the project and its target resolves into `.dev-team-agents/` or `.claude/dev-team-agents/`. Recognised stubs are listed in `v2_copies`, quarantined (never deleted) and, with `--untrack`, removed from the index. Covers the Codex and opencode `skills/dev-team-agents` link too, and a `bind` over one now carries the `v2-install` reason (and the app's migrate repair) like Claude's.
 
 ### Added
