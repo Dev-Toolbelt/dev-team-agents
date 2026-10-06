@@ -86,7 +86,7 @@ import {
 } from '../shared/pluginRules.js';
 import { CONSENT_KEYS, PREFERENCE_RULES, valueProblem } from '../shared/preferenceRules.js';
 import { trustedHandler, type RendererTarget } from './security.js';
-import { readSettings, writeOnboardingCompleted, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
+import { clearProjectName, readSettings, writeOnboardingCompleted, writeProjectFolders, writeProjectName, type AppSettings } from './settings.js';
 import { launchArgvProblem } from './firstTaskLauncher.js';
 import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, type ProjectFoldersAnswer } from '../shared/projectFolders.js';
 import { PROVIDERS } from '../shared/providers.js';
@@ -94,6 +94,8 @@ import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
 import {
   type CliInstallResult,
   CHANNELS,
+  projectNameProblem,
+  type RenameProjectAnswer,
   type BindMode,
   type BindProvider,
   type BindReport,
@@ -678,6 +680,29 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
   handle(CHANNELS.projectNames, async (): Promise<Readonly<Record<string, string>>> => {
     const current = await ensureSettings();
     return current.projectNames;
+  });
+
+  // Spawns no mutating command — the name is this app's own record, like `bind`'s `name`.
+  // The project id is checked against the registry so a stray id cannot grow the file.
+  handle(CHANNELS.renameProject, async (_event, rawId: unknown, rawName: unknown): Promise<RenameProjectAnswer> => {
+    if (typeof rawId !== 'string' || rawId === '' || rawId.length > 128) return { ok: false, message: 'The project could not be identified.' };
+    if (rawName !== null) {
+      if (typeof rawName !== 'string') return { ok: false, message: 'The name is not text.' };
+      const problem = projectNameProblem(rawName);
+      if (problem !== null) return { ok: false, message: problem };
+    }
+    const known = await listPaths();
+    if (known === null) return { ok: false, message: 'The project list could not be read, so the name was not changed.' };
+    if (!known.has(rawId)) return { ok: false, message: 'That project is not bound to this store.' };
+    try {
+      if (rawName === null) await clearProjectName(deps.userDataDir, rawId);
+      else await writeProjectName(deps.userDataDir, rawId, rawName);
+    } catch (error) {
+      return { ok: false, message: `The name could not be saved: ${error instanceof Error ? error.message : String(error)}` };
+    } finally {
+      settings = null;
+    }
+    return { ok: true };
   });
 
   // Spawns nothing — the folders are this app's own record (ADR-0021).

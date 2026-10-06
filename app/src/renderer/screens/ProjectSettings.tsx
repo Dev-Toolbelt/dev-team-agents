@@ -24,6 +24,8 @@ import { SELECT_CLASS } from '../formStyles.js';
 import { Loading, Problem } from '../Problem.js';
 import { PinDialog, UnbindDialog } from './ProjectDialogs.js';
 import { ProjectIntegrations } from './ProjectIntegrations.js';
+import { ProjectNameField } from './ProjectNameField.js';
+import { basename } from './ProjectRow.js';
 import { ProjectPlugins } from './ProjectPlugins.js';
 import { ProjectCredentials } from '../credentials/ProjectCredentials.js';
 import { useAction, useOperation } from '../useOperation.js';
@@ -109,9 +111,15 @@ export function ProjectSettings({
   onUnbound,
   onOpenIntegrations,
   integrationsNonce = 0,
+  storedName,
+  onRenamed,
 }: {
   project: ProjectRecord;
   name: string;
+  /** The app's own name for this project, absent when it shows the folder's name. */
+  storedName?: string | undefined;
+  /** The name was set or reset; the caller's name map is now stale. */
+  onRenamed?: ((projectId: string, name: string | undefined) => void) | undefined;
   environment: EnvironmentReport | null;
   /** Whether the tab holding this screen is the visible one; it stays mounted while hidden. */
   active: boolean;
@@ -403,6 +411,7 @@ export function ProjectSettings({
           </WriteButton>
         </div>
       </div>
+      <ProjectNameField projectId={projectId} folderName={basename(project.path)} storedName={storedName} onRenamed={onRenamed ?? (() => undefined)} />
     </header>
   );
 

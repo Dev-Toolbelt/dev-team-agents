@@ -38,6 +38,7 @@ import type {
   OperationResult,
   PreferencesImport,
   SyncAllReport,
+  ProjectRecord,
 } from '../../shared/api.js';
 
 
@@ -225,6 +226,13 @@ export function Projects({
           key={settingsFor.project_id}
           project={settingsFor}
           name={displayName(settingsFor.path, settingsFor.project_id, projectNames)}
+          storedName={projectNames[settingsFor.project_id]}
+          onRenamed={(projectId, renamed) =>
+            setProjectNames((previous) => {
+              const rest = Object.fromEntries(Object.entries(previous).filter(([id]) => id !== projectId));
+              return renamed === undefined ? rest : { ...rest, [projectId]: renamed };
+            })
+          }
           environment={environment}
           active={active}
           onOpenIntegrations={onOpenIntegrations}
@@ -257,7 +265,14 @@ export function Projects({
   }
 
   const normalizedFilterText = filterText.trim().toLowerCase();
-  const filteredProjects = projects.filter((project) => {
+  // Alphabetical by what the row shows, with the folders' own collation, so a rename moves
+  // the row at once. Folders only group these rows; they carry no order of their own.
+  const byName = (a: ProjectRecord, b: ProjectRecord): number =>
+    displayName(a.path, a.project_id, projectNames).localeCompare(displayName(b.path, b.project_id, projectNames), undefined, {
+      sensitivity: 'base',
+      numeric: true,
+    });
+  const filteredProjects = [...projects].sort(byName).filter((project) => {
     if (normalizedFilterText !== '') {
       const name = displayName(project.path, project.project_id, projectNames).toLowerCase();
       if (!name.includes(normalizedFilterText) && !project.path.toLowerCase().includes(normalizedFilterText)) {

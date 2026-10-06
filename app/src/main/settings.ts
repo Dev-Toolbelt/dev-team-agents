@@ -184,6 +184,17 @@ export async function writeProjectName(userDataDir: string, projectId: string, n
   await writeSettings(userDataDir, (current) => ({ projectNames: { ...current.projectNames, [projectId]: trimmed } }));
 }
 
+/**
+ * Forget this app's name for a project, so it falls back to the directory's basename.
+ * A no-op write when there is no stored name.
+ */
+export async function clearProjectName(userDataDir: string, projectId: string): Promise<void> {
+  await writeSettings(userDataDir, (current) => {
+    if (!Object.hasOwn(current.projectNames, projectId)) return {};
+    return { projectNames: Object.fromEntries(Object.entries(current.projectNames).filter(([id]) => id !== projectId)) };
+  });
+}
+
 /** Record the user's start-at-login choice. The OS registration is `index.ts`'s job. */
 export async function writeOpenAtLogin(userDataDir: string, enabled: boolean): Promise<void> {
   await writeSettings(userDataDir, () => ({ openAtLogin: enabled }));

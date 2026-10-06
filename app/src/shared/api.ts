@@ -301,6 +301,25 @@ export type DirectoryChoice =
 export type BindProvider = Provider;
 export type BindMode = 'auto' | 'link' | 'copy' | 'vendored';
 
+/** The outcome of `renameProject`. */
+export type RenameProjectAnswer = { readonly ok: true } | { readonly ok: false; readonly message: string };
+
+/** Longest name `renameProject` accepts. */
+export const PROJECT_NAME_MAX_LENGTH = 120;
+
+/**
+ * Why `name` cannot be a project's name, or `null` when it can. Shared so the renderer
+ * disables Save on exactly the condition the main process would refuse.
+ */
+export function projectNameProblem(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === '') return 'A project needs a name.';
+  if (trimmed.length > PROJECT_NAME_MAX_LENGTH) return `A name is at most ${PROJECT_NAME_MAX_LENGTH} characters.`;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(trimmed)) return 'A name cannot contain control characters.';
+  return null;
+}
+
 /**
  * What `bind` is asked to do. `path` must be one the main process offered through
  * `chooseProjectDirectory`; every other field is optional and omitted rather than
@@ -318,7 +337,7 @@ export interface BindRequest {
    * framework identifies a project by `project_id`, a UUID chosen so identity survives a
    * re-clone, a move and a machine change. This never reaches the CLI's argv; the main
    * process stores it after a successful bind and it is read back through
-   * `projectNames()`.
+   * `projectNames()`. It can be changed later with `renameProject`.
    *
    * The consequence is worth stating rather than discovering: a name set here lives in
    * this app's `settings.json` on this machine only. It does not travel with the
@@ -1254,6 +1273,13 @@ export interface DevteamBridge {
    */
   readonly projectNames: () => Promise<Readonly<Record<string, string>>>;
   /**
+   * Set (a string) or reset (`null`, back to the directory's basename) this app's name for
+   * a bound project. App-local like `BindRequest.name`: spawns no command that mutates
+   * the store, so it is not gated by the CLI's write gate. The main process validates the
+   * name with `projectNameProblem` and the project id against the registry.
+   */
+  readonly renameProject: (projectId: string, name: string | null) => Promise<RenameProjectAnswer>;
+  /**
    * The Projects screen's folders (ADR-0021). Spawns nothing; app-local, like
    * `projectNames`. See `shared/projectFolders.ts` for the model.
    */
@@ -1870,6 +1896,7 @@ export const CHANNELS = {
   onboardingState: 'devteam:onboarding-state',
   completeOnboarding: 'devteam:complete-onboarding',
   projectNames: 'devteam:project-names',
+  renameProject: 'devteam:rename-project',
   projectFolders: 'devteam:project-folders',
   saveProjectFolders: 'devteam:save-project-folders',
   chooseProjectDirectory: 'devteam:choose-project-directory',

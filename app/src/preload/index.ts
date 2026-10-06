@@ -58,6 +58,7 @@ const bridge: DevteamBridge = {
   handshake: () => ipcRenderer.invoke(CHANNELS.handshake),
   listProjects: () => ipcRenderer.invoke(CHANNELS.listProjects),
   projectNames: () => ipcRenderer.invoke(CHANNELS.projectNames),
+  renameProject: (projectId: string, name: string | null) => ipcRenderer.invoke(CHANNELS.renameProject, projectId, name),
   projectFolders: () => ipcRenderer.invoke(CHANNELS.projectFolders),
   // Rebuilt into plain JSON rather than passed through; the main process validates it again.
   saveProjectFolders: (folders: ProjectFolders) =>
