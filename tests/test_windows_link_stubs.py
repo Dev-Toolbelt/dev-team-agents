@@ -10,6 +10,7 @@ import os
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import shutil
 
@@ -75,6 +76,20 @@ class ReadLinkStubTest(StoreTestCase):
         self.assertEqual(providers.read_link_stub(path), "../a/b")
         path = self._write("nl", _git_plain("../a/b") + b"\n")
         self.assertEqual(providers.read_link_stub(path), "../a/b")
+
+    def test_a_utf8_bom_is_not_part_of_the_target(self):
+        for name, raw in (
+            ("plain", b"\xef\xbb\xbf../a/b"),
+            ("cygwin", b"!<symlink>\xef\xbb\xbf../a/b\0"),
+        ):
+            with self.subTest(case=name):
+                self.assertEqual(providers.read_link_stub(self._write(name, raw)), "../a/b")
+
+    def test_a_big_endian_stub_is_not_one(self):
+        raw = b"!<symlink>\xfe\xff" + "../a/b".encode("utf-16-be")
+        self.assertIsNone(providers.read_link_stub(self._write("be", raw)))
+        raw = b"IntxLNK\x01\xfe\xff" + "../a/b".encode("utf-16-be")
+        self.assertIsNone(providers.read_link_stub(self._write("be-intx", raw)))
 
     def test_things_that_are_not_stubs_return_none(self):
         random_binary = bytes(range(256)) * 4
@@ -150,6 +165,27 @@ class V2LinkFileTest(StoreTestCase):
                     self.assertFalse(
                         bind.v2_copy(".claude/agents/dev-team", path, self.version_dir, self.root)
                     )
+
+    def test_a_stub_reached_through_a_symlinked_parent_is_not_this_projects(self):
+        elsewhere = self.tmp / "elsewhere" / ".codex" / "skills"
+        elsewhere.mkdir(parents=True)
+        (elsewhere / "dev-team-agents").write_bytes(_intxlnk("../../.dev-team-agents/skills"))
+        try:
+            os.symlink(str(elsewhere.parent), str(self.root / ".codex"))
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable")
+        stub = self.root / ".codex" / "skills" / "dev-team-agents"
+        self.assertFalse(bind._v2_link_file(stub, self.root))
+        self.assertNotIn(".codex/skills/dev-team-agents", bind.v2_copies(self.version_dir, self.root))
+
+    def test_an_msys_drive_path_reads_as_its_windows_drive(self):
+        with mock.patch.object(bind.os, "name", "nt"):
+            self.assertEqual(bind._msys_drive_path("/c/proj/x"), "c:/proj/x")
+            self.assertEqual(bind._msys_drive_path("/c"), "c:/")
+            self.assertEqual(bind._msys_drive_path("/etc/passwd"), "/etc/passwd")
+            self.assertEqual(bind._msys_drive_path("../a"), "../a")
+        with mock.patch.object(bind.os, "name", "posix"):
+            self.assertEqual(bind._msys_drive_path("/c/proj/x"), "/c/proj/x")
 
     def test_a_plain_project_markdown_file_is_not_a_link(self):
         path = self._stub(".claude/commands/devteam", b"# my own command\n\nbody\n")
@@ -351,6 +387,38 @@ class ProviderStubMigrationTest(StoreTestCase):
 
     def test_every_provider_has_a_tools_case(self):
         self.assertEqual(set(TOOLS), set(providers.ALL_PROVIDERS))
+
+    def _require_tools(self, provider):
+        missing = [t for t in TOOLS[provider] if shutil.which(t) is None]
+        if missing:
+            self.skipTest("{} needs {}".format(provider, ", ".join(missing)))
+
+    def test_each_delegated_v2_link_is_a_path_its_installer_owns(self):
+        version_dir = versions.require(versions.resolve(None))
+        root = self.new_project("targets")
+        for provider in providers.ALL_PROVIDERS:
+            rel, _ = ProviderStubParityTest.STUBS[provider]
+            if rel not in providers.V2_SKILL_LINKS:
+                continue
+            with self.subTest(provider=provider):
+                self._require_tools(provider)
+                self.assertIn(rel, providers.delegated_targets(provider, version_dir, root))
+
+    def test_bind_over_each_providers_stub_refuses_with_the_v2_reason(self):
+        for provider in providers.ALL_PROVIDERS:
+            rel, target = ProviderStubParityTest.STUBS[provider]
+            with self.subTest(provider=provider):
+                self._require_tools(provider)
+                root = self.new_project("bind-" + provider)
+                stub = root / rel
+                stub.parent.mkdir(parents=True, exist_ok=True)
+                stub.write_bytes(_intxlnk(target))
+                code, out, _ = self.run_cli(
+                    "--json", "bind", str(root), "--provider", provider, "--mode", "link"
+                )
+                self.assertEqual(code, 4, out)
+                self.assertEqual(json.loads(out)["details"]["reason"], bind.V2_INSTALL_REASON)
+                self.assertTrue(stub.is_file() and not stub.is_symlink(), rel)
 
     def test_each_providers_stub_is_quarantined_by_migrate(self):
         for provider in providers.ALL_PROVIDERS:

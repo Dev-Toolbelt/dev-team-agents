@@ -547,21 +547,21 @@ class V2CopiesTest(StoreTestCase):
     def test_v2_copy_recognises_copies_and_link_files_but_not_project_content(self):
         root, _ = self._copies_project()
         version_dir = versions.require(versions.resolve(None))
-        self.assertTrue(bind.v2_copy(".claude/agents/dev-team", root / ".claude/agents/dev-team", version_dir))
+        self.assertTrue(bind.v2_copy(".claude/agents/dev-team", root / ".claude/agents/dev-team", version_dir, root))
         self.assertTrue(
-            bind.v2_copy(".claude/skills/unit", root / ".claude/skills/unit", version_dir)
+            bind.v2_copy(".claude/skills/unit", root / ".claude/skills/unit", version_dir, root)
         )
         link_file = root / ".claude" / "commands" / "devteam"
         shutil.rmtree(str(link_file))
         link_file.write_text("../../.dev-team-agents/commands", encoding="utf-8")
-        self.assertTrue(bind.v2_copy(".claude/commands/devteam", link_file, version_dir))
+        self.assertTrue(bind.v2_copy(".claude/commands/devteam", link_file, version_dir, root))
 
         own = root / ".claude" / "agents" / "dev-team"
         (own / "notes.txt").write_text("mine\n", encoding="utf-8")
-        self.assertFalse(bind.v2_copy(".claude/agents/dev-team", own, version_dir))
+        self.assertFalse(bind.v2_copy(".claude/agents/dev-team", own, version_dir, root))
         skill = root / ".claude" / "skills" / "unit" / "SKILL.md"
         skill.write_text("---\nname: something-else\n---\n", encoding="utf-8")
-        self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir))
+        self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir, root))
 
     def test_bind_refuses_copies_with_the_v2_reason_and_writes_nothing(self):
         root, copied = self._interrupted()
