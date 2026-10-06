@@ -9,7 +9,7 @@ from pathlib import Path
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, doctor, migrate, project, quarantine, registry, versions
+from devteam import bind, doctor, migrate, project, providers, quarantine, registry, versions
 from devteam.errors import ConflictError, UsageError
 
 
@@ -411,6 +411,20 @@ class BindOverV2Test(StoreTestCase):
                 payload = json.loads(out)
                 self.assertIn(".claude/dev-team-agents", payload["error"])
                 self.assertIn("devteam migrate", payload["hint"])
+                self.assertEqual(payload["details"]["reason"], bind.V2_INSTALL_REASON)
+                self.assertFalse((root / project.PROJECT_DIR).exists())
+
+    def test_every_provider_gets_the_v2_reason_for_a_pre_root_install(self):
+        # The refusal comes before any provider is touched, so the app's migrate
+        # repair is offered whichever provider the bind asked for.
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                root = self._pre_root_project("pre-root-" + provider)
+                code, out, _ = self.run_cli(
+                    "--json", "bind", str(root), "--provider", provider, "--mode", "link"
+                )
+                self.assertEqual(code, 4)
+                self.assertEqual(json.loads(out)["details"]["reason"], bind.V2_INSTALL_REASON)
                 self.assertFalse((root / project.PROJECT_DIR).exists())
 
     def test_a_first_bind_that_collides_leaves_no_project_json(self):
