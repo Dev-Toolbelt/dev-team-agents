@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -31,8 +32,11 @@ V2_SKILL_LINKS = (".codex/skills/dev-team-agents", ".opencode/skills/dev-team-ag
 
 
 def _decode_utf16(raw):
-    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+    # Cygwin and MSYS write little-endian only; a big-endian mark is not a stub.
+    if raw[:2] == b"\xff\xfe":
         raw = raw[2:]
+    elif raw[:2] == b"\xfe\xff":
+        raise ValueError("big-endian link stub")
     return raw.decode("utf-16-le")
 
 
@@ -44,10 +48,15 @@ def read_link_stub(path):
     own with ``core.symlinks=false`` — the link text, as plain UTF-8. Never raises.
     """
     try:
-        info = os.lstat(str(path))
-        if not os.path.isfile(str(path)) or os.path.islink(str(path)) or info.st_size > LINK_STUB_MAX:
+        if not stat.S_ISREG(os.lstat(str(path)).st_mode):
             return None
-        with open(str(path), "rb") as stream:
+        # O_NOFOLLOW and fstat: what is read is the regular file lstat saw, even if
+        # the path is swapped for a link in between.
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > LINK_STUB_MAX:
+                return None
             raw = stream.read(LINK_STUB_MAX + 1)
         if len(raw) > LINK_STUB_MAX:
             return None
@@ -55,11 +64,11 @@ def read_link_stub(path):
             text = _decode_utf16(raw[8:])
         elif raw.startswith(b"!<symlink>"):
             body = raw[10:]
-            text = _decode_utf16(body) if body[:2] == b"\xff\xfe" else body.decode("utf-8")
+            text = _decode_utf16(body) if body[:2] == b"\xff\xfe" else body.decode("utf-8-sig")
         else:
             if b"\0" in raw:
                 return None
-            text = raw.decode("utf-8")
+            text = raw.decode("utf-8-sig")
     except (OSError, UnicodeError, ValueError):
         return None
     text = text.strip("\0").strip()

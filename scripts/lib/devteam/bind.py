@@ -12,6 +12,7 @@ store. A path it does not recognise is a conflict, never something to overwrite.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -376,21 +377,29 @@ def _v2_copy_error(dest, rel):
     )
 
 
-#: A Windows checkout without symlink support writes a link as a text file holding
-#: its target. Anything larger than this is not one.
-_LINK_FILE_MAX = 4096
+def _msys_drive_path(target):
+    """``/c/proj/x`` as Windows reads it (``c:/proj/x``); unchanged elsewhere."""
+    if os.name == "nt" and re.match(r"^/[A-Za-z](/|$)", target):
+        return "{}:/{}".format(target[1], target[3:])
+    return target
 
 
 def _v2_link_file(path, project_root):
     """True when ``path`` is a v2 symlink that a checkout wrote as a plain file.
 
-    The target must land inside the project's v2 install directory (either layout).
-    It is resolved lexically — it need not exist, the install may already be gone.
+    The stub itself must live inside the project — a committed `.claude` or `.codex`
+    symlink would otherwise hand migrate a file from another tree to move. Its
+    target must land inside the project's v2 install directory (either layout),
+    resolved lexically: it need not exist, the install may already be gone.
     """
+    try:
+        require_inside(path, project_root)
+    except ConflictError:
+        return False
     target = providers.read_link_stub(path)
     if target is None:
         return False
-    target = target.replace("\\", "/")
+    target = _msys_drive_path(target.replace("\\", "/"))
     resolved = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(str(path))), target))
     root = os.path.abspath(str(project_root))
     for install in (project.PROJECT_DIR, project.PRE_ROOT_DIR):
@@ -420,7 +429,7 @@ def _frontmatter_name(skill_file):
     return None
 
 
-def v2_copy(rel, dest, version_dir, project_root=None):
+def v2_copy(rel, dest, version_dir, project_root):
     """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
 
     v2 committed relative links (`.claude/agents/dev-team -> ../../.dev-team-agents/
@@ -435,8 +444,6 @@ def v2_copy(rel, dest, version_dir, project_root=None):
     dest = Path(dest)
     if dest.is_symlink() or not dest.exists():
         return False
-    if project_root is None:
-        project_root = dest.parents[len(Path(rel).parts) - 1]
     if dest.is_file():
         return _v2_link_file(dest, project_root)
     parts = Path(rel).parts
@@ -542,6 +549,8 @@ def _preflight(
             if rel in vacated or not (dest.exists() or dest.is_symlink()):
                 continue
             if not _is_managed_path(rel, dest, claimed, project_root):
+                if rel in providers.V2_SKILL_LINKS and _v2_link_file(dest, project_root):
+                    raise _v2_copy_error(dest, rel)
                 raise _foreign_path_error(dest)
             existing.append(rel)
         delegated[provider_name] = targets

@@ -586,6 +586,10 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
     install_dir = project_root / preview["install_dir"]
     stamp = time.strftime("%Y-%m-%d")
     quarantined = []
+    # Through a symlinked `.claude` / `.codex` a copy would be another tree's; refuse
+    # before anything has moved, not halfway through.
+    for rel in preview["v2_copies"]:
+        bind_module.require_inside(project_root / rel, project_root, what="v2 copy")
     for name in found["vendored_trees"] + found["vendored_files"]:
         destination = quarantine.move(
             install_dir / name, project_id, group="v2-install", stamp=stamp
