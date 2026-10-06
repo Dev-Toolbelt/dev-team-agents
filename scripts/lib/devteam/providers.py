@@ -22,6 +22,51 @@ from .errors import ConflictError, EnvError
 
 ALL_PROVIDERS = ("claude", "opencode", "codex")
 
+#: A link written as a file is tiny. Anything larger is not one.
+LINK_STUB_MAX = 4096
+
+#: Where a v2 Codex / opencode install linked the framework skills. As a link
+#: stub (a checkout without symlink support) it points into the v2 install.
+V2_SKILL_LINKS = (".codex/skills/dev-team-agents", ".opencode/skills/dev-team-agents")
+
+
+def _decode_utf16(raw):
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        raw = raw[2:]
+    return raw.decode("utf-16-le")
+
+
+def read_link_stub(path):
+    """The target of a symlink that a checkout wrote as a regular file, or ``None``.
+
+    Three shapes exist: Cygwin/MSYS ``IntxLNK\\x01`` plus a UTF-16LE target, Cygwin's
+    ``!<symlink>`` plus a target (UTF-16LE after a BOM, UTF-8 otherwise), and git's
+    own with ``core.symlinks=false`` — the link text, as plain UTF-8. Never raises.
+    """
+    try:
+        info = os.lstat(str(path))
+        if not os.path.isfile(str(path)) or os.path.islink(str(path)) or info.st_size > LINK_STUB_MAX:
+            return None
+        with open(str(path), "rb") as stream:
+            raw = stream.read(LINK_STUB_MAX + 1)
+        if len(raw) > LINK_STUB_MAX:
+            return None
+        if raw.startswith(b"IntxLNK\x01"):
+            text = _decode_utf16(raw[8:])
+        elif raw.startswith(b"!<symlink>"):
+            body = raw[10:]
+            text = _decode_utf16(body) if body[:2] == b"\xff\xfe" else body.decode("utf-8")
+        else:
+            if b"\0" in raw:
+                return None
+            text = raw.decode("utf-8")
+    except (OSError, UnicodeError, ValueError):
+        return None
+    text = text.strip("\0").strip()
+    if not text or "\n" in text or "\r" in text or "\0" in text:
+        return None
+    return text
+
 
 def detect(project_root):
     """Providers a project already uses; ``claude`` when nothing indicates one."""

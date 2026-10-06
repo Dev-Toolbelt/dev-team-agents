@@ -326,6 +326,9 @@ def _git_tracked_many(project_root, relatives):
 
 def _copy_group(rel):
     """Quarantine group for a v2 copy: its `.claude/` folder, kept apart from the tree."""
+    parts = Path(rel).parts
+    if parts[0] != ".claude":
+        return "v2-install/{}/{}".format(parts[0].lstrip("."), Path(rel).parent.name)
     return "v2-install/claude/{}".format(Path(rel).parent.name)
 
 

@@ -381,19 +381,26 @@ def _v2_copy_error(dest, rel):
 _LINK_FILE_MAX = 4096
 
 
-def _v2_link_file(path):
-    """True when ``path`` is a v2 symlink that a checkout wrote as a plain file."""
-    try:
-        if path.stat().st_size > _LINK_FILE_MAX:
-            return False
-        text = path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeDecodeError):
+def _v2_link_file(path, project_root):
+    """True when ``path`` is a v2 symlink that a checkout wrote as a plain file.
+
+    The target must land inside the project's v2 install directory (either layout).
+    It is resolved lexically — it need not exist, the install may already be gone.
+    """
+    target = providers.read_link_stub(path)
+    if target is None:
         return False
-    if not text or "\n" in text:
-        return False
-    # `.dev-team-agents/` for a root install, `.claude/dev-team-agents/` before v2.1.0.
-    parts = Path(text.replace("\\", "/")).parts
-    return project.PROJECT_DIR in parts or Path(project.PRE_ROOT_DIR).name in parts
+    target = target.replace("\\", "/")
+    resolved = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(str(path))), target))
+    root = os.path.abspath(str(project_root))
+    for install in (project.PROJECT_DIR, project.PRE_ROOT_DIR):
+        install_dir = os.path.normpath(os.path.join(root, install))
+        try:
+            if os.path.commonpath([install_dir, resolved]) == install_dir:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _frontmatter_name(skill_file):
@@ -413,7 +420,7 @@ def _frontmatter_name(skill_file):
     return None
 
 
-def v2_copy(rel, dest, version_dir):
+def v2_copy(rel, dest, version_dir, project_root=None):
     """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
 
     v2 committed relative links (`.claude/agents/dev-team -> ../../.dev-team-agents/
@@ -428,8 +435,10 @@ def v2_copy(rel, dest, version_dir):
     dest = Path(dest)
     if dest.is_symlink() or not dest.exists():
         return False
+    if project_root is None:
+        project_root = dest.parents[len(Path(rel).parts) - 1]
     if dest.is_file():
-        return _v2_link_file(dest)
+        return _v2_link_file(dest, project_root)
     parts = Path(rel).parts
     if len(parts) != 3 or parts[0] != ".claude":
         return False
@@ -451,11 +460,14 @@ def v2_copy(rel, dest, version_dir):
 def v2_copies(version_dir, project_root):
     """Every Claude artifact path holding a materialized v2 copy, project-relative."""
     root = Path(project_root)
-    return [
+    found = [
         rel_path.as_posix()
         for rel_path, _source in providers.claude_artifacts(version_dir)
-        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir)
+        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir, project_root)
     ]
+    # The Codex / opencode skills link a v2 install made, written as a file.
+    found += [rel for rel in providers.V2_SKILL_LINKS if _v2_link_file(root / rel, project_root)]
+    return found
 
 
 def _preflight(
@@ -497,7 +509,7 @@ def _preflight(
                 continue
             if _is_managed_path(rel, dest, previous_paths, project_root):
                 continue
-            if v2_copy(rel, dest, version_dir):
+            if v2_copy(rel, dest, version_dir, project_root):
                 raise _v2_copy_error(dest, rel)
             raise _foreign_path_error(dest)
     # Vendored mode puts real trees at these paths on purpose; it has no runtime links.
@@ -527,7 +539,7 @@ def _preflight(
         existing = []
         for rel in targets:
             dest = root / rel
-            if not (dest.exists() or dest.is_symlink()):
+            if rel in vacated or not (dest.exists() or dest.is_symlink()):
                 continue
             if not _is_managed_path(rel, dest, claimed, project_root):
                 raise _foreign_path_error(dest)
