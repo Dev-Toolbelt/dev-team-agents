@@ -65,7 +65,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029), and `command-usage.json` (how often this machine's user ran each devteam command, which decides the commands the banner reveals, ADR-0030). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each GitHub/Jira integration, from this machine). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -174,24 +174,17 @@ mode.
 | `devteam version` | Installed versions and the active one |
 | `devteam catalog` | Read-only browse — counts, and per-kind listings; see § Catalog below |
 | `devteam skills list \| show <name> \| install --source <dir\|zip> \| remove <name>` | The providers' **global** (user-level) skills — Claude, Codex, opencode; see § Global skills below |
-| `devteam auth login (--google \| --github \| --email <addr> [--password [--signup [--send-code \| --finish]]]) [--name <n>]` | Sign in (ADR-0029). OAuth opens the system browser (PKCE S256, one-shot `127.0.0.1` listener); `--email` is a passwordless 8-digit code; `--email --password` is email and password; `--password --signup` creates the account and, without a terminal, runs in two stages: `--send-code` (password on stdin, sends the confirmation code, exits) then `--finish` (code on stdin; GoTrue's own unconfirmed-signup state carries it, nothing is persisted locally). Codes and passwords come from the terminal without echo or from stdin, **one per line in the order prompted** — no flag takes one. A machine with no display refuses OAuth and points at `--email`. See § Account below |
-| `devteam auth logout` | Revoke the session on the server (best effort), then **always** remove the refresh token, `entitlement.json` and `account-session.json` locally; reports which parts succeeded |
-| `devteam auth status [--offline]` / `devteam auth check [--offline]` | The session and license state. `status` always exits 0; `check` exits 0 only when entitled, 1 when not (signed out, `trial_expired`, `banned`, invalid cache), 3 when an online check is needed and could not be made. Both refresh the cached license when it is stale and the network is there; `--offline` never touches it. The delegated installers call `check --json`; the session-start banner calls `auth_gate.banner_line()` in-process: cache-only, no network, never the CLI |
-| `devteam auth otp start --email <addr> \| verify --email <addr>` | The two-step form of `login --email`, for the desktop app. `start` answers identically for every address |
-| `devteam auth password reset --email <addr> [--send-code \| --finish] \| change` | Reset with an emailed recovery code (`--send-code` only sends; `--finish` reads code then new password from stdin; neither flag does both). `change` reads current then new password. Both revoke the account's other sessions |
-| `devteam auth profile [show] \| update --name <n> \| identities \| email --new <addr> [--confirm] \| link \| unlink --google\|--github` | The account profile. Unlinking the last sign-in method is refused (exit 1, `details.reason: "last_identity"`) |
-| `devteam auth delete [--send-code \| --yes]` | Delete the account after a **fresh** email code (signs in again with it; a refreshed token would fail the server's freshness check). A terminal asks for the address; without one, `--send-code` then `--yes` with the code on stdin |
 | `devteam store list \| install --from <tree> \| use <v> \| gc [--apply]` | Manage the versioned core; `gc` previews by default and never removes `current` or a pinned version |
-| `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()`. A **pre-v2.1.0 install at `.claude/dev-team-agents/`** is refused in every mode and pointed at `migrate`. Every collision is checked before the first write, so a refused bind leaves no `project.json` and no `.dev-team-agents/`. A delegated target the installer's `.provider-owned-<provider>` ledger lists is managed, not a collision; after a successful install the ledger is quarantined and listed in `retired` (ADR-0022 amendment 2026-10-02). A registered path whose `project.json` is gone gets it back **with the registered `project_id`**, never a new one — a new id would leave a second registry entry for the same path and orphan the first one's manifest, preferences and memory |
+| `devteam bind [path] [--provider …] [--mode …] [--pin <v>]` | Bind a project; idempotent. **Refuses a v2 vendored install with exit 4** and points at `migrate` — binding over one left the vendored tree tracked in git. `--mode vendored` is exempt, and `sync` never refuses: the check is in the command, not in `bind()`. A **pre-v2.1.0 install at `.claude/dev-team-agents/`** is refused in every mode and pointed at `migrate`. Every collision is checked before the first write, so a refused bind leaves no `project.json` and no `.dev-team-agents/`. A registered path whose `project.json` is gone gets it back **with the registered `project_id`**, never a new one — a new id would leave a second registry entry for the same path and orphan the first one's manifest, preferences and memory |
 | `devteam unbind [path]` | Remove artifacts, keeping `project.json` and `user-data/` |
 | `devteam list` | Bound projects, mode, resolved version, pin drift; each record also carries `preferences` — `{auto_update, worktree_active, suppress_notifications}` resolved for that project (`bool`; `suppress_notifications` is `bool` or a list of muted types), each `null` when the version does not resolve or the layer is unreadable, never a guess. Additive: the app's Projects table reads it instead of one `prefs list` per row. Each record also carries `layout` and `upgrade_available` (`null` when the path or its `project.json` cannot be read); the app disables Upgrade only on an affirmative `false` |
 | `devteam sync [path] [--all]` | Rebuild artifacts from the store |
 | `devteam pin <v> \| --release` | Hold a project on a version, or return it to `current`. `<v>` (like `bind --pin`) must be a plain version name (`2.48.0`, optional `v` and `-`/`+` suffix) — anything else exits 2; a bad pin already in the registry is an environment error (exit 3) that `doctor` reports |
 | `devteam update [--ref vX.Y.Z] [--check]` | Fetch a release, activate it, sync every unpinned project |
-| `devteam migrate [path] [--apply [--untrack]]` | v2 install → bind, in either shape: `root` (vendored at `.dev-team-agents/`) or `pre-root` (at `.claude/dev-team-agents/`, before v2.1.0 — its memory moves to `.dev-team-agents/user-data/`, its `.claude/docs/` stays and joins `context_paths`, its hook entries and links are replaced). Previews unless `--apply`. An unregistered `project.json` (left by a refused bind) is adopted (`adopts_identity`); a registered path with no `project.json` gets the registered id back (`restores_identity` / `restored_identity`: that id, or `null`). Reports the paths git still tracks — `git_tracked` (the vendored trees, and memory) and `git_tracked_artifacts` (committed links a bind replaced) — and with `--untrack` runs `git rm -r --cached` on exactly those: the index only, never the working tree, nothing committed (`untracked`, `untrack_problem`). The one command that runs git on the user's repository, and only when asked (ADR-0015 amendment). `.claude/` links materialized as real copies (`bind.v2_copy`) and the real files a v2 Codex or opencode installer rendered (`providers.is_v2_render`, or listed in its `.provider-owned-<provider>` ledger, which goes with them) are quarantined with the tree and listed in `v2_copies`, never a path a v3 manifest claims (ADR-0022 amendment 2026-10-02); a project left with only those copies by an interrupted migration is migrated on the same identity. Every provider's bind preflight (`bind.check`) runs before the first move, so a refused migration changes nothing |
+| `devteam migrate [path] [--apply [--untrack]]` | v2 install → bind, in either shape: `root` (vendored at `.dev-team-agents/`) or `pre-root` (at `.claude/dev-team-agents/`, before v2.1.0 — its memory moves to `.dev-team-agents/user-data/`, its `.claude/docs/` stays and joins `context_paths`, its hook entries and links are replaced). Previews unless `--apply`. An unregistered `project.json` (left by a refused bind) is adopted (`adopts_identity`); a registered path with no `project.json` gets the registered id back (`restores_identity` / `restored_identity`: that id, or `null`). Reports the paths git still tracks — `git_tracked` (the vendored trees, and memory) and `git_tracked_artifacts` (committed links a bind replaced) — and with `--untrack` runs `git rm -r --cached` on exactly those: the index only, never the working tree, nothing committed (`untracked`, `untrack_problem`). The one command that runs git on the user's repository, and only when asked (ADR-0015 amendment). `.claude/` links materialized as real copies (`bind.v2_copy`) are quarantined with the tree and listed in `v2_copies`; a project left with only those copies by an interrupted migration is migrated on the same identity. **Symlink stubs** — a link a Windows checkout wrote as a file is one too, in three formats (`providers.read_link_stub`): git's plain text (`core.symlinks=false`), `IntxLNK\x01` + UTF-16LE (MSYS/Interix `ln -s`) and `!<symlink>` (Cygwin). It counts only as a regular file of at most 4096 bytes inside the project whose target resolves into `.dev-team-agents/` or `.claude/dev-team-agents/`. `v2_copies` then also lists a stubbed `.codex/skills/dev-team-agents` / `.opencode/skills/dev-team-agents`, and `bind` over one refuses with `reason: v2-install` like Claude's. Every provider's bind preflight (`bind.check`) runs before the first move, so a refused migration changes nothing |
 | `devteam prefs list \| get <key> \| set <key> <value> [--scope project] \| unset <key>` | Read and write the preference layers; `list` names the layer each value came from |
 | `devteam plugin list \| show <name> \| enable <name> [--force] \| disable <name> \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| run <name> <action>` | Manage plugins; see § Plugins below |
-| `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind> \| call <name> <METHOD> <endpoint> [--query k=v]… [--data J \| --data-file F] [--allow-write]` | Account-level GitHub, Jira and Cloudflare connections, and the agents' API proxy; see § Integrations below |
+| `devteam integration list \| show <name> \| connect <name> [--field k=v]… \| test <name> \| disconnect <name> [--keep-token] \| config get <name> [<key>] \| config set <name> <key> <value> \| config unset <name> <key> \| resources <name> <kind>` | Account-level GitHub and Jira connections; see § Integrations below |
 | `devteam cred list \| get <key> \| set <key> \| unset <key> \| import <file> \| check \| backends` | Manage credential references and values; see § Credentials below |
 | `devteam cred local show \| init \| patch --expect-hash <H>` | Manage `.dev-team-agents/credentials.local.json` for agents and the app; see § Local Credentials File below |
 | `devteam upgrade [path] [--apply]` | Move this project's memory into the store. Previews unless `--apply`; **nothing moves on any other command**. A project already on the current layout is refused with exit 2 and `details.reason: "up-to-date"` — nothing to do, not a malformed request |
@@ -207,9 +200,7 @@ mode.
 | `devteam tasks review-result --project-root <dir>` | **Hook-only.** Reads a finished review agent's output on stdin, sums its `<!-- review-result: findings=N -->` markers and records the window's result once every source answered. Prints `{recorded, session, window, result, findings, resolved, all_done, became_all_done}` |
 | `devteam tasks list [--project <id>…] [--since <epoch>] [--stale-after S] [--ended-after S]` | The task board: every bound project with ≥ 1 task, sessions, tasks and derived state; see § Task board below |
 | `devteam tasks watch [same filters] [--interval <s>]` | Stream `snapshot` events per changed project, then `ready`, `heartbeat`, `end`. `--json` is JSON Lines |
-| `devteam detect [--path <dir>]` | Detect the machine (git, Python, installed providers), the project's stack and primary provider, and suggest a project type (`new`, `unfinished`, `maintenance`). ADR-0030: detection lives in the CLI, the app only displays it. Report is JSON-native (always structured for scripting) |
-| `devteam start [--path <dir>] [--provider claude\|opencode\|codex] [--type new\|unfinished\|maintenance]` | Set up the first project and launch a read-only first task (`audit` or `review`). Calls `detect` internally and applies the flag overrides, then suggests the task via the provider's permission mode (read-only enforcement). The first-run order is fixed: CLI → sign-in → prerequisites → project → first task. ADR-0030 § Decision |
-| `devteam doctor [path] [--reassign-identity] / --machine` | **Without flag:** diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add`. **With `--machine`:** check git, Python and installed providers instead; each finding carries `fix` (remediation command) and `auto_fixable` (whether the CLI can run it without user input). The desktop app offers a "Fix" button only for auto-fixable findings. ADR-0030 § Consequences |
+| `devteam doctor [path] [--reassign-identity]` | Diagnose store and bind; reconcile a moved project; report a stale layout, a v2 tree left behind by a bind, and machine-local bind artifacts git still tracks (`bind.MACHINE_LOCAL_KINDS` — `settings` is exempt, it is the project's own file). The same allowlist decides what `bind` writes into `.git/info/exclude`, so `.claude/settings.json` is never hidden from `git add` |
 
 ## The `--json` contract
 
@@ -365,81 +356,6 @@ of those directories; its unit is the physical **root**, each listing the provid
 - `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
 - `skills install`: `{name, description, source, linked, source_kind, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
 - `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`
-
-## Account
-
-`devteam auth` is the only code that talks to the identity provider ([ADR-0029](../docs/development/adrs/0029-mandatory-accounts-owned-by-the-cli-licensed-through-a-signed-offline-entitlement.md)).
-Modules: `auth.py` (handlers and parser), `auth_gotrue.py` (wire protocol, input rules, fixed error
-messages), `auth_session.py` (session store, refresh lock), `auth_oauth.py` (PKCE and the loopback
-listener), on top of `entitlement.py`. None imports telemetry.
-
-- **Session.** The refresh token is the global secret `account.session.refresh_token` (`secrets.py`,
-  default backend); the non-secret half — account id, email, which backend holds the token, last
-  online check — is the machine-local `account-session.json`. The access token is in memory only.
-  When the backend is `insecure`, `secret_backend` is `"insecure"`, `secret_backend_insecure` is
-  `true`, and a warning is printed. A refresh runs under the `auth-session` store lock; a process
-  that waited re-reads the stored token. Threads of one process share one exchange.
-- **Stale and retry.** A usable license is refreshed when its last online check is over 24 hours old
-  (1 hour for `trial_expired`/`banned`). A failed attempt — including one that returned an unusable
-  token — is not repeated for 15 minutes **whatever the cached status**, so an offline machine pays
-  a network timeout at most once per window. Only a rejected refresh token (400/401) or a 401 from
-  `/user` or the entitlement function ends the session; any other 4xx is `server_refused`, an
-  environment error that keeps it. Logout runs under the session lock and, on a machine with no
-  id yet, touches nothing.
-- **Errors.** One fixed sentence per failure; a response body is never echoed. `1` rejected by the
-  server (wrong credential or code, dead session, not signed in), `2` usage (bad flag, password
-  outside 10-64 characters / 72 bytes, a code that is not 8 digits), `3` environment (unreachable,
-  rate limited with `details.retry_after`, no display, secret store, no account server in this
-  build), `4` the lock. `details.reason` is the stable machine-readable cause.
-- **`--json`.** `login`, `otp verify`, `password reset --finish`, `status` and `check` share one
-  shape: `{signed_in, account: {id, email, display_name, provider, signed_in_at} | null, entitled,
-  entitlement: {status, reason, token_status, features, trial_ends_at, expires_at}, online:
-  {attempted, ok}, last_online_check, secret_backend, secret_backend_insecure, environment,
-  gate_mode, test_seam, warnings}` (`gate_mode` is `warn` or `enforce`, from `auth-config.json`); `login` adds `method`, `status`/`check` add `offline`. A failing `check`
-  returns the same body plus `error`, `exit_code`, `hint` and `details`, so the gate and the
-  installers parse one schema. `entitlement.status` is one of `active`, `trial`, `trial_expired`,
-  `banned`, `needs_online_check`, `signed_out`, `invalid`.
-- **Test seam.** `DEVTEAM_AUTH_TEST_URL` / `_KID` / `_PUBKEY` (loopback URL, `test-` key id) point the
-  CLI at a fake server or a local `supabase start` stack (`infra/supabase/dev-local.sh`), with the
-  optional `DEVTEAM_AUTH_TEST_ANON_KEY` for that stack's gateway; every command then warns on stderr
-  and reports `test_seam: true`. An
-  unusable seam (a remote URL, a key id without `test-`, a partial set) is **ignored** with a
-  `test seam ignored` warning, so a stray variable can neither redirect the CLI nor fail every
-  command. Nothing else — no project file, preference or other variable — changes the endpoint.
-- **Environments.** `scripts/lib/auth-config.json` carries the `prod` environment only. The
-  repository-only `scripts/lib/auth-config.dev.json` adds and selects `dev`; `strip-tarball.sh`
-  drops it and no CLI installer copies it, so a released build embeds prod keys alone (SR-27).
-- **Client gate.** Every `auth` leaf is `STORE_NEUTRAL` in `compat.py`: never refused to a declared
-  client (a user must always be able to sign in), but not called read-only, because it writes
-  machine-local session records and the remote account rather than declared store shapes.
-- **Account gate** (`auth_gate.py`, SR-30). `main()` calls `gate.apply()` after the group-usage check and
-  before the handler, in-process through `auth.cmd_check` (no subprocess), so its decision, exit
-  codes and message are `auth check`'s. The exempt list is an **allowlist on the parsed command
-  path** (`auth_gate.EXEMPT`): `auth *`, `version`, `path`, `compat`, `doctor`, `unbind`, `uninstall`,
-  `export`, `quarantine restore`, and the hook plumbing `tasks *`. Everything else, including a
-  command added later, is gated; `tests/test_auth_gate.py` walks the real parser to prove it.
-  `gate_mode` is `Identity.gate_mode`, read from the compiled `scripts/lib/auth-config.json`: `warn`
-  or `enforce`, any other value reads as `enforce` (a typo never opens the gate), and an unreadable
-  file falls back to `entitlement.DEFAULT_GATE_MODE` — the release's own mode, flipped together with
-  the file (a test holds them equal). `warn` runs the command whatever the check says, **even when
-  the check cannot run**, leaves the `--json` document unchanged, and prints its notice only when
-  stderr is a terminal; `enforce` refuses with exit 1 (not entitled) or 3 (an online check is needed
-  and could not be made), the remedy `devteam auth login`, and `details.gate = "account"`. A cached
-  license inside its offline window is entitled, so it never blocks. While blocked, `devteam update`
-  still installs the core (hook fixes must reach blocked users): the gate returns `CORE_ONLY` and the
-  handler skips the project sync; `sync`, `bind`, `upgrade` and `migrate` stay gated.
-  The gate runs after the one-time layout adoption, so a refusal does not skip a store migration.
-- **Installers.** `install-opencode.sh`, `install-codex.sh`, `install-provider.sh` and `update.sh`
-  (before it re-renders the opencode/Codex trees; the core update above is never gated) source
-  `scripts/lib/auth-gate.sh` and call `ag_gate` before their first write: it runs
-  `devteam auth check --json` (the tree's own `scripts/cli/devteam`, else `devteam` on PATH),
-  takes `gate_mode` from that answer (falling back to the config, then to `AG_DEFAULT_MODE`, held
-  equal to `DEFAULT_GATE_MODE` by a test), and returns 0 (proceed) or **5** (blocked, `enforce`
-  only). Exits 1 and 3 from `check` are blocked-class; exit 4 (lock busy), any other exit, or no CLI
-  at all cannot be decided: `warn` skips with a stderr note, `enforce` blocks (SR-42).
-  `install-provider.sh` sources the gate from **its own tree**, never from the downloaded one, so an
-  old `--version` cannot opt out; `update.sh` tolerates a tree that predates the gate. `--dry-run`
-  and `--list-targets` are never gated. `tests/test_installer_gate.py` iterates `ALL_PROVIDERS` with a per-provider map.
 
 ## Compatibility block in `version`
 
@@ -768,7 +684,7 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 
 ## Integrations
 
-`devteam integration` connects the account to GitHub, Jira and Cloudflare. An integration is **not** a plugin: the
+`devteam integration` connects the account to GitHub and Jira. An integration is **not** a plugin: the
 token is account-level, and all network I/O happens in the CLI (the desktop app never touches the
 network, ADR-0015). Each adapter (`scripts/lib/devteam/integrations/`) declares a descriptor — fields, scope, picker
 resource — and the `IntegrationView` in `--json` carries it, so a client renders generically.
@@ -807,40 +723,6 @@ it changed. A reference whose value is not on this machine makes `test` answer `
 `connect` checks the required account fields before it prompts for a token.
 Read-modify-write of the account and binding files, and `disconnect`, hold the `integrations` lock
 (outer; `creds`' lock nests inside it); no lock is held across a network call.
-
-**`call` is the agents' API proxy** ([ADR-0031](../docs/development/adrs/0031-agents-call-integration-apis-through-a-cli-proxy-that-holds-the-token.md)).
-Only an adapter with `supports_call = True` accepts it — `cloudflare` today; `github`/`jira` answer a
-usage error. The endpoint is an absolute path of RFC 3986 path characters: no query, fragment, empty,
-`.` or `..` segment, and no percent-escape that decodes to `/`, `\`, `.`, `%` or a control character;
-query parameters go through `--query`. Its shape is checked **before** the token is read. `{field}`
-placeholders take the effective account and project values (never the origin field), each
-re-validated by the adapter and percent-encoded; the filled path is checked again and matched
-(decoded) against the adapter's `forbidden_endpoints` — endpoints whose response is a credential,
-refused even with `--allow-write`. `GET` runs freely; `POST`/`PUT`/`PATCH`/`DELETE` are a usage error
-without `--allow-write` (no option abbreviations: `--allow` is rejected), and nothing is sent. The
-body is strict JSON, at most 1 MB (`--data`, or `--data-file`, `-` for stdin). An unreadable project
-binding is an environment error, never read as an unset field. It uses `http.request_json`: same
-policy, **no redirect followed**. Success payload: `{integration, method, endpoint, response}`
-(`tests/test_json_contract.py` `AGENT_FACING_KEYS`); an HTTP failure exits `3` with
-`details.{state, http_status, response, retry_after?}`, and the human-mode message carries the
-adapter's `describe_error` summary. Every call, refused or sent, appends an `integration-call` line
-(method, resolved path, `allow_write`, project id, outcome; never body, query values or response) to
-the global credential audit log. `compat` classifies it **store-neutral**, and the desktop app's
-`ALLOWED_COMMANDS` does not include it. `03-credential-guard.sh` refuses `devteam cred get
-integration.*` for agents.
-
-**A write asks the user in the provider's own prompt** ([ADR-0032](../docs/development/adrs/0032-bind-writes-provider-native-ask-rules-for-integration-writes.md)).
-`call` refuses a `POST`/`PUT`/`PATCH`/`DELETE` unless the command line starts
-`integration call <name> <METHOD>` with the method upper-case (`integrations.is_canonical_call`) —
-the form every provider rule matches, Codex's by prefix only. The rules come from one module,
-`scripts/lib/devteam/permissions.py` (installers: `scripts/lib/permission_rules.py`): Claude's are
-merged into `.claude/settings.json` `permissions.ask` by `hooks.wire` (same `settings` record; the v2
-`install.sh` too), opencode's are the last `permission.bash` keys of `.opencode/opencode.json`
-(`install-opencode.sh`; removed by `unwire_opencode_commands`), and Codex's are the owned file
-`.codex/rules/devteam.rules` (`install-codex.sh`; an ADR-0022 target). Each merge adds and removes
-only our exact entries and refuses (exit 4) a file it cannot parse. `doctor` reports a missing rule,
-an opencode override (a later key, an agent's own `permission.bash`) and an untrusted Codex project
-under the `permissions` category.
 
 ## Plugins
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from devteam_support import StoreTestCase
 
-from devteam import bind, doctor, migrate, permissions, project, quarantine, registry, versions
+from devteam import bind, doctor, migrate, project, providers, quarantine, registry, versions
 from devteam.errors import ConflictError, UsageError
 
 
@@ -278,9 +278,7 @@ class PreRootMigrationTest(StoreTestCase):
         self.assertEqual(len(stops), 1)
         self.assertIn(".dev-team-agents/scripts/hooks/stop.sh", stops[0])
         self.assertNotIn(".claude/dev-team-agents", stops[0])
-        # The project's own rule is kept; the integration-write ask rules are added (ADR-0032).
-        self.assertEqual(settings["permissions"]["allow"], ["Bash(npm test)"])
-        self.assertEqual(settings["permissions"]["ask"], list(permissions.CLAUDE_ASK_RULES))
+        self.assertEqual(settings["permissions"], {"allow": ["Bash(npm test)"]})
         # The link the bind recreates points into the store; the one it does not is gone.
         # Resolved on both sides: Windows reports the link target with a `\\?\` prefix and the
         # temp home under its 8.3 short name.
@@ -413,6 +411,20 @@ class BindOverV2Test(StoreTestCase):
                 payload = json.loads(out)
                 self.assertIn(".claude/dev-team-agents", payload["error"])
                 self.assertIn("devteam migrate", payload["hint"])
+                self.assertEqual(payload["details"]["reason"], bind.V2_INSTALL_REASON)
+                self.assertFalse((root / project.PROJECT_DIR).exists())
+
+    def test_every_provider_gets_the_v2_reason_for_a_pre_root_install(self):
+        # The refusal comes before any provider is touched, so the app's migrate
+        # repair is offered whichever provider the bind asked for.
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                root = self._pre_root_project("pre-root-" + provider)
+                code, out, _ = self.run_cli(
+                    "--json", "bind", str(root), "--provider", provider, "--mode", "link"
+                )
+                self.assertEqual(code, 4)
+                self.assertEqual(json.loads(out)["details"]["reason"], bind.V2_INSTALL_REASON)
                 self.assertFalse((root / project.PROJECT_DIR).exists())
 
     def test_a_first_bind_that_collides_leaves_no_project_json(self):
@@ -549,21 +561,21 @@ class V2CopiesTest(StoreTestCase):
     def test_v2_copy_recognises_copies_and_link_files_but_not_project_content(self):
         root, _ = self._copies_project()
         version_dir = versions.require(versions.resolve(None))
-        self.assertTrue(bind.v2_copy(".claude/agents/dev-team", root / ".claude/agents/dev-team", version_dir))
+        self.assertTrue(bind.v2_copy(".claude/agents/dev-team", root / ".claude/agents/dev-team", version_dir, root))
         self.assertTrue(
-            bind.v2_copy(".claude/skills/unit", root / ".claude/skills/unit", version_dir)
+            bind.v2_copy(".claude/skills/unit", root / ".claude/skills/unit", version_dir, root)
         )
         link_file = root / ".claude" / "commands" / "devteam"
         shutil.rmtree(str(link_file))
         link_file.write_text("../../.dev-team-agents/commands", encoding="utf-8")
-        self.assertTrue(bind.v2_copy(".claude/commands/devteam", link_file, version_dir))
+        self.assertTrue(bind.v2_copy(".claude/commands/devteam", link_file, version_dir, root))
 
         own = root / ".claude" / "agents" / "dev-team"
         (own / "notes.txt").write_text("mine\n", encoding="utf-8")
-        self.assertFalse(bind.v2_copy(".claude/agents/dev-team", own, version_dir))
+        self.assertFalse(bind.v2_copy(".claude/agents/dev-team", own, version_dir, root))
         skill = root / ".claude" / "skills" / "unit" / "SKILL.md"
         skill.write_text("---\nname: something-else\n---\n", encoding="utf-8")
-        self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir))
+        self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir, root))
 
     def test_bind_refuses_copies_with_the_v2_reason_and_writes_nothing(self):
         root, copied = self._interrupted()

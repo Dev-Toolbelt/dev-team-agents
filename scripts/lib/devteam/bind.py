@@ -12,6 +12,7 @@ store. A path it does not recognise is a conflict, never something to overwrite.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -376,24 +377,39 @@ def _v2_copy_error(dest, rel):
     )
 
 
-#: A Windows checkout without symlink support writes a link as a text file holding
-#: its target. Anything larger than this is not one.
-_LINK_FILE_MAX = 4096
+def _msys_drive_path(target):
+    """``/c/proj/x`` as Windows reads it (``c:/proj/x``); unchanged elsewhere."""
+    if os.name == "nt" and re.match(r"^/[A-Za-z](/|$)", target):
+        return "{}:/{}".format(target[1], target[3:])
+    return target
 
 
-def _v2_link_file(path):
-    """True when ``path`` is a v2 symlink that a checkout wrote as a plain file."""
+def _v2_link_file(path, project_root):
+    """True when ``path`` is a v2 symlink that a checkout wrote as a plain file.
+
+    The stub itself must live inside the project — a committed `.claude` or `.codex`
+    symlink would otherwise hand migrate a file from another tree to move. Its
+    target must land inside the project's v2 install directory (either layout),
+    resolved lexically: it need not exist, the install may already be gone.
+    """
     try:
-        if path.stat().st_size > _LINK_FILE_MAX:
-            return False
-        text = path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeDecodeError):
+        require_inside(path, project_root)
+    except ConflictError:
         return False
-    if not text or "\n" in text:
+    target = providers.read_link_stub(path)
+    if target is None:
         return False
-    # `.dev-team-agents/` for a root install, `.claude/dev-team-agents/` before v2.1.0.
-    parts = Path(text.replace("\\", "/")).parts
-    return project.PROJECT_DIR in parts or Path(project.PRE_ROOT_DIR).name in parts
+    target = _msys_drive_path(target.replace("\\", "/"))
+    resolved = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(str(path))), target))
+    root = os.path.abspath(str(project_root))
+    for install in (project.PROJECT_DIR, project.PRE_ROOT_DIR):
+        install_dir = os.path.normpath(os.path.join(root, install))
+        try:
+            if os.path.commonpath([install_dir, resolved]) == install_dir:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _frontmatter_name(skill_file):
@@ -413,7 +429,7 @@ def _frontmatter_name(skill_file):
     return None
 
 
-def v2_copy(rel, dest, version_dir):
+def v2_copy(rel, dest, version_dir, project_root):
     """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
 
     v2 committed relative links (`.claude/agents/dev-team -> ../../.dev-team-agents/
@@ -429,7 +445,7 @@ def v2_copy(rel, dest, version_dir):
     if dest.is_symlink() or not dest.exists():
         return False
     if dest.is_file():
-        return _v2_link_file(dest)
+        return _v2_link_file(dest, project_root)
     parts = Path(rel).parts
     if len(parts) != 3 or parts[0] != ".claude":
         return False
@@ -451,77 +467,14 @@ def v2_copy(rel, dest, version_dir):
 def v2_copies(version_dir, project_root):
     """Every Claude artifact path holding a materialized v2 copy, project-relative."""
     root = Path(project_root)
-    return [
+    found = [
         rel_path.as_posix()
         for rel_path, _source in providers.claude_artifacts(version_dir)
-        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir)
+        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir, project_root)
     ]
-
-
-def _provider_ledger(provider, project_root):
-    """Paths a standalone v2 installer recorded as its own, or an empty set."""
-    ledger = Path(project_root) / project.PROJECT_DIR / (".provider-owned-" + provider)
-    text = providers.read_regular_file(ledger)
-    return {line.strip().rstrip("/") for line in (text or "").splitlines() if line.strip()}
-
-
-def _in_ledger(rel, ledger):
-    # An old ledger recorded whole directories, like the old manifest did.
-    return any(rel == entry or rel.startswith(entry + "/") for entry in ledger)
-
-
-def provider_ledgers(project_root, provider_names):
-    """Project-relative ledger files the selected delegated providers left behind."""
-    root = Path(project_root)
-    found = []
-    for provider_name in provider_names:
-        if provider_name not in providers.DELEGATED_INSTALLERS:
-            continue
-        rel = "{}/.provider-owned-{}".format(project.PROJECT_DIR, provider_name)
-        if (root / rel).is_file() and not (root / rel).is_symlink():
-            found.append(rel)
+    # The Codex / opencode skills link a v2 install made, written as a file.
+    found += [rel for rel in providers.V2_SKILL_LINKS if _v2_link_file(root / rel, project_root)]
     return found
-
-
-def v2_delegated_copies(version_dir, project_root, provider_names, claimed=frozenset(), targets=None):
-    """Every delegated-provider target holding real v2 installer output, project-relative.
-
-    A target counts when it is real content that no bind manifest claims (``claimed``:
-    a v3 bind writes these same files, and they are its own, not a v2 install's) and
-    either the installer's ledger lists it or its content is recognisably a render
-    (:func:`providers.is_v2_render`). A target under a symlinked parent is left to the
-    preflight, which refuses it. ``targets`` reuses a ``{provider: [rel]}`` already
-    computed, so the installer is not asked twice.
-    """
-    root = Path(project_root)
-    found = []
-    for provider_name in provider_names:
-        if provider_name not in providers.DELEGATED_INSTALLERS:
-            continue
-        ledger = _provider_ledger(provider_name, project_root)
-        listed = (targets or {}).get(provider_name)
-        if listed is None:
-            listed = providers.delegated_targets(provider_name, version_dir, project_root)
-        for rel in listed:
-            dest = root / rel
-            if rel in claimed or dest.is_symlink() or not dest.exists():
-                continue
-            try:
-                require_inside(dest, project_root, what="artifact")
-            except ConflictError:
-                continue
-            if _in_ledger(rel, ledger) or providers.is_v2_render(rel, dest, version_dir):
-                found.append(rel)
-    return found
-
-
-def _v2_delegated_error(dest, rel):
-    return ConflictError(
-        "{} is a v2 installer's {}, where this bind installs it".format(dest, rel),
-        hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
-        "old file into a dated quarantine rather than deleting it.",
-        details={"path": str(dest), "reason": V2_INSTALL_REASON},
-    )
 
 
 def _preflight(
@@ -563,7 +516,7 @@ def _preflight(
                 continue
             if _is_managed_path(rel, dest, previous_paths, project_root):
                 continue
-            if v2_copy(rel, dest, version_dir):
+            if v2_copy(rel, dest, version_dir, project_root):
                 raise _v2_copy_error(dest, rel)
             raise _foreign_path_error(dest)
     # Vendored mode puts real trees at these paths on purpose; it has no runtime links.
@@ -590,18 +543,14 @@ def _preflight(
         for rel in list(targets) + extra:
             require_inside(root / rel, project_root, what="artifact")
         claimed = set(previous_paths) | set(providers.legacy_owned(previous_artifacts, targets))
-        # The installer's own ledger is proof of ownership in this layer too (ADR-0022,
-        # Decision 2): a standalone install followed by a bind is not a collision.
-        ledger = _provider_ledger(provider_name, project_root)
-        claimed |= {rel for rel in targets if _in_ledger(rel, ledger)}
         existing = []
         for rel in targets:
             dest = root / rel
             if rel in vacated or not (dest.exists() or dest.is_symlink()):
                 continue
             if not _is_managed_path(rel, dest, claimed, project_root):
-                if providers.is_v2_render(rel, dest, version_dir):
-                    raise _v2_delegated_error(dest, rel)
+                if rel in providers.V2_SKILL_LINKS and _v2_link_file(dest, project_root):
+                    raise _v2_copy_error(dest, rel)
                 raise _foreign_path_error(dest)
             existing.append(rel)
         delegated[provider_name] = targets
@@ -1033,16 +982,6 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             )
         )
         merged.extend(providers.merged_project_files("codex", project_root))
-
-    # The manifest records those paths now, and a bind runs the installers with
-    # `--owned`, so nothing would ever update the ledger again: retired once the
-    # install succeeded, never before, so a refused bind leaves it where it was.
-    for rel in provider_ledgers(project_root, selected):
-        action, destination = _retire_artifact(
-            Path(project_root) / rel, project_id, project_root, group="ledger"
-        )
-        if action == "quarantined":
-            retired.append({"path": rel, "to": str(destination)})
 
     stale = _prune_stale(
         project_root, previous, {item["path"] for item in artifacts}, project_id, version_dir

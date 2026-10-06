@@ -23,6 +23,59 @@ from .errors import ConflictError, EnvError
 
 ALL_PROVIDERS = ("claude", "opencode", "codex")
 
+#: A link written as a file is tiny. Anything larger is not one.
+LINK_STUB_MAX = 4096
+
+#: Where a v2 Codex / opencode install linked the framework skills. As a link
+#: stub (a checkout without symlink support) it points into the v2 install.
+V2_SKILL_LINKS = (".codex/skills/dev-team-agents", ".opencode/skills/dev-team-agents")
+
+
+def _decode_utf16(raw):
+    # Cygwin and MSYS write little-endian only; a big-endian mark is not a stub.
+    if raw[:2] == b"\xff\xfe":
+        raw = raw[2:]
+    elif raw[:2] == b"\xfe\xff":
+        raise ValueError("big-endian link stub")
+    return raw.decode("utf-16-le")
+
+
+def read_link_stub(path):
+    """The target of a symlink that a checkout wrote as a regular file, or ``None``.
+
+    Three shapes exist: Cygwin/MSYS ``IntxLNK\\x01`` plus a UTF-16LE target, Cygwin's
+    ``!<symlink>`` plus a target (UTF-16LE after a BOM, UTF-8 otherwise), and git's
+    own with ``core.symlinks=false`` — the link text, as plain UTF-8. Never raises.
+    """
+    try:
+        if not stat.S_ISREG(os.lstat(str(path)).st_mode):
+            return None
+        # O_NOFOLLOW and fstat: what is read is the regular file lstat saw, even if
+        # the path is swapped for a link in between.
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > LINK_STUB_MAX:
+                return None
+            raw = stream.read(LINK_STUB_MAX + 1)
+        if len(raw) > LINK_STUB_MAX:
+            return None
+        if raw.startswith(b"IntxLNK\x01"):
+            text = _decode_utf16(raw[8:])
+        elif raw.startswith(b"!<symlink>"):
+            body = raw[10:]
+            text = _decode_utf16(body) if body[:2] == b"\xff\xfe" else body.decode("utf-8-sig")
+        else:
+            if b"\0" in raw:
+                return None
+            text = raw.decode("utf-8-sig")
+    except (OSError, UnicodeError, ValueError):
+        return None
+    text = text.strip("\0").strip()
+    if not text or "\n" in text or "\r" in text or "\0" in text:
+        return None
+    return text
+
 
 def detect_in_project(project_root):
     """Providers a project already carries artifacts for; empty when none."""
