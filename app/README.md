@@ -308,13 +308,18 @@ Release's address:
 ## Project folders
 
 The Projects table shows each project's name (its path is the name's tooltip, and a `missing` badge
-sits beside the name when the directory is gone) and, from `list --json`'s `preferences`, an On/Off
-badge for Auto-update, Worktree and Notifications — a dash when the CLI did not report the value.
-Pin and Unbind are on the project's own screen; Unbind asks for an explicit acknowledgement first.
+sits beside the name when the directory is gone). Projects are sorted by display name in ascending order,
+case-insensitive with numeric-aware sorting, at both the root level and inside folders. The table also
+shows, from `list --json`'s `preferences`, an On/Off badge for Auto-update, Worktree and Notifications —
+a dash when the CLI did not report the value. Pin and Unbind are on the project's own screen; Unbind
+asks for an explicit acknowledgement first.
 
 The Projects screen groups bound projects into folders (ADR-0021). Like a project's display name
 (ADR-0016), folders are the app's own record — `projectFolders` in `settings.json` — and never
-reach the CLI, `project.json` or the store. They are per machine.
+reach the CLI, `project.json` or the store. They are per machine. A new Name field in Project Settings
+lets you set a custom display name for each project; select **Reset to folder name** to revert to the
+folder's basename. Display names are stored app-locally in `settings.json` and never reach the CLI or
+`project.json`.
 
 - **New folder** above the table; **Rename…**, **Delete folder…** from a folder's `⋯` menu. Deleting
   a folder moves its projects out to the top level; it never unbinds anything.
