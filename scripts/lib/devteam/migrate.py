@@ -85,7 +85,8 @@ def pre_root_error(project_root):
         "links it committed".format(root, PRE_ROOT_DIR.as_posix()),
         hint="Run `devteam migrate` — it shows a plan first, moves the old install into "
         "a dated quarantine, keeps its memory, and binds.",
-        details={"path": str(root / PRE_ROOT_DIR)},
+        # The reason the desktop app keys its migrate repair on (ADR-0011).
+        details={"path": str(root / PRE_ROOT_DIR), "reason": bind_module.V2_INSTALL_REASON},
     )
 
 
