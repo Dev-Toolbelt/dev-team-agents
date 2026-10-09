@@ -159,7 +159,7 @@ jobs:
       # Uploaded straight after the rewrite and before anything else runs, so the
       # artifact is that step's output and not a later step's idea of it.
       - name: Upload the rewritten formula for the verify job
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bumped-homebrew-formula
           path: packaging/homebrew/devteam.rb
@@ -790,7 +790,7 @@ jobs:
           fi
 
       - name: Upload the dmg
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-mac
           path: app/release/dev-team-agents-${{ needs.app-prepare.outputs.version }}.dmg
@@ -866,7 +866,7 @@ jobs:
           "signed=$signed" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload the installers
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: app-win
           path: |
@@ -963,7 +963,7 @@ jobs:
           cat devteam-app.rb
 
       - name: Upload the cask
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: homebrew-cask-devteam-app
           path: devteam-app.rb
