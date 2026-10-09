@@ -26,3 +26,9 @@ devteam-data-*.tar.gz
 infra/supabase/.local/
 
 # <<< dev-team-agents (managed)
+
+# Supabase: local stack from infra/supabase/dev-local.sh (secrets, database copy) and
+# the project link written by `supabase link`. Outside the managed block, which sync rewrites.
+infra/supabase/.local/
+infra/supabase/.temp/
+infra/.temp/
