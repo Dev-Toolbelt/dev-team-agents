@@ -43,6 +43,7 @@ A project counts as "needs SEO" when any of these hold. Use this table to decide
 - Internal linking uses descriptive anchor text, not "click here"
 - Content answers the query in the first 1–2 sentences before elaborating (also serves GEO — see below)
 - Open Graph (`og:title`, `og:description`, `og:image`, `og:url`) and Twitter Card tags present for shareable pages
+- **Share preview check** — verify those tags in the HTML served to the `facebookexternalhit` crawler, not just in source. Procedure: `references/share-preview-check.md`
 
 ## Off-Page Signals (advisory, not gated)
 
@@ -123,4 +124,4 @@ Use this exact structure when reporting an SEO review (see `agents/seo-specialis
 [APPROVED / APPROVED WITH NOTES / BLOCKED]
 ```
 
-`BLOCKER` = missing sitemap/robots.txt, missing canonical on a duplicated route, broken structured data, LCP/CLS in "poor" range, or a soft-404. Everything else non-passing is `ISSUE`. `BLOCKED` verdict when any `BLOCKER` is present.
+`BLOCKER` = missing sitemap/robots.txt, missing canonical on a duplicated route, broken structured data, LCP/CLS in "poor" range, a soft-404, or a shareable page answering `403`/`429` to the `facebookexternalhit` crawler while a regular browser User-Agent gets `200` (see `references/share-preview-check.md`). Everything else non-passing is `ISSUE`. `BLOCKED` verdict when any `BLOCKER` is present.

@@ -51,7 +51,7 @@ When invoked directly (`/devteam:seo` or an explicit SEO request), always run th
 ## Core Responsibilities
 
 1. **Technical SEO** — sitemap, robots.txt, canonicals, heading hierarchy, redirects, HTTPS, clean URLs (see skill checklist)
-2. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, answer-first content structure
+2. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, answer-first content structure. Verify og tags as the `facebookexternalhit` crawler receives them, following `skills/design/seo-optimization/references/share-preview-check.md`
 3. **Core Web Vitals** — flag LCP/INP/CLS regressions and propose concrete fixes (preload, dimensions on images, defer non-critical JS)
 4. **Structured data** — author or review JSON-LD against the schema.org type table in the skill; never mark up content that isn't visibly present on the page
 5. **GEO (SEO for LLMs)** — `llms.txt` maintenance, answer-first structure, self-contained sections, semantic HTML, AI-crawler directives in `robots.txt`
@@ -61,7 +61,7 @@ When invoked directly (`/devteam:seo` or an explicit SEO request), always run th
 
 ## Quality Gate Output
 
-Use the exact format defined in `skills/design/seo-optimization/SKILL.md` § Quality Gate Output Format. `BLOCKER` findings (missing sitemap/robots.txt, missing canonical on a duplicate route, broken structured data, "poor" Core Web Vitals, soft-404) force a `BLOCKED` verdict — do not soften this to `APPROVED WITH NOTES`.
+Use the exact format defined in `skills/design/seo-optimization/SKILL.md` § Quality Gate Output Format. `BLOCKER` findings, as defined in that section, force a `BLOCKED` verdict — do not soften this to `APPROVED WITH NOTES`.
 
 When acting alongside `frontend-developer` or `ui-ux-designer` in the same session, run the gate **after** their changes land, scoped to the pages they touched (`git diff --name-only` against the base branch).
 
