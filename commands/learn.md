@@ -23,6 +23,7 @@ ls docs/wiki/ 2>/dev/null
 
 **`--auto`:** derive the touched set per `skills/shared/feature-learn/SKILL.md` § Scope Derivation and
 pass it as a pathspec to every command above (`git log … -- <paths>`); an empty set ends the run as *nothing to update*.
+**`--embedded`** (the silent pass `/devteam:commit` runs before grouping): follow the same skill's § Embedded Commit Capture — no output, no question, no commit, no marker. Its rules override Steps 3–5 wherever they differ.
 
 Extract from that output:
 - **Done / Decisions / Next** from the most recent session-summary entry.
@@ -88,11 +89,9 @@ This command commits the knowledge-base updates automatically once the agents fi
 Awaiting your approval before proceeding. Approving this plan authorizes the listed commits.
 ```
 
-**`--auto`:** print the plan without the approval line and go straight to Step 4 — the flag is the approval,
-commits included. Reuse rule candidates become `/devteam:rule …` suggestions in the summary instead of a
-reuse-rule pass: that pass's per-row confirmation belongs to `reuse-guidelines` and is never skipped.
+**`--auto`** (not `--embedded`, which prints nothing)**:** print the plan without the approval line and go straight to Step 4 — the flag is the approval, commits included. Reuse rule candidates become `/devteam:rule …` suggestions in the summary instead of a reuse-rule pass: that pass's per-row confirmation belongs to `reuse-guidelines` and is never skipped.
 
-If **nothing to update** was determined, output exactly `Nothing to capture — session knowledge is already up to date.`, record the run marker (see Step 4) and stop.
+If **nothing to update** was determined, output exactly `Nothing to capture — session knowledge is already up to date.`, record the run marker (see Step 5 item 4) and stop. Under `--embedded`: return an empty result silently, no marker.
 
 ## Step 4 — Execute (after user approval, or directly with `--auto`)
 
@@ -142,11 +141,11 @@ ADR candidates identified this session:
 [paste ADR candidates from Step 3]
 
 For each candidate: run `bash .dev-team-agents/scripts/new-adr.sh "<decision title>"`, fill in
-Context/Decision/Consequences factually, set status to `Accepted`, output "ADR created: <filepath>".
+Context/Decision/Consequences factually, set status to `Accepted` (`Proposed` under `--embedded`), output "ADR created: <filepath>".
 Skip decisions that are easily reversible or purely implementation-level.
 ```
 
-### Spawn conditionally (only if reuse rule candidates were detected):
+### Spawn conditionally (only if reuse rule candidates were detected, and never under `--auto`/`--embedded`):
 
 **`technical-writer`**
 
@@ -172,9 +171,9 @@ After all agents complete, execute the **Commit plan** declared in Step 3 — th
 2. For each manifest row, stage only that row's files (`git add …`) and commit it. One
    atomic commit per row; never mix layers; commit **locally only** — do not push.
 3. If a file in the manifest was not actually created/changed, skip its commit and note it.
-4. Record the run marker (any outcome, also on `--no-commit`) **after** the commits, so it holds the post-commit HEAD: `echo "$(date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — read by the `commands/merge.md` § Step 4 nudge and `/devteam:commit`'s session guard.
+4. Record the run marker (any outcome, also on `--no-commit`; never under `--embedded`, whose caller records it) **after** the commits, so it holds the post-commit HEAD: `echo "$(date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — read by the `commands/merge.md` § Step 4 nudge and `/devteam:commit`'s session guard.
 
-Then output a summary:
+Then output a summary (not under `--embedded`, which returns only paths and suggestions):
 
 ```
 ## Session knowledge captured & committed
@@ -195,5 +194,6 @@ Commits created (N):
 | `adr` | ADR candidates only |
 | `rule` | Reuse rule candidates only |
 | `--auto` | No approval question; scope limited to what this session/branch/worktree touched (Step 1, Step 3) |
+| `--embedded` | Silent pre-commit pass for `/devteam:commit` — see `feature-learn` § Embedded Commit Capture (Step 1) |
 | `--dry-run` | Show the classified plan (incl. commit manifest) only, do not spawn agents or commit — wins over `--auto` |
 | `--no-commit` | Run the full learn pass but skip the auto-commit — leave changes staged for manual commit |

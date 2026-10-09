@@ -1,6 +1,6 @@
 ---
 description: Group staged changes by layer and write commits
-argument-hint: [all] [dry-run] [format: <style>]
+argument-hint: [all] [dry-run] [--skip-learn] [format: <style>]
 model: haiku
 ---
 
@@ -81,6 +81,12 @@ If unstaged/untracked files fall **outside** that set, don't auto-stage them —
 
 Carry the chosen scope into Step 3.
 
+## Step 2.7 — Embedded knowledge capture
+
+Knowledge capture is part of the commit, not a separate approval. Skip it if `$ARGUMENTS` contains `dry-run`/`--dry-run` or `--skip-learn`, the user asked to skip it, the user chose a preview/abort above, or `auto_learn_before_commit` in `.dev-team-agents/resolved/preferences.json` is `false` (default: `true`).
+
+Otherwise load `skills/shared/feature-learn/SKILL.md` § Embedded Commit Capture and follow its commit side: run its session guard; if it does not skip, print exactly one line — `Generating learn for this work before committing…` — run `/devteam:learn --embedded`, and stage its docs through that section's guards. They group as the **9 — Docs** layer in Step 3; then continue the normal flow.
+
 ## Step 3 — Group changes into logical commits
 
 Analyze the staged files and group them by layer or context using the **Layered Commits** ordering table in the loaded `conventional-commits` skill; it is the single source of truth for layer order and examples. It ends at layer 7 (tests); this command continues with **8 — Config / CI** (build, ci, chore) and **9 — Docs** (documentation changes).
@@ -151,6 +157,7 @@ If any gate (lint, type-check, tests, or commit message validation) returns non-
 - Show the output to the user
 - Ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**
 - Do NOT auto-fix without explicit user consent
+- Before the gate, and for a failure caused only by a learn doc, apply § Embedded Commit Capture items 5–6 (secret scan; advisory gate)
 
 ---
 
@@ -158,7 +165,7 @@ If any gate (lint, type-check, tests, or commit message validation) returns non-
 
 Before presenting the plan, build and show the **Work Summary Table** described in the loaded `conventional-commits` skill.
 
-Present the proposed commit plan to the user: list each commit with its message and covered files; if there is only one commit, show the full message.
+Present the proposed commit plan to the user: list each commit with its message and covered files; if there is only one commit, show the full message. Files from Step 2.7 go under **Added by learn**, followed by its suggestions.
 
 Then **execute the commits directly** using `git commit` unless:
 - `$ARGUMENTS` contains `dry-run` or `--dry-run` → show the plan only, do not commit
@@ -168,17 +175,9 @@ For multiple commits, stage each group individually with `git add <files>` befor
 
 After all commits, run `git log --oneline -5` and show the output so the user can verify the result.
 
-If Step 0.5 selected a worktree finalize action (rebase, or rebase + merge + teardown), perform it now before continuing to Step 6.
+If Step 0.5 selected a worktree finalize action (rebase, or rebase + merge + teardown), perform it now.
 
----
-
-## Step 6 — Auto knowledge capture
-
-Skip this step entirely if `$ARGUMENTS` contained `dry-run`/`--dry-run`, no commit was actually made (e.g., the user chose "just show me" / aborted), `$ARGUMENTS` contains `--skip-learn`, the user explicitly asked to skip it, or `auto_learn_before_commit` in `.dev-team-agents/resolved/preferences.json` is `false` (default: `true`).
-
-**Session guard.** Read `.dev-team-agents/.learn-last-run` (`<unix-timestamp> <head-sha>`, written by `/devteam:learn` § Step 5 with `date +%s` and the post-commit HEAD). Skip — nothing new to capture — only when `<head-sha>` equals the current `git rev-parse HEAD` (now reflecting the commits just made and any worktree rebase/merge) **and** `<unix-timestamp>` is not older than the mtime of `.dev-team-agents/user-data/session-summary.md`. A missing marker never skips.
-
-Otherwise, run `/devteam:learn` Steps 1–4 exactly, with one override: in Step 3, suppress the "Awaiting your approval before proceeding." line and proceed directly to spawning agents. Wait for all learn agents to finish; if they return "Nothing to capture", stop. Then write the run marker exactly as `/devteam:learn` § Step 5 item 4 defines — Step 5 is not run here, so this command records it.
+If Step 2.7 ran, settle it per § Embedded Commit Capture items 8–9: unstage the learn docs when no commit was made; otherwise record the run marker after the commits and any rebase/merge, but before a worktree teardown.
 
 ## $ARGUMENTS options
 
@@ -186,6 +185,7 @@ Otherwise, run `/devteam:learn` Steps 1–4 exactly, with one override: in Step 
 |----------|--------|
 | `all` / `--all` | Stage all modified files before committing (`git add -A`) |
 | `dry-run` / `--dry-run` | Show proposed commits without executing |
+| `--skip-learn` | Skip the embedded knowledge capture (Step 2.7) |
 | `format: <pattern>` | Override pattern detection; use the specified format |
 | `amend` | Amend the last commit instead of creating a new one (requires user confirmation) |
 | `finalize` / `merge` / `teardown` | In an active worktree, skip the chooser and auto-run commit + rebase + merge + teardown |

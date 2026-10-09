@@ -59,6 +59,50 @@ Fold the promoted files into this task's own Session-close commit(s) (layered pe
 `conventional-commits`), or as one trailing `docs:` commit — never leave promoted docs uncommitted
 and unmentioned in the hand-off message.
 
+## Embedded Commit Capture
+
+The learn pass `/devteam:commit` § Step 2.7 runs before grouping commits, via `/devteam:learn --embedded`.
+It asks the user nothing, so the guards below stand in for the approval it skips. Canonical home for both sides.
+
+**Session guard (caller).** Skip the pass when `.dev-team-agents/.learn-last-run` exists and its timestamp is
+`>=` the newest mtime among the staged files and the session summary (path resolved through
+`.dev-team-agents/memory-dir`). A missing marker, or a staged deletion, never skips.
+
+**Learn side (`--embedded`)** — overrides `/devteam:learn` Steps 3–5:
+
+| Rule | Detail |
+|---|---|
+| Flags | Implies `--auto` and `--no-commit`; scope per § Scope Derivation |
+| Evidence | Adds `git diff --cached` hunks for in-scope files (first 300 lines per file) — the work about to be committed |
+| No questions | Never calls `AskUserQuestion` nor tells a spawned agent to; anything that would need one becomes a returned suggestion |
+| Reuse rules | No reuse-rule pass; candidates are returned as `/devteam:rule …` suggestions |
+| ADRs | Written with status `Proposed`, listed in the suggestions for the user to accept |
+| Output | Prints nothing — no plan, no "Nothing to capture", no summary. Still checks each spawned agent returned its run banner (`skills/architecture/orchestration/SKILL.md` § Spawn Integrity), without echoing it |
+| Return | Only the written paths (`PATCHED` / `ADR created` lines) and the suggestions list |
+| Marker | Never written by learn — the caller writes it after its commits |
+
+**Commit side (caller):**
+
+1. Before learn, record the staged paths, `T0=$(git write-tree)`, and the paths with unstaged edits (`git diff --name-only`).
+2. Stage a returned path only when it resolves (`realpath`) inside the repo, is not a symlink, is not ignored
+   (`git check-ignore -q`), had no unstaged edits before learn, and is under `docs/development/`, `docs/wiki/` or
+   is `docs/project.md`.
+3. After staging, `git diff --cached --name-only "$T0"` must list only paths staged in item 2, and
+   `git diff --name-only` no path absent from item 1's list; anything else means an agent touched the index or a
+   file already in the commit.
+4. Any path refused by item 2 or flagged by item 3 → one `AskUserQuestion`: keep only the allowed learn docs
+   (recommended), also stage the flagged paths, or drop every learn doc. A clean run asks nothing.
+5. Secret scan over the learn-staged files before the pre-commit gate: `gitleaks protect --staged` when installed,
+   otherwise grep for `AKIA[0-9A-Z]{16}`, `gh[pousr]_[A-Za-z0-9]{36}`, `xox[abpr]-`, `-----BEGIN [A-Z ]*PRIVATE KEY`,
+   `(password|secret|token)\s*[:=]\s*\S{8,}`. A hit unstages that file and is reported in one line.
+6. A pre-commit gate failure caused only by a learn doc is advisory: unstage that doc, say so, keep committing the work.
+7. The commit plan lists learn files under **Added by learn**, with the suggestions after it.
+8. No commit made (preview, abort, gate abort): `git restore --staged` the learn docs, leave them in the working
+   tree, say so in one line, write no marker.
+9. At least one commit made: write the marker in the format `/devteam:learn` § Step 5 item 4 defines, holding the
+   branch tip after the commits and any worktree rebase/merge, **before** a worktree teardown, at the main checkout root
+   (`ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)`, the form `commands/merge.md` uses).
+
 ## Nothing to Promote
 
 If the scoped evidence yields no bucket hits, skip silently — no agent spawn, no commentary. Mirrors
