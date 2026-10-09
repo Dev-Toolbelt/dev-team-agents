@@ -95,7 +95,7 @@ scripts/lib/preferences-defaults.json
 | `worktree_active` | `true` | bool | Whether coding tasks default to isolated git worktrees |
 | `worktree_base_branch` | `null` | string or null | Preferred base branch for new worktrees |
 | `worktree_commit_action` | `"ask"` | string | Default `/devteam:commit` behavior inside an active worktree |
-| `auto_learn_before_commit` | `true` | bool | Auto-run `/devteam:learn` before every `/devteam:commit` (`false` = skip by default) |
+| `auto_learn_before_commit` | `true` | bool | Silently run `/devteam:learn` before every `/devteam:commit`, no approval asked (`false` = skip by default) |
 | `worktree_path` | `".worktrees"` | string | Root directory where worktrees are created |
 | `worktree_docker_isolate` | `true` | bool | Whether Docker Compose should be isolated per worktree |
 | `qa_browser` | `null` | string or null | Preferred browser for the QA agent |
@@ -112,7 +112,7 @@ Worktree behavior is driven primarily by five preferences:
 | `worktree_active` | `true` | Create a worktree per coding task without prompting on modern installs |
 | `worktree_base_branch` | `null` | Use a fixed base branch or auto-detect the repository default |
 | `worktree_commit_action` | `"ask"` | Control whether commit flow stops to ask, rebases, finalizes, or only commits |
-| `auto_learn_before_commit` | `true` | Run `/devteam:learn` automatically before each commit; `false` skips it by default |
+| `auto_learn_before_commit` | `true` | Run `/devteam:learn` silently before each commit — its docs are committed with the work; `false` skips it by default |
 | `worktree_path` | `".worktrees"` | Choose where generated worktrees live |
 | `worktree_docker_isolate` | `true` | Namespace Docker Compose resources per worktree when Docker is in use |
 
