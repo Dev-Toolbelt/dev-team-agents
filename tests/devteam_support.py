@@ -331,7 +331,7 @@ class StoreTestCase(unittest.TestCase):
     def new_project(self, name="app"):
         return make_git_project(self.tmp / name, name=name)
 
-    def run_cli(self, *args, input_text=None):
+    def run_cli(self, *args, input_text=None, cli=None):
         """Invoke the real entry point; returns ``(code, stdout, stderr)``.
 
         ``input_text``, when given, is written to the subprocess's stdin and
@@ -347,7 +347,7 @@ class StoreTestCase(unittest.TestCase):
             {"input": input_text.encode("utf-8")} if input_text is not None else {"stdin": subprocess.DEVNULL}
         )
         result = subprocess.run(
-            [sys.executable, str(CLI), *args],
+            [sys.executable, str(cli or CLI), *args],
             **stdin_kwargs,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

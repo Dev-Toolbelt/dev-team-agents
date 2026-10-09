@@ -400,7 +400,8 @@ class LoadIdentityTest(unittest.TestCase):
         return {k: v for k, v in env.items() if v is not None}
 
     def test_shipped_config_is_placeholders_and_unconfigured(self):
-        loaded = ent.load_identity(environ={})
+        # The shipped file alone: the repository-only auth-config.dev.json may hold real dev values.
+        loaded = ent.load_identity(environ={}, config_path=ent._CONFIG_PATH)
         self.assertFalse(loaded.configured)
         self.assertEqual(loaded.keys, {})
         self.assertIn("REPLACE-ME", loaded.supabase_url)

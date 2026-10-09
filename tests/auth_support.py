@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import atexit
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -16,9 +19,28 @@ from auth_fakes import NEW_PASSWORD, PASSWORD, FakeIdP  # noqa: E402,F401
 from devteam_support import CLI, StoreTestCase  # noqa: E402
 
 from devteam import cli as devteam_cli  # noqa: E402
+from devteam import entitlement  # noqa: E402
 
 CODE = "24681357"
 EMAIL = "ada@example.com"
+
+_SHIPPED_CLI = []
+
+
+def shipped_cli():
+    """The CLI as a release ships it: no repository-only ``auth-config.dev.json``.
+
+    A checkout whose dev file holds a real project would otherwise make every "unconfigured
+    build" test reach that project over the network. Copied once per test run.
+    """
+    if not _SHIPPED_CLI:
+        root = Path(tempfile.mkdtemp(prefix="devteam-shipped-cli-"))
+        atexit.register(shutil.rmtree, root, True)
+        ignore = shutil.ignore_patterns("auth-config.dev.json", "__pycache__")
+        for part in ("cli", "lib"):
+            shutil.copytree(CLI.parent.parent / part, root / "scripts" / part, ignore=ignore)
+        _SHIPPED_CLI.append(root / "scripts" / "cli" / CLI.name)
+    return _SHIPPED_CLI[0]
 
 
 class AuthTestCase(StoreTestCase):
@@ -34,12 +56,16 @@ class AuthTestCase(StoreTestCase):
         self.addCleanup(self.idp.stop)
         os.environ.update(self.idp.env())
         self.outputs = []
+        patcher = mock.patch.object(entitlement, "_DEV_CONFIG_PATH", Path(self.home) / "no-auth-config.dev.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.cli = shipped_cli()
 
     # -- running ---------------------------------------------------------------
 
     def run_auth(self, *args, input_text=None):
         """The real entry point in a subprocess; returns ``(code, stdout, stderr)``."""
-        result = self.run_cli(*args, input_text=input_text)
+        result = self.run_cli(*args, input_text=input_text, cli=self.cli)
         self.outputs.append(result[1] + result[2])
         return result
 
@@ -57,7 +83,7 @@ class AuthTestCase(StoreTestCase):
 
     def popen(self, *args, input_text=""):
         return subprocess.Popen(
-            [sys.executable, str(CLI), *args],
+            [sys.executable, str(self.cli), *args],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
