@@ -50,6 +50,12 @@ class SupabaseConfigTest(unittest.TestCase):
         self.assertEqual(email["otp_expiry"], "600")
         self.assertEqual(email["max_frequency"], '"60s"')
 
+    def test_every_rate_limit_is_accepted_by_the_hosted_api(self):
+        # `supabase config push` fails on 0: the hosted API requires each limit to be >= 1.
+        for key, value in self.cfg["auth.rate_limit"].items():
+            with self.subTest(limit=key):
+                self.assertGreaterEqual(int(value), 1)
+
     def test_linking_and_sign_in_methods(self):
         auth, email = self.cfg["auth"], self.cfg["auth.email"]
         self.assertEqual(auth["enable_anonymous_sign_ins"], "false")
