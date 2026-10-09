@@ -64,7 +64,7 @@ Implements mobile features across React Native, Expo, Flutter, and native iOS/An
 Operates in two modes: **design mode** (produces design system docs, component specs, UX flows) and **development mode** (audits implementation against design system and web interface guidelines). Conditional — spawned when the task involves visual or UX decisions.
 
 ### `seo-specialist`
-Runs the SEO quality gate: technical SEO (sitemap, robots.txt, canonicals, redirects), on-page SEO (titles, meta descriptions, Open Graph), Core Web Vitals, structured data (schema.org/JSON-LD), and GEO — SEO for LLMs/AI search (`llms.txt`, answer-first structure, semantic HTML). Mandatory gate for public sites, landing pages, e-commerce, and blogs; advisory otherwise. Conditional — spawned by `/devteam:frontend` and `/devteam:fullstack` when the project matches a Detection Signal, or directly via `/devteam:seo`.
+Runs the SEO quality gate: technical SEO (sitemap, robots.txt, canonicals, redirects), on-page SEO (titles, meta descriptions, Open Graph verified as the `facebookexternalhit` crawler sees it), Core Web Vitals, structured data (schema.org/JSON-LD), and GEO — SEO for LLMs/AI search (`llms.txt`, answer-first structure, semantic HTML). Mandatory gate for public sites, landing pages, e-commerce, and blogs; advisory otherwise. Conditional — spawned by `/devteam:frontend` and `/devteam:fullstack` when the project matches a Detection Signal, or directly via `/devteam:seo`.
 
 ### `database-specialist`
 Handles schema design, query optimization, index strategy, and database selection. Produces migration files and zero-downtime migration plans. Conditional — spawned when the task touches data models or database infrastructure.

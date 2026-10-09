@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`seo-specialist` verifies Open Graph tags as Meta's crawler receives them.** The SEO gate fetches shareable pages with the `facebookexternalhit` User-Agent and checks the served `og:*`/`twitter:*` tags and `og:image` reachability (`skills/design/seo-optimization/references/share-preview-check.md`). A page that answers `403`/`429` to the crawler while a browser gets `200` is a new `BLOCKER`. Without `curl` or network the check reports `unverified` and the gate falls back to source analysis, showing install steps when `curl` is missing. Every provider.
+
 ### Fixed
 - **`devteam bind` on a pre-v2.1.0 install now carries `reason: v2-install`.** The refusal for a project still installed at `.claude/dev-team-agents/` set only `details.path`, so the desktop app never offered its migrate repair there, though the remedy is the same `devteam migrate`. Additive `--json` key; every provider.
 - **`devteam migrate` no longer refuses a v2 install committed from Windows Git Bash.** There `ln -s` without symlink permission writes each v2 link as a small regular file holding an `IntxLNK\x01` + UTF-16LE stub (Cygwin's `!<symlink>` is the other variant), which `bind` read as project content and refused with exit 4 "already exists and was not created by dev-team-agents". `providers.read_link_stub()` now decodes those and git's own plain-text link files; a stub counts only when it is a regular file of at most 4096 bytes inside the project and its target resolves into `.dev-team-agents/` or `.claude/dev-team-agents/`. Recognised stubs are listed in `v2_copies`, quarantined (never deleted) and, with `--untrack`, removed from the index. Covers the Codex and opencode `skills/dev-team-agents` link too, and a `bind` over one now carries the `v2-install` reason (and the app's migrate repair) like Claude's.
