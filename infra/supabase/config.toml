@@ -41,13 +41,15 @@ password_requirements = ""
 # address-spraying IP can burn for everyone: size it to the SMTP provider's safe hourly volume
 # (well above sign_in_sign_ups x a few hundred IPs). CAPTCHA is not an option: the CLI cannot
 # render one, so per-IP sign_in_sign_ups is the throttle in front of /otp and /signup.
+# The hosted API rejects 0 (minimum 1), so the methods that are switched off (SMS, anonymous,
+# web3) get the lowest accepted limit instead; the method itself stays disabled.
 email_sent = 500
-sms_sent = 0
-anonymous_users = 0
+sms_sent = 1
+anonymous_users = 1
 token_refresh = 150
 sign_in_sign_ups = 30
 token_verifications = 30
-web3 = 0
+web3 = 1
 
 [auth.email]
 # SR-14: confirmations on, both addresses confirm on change.
