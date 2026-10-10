@@ -25,7 +25,7 @@ You are running the **`/devteam:audit`** command.
 
 If `$ARGUMENTS` already names a target (e.g., `auth`, `billing`, `api`, `admin`), use it as `<module>` and skip this step.
 
-If `$ARGUMENTS` is **empty**, ask "Which module/area should I audit?" with `AskUserQuestion` (single-select, generic examples such as `auth`, `api`, `database`, `notifications`, `search`, `admin`, plus "Other" for free text). Store the answer as `<module>`.
+If `$ARGUMENTS` is **empty**, ask "Which module/area should I audit?" with `AskUserQuestion` (single-select, the generic examples `auth`, `api`, `database`, plus "Other" for free text). Store the answer as `<module>`.
 
 ---
 
@@ -137,7 +137,7 @@ Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUI
 
 ## Step 5 — Synthesize improvement plan
 
-Once all agents from Phase 4 complete, synthesize their findings into a single curated improvement plan. De-duplicate related issues, merge items that describe the same root cause, and discard any finding that doesn't meet the relevance bar from Phase 4a. Discard any finding that proposes new business rules or changes to existing business logic — the audit is observational, not prescriptive. The final report should be shorter than the sum of its parts — every item must justify its inclusion.
+Once all agents from Phase 4 complete, synthesize their findings into a single curated improvement plan. De-duplicate related issues, merge items that describe the same root cause, and discard any finding that doesn't meet the relevance bar from Phase 4a. Discard any finding that proposes new business rules or changes to existing business logic — the audit is observational, not prescriptive. The final report should be shorter than the sum of its parts — every item must justify its inclusion. Refer to any secret by `file:line` and kind (e.g. `AWS access key at config/x.py:12`), never by its value, not even partly — here and in the Step 6 TL;DR.
 
 Output format (pure markdown, no box-drawing Unicode, no decorative symbols):
 
@@ -177,7 +177,7 @@ Then:
    - Use `<module>` in lowercase, hyphens for spaces.
    - Example: audit of module `Billing` → `docs/audit/billing-audit-2026-07-27.md`.
 2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.
-3. Nudge `/devteam:learn` — run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip; this report is a finalization signal even on **Report only**. Then close with Step 6.
+3. On **Report only**, nudge `/devteam:learn` now, then close with Step 6. On either implement choice, go through the PLAN GATE and implement; only after the audit's commits land, nudge `/devteam:learn`, then close with Step 6. The nudge is the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip — this report is a finalization signal even on **Report only**.
 
 ---
 
@@ -185,12 +185,14 @@ Then:
 1. Present a structured plan (in the user's language) following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
 2. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 
+---
+
 ## Step 6 — TL;DR
 
-On every exit path, the last thing printed is a TL;DR — at most 8 bullets in the user's language, written after all implementation, fixes, and the learn nudge are done:
+After implementing the plan, on **Report only**, and with `--report-only`, the last thing printed is a TL;DR — at most 8 bullets in the user's language, written after all implementation, fixes, and the learn nudge are done (Cancel at Step 1 or a declined plan has no report and no TL;DR):
 
 - **Implemented** — what was fixed (item numbers from the report), what was left pending or skipped and why, and the commits or files changed.
 - **Report only** / `--report-only` — finding counts by severity and the top 3 items by value.
-- Always end with the report path (`docs/audit/<module>-audit-YYYY-MM-DD.md`) as the place for the details; with `--report-only`, point to the report above instead.
+- Close with where the details are: the report file (`docs/audit/<module>-audit-YYYY-MM-DD.md`) when one was written, otherwise the report printed above.
 
 Task: $ARGUMENTS
