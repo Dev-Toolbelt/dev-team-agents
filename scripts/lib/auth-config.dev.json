@@ -4,10 +4,10 @@
   "environment": "dev",
   "environments": {
     "dev": {
-      "supabase_url": "https://REPLACE-ME-DEV.supabase.co",
-      "anon_key": "REPLACE-ME-DEV-ANON-KEY",
+      "supabase_url": "https://xflspxgomjalglldenap.supabase.co",
+      "anon_key": "sb_publishable_bBvdVcfOqFeBkndjq5msyA_zXqSkbwa",
       "entitlement_keys": {
-        "dev-1": "REPLACE-ME-DEV-ED25519-PUBLIC-KEY-BASE64URL"
+        "dev-1": "GsEpatxHdX6oYYMq1PojZWjL3qBs04TUPEE6qyU5F9o"
       }
     }
   }
