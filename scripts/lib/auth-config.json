@@ -1,15 +1,15 @@
 {
   "schema": 1,
-  "_comment": "Compiled-in identity constants for the account system (ADR-0029 SR-8). Nothing in a project, a preference or the environment overrides them; the only seam is the loopback test seam of SR-44. gate_mode is warn (notice only) or enforce (refuse); any other value reads as enforce, and an unreadable file falls back to entitlement.DEFAULT_GATE_MODE, which is flipped together with this value. Every REPLACE-ME value is a placeholder filled in at release time; a build whose values are still placeholders rejects every token. This file carries the prod environment only (SR-27); the dev environment lives in the repository-only auth-config.dev.json, which is never packaged.",
+  "_comment": "Compiled-in identity constants for the account system (ADR-0029 SR-8). Nothing in a project, a preference or the environment overrides them; the only seam is the loopback test seam of SR-44. gate_mode is warn (notice only) or enforce (refuse); any other value reads as enforce, and an unreadable file falls back to entitlement.DEFAULT_GATE_MODE, which is flipped together with this value. One Supabase project serves development and production (ADR-0029 amendment 2026-10-10), so this file carries its real, public values: URL, publishable key and the Ed25519 public key whose kid matches the ENTITLEMENT_KID function secret. A repository-only auth-config.dev.json, if ever added again for a separate project, is merged in and never packaged (SR-27).",
   "environment": "prod",
   "audience": "devteam-cli",
   "gate_mode": "warn",
   "environments": {
     "prod": {
-      "supabase_url": "https://REPLACE-ME-PROD.supabase.co",
-      "anon_key": "REPLACE-ME-PROD-ANON-KEY",
+      "supabase_url": "https://xflspxgomjalglldenap.supabase.co",
+      "anon_key": "sb_publishable_bBvdVcfOqFeBkndjq5msyA_zXqSkbwa",
       "entitlement_keys": {
-        "prod-1": "REPLACE-ME-PROD-ED25519-PUBLIC-KEY-BASE64URL"
+        "prod-1": "GsEpatxHdX6oYYMq1PojZWjL3qBs04TUPEE6qyU5F9o"
       }
     }
   }
