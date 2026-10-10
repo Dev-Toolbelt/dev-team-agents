@@ -17,7 +17,7 @@ You are running the **`/devteam:audit`** command.
 
 **Observational Analysis Principle:** The audit is a diagnostic — it analyzes the software as it currently behaves. Agents must NOT propose changes that alter existing business logic, introduce new business rules, or modify the intended behavior of the system. Findings must be grounded in the current codebase context: bugs, missing guards, security gaps, and quality issues that exist today. If a finding requires inventing a new business rule or changing what the software is supposed to do, it is out of scope.
 
-**Report-only mode:** when `$ARGUMENTS` contains `--report-only`, strip the flag and run read-only (the first-run path, ADR-0030): ask nothing, skip Steps 1 and 2 (no scope quiz, worktree, or branch), write no file, and in Step 5 print the report in the conversation and stop — no `docs/audit/` file, no follow-up quiz, no learn nudge. Target `.` means the project root; accept the target as given.
+**Report-only mode:** when `$ARGUMENTS` contains `--report-only`, strip the flag and run read-only (the first-run path, ADR-0030): ask nothing, skip Steps 1 and 2 (no scope quiz, worktree, or branch), write no file, and in Step 5 print the report in the conversation, close with the Step 6 TL;DR, and stop — no `docs/audit/` file, no follow-up quiz, no learn nudge. Target `.` means the project root; accept the target as given.
 
 ---
 
@@ -25,21 +25,13 @@ You are running the **`/devteam:audit`** command.
 
 If `$ARGUMENTS` already names a target (e.g., `auth`, `billing`, `api`, `admin`), use it as `<module>` and skip this step.
 
-If `$ARGUMENTS` is **empty**, ask the user with `AskUserQuestion` (single-select with "Other" option for free-text):
-
-> "Which module/area should I audit?"
-
-Offer a few generic examples as options (`auth`, `api`, `database`, `notifications`, `search`, `admin`) or let them type a custom area.
-
-Once resolved, store the target as `<module>`.
+If `$ARGUMENTS` is **empty**, ask "Which module/area should I audit?" with `AskUserQuestion` (single-select, generic examples such as `auth`, `api`, `database`, `notifications`, `search`, `admin`, plus "Other" for free text). Store the answer as `<module>`.
 
 ---
 
 ## Step 1 — Scope guard
 
-If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), state in one line that this scope may take a long time and consume a significant number of tokens, then ask with `AskUserQuestion` (single-select): **Module by module** (recommended — a checkpoint between each), **All at once**, or **Cancel**.
-
-Do NOT proceed until the user answers.
+If `<module>` is vague ("tudo", "all", "everything", "codebase", "projeto inteiro"), state in one line that this scope may take a long time and consume a significant number of tokens, then ask with `AskUserQuestion` (single-select): **Module by module** (recommended — a checkpoint between each), **All at once**, or **Cancel**. Do NOT proceed until the user answers.
 
 ---
 
@@ -55,9 +47,7 @@ If **worktree** is selected:
 2. Context name: `audit/<module>`.
 3. After worktree creation, spin up an isolated Docker stack following the worktree's docker-isolation references.
 
-If **branch** is selected:
-1. Create a new branch: `audit/<module>` from the detected base branch.
-2. Work directly in the main checkout.
+If **branch** is selected: create `audit/<module>` from the detected base branch and work directly in the main checkout.
 
 Write the decision to `.dev-team-agents/.worktree-session` if not already present.
 
@@ -187,13 +177,20 @@ Then:
    - Use `<module>` in lowercase, hyphens for spaces.
    - Example: audit of module `Billing` → `docs/audit/billing-audit-2026-07-27.md`.
 2. Present the report to the user and ask with `AskUserQuestion` (single-select): **Implement the plan now**, **Implement selected items** (then ask which), or **Report only**.
-3. Nudge `/devteam:learn` — run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip; this report is a finalization signal even on **Report only**.
+3. Nudge `/devteam:learn` — run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip; this report is a finalization signal even on **Report only**. Then close with Step 6.
 
 ---
 
 **PLAN GATE:** Steps 3 and 4 are read-only exploration/analysis — the agents there report findings, they do not touch files, so no plan-and-wait cycle applies to them. The gate applies only when the user picks **Implement the plan now** or **Implement selected items** in Step 5:
-1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
-2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
-3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
+1. Present a structured plan (in the user's language) following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
+2. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
+
+## Step 6 — TL;DR
+
+On every exit path, the last thing printed is a TL;DR — at most 8 bullets in the user's language, written after all implementation, fixes, and the learn nudge are done:
+
+- **Implemented** — what was fixed (item numbers from the report), what was left pending or skipped and why, and the commits or files changed.
+- **Report only** / `--report-only` — finding counts by severity and the top 3 items by value.
+- Always end with the report path (`docs/audit/<module>-audit-YYYY-MM-DD.md`) as the place for the details; with `--report-only`, point to the report above instead.
 
 Task: $ARGUMENTS
