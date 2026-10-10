@@ -24,23 +24,36 @@ from devteam import entitlement  # noqa: E402
 CODE = "24681357"
 EMAIL = "ada@example.com"
 
-_SHIPPED_CLI = []
+_UNCONFIGURED_CLI = []
+
+PLACEHOLDER_PROD = {
+    "supabase_url": "https://REPLACE-ME-PROD.supabase.co",
+    "anon_key": "REPLACE-ME-PROD-ANON-KEY",
+    "entitlement_keys": {"prod-1": "REPLACE-ME-PROD-ED25519-PUBLIC-KEY-BASE64URL"},
+}
 
 
-def shipped_cli():
-    """The CLI as a release ships it: no repository-only ``auth-config.dev.json``.
+def unconfigured_cli():
+    """A copy of the CLI whose compiled config is placeholders, with no dev file.
 
-    A checkout whose dev file holds a real project would otherwise make every "unconfigured
-    build" test reach that project over the network. Copied once per test run.
+    The checkout's ``auth-config.json`` points at the real project, so a test that runs the
+    checkout CLI and expects an unconfigured build would reach that project over the network.
+    The fake identity server is reached through the loopback seam, which this copy keeps.
+    Copied once per test run.
     """
-    if not _SHIPPED_CLI:
-        root = Path(tempfile.mkdtemp(prefix="devteam-shipped-cli-"))
+    if not _UNCONFIGURED_CLI:
+        root = Path(tempfile.mkdtemp(prefix="devteam-unconfigured-cli-"))
         atexit.register(shutil.rmtree, root, True)
         ignore = shutil.ignore_patterns("auth-config.dev.json", "__pycache__")
         for part in ("cli", "lib"):
             shutil.copytree(CLI.parent.parent / part, root / "scripts" / part, ignore=ignore)
-        _SHIPPED_CLI.append(root / "scripts" / "cli" / CLI.name)
-    return _SHIPPED_CLI[0]
+        config = root / "scripts" / "lib" / "auth-config.json"
+        data = json.loads(config.read_text(encoding="utf-8"))
+        data["environments"] = {"prod": dict(PLACEHOLDER_PROD)}
+        data["environment"] = "prod"
+        config.write_text(json.dumps(data), encoding="utf-8")
+        _UNCONFIGURED_CLI.append(root / "scripts" / "cli" / CLI.name)
+    return _UNCONFIGURED_CLI[0]
 
 
 class AuthTestCase(StoreTestCase):
@@ -56,10 +69,16 @@ class AuthTestCase(StoreTestCase):
         self.addCleanup(self.idp.stop)
         os.environ.update(self.idp.env())
         self.outputs = []
-        patcher = mock.patch.object(entitlement, "_DEV_CONFIG_PATH", Path(self.home) / "no-auth-config.dev.json")
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.cli = shipped_cli()
+        config = Path(self.home) / "unconfigured-auth-config.json"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        data = json.loads(entitlement._CONFIG_PATH.read_text(encoding="utf-8"))
+        data["environments"] = {"prod": dict(PLACEHOLDER_PROD)}
+        config.write_text(json.dumps(data), encoding="utf-8")
+        for name, value in (("_CONFIG_PATH", config), ("_DEV_CONFIG_PATH", Path(self.home) / "no-auth-config.dev.json")):
+            patcher = mock.patch.object(entitlement, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.cli = unconfigured_cli()
 
     # -- running ---------------------------------------------------------------
 

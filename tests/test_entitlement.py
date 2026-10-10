@@ -399,14 +399,28 @@ class LoadIdentityTest(unittest.TestCase):
         env.update(changes)
         return {k: v for k, v in env.items() if v is not None}
 
-    def test_shipped_config_is_placeholders_and_unconfigured(self):
-        # The shipped file alone: the repository-only auth-config.dev.json may hold real dev values.
+    def test_shipped_config_points_at_the_project(self):
+        # One project serves dev and prod (ADR-0029 amendment 2026-10-10): the shipped file is real.
         loaded = ent.load_identity(environ={}, config_path=ent._CONFIG_PATH)
+        self.assertTrue(loaded.configured)
+        self.assertEqual(set(loaded.keys), {"prod-1"})
+        self.assertTrue(loaded.supabase_url.startswith("https://"), loaded.supabase_url)
+        self.assertTrue(loaded.supabase_url.endswith(".supabase.co"), loaded.supabase_url)
+        self.assertTrue(loaded.anon_key.startswith("sb_publishable_"), "only the public key may ship")
+        self.assertFalse(loaded.test_seam)
+
+    def test_a_placeholder_config_is_unconfigured_and_rejects_every_token(self):
+        path = Path(self.dir.name) / "auth-config.json"
+        data = json.loads(ent._CONFIG_PATH.read_text(encoding="utf-8"))
+        data["environments"] = {"prod": {
+            "supabase_url": "https://REPLACE-ME-PROD.supabase.co",
+            "anon_key": "REPLACE-ME-PROD-ANON-KEY",
+            "entitlement_keys": {"prod-1": "REPLACE-ME-PROD-ED25519-PUBLIC-KEY-BASE64URL"},
+        }}
+        path.write_text(json.dumps(data), encoding="utf-8")
+        loaded = ent.load_identity(environ={}, config_path=path)
         self.assertFalse(loaded.configured)
         self.assertEqual(loaded.keys, {})
-        self.assertIn("REPLACE-ME", loaded.supabase_url)
-        self.assertFalse(loaded.test_seam)
-        # An unconfigured build trusts no key, so it rejects every token.
         with self.assertRaises(ent.TokenError):
             ent.verify_token(make_token(), loaded)
 
