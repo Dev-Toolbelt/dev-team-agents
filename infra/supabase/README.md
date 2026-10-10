@@ -36,13 +36,32 @@ python3 scripts/cli/devteam auth login --email you@example.test --password  # pa
 
 ## Link and push
 
+Run every command from the repository root with `--workdir infra`, because `supabase/` lives in `infra/`.
+Link state is written to `infra/supabase/.temp/` (gitignored).
+
+Working order for a hosted project:
+
 ```bash
-supabase link --project-ref <ref>        # run once per target
-supabase config push                      # pushes config.toml (auth, rate limits, templates)
-supabase db push                          # migrations
-supabase functions deploy                 # entitlement, account-delete, ban-user
-supabase secrets set ENTITLEMENT_ED25519_PRIVATE_KEY=... ENTITLEMENT_KID=... BAN_HMAC_KEY=...
+supabase login                                                    # once per machine; link fails with "Access token not provided" without it
+supabase link --workdir infra --project-ref <project-ref> -p <db-password>
+supabase db push --workdir infra                                  # 2 migrations; the first enables pg_cron
+supabase functions deploy --workdir infra --project-ref <project-ref>
+supabase secrets set --workdir infra --project-ref <project-ref> ENTITLEMENT_KID=... ENTITLEMENT_ED25519_PRIVATE_KEY=... BAN_HMAC_KEY=...
+supabase config push --workdir infra --project-ref <project-ref>        # or the temporary copy's dir (see below)
 ```
+
+- **Do not add `--use-api` to `functions deploy`.** It fails for all three functions with
+  `Relative import path "@supabase/supabase-js" not prefixed with / or ./ or ../`, because the server-side
+  bundler does not read the import map in `infra/supabase/functions/deno.json`. The default Docker bundling does.
+- **`config push` sends the whole `config.toml`.** It enables `[auth.email.smtp]` and `[auth.external.github]`
+  and reads their `env(...)` values, so export every variable in `.env.example` first. If SMTP or GitHub is not
+  ready, push from a temporary copy of `infra/supabase` with those two sections set to `enabled = false`
+  (the same change `dev-local.sh` makes to its local copy).
+- **Free plan with the default email provider** rejects `[auth.email.template.*]` and
+  `[auth.email.notification.*]`. Remove those sections from the temporary copy to push. Consequence: hosted
+  mail carries a link, while the CLI expects an 8-digit code, so **email OTP sign-in on hosted needs a custom
+  SMTP provider first**. Google sign-in does not depend on it.
+- Details and the reasons behind each point: `docs/wiki/supabase/hosted-config-push.md`.
 
 ## Edge Functions
 
@@ -74,7 +93,8 @@ and the dev project's extra redirect entry for the fake IdP seam.
 `http://127.0.0.1:*/callback`. GoTrue matches `additional_redirect_urls` as glob patterns, where `*`
 matches any run of non-`/` characters, so it covers the OS-assigned port. If a `supabase config push`
 or a live OAuth attempt rejects it, fall back to a fixed range (for example ports 53682-53690 listed
-one per entry) and make the CLI listener pick from that range. This was not exercised against a live project.
+one per entry) and make the CLI listener pick from that range. Verified live on 2026-10-09: `devteam auth login --google`
+against the hosted dev project completed, so hosted GoTrue accepts the wildcard.
 
 ## Ed25519 keypair and kid rotation
 
