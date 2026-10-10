@@ -1,13 +1,17 @@
 # A CLI subprocess test sends real sign-in requests once the dev auth config is filled in
 
 **Origin:** Hosted dev Supabase project wired into the CLI (commit cd58999) | 2026-10-10
-**Tags:** scripts/lib/auth-config.dev.json, Identity.configured, unconfigured build, shipped_cli, auth_support, devteam_support, subprocess, network leak, test isolation, entitlement
+**Tags:** scripts/lib/auth-config.json, scripts/lib/auth-config.dev.json, unconfigured_cli, Identity.configured, unconfigured build, shipped_cli, auth_support, devteam_support, subprocess, network leak, test isolation, entitlement
 
-> When `scripts/lib/auth-config.dev.json` has a real `supabase_url`, the checkout's CLI counts as configured. A test that runs the checkout CLI as a subprocess and expects an unconfigured build then talks to the dev project. Run the shipped copy from `shipped_cli()` instead.
+> The checkout's `auth-config.json` points at the real Supabase project, so the checkout CLI counts as configured. A test that runs it as a subprocess and expects an unconfigured build would reach that project. Run the copy from `unconfigured_cli()` instead.
 
 ---
 
 ## What it is
+
+**Updated 2026-10-10:** one project serves development and production (ADR-0029 amendment). The shipped
+`auth-config.json` is real and `auth-config.dev.json` was removed, so the copy now replaces the config with placeholders.
+The history below is how the leak was first found, with the dev file.
 
 `scripts/lib/auth-config.dev.json` is repository-only (never packaged, ADR-0029 SR-27). When present,
 `entitlement.read_config` merges it in and selects its environment. `Identity.configured` is true when
@@ -30,13 +34,15 @@ Fix (commit 349f18c):
 
 ## Gotchas
 
-- Tests that launch `devteam_support.CLI` directly, such as `tests/test_client_gate.py`, still use the checkout
-  CLI. A new test that asserts unconfigured behaviour must use `shipped_cli()`.
+- Today the helper is `tests/auth_support.py::unconfigured_cli()`: it copies `scripts/cli` and `scripts/lib` once per run and
+  writes a placeholder `auth-config.json` into the copy. `AuthTestCase` also patches `entitlement._CONFIG_PATH` for in-process calls.
+- Tests that launch `devteam_support.CLI` directly, such as `tests/test_client_gate.py`, use the checkout CLI, which is
+  configured. A new test that asserts unconfigured behaviour must use `unconfigured_cli()`.
 - No environment variable disables the dev file, on purpose. A variable that does so would let the environment
   redirect the CLI to another server, which `test_without_the_seam_nothing_points_the_cli_at_another_server` guards against.
 
 ## References
 
 - `scripts/lib/auth-config.dev.json`; `scripts/lib/devteam/entitlement.py` (`read_config`, `Identity.configured`)
-- `tests/auth_support.py` (`shipped_cli`); `tests/devteam_support.py` (`run_cli`)
+- `tests/auth_support.py` (`unconfigured_cli`); `tests/devteam_support.py` (`run_cli`)
 - `docs/wiki/security/test-seam-authz.md` (the separate test seam, SR-44)

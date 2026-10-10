@@ -38,8 +38,9 @@ it.
 
 ### 1. Supabase Auth is the identity provider
 
-The identity provider is a managed **Supabase Auth** project (GoTrue) in region `sa-east-1`, with
-separate `dev` and `prod` projects. Four sign-in methods are supported:
+The identity provider is a managed **Supabase Auth** project (GoTrue) in region `sa-east-1`. One
+project serves development and production (amended 2026-10-10, see § Amendments; the original
+decision was separate `dev` and `prod` projects). Four sign-in methods are supported:
 
 | Method | Mechanism |
 |--------|-----------|
@@ -124,7 +125,7 @@ After every successful sign-in or token refresh, the CLI calls a Supabase Edge F
 | `status` | `active` · `trial` · `trial_expired` · `premium` · `banned` |
 | `features` | Premium feature keys granted (empty today) |
 | `trial_ends_at` | Present while a trial is running |
-| `iss` | The Supabase project URL that issued it; separates `dev` from `prod` |
+| `iss` | The Supabase project URL that issued it (one project since the 2026-10-10 amendment, so it no longer separates environments) |
 | `aud` | Fixed `devteam-cli` |
 | `v` | Token format version, `1` |
 | `iat`, `exp` | Issue time, and expiry = `min(iat + max_offline_days, trial_ends_at)` while a trial runs, else `iat + max_offline_days` |
@@ -356,9 +357,10 @@ fake IdP issues so tests can grep every output for it.
 26. **Replay.** A token copied from another account fails the `sub` check. A token copied to another
     machine together with that account's session is account sharing, which § 8 accepts. A `banned`
     or `trial_expired` token is cached like any other, so offline the block still shows its reason.
-27. **Keys.** `dev` and `prod` use different key pairs; a `prod` build embeds only `prod` keys:
-    `scripts/lib/auth-config.json` carries the `prod` environment alone, and the `dev` one lives in
-    the repository-only `auth-config.dev.json`, which no distribution path copies. The
+27. **Keys.** One key pair, `kid` `prod-1`, signs for the single project (amended 2026-10-10):
+    `scripts/lib/auth-config.json` carries the `prod` environment alone, with the project's real,
+    public values. A repository-only `auth-config.dev.json`, if a separate project is added again,
+    is merged in by the CLI and no distribution path copies it. The
     private key is generated offline, held only as the Edge Function secret plus an offline backup in
     the maintainers' password manager, and never committed. Rotation: ship the next public key as
     `next` one release ahead, then switch signing. A leaked private key is answered by a release that
@@ -566,3 +568,29 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
 | Hooks that block the agent session when unlicensed | One gate bug locks every user out of their own editor, and § 8 means it does not stop a determined user. |
 | `cryptography` package for Ed25519 | Breaks the standard-library-only rule (ADR-0009) and the one-line brew/winget dependency it protects. |
 | Relicensing, or server-delivered premium, to make enforcement real | Explicitly declined for now (§ 8). |
+
+## Amendments
+
+### 2026-10-10 — one Supabase project and one Google OAuth client for development and production
+
+**Decision.** The maintainer provisioned a single Supabase project and a single Google OAuth client and
+uses them for both development and production. This replaces the separate `dev` and `prod` projects of
+§ 1 and the separate key pairs of SR-27.
+
+**What changed.**
+- `scripts/lib/auth-config.json` carries the project's real URL, publishable key and Ed25519 public key
+  (`kid` `prod-1`, matching the `ENTITLEMENT_KID` function secret). The repository-only
+  `auth-config.dev.json` was removed; the CLI still merges one if it is ever added for a separate project,
+  and the packaging gate still fails if it reaches the package.
+- The `iss` claim names the one project, so a token issued while testing is valid in production.
+- Tests that need an unconfigured build run a copy of the CLI whose config is placeholders
+  (`tests/auth_support.py`), so the suite never reaches the project.
+
+**Consequences.**
+- Test accounts, trial markers (`trial_consumed`) and bans live in the same database as real users.
+  Disposable testing belongs on the local stack (`infra/supabase/dev-local.sh`); a migration or a manual
+  change on the hosted project is a production change.
+- The Google OAuth client must be published for real users, so testing happens in a published app.
+- A Free-plan project is paused after a period of inactivity, which would take sign-in down for every user.
+- Separating environments later means a new project, new OAuth clients and a new key pair, shipped in a
+  CLI release that trusts the new `kid`.
