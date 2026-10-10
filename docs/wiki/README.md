@@ -1,5 +1,5 @@
-<!-- last-updated: 2026-10-02 -->
-**Last entries added:** 3 Supabase local stack gotchas and 9 Windows/cross-platform findings (2026-10-02)
+<!-- last-updated: 2026-10-10 -->
+**Last entries added:** 3 hosted-Supabase, gitignore and test-isolation findings (2026-10-10)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -24,6 +24,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `electron/third-party-runtime-styles-and-csp.md` | sonner, CSP, content-security-policy, third-party, runtime styles, development vs production, __insertCSS, unsafe-inline | Libraries that inject `<style>` at module load render unstyled when CSP forbids `'unsafe-inline'` |
 | `electron/userdata-collides-with-the-cli-store.md` | electron, userData, getPath, productName, APP_NAME, Application Support, APPDATA, second writer, setPath | An Electron app is named after a CLI whose data directory follows the same convention, or a store-wide operation reports a size that makes no sense |
 | `git/worktree-exclude-scope.md` | worktree, info/exclude, gitignore, GIT_DIR, GIT_COMMON_DIR, untracked | Keeping generated files out of git in a repository that uses linked worktrees |
+| `git/gitignore-managed-block-is-rewritten.md` | gitignore, managed block, devteam sync, dev-team-agents (managed), infra/supabase/.local, untracked, regenerated | A project rule in `.gitignore` disappears after `devteam sync`, or `infra/supabase/.local/` shows as untracked |
 | `git/worktree-session-lives-in-the-main-checkout.md` | worktree, git-common-dir, .worktree-session, linked worktree, untracked, relative path, session protocol, commands/merge, finalization | Resolving the session file location when code runs in a linked worktree |
 | `hooks/an-early-exit-sub-script-masks-a-block.md` | hook, dispatcher, pre-tool-use, post-tool-use, user-prompt-submit, stdin, pipe, SIGPIPE, exit 2, block code, full-suite guard, credential guard, payload | A sub-script that exits without reading stdin masks a later exit 2 block |
 | `hooks/a-relative-hook-command-breaks-after-cd.md` | hook, settings.json, hooks.json, relative path, cwd, cd, subdirectory, monorepo, CLAUDE_PROJECT_DIR, non-blocking error, empty board | Hooks stop working, or the board stays empty, after a session `cd`-ed into a subdirectory |
@@ -55,11 +56,13 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `store/plugin-settings-location.md` | plugins, plugin-settings, runtime link, "enabled": true, 02d-plugins.sh, OPTIONAL_TREES, graphify.json, legacy migration, ADR-0019 | Before writing or hand-editing plugin settings, or when a hook ignores an enabled plugin |
 | `store/runtime-root-at-the-cited-path.md` | core, pointer, scripts, templates, runtime root, project-relative, new-adr.sh, reuse-lint, design-token-lint, exit 0, silent gate | A framework path an agent runs does not exist in a bound project, or a Stop gate never reports anything |
 | `store/sync-wires-hooks-the-linked-core-lacks.md` | devteam sync, hook, hooks.EVENTS, core version, linked tree, missing hook, symlink, scripts | A tool call fails after `devteam sync`, or a project needs to upgrade to resolve its core version |
+| `supabase/hosted-config-push.md` | supabase, config push, config.toml, rate_limit, free plan, email template, SMTP, email OTP, all-or-nothing, config diff | Pushing `config.toml` to a hosted project is rejected, or email OTP sign-in does not arrive on hosted |
 | `windows/a-bare-bash-is-wsl.md` | bash, subprocess, CreateProcess, System32, PATH, WSL, shutil.which, Windows, devteam.shells.bash_path | A subprocess call to bash spawns the WSL launcher from System32 instead of Git Bash |
 | `windows/git-bash-children-escape-taskkill.md` | Git Bash, taskkill, process tree, Job Object, TerminateProcess, Windows process group, plugin timeout | taskkill leaves Git Bash children running; a Job Object is required to terminate them |
 | `windows/nul-is-a-tty.md` | NUL, isatty, Windows, getpass, DEVNULL, GetConsoleMode, stdin | The NUL device reports isatty()==True, causing getpass() to hang forever |
 | `windows/os-kill-and-unlink-differ.md` | os.kill, TerminateProcess, os.unlink, file lock, Windows, pid alive check, lock.py | os.kill(pid, 0) on Windows terminates the process; locked files cannot be unlinked |
 | `windows/python-reads-cp1252.md` | cp1252, encoding, UTF-8, read_text, write_text, PYTHONUTF8, Path.write_bytes, CRLF, Windows, test fixtures | Python defaults to cp1252 on Windows; UTF-8 files crash; write_text translates LF to CRLF |
+| `testing/cli-subprocess-tests-and-the-dev-auth-config.md` | scripts/lib/auth-config.dev.json, Identity.configured, unconfigured build, shipped_cli, auth_support, devteam_support, subprocess, network leak, test isolation, entitlement | A test that runs the CLI as a subprocess and expects an unconfigured build sends real requests once the dev auth config is filled in |
 | `testing/diagnosing-the-windows-ci-job.md` | windows, CI, windows-latest, hang, timeout, faulthandler, dump_traceback_later, temporary branch, gh api, job logs, subtests, set +e | The Windows python job hangs or fails with no usable trace in its log |
 | `testing/fixture-circularity.md` | fixture, migration, test design, circular, legacy layout, false confidence | Writing a test for a migration away from a layout the current code no longer produces |
 | `testing/wait-for-the-data-a-control-depends-on.md` | async, flaky test, fixture, wait, disabled control, Radix, DropdownMenu, data loading, ProjectList, folders, sonner, toasts, race condition | Wait for the readiness signal of the data a control depends on, not for unrelated text rendered earlier |
