@@ -272,6 +272,12 @@ echo "[DEVTEAM:SESSION_BANNER]"
 echo "DevTeam Agents • ${DT_VERSION} (github.com/Dev-Toolbelt/dev-team-agents)"
 echo "─────────────────────────────────────────────────"
 echo "Language: ${USER_LANG} | Auto Update: ${DT_AUTO_UPDATE_LABEL} | Worktree: ${DT_WORKTREE_LABEL}"
+# The label above is information; this line is the instruction. user-prompt-submit/04-language.sh
+# restates it on every prompt, because a directive seen once at session start fades.
+case "$USER_LANG" in
+    ""|en|en-*) ;;
+    *) echo "Reply to the user in ${USER_LANG} for the whole session. Documents, commits and the session summary stay in English." ;;
+esac
 # Account state (ADR-0029): informational only, read from the local cache, never the network.
 # A hook never blocks a session on it, and any failure here prints nothing.
 DT_ACCOUNT_LINE="$(PYTHONDONTWRITEBYTECODE=1 python3 -c 'import sys

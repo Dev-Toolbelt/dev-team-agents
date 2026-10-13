@@ -21,7 +21,8 @@
  *     `create_pull_request` / `merge_pull_request`: the board records the PR/MR their RESULT
  *     confirms. Every other tool stays free.)
  *   `chat.message`                    → scripts/hooks/user-prompt-submit.sh
- *     (the user's prompt text, for review commands and requests and issue references on the task board)
+ *     (the user's prompt text, for review commands and requests and issue references on the task board;
+ *     its `[DEVTEAM:LANGUAGE]` stdout line is re-emitted by `experimental.chat.system.transform`)
  *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh
  *   `session.idle` (event bus)        → scripts/hooks/stop.sh
  *   `session.updated` (a rename)      → scripts/hooks/session-retitle.sh
@@ -310,6 +311,9 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     }
   }
 
+  // sessionID → the `[DEVTEAM:LANGUAGE]` line from the last prompt's UserPromptSubmit run.
+  const languageDirective = new Map<string, string>()
+
   const safe = async (label: string, fn: () => Promise<unknown>) => {
     try {
       await fn()
@@ -453,9 +457,20 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       if (!text.trim()) return
       // `prompt` last: the bash gate only looks at what follows that key.
       const payload = JSON.stringify({ session_id: input.sessionID, prompt: text })
-      await safe("user-prompt-submit", () =>
-        runHook(`${hooksDir()}/user-prompt-submit.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS),
-      )
+      await safe("user-prompt-submit", async () => {
+        const r = await runHook(`${hooksDir()}/user-prompt-submit.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS)
+        // opencode drops a chat.message hook's stdout, where Claude Code and Codex add it to the
+        // context. The language directive (user-prompt-submit/04-language.sh) is kept per session
+        // and handed to the system prompt below instead.
+        const directive = r.stdout.split("\n").find((l) => l.startsWith("[DEVTEAM:LANGUAGE]"))
+        if (directive) languageDirective.set(input.sessionID, directive.trim())
+        else languageDirective.delete(input.sessionID)
+      })
+    },
+
+    "experimental.chat.system.transform": async (input, output) => {
+      const directive = input.sessionID ? languageDirective.get(input.sessionID) : undefined
+      if (directive) output.system.push(directive)
     },
 
     "experimental.session.compacting": async (_input, output) => {
