@@ -8,8 +8,10 @@ session concurrency live in `test_auth_oauth.py` and `test_auth_security.py`.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -173,6 +175,17 @@ class PasswordSignInTest(AuthTestCase):
     def test_password_is_sent_normalised_to_nfc(self):
         decomposed = "e\u0301" * 6 + "-SENTINEL-pw"
         self.run_json("auth", "login", "--email", EMAIL, "--password", "--signup", input_text=decomposed + "\n" + CODE + "\n")
+        sent = self.idp.calls_to("/auth/v1/signup")[0]["body"]["password"]
+        self.assertEqual(sent, "\u00e9" * 6 + "-SENTINEL-pw")
+
+    def test_a_piped_password_is_read_as_utf8_whatever_the_locale(self):
+        # Windows decodes a piped stdin as cp1252, where UTF-8's 0x81 is undefined: the
+        # password reached the service altered, or the read failed. Forced here on any OS.
+        with mock.patch.dict(os.environ, {"PYTHONIOENCODING": "cp1252"}):
+            self.run_json(
+                "auth", "login", "--email", EMAIL, "--password", "--signup",
+                input_text="e\u0301" * 6 + "-SENTINEL-pw\n" + CODE + "\n",
+            )
         sent = self.idp.calls_to("/auth/v1/signup")[0]["body"]["password"]
         self.assertEqual(sent, "\u00e9" * 6 + "-SENTINEL-pw")
 

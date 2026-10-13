@@ -2287,7 +2287,7 @@ def resolved_command_path(parser, args):
 
 
 def _ensure_utf8_stdio():
-    """Force ``sys.stdout``/``sys.stderr`` to UTF-8, if the interpreter allows it.
+    """Force ``sys.stdin``/``sys.stdout``/``sys.stderr`` to UTF-8, if the interpreter allows it.
 
     Every human-facing message in this package is an ordinary Python string that
     may contain non-ASCII punctuation — an em dash, mainly (`grep -rn "—"` finds
@@ -2301,8 +2301,13 @@ def _ensure_utf8_stdio():
     UTF-8-decoding caller expects. ``reconfigure`` exists on every stream this
     matters for (Python 3.7+'s ``TextIOWrapper``) and is a no-op cost-wise; a
     stream that lacks it (already replaced by a test double) is left alone.
+
+    stdin has the same problem in the other direction: a piped password or request
+    body (the desktop app sends both as UTF-8) was decoded as ``cp1252`` on Windows,
+    so a non-ASCII password reached the account service altered, or the read raised.
+    A console read goes through ``getpass`` and is unaffected.
     """
-    for stream in (sys.stdout, sys.stderr):
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             try:
