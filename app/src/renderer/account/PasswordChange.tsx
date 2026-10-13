@@ -19,6 +19,7 @@ export function PasswordChange() {
     event.preventDefault();
     setAttempted(true);
     if (signInPasswordProblem(current) !== null || newPasswordProblem(next) !== null) return;
+    if (call.inFlight()) return;
     setMessage(null);
     const done = await call.run(() => window.devteam.authPasswordChange(current, next));
     setCurrent('');

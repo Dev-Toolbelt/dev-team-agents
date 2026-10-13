@@ -198,6 +198,7 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
   const onlyOne = identities.length <= 1;
 
   async function link(provider: AuthProvider) {
+    if (call.inFlight()) return;
     setWorking(`link-${provider}`);
     setNotice(null);
     const done = await call.run(() => window.devteam.authIdentityLink(provider));
@@ -214,6 +215,7 @@ function Identities({ t, identities, onChanged }: { t: Translate; identities: re
       setConfirming(provider);
       return;
     }
+    if (call.inFlight()) return;
     setConfirming(null);
     setWorking(`unlink-${provider}`);
     setNotice(null);

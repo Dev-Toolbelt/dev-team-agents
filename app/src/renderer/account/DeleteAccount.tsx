@@ -44,7 +44,7 @@ export function DeleteAccount({ onDeleted }: { onDeleted: () => void }) {
       return;
     }
     setAttempted(true);
-    if (!confirmed || codeProblem(code) !== null) return;
+    if (!confirmed || codeProblem(code) !== null || call.inFlight()) return;
     const done = await call.run(() => window.devteam.authDeleteConfirm(code));
     // The code is spent either way; an emptied field must not read as a validation error.
     setCode('');

@@ -150,6 +150,7 @@ function Choose({
   const passwordIssue = attempted ? (signUp ? newPasswordProblem(password) : signInPasswordProblem(password)) : null;
 
   async function signInWith(provider: AuthProvider) {
+    if (call.inFlight()) return;
     setOauth(provider);
     const state = await call.run(() => window.devteam.authLoginOAuth(provider));
     setOauth(null);

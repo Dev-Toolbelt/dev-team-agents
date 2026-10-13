@@ -55,9 +55,14 @@ export function useCall(t: Translate) {
     };
   }, []);
   const mounted = useCallback((): boolean => live.current, []);
+  // `busy` only turns true after a re-render; this ref closes the window in between.
+  const pending = useRef(false);
+  const inFlight = useCallback((): boolean => pending.current, []);
 
   const run = useCallback(
     async <T,>(call: () => Promise<OperationResult<T>>): Promise<T | null> => {
+      if (pending.current) return null;
+      pending.current = true;
       setBusy(true);
       setError(null);
       let result: OperationResult<T>;
@@ -65,6 +70,8 @@ export function useCall(t: Translate) {
         result = await call();
       } catch (caught) {
         result = unreachable(caught);
+      } finally {
+        pending.current = false;
       }
       if (!mounted()) return null;
       setBusy(false);
@@ -77,7 +84,7 @@ export function useCall(t: Translate) {
     [t, mounted],
   );
 
-  return { busy, error, setError, run };
+  return { busy, error, setError, run, inFlight };
 }
 
 export function ErrorLine({ id, children }: { id?: string; children: string | null }) {
