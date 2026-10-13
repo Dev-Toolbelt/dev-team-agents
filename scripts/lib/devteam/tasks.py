@@ -36,7 +36,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import jsonio, lock, pr_refs, project, review_triggers
+from . import jsonio, lock, paths, pr_refs, project, review_triggers
 from .errors import DevteamError
 
 SCHEMA = 1
@@ -2817,6 +2817,8 @@ def _action_dir(action, cwd):
     target = action["dir"]
     if not target:
         return None
+    # Git Bash on Windows writes `cd /c/Users/me/proj`; as written it would land on the current drive.
+    target = paths.msys_drive_path(target)
     if not os.path.isabs(target):
         if not cwd or not os.path.isabs(cwd):
             return None

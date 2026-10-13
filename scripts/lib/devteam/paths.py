@@ -226,6 +226,21 @@ def is_absolute_on_any_platform(text):
     return bool(win.drive) or win.root != ""
 
 
+def msys_drive_path(target, windows=None):
+    """``/c/proj/x`` as Windows reads it (``c:/proj/x``); unchanged elsewhere.
+
+    Git Bash spells a drive as a one-letter root directory. Windows resolves that
+    string against the current drive (``\\c\\proj\\x``), so a path written in a
+    shell command or a symlink stub has to be translated before it is used.
+    ``windows`` defaults to the host; tests pass it to exercise either side.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if windows and re.match(r"^/[A-Za-z](/|$)", target):
+        return "{}:/{}".format(target[1], target[3:])
+    return target
+
+
 def realpath_normalized(path):
     """``os.path.realpath(path)`` with the extended-length prefix stripped.
 

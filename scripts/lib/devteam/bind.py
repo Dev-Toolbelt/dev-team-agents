@@ -377,13 +377,6 @@ def _v2_copy_error(dest, rel):
     )
 
 
-def _msys_drive_path(target):
-    """``/c/proj/x`` as Windows reads it (``c:/proj/x``); unchanged elsewhere."""
-    if os.name == "nt" and re.match(r"^/[A-Za-z](/|$)", target):
-        return "{}:/{}".format(target[1], target[3:])
-    return target
-
-
 def _v2_link_file(path, project_root):
     """True when ``path`` is a v2 symlink that a checkout wrote as a plain file.
 
@@ -399,7 +392,7 @@ def _v2_link_file(path, project_root):
     target = providers.read_link_stub(path)
     if target is None:
         return False
-    target = _msys_drive_path(target.replace("\\", "/"))
+    target = paths.msys_drive_path(target.replace("\\", "/"))
     resolved = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(str(path))), target))
     root = os.path.abspath(str(project_root))
     for install in (project.PROJECT_DIR, project.PRE_ROOT_DIR):
