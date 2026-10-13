@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "lib"))
@@ -54,19 +55,13 @@ class CodexQuestionFlagTest(unittest.TestCase):
 
 class DoctorCodexFlagTest(unittest.TestCase):
     def findings(self, bound, config_text):
-        old = os.environ.get("HOME")
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with(tmp, config_text)
-            os.environ["HOME"] = str(home)
-            try:
+            # Windows resolves `~` from USERPROFILE, everything else from HOME.
+            with mock.patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
                 root = Path(tmp) / "proj"
                 root.mkdir()
                 return doctor._ask_rule_findings(root, bound, {})
-            finally:
-                if old is None:
-                    os.environ.pop("HOME", None)
-                else:
-                    os.environ["HOME"] = old
 
     def flagged(self, findings):
         return [f for f in findings if "default_mode_request_user_input" in f.get("hint", "")]

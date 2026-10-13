@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import time
@@ -279,7 +280,9 @@ class OtherBoundProjectTest(PrCase):
         registry.upsert("other-id", self.other, ["claude"], "link")
 
     def create_there(self, session="s1", now=T0 + 20, url=OTHER, command=None):
-        command = command or "cd {} && git push -u origin fix/other-x && gh pr create --base develop".format(self.other)
+        command = command or "cd {} && git push -u origin fix/other-x && gh pr create --base develop".format(
+            shlex.quote(str(self.other))
+        )
         return self.rec(claude_bash(session, command, url + "\n", cwd=str(self.root)), now=now)
 
     def test_a_pr_in_another_bound_project_is_recorded_with_that_project_as_its_voucher(self):
@@ -315,7 +318,7 @@ class OtherBoundProjectTest(PrCase):
         self.create_there()
         self.stop_idle()
         out = self.rec(claude_bash(
-            "s1", "cd {} && gh pr merge 7 --squash".format(self.other),
+            "s1", "cd {} && gh pr merge 7 --squash".format(shlex.quote(str(self.other))),
             "✓ Squashed and merged pull request #7 (fix)\n", cwd=str(self.root),
         ), now=T0 + 50)
         self.assertEqual(out["event"], "pr_merged")

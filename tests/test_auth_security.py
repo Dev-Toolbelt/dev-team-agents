@@ -272,14 +272,14 @@ class TelemetrySeparationTest(AuthTestCase):
         self.assertGreaterEqual(len(auth_files), 6)
         for path in auth_files:
             code = "\n".join(
-                line for line in path.read_text().splitlines() if line.lstrip().startswith(("import ", "from "))
+                line for line in path.read_text(encoding="utf-8").splitlines() if line.lstrip().startswith(("import ", "from "))
             )
             self.assertNotIn("telemetry", code.lower(), path.name)
         pattern = re.compile(r"^\s*(from \. import .*\bauth\w*\b|from \.auth\w* import|import auth)", re.M)
         for path in LIB.glob("*.py"):
             if path.name == "cli.py" or path.name.startswith("auth"):
                 continue
-            self.assertIsNone(pattern.search(path.read_text()), "{} imports the auth modules".format(path.name))
+            self.assertIsNone(pattern.search(path.read_text(encoding="utf-8")), "{} imports the auth modules".format(path.name))
 
     def test_the_telemetry_payload_has_no_account_field(self):
         # SR-41 from the other side: the event the telemetry sender builds, and every call

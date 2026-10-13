@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from devteam_support import REPO_ROOT
+from devteam_support import REPO_ROOT, requires_bash
 
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
@@ -161,6 +161,7 @@ class StructuredChoiceRenderTest(unittest.TestCase):
                 with self.subTest(kind=kind, name=name):
                     self.assertIn(src, self._rendered_for("claude", kind, name))
 
+    @requires_bash()
     def test_codex_tree_passes_compat_lint(self):
         result = subprocess.run(["bash", str(COMPAT), str(self.dirs["codex"] / ".codex")],
                                 capture_output=True, text=True)

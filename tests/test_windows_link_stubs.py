@@ -72,7 +72,7 @@ class ReadLinkStubTest(StoreTestCase):
                 self.assertEqual(providers.read_link_stub(path), "../dev-team-agents/skills/x")
 
     def test_trailing_nuls_and_whitespace_are_stripped(self):
-        path = self._write("nul", _intxlnk("../a/b") + b"\0\0")
+        path = self._write("trailing-nul", _intxlnk("../a/b") + b"\0\0")  # `nul` is a device on Windows
         self.assertEqual(providers.read_link_stub(path), "../a/b")
         path = self._write("nl", _git_plain("../a/b") + b"\n")
         self.assertEqual(providers.read_link_stub(path), "../a/b")
@@ -276,7 +276,7 @@ class WindowsStubProjectTest(StoreTestCase):
                 self.assertEqual(code, 4)
                 payload = json.loads(out)
                 self.assertIn("devteam migrate", payload["hint"])
-                self.assertTrue(payload["details"]["path"].endswith(".claude/dev-team-agents"))
+                self.assertTrue(Path(payload["details"]["path"]).as_posix().endswith(".claude/dev-team-agents"))
                 self.assertNotIn("was not created by", payload["error"])
                 for rel in stubs:
                     self.assertTrue((root / rel).is_file() and not (root / rel).is_symlink(), rel)
