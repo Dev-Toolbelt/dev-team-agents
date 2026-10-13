@@ -181,6 +181,8 @@ The language rules are split by output type:
 
 That separation keeps repository artifacts stable while still letting sessions happen in the user's preferred language.
 
+When `language` is not English, the session banner states it as an instruction, and a `UserPromptSubmit` hook restates it on **every prompt** (a `[DEVTEAM:LANGUAGE]` line), so a long session does not drift to English after an English commit or session summary. Claude Code and Codex receive the line as prompt context; on opencode the plugin adds it to the system prompt. With `language: en` nothing is added.
+
 ---
 
 ## Related Documents

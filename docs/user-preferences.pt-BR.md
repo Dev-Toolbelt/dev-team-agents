@@ -181,6 +181,8 @@ As regras de idioma são separadas por tipo de saída:
 
 Essa separação mantém os artefatos do repositório estáveis, sem impedir que a sessão aconteça no idioma preferido do usuário.
 
+Quando `language` não é inglês, o banner da sessão o declara como instrução, e um hook `UserPromptSubmit` o reforça a **cada prompt** (uma linha `[DEVTEAM:LANGUAGE]`), para que uma sessão longa não passe para o inglês depois de um commit ou session summary em inglês. Claude Code e Codex recebem a linha como contexto do prompt; no opencode, o plugin a adiciona ao system prompt. Com `language: en` nada é adicionado.
+
 ---
 
 ## Documentos Relacionados

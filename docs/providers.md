@@ -161,6 +161,7 @@ Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, s
 | Merge `gh pr merge` / `glab mr merge` | `PostToolUse` on `Bash`, output contains success marker | `PostToolUse` on `Bash`, output contains success marker | `tool.execute.after` on `bash` |
 | Merge `/devteam:merge` (`git merge <ref>`) | `PostToolUse` on `Bash`, command contains `git merge`, success = no `CONFLICT`/`fatal`/`error:` in output | `PostToolUse` on `Bash` | `tool.execute.after` on `bash` |
 | Issue refs in prompt | `UserPromptSubmit`, `prompt` | `UserPromptSubmit`, `prompt` | plugin `chat.message` → `{session_id, prompt}` |
+| Conversation language (`04-language.sh`) | `UserPromptSubmit` stdout → context | `UserPromptSubmit` stdout → developer context | plugin `chat.message` captures the `[DEVTEAM:LANGUAGE]` line; `experimental.chat.system.transform` adds it to that session's system prompt |
 | Command use (`command-usage.json`, ADR-0030) | `UserPromptSubmit`, `prompt` (`/devteam:<name>`) | `UserPromptSubmit`, `prompt` (`$devteam-<name>`) | plugin `chat.message` → `{session_id, prompt}`; same unverified raw-vs-expanded caveat as review commands |
 | Branch name refs | Hook call's `branch` (git `rev-parse --abbrev-ref HEAD`) | Hook call's `branch` | Hook call's `branch` |
 
