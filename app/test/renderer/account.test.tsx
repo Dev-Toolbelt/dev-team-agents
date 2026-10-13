@@ -9,7 +9,7 @@
 import './setup.js';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -463,6 +463,175 @@ describe('sign-in', () => {
   });
 });
 
+describe('double submit', () => {
+  type Pending = ReturnType<typeof deferred<ReturnType<typeof ok<AuthState>>>>;
+  type Flow = {
+    readonly name: string;
+    readonly button: RegExp;
+    readonly open: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
+    readonly bridge: (pending: Pending) => { overrides: Partial<DevteamBridge>; op: () => ReturnType<typeof vi.fn> };
+  };
+
+  const passwordTab = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('tab', { name: /email and password/i }));
+
+  const flows: readonly Flow[] = [
+    {
+      name: 'email and password sign-in',
+      button: /^sign in$/i,
+      open: async (user) => {
+        await passwordTab(user);
+        await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+        await user.type(screen.getByLabelText(/^password/i), 'a-long-enough-password');
+      },
+      bridge: (pending) => {
+        const fn = vi.fn(() => pending.promise);
+        return { overrides: { authPasswordSignIn: fn }, op: () => fn };
+      },
+    },
+    {
+      name: 'requesting the emailed code',
+      button: /send me a code/i,
+      open: async (user) => {
+        await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+      },
+      bridge: (pending) => {
+        const fn = vi.fn(() => pending.promise as never);
+        return { overrides: { authOtpStart: fn }, op: () => fn };
+      },
+    },
+    {
+      name: 'sign-up: sending the code',
+      button: /create account/i,
+      open: async (user) => {
+        await passwordTab(user);
+        await user.click(screen.getByRole('button', { name: /create an account/i }));
+        await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+        await user.type(screen.getByLabelText(/choose a password/i), 'a-long-enough-password');
+      },
+      bridge: (pending) => {
+        const fn = vi.fn(() => pending.promise as never);
+        return { overrides: { authPasswordSignUpStart: fn }, op: () => fn };
+      },
+    },
+    {
+      name: 'password reset: sending the code',
+      button: /send the code/i,
+      open: async (user) => {
+        await passwordTab(user);
+        await user.click(screen.getByRole('button', { name: /forgot your password/i }));
+        await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+      },
+      bridge: (pending) => {
+        const fn = vi.fn(() => pending.promise as never);
+        return { overrides: { authPasswordResetStart: fn }, op: () => fn };
+      },
+    },
+  ];
+
+  async function mountFlow(flow: Flow) {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const { overrides, op } = flow.bridge(pending);
+    installBridge(fakeBridge(overrides));
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await flow.open(user);
+    return { user, op: op(), pending };
+  }
+
+  it.each(flows.map((flow) => [flow.name, flow] as const))('%s: repeated clicks call the operation once', async (_name, flow) => {
+    const { user, op } = await mountFlow(flow);
+    const button = screen.getByRole('button', { name: flow.button });
+    await user.click(button);
+    await user.click(button);
+    await user.dblClick(button);
+    expect(op).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /working/i })).toBeDisabled();
+  });
+
+  it.each(flows.map((flow) => [flow.name, flow] as const))('%s: repeated Enter calls the operation once', async (_name, flow) => {
+    const { user, op } = await mountFlow(flow);
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Enter}');
+    expect(op).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(flows.map((flow) => [flow.name, flow] as const))('%s: a failure frees the button for a new attempt', async (_name, flow) => {
+    const { user, op, pending } = await mountFlow(flow);
+    await user.click(screen.getByRole('button', { name: flow.button }));
+    pending.resolve(fail('unavailable'));
+    const button = await screen.findByRole('button', { name: flow.button });
+    expect(button).toBeEnabled();
+    expect(op).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(flows.map((flow) => [flow.name, flow] as const))(
+    '%s: a second submit event dispatched while the first is pending still calls the operation once',
+    async (_name, flow) => {
+      const { op } = await mountFlow(flow);
+      const form = screen.getByRole('button', { name: flow.button }).closest('form') as HTMLFormElement;
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+      expect(op).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('the code step (login and sign-up) calls verify once for repeated clicks', async () => {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const authOtpVerify = vi.fn(() => pending.promise);
+    installBridge(fakeBridge({ authOtpStart: vi.fn(() => Promise.resolve(ok({ sent: true }))), authOtpVerify }));
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+    await user.click(screen.getByRole('button', { name: /send me a code/i }));
+    await user.type(await screen.findByLabelText(/^code/i), GOOD_CODE);
+    const button = screen.getByRole('button', { name: /^sign in$/i });
+    await user.click(button);
+    await user.click(button);
+    await user.keyboard('{Enter}');
+    expect(authOtpVerify).toHaveBeenCalledTimes(1);
+  });
+
+  it('sign-up finish calls the operation once for repeated clicks', async () => {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const authPasswordSignUpFinish = vi.fn(() => pending.promise);
+    installBridge(
+      fakeBridge({ authPasswordSignUpStart: vi.fn(() => Promise.resolve(ok({ pending: true as const }))), authPasswordSignUpFinish }),
+    );
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await passwordTab(user);
+    await user.click(screen.getByRole('button', { name: /create an account/i }));
+    await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+    await user.type(screen.getByLabelText(/choose a password/i), 'a-long-enough-password');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+    await user.type(await screen.findByLabelText(/^code/i), GOOD_CODE);
+    const button = screen.getByRole('button', { name: /confirm and sign in/i });
+    await user.click(button);
+    await user.click(button);
+    expect(authPasswordSignUpFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('password reset finish calls the operation once for repeated clicks', async () => {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const authPasswordResetFinish = vi.fn(() => pending.promise);
+    installBridge(fakeBridge({ authPasswordResetStart: vi.fn(() => Promise.resolve(ok({ sent: true }))), authPasswordResetFinish }));
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const user = userEvent.setup();
+    await passwordTab(user);
+    await user.click(screen.getByRole('button', { name: /forgot your password/i }));
+    await user.type(screen.getByLabelText(/email address/i), 'ana@example.com');
+    await user.click(screen.getByRole('button', { name: /send the code/i }));
+    await user.type(await screen.findByLabelText(/^code/i), GOOD_CODE);
+    await user.type(screen.getByLabelText(/new password/i), 'a-brand-new-password');
+    const button = screen.getByRole('button', { name: /set the new password/i });
+    await user.click(button);
+    await user.click(button);
+    expect(authPasswordResetFinish).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('profile', () => {
   async function mount(overrides: Partial<DevteamBridge> = {}, state: AuthState = authState()) {
     const bridge = fakeBridge({ authCheck: checkReturning(state), ...overrides });
@@ -620,6 +789,81 @@ describe('profile', () => {
     expect(await screen.findByRole('heading', { name: /sign in to dev-team-agents/i })).toBeInTheDocument();
   });
 
+  describe('double submit', () => {
+    it('change password: a second submit while pending calls once and keeps the typed values until it settles', async () => {
+      const pending = deferred<ReturnType<typeof ok<{ changed: true; other_sessions_revoked: boolean }>>>();
+      const authPasswordChange = vi.fn(() => pending.promise);
+      const { user } = await mount({ authPasswordChange });
+      await user.click(screen.getByRole('button', { name: /^change password$/i }));
+      await user.type(screen.getByLabelText(/current password/i), 'old-password-1');
+      await user.type(screen.getByLabelText(/^new password$/i), 'new-password-123');
+      const form = screen.getByLabelText(/^new password$/i).closest('form') as HTMLFormElement;
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+      expect(authPasswordChange).toHaveBeenCalledTimes(1);
+      expect(screen.getByDisplayValue('old-password-1')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('new-password-123')).toBeInTheDocument();
+      pending.resolve(ok({ changed: true as const, other_sessions_revoked: true }));
+      expect(await screen.findByText(/other devices were signed out/i)).toBeInTheDocument();
+      expect(authPasswordChange).toHaveBeenCalledTimes(1);
+      expect(screen.queryByDisplayValue('new-password-123')).not.toBeInTheDocument();
+      expect(screen.queryByDisplayValue('old-password-1')).not.toBeInTheDocument();
+    });
+
+    it('delete account: a second confirmation while pending calls once and keeps the typed code', async () => {
+      const pending = deferred<ReturnType<typeof ok<{ deleted: true }>>>();
+      const authDeleteConfirm = vi.fn(() => pending.promise);
+      const { user } = await mount({
+        authDeleteStart: vi.fn(() => Promise.resolve(ok({ sent: true }))),
+        authDeleteConfirm,
+        authCheck: vi.fn().mockResolvedValueOnce(ok(authState())).mockResolvedValue(ok(signedOutState(), { outcome: 'findings' })),
+      });
+      await user.click(screen.getByRole('button', { name: /delete my account/i }));
+      await user.type(screen.getByLabelText(/type delete to confirm/i), 'DELETE');
+      await user.click(screen.getByRole('button', { name: /send a confirmation code/i }));
+      await user.type(await screen.findByLabelText(/confirmation code/i), GOOD_CODE);
+      const form = screen.getByLabelText(/confirmation code/i).closest('form') as HTMLFormElement;
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+      await user.click(screen.getByRole('button', { name: /delete account permanently|working/i }));
+      expect(authDeleteConfirm).toHaveBeenCalledTimes(1);
+      expect(screen.getByDisplayValue(GOOD_CODE)).toBeInTheDocument();
+      pending.resolve(ok({ deleted: true as const }));
+      expect(await screen.findByRole('heading', { name: /sign in to dev-team-agents/i })).toBeInTheDocument();
+      expect(authDeleteConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('link: a second click while pending calls once and the working state survives until it settles', async () => {
+      const pending = deferred<ReturnType<typeof ok<{ linked: string; identities: never[] }>>>();
+      const authIdentityLink = vi.fn(() => pending.promise);
+      await mount({ authIdentityLink });
+      const button = screen.getByRole('button', { name: /link github/i });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      expect(authIdentityLink).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: /link github/i })).toBeDisabled();
+      pending.resolve(ok({ linked: 'github', identities: [] }));
+      expect(await screen.findByText('GitHub linked.')).toBeInTheDocument();
+      expect(authIdentityLink).toHaveBeenCalledTimes(1);
+    });
+
+    it('unlink: a second confirming click while pending calls once and the working state survives until it settles', async () => {
+      const pending = deferred<ReturnType<typeof ok<{ unlinked: string }>>>();
+      const authIdentityUnlink = vi.fn(() => pending.promise);
+      const { user } = await mount({ authIdentityUnlink });
+      await user.click(screen.getByRole('button', { name: /unlink google/i }));
+      const confirm = screen.getByRole('button', { name: /click again to unlink google/i });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      expect(authIdentityUnlink).toHaveBeenCalledTimes(1);
+      expect(authIdentityUnlink).toHaveBeenCalledWith('google');
+      expect(screen.getByRole('button', { name: /link github/i })).toBeDisabled();
+      pending.resolve(ok({ unlinked: 'google' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: /link github/i })).toBeEnabled());
+      expect(authIdentityUnlink).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('delete account', () => {
     it('sends nothing until the confirmation word is typed, then needs the emailed code', async () => {
       const authDeleteStart = vi.fn(() => Promise.resolve(ok({ sent: true })));
@@ -721,6 +965,21 @@ describe('review follow-ups', () => {
     );
     expect(await screen.findByRole('button', { name: /^account$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument();
+  });
+
+  it('a second click landing before the re-render neither calls the browser sign-in again nor clears the waiting line', () => {
+    const pending = deferred<ReturnType<typeof ok<AuthState>>>();
+    const bridge = fakeBridge({ authLoginOAuth: vi.fn(() => pending.promise) });
+    installBridge(bridge);
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const button = screen.getByRole('button', { name: /continue with google/i });
+    act(() => {
+      button.click();
+      button.click();
+    });
+    expect(bridge.authLoginOAuth).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status')).toHaveTextContent(/finish signing in in your browser/i);
+    pending.resolve(fail('cancelled', { reason: 'oauth_failed', exitCode: 1 }));
   });
 
   it('lets the person give up on a browser sign-in', async () => {
