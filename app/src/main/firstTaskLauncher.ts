@@ -18,7 +18,7 @@
  */
 import { spawn } from 'node:child_process';
 import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 import type { LaunchFirstTaskAnswer } from '../shared/api.js';
 import { joinQuoted, quoteCmd, quotePosix } from '../shared/shellQuote.js';
@@ -112,7 +112,9 @@ export async function launchInTerminal(deps: LauncherDeps, cwd: string, argv: re
     return { launched: false, message: 'This folder or command has a character that cannot be passed to a terminal safely.' };
   }
 
-  const makeDir = deps.makeDir ?? ((prefix: string) => mkdtemp(join(deps.tempDir, prefix)));
+  // The separator follows the platform the script is for, not the one this code runs on.
+  const pathApi = windows ? win32 : posix;
+  const makeDir = deps.makeDir ?? ((prefix: string) => mkdtemp(pathApi.join(deps.tempDir, prefix)));
   const writeScript =
     deps.writeScript ??
     (async (path: string, content: string) => {
@@ -123,7 +125,7 @@ export async function launchInTerminal(deps: LauncherDeps, cwd: string, argv: re
   let scriptPath: string;
   try {
     const dir = await makeDir('devteam-first-task-');
-    scriptPath = join(dir, windows ? 'first-task.cmd' : 'first-task.command');
+    scriptPath = pathApi.join(dir, windows ? 'first-task.cmd' : 'first-task.command');
     await writeScript(scriptPath, script);
   } catch (error) {
     return { launched: false, message: `The terminal script could not be written: ${error instanceof Error ? error.message : String(error)}` };
