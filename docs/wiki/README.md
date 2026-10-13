@@ -1,5 +1,5 @@
-<!-- last-updated: 2026-10-10 -->
-**Last entries added:** 3 hosted-Supabase, gitignore and test-isolation findings (2026-10-10)
+<!-- last-updated: 2026-10-13 -->
+**Last entries added:** app renderer Node version and useCall in-flight guard findings (2026-10-13)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -19,6 +19,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `bash/gnu-stat-f-is-filesystem-status.md` | stat, -f, -c, filesystem status, GNU, multi-line output, file-stat.sh, Ubuntu | A stat probe on a GNU system returns multi-line garbage and exits 1 |
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
 | `bash/supabase-local-dev.md` | supabase, cli, config.toml, content_path, email templates, workdir, dev-local.sh, symlink, copy | `supabase start` or `config push` cannot find a template, or the local stack needs a config change |
+| `electron/usecall-in-flight-guard-and-caller-contract.md` | useCall, double submit, in-flight guard, pending ref, inFlight, disabled, fireEvent.submit, PasswordChange, DeleteAccount, Profile, SignIn, account | `useCall.run` returns `null` on a duplicate submit, or a caller acts on a `run` result it did not check |
 | `electron/ipc-channels-need-the-trusted-sender-check.md` | electron, IPC, ipcMain.handle, security, trustedHandler, trustedRenderer, audit trail | After rebasing app work on main, grep for new `ipcMain.handle` calls |
 | `electron/project-naming-scope.md` | project, name, BindRequest, settings.json, app-local, not portable, machine-local, product naming | Deciding whether project names belong in the app-local settings or the CLI's committed record |
 | `electron/third-party-runtime-styles-and-csp.md` | sonner, CSP, content-security-policy, third-party, runtime styles, development vs production, __insertCSS, unsafe-inline | Libraries that inject `<style>` at module load render unstyled when CSP forbids `'unsafe-inline'` |
@@ -62,6 +63,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `windows/nul-is-a-tty.md` | NUL, isatty, Windows, getpass, DEVNULL, GetConsoleMode, stdin | The NUL device reports isatty()==True, causing getpass() to hang forever |
 | `windows/os-kill-and-unlink-differ.md` | os.kill, TerminateProcess, os.unlink, file lock, Windows, pid alive check, lock.py | os.kill(pid, 0) on Windows terminates the process; locked files cannot be unlinked |
 | `windows/python-reads-cp1252.md` | cp1252, encoding, UTF-8, read_text, write_text, PYTHONUTF8, Path.write_bytes, CRLF, Windows, test fixtures | Python defaults to cp1252 on Windows; UTF-8 files crash; write_text translates LF to CRLF |
+| `testing/app-tests-need-the-nvmrc-node.md` | vitest, jsdom, undici, markAsUncloneable, Failed to start forks worker, Node 20, nvmrc, engines, app tests, renderer tests | `app/` tests die with "Failed to start forks worker" before any assertion runs |
 | `testing/cli-subprocess-tests-and-the-dev-auth-config.md` | scripts/lib/auth-config.json, scripts/lib/auth-config.dev.json, unconfigured_cli, Identity.configured, unconfigured build, auth_support, devteam_support, subprocess, network leak, test isolation, entitlement | A test that runs the CLI as a subprocess and expects an unconfigured build sends real requests because the checkout's auth config is real |
 | `testing/diagnosing-the-windows-ci-job.md` | windows, CI, windows-latest, hang, timeout, faulthandler, dump_traceback_later, temporary branch, gh api, job logs, subtests, set +e | The Windows python job hangs or fails with no usable trace in its log |
 | `testing/fixture-circularity.md` | fixture, migration, test design, circular, legacy layout, false confidence | Writing a test for a migration away from a layout the current code no longer produces |
