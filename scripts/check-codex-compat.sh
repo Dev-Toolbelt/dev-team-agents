@@ -47,6 +47,8 @@ FORBIDDEN_PATTERNS=(
 )
 
 # Regression patterns: literal matches, never auto-fixed. The fix is a re-render.
+# The backticks are the text being searched for, so they stay unexpanded on purpose.
+# shellcheck disable=SC2016
 RENDER_REGRESSION_PATTERNS=(
     '``request_user_input'
     '`request_user_input` (Plan mode)'
