@@ -12,6 +12,7 @@ import contextlib
 import json
 import ntpath
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -276,8 +277,10 @@ class ActionDirTest(unittest.TestCase):
         self.assertEqual(ntpath.normcase(where), ntpath.normcase("c:\\Users\\me\\other"))
 
     def test_a_posix_cd_target_is_left_alone(self):
-        with mock.patch.object(tasks.paths.os, "name", "posix"):
-            self.assertEqual(tasks._action_dir({"dir": "/c/srv"}, "/work"), os.path.realpath("/c/srv"))
+        with mock.patch.object(tasks.paths.os, "name", "posix"), mock.patch.object(tasks.os, "path", posixpath):
+            where = tasks._action_dir({"dir": "/c/srv"}, "/work")
+            expected = posixpath.realpath("/c/srv")
+        self.assertEqual(where, expected)
 
 
 OTHER = "https://github.com/o/other/pull/7"
