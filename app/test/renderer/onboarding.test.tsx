@@ -55,7 +55,8 @@ describe('the first-run wizard', () => {
     render(<App />);
 
     // Signed in, machine fine: the folder step is the first thing there is to do.
-    expect(await screen.findByRole('heading', { name: 'Choose your project folder' })).toHaveFocus();
+    const folderHeading = await screen.findByRole('heading', { name: 'Choose your project folder' });
+    await waitFor(() => expect(folderHeading).toHaveFocus());
     expect(screen.queryByRole('tab', { name: 'Projects' })).not.toBeInTheDocument();
     expect(wizard().getByRole('listitem', { current: 'step' })).toHaveTextContent('Folder');
     expect(wizard().getByText('Get started')).toBeInTheDocument();
@@ -63,7 +64,8 @@ describe('the first-run wizard', () => {
     // Click 1: choose the folder. Nothing is set up yet.
     await user.click(screen.getByRole('button', { name: 'Choose a folder' }));
     expect(bridge.detectProject).toHaveBeenCalledWith('/work/my-app');
-    expect(await screen.findByRole('heading', { name: 'Does this look right?' })).toHaveFocus();
+    const reviewHeading = await screen.findByRole('heading', { name: 'Does this look right?' });
+    await waitFor(() => expect(reviewHeading).toHaveFocus());
     expect(bridge.startProject).not.toHaveBeenCalled();
     expect(screen.getByLabelText('AI coding tool')).toHaveValue('claude');
     expect(screen.getByLabelText('This project is')).toHaveValue('maintenance');
