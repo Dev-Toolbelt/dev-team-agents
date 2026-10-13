@@ -188,3 +188,28 @@ test("a renamed session reaches the task board through session-retitle.sh", asyn
   assert.equal(sent.session_id, "s1")
   assert.equal(sent.session_title, "Desafio 7D")
 })
+
+test("the prompt hook's language directive reaches that session's system prompt, and only it", async () => {
+  const dir = makeProject()
+  control(dir, "user-prompt-submit", { out: "[DEVTEAM:LANGUAGE] Reply to the user in pt-BR." })
+  const { plugin } = await load(dir)
+  await plugin["chat.message"]({ sessionID: "s1" }, { parts: [{ type: "text", text: "oi" }] })
+  const system = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s1" }, system)
+  assert.deepEqual(system.system, ["[DEVTEAM:LANGUAGE] Reply to the user in pt-BR."])
+  const other = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s2" }, other)
+  assert.deepEqual(other.system, [])
+})
+
+test("a prompt whose hook prints no directive clears the session's language line", async () => {
+  const dir = makeProject()
+  control(dir, "user-prompt-submit", { out: "[DEVTEAM:LANGUAGE] Reply to the user in pt-BR." })
+  const { plugin } = await load(dir)
+  await plugin["chat.message"]({ sessionID: "s1" }, { parts: [{ type: "text", text: "oi" }] })
+  control(dir, "user-prompt-submit", {})
+  await plugin["chat.message"]({ sessionID: "s1" }, { parts: [{ type: "text", text: "hi" }] })
+  const system = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s1" }, system)
+  assert.deepEqual(system.system, [])
+})
