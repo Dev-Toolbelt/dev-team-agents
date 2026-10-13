@@ -1030,6 +1030,16 @@ class ReviewHookTest(tt.HookTest):
     def codes(self):
         return [r["code"] for r in self.queue()]
 
+    def english(self):
+        # The default language is pt-BR, and the prompt dispatcher restates a non-English one on
+        # stdout (user-prompt-submit/04-language.sh). The silence asserted here is the review
+        # hooks', so the language line is switched off rather than filtered out.
+        prefs = Path(self.root) / ".dev-team-agents" / "resolved" / "preferences.json"
+        data = json.loads(prefs.read_text()) if prefs.is_file() else {}
+        data["language"] = "en"
+        prefs.parent.mkdir(parents=True, exist_ok=True)
+        prefs.write_text(json.dumps(data))
+
     def test_the_prompt_gate_forks_no_python_for_an_unrelated_prompt_or_a_path_that_looks_related(self):
         self.start()
         base = self.python_calls()
@@ -1150,6 +1160,7 @@ class ReviewHookTest(tt.HookTest):
         self.assertEqual((window["pending"], window["unread"], window["findings"]), (0, 1, None))
 
     def test_a_big_payload_through_the_dispatchers_is_fast_silent_and_forks_nothing(self):
+        self.english()
         base = self.start_turn()
         big = {"tool_name": "Bash", "session_id": "s1", "tool_input": {"command": "x" * 1_000_000}}
         started = time.monotonic()
@@ -1190,6 +1201,7 @@ class ReviewHookTest(tt.HookTest):
         self.assertIn("revisão", self.queue()[0]["message"])
 
     def test_every_new_hook_exits_zero_and_silent_on_garbage(self):
+        self.english()
         for script in (PROMPT_SUB, PROMPT_DISPATCHER, PRE_TOOL_USE, POST_TOOL_USE, POST_DISPATCHER):
             result = self.run_script(script, "not json at all review qa test")
             self.assertEqual((result.stdout, result.stderr), (b"", b""), script)
