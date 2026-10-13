@@ -178,15 +178,6 @@ class V2LinkFileTest(StoreTestCase):
         self.assertFalse(bind._v2_link_file(stub, self.root))
         self.assertNotIn(".codex/skills/dev-team-agents", bind.v2_copies(self.version_dir, self.root))
 
-    def test_an_msys_drive_path_reads_as_its_windows_drive(self):
-        with mock.patch.object(bind.os, "name", "nt"):
-            self.assertEqual(bind._msys_drive_path("/c/proj/x"), "c:/proj/x")
-            self.assertEqual(bind._msys_drive_path("/c"), "c:/")
-            self.assertEqual(bind._msys_drive_path("/etc/passwd"), "/etc/passwd")
-            self.assertEqual(bind._msys_drive_path("../a"), "../a")
-        with mock.patch.object(bind.os, "name", "posix"):
-            self.assertEqual(bind._msys_drive_path("/c/proj/x"), "/c/proj/x")
-
     def test_a_plain_project_markdown_file_is_not_a_link(self):
         path = self._stub(".claude/commands/devteam", b"# my own command\n\nbody\n")
         self.assertFalse(bind.v2_copy(".claude/commands/devteam", path, self.version_dir, self.root))

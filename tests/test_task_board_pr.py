@@ -10,6 +10,7 @@ hook wiring.
 
 import contextlib
 import json
+import ntpath
 import os
 import re
 import shlex
@@ -263,6 +264,20 @@ class CreationTest(PrCase):
         self.assertEqual(len(self.prs()), tasks.MAX_PRS)
         self.assertEqual(tasks.MAX_PRS, 20)
         self.assertEqual([p["number"] for p in self.prs()][-1], 20)
+
+
+class ActionDirTest(unittest.TestCase):
+    """Git Bash on Windows writes `cd /c/Users/me/proj`; resolved as written it would land on
+    the current drive (`\\c\\Users\\...`) and the action would belong to no bound project."""
+
+    def test_an_msys_cd_target_resolves_to_its_drive_on_windows(self):
+        with mock.patch.object(tasks.paths.os, "name", "nt"), mock.patch.object(tasks.os, "path", ntpath):
+            where = tasks._action_dir({"dir": "/c/Users/me/other"}, "C:\\Users\\me\\proj")
+        self.assertEqual(ntpath.normcase(where), ntpath.normcase("c:\\Users\\me\\other"))
+
+    def test_a_posix_cd_target_is_left_alone(self):
+        with mock.patch.object(tasks.paths.os, "name", "posix"):
+            self.assertEqual(tasks._action_dir({"dir": "/c/srv"}, "/work"), os.path.realpath("/c/srv"))
 
 
 OTHER = "https://github.com/o/other/pull/7"

@@ -101,6 +101,26 @@ class PlatformLayoutTest(unittest.TestCase):
                 )
 
 
+class MsysDrivePathTest(unittest.TestCase):
+    def test_a_one_letter_root_is_its_windows_drive_on_windows(self):
+        for written, read in (
+            ("/c/proj/x", "c:/proj/x"), ("/C/proj/x", "C:/proj/x"), ("/c", "c:/"),
+            ("/cd/x", "/cd/x"), ("/etc/passwd", "/etc/passwd"), ("../a", "../a"), ("C:/x", "C:/x"),
+        ):
+            self.assertEqual(paths.msys_drive_path(written, windows=True), read, written)
+
+    def test_nothing_changes_elsewhere(self):
+        self.assertEqual(paths.msys_drive_path("/c/proj/x", windows=False), "/c/proj/x")
+
+    def test_the_host_decides_by_default(self):
+        from unittest import mock
+
+        with mock.patch.object(paths.os, "name", "nt"):
+            self.assertEqual(paths.msys_drive_path("/c/proj/x"), "c:/proj/x")
+        with mock.patch.object(paths.os, "name", "posix"):
+            self.assertEqual(paths.msys_drive_path("/c/proj/x"), "/c/proj/x")
+
+
 class MachineLocalClassifierTest(unittest.TestCase):
     """`is_machine_local_record` / `path_is_machine_local` — the one place that
     decides which side of the portable/machine-local split a record belongs on.
