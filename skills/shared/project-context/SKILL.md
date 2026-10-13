@@ -56,7 +56,7 @@ python3 -c \
 
 If `preferences.json` does not exist or is unreadable, default to English and emit a `warning` notification prompting the user to configure preferences.
 
-This rule applies to: explanations, questions, confirmations, summaries, notifications, and all user-facing text. It does NOT apply to document content, code comments, or commit messages.
+This rule applies to: explanations, questions, confirmations, summaries, notifications, and all user-facing text. It does NOT apply to document content, code comments, or commit messages. Writing an English commit or session summary does not switch the conversation: the closing message of a task stays in the user's language. A `[DEVTEAM:LANGUAGE]` line (restated on every prompt by the `UserPromptSubmit` hook) carries the same value — follow it.
 
 Notifications (context window, stale config, tips) are raised by hooks and shown by the desktop app — never print a `DEV TEAM AGENTS` box. `skills/shared/notifier/SKILL.md` says what raises what, and how a hook adds a new one.
 

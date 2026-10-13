@@ -112,13 +112,16 @@ Two distinct rules govern language in dev-team-agents:
 
 | Output type | Language rule |
 |-------------|--------------|
-| Documents (ADRs, session-summary, plans, changelogs, code comments) | **Always English** — regardless of `preferences.json` |
-| Conversation with the user (responses, questions, explanations, notifications) | **Use `language` from `preferences.json`** — fallback to English if absent or unreadable |
+| Documents written to disk (ADRs, session-summary, plan files, changelogs, commits, code comments) | **Always English** — regardless of `preferences.json` |
+| Conversation with the user (responses, questions, explanations, notifications, plans presented for approval) | **Use `language` from `preferences.json`** — fallback to English if absent or unreadable |
+
+The conversation rule holds for **every** message, including the closing summary of a task written right after an English commit or session summary — that is exactly where it used to drift. The `UserPromptSubmit` hook `user-prompt-submit/04-language.sh` restates it on every prompt as `[DEVTEAM:LANGUAGE]`; follow that line.
 
 **How agents read the user's language:**
 
 ```bash
-PREFS=".dev-team-agents/user-data/preferences.json"
+PREFS=".dev-team-agents/resolved/preferences.json"
+[ -f "$PREFS" ] || PREFS=".dev-team-agents/user-data/preferences.json"
 USER_LANG="en"
 if [ -f "$PREFS" ] && command -v python3 >/dev/null 2>&1; then
     USER_LANG=$(python3 -c \
@@ -127,7 +130,7 @@ if [ -f "$PREFS" ] && command -v python3 >/dev/null 2>&1; then
 fi
 ```
 
-For agents: read `.dev-team-agents/user-data/preferences.json` at the start of each session. Use the `language` value when writing any response directed at the user. If the file does not exist, use English.
+For agents: read the file named in § Read one file; never merge at the start of each session. Use the `language` value when writing any response directed at the user. If neither file exists, use English.
 
 ---
 
@@ -159,10 +162,11 @@ If a specific field is missing from the file (partial schema), use its default v
 
 ```bash
 _pref() {
-    local field="$1" default="$2"
+    local field="$1" default="$2" prefs=".dev-team-agents/resolved/preferences.json"
+    [ -f "$prefs" ] || prefs=".dev-team-agents/user-data/preferences.json"
     python3 -c \
-        "import json,sys; d=json.load(open('.dev-team-agents/user-data/preferences.json')); \
-         print(d.get('$field', $default))" 2>/dev/null || echo "$default"
+        "import json,sys; d=json.load(open(sys.argv[1])); \
+         print(d.get('$field', $default))" "$prefs" 2>/dev/null || echo "$default"
 }
 
 LANG=$(_pref language '"en"')
