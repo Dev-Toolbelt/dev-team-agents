@@ -386,6 +386,20 @@ check_plan_mode_mirroring() {
   done
 }
 
+# ── Passed-through output is "verbatim", not "exactly" ────────────────────────
+# project-context § Language Policy: `output exactly` is a fixed message the user reads in their
+# own language; `output verbatim` is passed through byte-for-byte. A script's output said with
+# "exactly" would be translated, so the wording that names a script's output must be "verbatim".
+# A tripwire on one line: a fixed message on one line followed by the output on the next is not seen.
+check_verbatim_wording() {
+  local hits
+  hits="$(grep -n -i -E '(output|print) exactly[^.]{0,40}(script|prints|printed|produced|produces|outputs|returns|emits)' "$REPO_ROOT"/commands/*.md 2>/dev/null || true)"
+  [ -n "$hits" ] || return 0
+  while IFS= read -r hit; do
+    ERRORS+=("  · ${hit#"$REPO_ROOT"/}: passes a script's output through with 'exactly' — say 'verbatim' (project-context § Language Policy)")
+  done <<< "$hits"
+}
+
 # ── Orchestration roster must match agents/ ───────────────────────────────────
 # skills/architecture/orchestration/SKILL.md carries the roster an orchestrator
 # reads to choose a subagent_type. It was hand-maintained and unvalidated, and it
@@ -538,6 +552,7 @@ check_skill_name_uniqueness
 check_orchestration_roster
 check_command_roster
 check_plan_mode_mirroring
+check_verbatim_wording
 
 # Warnings are reported only in verbose mode — they are non-blocking and would
 # otherwise fire on every Stop-hook run.
