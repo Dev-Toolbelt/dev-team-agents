@@ -14,7 +14,7 @@ You are running the **`/devteam:update`** command.
 - Be direct and terse. No analysis, no side notes, no observations, no commentary beyond what is specified below.
 - Do NOT add any personal remarks, flag issues you noticed, or mention things "worth flagging".
 - Do NOT explain what you are about to do before doing it.
-- Only output exactly what each step below says to output.
+- Only output what each step below says to output.
 
 ---
 

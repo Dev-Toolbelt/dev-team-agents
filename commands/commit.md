@@ -85,7 +85,7 @@ Carry the chosen scope into Step 3.
 
 Knowledge capture is part of the commit, not a separate approval. Skip it if `$ARGUMENTS` contains `dry-run`/`--dry-run` or `--skip-learn`, the user asked to skip it, the user chose a preview/abort above, or `auto_learn_before_commit` in `.dev-team-agents/resolved/preferences.json` is `false` (default: `true`).
 
-Otherwise load `skills/shared/feature-learn/SKILL.md` § Embedded Commit Capture and follow its commit side: run its session guard; if it does not skip, print exactly one line — `Generating learn for this work before committing…` — run `/devteam:learn --embedded`, and stage its docs through that section's guards. They group as the **9 — Docs** layer in Step 3; then continue the normal flow.
+Otherwise load `skills/shared/feature-learn/SKILL.md` § Embedded Commit Capture and follow its commit side: run its session guard; if it does not skip, print exactly a single line — `Generating learn for this work before committing…` — run `/devteam:learn --embedded`, and stage its docs through that section's guards. They group as the **9 — Docs** layer in Step 3; then continue the normal flow.
 
 ## Step 3 — Group changes into logical commits
 

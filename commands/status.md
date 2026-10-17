@@ -127,4 +127,4 @@ fi
 ' _ "$ARGUMENTS"
 ```
 
-Output exactly what the script prints, as markdown. Nothing before it, nothing after it.
+Output verbatim what the script prints, as markdown. Nothing before it, nothing after it.

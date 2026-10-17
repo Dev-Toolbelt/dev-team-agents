@@ -14,7 +14,7 @@ Its job: detect the operating system and the active provider, analyze every dev-
 **IMPORTANT — Output rules:**
 - Be direct and terse. No analysis, no side notes, no commentary beyond what is specified below.
 - Do NOT explain what you are about to do before doing it.
-- Only output exactly what each step below says to output.
+- Only output what each step below says to output.
 
 > This command operates on the local installation, not a git branch — it does **not** load `current-context` and has no Plan Gate.
 
@@ -41,7 +41,7 @@ elif [ -f .codex/hooks.json ]; then echo "Provider: codex"
 else echo "Provider: unknown"; fi
 ```
 
-Output exactly the two lines produced: `OS: <detected>` and `Provider: <provider>`.
+Output verbatim the two lines produced: `OS: <detected>` and `Provider: <provider>`.
 
 Bind these two labels for every later step — never hardcode a CLI name:
 
@@ -87,7 +87,7 @@ Restart <CLI> so it re-indexes commands, agents, and skills.
 
 Then check for `[DEVTEAM:SYMLINK_COMMIT_NEEDED]` below before going to Step 6.
 
-**If the script output also contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`** (in either branch above) — the link(s) work locally but the git blob at that path is still committed as a plain file, not a symlink. Every future checkout/pull/stash/reset, and every teammate's fresh clone, will silently re-break it unless this is committed. Append this to the output above, substituting the `git add`/`git commit` command lines exactly as printed by the script:
+**If the script output also contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`** (in either branch above) — the link(s) work locally but the git blob at that path is still committed as a plain file, not a symlink. Every future checkout/pull/stash/reset, and every teammate's fresh clone, will silently re-break it unless this is committed. Append this to the output above, substituting verbatim the `git add`/`git commit` command lines the script printed:
 
 ```
 ⚠️  This fix is local only — the committed version is still a plain file.
@@ -104,7 +104,7 @@ Then go to Step 6.
 Repair failed. Script output:
 ```
 
-Followed by the raw script output. Then stop.
+Followed by the script output, verbatim. Then stop.
 
 **`EXIT:3`** → the OS is blocking native symlink creation. Continue to Step 4.
 
@@ -176,7 +176,7 @@ When `Provider:` is `opencode` or `codex`: `fix-symlinks.sh` does not inspect `<
 test -L <config-dir>/skills/dev-team-agents && echo "SKILLS:link" || echo "SKILLS:broken"
 ```
 
-On `SKILLS:broken`, output exactly one line, then stop:
+On `SKILLS:broken`, output exactly this single line, then stop:
 
 ```
 Re-run bash .dev-team-agents/scripts/install-<provider>.sh to restore the skills symlink.

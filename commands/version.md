@@ -59,4 +59,4 @@ echo "Language: ${USER_LANG} | Auto Update: ${AUTO_UPDATE_LABEL} | Worktree: ${W
 '
 ```
 
-Output exactly what the script prints. Nothing before it, nothing after it.
+Output verbatim what the script prints. Nothing before it, nothing after it.

@@ -125,7 +125,7 @@ Rules:
   rewrite, `<!-- last-updated -->` refreshed, its token-economy rules respected.
 - Session summary: if today's entry is missing or incomplete, write/append it now in the
   format defined in CLAUDE.md.
-- For each file touched, output exactly one line: "PATCHED <filepath>"
+- For each file touched, output verbatim one line: "PATCHED <filepath>"
 ```
 
 ### Spawn conditionally (only if ADR candidates were detected):

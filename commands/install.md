@@ -113,7 +113,7 @@ If `graphify` was installed and verified, hand off to `skills/devops/graphify-se
 
 ## Step 7 — Final report
 
-Print exactly one line per requested tool:
+Print exactly a single line per requested tool:
 
 ```
 ✅ installed: <tool> (verified)
