@@ -1,23 +1,71 @@
 {
-  "includeCoAuthoredBy": false,
   "hooks": {
-    "PreToolUse": [
+    "PostToolUse": [
       {
-        "matcher": ".*",
         "hooks": [
           {
-            "type": "command",
-            "command": "scripts/hooks/pre-tool-use.sh"
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" post-tool-use.sh; }; exec bash .dev-team-agents/scripts/hooks/post-tool-use.sh; }'",
+            "type": "command"
+          }
+        ],
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" post-tool-use.sh; }; exec bash .dev-team-agents/scripts/hooks/post-tool-use.sh; }'",
+            "type": "command"
+          }
+        ],
+        "matcher": "Agent|Task|Bash|mcp__.*create_pull_request"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "scripts/hooks/pre-compact.sh",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" pre-compact.sh; }; exec bash .dev-team-agents/scripts/hooks/pre-compact.sh; }'",
+            "type": "command"
           }
         ]
       }
     ],
-    "Stop": [
+    "PreToolUse": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "scripts/hooks/stop.sh"
+            "command": "scripts/hooks/pre-tool-use.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ".*"
+      },
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" pre-tool-use.sh; }; exec bash .dev-team-agents/scripts/hooks/pre-tool-use.sh; }'",
+            "type": "command"
+          }
+        ],
+        "matcher": ".*"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" session-end.sh; }; exec bash .dev-team-agents/scripts/hooks/session-end.sh; }'",
+            "type": "command"
           }
         ]
       }
@@ -26,21 +74,58 @@
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "scripts/hooks/session-start.sh"
+            "command": "scripts/hooks/session-start.sh",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" session-start.sh; }; exec bash .dev-team-agents/scripts/hooks/session-start.sh; }'",
+            "type": "command"
           }
         ]
       }
     ],
-    "PreCompact": [
+    "Stop": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "scripts/hooks/pre-compact.sh"
+            "command": "scripts/hooks/stop.sh",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" stop.sh; }; exec bash .dev-team-agents/scripts/hooks/stop.sh; }'",
+            "type": "command"
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\" \"$(pwd -P)\"; do while [ -n \"$d\" ] && [ ! -d \"$d/.dev-team-agents/scripts/hooks\" ] && [ ! -f \"$d/.dev-team-agents/core-dir\" ]; do p=${d%/*}; [ \"$p\" = \"$d\" ] && p=; d=$p; done; [ -n \"$d\" ] && break; done; cd \"${d:-${CLAUDE_PROJECT_DIR:-.}}\" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash \"$c/versions/$(cat \"$c/current\")/scripts/hooks/lib/self-heal.sh\" user-prompt-submit.sh; }; exec bash .dev-team-agents/scripts/hooks/user-prompt-submit.sh; }'",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "ask": [
+      "Bash(devteam integration call * POST *)",
+      "Bash(devteam integration call * PUT *)",
+      "Bash(devteam integration call * PATCH *)",
+      "Bash(devteam integration call * DELETE *)",
+      "Bash(devteam integration call * --allow-write)",
+      "Bash(devteam integration call * --allow-write *)"
     ]
   }
 }
