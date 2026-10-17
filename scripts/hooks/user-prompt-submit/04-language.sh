@@ -12,17 +12,22 @@ set -uo pipefail
 ROOT="$PWD"
 if [ ! -d "${ROOT}/.dev-team-agents" ]; then
     # The preferences live in the MAIN checkout only, never in a linked worktree.
-    ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)" || exit 0
+    COMMON="$(git rev-parse --git-common-dir 2>/dev/null)" || exit 0
+    [ -n "$COMMON" ] || exit 0
+    ROOT="$(cd "${COMMON}/.." 2>/dev/null && pwd)" || exit 0
 fi
 PREFS="${ROOT}/.dev-team-agents/resolved/preferences.json"
 [ -f "$PREFS" ] || PREFS="${ROOT}/.dev-team-agents/user-data/preferences.json"
 [ -f "$PREFS" ] || exit 0
 
-LANG_TAG="$(grep -m1 -oE '"language"[[:space:]]*:[[:space:]]*"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*"' "$PREFS" 2>/dev/null \
-    | sed -E 's/.*"([^"]+)"$/\1/')"
-case "$LANG_TAG" in
-    ""|en|en-*|EN|EN-*) exit 0 ;;
+# The value becomes model context on every prompt, so it must be shaped like a language tag and
+# nothing more: at most two subtags, 20 characters, and only the first match in the file.
+LANG_TAG="$(grep -m1 -oE '"language"[[:space:]]*:[[:space:]]*"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}"' "$PREFS" 2>/dev/null \
+    | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
+[ "${#LANG_TAG}" -le 20 ] || exit 0
+case "$(printf '%s' "$LANG_TAG" | tr '[:upper:]' '[:lower:]')" in
+    ""|en|en-*) exit 0 ;;
 esac
 
-echo "[DEVTEAM:LANGUAGE] Reply to the user in ${LANG_TAG} — every message, including the last one of a task. Documents, code comments, commit messages and the session summary stay in English."
+echo "[DEVTEAM:LANGUAGE] Reply to the user in ${LANG_TAG} — every message, including the last one of a task and any fixed message a command says to output exactly (code, paths, versions, commands, placeholders and emoji stay as written). Only what a command says to output verbatim stays as written. Documents, code comments, commit messages and the session summary stay in English."
 exit 0
