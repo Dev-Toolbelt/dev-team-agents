@@ -65,6 +65,22 @@ When generating a plan, use the `Par.` column in the STEPS table to group steps 
 
 This reduces total wall-clock time significantly on multi-agent tasks.
 
+### Mandatory Scoped Review Before Done
+
+Every task that changes functionality in this repository ends with a review-and-fix pass, **run automatically, without asking**. It is skipped only for one-liner fixes (typo, single-line change, rename in one file) and for changes that touch no functionality (`docs/`, README, CHANGELOG, code comments, formatting). Edits to `agents/`, `commands/`, `skills/`, `templates/` and `CLAUDE.md` rules are functionality and are never exempt. This is a project-level rule, so it wins over the shipped Review Next-Step Gate per the Coexistence Rule — and the gate is never reached anyway: this pass satisfies its "a review already ran this session" skip condition. The Visual Check Gate and the commit/PR hand-off still follow.
+
+| Point | Rule |
+|---|---|
+| **Owner** | The main conversation (or outermost orchestrator). A sub-agent reports its touched paths and never starts the pass itself |
+| **Plan** | Every plan for such a task ends with a `Scoped review` step, so approving the plan covers the in-scope fixes |
+| **Scope** | When the plan is approved, save `git status --porcelain` and `git diff` to the scratchpad as the baseline; the scope is the current diff minus that baseline. Reviewer prompts name the touched files and hunks and say everything else is out of scope |
+| **Reviewers** | This repo's own map, not the shipped classifier: `code-reviewer` always — when it classifies the diff as `BOTH`, spawn `backend-reviewer` and `frontend-reviewer` instead; `security-specialist` when `scripts/`, hooks, the CLI, credentials or installers are touched; `software-architect` when a canonical rule, provider-facing behavior or an ADR Trigger Rule case is touched; `qa-specialist` when a spec or acceptance criteria exist. Spawned in parallel under `skills/architecture/orchestration/SKILL.md` § Spawn Integrity — a reviewer that did not run means the task is not done |
+| **Fix** | Apply in-scope BLOCKING and SUGGESTION findings without asking. A fix beyond the approved plan (new file, behavior change, anything provider-facing) goes through `AskUserQuestion`; NITs and out-of-scope items are listed |
+| **Re-verify** | `helpers/agent-lint.sh`, `helpers/size-limits.sh`, `helpers/plugin-lint.sh` when `plugins/` changed, `helpers/orphan-skill-scan.sh` when `agents/` or `skills/` changed, and tests per `skills/shared/scoped-test-execution/SKILL.md`. At most **one** re-review, limited to the fixed hunks; BLOCKING items it still finds are reported as open and asked about |
+| **Done** | Only after the review returned and its fixes landed — wrap-up and the session-summary entry come after it. The close carries a table built from returned run banners and `review-result` markers: reviewer · findings · applied · left open. Zero findings is a valid result |
+
+Commits and pushes still happen only when the user asks.
+
 ---
 
 ## Authoring Standards
@@ -184,6 +200,7 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Periodic status-table check-in while background sub-agents work — table format, `ScheduleWakeup` cadence, and the `credentials.local.json` gate (`work_feedback_active`, `work_feedback_interval_minutes`) | `skills/shared/work-feedback/SKILL.md` | Orchestrators load it from `skills/architecture/orchestration/SKILL.md` § Spawn Integrity, check 6. Never restate the gate check, loop mechanics, or table format |
 | Review Next-Step Gate — a flow whose next step is a review closes with a dynamic `AskUserQuestion` (review recommended, `Don't review`, options built from the diff and specs), never a plain-text pointer | `skills/shared/interaction-patterns/SKILL.md` § Review Next-Step Gate | Reference it at the flow's close; never restate the options or skip conditions |
 | Visual Check Gate — a flow that changed or reviewed web UI closes with a dynamic `AskUserQuestion` offering to open the changed screen, reusing an environment that belongs to this checkout before starting one, loopback only; never a plain-text "check it in the browser" line. Its § Browser Choice is also the single browser-selection rule (`qa-specialist` follows it) | `skills/shared/interaction-patterns/SKILL.md` § Visual Check Gate | Reference it at the flow's close, after the Review Next-Step Gate; sub-agents end with a **Screens to check** list instead of asking. Never restate the options, the reuse order or the browser choice |
+| Scoped review before done — contributor-only; no provider auto-loads the core-store copy (`versions.py` copies it so the `CLAUDE-md/` links resolve) | `CLAUDE.md` § Mandatory Scoped Review Before Done | Nothing — it does not apply to installed projects. Never copy it into `agents/`, `commands/` or `skills/` |
 | Dirty-Tree Pre-flight — `/devteam:push`, `/devteam:merge`, `/devteam:pr` (and a push/merge asked in plain language) run the `/devteam:commit` flow automatically on uncommitted changes, then continue | `skills/shared/git-workflow/SKILL.md` § Dirty-Tree Pre-flight | Load it as the first step; never carry a copy of the commit routine |
 | PR Comment Gate — reviewing a PR/MR drafts one comment mentioning the assignees (fallback: author), rule-violating BLOCKING/SUGGESTION items with `path:line` + code excerpts; with no BLOCKING it approves instead (never self-approval); posted only after an `AskUserQuestion` confirmation | `skills/shared/pr-review/SKILL.md` § PR Comment Gate | Point to it from the review close; never restate the format, mention rule, or platform commands |
 
