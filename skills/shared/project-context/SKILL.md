@@ -58,6 +58,15 @@ If `preferences.json` does not exist or is unreadable, default to English and em
 
 This rule applies to: explanations, questions, confirmations, summaries, notifications, and all user-facing text. It does NOT apply to document content, code comments, or commit messages. Writing an English commit or session summary does not switch the conversation: the closing message of a task stays in the user's language. A `[DEVTEAM:LANGUAGE]` line (restated on every prompt by the `UserPromptSubmit` hook) carries the same value — follow it.
 
+**Fixed messages in commands.** Two wordings, two meanings:
+
+| Wording | Meaning |
+|---|---|
+| `output exactly` / `print exactly` | A fixed message for the user: say exactly that, in the user's language. Code, paths, versions, commands, placeholders, emoji and table structure stay as written |
+| `output verbatim` | Byte-for-byte: a script's output passed through, or any line a later step parses (`PATCHED <path>`). Never translated |
+
+A command author picks `verbatim` only for the second case; `helpers/agent-lint.sh` fails a command that says `output exactly` for what a script prints.
+
 Notifications (context window, stale config, tips) are raised by hooks and shown by the desktop app — never print a `DEV TEAM AGENTS` box. `skills/shared/notifier/SKILL.md` says what raises what, and how a hook adds a new one.
 
 ---
