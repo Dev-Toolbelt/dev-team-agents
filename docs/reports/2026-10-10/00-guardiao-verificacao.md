@@ -3,6 +3,12 @@
 **Baseline:** `HEAD` = `349f18c` · **Baseline anterior:** `5e338d9` · **Delta:** 62 commits,
 183 arquivos.
 
+> O repositório recebeu um commit **durante** este pass: `cd58999`
+> ("build(cli): point the dev environment at the provisioned Supabase project", 3 linhas em
+> `scripts/lib/auth-config.dev.json`) foi commitado de uma mudança que estava no working tree no
+> início. Todas as fases foram verificadas contra `349f18c`; nenhum achado nem nenhuma
+> verificação deste pass toca esse arquivo.
+
 > **Plan Gate.** Este pass foi disparado por tarefa agendada, com instrução explícita de
 > executar e commitar. Não houve gate humano; o critério de amostragem está declarado abaixo
 > antes dos resultados, que é o que o gate existe para garantir.
