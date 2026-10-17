@@ -168,6 +168,12 @@ State the adopted role on the first line, as the router instructs (`Review type:
 
 ---
 
+## PR Comment
+
+When invoked directly on a pull/merge request, run `skills/shared/pr-review/SKILL.md` § PR Comment Gate before closing; when spawned by a command, leave it to the command.
+
+---
+
 ## Jira Integration
 
 **Detection**: load `skills/integrations/jira/SKILL.md` when any of the following are true:

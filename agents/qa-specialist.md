@@ -74,15 +74,7 @@ Load `skills/shared/scoped-test-execution/SKILL.md` before running any automated
 
 ## Browser Testing
 
-When validation requires driving a real browser (UI flows, end-to-end paths, visual behavior), choose the browser as follows:
-
-1. **Prefer the Claude app browser.** If the in-app browser tools are available (`mcp__Claude_Browser__*`), use them **by default** — no need to ask. This is the priority option.
-2. **CLI (in-app browser unavailable) → always ask.** If you are running in the Claude CLI and the in-app browser is not available:
-   - First read `.dev-team-agents/resolved/preferences.json` → `qa_browser`. If it holds a saved choice, use it **without asking**.
-   - If `qa_browser` is `null`/absent, **always ask** the user which browser to use, via `AskUserQuestion`. Offer the browser tools available in the environment (e.g., Playwright, Puppeteer, a system browser, or another driver the project already uses), plus an **"Other"** option for a custom choice.
-   - Include a follow-up option to **set the chosen browser as the default for future activities**. If the user opts in, write the choice to `preferences.json → qa_browser` so you don't ask again.
-
-Never silently pick a CLI browser — outside the in-app browser, the choice is always the user's until a default is saved. Always run browser tests in the main/foreground agent, never delegated to a background subagent — the user must be able to watch the run live, step by step.
+When validation requires driving a real browser (UI flows, end-to-end paths, visual behavior), pick the browser with `skills/shared/interaction-patterns/SKILL.md` § Visual Check Gate → Browser Choice (in-app browser first, then the saved `qa_browser`, otherwise ask and offer to save the default). Always run browser tests in the main/foreground agent, never delegated to a background subagent — the user must be able to watch the run live, step by step.
 
 **Mindset**: don't stop at the happy path — map every in-scope route/screen plus its backend validation rules (required, format, limits, uniqueness, terms-of-use), then actually drive the browser as a real user through happy path, edge cases, and per-field validation; cross-check UI behavior against backend rules and flag divergences; for every error triggered, check that the front-end message is specific and actionable — flag generic messages ("something went wrong", raw status codes, silent failures) that don't tell the user what to fix; on every form/submit action, test rapid repeated clicks/submits and check the button/form is disabled or debounced after the first click — flag duplicate submissions, duplicate records, or double-charges when this protection is missing; report only, never fix; surface relevant improvement opportunities separately from findings.
 
@@ -208,4 +200,4 @@ If asked to modify files inside `dev-team-agents`:
 
 ## Before You Finish
 
-Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody. After a review or QA pass, end with the `<!-- review-result: findings=N -->` line from `skills/shared/review-result/SKILL.md`.
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody. After a review or QA pass, end with the `<!-- review-result: findings=N -->` line from `skills/shared/review-result/SKILL.md`. When UI changed, list the screens you drove under **Screens checked** and any you could not under **Screens to check** — the orchestrator's Visual Check Gate reads them.

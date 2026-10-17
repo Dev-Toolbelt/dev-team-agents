@@ -205,4 +205,4 @@ If asked to modify files inside `dev-team-agents`:
 
 ## Before You Finish
 
-Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody. After a review or QA pass, end with the `<!-- review-result: findings=N -->` line from `skills/shared/review-result/SKILL.md`.
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody. After a review or QA pass, end with the `<!-- review-result: findings=N -->` line from `skills/shared/review-result/SKILL.md`. Never close with a plain-text "check it in the browser" line: end with a **Screens to check** list so the **Visual Check Gate** (`skills/shared/interaction-patterns/SKILL.md`) is asked.
