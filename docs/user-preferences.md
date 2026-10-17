@@ -98,7 +98,7 @@ scripts/lib/preferences-defaults.json
 | `auto_learn_before_commit` | `true` | bool | Silently run `/devteam:learn` before every `/devteam:commit`, no approval asked (`false` = skip by default) |
 | `worktree_path` | `".worktrees"` | string | Root directory where worktrees are created |
 | `worktree_docker_isolate` | `true` | bool | Whether Docker Compose should be isolated per worktree |
-| `qa_browser` | `null` | string or null | Preferred browser for the QA agent |
+| `qa_browser` | `null` | string or null | Preferred browser when the in-app browser is unavailable — QA browser testing and the visual check after UI work |
 | `ci_cd_detected` | `null` | bool or null | Cached CI/CD detection state |
 
 ---

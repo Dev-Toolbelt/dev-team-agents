@@ -221,7 +221,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:refactor` | Refatoração — software-architect planeja, desenvolvedor(es) executam |
 | `/devteam:architect` | Decisões de arquitetura e ADRs — software-architect |
 | `/devteam:audit` | Análise profunda de módulo/área — backend-developer + frontend-developer + security-specialist + devops-specialist; salva relatório em `docs/audit/` |
-| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; em uma PR/MR, rascunha um comentário para o responsável — ou aprova quando nada bloqueia — após sua confirmação |
 | `/devteam:qa` | Garantia de qualidade — qa-specialist |
 | `/devteam:security` | Auditoria de segurança — security-specialist + software-architect |
 | `/devteam:dba` | Trabalho de banco de dados — database-specialist + software-architect |

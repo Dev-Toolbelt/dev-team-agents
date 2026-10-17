@@ -79,7 +79,7 @@ Writes and maintains backend test coverage: unit tests, integration tests, contr
 Writes and maintains frontend test coverage: component tests, visual regression, snapshot testing. Runs after `frontend-developer` completes implementation.
 
 ### `code-reviewer`
-Entry-point router for `/devteam:review`. Reads the diff, classifies the change scope, and delegates to `backend-reviewer`, `frontend-reviewer`, or both. Synthesizes results into a single review verdict.
+Entry-point router for `/devteam:review`. Reads the diff, classifies the change scope, and delegates to `backend-reviewer`, `frontend-reviewer`, or both. Synthesizes results into a single review verdict. On a pull/merge request with rule violations, drafts one comment mentioning the assignees; with no blocking finding it approves instead. Nothing is posted without confirmation.
 
 ### `backend-reviewer`
 Deep backend review: API contract correctness, transaction boundaries, N+1 query detection, authentication and authorization, background job safety, SOLID principles.

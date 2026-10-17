@@ -79,7 +79,7 @@ Escreve e mantém cobertura de testes backend: testes unitários, de integraçã
 Escreve e mantém cobertura de testes frontend: testes de componentes, regressão visual, snapshot testing. Executa após o `frontend-developer` completar a implementação.
 
 ### `code-reviewer`
-Ponto de entrada de roteamento para `/devteam:review`. Lê o diff, classifica o escopo da mudança e delega para `backend-reviewer`, `frontend-reviewer` ou ambos. Sintetiza os resultados em um único veredicto de review.
+Ponto de entrada de roteamento para `/devteam:review`. Lê o diff, classifica o escopo da mudança e delega para `backend-reviewer`, `frontend-reviewer` ou ambos. Sintetiza os resultados em um único veredicto de review. Em uma PR/MR com violações de regras, rascunha um comentário mencionando os responsáveis; sem nenhum apontamento bloqueante, aprova a PR. Nada é publicado sem confirmação.
 
 ### `backend-reviewer`
 Review profundo de backend: correção de contratos de API, limites de transação, detecção de N+1, autenticação e autorização, segurança de background jobs, princípios SOLID.

@@ -220,7 +220,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
 | `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
-| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; on a PR/MR, drafts a comment for its owner — or approves it when nothing blocks — after you confirm |
 | `/devteam:qa` | Quality assurance — qa-specialist |
 | `/devteam:audit` | Deep module/area analysis — backend-developer + frontend-developer + security-specialist + devops-specialist; saves report to `docs/audit/` |
 | `/devteam:security` | Security audit — security-specialist + software-architect |
