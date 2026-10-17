@@ -11,6 +11,8 @@ Stack-agnostic, project-aware. Installed at the project level (`.dev-team-agents
 
 The canonical source (`agents/`, `commands/`, `skills/`, `scripts/hooks/`) is **provider-agnostic**. Claude Code is the default provider; opencode and OpenAI Codex CLI are supported via a render engine (`scripts/render-provider.sh`) that emits the provider-specific file tree per target project. See `docs/providers.md` for the tier → model id map and the per-provider install scripts.
 
+This file is the single home of the contributor rules. `AGENTS.md` only points Codex and opencode contributors here: Codex never reads `CLAUDE.md`, and opencode reads it only when no `AGENTS.md` exists — and one always does, because `install-codex.sh` writes it. Never put a rule there.
+
 ### Provider Parity Rule
 
 **Any change to provider-facing behavior is implemented and tested for every supported provider, never for Claude Code alone.** The supported set is `scripts/lib/devteam/providers.py:ALL_PROVIDERS` (today: `claude`, `opencode`, `codex`) — read it, do not restate it.
@@ -359,6 +361,7 @@ dev-team-agents/
 ├── SECURITY.md
 ├── PRIVACY.md
 ├── LICENSE
+├── AGENTS.md        ← points Codex/opencode contributors at this file; ends with the banner block `install-codex.sh` appends
 └── CLAUDE.md        ← this file
 ```
 
