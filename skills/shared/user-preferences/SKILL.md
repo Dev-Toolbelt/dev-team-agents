@@ -97,7 +97,7 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 | `auto_learn_before_commit` | bool | `true` | Silently run `/devteam:learn` before every commit, its docs committed with the work (`false` = skip by default) |
 | `worktree_path` | string | `".worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
-| `qa_browser` | string or null | `null` | Browser the `qa-specialist` drives (`null` = ask on first use) |
+| `qa_browser` | string or null | `null` | Browser used when the in-app browser is unavailable — `qa-specialist` and the Visual Check Gate (`null` = ask on first use) |
 | `ci_cd_detected` | bool or null | `null` | Cached GitHub Actions detection (`null` = unchecked) |
 
 > For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.

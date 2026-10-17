@@ -7,6 +7,8 @@ description: Load when the user asks to push — watch GitHub Actions and auto-f
 
 Load this skill **only when the user explicitly asks to push** (e.g., "push", "faça o push", "push and open the PR"). Do not trigger on commits alone — a commit is not a push.
 
+Before the push itself — whatever the preconditions below decide — run the **Dirty-Tree Pre-flight** in `skills/shared/git-workflow/SKILL.md`: uncommitted changes go through the `/devteam:commit` flow automatically, then the push runs.
+
 ## Preconditions (check in order, stop if any fails)
 
 1. `gh auth status` succeeds → the GitHub CLI is configured and authenticated.

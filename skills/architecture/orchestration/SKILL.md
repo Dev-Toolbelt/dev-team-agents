@@ -391,9 +391,12 @@ than one or two parallel spawns.
    ### Documents produced / modified
    [list]
 
-   ### Next steps
-   Run `/devteam:review` for code review and QA handoff.
    ```
+
+   Then close with the **Review Next-Step Gate** (`skills/shared/interaction-patterns/SKILL.md`)
+   — a dynamic `AskUserQuestion`, never a plain-text "run `/devteam:review`" line. If UI changed,
+   follow it with the **Visual Check Gate** from the same skill, built from the sub-agents'
+   **Screens to check** lists.
 
    If every row reads `NOT RUN`, that is the headline: the task was not executed. Say so first,
    before anything else — do not bury it under a summary of intended work.

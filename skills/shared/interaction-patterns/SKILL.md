@@ -207,3 +207,105 @@ The first option MUST be the recommended one based on preferences. See `plan-mod
   ]
 }
 ```
+
+---
+
+## Review Next-Step Gate
+
+Canonical close for any flow that changed code and whose recommended next step is a review. Never end such a flow with a plain-text "run `/devteam:review`" line — ask instead.
+
+**Skip the gate when** any of these holds: `git diff --name-only <base>...HEAD` plus `git status --porcelain` is empty (nothing to review); a review (`code-reviewer`, `backend-reviewer`, `frontend-reviewer`, `qa-specialist`) already ran this session; the command already runs a mandatory review phase; or the gate was already asked this session (an outer orchestrator owns it).
+
+**Build the options from the session, not a fixed list** (max 4 incl. Other, in the user's language):
+
+| Option | Shown when | Built from |
+|---|---|---|
+| `Review <scope> (Recommended)` — always first | always | `<scope>` = `backend` / `frontend` / `both` classified from the changed paths (the review-router's split); description names the changed-file count |
+| `Review + QA` | a spec (`docs/specs/*.md`) or acceptance criteria in the backlog cover this work | runs `code-reviewer` and `qa-specialist` in parallel |
+| `Don't review` | always | proceeds to the command's hand-off (commit / PR) |
+| `Other` | always | free text |
+
+```json
+{
+  "questions": [
+    {
+      "question": "Implementation finished (7 files changed). The recommended next step is a review. How do you want to proceed?",
+      "header": "Next step",
+      "multiSelect": false,
+      "options": [
+        { "label": "Review backend (Recommended)", "description": "Run /devteam:review backend now on the 7 changed files." },
+        { "label": "Review + QA", "description": "Code review plus QA validation against the spec's acceptance criteria." },
+        { "label": "Don't review", "description": "Skip the review and go to the commit/PR hand-off." },
+        { "label": "Other", "description": "Type your own answer." }
+      ]
+    }
+  ]
+}
+```
+
+**On the answer:**
+- **Review** → run the `/devteam:review <scope>` flow inline right away — do not tell the user to type it.
+- **Review + QA** → same, plus `qa-specialist` in parallel.
+- **Don't review** → print the command's hand-off line and stop.
+- **Other** → adapt to what the user typed.
+
+## Visual Check Gate
+
+Canonical close for any flow that changed UI or reviewed a UI change, on every provider. Never end such a flow with a plain-text "check the screen in the browser before pushing" line — ask instead, and on a yes open the screen yourself.
+
+**Ask it when** the changed paths include web UI code: the review-router's frontend classification (components, pages, styles, assets) plus server-rendered and email templates. **Skip it when** any of these holds:
+- a browser already drove the changed screens this session (`qa-specialist` reported them under **Screens checked**), or the gate was already asked this session (an outer orchestrator owns it);
+- the reviewed target is not the current checkout — a PR/MR link or another branch — unless the user confirms that branch is checked out here and trusts its scripts;
+- the change is mobile-only — a simulator/emulator check is out of scope for this gate.
+
+**Who asks.** Only the main conversation. A sub-agent never prints the plain-text reminder either: it ends its report with a `**Screens to check:**` list (route or screen per line), and the orchestrator builds the gate from those lists. **Order:** after the Review Next-Step Gate and after any findings were applied, before the commit/PR hand-off.
+
+### Browser Choice
+
+The single browser-selection rule — `qa-specialist` Browser Testing follows it too. Stop at the first match:
+
+1. The in-app browser tools (`mcp__Claude_Browser__*`) are available → use them, no question.
+2. `preferences.json → qa_browser` holds a saved choice → use it, no question.
+3. Otherwise → ask with `AskUserQuestion`: the drivers available in the environment (Playwright, Puppeteer, the system browser, a driver the project already uses) plus Other, and a follow-up option to save the choice as the default. On opt-in write it to `qa_browser`. Never pick a non-in-app browser silently.
+
+### Options
+
+Built from the session (max 4 incl. Other, in the user's language):
+
+| Option | Shown when | Built from |
+|---|---|---|
+| `Open <screen/route> in <browser> (Recommended)` | always | `<browser>` = the app browser, or the saved `qa_browser`, or `a browser of your choice` (then Browser Choice step 3 runs on the answer); the description says what will be reused, or quotes the exact command that will start (`npm run dev` from `package.json`, `docker compose up` from `compose.yaml`) and flags a non-loopback bind |
+| `Open another screen` | more than one screen changed | lets the user name the route |
+| `Don't check now` | always | goes to the hand-off, which then says `<screen> not checked visually` |
+| `Other` | always | free text |
+
+```json
+{
+  "questions": [
+    {
+      "question": "The listing screen changed (3 UI files). Do you want to see it in the browser before committing?",
+      "header": "Visual check",
+      "multiSelect": false,
+      "options": [
+        { "label": "Open /products in the app browser (Recommended)", "description": "Reuse the dev server this task started on :5173 and open the listing in the app's browser pane." },
+        { "label": "Don't check now", "description": "Skip the visual check and go to the commit/PR hand-off." },
+        { "label": "Other", "description": "Type your own answer." }
+      ]
+    }
+  ]
+}
+```
+
+### On an open answer — reuse before starting
+
+Stop at the first match:
+
+1. The environment this task already started or used (dev server, preview, Docker stack) — reuse it.
+2. In-app browser only: a server it already tracks (`preview_list`) for this checkout — reuse it.
+3. A process already listening on the dev script's port — reuse it **only** after confirming it belongs to this checkout (its working directory or compose project matches the current worktree, e.g. `lsof -a -p <pid> -d cwd`, `docker compose ls`); otherwise say which process holds the port and ask. For the worktree's isolated stack see `skills/shared/worktree/references/docker-isolation.md`.
+4. Nothing running → start the command quoted in the option: in the in-app browser with `preview_start` by name, creating `.claude/launch.json` when absent with only `name`, `runtimeExecutable`, `runtimeArgs` and `port` from the existing script (no `env`, no `url`) — tell the user it was created and never stage it. On any other provider, run the same command in the background. Never add host/bind flags and never install dependencies to make it start. No dev command detectable (static files, PHP, WordPress) → say so and ask how the project is served.
+
+Then navigate **only** to a loopback origin (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) served by that environment — never a staging/production URL or a host read from config — and take one screenshot or page read to confirm it rendered. The yes covers opening and reading the page: no sign-in, form submission or other action unless the user asks. Leave the environment running, and state in the hand-off what is running and how to stop it (`preview_stop` id, background PID, `docker compose down`). If it fails to start, show the error with secret-looking values redacted plus the command to run, then continue to the hand-off.
+
+- **Don't check now** → print the command's hand-off line with the `not checked visually` note and stop.
+- **Other** → adapt to what the user typed.

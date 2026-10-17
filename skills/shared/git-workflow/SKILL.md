@@ -104,3 +104,19 @@ Follow `skills/shared/conventional-commits/SKILL.md` for format details. Key rul
 - All CI checks must pass before merge.
 - No force-push.
 - No deletion.
+
+## Dirty-Tree Pre-flight (push / merge / pr)
+
+Canonical pre-flight for `/devteam:push`, `/devteam:merge` and `/devteam:pr`, and for a push or merge asked in plain language. Run it before any other step.
+
+1. `git status --porcelain`. Empty → skip to the command's next step.
+2. Non-empty → resolve from `$ARGUMENTS`, first match wins:
+   - `skip-commit` → continue without committing
+   - `abort-on-dirty` → stop the command
+   - otherwise (including `commit`) → **run the devteam `commit` command's flow inline, without asking first** — `/devteam:commit` on Claude Code and opencode, `$devteam-commit` on Codex; read that command's file and follow it, do not reimplement it
+   - Forward `all` / `--all` and `--skip-learn` to the commit flow when the user passed them; add nothing else
+3. When the commit flow ends, re-run `git status --porcelain`:
+   - Clean, or the user deliberately left files uncommitted inside the commit flow → continue with the action the user asked for (push, merge or PR)
+   - The commit flow was aborted or a gate failed unresolved → stop and say so; never push, merge or open a PR on top of a failed commit
+
+The questions the commit flow itself asks (worktree commit action, files that do not look like this session's, pre-commit gate failure) still apply — "automatic" removes only the "commit now?" question.
