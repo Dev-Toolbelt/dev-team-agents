@@ -48,7 +48,6 @@ After the software-architect completes its full workflow (including any spawned 
 
 ### Agents spawned
 [list of agents and what they did]
-
-### Next steps
-Run `/devteam:review` for code review and QA handoff, or run `/devteam:qa` for standalone QA validation.
 ```
+
+Then close with the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.

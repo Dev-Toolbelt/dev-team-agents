@@ -22,6 +22,10 @@ Also spawn if the context includes frontend changes:
 Also spawn if the context includes mobile changes (ios/, android/, *.swift, *.kt, App.tsx, pubspec.yaml, *.dart):
 - `mobile-developer` — author or update tests for mobile components (Detox, Maestro, Appium, XCTest, Espresso)
 
+## Next step (mandatory)
+
+After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**

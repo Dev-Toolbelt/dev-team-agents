@@ -111,4 +111,5 @@ Post-relayout review: no issues found.
 ## Session close (mandatory)
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading.
-2. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit`, then `/devteam:pr` when the branch is ready for review.
+2. **Visual check** — if UI changed, ask the **Visual Check Gate** from the interaction-patterns skill loaded above.
+3. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit`, then `/devteam:pr` when the branch is ready for review.

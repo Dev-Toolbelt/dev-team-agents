@@ -1,6 +1,6 @@
 ---
 description: Push the current branch, with a CI-aware quiz if Actions is configured
-argument-hint: [all] [commit|skip-commit|abort-on-dirty]
+argument-hint: [all] [skip-commit|abort-on-dirty]
 model: haiku
 ---
 
@@ -10,42 +10,7 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 ## Step -1 — Uncommitted changes pre-flight
 
-Before any other action, run:
-
-```bash
-git diff --cached --name-only   # staged files
-git diff --name-only            # unstaged modified files
-```
-
-If either command returns output (there are staged or unstaged changes):
-
-1. Inform the user: "There are uncommitted changes in the working tree."
-2. Resolve the path in this order:
-   - If `$ARGUMENTS` contains `commit`, choose **Commit them now**
-   - Else if `$ARGUMENTS` contains `skip-commit`, choose **Skip and continue**
-   - Else if `$ARGUMENTS` contains `abort-on-dirty`, choose **Abort**
-   - Else ask (via `AskUserQuestion`):
-
-   > "There are uncommitted changes. What would you like to do before pushing?"
-   - **Commit them now** — run the commit routine below, then continue to Step 0
-   - **Skip and continue** — proceed to Step 0 without committing
-   - **Abort** — stop the command entirely
-
-If the user chooses **Commit them now**, execute the following routine inline (same logic as `devteam:commit`):
-
-### Commit routine
-
-1. Load `skills/shared/conventional-commits/SKILL.md`.
-2. Read the target project's `CLAUDE.md` (root or `.claude/CLAUDE.md`) to detect the commit pattern. If a project-specific pattern is documented, follow it; otherwise use Conventional Commits.
-3. Run `git status --short`, `git diff --cached --stat`, and `git diff --stat` to identify staged vs. unstaged files. Do NOT auto-stage — only commit what is already staged, unless `$ARGUMENTS` contains `all` or `--all` (then run `git add -A` first).
-4. Group staged files into logical commits by layer (data/schema → domain → persistence → infrastructure → application → interface → tests → config/CI → docs). Skip empty layers. Bundle single-context changes into one commit.
-5. For each group, write a commit message following the detected pattern. Never add `Co-Authored-By:`, AI attribution, or any non-user authorship footer.
-6. Before executing each commit, run lint/type-check/tests if no pre-commit hook is already configured. If a gate fails, ask with `AskUserQuestion` (single-select): **Fix and re-stage** (recommended), **Commit anyway**, or **Abort**.
-7. Present the proposed commit plan to the user and execute the commits unless the user says to stop.
-
-Once the commit routine completes successfully, continue to Step 0.
-
-If there are **no** staged or unstaged changes, skip directly to Step 0.
+Load `skills/shared/git-workflow/SKILL.md` and run its **Dirty-Tree Pre-flight** before any other action: with uncommitted changes, the `/devteam:commit` flow runs automatically (no "commit now?" question), then this command continues to Step 0 and pushes. `skip-commit` and `abort-on-dirty` opt out.
 
 ---
 
@@ -64,7 +29,7 @@ After the push completes (regardless of which quiz option was chosen), apply the
 ---
 
 $ARGUMENTS options:
-- `all` / `--all` — stage all changes before committing (only relevant if the commit routine runs)
-- `commit` — when uncommitted changes exist, run the commit routine automatically before pushing
+- `all` / `--all` — stage all changes before committing (forwarded to the `/devteam:commit` flow when the pre-flight runs it)
+- `commit` — accepted for compatibility; committing uncommitted changes first is now the default (Dirty-Tree Pre-flight)
 - `skip-commit` — when uncommitted changes exist, push without committing them first
-- `abort-on-dirty` — when uncommitted changes exist, stop instead of asking
+- `abort-on-dirty` — when uncommitted changes exist, stop instead of committing

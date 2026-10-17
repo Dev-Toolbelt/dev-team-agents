@@ -25,7 +25,7 @@ Act strictly on the chosen target:
 
 - **Current local branch** → proceed with the scope detected by `current-context`.
 - **Another local branch** → `git diff <base>...<branch>` for that branch; restrict the review to those files.
-- **A pull request link** → use the platform CLI/API to fetch the diff (`gh pr diff <url-or-number>` for GitHub; for GitLab/Bitbucket use the available MCP/CLI or fetch the diff). Review the PR changeset. Do not post comments unless the user asks.
+- **A pull request link** → use the platform CLI/API to fetch the diff (`gh pr diff <url-or-number>` for GitHub; for GitLab/Bitbucket use the available MCP/CLI or fetch the diff). Review the PR changeset. Commenting on or approving the PR happens only through the PR Comment Gate (Step 8).
 - **Other** → review exactly the scope the user described.
 
 Once the target is resolved, load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to the resolved changeset to determine which conditional agents below to spawn.
@@ -52,9 +52,13 @@ Task: $ARGUMENTS
 
 ---
 
-## Step 9 — Apply findings (mandatory)
+## Step 8 — PR comment or approval (PR/MR targets only)
 
-After all spawned agents complete and return their findings, present a synthesized summary of all findings (grouped by agent) to the user.
+After all spawned agents complete and return their findings, present a synthesized summary of all findings (grouped by agent) to the user. If the target is a pull/merge request, run `skills/shared/pr-review/SKILL.md` § PR Comment Gate on those findings before Step 9.
+
+---
+
+## Step 9 — Apply findings (mandatory)
 
 Then use `AskUserQuestion` (single-select) to ask:
 
@@ -66,3 +70,7 @@ Then use `AskUserQuestion` (single-select) to ask:
 If the user chooses to apply, execute the changes directly (edit files, create commits if files were modified). Do not delegate back to agents — apply the changes yourself based on the findings already collected.
 
 If the user chooses to skip, print a one-line confirmation: "Findings noted. No files were modified."
+
+## Step 10 — Visual check (UI scope only)
+
+When the reviewed scope is `frontend` or `both`, ask the **Visual Check Gate** from the interaction-patterns skill loaded above, after Step 9. Its skip conditions cover PR/MR and other-branch targets.

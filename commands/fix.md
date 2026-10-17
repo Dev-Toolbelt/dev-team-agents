@@ -32,6 +32,12 @@ Skip tests entirely.
   - `frontend-developer` (if frontend was touched)
   - `mobile-developer` (if mobile was touched — same detection signals as above)
 
+## Next step (mandatory)
+
+After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+
+Then, if the fix touched UI, ask the **Visual Check Gate** from the same skill — after the review and any applied findings.
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**

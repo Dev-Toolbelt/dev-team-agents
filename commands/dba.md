@@ -16,6 +16,10 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 - `database-specialist` — schema design, migrations, query optimization, indexing, replication
 - `software-architect` — architectural data modeling implications and cross-service impact
 
+## Next step (mandatory)
+
+After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**

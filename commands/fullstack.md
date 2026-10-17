@@ -95,7 +95,8 @@ After the phases above complete — including any resolution agents:
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
 2. **Lessons learned (automatic)** — load `skills/shared/feature-learn/SKILL.md` and run its scoped promotion pass; skip silently if it finds nothing to promote.
-3. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
+3. **Visual check** — if UI changed, ask the **Visual Check Gate** from the interaction-patterns skill loaded above.
+4. **Hand off** — the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
 
 ---
 

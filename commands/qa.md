@@ -13,6 +13,10 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 
 - `qa-specialist` at `.claude/agents/dev-team/qa-specialist.md` — validate feature behavior, acceptance criteria, regression, and end-to-end correctness
 
+## After the agent returns
+
+If UI changed, ask the **Visual Check Gate** from the interaction-patterns skill loaded above, built from the agent's **Screens to check** list.
+
 ---
 
 **PLAN GATE — mandatory for every spawned agent:**

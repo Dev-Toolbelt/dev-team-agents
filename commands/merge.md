@@ -1,6 +1,6 @@
 ---
 description: Merge the current working branch into a target branch, with worktree-aware finalization
-argument-hint: [target-branch] [--no-teardown]
+argument-hint: [target-branch] [--no-teardown] [skip-commit|abort-on-dirty]
 model: haiku
 ---
 
@@ -10,13 +10,7 @@ Load `skills/shared/current-context/SKILL.md` to detect branch/worktree state. L
 
 ## Step 0 — Uncommitted changes pre-flight
 
-Run:
-
-```bash
-git status --porcelain
-```
-
-If non-empty, tell the user there are uncommitted changes and ask (`AskUserQuestion`): **Commit them now** (run the same commit routine as `/devteam:commit` — see that command for the routine, group by layer, no Claude attribution), **Skip and continue**, or **Abort**. Abort stops the command entirely.
+Load `skills/shared/git-workflow/SKILL.md` and run its **Dirty-Tree Pre-flight** before any other action: with uncommitted changes, the `/devteam:commit` flow runs automatically (no "commit now?" question), then this command continues to Step 1 and merges. `skip-commit` and `abort-on-dirty` opt out.
 
 ---
 
@@ -34,7 +28,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/ori
 The last command (or `worktree_base_branch` in `preferences.json`, or project config, if set) gives the **default branch** — never hardcode `main`, `master`, `beta`, or `develop`.
 
 - **Working branch** — the current branch. If the session says `worktree=yes` and you are in the main checkout, it is the branch checked out in the linked worktree (`git worktree list`; ask via `AskUserQuestion` if there is more than one).
-- **Target** — strip every `--flag` from `$ARGUMENTS`; the first remaining token, if any, is the target. Otherwise, with `worktree=yes branch=<b>`, the target defaults to the worktree base `<b>`. Otherwise ask via `AskUserQuestion`: "Which branch do you want to merge `<working-branch>` into?" — **`<detected-default-branch>`** (recommended) / **Other** (free text).
+- **Target** — strip every `--flag` and the `skip-commit` / `abort-on-dirty` tokens from `$ARGUMENTS`; the first remaining token, if any, is the target. Otherwise, with `worktree=yes branch=<b>`, the target defaults to the worktree base `<b>`. Otherwise ask via `AskUserQuestion`: "Which branch do you want to merge `<working-branch>` into?" — **`<detected-default-branch>`** (recommended) / **Other** (free text).
 - If the working branch is the default branch or equals the target, there is nothing to merge — tell the user and stop.
 - If an explicit target differs from the worktree base `<b>`, say so: any rebase goes onto the target, not `<b>`.
 
