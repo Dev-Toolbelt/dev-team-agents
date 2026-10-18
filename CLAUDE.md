@@ -559,11 +559,11 @@ The script prints existing ADR titles and auto-numbers the file — see `skills/
 
 ### Learn Trigger Rule
 
-`/devteam:learn` should not be treated as an end-of-session-only command — any point where work is about to leave the current session's context is a finalization signal worth checking. The canonical nudge implementation is `commands/merge.md` § Step 4 (checks `.dev-team-agents/.learn-last-run` against current `HEAD`, asks via `AskUserQuestion`). The following commands carry the same check at their own closing point — patch all of them together if the mechanism ever changes:
+`/devteam:learn` should not be treated as an end-of-session-only command — any point where work is about to leave the current session's context is a finalization signal worth checking. The canonical nudge implementation is `commands/merge.md` § Step 4 (checks `.dev-team-agents/.learn-last-run` against current `HEAD`, asks via `AskUserQuestion`; on Yes it runs the learn flow inline — see that step). The following commands carry the same check at their own closing point — patch all of them together if the mechanism ever changes:
 
 | Command | Finalization point |
 |---------|--------------------|
-| `/devteam:merge` | Merging the working branch into the target (canonical implementation) |
+| `/devteam:merge` | Just before merging the working branch into the target, so learn commits ride into it (canonical implementation) |
 | `/devteam:pr` | After `gh pr create` succeeds |
 | `/devteam:refactor` | Session close, alongside the session-summary step |
 | `/devteam:audit` | After the report is written, even on **Report only** |
