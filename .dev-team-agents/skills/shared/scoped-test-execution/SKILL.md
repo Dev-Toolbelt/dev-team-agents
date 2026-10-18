@@ -1,0 +1,93 @@
+---
+name: scoped-test-execution
+description: Run only tests covering the touched code; full suite only on explicit user request.
+---
+
+# Scoped Test Execution
+
+**Rule:** when finishing a task, run **only the tests that cover what you touched**. Never run the project's full suite on your own initiative. The full run belongs to CI, or to the user running it manually.
+
+Rationale: a full suite costs wall-clock time and tokens on every task, and re-verifies code the task never touched. Scoped runs give the same signal for the work at hand.
+
+**Who this binds:** every agent that invokes a test runner — implementer, fixer, refactorer, reviewer, QA. Not only the test specialists. `skills/shared/project-context/SKILL.md` makes the load mandatory, so being spawned as a subagent never exempts you.
+
+**What it does not touch: CI.** This governs runs you execute locally, in your own context. It places no constraint on a pipeline — a workflow authored by `devops-specialist` still executes 100% of the suite, and you must never narrow one to satisfy this rule.
+
+---
+
+## Orchestrator Rule
+
+When you spawn a subagent, never write "run the tests" unqualified into the prompt, and never instruct a full-suite run. State the touched scope and let the subagent derive its own blast radius. Relay a full run only when the user asked for one in this session, and say so explicitly.
+
+---
+
+## The Only Exception
+
+The full suite runs **only** when the user explicitly asks for it in this session — "run the whole suite", "run all the tests", "rode a suíte inteira".
+
+No other signal authorizes it. Not a fast suite, not a wide refactor, not a change to shared code, not a scoped test that failed, not a release or a merge. When the request is ambiguous ("make sure nothing broke", "validate everything"), **do not escalate** — run the scoped set and say in your report that you can run the full suite if the user confirms.
+
+---
+
+## Deriving the Scope
+
+1. List what changed: `git diff --name-only` (plus `--cached` and untracked files when relevant).
+2. For each changed source file, include its mirror test file (`src/foo/bar.ts` → `tests/foo/bar.test.ts`, `app/Service.php` → `tests/ServiceTest.php` — follow the project's own convention).
+3. Add the tests of **direct dependents**: grep for who imports or uses the changed symbol, and include their tests. Scope means "the blast radius of this change", not "the file I edited".
+4. When a changed file has no test, say so in the report — do not silently substitute a full run.
+
+**Reduced scope is not empty scope.** If step 2 and step 3 yield nothing, you still verify the change some other way (a targeted test you write, a manual check) and report what you did.
+
+---
+
+## Runner Filters
+
+| Stack | Scoped command |
+|-------|----------------|
+| Jest | `npx jest <paths…>` · `npx jest --findRelatedTests <changed-files…>` |
+| Vitest | `npx vitest run <paths…>` · `npx vitest related <changed-files…>` |
+| Playwright / Cypress | `npx playwright test <spec…>` · `npx cypress run --spec <glob>` |
+| pytest | `pytest <path>` · `pytest <path>::<Class>::<test>` · `pytest -k "<expr>"` |
+| PHPUnit / Pest | `vendor/bin/phpunit <path>` · `--filter '<pattern>'` |
+| Go | `go test ./pkg/<changed>/...` · `-run '<Regexp>'` |
+| Gradle / JUnit | `./gradlew test --tests '<FQCN>'` |
+| Flutter | `flutter test test/<path>` |
+| RSpec | `bundle exec rspec <path>:<line>` |
+| Xcode | `xcodebuild test -only-testing:<Target>/<Class>` |
+| Cargo | `cargo test <filter>` |
+
+When the project defines its own scoped script in `CLAUDE.md`, `package.json`, or a `Makefile`, that command wins over the table.
+
+Wrappers (`npm test`, `composer test`, `make test`) are scoped by passing a path, `--filter`, `--`, or `TESTPATH=`/`FILTER=` through. The full-suite guard (`02c-full-suite-guard.sh`) judges only the command actually invoked, so read-only commands that merely name a runner are never blocked.
+
+---
+
+## Run Independent Verification Commands in Parallel
+
+Tests, linters, and static analysis are independent of each other — none depends on another's output. When a task needs more than one (e.g. a scoped test run and a lint pass), issue them as **separate Bash tool calls in the same message**, not chained in one shell with `;`/`&&`. Chaining serializes work that has no dependency, and hides per-command failures behind a single combined output. This is the same "no dependency → parallel tool calls" rule this repo already applies to agent spawning; it applies equally to your own Bash calls within one task.
+
+---
+
+## Coverage Runs
+
+Coverage reports (SonarQube quality gates, LCOV artifacts) are **CI artifacts**. Generate coverage locally only when the user asks, or when a scoped run is already producing it for free. A quality-gate threshold is never a reason to trigger a full local run.
+
+---
+
+## Reporting
+
+Close the task with one line naming what ran and what did not:
+
+```
+Tests: ran 12 tests across auth/session (scoped to the change). Full suite delegated to CI.
+```
+
+If the project has no CI, say so instead: `Full suite not run — no CI configured; run it locally when you want the complete check.`
+
+---
+
+## What This Rule Never Does
+
+- It does not weaken a gate: a **scoped test that fails blocks the task**. Report the failure, fix it, or hand it back — never widen the run to bury it, and never skip or delete the failing test.
+- It does not change what CI runs. Pipelines authored by `devops-specialist` keep executing 100% of the suite.
+- It does not reduce what you **write**. Test authoring scope is governed by `skills/testing/test-strategy/SKILL.md`; this skill governs only what you **execute**.

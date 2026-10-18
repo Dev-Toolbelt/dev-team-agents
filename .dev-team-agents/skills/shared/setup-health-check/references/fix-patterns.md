@@ -1,0 +1,457 @@
+# Fix Patterns
+
+## A v3-bound project (`.dev-team-agents/project.json` exists) — read this first
+
+`.dev-team-agents/scripts` and `.dev-team-agents/templates` are **links into the store**, which is
+immutable per version. Every fix below that writes under them — `chmod`, a copy, a re-render — would
+change the installed version for every project bound to it. In a bound project:
+
+| v2 fix in this file | Use instead |
+|---|---|
+| `fix-symlinks.sh`, any `.claude/` link repair, `chmod +x` on a framework script | `devteam sync` |
+| `install-codex.sh` / `install-opencode.sh` | `devteam bind --provider codex` (or `opencode`) |
+| `update.sh` | `devteam update` |
+
+The v2 tools refuse to run in a bound project (`scripts/lib/bound-project-guard.sh`) and name the
+command above. `devteam doctor` is the diagnosis to run before and after.
+
+## Auto-fix for `includeCoAuthoredBy`
+
+```bash
+python3 - .claude/settings.json <<'PYEOF'
+import sys, json
+f = sys.argv[1]
+with open(f) as fh: data = json.load(fh)
+data['includeCoAuthoredBy'] = False
+with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
+PYEOF
+```
+
+## Auto-fix for a missing `SessionStart` or `PreCompact` hook entry
+
+Same merge shape `install.sh` Step 7 uses (`_inject_hook`) — safe to re-run even if the entry is
+already present, since the check above only fires when it's confirmed missing:
+
+```bash
+python3 - .claude/settings.json <<'PYEOF'
+import sys, json
+f = sys.argv[1]
+with open(f) as fh: data = json.load(fh)
+hooks = data.setdefault('hooks', {})
+# Repeat this block once per missing hook_type: "SessionStart" -> session-start.sh,
+# "PreCompact" -> pre-compact.sh. Self-hosted (this repo) uses a bare
+# "scripts/hooks/<name>.sh" command; an installed project uses
+# "env -u BASH_ENV -u ENV .dev-team-agents/scripts/hooks/<name>.sh" instead — match
+# whatever command form the existing Stop entry in the same file already uses.
+entries = hooks.setdefault('SessionStart', [])
+entries.append({"hooks": [{"type": "command", "command": "<matching-command-form>/scripts/hooks/session-start.sh"}]})
+with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
+PYEOF
+```
+
+Then `chmod +x` both scripts if the executable-bit check above also failed — a hook command
+pointing at a non-executable file fails exactly as silently as a missing entry.
+
+## Auto-fix for missing symlinks
+
+Only when the path does **not** exist (MISSING). If the path exists as a plain
+file (MATERIALIZED), `ln -s` fails — use the materialized-link fix below.
+
+```bash
+# agents symlink
+ln -s ../../.dev-team-agents/agents .claude/agents/dev-team
+
+# commands symlink
+ln -s ../../.dev-team-agents/commands .claude/commands/devteam
+```
+
+## Fix for materialized symlinks (Windows)
+
+When a link exists as a plain text file instead of a symlink (the Windows
+"no native symlink support" condition), run the repair helper — never a raw
+`ln -s`, which fails because the path already exists:
+
+```bash
+bash .dev-team-agents/scripts/fix-symlinks.sh
+```
+
+Behavior:
+- **Auto-repairs** when the OS allows native symlinks (Developer Mode on, or an
+  elevated process): enables `core.symlinks`, re-materializes each broken link
+  (scoped `git checkout` if tracked, else `ln -s`), and re-validates. Exit 0.
+- **Cannot repair** (native symlinks blocked): exits 3 and prints the 3
+  remediation options. Present them to the user with `AskUserQuestion`
+  (quiz-first), then auto-run the safe git steps once the blocker clears:
+
+  1. **Developer Mode** (recommended, no admin) — user enables it in
+     Settings → System → For developers; agent then runs
+     `git config core.symlinks true && git checkout -- .claude` and re-validates.
+  2. **Elevated terminal once** — user runs the two git commands above in an
+     Administrator PowerShell, then restarts the CLI.
+  3. **Run the CLI as administrator** — fully close the app (incl. tray and
+     lingering processes), right-click → Run as administrator, re-run the helper.
+
+After any successful repair, tell the user to restart their CLI so it
+re-indexes commands, agents, and skills.
+
+## Commit-required symlinks (fix is local only)
+
+`fix-symlinks.sh` also checks, for every link that currently works (whether it
+was already fine or was just repaired), whether the git blob tracked at that
+path is itself a symlink (mode `120000`) or a plain file (mode `100644`). A
+plain-file blob means the link was first committed on a machine where native
+symlinks were blocked — `ln -s` fixes the *working tree*, not the committed
+blob, so every later `git checkout`/`pull`/`stash`/`reset --hard`, and every
+fresh clone by a teammate, restores the broken plain file again.
+
+When the script output contains `[DEVTEAM:SYMLINK_COMMIT_NEEDED]`, it also
+prints the exact fix — run it (or have the user run it) to make the repair
+durable:
+
+```bash
+git add <paths from the script output>
+git commit -m "fix: restore dev-team-agents symlinks (were committed as plain files)"
+```
+
+Report this distinctly from a plain repair — "fixed locally, but you must
+commit or it will recur" — never silently fold it into "nothing to fix" or
+"repaired".
+
+> `fix-symlinks.sh` inspects the `.claude/` tree only. On opencode and Codex
+> installs the `skills/` symlink under `.opencode/` or `.codex/` breaks the same
+> way — check it with `test -L <config-dir>/skills/dev-team-agents` and repair by
+> re-running that provider's installer.
+
+## Auto-fix for Codex provider drift
+
+When any of the following Codex checks fail:
+- missing or invalid `.codex/hooks.json`
+- missing managed hook entries
+- missing generated `$devteam-*` skill dirs
+- generated `$devteam-*` skill frontmatter names do not match their folder basenames
+- legacy project-local `.codex/prompts/devteam-*.md` aliases still exist
+- rendered Codex command skills carry a stale structured-choice generation (missing `request_user_input_async`, a pinned "(Plan mode)" phrase, nested backticks around the tool name, a missing `default_mode_request_user_input` hint in optional commands, or missing `/plan` guidance in required ones)
+- mismatched `.codex/agents/*.toml` `model` / `model_reasoning_effort`
+
+re-render and reinstall the Codex provider:
+
+```bash
+bash .dev-team-agents/scripts/install-codex.sh
+```
+
+This is the canonical repair because the Codex install is rendered output. Fixing
+individual prompt, skill, TOML, or hook files by hand invites drift from the
+canonical source in `agents/`, `commands/`, `skills/`, and `scripts/lib/*.json`.
+
+### Codex Default mode chooser flag
+
+When `codex-default-mode-questions:WARN` is reported, tell the user to add this to
+`~/.codex/config.toml`:
+
+```toml
+[features]
+default_mode_request_user_input = true
+```
+
+Never edit `~/.codex/config.toml` or `.codex/config.toml` automatically; that is user
+configuration, not a file the installer owns.
+
+## Auto-fix for non-executable scripts
+
+```bash
+chmod +x .dev-team-agents/scripts/hooks/pre-tool-use.sh
+chmod +x .dev-team-agents/scripts/hooks/stop.sh
+chmod +x .dev-team-agents/scripts/hooks/session-start.sh
+chmod +x .dev-team-agents/scripts/hooks/stop/01-session-summary.sh
+chmod +x .dev-team-agents/scripts/hooks/stop/04-notifier.sh
+chmod +x .dev-team-agents/scripts/update.sh
+# v2 installs only — see the v3 table at the top of this file. 01-check-updates.sh is
+# disabled by design: do not chmod its _disabled- variant
+# back into the dispatch convention. See CLAUDE-md/hooks.md § Disabled Hooks.
+```
+
+## Auto-fix for .gitignore migration (legacy per-file → directory pattern)
+
+When legacy individual entries are detected, offer migration:
+
+> Your `.gitignore` uses the old per-file pattern for `user-data/`. The current version uses a directory-level ignore (`.dev-team-agents/user-data/`) with a `graphify.json` exception. Migrate automatically?
+
+On confirmation: **replace** the 4 legacy lines with the 3 new entries — a single rewrite of the block, not a delete followed by an append. The 4 legacy paths are all covered by the directory pattern that replaces them, so nothing stops being ignored at any point; a two-step edit leaves a window where `user-data/` is tracked. This is a config rewrite, not a removal — see the No-Destruction Rule in `../SKILL.md`.
+
+Legacy entries superseded by the rewrite:
+```
+.dev-team-agents/user-data/session-summary.md
+.dev-team-agents/user-data/.last-update-check
+.dev-team-agents/user-data/.installed-version
+.dev-team-agents/user-data/.auto-update
+```
+
+New entries to add:
+```
+.dev-team-agents/user-data/
+!.dev-team-agents/user-data/graphify.json
+.dev-team-agents/.worktree-session
+```
+
+### Malformed single-line entry fix
+
+If a legacy entry like `.claude/user-data/*!.claude/user-data/graphify.json` exists (no newline between the two patterns), separate them:
+
+```bash
+sed -i '' 's|\.claude/user-data/\*!\.claude/user-data/graphify\.json|.claude/user-data/\n!.claude/user-data/graphify.json|' .gitignore
+```
+
+Then update to the new paths:
+
+```bash
+sed -i '' 's|\.claude/user-data|.dev-team-agents/user-data|g' .gitignore
+```
+
+## Legacy directory migration
+
+If legacy `.claude/` directories still exist (user-data, docs, context, tasks, dev-team-agents):
+
+| Legacy path | New path | Action |
+|---|---|---|
+| `.claude/user-data/` | `.dev-team-agents/user-data/` | `mv .claude/user-data .dev-team-agents/user-data` |
+| `.claude/docs/` | `docs/` | `mv .claude/docs docs` (merge if `docs/` exists) |
+| `.claude/context/` | `docs/context/` | `mkdir -p docs/context && mv .claude/context/* docs/context/` |
+| `.claude/tasks/` | `docs/tasks/` | `mkdir -p docs/tasks && mv .claude/tasks/* docs/tasks/` |
+| `.claude/dev-team-agents/` | `.dev-team-agents/` | With the v3 CLI: `devteam migrate` (the app's bind dialog offers it), which also moves `.claude/user-data/` and keeps `.claude/docs/`. v2 only: `bash .dev-team-agents/scripts/migrate-to-root.sh` |
+| `.claude/.worktree-session` | `.dev-team-agents/.worktree-session` | `mv .claude/.worktree-session .dev-team-agents/` |
+
+After moving, clean up under the **No-Destruction Rule** (`../SKILL.md`):
+
+```bash
+# Empty leftovers only — rmdir without -r fails on anything still holding content
+rmdir .claude/user-data .claude/docs .claude/context .claude/tasks 2>/dev/null
+
+# .claude/dev-team-agents/ — quarantine whatever migrate-to-root.sh left behind
+if [ -d .claude/dev-team-agents ] && [ -n "$(ls -A .claude/dev-team-agents 2>/dev/null)" ]; then
+  QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+  mkdir -p "$QUARANTINE"
+  mv .claude/dev-team-agents "$QUARANTINE/"
+  echo "→ Quarantined leftover .claude/dev-team-agents → $QUARANTINE/"
+else
+  rmdir .claude/dev-team-agents 2>/dev/null
+fi
+```
+
+This path previously ran `rm -rf .claude/dev-team-agents`, unconditionally, on the line following `migrate-to-root.sh`. A migration that failed halfway therefore destroyed `user-data/` — session summaries, preferences, credentials — with no record that it had. Residue after a migration is evidence the migration is incomplete; it is never cleanup.
+
+## State.json marker migration
+
+If any `LEGACY_MARKER` was reported by Category 3 (a project still on the pre-consolidation dotfiles — `.installed-version`, `.installed-version.prev`, `.last-health-check`, `.last-update-check`, `.update-check-interval`, `.graphify-last-run`, `.session-id`, `.session-head`):
+
+```bash
+source .dev-team-agents/scripts/lib/state.sh
+state_migrate_legacy .dev-team-agents/user-data
+```
+
+`state_migrate_legacy` is idempotent and additive under the **No-Destruction Rule**: it reads each present dotfile's value into the matching key in `state.json`, then renames the original to `<name>.pre-migration.bak` — it never deletes. Re-running it on a project that already migrated is a no-op (the dotfiles are gone, only the `.bak` files remain). Report which markers were migrated.
+
+### Confirmed `.pre-migration.bak` cleanup
+
+The one narrow exception to the No-Destruction Rule (see `SKILL.md` § No-Destruction Rule): once a `.pre-migration.bak`'s value is confirmed present in `state.json`, the `.bak` carries zero remaining information and may be deleted. Category 3 reports this as `BAK_CONFIRMED: <path>` — never re-derive the confirmation here, only act on what that check already reported:
+
+```bash
+for _bak in $(grep -oE 'BAK_CONFIRMED: .*' /dev/stdin | cut -d' ' -f2); do
+  rm -f "$_bak"
+done
+```
+
+`BAK_UNCONFIRMED` entries are left untouched and reported as a WARN — an empty or missing key means the value was never actually copied into `state.json`, so the `.bak` is the only remaining copy and deleting it would be data loss, not cleanup.
+
+## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
+
+Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):
+
+```bash
+_DTA_MARKER="<!-- dev-team-agents: pre-compact-auto-summary -->"
+if ! grep -qF "$_DTA_MARKER" CLAUDE.md 2>/dev/null; then
+    cat >> CLAUDE.md <<'CLAUDEEOF'
+
+<!-- dev-team-agents: pre-compact-auto-summary -->
+# Pre-compact Hook — Auto Session Summary
+When `/compact` is blocked by the `pre-compact.sh` hook with the message "SESSION SUMMARY REQUIRED (pre-compact)", do the following **automatically, without asking the user**:
+
+1. Write the session summary entry at the top of `.dev-team-agents/user-data/session-summary.md` using the format:
+   ```
+   ## YYYY-MM-DD HH:MM:SS | [brief task title]
+   **Done**: what was implemented or changed
+
+   **Decisions**: key choices made and why
+
+   **Next**: what remains or is recommended next
+
+   ---
+   ```
+   - Use today's date and current time
+   - Base the content on the current conversation context
+   - Always write in English
+2. After writing, tell the user: "Session summary written. Run `/compact` again to proceed."
+
+Do not ask for confirmation. Do not wait for user input. Write and notify immediately.
+CLAUDEEOF
+fi
+```
+
+## Auto-fix for missing commit-rule marker in CLAUDE.md
+
+Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates). Mirrors the pre-compact block above exactly — same file, same append-only mechanism:
+
+```bash
+_DTA_COMMIT_MARKER="<!-- dev-team-agents: commit-rule -->"
+if ! grep -qF "$_DTA_COMMIT_MARKER" CLAUDE.md 2>/dev/null; then
+    cat >> CLAUDE.md <<'CLAUDEEOF'
+
+<!-- dev-team-agents: commit-rule -->
+## Commit Rule (dev-team-agents)
+When making a git commit for any task — whether triggered by `/devteam:commit` or a direct prompt request — apply these rules:
+
+1. Load `.dev-team-agents/skills/shared/conventional-commits/SKILL.md` before writing the commit message
+2. Defer to the project's own pattern first: run `git log --oneline -10` and check whether the existing history follows Conventional Commits or a different format (e.g., GitHub-style `[feature]`, plain imperative, Jira ticket prefix). If a project-specific pattern is clearly in use, follow it instead
+3. Never include AI attribution: no `Co-Authored-By: Claude`, no `🤖 Generated with Claude Code`, no AI tooling references in commit messages, PR titles, or PR bodies
+4. Show the **Work Summary Table** from the loaded skill's § Work Summary Table before presenting the commit plan — whether the commit is planned or executed directly
+CLAUDEEOF
+fi
+```
+
+## Auto-fix for missing Codex session-banner rule in AGENTS.md
+
+Append the managed rule block to `AGENTS.md` (idempotent — marker prevents duplicates):
+
+```bash
+_DTA_CODEX_BANNER_MARKER="<!-- dev-team-agents: codex-session-banner -->"
+if ! grep -qF "$_DTA_CODEX_BANNER_MARKER" AGENTS.md 2>/dev/null; then
+    cat >> AGENTS.md <<'AGENTSEOF'
+
+<!-- dev-team-agents: codex-session-banner -->
+## Codex Session Banner
+
+When the `SessionStart` hook context contains a line exactly equal to `[DEVTEAM:SESSION_BANNER]`, reproduce the lines that follow it, up to the first blank line, **verbatim, unmodified**, as the first thing in your **first reply of the session**.
+
+Rules:
+- Do not add any text before the banner.
+- Do not translate, summarize, or reformat it.
+- Do not fabricate the banner when the marker is absent.
+- This rule applies to normal conversation too, not only `$devteam-*` skills.
+AGENTSEOF
+fi
+```
+
+## Auto-fix for missing preferences.json fields
+
+Inject missing fields without overwriting existing values:
+
+```python
+import json
+
+defaults = {
+    "language": "en",
+    "context_window_percent_warning": 55,
+    "context_window_percent_limit": 60,
+    "suppress_notifications": False,
+    "session_summary_max_days": 30,
+    "session_summary_max_entries": 30,
+    "docs_stale_after_days": 30,
+    "auto_update": False,
+    "update_check_interval_hours": 24,
+}
+
+path = ".dev-team-agents/user-data/preferences.json"
+with open(path) as f:
+    data = json.load(f)
+
+for key, val in defaults.items():
+    if key not in data:
+        data[key] = val
+
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+```
+
+## Credentials — Category 10
+
+The file is never created by the health check. Creation only happens via `devteam cred local init` or the app's Credentials tab — see `skills/shared/credentials/SKILL.md`.
+
+When the check detects a legacy copy (in `user-data/` or in the store):
+
+```bash
+devteam doctor
+```
+
+It moves the legacy copy to `.dev-team-agents/credentials.local.json` byte-for-byte, quarantines blank or duplicate copies per the No-Destruction Rule, and reports — without touching anything — two copies with different content (ADR-0024 § 2). It never creates the file when none exists.
+
+The `.gitignore` entry for `.dev-team-agents/credentials.local.json` is part of the managed block — `devteam sync` fixes it when missing. Never append it manually.
+
+## Auto-fix for opencode agent model/variant config
+
+When opencode agent files are missing `model:` or `variant:` in frontmatter, or the command snippets lack these fields, re-run the opencode installer:
+
+```bash
+bash .dev-team-agents/scripts/install-opencode.sh
+```
+
+This re-renders all agent files, command snippets, and plugin from the canonical source (`scripts/lib/tiers.json`), ensuring every agent has the correct model and variant per its tier.
+
+After re-rendering, verify the fix:
+
+```bash
+missing=0
+for f in .opencode/agents/*.md; do
+  [ -f "$f" ] || continue
+  has_model=$(grep -c '^model: ' "$f" || true)
+  has_variant=$(grep -c '^variant: ' "$f" || true)
+  if [ "$has_model" -eq 0 ] || [ "$has_variant" -eq 0 ]; then
+    echo "STILL_MISSING: $(basename "$f" .md)"
+    missing=$((missing + 1))
+  fi
+done
+[ "$missing" -eq 0 ] && echo "OK: all agents have model+variant"
+```
+
+## Auto-fix for legacy .auto-update flag
+
+```bash
+# Set auto_update: true in preferences.json, then retire the flag file
+python3 - .dev-team-agents/user-data/preferences.json <<'PYEOF'
+import sys, json
+f = sys.argv[1]
+with open(f) as fh: data = json.load(fh)
+data['auto_update'] = True
+with open(f, 'w') as fh: json.dump(data, fh, indent=2); fh.write('\n')
+PYEOF
+QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)"
+mkdir -p "$QUARANTINE"
+mv .dev-team-agents/user-data/.auto-update "$QUARANTINE/"
+```
+
+The flag carries no content — its existence *was* the value, and that value is now in `preferences.json`. It is still moved rather than deleted, because the No-Destruction Rule has no "this one is safe" exception: a rule with a judgment call in it gets the judgment wrong eventually, and quarantining a zero-byte marker costs nothing.
+
+## Backfill for `docs/development/reuse-guidelines.md`
+
+Triggered by the Reuse Guidelines Backfill check (Category 11). After the user confirms a proposed row for a sentence found in `code-standards.md`, `design-system.md`, or a wiki entry:
+
+```bash
+REGISTRY="docs/development/reuse-guidelines.md"
+
+# Create the registry from the template's header if this is the first row ever backfilled
+if [ ! -f "$REGISTRY" ]; then
+  head -n 3 .dev-team-agents/templates/reuse-guidelines-template.md | tail -n 2 > "$REGISTRY"
+  # (the two header lines: "| name | type | ... |" and the "|---|---|...|" separator —
+  #  never copy the template's example row)
+fi
+
+# Append the confirmed row (built in the check step, not here)
+echo "$CONFIRMED_ROW" >> "$REGISTRY"
+```
+
+Then, in the **source document** (`code-standards.md`, `design-system.md`, or the wiki entry), replace the located sentence/paragraph with a one-line pointer, using Edit — never Write the whole file:
+
+```
+See `docs/development/reuse-guidelines.md` § <name> for the canonical rule.
+```
+
+Keep the original heading in place even if the paragraph under it is now just the pointer — removing the heading changes anchors other docs or commits may reference. This is a content *move*, not a deletion: the rule still exists, now in one place instead of two.
