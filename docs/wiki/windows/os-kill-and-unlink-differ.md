@@ -1,7 +1,7 @@
 # `os.kill(pid, 0)`, deleting an open file and `select()` on a pipe all mean something else on Windows
 
 **Origin:** Windows CI hang in `test_integrations` and the store lock | 2026-10-02
-**Tags:** windows, os.kill, signal 0, TerminateProcess, liveness probe, lock, unlink, PermissionError, sharing violation, select, pipe, stdin, hook, timeout
+**Tags:** windows, os.kill, signal 0, TerminateProcess, liveness probe, lock, unlink, PermissionError, sharing violation, select, pipe, stdin, hook, timeout, os.unlink, file lock, Windows, pid alive check, lock.py
 
 > Three POSIX idioms that probe or clean up compile and run on Windows, and each one does something else there. All three were in the store lock or the hook stdin reader, and each cost a hang or worse.
 

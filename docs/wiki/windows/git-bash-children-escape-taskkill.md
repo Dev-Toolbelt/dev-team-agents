@@ -1,7 +1,7 @@
 # A Git Bash script's children are not in its Windows process tree
 
 **Origin:** plugin timeout test taking the full `sleep 5` on the Windows runner | 2026-10-02
-**Tags:** windows, git bash, MSYS2, process tree, taskkill /T, TerminateProcess, Job Object, CreateJobObjectW, AssignProcessToJobObject, TerminateJobObject, timeout, plugin, pipe
+**Tags:** windows, git bash, MSYS2, process tree, taskkill /T, TerminateProcess, Job Object, CreateJobObjectW, AssignProcessToJobObject, TerminateJobObject, timeout, plugin, pipe, Git Bash, taskkill, Windows process group, plugin timeout
 
 > Killing a script run under Git Bash, even with `taskkill /F /T`, leaves the commands it started running. They keep the output pipes open, so a "timed out" run still waits for them. Only a Job Object reaches them.
 

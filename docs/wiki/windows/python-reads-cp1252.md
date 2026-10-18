@@ -1,7 +1,7 @@
 # Python on Windows reads cp1252 and writes CRLF unless told otherwise
 
 **Origin:** opencode installer and half the test suite failing on the Windows runner | 2026-10-02
-**Tags:** windows, encoding, cp1252, UTF-8, UnicodeDecodeError, PYTHONUTF8, read_text, write_text, CRLF, newline, fixtures, bytes, command line length, WinError 206, readlink, 8.3 short name, permission bits
+**Tags:** windows, encoding, cp1252, UTF-8, UnicodeDecodeError, PYTHONUTF8, read_text, write_text, CRLF, newline, fixtures, bytes, command line length, WinError 206, readlink, 8.3 short name, permission bits, Path.write_bytes, Windows, test fixtures
 
 > On Windows, Python's default text encoding is the locale's (cp1252 on the runner) and text-mode writes translate `\n` to `\r\n`. The repo's files are UTF-8 with em dashes and arrows, so every `open()`/`read_text()` without `encoding=` is a `UnicodeDecodeError` waiting to happen, and every `write_text` fixture is a byte mismatch.
 

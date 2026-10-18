@@ -1,7 +1,7 @@
 # `NUL` is a tty on Windows: an `isatty()` check is not "a human is there"
 
 **Origin:** `test_integrations` hanging the Windows CI job | 2026-10-02
-**Tags:** windows, NUL, isatty, tty, getpass, stdin, DEVNULL, GetConsoleMode, console, prompt, hang, integration connect, cred set
+**Tags:** windows, NUL, isatty, tty, getpass, stdin, DEVNULL, GetConsoleMode, console, prompt, hang, integration connect, cred set, Windows
 
 > On Windows the `NUL` device is a character device, so `sys.stdin.isatty()` is `True` when stdin is `NUL`. Code that prompts "when interactive" then calls `getpass`, which waits forever on a console that does not exist.
 

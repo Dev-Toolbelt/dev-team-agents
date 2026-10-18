@@ -366,7 +366,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Cinco camadas minimiza
 
 - **Resumo de sessão** — escrito ao final de qualquer sessão com arquivos alterados; um hook `Stop` enforça. Antes de entradas antigas serem removidas, os agentes verificam se as decisões nelas chegaram a virar ADR ou entrada de wiki, e avisam quais não viraram em vez de descartá-las em silêncio.
 - **Wiki** — `docs/wiki/README.md` é um índice por palavra-chave, uma linha por entrada. Os agentes fazem grep nele para a tarefa atual e abrem só o que casar, então um wiki com 200 entradas custa o mesmo no startup que um com 5.
-- **ADRs** — crie um com `bash .dev-team-agents/scripts/new-adr.sh "título"`.
+- **ADRs** — crie um com `bash .dev-team-agents/scripts/new-adr.sh "título"`. Ele segue uma série já existente em `docs/adr/`, mostra o diretório com `--dir` e adiciona a linha do ADR ao índice de ADRs (`README.md` nesse diretório). Os índices da wiki e de ADRs são verificados ao fim de cada sessão que os tocou.
 - **`/devteam:learn`** — promove o que a sessão aprendeu da camada episódica para as duráveis.
 
 Nada nesse sistema apaga conhecimento automaticamente. A camada episódica é a única exceção, por design, e a verificação de promoção acima é o que a protege.

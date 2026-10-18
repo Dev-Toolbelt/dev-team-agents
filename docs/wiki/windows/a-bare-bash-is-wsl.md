@@ -1,7 +1,7 @@
 # A bare `bash` on Windows can be WSL's launcher, even when `shutil.which` says Git Bash
 
 **Origin:** `test_plugin_lint` printing "Windows Subsystem for Linux has no installed distributions" on the runner | 2026-10-02
-**Tags:** windows, bash, WSL, System32, bash.exe, WindowsApps, Store alias, CreateProcess search order, shutil.which, Git Bash, subprocess, cmd.exe, hooks.json
+**Tags:** windows, bash, WSL, System32, bash.exe, WindowsApps, Store alias, CreateProcess search order, Git Bash, subprocess, cmd.exe, hooks.json, CreateProcess, PATH, Windows, devteam.shells.bash_path, shutil.which
 
 > `subprocess.run(["bash", ...])` and a `cmd.exe` command starting with `bash` resolve the name with CreateProcess's search order, which looks in `System32` **before** PATH. That finds `C:\Windows\System32\bash.exe`, the WSL launcher, while `shutil.which("bash")` on the same machine returned `C:\Program Files\Git\usr\bin\bash.EXE`.
 
@@ -13,7 +13,7 @@ The WSL launcher is not Git Bash. It runs the script inside a Linux distribution
 
 ## The rule
 
-Resolve an **absolute** Git Bash and run that: `devteam.shells.bash_path()`. On POSIX it is just `shutil.which("bash")`. On Windows it takes the PATH hit only when it is outside `\windows\system32\` and `\windowsapps\`, else the Git for Windows default folders, else `None`. Plugin runtimes, the opencode/Codex installers (`providers._run_installer`, `require_tools`) and the Codex hook command (`codex_hooks_merge.windows_command`) all go through it. The reuse rule `bash_path_resolution` in `docs/development/reuse-guidelines.md` enforces it.
+Resolve an **absolute** Git Bash and run that: `devteam.shells.bash_path, shutil.which()`. On POSIX it is just `shutil.which("bash")`. On Windows it takes the PATH hit only when it is outside `\windows\system32\` and `\windowsapps\`, else the Git for Windows default folders, else `None`. Plugin runtimes, the opencode/Codex installers (`providers._run_installer`, `require_tools`) and the Codex hook command (`codex_hooks_merge.windows_command`) all go through it. The reuse rule `bash_path_resolution` in `docs/development/reuse-guidelines.md` enforces it.
 
 ## Gotchas
 

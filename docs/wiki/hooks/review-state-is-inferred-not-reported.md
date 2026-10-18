@@ -1,7 +1,7 @@
 # Review State Is Inferred, Not Reported
 
 **Origin:** In Review column implementation (ADR-0018 amendment) | 2026-09-30  
-**Tags:** review state, task board, review window, marker, inferred, outcome
+**Tags:** review state, task board, review window, marker, inferred, outcome, in review, findings
 
 > No provider has a review status field — the column is inferred entirely from review triggers, window tracking, and the agent's result marker.
 

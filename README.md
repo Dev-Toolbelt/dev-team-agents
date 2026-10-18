@@ -366,7 +366,7 @@ Agents start each session with no memory of previous ones. Five layers minimize 
 
 - **Session summary** — written at the end of any session where files changed; a `Stop` hook enforces it. Before old entries are trimmed, agents check whether the decisions in them were ever promoted to an ADR or wiki entry, and tell you which weren't rather than dropping them silently.
 - **Wiki** — `docs/wiki/README.md` is a keyword index, one row per entry. Agents grep it for the task at hand and open only what matches, so a wiki with 200 entries costs the same at startup as one with 5.
-- **ADRs** — create one with `bash .dev-team-agents/scripts/new-adr.sh "title"`.
+- **ADRs** — create one with `bash .dev-team-agents/scripts/new-adr.sh "title"`. It follows an existing `docs/adr/` series, prints the directory with `--dir`, and adds the ADR's row to the ADR index (`README.md` in that directory). The wiki and ADR indexes are checked at the end of each session when a session touched them.
 - **`/devteam:learn`** — promotes what a session learned from the episodic layer into the durable ones.
 
 Nothing in this system deletes knowledge automatically. The episodic layer is the sole exception, by design, and the promotion check above is what guards it.

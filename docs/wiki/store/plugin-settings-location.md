@@ -1,7 +1,7 @@
 # Plugin settings: where they live and why their format is load-bearing
 
 **Origin:** plugin system and Graphify as the first plugin (ADR-0019) | 2026-09-30
-**Tags:** plugins, plugin-settings, plugin.json, runtime link, .dev-team-agents/plugins, "enabled": true, 02d-plugins.sh, OPTIONAL_TREES, graphify.json, legacy migration, sort_keys
+**Tags:** plugins, plugin-settings, plugin.json, runtime link, .dev-team-agents/plugins, "enabled": true, 02d-plugins.sh, OPTIONAL_TREES, graphify.json, legacy migration, sort_keys, ADR-0019
 
 > Never write plugin settings under `.dev-team-agents/plugins/` — in a bound project that path is a symlink into the installed core version, so a write there modifies the framework for every project on the machine.
 

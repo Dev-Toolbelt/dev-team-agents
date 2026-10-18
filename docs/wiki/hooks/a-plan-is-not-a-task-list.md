@@ -1,7 +1,7 @@
 # A written plan never reaches the task board
 
 **Origin:** a live session planned a whole feature with no task-list call and the board stayed empty | 2026-09-30
-**Tags:** task board, plan, plan-mode, TaskCreate, update_plan, todowrite, native task list, empty board, Task List Mirroring, agent spawn, direct work
+**Tags:** task board, plan, plan-mode, TaskCreate, update_plan, todowrite, native task list, empty board, Task List Mirroring, agent spawn, direct work, read-only turn, To Do, lifetime, hook, settings.json
 
 > The board reads only the provider's native task list. A plan in chat or in a `.md` file is invisible to it until its steps are mirrored as native tasks. Since agent spawns now appear as tasks automatically, an empty board after a command that delegated to agents means the capture hooks did not fire.
 
