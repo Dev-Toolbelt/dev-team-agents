@@ -62,7 +62,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 ## Execution Strategy Gate (Mandatory)
 
 After the user approves the plan and **before executing any step**, present the Execution Strategy
-Gate — the worktree / branch / current-branch quiz. When the user signals fully autonomous
+Gate — the worktree / branch / current-branch quiz (skip it when the command already ran its own strategy gate or passed `WORKTREE_PATH`/`BRANCH`; as a sub-agent without the question tool, return it as an Open Decision per `interaction-patterns` § Sub-agent Question Relay). When the user signals fully autonomous
 execution ("do it all without asking", "autonomous sprint", equivalents in any language), skip the quiz and follow the Autonomous Sprint Protocol instead.
 
 Both procedures — preference reading, quiz options, session-file write, and the autonomous review
@@ -82,7 +82,7 @@ classification table, spawn prompt contract, parallelism rules, and the consolid
 
 Non-negotiable spawn invariants:
 
-- The worktree or branch MUST exist **before** the first subagent is spawned — subagents have no shell access
+- The worktree or branch MUST exist **before** the first subagent is spawned — it is the orchestrator's decision, not the subagent's
 - Every spawn prompt carries `WORKTREE_PATH` and `BRANCH`, and forbids writing outside that path; independent agents are spawned in parallel, dependent ones in sequence
 - After all agents complete, present one consolidated summary, then ask the **Review Next-Step Gate** (`interaction-patterns` skill) — never a plain-text review pointer
 - **On a status question, call `TaskList`/`TaskGet`/`TaskOutput` first** — never answer from the plan or a prior message (orchestration skill, Spawn Integrity check 4, Liveness)
@@ -111,7 +111,7 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 When spawned by the `spec-gate` rule (touches more than one layer, or introduces a new
 API/schema/integration point), write **only** `docs/specs/<feature>-contract.md` — interface shapes,
 schema fields, error format, technical dependency order. Load `skills/shared/spec-gate/SKILL.md`
-first. Do not touch `overview.md`, restate the business rule, or make a product decision; a
+first. Do not touch the scope overview, restate the business rule, or make a product decision; a
 contradiction with the spec goes back to `product-analyst`, not a silent technical override.
 
 ### In DISCOVERY (after product-analyst closes scope)

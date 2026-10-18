@@ -34,7 +34,7 @@ If none indicate tests are required:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

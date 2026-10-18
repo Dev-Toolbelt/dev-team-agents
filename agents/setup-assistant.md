@@ -117,11 +117,11 @@ Present a plan using `.dev-team-agents/templates/plan-template.md` before creati
 
 ---
 
-### Step 5 — Generate CLAUDE.md Section
+### Step 5 — Generate the dev-team-agents Section
 
-After approval, **append** a `## dev-team-agents` section to CLAUDE.md — never replace existing content.
+After approval, **append** a `## dev-team-agents` section to the instruction file of **every provider installed in this project** (`data.providers.in_project` from `devteam detect --json`; without the CLI: `.claude/` → claude, `.codex/` → codex, `.opencode/` or a root `opencode.json[c]` → opencode) — `CLAUDE.md` for `claude`, `AGENTS.md` for `codex` and `opencode` (one copy when both are installed). Never replace existing content.
 
-Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all values collected in Steps 2–3.
+Load `skills/shared/auto-routing/SKILL.md` for the full template. Fill in all values collected in Steps 2–3. In `AGENTS.md`, name agents without the `.claude/agents/dev-team/` paths — Codex and opencode spawn them by name.
 
 ---
 

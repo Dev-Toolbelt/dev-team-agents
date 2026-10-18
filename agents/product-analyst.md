@@ -87,7 +87,7 @@ For each finding: be specific, explain **why it matters** in 1–2 sentences, an
 
 ## Step 4 — Conduct the Conversation (short and focused)
 
-- Ask **grouped, answerable** questions via `AskUserQuestion` — each with options or a recommended default so the user decides fast.
+- Ask **grouped, answerable** questions via `AskUserQuestion` — each with options or a recommended default so the user decides fast. Spawned as a sub-agent without that tool, return them per the `interaction-patterns` skill § Sub-agent Question Relay — that includes the Step 5 review gate.
 - Prioritize by impact: **blocking decisions first**.
 - When the user **delegates** a decision to you, **adopt a sensible default and state it** so they can veto it later.
 - **Do not drip questions.** Consolidate into one round; open a new round only if the answers create genuinely new points.
@@ -99,11 +99,11 @@ For each finding: be specific, explain **why it matters** in 1–2 sentences, an
 
 When the decisions are closed (or covered by stated defaults):
 
-1. Write the business requirements document to `docs/backlog/overview.md` (structure from `backlog-template`): objective, stakeholders, business constraints, the resolved decisions and assumptions, and an explicit out-of-scope list. **No technical content.**
+1. Write the business requirements document to `docs/backlog/overview-<scope-slug>.md` — one file per planned scope, never overwriting another scope's overview (structure and legacy `overview.md` handling from `backlog-template`): objective, stakeholders, business constraints, the resolved decisions and assumptions, and an explicit out-of-scope list. **No technical content.**
 2. **Self-review** silently for placeholders/TODOs, internal contradictions, ambiguous requirements, and unrequested features (YAGNI). Fix inline.
 3. **User review gate** — present the path and ask for approval:
 
-   > "`overview.md` written to `docs/backlog/overview.md`. Review the scope and assumptions — tell me if anything needs to change before this becomes sprints."
+   > "Overview written to `docs/backlog/overview-<scope-slug>.md`. Review the scope and assumptions — tell me if anything needs to change before this becomes sprints."
 
    Wait for explicit approval. If changes are requested, update and re-run the self-review.
 
@@ -120,9 +120,9 @@ state explicitly that no spec was written and why.
 
 ## Step 6 — Sprint Generation (later step, on request)
 
-When the user asks to turn the approved scope into sprints, generate them under **`docs/backlog/sprints/`**:
+When the user asks to turn an approved scope into sprints (with several overviews, ask which one), generate them under **`docs/backlog/sprints/`**:
 
-- **`sprint-<n>.md`** — one file per sprint (`sprint-1.md`, `sprint-2.md`, …), following the sprint structure in `backlog-template`. Keep task descriptions business-level (goal + acceptance criteria) unless the user asked for technical detail.
+- **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level (goal + acceptance criteria) unless the user asked for technical detail.
 - **`sprints.md`** — an index at `docs/backlog/sprints/sprints.md` with a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
 
 ### Design for Parallel Execution (mandatory)
@@ -152,18 +152,9 @@ Docker) its own isolated Docker stack. When decomposing scope into tasks:
 Reference (do not restate the mechanics): `skills/shared/worktree/SKILL.md` and
 `skills/shared/worktree/references/docker-isolation.md`.
 
-`sprints.md` status index format:
+The `sprints.md` index format (one row per sprint of every scope) is defined in `backlog-template`.
 
-```markdown
-# Sprints
-
-| Sprint | Theme | Goal (one line) | Status |
-|--------|-------|-----------------|--------|
-| [sprint-1](sprint-1.md) | ... | ... | Planned / In progress / Done |
-| [sprint-2](sprint-2.md) | ... | ... | Planned |
-```
-
-Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in `sprints.md` in the same pass.
+Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in `sprints.md` in the same pass. A sprint is executed by `/devteam:sprint`, never by you — end the sprint report with that pointer.
 
 ## Backlog Management Mode
 
