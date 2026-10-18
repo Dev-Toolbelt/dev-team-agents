@@ -51,6 +51,7 @@ See `references/anti-patterns.md` for full before/after code examples.
 | ORM/dynamic property types | Yes — type annotation | Native language syntax |
 | Complex return shapes | Yes — type annotation | Native language syntax |
 | Test structure | Yes — AAA markers | `// Arrange`, `// Act`, `// Assert` |
+| Spec scenario a test covers | Yes — traceability token | `[spec:<feature>#S<n>]` in the test's description string; a one-line comment only when the framework has no description string (`skills/shared/spec-gate/SKILL.md` § Traceability) |
 
 See `references/type-annotations.md` and `references/aaa-pattern.md` for full examples.
 

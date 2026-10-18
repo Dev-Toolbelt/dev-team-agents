@@ -61,7 +61,7 @@ docs/backlog/
 A task is DONE when ALL of the following are true:
 
 ## Code
-- [ ] Implements the acceptance criteria completely
+- [ ] Implements the acceptance criteria completely — the `Covers` scenarios of the linked spec, or the task's own criteria when it has no spec
 - [ ] No known bugs introduced
 - [ ] Code reviewed and approved
 - [ ] Linters pass (no errors)
@@ -88,9 +88,7 @@ A task is DONE when ALL of the following are true:
 
 ## Epic 1 — [Name]
 **Goal**: [What this epic delivers]
-**Acceptance Criteria**:
-- [ ] ...
-- [ ] ...
+**Specs**: [`docs/specs/<feature>.md`, … — the epic's criteria live there, never restated here]
 
 **Estimated effort**: [S / M / L / XL]
 **Priority**: [High / Medium / Low]
@@ -145,14 +143,14 @@ A wave starts only after every task in the previous wave is done.
 **Wave**: A
 **Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
 **Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
+**Covers**: [scenario IDs from the spec this task delivers, e.g. `S1, S3` — omit when Spec is "none"]
 **Depends on**: [TASK-XXX or "none"]
-**Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; /devteam:sprint updates it -->
+**Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; the executing command updates it -->
 
 **Description**:
 [What needs to be done — technical enough for a developer to start]
 
-**Acceptance Criteria**:
-- [ ] ...
+**Acceptance Criteria**: [only when Spec is "none" — a spec-linked task's criteria are its `Covers` scenarios, never a second copy]
 - [ ] ...
 
 ---
@@ -170,6 +168,8 @@ A wave starts only after every task in the previous wave is done.
 | Max parallelism | N tasks (largest wave) |
 | Estimated total | Nh / N pts |
 ```
+
+**Covers rule**: every scenario of a linked spec is cited by at least one task's `Covers` — a scenario no task covers is a planning gap, not an implicit extra. Status flips are owned by the executing command (`skills/shared/spec-gate/SKILL.md` § Task Resolution).
 
 ### `sprints/sprints.md` — status index
 
