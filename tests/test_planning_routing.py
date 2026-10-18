@@ -105,6 +105,7 @@ class CompactRoutingTest(unittest.TestCase):
         "backend-developer", "frontend-developer", "ui-ux-designer", "database-specialist",
         "devops-specialist", "backend-test-specialist", "frontend-test-specialist",
         "code-reviewer", "security-specialist", "qa-specialist", "technical-writer",
+        "mobile-developer", "seo-specialist",
     }
     KEYS = (
         "PROJECT_TYPE", "TESTS_REQUIRED", "CICD_PLATFORM", "GRAPHIFY", "BACKLOG_LOCATION",
@@ -147,6 +148,55 @@ class CompactRoutingTest(unittest.TestCase):
         text = legacy.read_text(encoding="utf-8")
         self.assertIn(self.VERBOSE_NEEDLE, text)
         self.assertIn("### Language", text)
+
+
+TEST_GATE_COMMANDS = ("fix", "backend", "frontend", "fullstack", "mobile", "refactor", "relayout", "audit", "sprint")
+
+
+class TestGateTest(unittest.TestCase):
+    """A Codex- or opencode-only project keeps TESTS_REQUIRED in AGENTS.md only."""
+
+    def setUp(self):
+        self.lib = render_provider.load_lib(REPO_ROOT / "scripts" / "lib")
+        self.meta = self.lib["commands"]["commands"]
+
+    def _rendered(self, name):
+        tm = self.lib["tool_map"]
+        _, body = render_provider.parse_frontmatter((REPO_ROOT / "commands" / (name + ".md")).read_text(encoding="utf-8"))
+        codex = render_provider.render_command_codex(name, self.meta[name], body, "m", None, tm)
+        return {
+            "claude": body,
+            "opencode": render_provider.render_command_opencode(name, self.meta[name], body, "m", None, tm)["snippet_entry"]["template"],
+            "codex": "".join(item["content"] for item in (codex if isinstance(codex, list) else [codex])),
+        }
+
+    def test_the_rule_reads_both_instruction_files(self):
+        gate = _section(AUTO_ROUTING.read_text(encoding="utf-8"), "## Test Gate")
+        for filename in set(INSTRUCTION_FILES.values()):
+            self.assertIn("`%s`" % filename, gate)
+        self.assertIn("Contradiction Guard", gate)
+        self.assertIn("No section, or no key | `yes`", gate)
+        self.assertIn("exactly one of", gate)
+
+    def test_every_gated_command_resolves_through_the_rule_on_every_provider(self):
+        for name in TEST_GATE_COMMANDS:
+            rendered = self._rendered(name)
+            self.assertEqual(set(rendered), set(providers.ALL_PROVIDERS))
+            for provider, text in rendered.items():
+                with self.subTest(command=name, provider=provider):
+                    self.assertIn("`skills/shared/auto-routing/SKILL.md` § Test Gate", text)
+                    self.assertNotIn("`CLAUDE.md` → `## dev-team-agents`", text)
+
+    def test_no_command_or_agent_reads_the_gate_from_claude_md_alone(self):
+        for root in ("commands", "agents"):
+            for path in (REPO_ROOT / root).glob("*.md"):
+                with self.subTest(path=path.name):
+                    self.assertNotIn("`CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`", path.read_text(encoding="utf-8"))
+
+    def test_test_culture_agents_use_the_rule(self):
+        for name in ("backend-test-specialist", "frontend-test-specialist", "backend-developer"):
+            with self.subTest(agent=name):
+                self.assertIn("§ Test Gate", (REPO_ROOT / "agents" / (name + ".md")).read_text(encoding="utf-8"))
 
 
 class SprintCommandTest(unittest.TestCase):
