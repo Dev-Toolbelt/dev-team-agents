@@ -70,7 +70,7 @@ class RealTreeRuntimeLinksTest(StoreTestCase):
         # silently off in every project bound with the `core` pointer.
         root = self.new_project("gates")
         bind.bind(root, provider_names=["claude"], mode="link")
-        for lint in ("reuse-lint.sh", "design-token-lint.sh"):
+        for lint in ("reuse-lint.sh", "design-token-lint.sh", "spec-lint.sh"):
             self.assertTrue((root / project.PROJECT_DIR / "scripts" / lint).is_file(), lint)
 
 

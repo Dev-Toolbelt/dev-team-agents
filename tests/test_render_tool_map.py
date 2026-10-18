@@ -26,6 +26,7 @@ CLAUDE_ONLY = ("AskUserQuestion", "ScheduleWakeup", "TaskList", "TaskGet", "Task
 SCRIPT_DOC_PATHS = {
     "scripts/new-adr.sh": "docs/development/adrs",
     "scripts/reuse-lint.sh": "docs/development/reuse-guidelines.md",
+    "scripts/spec-lint.sh": "docs/specs",
     "scripts/hooks/stop/03e-adr-gap-check.sh": "docs/development/adrs/",
 }
 
