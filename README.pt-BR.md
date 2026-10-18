@@ -206,6 +206,8 @@ Curioso sobre como os agentes e comandos são usados na prática? Veja o relató
 
 Após a instalação, Claude Code e opencode expõem slash commands sob o namespace `/devteam:`. No Codex, o padrão local ao projeto é o caminho por skill `$devteam-<name>`. Cada entrypoint dispara os agentes corretos e limita automaticamente sua atuação à branch ou worktree atual do git.
 
+Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:backend TASK-003`): leem a spec dela e os cenários que ela cobre, escrevem primeiro os testes que falham a partir desses cenários quando o projeto exige testes, implementam só o que eles cobrem e marcam a tarefa como concluída depois do review. As specs são verificadas ao fim de cada sessão quanto a IDs, dependências e links de tarefa quebrados ([ADR-0037](docs/development/adrs/0037-spec-status-scenario-ids-and-a-mechanical-spec-lint-close-the-spec-driven-loop.md)).
+
 | Command | O que faz |
 |---------|-----------|
 | `/devteam:setup` | Onboarding — detecta primeira execução ou refresh, e então o setup-assistant configura `CLAUDE.md`, `docs/`, a wiki e suas preferências |
@@ -215,6 +217,7 @@ Após a instalação, Claude Code e opencode expõem slash commands sob o namesp
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
 | `/devteam:fullstack` | Implementação full-stack — times de backend + frontend em paralelo |
 | `/devteam:sprint` | Executa uma sprint aprovada do `/devteam:plan` onda por onda — worktree por tarefa, o agente da tarefa preso à sua spec, review e merge em `sprint/<scope>-<n>` a cada onda, retomável |
+| `/devteam:spec` | Spec retroativa — escreve a spec de uma feature que já existe a partir do código, dos testes e dos docs; o qa-specialist confere cada cenário com a feature rodando, os testes existentes recebem o token do cenário e você decide cada divergência (descrever como está construído, ou manter o comportamento pretendido e corrigi-lo) |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:relayout` | Refazer o layout de uma tela existente para corresponder a referências visuais — ui-ux-designer + frontend-developer, gate obrigatório de referência/tela alvo, worktree isolada, review automática pós-execução |
 | `/devteam:seo` | Quality gate de SEO — seo-specialist (técnico, on-page, Core Web Vitals, dados estruturados, GEO/LLM) |

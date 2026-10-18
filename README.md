@@ -206,6 +206,8 @@ Curious how the agents and commands actually get used? See the latest anonymous 
 
 After installation, Claude Code and opencode expose slash commands under the `/devteam:` namespace. In Codex, the project-local default is the generated skill path `$devteam-<name>`. Each entrypoint spawns the appropriate agents and scopes work to the current git branch or worktree.
 
+Implementation commands also take a sprint task (`/devteam:backend TASK-003`): they read its spec and the scenarios it covers, write failing tests from those scenarios first when your project requires tests, implement only what they cover, and mark the task done after review. Specs are checked at the end of each session for broken IDs, dependencies and task links ([ADR-0037](docs/development/adrs/0037-spec-status-scenario-ids-and-a-mechanical-spec-lint-close-the-spec-driven-loop.md)).
+
 | Command | What it does |
 |---------|-------------|
 | `/devteam:setup` | Onboarding — detects first run vs refresh, then setup-assistant configures `CLAUDE.md`, `docs/`, the wiki, and your preferences |
@@ -215,6 +217,7 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
 | `/devteam:sprint` | Execute an approved sprint from `/devteam:plan` wave by wave — worktree per task, the task's agent bound to its spec, review and merge into `sprint/<scope>-<n>` per wave, resumable |
+| `/devteam:spec` | Retroactive spec — writes the spec of a feature that already exists from its code, tests and docs; qa-specialist checks every scenario against the running feature, existing tests get the scenario token, and you decide each divergence (describe it as built, or keep the intended behavior and fix it) |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
 | `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) |
