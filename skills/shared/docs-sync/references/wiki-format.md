@@ -49,6 +49,13 @@ Omit sections that add no value. Keep entries under 80 lines.
 
 **`Tags` is load-bearing, not decoration.** It is what an agent greps to decide whether to read the entry at all. Use the words someone would actually search — domain nouns, component names, error strings — not categories.
 
+| `Tags` rule | Why |
+|-------------|-----|
+| Required on every entry, exactly one line | An entry without it has nothing for its index row to copy, so the row gets invented from the title |
+| 4–10 comma-separated terms, lowercase except identifiers (class, table, env-var names keep their exact spelling) | Two terms match only the task phrased the way the author phrased it |
+| Add the synonyms a task would use — and the user-facing language's term when the project's users or docs use another language (`order, pedido`) | Lookup is lexical: a synonym that is not written down is a miss |
+| No bare category words (`api`, `backend`, `ui`) | They match every task and narrow nothing |
+
 ---
 
 ## Never Delete an Entry
@@ -113,7 +120,9 @@ One row per **entry**, not per domain. This file is the only part of the wiki an
 |--------|---------|
 | **Entry** | Path relative to `docs/wiki/`, in backticks |
 | **Keywords** | Copied verbatim from the entry's `Tags` line — the two must not drift |
-| **Read it when** | The entry's callout, compressed to one clause. A trigger condition, not a summary |
+| **Read it when** | The entry's callout, compressed to one clause. A trigger condition — the situation in which the entry is worth opening — never the entry's title or a summary |
+
+**Checked mechanically.** `scripts/index-lint.sh` (run by the `Stop` hook whenever a session touches `docs/wiki/`) reports an entry without `Tags`, an entry with no index row, a row whose Keywords drift from the entry's `Tags`, a row pointing at a missing file, and `Tags` below four terms.
 
 **Entry counts are not tracked.** A count is a number to keep in sync that answers no question an agent has; `ls` produces it on demand.
 

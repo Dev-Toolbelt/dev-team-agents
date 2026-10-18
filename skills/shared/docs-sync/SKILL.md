@@ -18,7 +18,7 @@ Agents call this skill after completing any task that changes project state. It 
 | **No duplicates** | If the information is in `CLAUDE.md`, do not repeat it here. |
 | **No history** | Docs record current state only. Past decisions belong in git commits and ADRs. |
 | **Surgical patches** | Read the current file first. Replace only the changed section using Edit — never Write the whole file. |
-| **Freshness marker** | Every file has `<!-- last-updated: YYYY-MM-DD -->` on line 1. Update it on every write. |
+| **Freshness marker** | Every file has `<!-- last-updated: YYYY-MM-DD -->` on line 1. Update it on every write. Line 1 is the canonical form: rewrite a date written elsewhere (`last-updated: …` lower in the file) into it. |
 | **No boilerplate** | Omit sections that are empty, N/A, or unknown. |
 | **One source of truth** | If two docs would say the same thing, keep it in the more specific one and link from the other. |
 
@@ -100,6 +100,18 @@ PROJECT_TYPE / TESTS_REQUIRED / CICD_PLATFORM
 After completing any task, check whether the work delivered triggers an entry in the Update
 Triggers table below. If it does, apply the surgical patch to the relevant `docs/` file. Run it
 in parallel with the commit — it is part of finishing the task, not a follow-up to it.
+
+## Document Lifecycle
+
+**A document that no longer describes current behavior says so at its top — it is never deleted.** The wiki (`references/wiki-format.md` § Never Delete an Entry) and ADRs (`skills/shared/adr/SKILL.md` § Status Lifecycle) carry their own markers; this covers everything else under `docs/`.
+
+| Document | Marker, directly under the H1 |
+|----------|-------------------------------|
+| Plan (`docs/development/plan-*.md`, or any document carrying acceptance criteria and steps) | `**Status:** Proposed \| Approved \| In progress \| Implemented \| Superseded \| Abandoned — <evidence: commit, PR, or replacing document>`, updated when the plan's state changes |
+| Superseded plan or reference document | `> ⚠️ Historical — superseded by [<file>](<link>). Current behavior is documented there.` under the status line |
+| Point-in-time snapshot (audit, gap report, incident, proposal) | `> 🗂️ Historical snapshot (YYYY-MM-DD). For current behavior see [<current source>](<link>).` |
+
+`Implemented` needs evidence that it shipped; a plan whose state cannot be established says `Unknown — <why>` rather than guessing. `scripts/index-lint.sh` warns on a `plan-*.md` without a status line.
 
 ## When to Update What
 

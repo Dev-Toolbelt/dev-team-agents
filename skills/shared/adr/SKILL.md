@@ -11,10 +11,13 @@ ADRs document significant architectural decisions — the context, what was deci
 
 ```
 docs/development/adrs/
+  README.md                      ← retrieval index (see § ADR Index)
   0001-database-choice.md
   0002-api-design-approach.md
   0003-authentication-strategy.md
 ```
+
+**The ADR directory is whatever `bash .dev-team-agents/scripts/new-adr.sh --dir` prints**: `docs/development/adrs/` when it exists, otherwise an existing `docs/adr/`, otherwise `docs/development/adrs/` (created with the first ADR). A directory whose ADRs are named `ADR-NNNN-slug.md` keeps that scheme. Every mention of `docs/development/adrs/` in any skill, agent or command means that resolved directory. A symlinked ADR directory is refused, never followed.
 
 ## MADR Format
 
@@ -81,7 +84,33 @@ Use the script to auto-number and scaffold the file — it also prints existing 
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-This creates `docs/development/adrs/NNNN-title-slug.md` — four digits, no `adr-` prefix — with the MADR template pre-filled. Fill in the generated file and change the status from `Proposed` to `Accepted`.
+This creates `<adr-dir>/NNNN-title-slug.md` — four digits, no prefix, or `ADR-NNNN-title-slug.md` in a directory that already uses that scheme — with the MADR template pre-filled, and appends its row to the ADR index. Fill in the generated file and its index row, and change the status from `Proposed` to `Accepted` in both.
+
+## ADR Index
+
+`README.md` inside the ADR directory is the ADRs' retrieval index — the same idea as the wiki index (`skills/shared/docs-sync/references/wiki-format.md`): an agent greps it for the task's keywords instead of listing and opening ADRs.
+
+```markdown
+# Architecture Decision Records
+
+## Index
+
+| ADR | Status | Keywords | Read it when |
+|-----|--------|----------|--------------|
+| `0001-database-choice.md` | Accepted | postgres, database engine, jsonb, banco de dados | Choosing or replacing the primary datastore |
+| `0002-api-design-approach.md` | Superseded by ADR-0007 | rest, graphql, api style, versioning | Adding an endpoint style the API does not use yet |
+```
+
+| Column | Content |
+|--------|---------|
+| **ADR** | Filename, in backticks |
+| **Status** | The ADR's current status — update it in the same edit that supersedes or deprecates the ADR |
+| **Keywords** | 4–10 comma-separated lowercase search terms, with synonyms — the wiki `Tags` rules apply |
+| **Read it when** | One clause naming the situation in which the decision constrains the work — not the title |
+
+- `new-adr.sh` appends the row with `Proposed` and two placeholders; filling them is part of writing the ADR. A placeholder left behind is an ADR nothing will find.
+- The index is created on demand: the first `new-adr.sh` run that finds it missing writes the header and a placeholder row (`[status]`, `[keywords]`, `[read it when]`) for every existing ADR, so the series stays reachable while the cells are filled. An existing index is never regenerated; a `README.md` with no `## Index` table is left untouched and the row is printed for a manual add.
+- `scripts/index-lint.sh` (run by the `Stop` hook when a session touches the ADR directory) reports an ADR with no row, a row pointing at a missing file, unfilled placeholders, and Keywords below four terms.
 
 ## When to Write an ADR
 
@@ -104,4 +133,4 @@ When superseding an ADR, update the old one's status and link to the new one.
 - Keep it short — 1-2 pages max
 - Write it at decision time, not after implementation
 - "We will" not "We should" — ADRs record decisions, not recommendations
-- Link ADRs from `CLAUDE.md` or `development/architecture.md` so they're discoverable
+- The ADR index is what makes an ADR discoverable; link the load-bearing ones from `CLAUDE.md` or `development/architecture.md` as well

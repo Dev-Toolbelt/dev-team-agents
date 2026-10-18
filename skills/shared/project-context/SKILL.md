@@ -83,10 +83,10 @@ Notifications (context window, stale config, tips) are raised by hooks and shown
 
 | Layer | Artifact | Holds | Lifespan |
 |-------|----------|-------|----------|
-| **Structural** | `docs/project.md`, `docs/development/*.md` | Current state: stack, architecture, standards | Rewritten in place — always describes now |
+| **Structural** | `docs/project.md`, `docs/development/*.md` | Current state: stack, architecture, standards | Rewritten in place — always describes now; a document that no longer does carries the `docs-sync` § Document Lifecycle marker |
 | **Episodic** | `<memory-dir>/session-summary.md` (`.dev-team-agents/memory-dir` pointer → portable memory) | What happened, in order | Decays (rotation policy below) |
 | **Semantic** | `docs/wiki/` | What isn't derivable from the code | Permanent; superseded, never deleted |
-| **Decisional** | `docs/development/adrs/` | Why a hard-to-reverse choice was made | Permanent and immutable |
+| **Decisional** | ADR directory (`new-adr.sh --dir`) + its `README.md` index | Why a hard-to-reverse choice was made | Permanent and immutable |
 | **Mechanical** | `graphify-out/graph.json` | Where things are in the code | Regenerated — never hand-written |
 
 ### Routing — which layer gets this?
@@ -114,7 +114,8 @@ Before starting any task, load context in this order (read what exists — skip 
                                              orient fast before reading individual dev files
 4. <memory-dir>/session-summary.md        ← last session's decisions and next steps; read the
                                              most recent entry (top of file). See `layout` below
-5. docs/development/adrs/        ← list ADR files and read any relevant to the task
+5. ADR directory (README.md)     ← ADR retrieval index; grep it for the task's keywords —
+                                             directory resolved by `new-adr.sh --dir`
 6. AGENTS.md                             ← agent-specific instructions for this project
 7. .claude/settings.json                 ← Claude Code configuration
 8. .agents/ (directory)                  ← project-level agent overrides
@@ -149,13 +150,13 @@ reads the same folders. Preferences are personal and never committed; see § Use
 
 **When `docs/project.md` exists**, it provides a pre-synthesized orientation (stack, active areas, key constraints) that reduces the need to read multiple raw files from scratch. Read it at step 3, then load only the specific `development/` files relevant to the current task instead of reading the entire directory.
 
-After reading `project.md`, extract the `<!-- last-updated: YYYY-MM-DD -->` field from line 1. If the date is more than 30 days in the past, include this warning at the top of your first response:
+After reading `project.md`, find its freshness date: the canonical form is `<!-- last-updated: YYYY-MM-DD -->` on line 1, but accept a `last-updated: YYYY-MM-DD` line in either form anywhere in the first five lines — an exact-line-1 match silently skipped every project that wrote the date differently, so a two-month-old overview never warned. If the date is more than 30 days in the past, **or no date can be found**, include this warning at the top of your first response:
 
-> ⚠️ `project.md` may be stale (last updated: YYYY-MM-DD). Consider running `setup-assistant` in REFRESH mode to bring it up to date.
+> ⚠️ `project.md` may be stale (last updated: YYYY-MM-DD — or "no date found"). Consider running `setup-assistant` in REFRESH mode to bring it up to date.
 
 **When `<memory-dir>/session-summary.md` exists** (path resolved via `.dev-team-agents/memory-dir` pointer on layout 2, or `.dev-team-agents/user-data/` on layout 1), read only the most recent entry (the topmost `## YYYY-MM-DD` block). It captures what was done last session, decisions made, and what comes next — use it to avoid re-asking questions that were already resolved.
 
-**When `docs/development/adrs/` exists**, list its files and read any ADR whose title is relevant to the current task. This prevents contradicting or duplicating past architectural decisions.
+**When the ADR directory exists** (`docs/development/adrs/`, or `docs/adr/` in a project that uses it — `new-adr.sh --dir` resolves it), read its `README.md` index and match the task's keywords against the **Keywords** column, exactly as for the wiki below; open the ADRs that hit and skip rows whose status is `Superseded` unless the task is about the superseded behavior. With no index — and for any ADR file the index has no row for — fall back to listing the files and reading any ADR whose title is relevant. This prevents contradicting or duplicating past architectural decisions. The index format is `skills/shared/adr/SKILL.md` § ADR Index.
 
 **When `docs/wiki/README.md` exists**, read that index — and only that index. Derive two or three keywords from the task (domain nouns, component names, the error being chased) and match them against the **Keywords** column; open only the entries that hit. Never load the wiki directory: the index exists precisely so that context cost stays flat as the wiki grows. An empty match set is a valid result — proceed without opening anything.
 
@@ -172,7 +173,7 @@ Read each file that exists. Combine the information into a unified understanding
 | 2, 6, 8 | The provider's instruction files (`CLAUDE.md`, `AGENTS.md`) and `.agents/` — project rules and overrides, always in full |
 | 1, 3 | `docs/project.md`; `README.md` only when `project.md` is absent |
 | 4 | The most recent session-summary entry |
-| 5 | ADR **titles** only; open an ADR only when its title names the area |
+| 5 | The ADR index keyword lookup (titles only when there is no index); open an ADR only when its row names the area |
 | 9 | Only the `docs/development/` file the layer needs — `code-standards.md` for code — plus every unscoped `reuse-guidelines.md` row and the rows whose `scope` matches the paths you will touch |
 | 11 | The wiki index keyword lookup, as in the full order |
 

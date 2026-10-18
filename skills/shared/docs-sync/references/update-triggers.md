@@ -15,6 +15,11 @@ When work is delivered, patch the corresponding doc section immediately. Use the
 | New UI component added | `design/design-system.md` | Component Inventory |
 | New color or typography token | `design/design-system.md` | relevant section |
 | Task completed touching a directory | `project.md` | Active Areas |
+| Environment deployed for the first time, taken down, or its URL changed | `project.md` | Environments / status |
+| Sprint closed, or the project moved to a new phase (MVP shipped, maintenance) | `project.md` | Current phase |
+| Backlog or tracker moved to another location | `project.md` | Where work is tracked |
+| Plan document implemented, abandoned, or replaced | the plan itself | `**Status:**` line — see `SKILL.md` § Document Lifecycle |
+| ADR created, superseded, or deprecated | ADR directory `README.md` | Index row — see `skills/shared/adr/SKILL.md` § ADR Index |
 | Schema migration applied | `architecture.md` | Module Map or API Contracts |
 | Architectural layer added or renamed | `architecture.md` | Layers |
 | Non-obvious domain behavior discovered | `wiki/<domain>/<topic>.md` | New or updated wiki entry |

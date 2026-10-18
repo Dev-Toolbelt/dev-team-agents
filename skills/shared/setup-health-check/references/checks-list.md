@@ -671,8 +671,11 @@ A registry row can rot without anyone noticing: a regex that no longer compiles,
 
 ```bash
 bash .dev-team-agents/scripts/reuse-lint.sh --validate   # silent and exit 0 when the registry is absent or valid
-for f in docs/development/code-standards.md docs/development/architecture.md; do
-  [ -f "$f" ] && head -1 "$f" | grep -oE 'last-updated: [0-9]{4}-[0-9]{2}-[0-9]{2}'
+for f in docs/project.md docs/development/code-standards.md docs/development/architecture.md; do
+  # First five lines, either form — line 1 is canonical, but a date written lower must not read as "no date"
+  [ -f "$f" ] || continue
+  d=$(head -5 "$f" | grep -oE 'last-updated: [0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+  [ -n "$d" ] && echo "$f: $d" || echo "$f: NO_DATE"
 done
 # name + added of every row that has an `added` date (8th cell)
 grep '^|' docs/development/reuse-guidelines.md 2>/dev/null | sed 's/\\|//g' | awk -F'|' '$9 ~ /[0-9]{4}-[0-9]{2}-[0-9]{2}/ {gsub(/ /,"",$2); gsub(/ /,"",$9); print $2, $9}'
@@ -682,6 +685,7 @@ grep '^|' docs/development/reuse-guidelines.md 2>/dev/null | sed 's/\\|//g' | aw
 |-------|--------|--------|
 | `--validate` prints `INVALID` lines | WARN | Report each line. Do not edit or delete the row — a broken rule is the user's to repair or retire (`skills/shared/reuse-guidelines/SKILL.md` § Updating the Registry) |
 | `code-standards.md` / `architecture.md` `last-updated` older than `docs_stale_after_days` (from `PREFS_FILE`, default `30`) | WARN | Report the file and date; suggest `software-architect` review it. Never bump the date without a review |
+| `project.md` `last-updated` older than `docs_stale_after_days`, or any of the three files printing `NO_DATE` | WARN | Report it; suggest `setup-assistant` in REFRESH mode for `project.md`. A date outside line 1 is adapted in place to `<!-- last-updated: … -->` on line 1 (`skills/shared/docs-sync/SKILL.md` § Core Rules) |
 | `scripts/ci/reuse-lint.sh` exists and differs from `.dev-team-agents/scripts/reuse-lint.sh` (`cmp -s`) | WARN | The committed CI copy has drifted from the shipped lint (`skills/devops/cicd-base/SKILL.md` § Project Rule Lint). Report it; never overwrite the copy |
 | Registry rows whose `added` is older than one year | INFO | List their `name`s as candidates to re-confirm — age alone never retires a rule |
 | All pass | OK | No action |
