@@ -9,28 +9,30 @@ description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 
 Generate under `docs/backlog/`:
 
-- `overview.md` — business requirements document (the planning deliverable)
-- `epics.md` — epics
-- `dod.md` — Definition of Done
-- `sprints/` — one file per sprint plus a status index (see below)
+- `overview-<scope-slug>.md` — business requirements document, one per planned scope (the planning deliverable). `<scope-slug>` is the scope name in kebab-case, 2–4 words (`checkout-coupons`). Re-planning the same scope updates its file; a second planned scope gets its own file; it never overwrites or merges into another scope's overview.
+- `epics-<scope-slug>.md` — epics of that scope
+- `dod.md` — Definition of Done, shared by every scope
+- `sprints/` — one file per sprint, named after its scope, plus one status index for all scopes (see below)
+
+Every per-scope file carries the same `<scope-slug>` as its overview. Legacy unscoped files (`overview.md`, `epics.md`, `sprints/sprint-<n>.md`) are kept as is and read as one more scope — never renamed or deleted.
 
 **Sprint files live in the `sprints/` subfolder**, never at the backlog root:
 
 ```
 docs/backlog/
-├── overview.md
-├── epics.md
+├── overview-<scope-slug>.md
+├── epics-<scope-slug>.md
 ├── dod.md
 └── sprints/
-    ├── sprints.md        ← index: summary + status of every sprint
-    ├── sprint-1.md
-    ├── sprint-2.md
+    ├── sprints.md                  ← index: every sprint of every scope + status
+    ├── <scope-slug>-sprint-1.md
+    ├── <scope-slug>-sprint-2.md
     └── ...
 ```
 
-### `overview.md`
+### `overview-<scope-slug>.md`
 ```markdown
-# Project: [Name]
+# Scope: [Name]
 
 ## Objective
 [One paragraph: what problem this solves, for whom, and the expected outcome]
@@ -80,7 +82,7 @@ A task is DONE when ALL of the following are true:
 - [ ] No regressions in adjacent features
 ```
 
-### `epics.md`
+### `epics-<scope-slug>.md`
 ```markdown
 # Epics
 
@@ -99,9 +101,9 @@ A task is DONE when ALL of the following are true:
 ...
 ```
 
-### `sprints/sprint-<n>.md`
+### `sprints/<scope-slug>-sprint-<n>.md`
 
-**One file per sprint**, in the `sprints/` subfolder: `sprints/sprint-1.md`, `sprints/sprint-2.md`, etc. Never merge multiple sprints into one file.
+**One file per sprint**, in the `sprints/` subfolder: `sprints/<scope-slug>-sprint-1.md`, `sprints/<scope-slug>-sprint-2.md`, etc. Numbering restarts at 1 for each scope. Never merge multiple sprints into one file.
 
 ```markdown
 # Sprint <n> — [Theme]
@@ -144,7 +146,7 @@ A wave starts only after every task in the previous wave is done.
 **Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
 **Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
 **Depends on**: [TASK-XXX or "none"]
-**Status**: [ ] Pending
+**Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; /devteam:sprint updates it -->
 
 **Description**:
 [What needs to be done — technical enough for a developer to start]
@@ -171,15 +173,15 @@ A wave starts only after every task in the previous wave is done.
 
 ### `sprints/sprints.md` — status index
 
-A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint and its status. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
+A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint of every scope and its status. An existing index without the Scope column gets it added in place, with `legacy` on the rows already there — never a rewritten table. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
 
 ```markdown
 # Sprints
 
-| Sprint | Theme | Goal (one line) | Status |
-|--------|-------|-----------------|--------|
-| [sprint-1](sprint-1.md) | [Theme] | [What it delivers] | Planned |
-| [sprint-2](sprint-2.md) | [Theme] | [What it delivers] | Planned |
+| Scope | Sprint | Theme | Goal (one line) | Status |
+|-------|--------|-------|-----------------|--------|
+| [scope-slug] | [sprint-1]([scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
+| [scope-slug] | [sprint-2]([scope-slug]-sprint-2.md) | [Theme] | [What it delivers] | Planned |
 ```
 
 Status values: **Planned → In progress → Done**.

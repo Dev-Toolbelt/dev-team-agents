@@ -16,7 +16,7 @@ depends_on: [] # other spec filenames this one needs, or leave empty
 As a [role], I want [capability], so that [outcome].
 
 ### Context
-[One or two sentences: what triggered this feature and how it fits the approved `overview.md` scope.]
+[One or two sentences: what triggered this feature and how it fits the approved scope overview (`docs/backlog/overview-<scope-slug>.md`).]
 
 ### Acceptance Criteria
 

@@ -82,7 +82,7 @@ In this mode the Execution Strategy Gate quiz is **skipped entirely** — resolv
 6. **Final notification** — notify only when implementation, review, QA, and the consolidated
    summary are all complete.
 
-> **Critical**: subagents have no shell access and cannot create worktrees or branches. The
+> **Critical**: a subagent cannot ask the user, so the worktree/branch decision is not its to make. The
 > worktree/branch MUST exist in the orchestrator's context before any subagent is spawned, and the
 > path MUST be passed in every spawn prompt.
 

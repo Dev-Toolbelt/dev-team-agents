@@ -29,6 +29,6 @@ Before acting on any significant request, verify it does not contradict:
 | `docs/development/adrs/` | Hard architectural decisions (these are especially binding) |
 | `docs/development/architecture.md` | System design, layer rules, tech stack decisions |
 | `docs/development/code-standards.md` | Coding patterns and anti-patterns |
-| `docs/backlog/sprint-*.md` | Scope of the current sprint (out-of-scope requests) |
+| `docs/backlog/sprints/*sprint-*.md` | Scope of the current sprint (out-of-scope requests) |
 
 A contradiction is only binding when the rule was **explicitly stated** in one of these sources — not inferred from code patterns alone. When in doubt, flag it.

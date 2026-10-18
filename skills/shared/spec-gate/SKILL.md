@@ -1,11 +1,11 @@
 ---
 name: spec-gate
-description: Spec layer between overview.md and sprints — testable criteria, auto contract gate.
+description: Spec layer between the scope overview and sprints — testable criteria, auto contract gate.
 ---
 
 # Spec Gate
 
-Sits between `docs/backlog/overview.md` (business scope) and `docs/backlog/sprints/` (execution
+Sits between `docs/backlog/overview-<scope-slug>.md` (business scope) and `docs/backlog/sprints/` (execution
 plan). One spec per feature/capability, written by `product-analyst`, in business language but with
 a testable acceptance format. It becomes the scope boundary every downstream agent reads instead of
 re-interpreting the overview or the sprint task description.
@@ -28,7 +28,7 @@ Structure from `templates/spec-template.md` (installed: `.dev-team-agents/templa
 - **User Story**: as a [role], I want [capability], so that [outcome]
 - **Acceptance Criteria**: one or more `Given / When / Then` blocks — this is the only place
   "done" is defined; nothing outside it is in scope
-- **Out of Scope**: explicit exclusions, same discipline as `overview.md`
+- **Out of Scope**: explicit exclusions, same discipline as the scope overview
 
 No stack, schema, or API shape in this file — that is the contract's job, not the spec's.
 
@@ -40,11 +40,11 @@ Immediately after `product-analyst` writes a spec, evaluate:
 touches.length > 1  OR  the spec introduces a new API/schema/integration point
 ```
 
-**True** → the command spawns `software-architect` automatically to write
-`<feature>-contract.md`. This does not require the user to ask for technical input — the gate
+**True** → the orchestrating main conversation spawns `software-architect` automatically to write
+`<feature>-contract.md` from `.dev-team-agents/templates/contract-template.md`. This does not require the user to ask for technical input — the gate
 replaces that dependency. `software-architect` writes **only** the interface: request/response
 shapes, schema fields, error format, and the technical dependency order between specs. It does not
-touch `overview.md`, does not restate the business rule, and does not make product decisions.
+touch the scope overview, does not restate the business rule, and does not make product decisions.
 
 **False** (single layer, no new integration surface) → skip the contract; the sprint task links the
 spec alone.

@@ -21,6 +21,18 @@ This applies to:
 
 ---
 
+## Sub-agent Question Relay
+
+A spawned sub-agent cannot reach the user: on Claude Code the question tool is absent from its tool list, and on every provider only its final message returns. So a sub-agent whose workflow needs a user decision or an approval does **not** ask — it relays.
+
+| Side | Rule |
+|---|---|
+| **Sub-agent** | When the question tool is not in its tool list, stop at the decision point and end the report with an `## Open Decisions` block: one numbered item per question, each with its options and a recommended default. Write nothing that depends on the answers. An approval gate (scope, plan, document review) is an Open Decision with Approve / Change options |
+| **Orchestrator** | Ask every item with `AskUserQuestion` in as few calls as the question tool allows, then continue the **same** sub-agent with the answers (`SendMessage` where available); without a continuation mechanism, re-spawn it with the original task plus the answered decisions. Never answer an item on the user's behalf |
+| **Loop** | Repeat until a report carries no `## Open Decisions` block. A report that asked in plain text instead is relayed the same way, never treated as approved |
+
+---
+
 ## "Other" Option Rule
 
 Include an **"Other"** option (with `description: "Type your own answer."`) whenever:
