@@ -44,12 +44,12 @@ class AdrGapCheckTest(StoreTestCase):
         text = (self.repo / "package.json").read_text(encoding="utf-8")
         (self.repo / "package.json").write_text(text.replace('"dependencies": {', '"dependencies": {\n    "%s": "1.0.0",' % name), encoding="utf-8")
 
-    def run_hook(self):
+    def run_hook(self, touched="package.json"):
         env = dict(
             os.environ,
             USER_DATA_DIR=str(self.state),
             DEVTEAM_TOUCHED_COMPUTED="1",
-            DEVTEAM_TOUCHED_PATHS="package.json",
+            DEVTEAM_TOUCHED_PATHS=touched,
         )
         env.pop("DEVTEAM_NO_CHANGES", None)
         result = subprocess.run(["bash", str(HOOK)], cwd=str(self.repo), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -88,6 +88,14 @@ class AdrGapCheckTest(StoreTestCase):
         self.assertEqual(victim.read_text(encoding="utf-8"), "mine\n")
         # Without a usable marker it keeps warning rather than going silent.
         self.assertEqual(self.run_hook()[0], 2)
+
+    def test_a_new_adr_in_either_directory_and_scheme_silences_it(self):
+        # new-adr.sh resolves docs/adr/ when a project keeps its series there, so a
+        # session that added `docs/adr/ADR-NNNN-*.md` did add an ADR.
+        self.add_dependency("left-pad")
+        for adr in ("docs/development/adrs/0001-use-x.md", "docs/adr/ADR-0042-use-x.md"):
+            with self.subTest(adr=adr):
+                self.assertEqual(self.run_hook(touched="package.json\n" + adr), (0, ""))
 
     def test_no_signal_no_warning(self):
         self.assertEqual(self.run_hook(), (0, ""))
