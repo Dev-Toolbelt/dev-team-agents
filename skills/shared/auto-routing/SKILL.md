@@ -1,6 +1,6 @@
 ---
 name: auto-routing
-description: CLAUDE.md devteam section — opt-out rules and auto-routing triggers.
+description: The devteam section in CLAUDE.md/AGENTS.md — routing triggers, opt-out, test gate.
 ---
 
 ## Instruction-File Template — `## dev-team-agents` Section
@@ -41,6 +41,7 @@ INACTIVE_AGENTS: [none|comma-separated agent names]
 | `ui-ux-designer` | design system, tokens, typography, UX flows, visual consistency — consultive alongside `frontend-developer` on visual decisions |
 | `database-specialist` | schema, migrations, queries, indexes, data model, caching layer |
 | `devops-specialist` | containers, CI/CD, deploy, infrastructure as code, cloud, monitoring |
+| `mobile-developer` | iOS, Android or cross-platform app code |
 
 ### Auto-Routing: Quality Gate
 
@@ -53,6 +54,20 @@ INACTIVE_AGENTS: [none|comma-separated agent names]
 | `security-specialist` | a security review is requested, or a release touches auth, payments or user data |
 | `qa-specialist` | behavior must be validated against acceptance criteria, after implementation |
 | `technical-writer` | documentation is requested, or after a significant change ships |
+| `seo-specialist` | a public, indexable page (site, landing, blog, store) was built or changed |
 
 All generated documents are in English unless a document says otherwise.
 ```
+
+## Test Gate
+
+`TESTS_REQUIRED` is the only key commands branch on, and the one most often read wrong. Resolve it this way, everywhere it is read:
+
+| Situation | Value |
+|-----------|-------|
+| The key is set in exactly one of `CLAUDE.md` / `AGENTS.md` (`## dev-team-agents` section) | That value. Never read `CLAUDE.md` alone: a Codex- or opencode-only project carries the section in `AGENTS.md` only |
+| Both files set it to the same value | That value |
+| Both files set it, to different values | A conflict between project sources — flag it through the Contradiction Guard (`skills/shared/project-context/SKILL.md` § Between project sources) and ask |
+| No section, or no key | `yes` — commands default to running tests |
+
+An agent spawned by a command uses the value the command resolved; it does not re-derive it.

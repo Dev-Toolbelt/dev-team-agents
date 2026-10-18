@@ -64,7 +64,7 @@ For each wave, before spawning:
 
 Spawn every task of the wave **in parallel** (one branch: one at a time, in the integration worktree). Each prompt carries the task's description and acceptance criteria, the spec and contract paths, `WORKTREE_PATH=<path>`, `BRANCH=<branch>`, the worktree rule of orchestration § Autonomous Sprint Protocol step 3, and: "Implement only what the linked spec covers (spec-gate § Scope Lock) and amend it per § Living Spec when reality diverges. Commit your work on BRANCH."
 
-Tests follow the project's `TESTS_REQUIRED` gate (`## dev-team-agents` in `CLAUDE.md` or `AGENTS.md`). When it is `yes` or absent: a `backend-developer` or `database-specialist` task with a spec runs spec-gate § Test-First Derivation (`backend-test-specialist` first); a `frontend-developer` task, or any backend task without a spec, gets its test specialist after the agent. Every other agent runs the tests covering what it touched, per the scoped-test-execution rule.
+Tests follow the project's `TESTS_REQUIRED` gate (`skills/shared/auto-routing/SKILL.md` § Test Gate). When it is `yes` or absent: a `backend-developer` or `database-specialist` task with a spec runs spec-gate § Test-First Derivation (`backend-test-specialist` first); a `frontend-developer` task, or any backend task without a spec, gets its test specialist after the agent. Every other agent runs the tests covering what it touched, per the scoped-test-execution rule.
 
 ## Step 5 — Wave gate
 

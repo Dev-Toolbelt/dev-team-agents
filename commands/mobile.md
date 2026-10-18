@@ -21,7 +21,7 @@ Phase 1 — spawn in parallel:
 
 Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Write tests **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. Write tests **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
 
 - For React Native / Expo (JS/TS) suites → spawn `frontend-test-specialist`.
 - For Flutter or native iOS/Android → the `mobile-developer` writes the platform-appropriate tests (e.g., `flutter test`, XCTest, Espresso) for the implemented changes.

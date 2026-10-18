@@ -15,7 +15,7 @@ If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-g
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate.
 
 **Frontend track** — always test-after, regardless of the gate below (visual/UX work does not benefit from test-first):
 - Phase 1 — spawn `frontend-developer` (implement client-side changes), `ui-ux-designer` (if visual/UX decisions are involved), `seo-specialist` (if the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md`)

@@ -15,7 +15,7 @@ If the bug links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-ga
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate.
 
 **If `TESTS_REQUIRED=no`:** Phase 1 — spawn based on where the bug lives (in parallel if both apply):
 - `backend-developer` — fix backend issues (spawn if the bug is in server-side code)

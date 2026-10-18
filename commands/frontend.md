@@ -22,7 +22,7 @@ Phase 1 — spawn in parallel:
 
 Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. Spawn the test-specialist below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely** and go straight to Phase 3.
 
 - `frontend-test-specialist` — write or update tests for the implemented changes
 

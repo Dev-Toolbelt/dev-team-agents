@@ -22,6 +22,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 **First thing**: check if tests are required for this project.
 
 Look for (in order):
+0. The `TESTS_REQUIRED` value the spawning command resolved; if none was handed over, resolve it per `skills/shared/auto-routing/SKILL.md` § Test Gate. `yes` settles it; `no` means no tests unless the user explicitly asks
 1. `CLAUDE.md` — explicit instruction about test culture or requirements
 2. `AGENTS.md` — test-related overrides
 3. Presence of `tests/` directory with meaningful content

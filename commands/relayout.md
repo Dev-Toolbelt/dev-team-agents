@@ -60,7 +60,7 @@ Also spawn if the target screen has a mobile counterpart in scope:
 
 Pass to every spawned agent: the resolved reference paths, the target screen path, and the design context from section 1.
 
-Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. If `TESTS_REQUIRED=yes` (default), the implementing agent(s) must run the project's existing tests for the touched screen per `skills/shared/scoped-test-execution/SKILL.md`; if `no`, skip and rely on the Phase 4 quality gate below.
+Resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. If `TESTS_REQUIRED=yes` (default), the implementing agent(s) must run the project's existing tests for the touched screen per `skills/shared/scoped-test-execution/SKILL.md`; if `no`, skip and rely on the Phase 4 quality gate below.
 
 ---
 
