@@ -163,7 +163,7 @@ This is the wiki's **read** path. Writing entries is `skills/shared/docs-sync/re
 
 Read each file that exists. Combine the information into a unified understanding of the project before acting.
 
-**Trivial-task exception**: when the task is confined to a single file with a small, well-specified change — the same bar as the Plan Mode "single-line typo fix" exception in `skills/shared/plan-mode/SKILL.md` — skip this loading order entirely and load only `CLAUDE.md` plus the target file. Fall back to the full order the moment the task turns out to touch more than one file or needs architectural context.
+**Trivial-task exception**: when the task qualifies as a **Small change** under `skills/shared/plan-mode/SKILL.md` § Plan Size (or is a typo fix that needs no plan at all), skip this loading order entirely and load only `CLAUDE.md` plus the target file. Fall back to the full order the moment the task stops qualifying — the same moment plan-mode's upgrade rule fires.
 
 **Focused tier**: between a Small change and the full order. It applies when the task stays inside **one layer or area** the request already names (one feature's backend, one screen, one script), raises no architectural question, and touches no public contract. Load:
 

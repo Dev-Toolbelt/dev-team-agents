@@ -30,13 +30,43 @@ A plan is required whenever a task involves:
 
 When in doubt: **write the plan**.
 
+### Plan Size
+
+A required plan comes in one of two sizes. Pick the size **before** writing it:
+
+| Size | Applies when | Format |
+|------|--------------|--------|
+| **Small change** | **Every** condition below holds | `plan-template.md` compact form |
+| **Full** | Any condition below fails, or you are unsure | `plan-template.md` full form |
+
+Small-change conditions — all of them, no exceptions:
+
+1. Touches exactly **one file**. A companion file the project's rules require (a translated README,
+   a changelog entry, a test) counts as a second file.
+2. The request already says **what** to change and **where** — no design choice is left to you.
+3. Adds no dependency, migration, or schema change.
+4. Changes no public contract: API, CLI flag, shared config key, exported interface, event or message shape.
+5. Needs no agent other than the one doing it. Agents that only review the finished change do not count.
+6. Is small enough to review at a glance — a handful of lines, not a rewrite of the file.
+
+A small-change plan follows the rest of this skill exactly as a full one does: same approval
+protocol, same Execution Strategy Gate when the agent mandates it. Two rules differ:
+
+- **Task List Mirroring** — one task, `Step 1: <the plan's Change line>`.
+- **Progress Reporting** — the closing message only; there is no per-step update.
+
+**Upgrade on contact.** The moment execution needs a second file, a decision, or anything that
+breaks a condition above, stop and follow § Replanning During Execution with a full plan. Its first
+row keeps the text of the existing `Step 1:` task unchanged; new rows continue from Step 2. Never
+finish a grown task under a small-change approval.
+
 ---
 
 ## Plan Format
 
 **Language:** Plans are presented to the user for approval — they are conversation items, not documents. Present plans in the user's preferred language from `.dev-team-agents/resolved/preferences.json` → `language` (default: English).
 
-Load `.dev-team-agents/templates/plan-template.md` and fill it in. That file is the canonical
+Load `.dev-team-agents/templates/plan-template.md` and fill in only the form § Plan Size picked. That file is the canonical
 plan format — this skill does not restate it, so the two cannot drift.
 
 Two rules the template encodes, restated here only because they change how you *execute*:
@@ -61,7 +91,7 @@ After presenting the plan:
 3. **Approval signals**: "approved", "go ahead", "proceed", "yes", "looks good", "do it", or selecting "Approved — proceed"
 4. **Rejection signals**: any feedback, correction, question, "no", or selecting "Adjust first" / "Cancel"
 
-On **rejection**: acknowledge the feedback, adjust the plan, re-present the full plan. Never partially execute before replanning.
+On **rejection**: acknowledge the feedback, adjust the plan, re-present the whole plan in its chosen size. Never partially execute before replanning.
 
 On **approval**: execute steps in order (agents with Execution Strategy Gate enabled MUST present the gate before executing). Report progress after each step per the **Progress Reporting** rule below. If execution reveals a problem that changes the plan, **stop and replan** before continuing.
 
