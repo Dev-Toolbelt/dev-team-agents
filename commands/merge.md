@@ -63,24 +63,24 @@ Ask via `AskUserQuestion`:
 
 ## Step 3 — Execute the chosen strategy
 
-Follow exactly what was confirmed in Step 2. For any path that includes rebase or merge conflicts, stop and hand resolution to the user — never force-resolve conflicts silently. For the worktree-teardown path, the dirty-worktree guard in `skills/shared/worktree/SKILL.md` is mandatory: if `git status --porcelain` inside the worktree is non-empty after the merge, abort teardown and ask the user (commit / discard / keep) instead of proceeding.
+**First, run the Step 4 learn-nudge check while the working branch is still checked out** (inside the worktree when one is used), so the learn commits land on the working branch and ride into `<target>` with the merge. Then follow exactly what was confirmed in Step 2. For any path that includes rebase or merge conflicts, stop and hand resolution to the user — never force-resolve conflicts silently. For the worktree-teardown path, the dirty-worktree guard in `skills/shared/worktree/SKILL.md` is mandatory: if `git status --porcelain` inside the worktree is non-empty after the merge, abort teardown and ask the user (commit / discard / keep) instead of proceeding.
 
 ---
 
 ## Step 4 — Nudge `/devteam:learn` if not run this session
 
-This is the canonical learn-nudge check — other commands reference it rather than restating it. Read the marker `/devteam:learn` writes (format `<unix-timestamp> <head-sha>`) from the checkout where learn ran — the worktree if one was used, else `$ROOT`:
+This is the canonical learn-nudge check — other commands reference it rather than restating it. In this command it runs once, from Step 3, before the merge — skip it when reached again after the merge; other commands run it at their own closing point. Read the marker `/devteam:learn` writes (format `<unix-timestamp> <head-sha>`) from the checkout where learn ran — the worktree if one was used, else `$ROOT`:
 
 ```bash
 cat .dev-team-agents/.learn-last-run "$ROOT/.dev-team-agents/.learn-last-run" 2>/dev/null
 git rev-parse <working-branch>
 ```
 
-If the marker is missing, or its `<head-sha>` differs from the working branch tip (commits landed since the last learn run), tell the user before finishing:
+If the marker is missing, or its `<head-sha>` differs from the working branch tip (commits landed since the last learn run), tell the user:
 
-> "This session hasn't run `/devteam:learn` since its last recorded commit — consider running it to capture decisions from this branch before they're lost. Run `/devteam:learn` now?"
+> "This session hasn't run the devteam `learn` command since its last recorded commit — consider running it to capture decisions from this branch before they're lost. Run the devteam `learn` command now? It captures and commits the docs, wiki entries and ADRs locally onto the current branch, without a second approval."
 
-Ask via `AskUserQuestion` (Yes / No). If yes, hand off by telling the user to invoke `/devteam:learn` (do not spawn it inline — it is a separate command with its own plan gate).
+Ask via `AskUserQuestion` (Yes / No). If yes, **run the devteam `learn` command's flow (`commands/learn.md`) with `--auto` inline, in this same turn** — `/devteam:learn --auto` on Claude Code and opencode, `$devteam-learn --auto` on Codex; follow that command, do not reimplement it. The Yes is the plan approval: never ask for it again and never stop to tell the user to invoke it — everything else follows that command's `--auto` semantics. The learn flow records the marker itself. If no, continue.
 
 ---
 

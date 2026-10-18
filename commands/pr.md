@@ -103,7 +103,7 @@ After `gh pr create` succeeds, apply the Session Summary Rule from `CLAUDE.md` r
 
 ## Post-create — Nudge `/devteam:learn` if not run this session
 
-Run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip. Hand off as that step says — never spawn `/devteam:learn` inline.
+Run the canonical learn-nudge check in `commands/merge.md` § Step 4, with the current `HEAD` as the working branch tip. On Yes, run the learn flow inline as that step says, then tell the user its commits are local and reach the PR only on the next push.
 
 ---
 
