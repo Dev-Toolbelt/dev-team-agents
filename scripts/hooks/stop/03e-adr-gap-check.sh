@@ -76,34 +76,9 @@ if [ "$NEW_DEP" = 1 ] || [ "$NEW_MIGRATION" = 1 ] || [ "$NEW_PROVIDER_CONFIG" = 
             done
         } | git hash-object --stdin 2>/dev/null || true
     )"
-    MARKER=""
-    if [ -n "$SIGNATURE" ]; then
-        # shellcheck source=scripts/hooks/lib/data-dirs.sh
-        . "$LIB_DIR/data-dirs.sh"
-        MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)" || MAIN_REPO_ROOT="$REPO_ROOT"
-        STATE_DIR="$(devteam_state_dir "${MAIN_REPO_ROOT:-$REPO_ROOT}" 2>/dev/null || true)"
-        [ -n "$STATE_DIR" ] && MARKER="$STATE_DIR/.adr-gap-warned"
-    fi
-    # A symlinked marker is never read or written: a cloned repository could commit one
-    # pointing at a file of the user's. Without a usable marker the hook simply warns.
-    if [ -n "$MARKER" ] && [ -L "$MARKER" ]; then
-        MARKER=""
-    fi
-    if [ -n "$MARKER" ] && [ -f "$MARKER" ] && [ "$(cat "$MARKER" 2>/dev/null)" = "$SIGNATURE" ]; then
-        exit 0
-    fi
-    if [ -n "$MARKER" ] && mkdir -p "$(dirname "$MARKER")" 2>/dev/null; then
-        # Written beside the marker and renamed over it: `mv` replaces the entry itself,
-        # so even a symlink planted between the check and the write is not followed.
-        TMP_MARKER="$(mktemp "$MARKER.XXXXXX" 2>/dev/null || true)"
-        if [ -n "$TMP_MARKER" ]; then
-            if printf '%s\n' "$SIGNATURE" 2>/dev/null >"$TMP_MARKER"; then
-                mv -f "$TMP_MARKER" "$MARKER" 2>/dev/null || rm -f "$TMP_MARKER"
-            else
-                rm -f "$TMP_MARKER"
-            fi
-        fi
-    fi
+    # shellcheck source=scripts/hooks/lib/warn-once.sh
+    . "$LIB_DIR/warn-once.sh"
+    devteam_warn_once .adr-gap-warned "$SIGNATURE" || exit 0
     cat >&2 <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
