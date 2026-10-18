@@ -28,10 +28,11 @@ Read the sprint file. For every task not yet `[x] Done`, check:
 
 - `Agent` is a name from the orchestration Agent Roster; `Wave` names a row of the Parallel Execution Plan.
 - `Depends on` points at a task in an earlier wave, or at a task of another sprint that is `[x] Done` there and already in the base branch.
-- `Spec` names a file that exists — plus `<feature>-contract.md` when the spec trips § Gate Rule of `spec-gate` — or is the template's `none — <reason>` form, which runs test-after.
+- `Spec` names a file that exists — plus `<feature>-contract.md` when the spec trips § Gate Rule of `spec-gate` — or is the template's `none — <reason>` form, which runs test-after. A linked spec is not `draft` (spec-gate § Spec Status).
+- `bash .dev-team-agents/scripts/spec-lint.sh` reports no ERROR naming this sprint file or one of its specs (a `Covers` ID the spec does not define, a broken `depends_on`); errors in unrelated specs are reported, not blocking.
 - `Worktree branch` passes `git check-ref-format --branch`, matches `^[a-z0-9][a-z0-9._/-]*$`, contains no `..`, and is unique in the sprint.
 
-Collect every failure into one list and stop on it, asking **Fix the sprint file with `product-analyst`** / **Stop**. Never guess a missing agent, spec, or branch.
+Collect every failure into one list and stop on it, asking **Fix the sprint file with `product-analyst`** / **Stop** — and, when a spec is `draft`, **Approve the spec** / **Review it with `/devteam:plan`** instead. Never guess a missing agent, spec, or branch.
 
 Worktrees start from committed history, so the sprint file, its specs and contracts must be committed on the base branch. If any is uncommitted, ask **Commit the planning docs first (Recommended)** — runs the `/devteam:commit` flow on those paths only — / **Stop**.
 
@@ -62,9 +63,9 @@ For each wave, before spawning:
 1. Mark its tasks `[~] In progress` in the sprint file, and the sprint `In progress` in `sprints.md` — both in the integration worktree, committed there.
 2. Worktree per task → one worktree per task from `sprint/<scope-slug>-<n>`, named from the task's `Worktree branch`, per the worktree skill's setup flow. A task resumed `[~] In progress` reuses its existing branch and worktree; a task whose branch is already in `git branch --merged sprint/<scope-slug>-<n>` is marked `[x] Done` instead of redone.
 
-Spawn every task of the wave **in parallel** (one branch: one at a time, in the integration worktree). Each prompt carries the task's description and acceptance criteria, the spec and contract paths, `WORKTREE_PATH=<path>`, `BRANCH=<branch>`, the worktree rule of orchestration § Autonomous Sprint Protocol step 3, and: "Implement only what the linked spec covers (spec-gate § Scope Lock) and amend it per § Living Spec when reality diverges. Commit your work on BRANCH."
+Spawn every task of the wave **in parallel** (one branch: one at a time, in the integration worktree). Each prompt carries the task's description, its `Covers` scenario IDs (its own acceptance criteria only when `Spec` is none), the spec and contract paths, `WORKTREE_PATH=<path>`, `BRANCH=<branch>`, the worktree rule of orchestration § Autonomous Sprint Protocol step 3, and: "Implement only the scenarios in Covers (spec-gate § Scope Lock) and amend it per § Living Spec when reality diverges. Commit your work on BRANCH."
 
-Tests follow the project's `TESTS_REQUIRED` gate (`skills/shared/auto-routing/SKILL.md` § Test Gate). When it is `yes` or absent: a `backend-developer` or `database-specialist` task with a spec runs spec-gate § Test-First Derivation (`backend-test-specialist` first); a `frontend-developer` task, or any backend task without a spec, gets its test specialist after the agent. Every other agent runs the tests covering what it touched, per the scoped-test-execution rule.
+Tests follow the project's `TESTS_REQUIRED` gate (`skills/shared/auto-routing/SKILL.md` § Test Gate). When it is `yes` or absent, every spec-linked task runs spec-gate § Test-First Derivation on its `Covers` scenarios — the track's test author first (`backend-test-specialist`, `frontend-test-specialist`, or `mobile-developer` for Flutter/native), then the task's agent; work outside the scenarios (visual, styling), and any task without a spec, gets its test specialist after the agent. Every other agent runs the tests covering what it touched, per the scoped-test-execution rule.
 
 ## Step 5 — Wave gate
 
@@ -79,7 +80,7 @@ A task that is not merged keeps out of later waves every task depending on it, d
 
 ## Step 6 — Close
 
-1. All tasks done → set the sprint `Done` in `sprints.md` (integration worktree). Otherwise leave it `In progress` and list what is left; running `/devteam:sprint` again resumes there.
+1. Each task marked Done ran the `implemented` check of spec-gate § Task Resolution. All tasks done → set the sprint `Done` in `sprints.md` (integration worktree). Otherwise leave it `In progress` and list what is left; running `/devteam:sprint` again resumes there.
 2. Consolidated summary per the orchestration skill — the Agents table filled from returned banners only.
 3. **Visual Check Gate** from the interaction-patterns skill when a task changed UI. The Review Next-Step Gate is skipped: every wave was already reviewed.
 4. Write the session summary entry (`<memory-dir>/session-summary.md`, `skills/shared/project-context/SKILL.md` § Memory Layers) and run the `skills/shared/feature-learn/SKILL.md` promotion pass.
