@@ -15,9 +15,7 @@ If the task links a spec (`docs/specs/<feature>.md`) or names a sprint task (`TA
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate.
-
-**If `TESTS_REQUIRED=yes` AND a spec was resolved:** test-first for the spec's behavioral scenarios, per the loaded spec-gate skill's § Test-First Derivation — Phase 0 spawns `frontend-test-specialist` alone to derive failing tests from the resolved scenarios and commit them red; Phase 1 then implements until they are green. Visual and styling work outside the scenarios stays test-after in Phase 2.
+**If the Phase 2 test gate below resolves `TESTS_REQUIRED=yes` AND a spec was resolved:** test-first for the spec's behavioral scenarios, per the loaded spec-gate skill's § Test-First Derivation — Phase 0 spawns `frontend-test-specialist` alone to derive failing tests from the resolved scenarios and commit them red; Phase 1 then implements until they are green. Visual and styling work outside the scenarios stays test-after in Phase 2.
 
 Phase 1 — spawn in parallel:
 - `frontend-developer` — implement the frontend changes

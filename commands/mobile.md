@@ -9,7 +9,7 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 If the task links a spec (`docs/specs/<feature>.md`) or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md` and resolve it per § Task Resolution before anything else — a `draft` spec stops here per § Spec Status; a resolved task is marked `[~] In progress` when its agents are spawned. Every spawned agent below treats the resolved scenarios as the implementation boundary and asks rather than assumes when something isn't covered.
 
-**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. **If `yes` AND a spec was resolved:** test-first per the loaded spec-gate skill's § Test-First Derivation — Phase 0 derives failing tests from the resolved scenarios and commits them red (React Native / Expo → `frontend-test-specialist`; Flutter or native → `mobile-developer` in a tests-only spawn); Phase 1 then implements until they are green, and Phase 2 covers only what they do not.
+**If the Phase 2 test gate below resolves `TESTS_REQUIRED=yes` AND a spec was resolved:** test-first per the loaded spec-gate skill's § Test-First Derivation — Phase 0 derives failing tests from the resolved scenarios and commits them red (React Native / Expo → `frontend-test-specialist`; Flutter or native → `mobile-developer` in a tests-only spawn); Phase 1 then implements until they are green, and Phase 2 covers only what they do not.
 
 ---
 
