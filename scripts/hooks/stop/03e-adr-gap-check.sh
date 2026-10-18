@@ -37,9 +37,9 @@ fi
 # `NNNN-slug.md`, so a pattern requiring the prefix matched no real filename and this
 # escape hatch could never fire. The hook then warned about a missing ADR at the very
 # session that had just added one — a false positive aimed at the person who did the
-# right thing. `scripts/new-adr.sh` (see `adr_files`) owns the scheme list; keep this
-# in step with it.
-if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE 'docs/development/adrs/(adr-)?[0-9]+.*\.md$'; then
+# right thing. `scripts/new-adr.sh` (see `adr_files` and the ADR_DIR resolution) owns
+# the scheme list and the two directories; keep this in step with it.
+if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE '(^|/)docs/(development/adrs|adr)/((adr|ADR)-)?[0-9]+[^/]*\.md$'; then
     exit 0
 fi
 
@@ -86,7 +86,7 @@ if [ "$NEW_DEP" = 1 ] || [ "$NEW_MIGRATION" = 1 ] || [ "$NEW_PROVIDER_CONFIG" = 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  This session touched a signal that often warrants an ADR
  (new dependency, schema migration, or provider config)
- but added no new file under docs/development/adrs/.
+ but added no new ADR file (docs/development/adrs/ or docs/adr/).
 
  This is a heuristic, not a rule — false positives are
  expected. If this decision is hard to reverse, affects
