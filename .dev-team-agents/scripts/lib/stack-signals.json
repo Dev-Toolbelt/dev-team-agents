@@ -1,0 +1,101 @@
+{
+  "_comment": "Canonical signal-to-stack table. Read by scripts/lib/devteam/detect.py and described by skills/shared/stack-detection/SKILL.md; edit rows here, never in the skill. Order matters: it breaks ties when two stacks have the same number of source files. A stack matches when ANY of its `signals` matches. Signal kinds: `all_files` (every listed file exists at the root, minus any `none_files`), `glob` (a non-recursive pattern relative to the root), `file_contains` ({file, text}: the file exists at the root and contains the text). `extensions` count the stack's source files when several stacks match and the largest wins.",
+  "stacks": [
+    {
+      "name": "Python",
+      "extensions": [".py"],
+      "signals": [
+        {"all_files": ["pyproject.toml"]},
+        {"all_files": ["requirements.txt"]},
+        {"all_files": ["setup.py"]},
+        {"glob": "*.py"}
+      ]
+    },
+    {
+      "name": "TypeScript/Node.js",
+      "extensions": [".ts", ".tsx"],
+      "signals": [
+        {"all_files": ["package.json", "tsconfig.json"]},
+        {"glob": "src/*.ts"},
+        {"glob": "src/*.tsx"}
+      ]
+    },
+    {
+      "name": "JavaScript/Node.js",
+      "extensions": [".js", ".jsx", ".mjs", ".cjs"],
+      "signals": [
+        {"all_files": ["package.json"], "none_files": ["tsconfig.json"]},
+        {"glob": "src/*.js"}
+      ]
+    },
+    {
+      "name": "Rust",
+      "extensions": [".rs"],
+      "signals": [{"all_files": ["Cargo.toml"]}]
+    },
+    {
+      "name": "PHP",
+      "extensions": [".php"],
+      "signals": [
+        {"all_files": ["composer.json"]},
+        {"glob": "*.php"},
+        {"glob": "src/*.php"}
+      ]
+    },
+    {
+      "name": "Ruby",
+      "extensions": [".rb"],
+      "signals": [
+        {"all_files": ["Gemfile"]},
+        {"glob": "app/*.rb"}
+      ]
+    },
+    {
+      "name": "Go",
+      "extensions": [".go"],
+      "signals": [{"all_files": ["go.mod"]}]
+    },
+    {
+      "name": "Java",
+      "extensions": [".java"],
+      "signals": [
+        {"all_files": ["pom.xml"]},
+        {"all_files": ["build.gradle"]},
+        {"glob": "src/*.java"}
+      ]
+    },
+    {
+      "name": "Kotlin",
+      "extensions": [".kt", ".kts"],
+      "signals": [
+        {"all_files": ["build.gradle.kts"]},
+        {"glob": "src/*.kt"}
+      ]
+    },
+    {
+      "name": "C#/.NET",
+      "extensions": [".cs"],
+      "signals": [
+        {"glob": "*.csproj"},
+        {"glob": "*.sln"},
+        {"all_files": ["Program.cs"]}
+      ]
+    },
+    {
+      "name": "Flutter/Dart",
+      "extensions": [".dart"],
+      "signals": [
+        {"all_files": ["pubspec.yaml"]},
+        {"glob": "lib/*.dart"}
+      ]
+    },
+    {
+      "name": "React Native",
+      "extensions": [".tsx", ".jsx"],
+      "signals": [
+        {"file_contains": {"file": "app.json", "text": "expo"}},
+        {"file_contains": {"file": "package.json", "text": "react-native"}}
+      ]
+    }
+  ]
+}

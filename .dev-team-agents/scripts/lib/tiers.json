@@ -1,0 +1,63 @@
+{
+  "$schema": "internal://tiers.json",
+  "_comment": "Canonical tier → provider model id map. To add a new provider, add a column to each tier entry (and an effort entry if applicable). Source agents/commands only declare their tier; the renderer looks the model id up here.",
+  "_claude_note": "The `claude` column holds Claude Code model ALIASES (opus/sonnet/haiku), not pinned model ids. Claude Code resolves an alias to the current model of that family, so the column never goes stale on a model launch — pinned ids did, which is why they were replaced. This value is mirrored into each agent's `model:` frontmatter key and into its run-banner row; helpers/agent-lint.sh fails on any drift between the three.",
+  "_claude_resolves_to": "As of 2026-07-31: opus → Claude Opus 5 ($5/$25 per MTok) · sonnet → Claude Sonnet 5 ($3/$15, introductory $2/$10 through 2026-08-31) · haiku → Claude Haiku 4.5 ($1/$5, 200K context vs 1M on the others).",
+  "tiers": {
+    "reasoning": {
+      "_roles": "architecture, planning, refactoring, security analysis, onboarding decisions",
+      "claude": "opus",
+      "codex": "openai/gpt-5.6-sol",
+      "opencode": "opencode-go/qwen3.7-plus"
+    },
+    "backend-exec": {
+      "_roles": "backend implementation, backend review, code review, database, devops, qa, mobile, backend tests",
+      "claude": "sonnet",
+      "codex": "openai/gpt-5.6-terra",
+      "opencode": "opencode-go/kimi-k2.7-code"
+    },
+    "frontend": {
+      "_roles": "frontend implementation, frontend review, frontend tests, ui/ux design",
+      "claude": "sonnet",
+      "codex": "openai/gpt-5.6-terra",
+      "opencode": "opencode-go/kimi-k2.6"
+    },
+    "repetitive": {
+      "_roles": "doc generation, changelogs, release notes, boilerplate, high-volume low-judgment tasks",
+      "claude": "haiku",
+      "codex": "openai/gpt-5.6-luna",
+      "opencode": "opencode-go/kimi-k2.5"
+    }
+  },
+  "effort": {
+    "_comment": "Per-tier per-provider effort/variant value injected into the provider's native effort field. An omitted provider key means that tier does not set effort for that provider.",
+    "_claude_note": "Claude Code DOES support a per-subagent `effort:` frontmatter key (low/medium/high/xhigh/max) — an earlier revision of this file wrongly claimed it had no effort concept. It is set deliberately for `repetitive` only: that tier is bounded, low-judgment work where `low` is a clear win. The other tiers omit it on purpose, because the key OVERRIDES the session's effort level — setting it everywhere would silently undo a user who lowered effort for cost or latency. Omitted = inherits the session, which is the right default.",
+    "reasoning": {
+      "codex": "high",
+      "opencode": "high"
+    },
+    "backend-exec": {
+      "codex": "medium",
+      "opencode": "default"
+    },
+    "frontend": {
+      "codex": "medium",
+      "opencode": "default"
+    },
+    "repetitive": {
+      "claude": "low",
+      "codex": "low",
+      "opencode": "low"
+    }
+  },
+  "agent_effort": {
+    "_comment": "Per-agent effort override, keyed by agent name then provider. Takes precedence over the tier-level `effort` map above, on every provider listed in the entry. Exists because effort tracks how much a role needs to REASON, which does not always follow the tier that picks its model: the five agents below carry detailed instructions and work largely to spec, so the extra exploration a higher level buys does not pay for itself. A provider omitted from an entry falls back to its tier level.",
+    "_why_not_security_specialist": "security-specialist is deliberately absent. Low effort means fewer, more consolidated tool calls and less exploration before answering — in a security audit that exploration is the product, and cutting it is how a vulnerability goes unreported. Do not add it here without a specific reason.",
+    "_why_qa_specialist": "qa-specialist IS here, and the contrast with the reviewers and security-specialist above is the point — the line is not 'does this role inspect code', it is 'is the target of the inspection already stated'. QA validates observable behavior against acceptance criteria that were written before it ran: the target is given, and the work is checking reality against it. Code review and security audit have the opposite shape — what they are looking for is precisely what nobody wrote down, so the exploration low effort cuts is the deliverable itself. Use that test before adding any agent below: if the agent is handed what to check, low is safe; if the agent's job is to discover what should have been checked, it is not.",
+    "backend-test-specialist": { "claude": "low", "codex": "low", "opencode": "low" },
+    "frontend-test-specialist": { "claude": "low", "codex": "low", "opencode": "low" },
+    "database-specialist": { "claude": "low", "codex": "low", "opencode": "low" },
+    "devops-specialist": { "claude": "low", "codex": "low", "opencode": "low" },
+    "qa-specialist": { "claude": "low", "codex": "low", "opencode": "low" }
+  }
+}

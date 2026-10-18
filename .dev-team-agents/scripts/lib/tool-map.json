@@ -1,0 +1,81 @@
+{
+  "$schema": "internal://tool-map.json",
+  "_comment": "Per-provider tool-name rewrite rules (tool_rewrites: renamed in the body; tool_unavailable: Claude-only tools with no equivalent, replaced by a descriptive phrase so no wrong name is emitted; path_rewrites: prefix swaps) + idiom translation notes applied to agent and command bodies at render time. Source bodies use Claude Code tool names (capitalized) and Claude idioms (e.g. 'Load skills/X/SKILL.md', 'spawn the agent at .claude/agents/dev-team/X.md'). The renderer uses tool_rewrites to describe the tool-name mapping, and idiom_notes to describe the brighter conventions for skill loading and subagent spawning.",
+  "providers": {
+    "claude": {
+      "_comment": "Identity — source already uses Claude Code tool names and idioms.",
+      "tool_rewrites": {},
+      "idiom_notes": [],
+      "path_rewrites": {}
+    },
+    "opencode": {
+      "_comment": "opencode exposes lowercase tool names; the `task` tool spawns subagents; `question` is the quiz tool. Read/Write/Edit/Glob/Grep/Bash stay lowercase. Skills are loaded via the `skill` tool named `SKILL.md` filename form (e.g. `skill({ name: 'reviewer-mindset' })`). Subagents are spawned via `task({ name: '<agent-name>' })` — no path arg, the name only.",
+      "tool_rewrites": {
+        "AskUserQuestion": "question",
+        "Task": "task",
+        "TodoWrite": "todowrite",
+        "WebSearch": "websearch",
+        "WebFetch": "webfetch"
+      },
+      "_unchanged": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Bash"
+      ],
+      "idiom_notes": [
+        "· **Skill loading.** When the body says `Load skills/<category>/<name>/SKILL.md`, invoke the opencode `skill` tool with the skill's folder name, e.g. `skill({ name: '<name>' })`. The skill body lives at `.opencode/skills/dev-team-agents/<category>/<name>/SKILL.md` and opencode resolves it by name.",
+        "· **Subagent spawn.** When the body says `spawn the agent at .claude/agents/dev-team/<X>.md`, treat it as `task({ name: '<X>' })` in opencode — subagents are registered as `.opencode/agents/<X>.md` and resolved by name only, no path.",
+        "· **Project context paths.** References like `docs/`, `.dev-team-agents/user-data/preferences.json`, `.dev-team-agents/scripts/...` are real paths materialized at install time; access them with the `read` tool the same way Claude would."
+      ],
+      "tool_unavailable": {
+        "ScheduleWakeup": "a deferred re-check (opencode has no scheduled-wakeup tool; re-check on the next user turn)",
+        "TaskList": "the spawned `task` result",
+        "TaskGet": "the spawned `task` result",
+        "TaskOutput": "the spawned `task` result",
+        "SendMessage": "a follow-up `task` call to the same agent"
+      },
+      "path_rewrites": {}
+    },
+    "codex": {
+      "_comment": "Codex surfaces differ between CLI, app, and evolving runtime builds. The renderer therefore maps Claude idioms to Codex concepts, not to a brittle single tool roster. AskUserQuestion maps to the structured_choice phrase (request_user_input, or request_user_input_async where the surface lists that); it is not pinned to Plan mode. Plan approvals and finite-choice decisions are user decisions, not permission or sandbox escalations. The rendered fallback is command-specific and applies only when neither tool is listed in the current turn: operational commands ask in conversation as a numbered list; plan-first commands keep the /plan retry requirement. Skills are read as files at .dev-team-agents/skills/<category>/<name>/SKILL.md.",
+      "structured_choice": "Codex's structured user-input tool (`request_user_input`, or `request_user_input_async` where the current surface lists that instead)",
+      "tool_rewrites": {
+        "AskUserQuestion": "request_user_input",
+        "Task": "spawn_agent",
+        "TodoWrite": "update_plan",
+        "WebSearch": "WebSearch",
+        "WebFetch": "WebSearch",
+        "Glob": "Bash",
+        "Grep": "Bash"
+      },
+      "_unchanged": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash"
+      ],
+      "idiom_notes": [
+        "· **Codex-native equivalents.** Use the file, shell/search, subagent, plan/todo, and web tools available in the current Codex surface. Tool names can differ between CLI, app, and newer runtime builds; prefer the current-session equivalent over the literal Claude name in the source body. When the source body calls for a structured user-choice step, use {structured_choice}.",
+        "· **Structured choices are user decisions.** Plan approvals and finite-choice questions in these instructions are decisions for the user, not permission or sandbox escalations. The fallback is command-specific and applies only when neither tool is listed in the current turn: operational commands ask the same question directly in conversation as a numbered list, preserving the same options and recommended path; plan-first commands keep the `/plan` retry requirement.",
+        "· **Skill loading.** When the body says `Load skills/<name>/SKILL.md`, open and read `.dev-team-agents/skills/<name>/SKILL.md` or the matching category path with the current file-read tool.",
+        "· **Subagent spawn.** When the body directs you to spawn an agent, use the current Codex subagent mechanism to invoke the agent defined at `.codex/agents/<name>.toml`. Resolve agents by name, not by a Claude path.",
+        "· **Project context paths.** References like `docs/some-file.md`, `.dev-team-agents/user-data/preferences.json`, and `.dev-team-agents/scripts/...` are real files. Read them with the current file-read tool.",
+        "· **Plan gate.** For complex or architectural tasks, use Codex's plan mode or the current-session planning mechanism. Only commands whose rendered policy marks structured choices as required should force the task back to `/plan`.",
+        "· **Task arguments.** `$ARGUMENTS` in this prompt = the user's free-form input after the slash command. Use it as the task description."
+      ],
+      "tool_unavailable": {
+        "ScheduleWakeup": "a deferred re-check (Codex has no scheduled-wakeup tool; re-check on the next user turn)",
+        "TaskList": "the current-session subagent status check",
+        "TaskGet": "the current-session subagent status check",
+        "TaskOutput": "the current-session subagent status check",
+        "SendMessage": "the current-session follow-up to the existing subagent"
+      },
+      "path_rewrites": {
+        ".claude/agents/dev-team/": ".codex/agents/"
+      }
+    }
+  }
+}

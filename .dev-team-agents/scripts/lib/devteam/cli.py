@@ -1,0 +1,2533 @@
+"""Argument parsing and the subcommand table.
+
+Every handler returns ``(payload, human)``: the JSON body and a terminal
+rendering of the same facts. Nothing prints directly, so the ``--json`` contract
+cannot be broken by a stray ``print``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import sys
+import time
+from pathlib import Path
+
+from . import auth, bind as bind_module
+from . import auth_gate as gate
+from . import detect
+from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import secrets as secrets_module
+from .errors import ConflictError, DevteamError, EnvError, UsageError
+from .console import stdin_is_console as _stdin_is_console
+from .output import Emitter
+
+PROGRAM = "devteam"
+
+
+class _Parser(argparse.ArgumentParser):
+    """An ``ArgumentParser`` that routes its own errors through the CLI contract.
+
+    argparse calls ``sys.exit(2)`` itself, so a bad flag printed usage text on
+    stderr and **nothing** on stdout — breaking the documented promise that
+    ``--json`` always emits exactly one document, on the paths a client is most
+    likely to hit (`--mode bogus`, `--provider bogus`, a missing `--from`).
+    """
+
+    def error(self, message):
+        raise UsageError(message, hint="Run `devteam --help` or `devteam <command> --help`.")
+
+    def exit(self, status=0, message=None):
+        if status:
+            raise UsageError((message or "").strip() or "invalid arguments")
+        raise _HelpRequested()
+
+
+class _HelpRequested(Exception):
+    """``--help`` printed its text; exit cleanly without an error payload."""
+
+
+def _short(project_id):
+    return project_id.split("-")[0]
+
+
+def _table(rows, headers):
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(str(cell)))
+    out = ["  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)).rstrip()]
+    out.append("  ".join("-" * widths[i] for i in range(len(headers))))
+    for row in rows:
+        out.append("  ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row)).rstrip())
+    return "\n".join(out)
+
+
+def cmd_path(args, emitter):
+    payload = paths.describe()
+    human = "\n".join(
+        "{:<20} {}".format(key, value) for key, value in payload.items() if value is not None
+    )
+    return payload, human
+
+
+def cmd_version(args, emitter):
+    # The `compat` block is what ADR-0011's "compatibility is declared, not assumed"
+    # costs: a client — the desktop app is the first — reads the shape numbers before
+    # it writes, and degrades to read-only when the store carries one it does not
+    # understand. It lives on `version` because that is the call a client makes first.
+    payload = {
+        "current": versions.current(),
+        "installed": versions.installed(),
+        "core": str(paths.core_dir()),
+        "compat": compat.describe(),
+    }
+    schemas = payload["compat"]["store_schemas"]
+    human = "\n".join(
+        [
+            "current: {}".format(payload["current"] or "(none)"),
+            "installed: {}".format(", ".join(payload["installed"]) or "(none)"),
+            "json contract: {}".format(payload["compat"]["json_contract"]),
+            "store shapes: {}".format(
+                ", ".join("{}={}".format(k, schemas[k]) for k in sorted(schemas))
+            ),
+        ]
+    )
+    return payload, human
+
+
+def cmd_compat(args, emitter):
+    # ADR-0011 named this the missing enforcement point: `compat.unsupported_by()`
+    # implemented the comparison but had no caller outside its tests, so "the app
+    # degrades to read-only" had nothing that actually asked the question. This is
+    # that caller — a client states what it understands and gets back a boolean it
+    # can branch on, computed by the framework rather than re-derived per client.
+    description = compat.describe()
+    payload = {
+        "json_contract": description["json_contract"],
+        "min_app_version": description["min_app_version"],
+        "store_schemas": description["store_schemas"],
+        "client_schemas": None,
+        "may_write": None,
+        "unsupported": {},
+    }
+
+    unsupported = {}
+    parsed = None
+    if args.client is not None:
+        parsed = compat.parse_client_schemas(args.client, "--client")
+    elif args.client_file is not None:
+        # The label names the flag, not just the path: `--client-file /nope/x.json could
+        # not be read`. That attribution was lost when this call site stopped carrying its
+        # own reader, and it is the exact property `compat`'s docstring argues for.
+        parsed = compat.load_client_schemas(
+            args.client_file, source="--client-file {}".format(args.client_file)
+        )
+    else:
+        # Neither flag: fall back to the global declaration seam, so a client that
+        # exported `DEVTEAM_CLIENT_SCHEMAS` once gets `may_write` from a bare
+        # `devteam compat` instead of having to restate the same file in a second flag
+        # form. An explicit `--client`/`--client-file` outranks it — more specific wins,
+        # the same precedence the seam itself uses between flag and variable.
+        declaration = compat.client_declaration(
+            getattr(args, "client_schemas", None), os.environ
+        )
+        if declaration is not None:
+            parsed = declaration.schemas
+
+    if parsed is not None:
+        unsupported = compat.unsupported_by(parsed)
+        payload["client_schemas"] = parsed
+        payload["unsupported"] = unsupported
+        # A boolean the client can branch on directly, rather than inferring the
+        # verdict from whether `unsupported` happens to be empty — inference is how
+        # a client gets exactly this backwards.
+        payload["may_write"] = not unsupported
+
+    lines = [
+        "json contract: {}".format(payload["json_contract"]),
+        "min app version: {}".format(payload["min_app_version"] or "(none asserted)"),
+        "store shapes: {}".format(
+            ", ".join(
+                "{}={}".format(k, payload["store_schemas"][k])
+                for k in sorted(payload["store_schemas"])
+            )
+        ),
+    ]
+    if payload["client_schemas"] is not None:
+        if payload["may_write"]:
+            lines.append("may_write: yes — this client understands every shape the store uses")
+        else:
+            lines.append("may_write: no — upgrade the client before it writes to this store")
+            for name in sorted(unsupported):
+                info = unsupported[name]
+                lines.append(
+                    "  {:<16} store={} client={}".format(name, info["store"], info["client"])
+                )
+    return payload, "\n".join(lines)
+
+
+def cmd_store_list(args, emitter):
+    installed = versions.installed()
+    active = versions.current()
+    pinned = versions.pinned_versions()
+    rows = [
+        (v, "current" if v == active else "", "pinned" if v in pinned else "") for v in installed
+    ]
+    payload = {"installed": installed, "current": active, "pinned": sorted(pinned)}
+    human = _table(rows, ["VERSION", "ACTIVE", "PINNED"]) if rows else "no version installed"
+    return payload, human
+
+
+def cmd_store_install(args, emitter):
+    version = versions.install_from_tree(
+        args.source, version=args.version, force=args.force, make_current=args.activate
+    )
+    payload = {"version": version, "current": versions.current(), "source": str(Path(args.source).resolve())}
+    return payload, "installed {} into the core (current: {})".format(version, payload["current"])
+
+
+def cmd_store_use(args, emitter):
+    versions.set_current(args.version)
+    return {"current": args.version}, "current = {}".format(args.version)
+
+
+def cmd_store_gc(args, emitter):
+    result = versions.gc(dry_run=not args.apply)
+    if args.apply:
+        human = "removed: {}".format(", ".join(result["removed"]) or "(nothing)")
+    else:
+        human = "would remove: {}\nkept: {}\n(pass --apply to remove)".format(
+            ", ".join(result["would_remove"]) or "(nothing)", ", ".join(result["kept"])
+        )
+    return result, human
+
+
+def cmd_bind(args, emitter):
+    # Here, not in `bind_module.bind()`: `sync`, `sync --all` and `migrate` all call
+    # that function, and a refusal there would stop a project that was already bound
+    # over a v2 install from ever syncing again. Only a bind the user asked for is
+    # refused. Binding over a v2 install used to succeed — it adopted the old relative
+    # links and left the vendored tree tracked in git, where `doctor` could no longer
+    # see it. `--mode vendored` is let through: that path already quarantines any
+    # existing tree before re-vendoring.
+    #
+    # The pre-v2.1.0 shape, `.claude/dev-team-agents/`, is refused in every mode: no
+    # mode moves it, and its committed links collide with the ones any bind writes.
+    root = project.resolve_root(args.path)
+    if root.is_dir() and migrate.pre_root_install(root):
+        raise migrate.pre_root_error(root)
+    if args.mode != "vendored":
+        leftover = migrate.leftover_trees(root) if root.is_dir() else []
+        if leftover:
+            raise ConflictError(
+                "{} is a v2 vendored install ({} under {}/) — bind would leave that tree "
+                "behind".format(root, ", ".join(leftover), project.PROJECT_DIR),
+                hint="Run `devteam migrate` — it shows a plan first, binds, and moves the "
+                "old tree into a dated quarantine rather than deleting it.",
+                details={"reason": bind_module.V2_INSTALL_REASON},
+            )
+    if args.pin is not None:
+        paths.validate_version(args.pin)
+    result = bind_module.bind(
+        args.path,
+        provider_names=args.provider,
+        mode=args.mode,
+        pin=args.pin,
+        emitter=emitter,
+    )
+    human = "\n".join(
+        [
+            "bound {}".format(result["path"]),
+            "  identity  {}{}".format(
+                result["project_id"], " (created)" if result["identity_created"] else ""
+            ),
+            "  version   {}".format(result["version"]),
+            "  mode      {}".format(result["mode"]),
+            "  providers {}".format(", ".join(result["providers"])),
+            "  artifacts {}".format(result["artifacts"]),
+        ]
+        + (
+            ["  pin       {}".format(result["pin"])] if result.get("pin") else []
+        )
+        + (
+            [
+                "  retired   {} path(s) moved to quarantine".format(len(result["retired"])),
+            ]
+            if result.get("retired")
+            else []
+        )
+        + (
+            [
+                "  merged    {} — project config, commit these yourself".format(
+                    ", ".join(result["merged_project_files"])
+                ),
+            ]
+            if result.get("merged_project_files")
+            else []
+        )
+        + _preferences_import_lines(result.get("preferences_import"))
+    )
+    return result, human
+
+
+def _preferences_import_lines(report):
+    """The human summary of `prefs.import_legacy`, or nothing when there was no file."""
+    if not report:
+        return []
+    if report.get("problem"):
+        return ["  prefs     {} not imported: {}".format(report["source"], report["problem"])]
+    return [
+        "  prefs     {} imported from {}, file moved to quarantine".format(
+            len(report["imported"]), report["source"]
+        )
+    ]
+
+
+def cmd_unbind(args, emitter):
+    result = bind_module.unbind(
+        args.path, project_id=args.project_id, keep_artifacts=args.keep_artifacts
+    )
+    lines = [
+        "unbound {}".format(result["path"]),
+        "  unlinked    {}".format(len(result["unlinked"])),
+        "  quarantined {}".format(len(result["quarantined"])),
+        "  kept        {}".format(", ".join(result["kept"])),
+    ]
+    if result["removed_dirs"]:
+        lines.append("  removed     {} empty dir(s)".format(len(result["removed_dirs"])))
+    if result["quarantined"]:
+        lines.append("  quarantine  {}".format(result["quarantined"][0]["to"]))
+    if result["problems"]:
+        lines.append("  problems    {}".format(len(result["problems"])))
+    return result, "\n".join(lines)
+
+
+def _list_preferences(project_id, version):
+    """The three preferences the app's Projects table shows, or all-null.
+
+    Best-effort by design: one project with no resolvable version or an unreadable
+    layer must not fail the whole listing, and a value of an unexpected type is
+    reported as `null` (silence) rather than coerced into a claim.
+    """
+    empty = {"auto_update": None, "worktree_active": None, "suppress_notifications": None}
+    if not version:
+        return empty
+    try:
+        values = prefs.resolve(project_id, version)["values"]
+    except DevteamError:
+        return empty
+    out = {}
+    for key in empty:
+        value = values.get(key)
+        if key == "suppress_notifications":
+            ok = isinstance(value, (bool, list))
+        else:
+            ok = isinstance(value, bool)
+        out[key] = value if ok else None
+    return out
+
+
+def _list_layout(path, exists):
+    """``layout`` and ``upgrade_available`` for one row — ``null`` when unreadable.
+
+    The app offers Upgrade from this: a project already on the current layout has
+    nothing to move, and asking `upgrade` anyway only earns a refusal.
+    """
+    current = None
+    if exists:
+        try:
+            if project.load(path) is not None:
+                current = project.layout(path)
+        except Exception:  # a malformed project.json is doctor's finding, not list's
+            current = None
+    return {
+        "layout": current,
+        "upgrade_available": None if current is None else current < project.CURRENT_LAYOUT,
+    }
+
+
+def cmd_list(args, emitter):
+    entries = registry.entries()
+    active = versions.current()
+    rows = []
+    payload_projects = []
+    for project_id, entry in sorted(entries.items(), key=lambda kv: kv[1].get("path", "")):
+        pin = entry.get("pin")
+        resolved = pin or active
+        drift = "pinned" if pin and pin != active else ""
+        exists = Path(entry.get("path", "")).is_dir()
+        if not exists:
+            drift = "MISSING"
+        rows.append(
+            (
+                _short(project_id),
+                entry.get("path", ""),
+                ",".join(entry.get("providers", [])),
+                entry.get("mode", ""),
+                resolved or "?",
+                drift,
+            )
+        )
+        payload_projects.append(
+            {
+                "project_id": project_id,
+                "path": entry.get("path"),
+                "providers": entry.get("providers", []),
+                "mode": entry.get("mode"),
+                "pin": pin,
+                "resolves_to": resolved,
+                "path_exists": exists,
+                "preferences": _list_preferences(project_id, resolved),
+                **_list_layout(entry.get("path", ""), exists),
+            }
+        )
+    payload = {"current": active, "projects": payload_projects}
+    human = (
+        _table(rows, ["ID", "PATH", "PROVIDERS", "MODE", "VERSION", "NOTE"])
+        if rows
+        else "no project bound yet — run `devteam bind` inside one"
+    )
+    return payload, human
+
+
+def cmd_sync(args, emitter):
+    if args.all:
+        result = bind_module.sync_all(emitter=emitter)
+        human = "synced {} project(s){}".format(
+            len(result["synced"]),
+            "" if not result["problems"] else "; {} problem(s)".format(len(result["problems"])),
+        )
+        return result, human
+    if args.project_id:
+        result = bind_module.sync_project(args.project_id, emitter=emitter)
+    else:
+        root = project.resolve_root(args.path)
+        data = project.load(root)
+        if data is None:
+            raise UsageError(
+                "{} is not a bound project".format(root),
+                hint="Run `devteam bind` first.",
+                details={"reason": bind_module.NOT_BOUND_REASON},
+            )
+        result = bind_module.sync_project(data["project_id"], emitter=emitter)
+    return result, "synced {} to {}".format(result["path"], result["version"])
+
+
+def cmd_pin(args, emitter):
+    root = project.resolve_root(args.path)
+    data = project.load(root)
+    if data is None:
+        raise UsageError("{} is not a bound project".format(root))
+    if args.release:
+        entry = registry.set_pin(data["project_id"], None)
+        human = "pin released — {} now follows current".format(root)
+    else:
+        if not args.version:
+            raise UsageError("pass a version to pin, or --release to clear the pin")
+        paths.validate_version(args.version)
+        versions.require(args.version)
+        entry = registry.set_pin(data["project_id"], args.version)
+        human = "pinned {} to {}".format(root, args.version)
+    return {"project_id": data["project_id"], "pin": entry.get("pin"), "path": str(root)}, human
+
+
+def cmd_update(args, emitter):
+    if args.check:
+        result = update.check()
+        human = "latest {} | installed: {} | current: {}".format(
+            result["latest_ref"], ", ".join(result["installed"]) or "(none)", result["current"] or "(none)"
+        )
+        return result, human
+    result = update.run(
+        ref=args.ref,
+        activate=not args.no_activate,
+        sync=not args.no_sync and getattr(args, "account_gate", gate.ALLOWED) != gate.CORE_ONLY,
+        force=args.force,
+        sha256=args.sha256,
+        emitter=emitter,
+    )
+    lines = [
+        "{} {} | current: {} | synced {} project(s)".format(
+            "installed" if result["installed_now"] else "already present:",
+            result["version"],
+            result["activated"] or versions.current(),
+            result["synced"],
+        )
+    ]
+    integrity = result.get("integrity")
+    if integrity and not integrity.get("verified"):
+        lines.append(
+            "  integrity NOT verified (no digest pinned) — sha256 {}".format(integrity["sha256"])
+        )
+    if result["problems"]:
+        lines.append("  {} project(s) failed to sync:".format(len(result["problems"])))
+        for problem in result["problems"]:
+            lines.append("    {}: {}".format(problem["project_id"], problem["error"]))
+    return result, "\n".join(lines)
+
+
+def cmd_migrate(args, emitter):
+    if getattr(args, "pin", None) is not None:
+        paths.validate_version(args.pin)
+    if args.untrack and not args.apply:
+        # A preview writes nothing — least of all git's index.
+        raise UsageError("--untrack only acts with --apply", hint="Run `devteam migrate --apply --untrack`.")
+    if args.apply:
+        result = migrate.apply(
+            args.path,
+            provider_names=args.provider,
+            mode=args.mode,
+            pin=args.pin,
+            emitter=emitter,
+            untrack_paths=args.untrack,
+        )
+        lines = [
+            "migrated {} ({} layout)".format(result["path"], result["layout"]),
+            "  identity   {}{}".format(
+                result["project_id"], " (adopted)" if result["adopted_identity"] else ""
+            ),
+            "  version    {}".format(result["version"]),
+            "  quarantine {}".format(result["quarantine_dir"] or "(nothing moved)"),
+            "  preserved  {}".format(", ".join(result["preserved"])),
+        ]
+        for move in result["memory_moved"]:
+            lines.append("  memory     {} -> {}".format(move["from"], move["to"]))
+        if result["context_paths_added"]:
+            lines.append("  context    added {}".format(", ".join(result["context_paths_added"])))
+        if result["untracked"]:
+            lines.append(
+                "  git        {} path(s) removed from the index (files kept) — review and "
+                "commit".format(len(result["untracked"]))
+            )
+        if result["untrack_problem"]:
+            lines.append("  git        not untracked: {}".format(result["untrack_problem"]))
+        untrack = [
+            path
+            for path in result["git_tracked"] + result["git_tracked_artifacts"] + result["retired_links"]
+            if path not in set(result["untracked"])
+        ]
+        if untrack and not result["untracked"]:
+            lines.append(
+                "  git        {} path(s) still tracked — commit their removal:".format(len(untrack))
+            )
+            lines.append("               git rm -r --cached {}".format(" ".join(untrack)))
+        if result["unrecognised"]:
+            lines.append("  left alone {}".format(", ".join(result["unrecognised"])))
+        return result, "\n".join(lines)
+
+    result = migrate.plan(args.path, provider_names=args.provider, mode=args.mode, pin=args.pin)
+    lines = ["migration plan for {} (nothing changed)".format(result["path"])]
+    lines.extend("  - {}".format(action) for action in result["actions"])
+    untrack = result["git_tracked"] + result["git_tracked_artifacts"]
+    if untrack:
+        lines.append("  after --apply, untrack them (the files stay on disk) — or pass --untrack:")
+        lines.append("    git rm -r --cached {}".format(" ".join(untrack)))
+    lines.append("  run again with --apply to execute")
+    return result, "\n".join(lines)
+
+
+def cmd_doctor(args, emitter):
+    if getattr(args, "machine", False):
+        result = doctor.run_machine()
+    else:
+        target = None if args.no_project else (args.path or ".")
+        result = doctor.run(project_root=target, reassign_identity=args.reassign_identity)
+    lines = []
+    for item in result["findings"]:
+        marker = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL"}[item["level"]]
+        lines.append("{} [{}] {}".format(marker, item["category"], item["message"]))
+        if item.get("hint"):
+            lines.append("        hint: {}".format(item["hint"]))
+        if item.get("fix"):
+            lines.append("        fix:  {}".format(item["fix"]))
+    lines.append("status: {}".format(result["status"]))
+    return result, "\n".join(lines)
+
+
+def cmd_detect(args, emitter):
+    result = detect.run(args.path)
+    stack = result["stack"]["primary"] or "no known stack"
+    kind = result["project_type"]
+    lines = [
+        "folder     {}".format(result["path"]),
+        "stack      {}".format(stack),
+        "looks like {} ({} confidence)".format(kind["suggested"], kind["confidence"]),
+        "providers  installed: {}; suggested: {}".format(
+            ", ".join(p["name"] for p in result["providers"]["installed"]) or "none",
+            result["providers"]["suggested"] or "none",
+        ),
+    ]
+    task = result["first_task"]
+    if task:
+        lines.append("first task {} (read-only)".format(task["label"]))
+    return result, "\n".join(lines)
+
+
+#: Used only when commands.json carries no `featured` key at all (ADR-0030 section 5).
+_FALLBACK_FEATURED = ("plan", "fix", "review", "commit", "pr")
+
+
+def _featured_commands():
+    try:
+        with (Path(__file__).resolve().parent.parent / "commands.json").open("r", encoding="utf-8") as stream:
+            entries = json.load(stream).get("commands", {})
+    except (OSError, ValueError):
+        return list(_FALLBACK_FEATURED)
+    if not any("featured" in meta for meta in entries.values() if isinstance(meta, dict)):
+        return list(_FALLBACK_FEATURED)
+    return [name for name, meta in entries.items() if isinstance(meta, dict) and meta.get("featured")]
+
+
+def cmd_start(args, emitter):
+    """Detect, then set the project up with the defaults. The user never sees how."""
+    root = project.resolve_root(args.path)
+    found = detect.run(str(root), provider=args.provider, project_type=args.type)
+    chosen = args.provider
+    if chosen is None and not found["providers"]["in_project"] and found["providers"]["suggested"]:
+        chosen = found["providers"]["suggested"]
+    bound, _human = cmd_bind(
+        argparse.Namespace(
+            path=str(root), provider=[chosen] if chosen else None, mode="auto", pin=None
+        ),
+        emitter,
+    )
+    featured = _featured_commands()
+    task = found["first_task"]
+    lines = [
+        "Project ready. Start with one of these: {}".format(
+            ", ".join("/devteam:{}".format(name) for name in featured)
+        )
+    ]
+    if task:
+        lines.append("")
+        lines.append("Suggested first task, read-only: {}".format(task["label"]))
+        if task["launch"]:
+            lines.append("  {}".format(" ".join(shlex.quote(part) for part in task["launch"]["argv"])))
+    payload = {
+        "bound": True,
+        "project_id": bound["project_id"],
+        "detect": found,
+        "featured_commands": featured,
+        "first_task": task,
+    }
+    return payload, "\n".join(lines)
+
+
+
+def _bound_project(path=None, required=True):
+    """``(root, project_id)`` for a path, or ``(root, None)`` when unbound."""
+    root = project.resolve_root(path)
+    data = project.load(root)
+    if data is None:
+        if required:
+            raise UsageError(
+                "{} is not a bound project".format(root),
+                hint="Run `devteam bind` first.",
+                details={"reason": bind_module.NOT_BOUND_REASON},
+            )
+        return root, None
+    return root, data["project_id"]
+
+
+def _catalog_version(args):
+    """This project's pin, else the active version — same resolution as ``prefs``."""
+    _root, project_id = _bound_project(getattr(args, "path", None), required=False)
+    pin = (registry.get(project_id) or {}).get("pin") if project_id else None
+    return versions.resolve(pin), project_id
+
+
+def _catalog_row(kind, entry):
+    if entry.get("malformed"):
+        note = "MALFORMED: {}".format(entry["error"])
+        if kind == "agents":
+            return (entry["name"], "-", "-", entry["path"], note)
+        if kind == "skills":
+            return (entry["name"], entry.get("category") or "-", entry["path"], note)
+        return (entry["name"], entry["path"], note)
+    if kind == "agents":
+        return (
+            entry["name"],
+            entry.get("tier") or "-",
+            entry.get("model") or "-",
+            entry["path"],
+            entry.get("description") or "-",
+        )
+    if kind == "skills":
+        return (entry["name"], entry.get("category") or "-", entry["path"], entry.get("description") or "-")
+    return (entry["name"], entry["path"], entry.get("description") or "-")
+
+
+_CATALOG_HEADERS = {
+    "agents": ["NAME", "TIER", "MODEL", "PATH", "DESCRIPTION"],
+    "skills": ["NAME", "CATEGORY", "PATH", "DESCRIPTION"],
+    "commands": ["NAME", "PATH", "DESCRIPTION"],
+}
+
+
+def cmd_catalog(args, emitter):
+    version, project_id = _catalog_version(args)
+    result = catalog.summary(version)
+    payload = {
+        "version": version,
+        "project_id": project_id,
+        "counts": result["counts"],
+        "malformed": result["malformed"],
+    }
+    lines = ["version: {}".format(version)]
+    if project_id:
+        lines.append("project: {}".format(_short(project_id)))
+    for kind in catalog.KINDS:
+        note = (
+            "  ({} malformed)".format(result["malformed"][kind]) if result["malformed"][kind] else ""
+        )
+        lines.append("{:<10} {}{}".format(kind, result["counts"][kind], note))
+    return payload, "\n".join(lines)
+
+
+def _cmd_catalog_kind(kind):
+    def handler(args, emitter):
+        version, project_id = _catalog_version(args)
+        featured_only = bool(getattr(args, "featured", False))
+        entries = catalog.list_kind(kind, version, featured_only=featured_only)
+        rows = [_catalog_row(kind, entry) for entry in entries]
+        payload = {
+            "version": version,
+            "project_id": project_id,
+            kind: entries,
+            "count": len(entries),
+        }
+        human = (
+            _table(rows, _CATALOG_HEADERS[kind])
+            if rows
+            else "no {} found in version {}".format(kind, version)
+        )
+        return payload, human
+
+    return handler
+
+
+cmd_catalog_agents = _cmd_catalog_kind("agents")
+cmd_catalog_skills = _cmd_catalog_kind("skills")
+cmd_catalog_commands = _cmd_catalog_kind("commands")
+
+
+def cmd_catalog_show(args, emitter):
+    version, project_id = _catalog_version(args)
+    result = catalog.show(args.name, version)
+    payload = dict(result)
+    payload["project_id"] = project_id
+    lines = ["{} ({})".format(result["name"], result["kind"])]
+    lines.append("  path      {}".format(result["path"]))
+    lines.append("  version   {}".format(result["version"]))
+    if result.get("tier"):
+        lines.append("  tier      {}".format(result["tier"]))
+    if result.get("model"):
+        lines.append("  model     {}".format(result["model"]))
+    if result.get("category"):
+        lines.append("  category  {}".format(result["category"]))
+    if result.get("description"):
+        lines.append("  {}".format(result["description"]))
+    lines.append("")
+    lines.append(result["body"])
+    return payload, "\n".join(lines)
+
+
+def _notification_line(record):
+    return "{:<8} {}  {}".format(record["level"], _short(record["project_id"]), record["message"])
+
+
+def cmd_notifications_list(args, emitter):
+    records = notifications.collect(args.project or None, unseen_only=args.unseen)
+    payload = {"notifications": records, "count": len(records)}
+    human = "\n".join(_notification_line(r) for r in records) or "no notifications"
+    return payload, human
+
+
+def cmd_notifications_ack(args, emitter):
+    marked = notifications.ack(args.ids, all_=args.all, project_ids=args.project or None)
+    return {"acknowledged": marked, "count": len(marked)}, "acknowledged {}".format(len(marked))
+
+
+def _watch_interval(text):
+    # Zero or a negative value would make `watch` a busy loop of `stat` calls.
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("not a number: {!r}".format(text))
+    if not value >= 0.01:
+        raise argparse.ArgumentTypeError("must be at least 0.01 seconds")
+    return value
+
+
+def cmd_notifications_watch(args, emitter):
+    def emit(event):
+        human = None
+        if event["event"] == "notification":
+            human = _notification_line(event["notification"])
+        emitter.stream(event, human)
+
+    reason = notifications.watch(emit, interval=args.interval)
+    return {"reason": reason}, None
+
+
+#: How long a hook-only command waits for its payload. A hook pipes the JSON and closes
+#: stdin at once; anything slower is not a hook, and waiting on it is what hung every
+#: caller that inherited an open stdin it never wrote to (the contract sweep, a shell).
+HOOK_STDIN_TIMEOUT = 5.0
+
+
+def _read_hook_stdin(timeout=HOOK_STDIN_TIMEOUT):
+    """Everything on stdin up to EOF, or what arrived before ``timeout``; never blocks longer."""
+    fd = sys.stdin.fileno()
+    deadline = time.monotonic() + timeout
+    chunks = []
+    if os.name == "nt":
+        # select() does not take pipes on Windows: read on a daemon thread and stop waiting at
+        # the deadline, keeping what arrived, so an open and silent stdin cannot hang the hook.
+        import threading
+
+        def pump():
+            try:
+                while True:
+                    chunk = os.read(fd, 65536)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+            except OSError:
+                pass
+
+        reader = threading.Thread(target=pump, daemon=True)
+        reader.start()
+        reader.join(timeout)
+        return b"".join(list(chunks)).decode("utf-8", "replace")
+    import select
+
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        ready, _, _ = select.select([fd], [], [], left)
+        if not ready:
+            break
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
+def _hook_payload():
+    """The hook JSON on stdin, or ``{}`` — a hook must never fail on what it was fed."""
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        data = json.loads(_read_hook_stdin() or "null")
+    except (OSError, ValueError, RecursionError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _hook_root(args):
+    try:
+        return project.resolve_root(args.project_root)
+    except DevteamError:
+        return Path(args.project_root) if args.project_root else Path.cwd()
+
+
+def cmd_tasks_record(args, emitter):
+    result = tasks.record(_hook_root(args), _hook_payload(), provider=args.provider)
+    return result, "recorded" if result["recorded"] else "nothing recorded"
+
+
+def cmd_tasks_mark(args, emitter):
+    result = tasks.mark(_hook_root(args), _hook_payload(), args.state)
+    return result, "marked ({} open)".format(result["open"]) if result["marked"] else "nothing marked"
+
+
+def cmd_tasks_retitle(args, emitter):
+    result = tasks.retitle(_hook_root(args), _hook_payload())
+    return result, "retitled" if result["retitled"] else "nothing retitled"
+
+
+def cmd_tasks_review_open(args, emitter):
+    result = tasks.review_open(_hook_root(args), _hook_payload())
+    return result, "review window {}".format(result["window"]) if result["recorded"] else "no review window"
+
+
+def cmd_tasks_review_result(args, emitter):
+    result = tasks.review_result(_hook_root(args), _hook_payload())
+    return result, "review result recorded" if result["recorded"] else "nothing recorded"
+
+
+def _tasks_filters(args):
+    return dict(
+        project_ids=args.project or None,
+        since=args.since,
+        stale_after=args.stale_after,
+        ended_after=args.ended_after,
+    )
+
+
+def _duration(seconds):
+    minutes = int(seconds) // 60
+    return "{}h{:02d}m".format(minutes // 60, minutes % 60) if minutes >= 60 else "{}m".format(minutes)
+
+
+def cmd_tasks_list(args, emitter):
+    board = tasks.collect(**_tasks_filters(args))
+    lines = []
+    for item in board["projects"]:
+        counts = item["counts"]
+        lines.append(
+            "{}  todo {} · in progress {} · in review {} · pr/mr created {} · done {}  ({} session(s), {} stale, {} abandoned)".format(
+                _short(item["project_id"]),
+                counts["todo"],
+                counts["in_progress"],
+                counts["in_review"],
+                counts["pr_created"],
+                counts["done"],
+                item["sessions_total"],
+                item["stale"],
+                item["abandoned"],
+            )
+        )
+        for session in item["sessions"]:
+            lines.append("  {} {} [{}] {}".format(session["provider"], session["session_id"], session["status"], session["branch"] or ""))
+            for task in session["tasks"]:
+                review = task.get("review")
+                note = ""
+                if review:
+                    note = {
+                        "findings": "  [{} findings]".format(review["findings"]),
+                        "unread": "  [result not read]",
+                    }.get(review["state"], "  [in review]")
+                spent = task["durations"]["in_review"] if review else task["durations"].get(task["status"], 0)
+                lines.append("    {:<11} {}  ({}){}".format(task["column"], task["content"], _duration(spent), note))
+    return board, "\n".join(lines) or "no tasks"
+
+
+def cmd_tasks_watch(args, emitter):
+    def emit(event):
+        human = None
+        if event["event"] == "snapshot" and not event["project"].get("removed"):
+            human = "{} {}".format(_short(event["project"]["project_id"]), event["project"]["counts"])
+        emitter.stream(event, human)
+
+    kwargs = _tasks_filters(args)
+    reason = tasks.watch(emit, interval=args.interval, **kwargs)
+    return {"reason": reason}, None
+
+
+def _skill_row(entry):
+    flags = []
+    if entry["is_symlink"]:
+        flags.append("link")
+    if entry["managed"]:
+        flags.append("managed")
+    if entry["status"] != "ok":
+        flags.append("MALFORMED: {}".format(entry["error"]))
+    return (
+        entry["name"],
+        entry["root"],
+        ",".join(entry["providers"]),
+        " ".join(flags) or "-",
+        entry["description"] or "-",
+    )
+
+
+def cmd_skills_list(args, emitter):
+    payload = global_skills.list_skills(args.provider)
+    rows = [_skill_row(entry) for entry in payload["skills"]]
+    lines = [
+        "{:<9} {}{}".format(root["id"], root["path"], "" if root["exists"] else "  (absent)")
+        for root in payload["roots"]
+    ]
+    lines.append("")
+    lines.append(
+        _table(rows, ["NAME", "ROOT", "PROVIDERS", "FLAGS", "DESCRIPTION"])
+        if rows
+        else "no global skills installed"
+    )
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_show(args, emitter):
+    payload = global_skills.show(args.name, args.root)
+    lines = ["{} ({})".format(payload["name"], payload["root"])]
+    lines.append("  path       {}".format(payload["path"]))
+    lines.append("  providers  {}".format(", ".join(payload["providers"])))
+    if payload["is_symlink"]:
+        lines.append("  link to    {}".format(payload["link_target"]))
+    if payload["status"] != "ok":
+        lines.append("  MALFORMED  {}".format(payload["error"]))
+    if payload["description"]:
+        lines.append("  {}".format(payload["description"]))
+    lines.append("  files      {}{}".format(len(payload["files"]), "+" if payload["files_truncated"] else ""))
+    if payload["body"]:
+        lines.append("")
+        lines.append(payload["body"])
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_install(args, emitter):
+    payload = global_skills.install(
+        args.source,
+        providers=args.provider,
+        root_ids=args.root,
+        replace=args.replace,
+        link=args.link,
+    )
+    lines = []
+    if payload["source_kind"] == "file":
+        lines.append("installed as a single-file skill: only {} was copied".format(payload["source"]))
+    for item in payload["installed"]:
+        note = ""
+        if item["quarantined_to"]:
+            note = "  (previous copy quarantined to {})".format(item["quarantined_to"])
+        elif item["replaced"]:
+            note = "  (previous link replaced)"
+        lines.append("installed {} -> {}{}".format(payload["name"], item["path"], note))
+    for other in payload["also_present"]:
+        lines.append(
+            "note: {} also exists in the {} root ({}); a provider reading both sees two copies".format(
+                payload["name"], other["root"], other["path"]
+            )
+        )
+    return payload, "\n".join(lines)
+
+
+def cmd_skills_remove(args, emitter):
+    payload = global_skills.remove(args.name, args.root)
+    if payload["action"] == "unlinked":
+        human = "unlinked {} (it pointed at {})".format(payload["path"], payload["link_target"])
+    else:
+        human = "moved {} to quarantine: {}".format(payload["path"], payload["quarantined_to"])
+    return payload, human
+
+
+def cmd_prefs_list(args, emitter):
+    root, project_id = _bound_project(args.path, required=False)
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    resolved = prefs.resolve(project_id, version)
+    rows = [
+        (key, str(resolved["values"][key]), resolved["origin"].get(key, "?"))
+        for key in sorted(resolved["values"])
+    ]
+    payload = {
+        "project_id": project_id,
+        "version": version,
+        "values": resolved["values"],
+        "origin": resolved["origin"],
+        "unknown": resolved["unknown"],
+    }
+    human = _table(rows, ["KEY", "VALUE", "FROM"])
+    if resolved["unknown"]:
+        human += "\n\nunknown key(s) carried through: {}".format(", ".join(resolved["unknown"]))
+    return payload, human
+
+
+def cmd_prefs_get(args, emitter):
+    root, project_id = _bound_project(args.path, required=False)
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    result = prefs.get(project_id, version, key=args.key)
+    return result, "{} = {}  (from {})".format(result["key"], result["value"], result["origin"])
+
+
+def cmd_prefs_set(args, emitter):
+    root, project_id = _bound_project(args.path, required=args.scope == "project")
+    version = versions.resolve((registry.get(project_id) or {}).get("pin") if project_id else None)
+    result = prefs.set_value(
+        args.key, args.value, version, scope=args.scope, project_id=project_id
+    )
+    if project_id:
+        prefs.materialize(root, project_id, version)
+    return result, "{} = {} in the {} layer".format(result["key"], result["value"], result["scope"])
+
+
+def cmd_prefs_unset(args, emitter):
+    root, project_id = _bound_project(args.path, required=args.scope == "project")
+    result = prefs.unset(args.key, scope=args.scope, project_id=project_id)
+    if project_id:
+        version = versions.resolve((registry.get(project_id) or {}).get("pin"))
+        prefs.materialize(root, project_id, version)
+    human = "{} {} from the {} layer".format(
+        "removed" if result["removed"] else "was not set in", result["key"], result["scope"]
+    )
+    return result, human
+
+
+def _plugin_context(args):
+    root, project_id = _bound_project(args.path)
+    return plugins.Context(root, project_id)
+
+
+def _plugin_line(view):
+    state = "enabled" if view["enabled"] else "disabled"
+    notes = []
+    if not view["ready"]:
+        notes.append("missing: " + ", ".join(r["binary"] for r in view["requirements"] if not r["found"]))
+    if view["enabled"] and not view["configured"]:
+        notes.append("not configured")
+    if view["status"]:
+        notes.append(view["status"]["summary"])
+    return (view["name"], state, "; ".join(notes))
+
+
+def _plugin_human(view):
+    lines = [
+        "{} ({})".format(view["title"], view["name"]),
+        "  {}".format(view["description"]),
+        "  state     {}{}".format(
+            "enabled" if view["enabled"] else "disabled",
+            "  [legacy graphify.json]" if view["source"] == "legacy" else "",
+        ),
+        "  settings  {}".format(view["settings_file"]),
+    ]
+    for req in view["requirements"]:
+        lines.append(
+            "  requires  {} {}".format(
+                req["binary"], "found" if req["found"] else "MISSING ({})".format(req["install_hint"])
+            )
+        )
+    for key in sorted(view["config"]):
+        lines.append("  config    {} = {}".format(key, json.dumps(view["config"][key])))
+    for action in view["actions"]:
+        lines.append("  action    {}: {}".format(action["id"], action["label"]))
+    if view["unknown_config"]:
+        lines.append("  unknown   {}".format(", ".join(view["unknown_config"])))
+    if view["status"]:
+        lines.append("  status    {}".format(view["status"]["summary"]))
+        for fact in view["status"]["facts"]:
+            lines.append("            {}: {}".format(fact["label"], fact["value"]))
+    return "\n".join(lines)
+
+
+def cmd_plugin_list(args, emitter):
+    ctx = _plugin_context(args)
+    views = plugins.list_views(ctx)
+    invalid = [
+        {"name_or_dir": item["name"], "problem": "; ".join(item["problems"])} for item in ctx.invalid
+    ]
+    payload = {"project_id": ctx.project_id, "plugins": views, "invalid": invalid}
+    human = _table([_plugin_line(v) for v in views], ["PLUGIN", "STATE", "NOTES"]) if views else "no plugins"
+    for item in invalid:
+        human += "\nwarning: invalid plugin manifest '{}': {}".format(item["name_or_dir"], item["problem"])
+    return payload, human
+
+
+def cmd_plugin_show(args, emitter):
+    ctx = _plugin_context(args)
+    view = plugins.build_view(ctx, ctx.plugin(args.name))
+    return view, _plugin_human(view)
+
+
+def cmd_plugin_enable(args, emitter):
+    result = plugins.enable(_plugin_context(args), args.name, force=args.force)
+    verb = "enabled" if result["changed"] else "already enabled"
+    human = "{} {}{}".format(verb, args.name, " (config seeded)" if result["seeded"] else "")
+    if result["changed"]:
+        human += "\n  {} is committed: the team gets this on the next pull".format(
+            result["plugin"]["settings_file"]
+        )
+    return result, human
+
+
+def cmd_plugin_disable(args, emitter):
+    result = plugins.disable(_plugin_context(args), args.name)
+    return result, "{} {}".format("disabled" if result["changed"] else "already disabled", args.name)
+
+
+def cmd_plugin_config_get(args, emitter):
+    result = plugins.config_get(_plugin_context(args), args.name, args.key)
+    if args.key:
+        return result, "{} = {}".format(args.key, json.dumps(result["value"]))
+    return result, "\n".join("{} = {}".format(k, json.dumps(v)) for k, v in sorted(result["config"].items()))
+
+
+def cmd_plugin_config_set(args, emitter):
+    result = plugins.config_set(_plugin_context(args), args.name, args.key, args.value)
+    return result, "{}.{} = {}".format(args.name, args.key, json.dumps(result["value"]))
+
+
+def cmd_plugin_config_unset(args, emitter):
+    result = plugins.config_unset(_plugin_context(args), args.name, args.key)
+    human = "{} {}.{}".format("removed" if result["removed"] else "was not set:", args.name, args.key)
+    return result, human
+
+
+def cmd_plugin_run(args, emitter):
+    result = plugins.run(_plugin_context(args), args.name, args.action)
+    lines = ["{} {}: {} in {} ms".format(
+        args.name, args.action, "ok" if result["ok"] else "FAILED (exit {})".format(result["exit_code"]),
+        result["duration_ms"],
+    )]
+    if result["output"] is not None:
+        lines.append(json.dumps(result["output"], indent=2, sort_keys=True))
+    if result["log_tail"]:
+        lines.append(result["log_tail"].rstrip("\n"))
+    return result, "\n".join(lines)
+
+
+def _integration_project(args):
+    """``(root, project_id)``; ``project_id`` is ``None`` when the path is not bound."""
+    return _bound_project(getattr(args, "path", None), required=False)
+
+
+def _integration_view(name, args):
+    root, project_id = _integration_project(args)
+    return integrations.build_view(integrations.get_adapter(name), root, project_id)
+
+
+def _integration_line(view):
+    notes = view["status"]["summary"]
+    if view["project"] is not None and view["project_configured"]:
+        notes += "; project: " + ", ".join("{}={}".format(k, v) for k, v in sorted(view["project"].items()))
+    return (view["name"], view["status"]["state"], notes)
+
+
+def _integration_human(view):
+    lines = [
+        "{} ({})".format(view["title"], view["name"]),
+        "  {}".format(view["description"]),
+        "  status    {} - {}".format(view["status"]["state"], view["status"]["summary"]),
+        "  token     {}".format(
+            "stored in {}".format(view["auth"]["backend"]) if view["auth"]["has_token"] else "none"
+        ),
+    ]
+    for key in sorted(view["account"]):
+        lines.append("  account   {} = {}".format(key, json.dumps(view["account"][key])))
+    if view["project"] is None:
+        lines.append("  project   (not a bound project)")
+    for key in sorted(view["project"] or {}):
+        lines.append("  project   {} = {}".format(key, json.dumps(view["project"][key])))
+    for key in sorted(view["detected"]):
+        lines.append("  detected  {} = {}".format(key, json.dumps(view["detected"][key])))
+    for fact in view["status"]["facts"]:
+        lines.append("            {}: {}".format(fact["label"], fact["value"]))
+    return "\n".join(lines)
+
+
+def _integration_test_human(view, result):
+    return "{}\n  test      {} - {}".format(
+        _integration_human(view), "ok" if result["ok"] else "FAILED", result["summary"]
+    )
+
+
+def cmd_integration_list(args, emitter):
+    root, project_id = _integration_project(args)
+    views = integrations.list_views(root, project_id)
+    payload = {"project_id": project_id, "integrations": views}
+    return payload, _table([_integration_line(v) for v in views], ["INTEGRATION", "STATE", "NOTES"])
+
+
+def cmd_integration_show(args, emitter):
+    view = _integration_view(args.name, args)
+    return {"integration": view}, _integration_human(view)
+
+
+def _read_token_from_stdin():
+    """The token, or ``None`` for an empty stdin. Never from argv."""
+    import getpass
+    import sys as _sys
+
+    if _stdin_is_console():
+        value = getpass.getpass("token (not echoed; empty keeps the stored one): ")
+    elif _sys.stdin is None:
+        value = ""
+    else:
+        value = _sys.stdin.read()
+    value = value.rstrip("\r\n")
+    return value or None
+
+
+def cmd_integration_connect(args, emitter):
+    adapter = integrations.get_adapter(args.name)
+    fields = integrations.parse_field_args(adapter, args.field)
+    integrations.check_connect_fields(args.name, fields)
+    token = _read_token_from_stdin()
+    result, backend = integrations.connect(args.name, fields, token)
+    view = _integration_view(args.name, args)
+    payload = {"integration": view, "test": result}
+    # Derived from where the new token actually went, like `cred set`.
+    if backend == "insecure":
+        payload["warning"] = (
+            "this machine has no secret store, so the token is in a mode-600 file: {}. "
+            "It is not encrypted - treat the machine as the boundary.".format(paths.secrets_dir())
+        )
+        emitter.warn(payload["warning"])
+    return payload, _integration_test_human(view, result)
+
+
+def cmd_integration_test(args, emitter):
+    result = integrations.test(args.name)
+    view = _integration_view(args.name, args)
+    return {"integration": view, "test": result}, _integration_test_human(view, result)
+
+
+def cmd_integration_disconnect(args, emitter):
+    _adapter, changed = integrations.disconnect(args.name, keep_token=args.keep_token)
+    view = _integration_view(args.name, args)
+    human = "{} {}".format("disconnected" if changed else "was not connected:", args.name)
+    return {"integration": view, "changed": changed}, human
+
+
+def cmd_integration_config_get(args, emitter):
+    root, project_id = _integration_project(args)
+    result = integrations.config_get(args.name, args.key, root, project_id)
+    if args.key:
+        return result, "{} = {}".format(args.key, json.dumps(result["value"]))
+    lines = ["{} = {}".format(k, json.dumps(v)) for k, v in sorted(result["account"].items())]
+    lines += ["project.{} = {}".format(k, json.dumps(v)) for k, v in sorted((result["project"] or {}).items())]
+    return result, "\n".join(lines)
+
+
+def cmd_integration_config_set(args, emitter):
+    root, project_id = _integration_project(args)
+    integrations.config_set(args.name, args.key, args.value, root, project_id)
+    view = _integration_view(args.name, args)
+    return {"integration": view, "key": args.key}, "set {}.{}".format(args.name, args.key)
+
+
+def cmd_integration_config_unset(args, emitter):
+    root, project_id = _integration_project(args)
+    _adapter, removed = integrations.config_unset(args.name, args.key, root, project_id)
+    view = _integration_view(args.name, args)
+    human = "{} {}.{}".format("removed" if removed else "was not set:", args.name, args.key)
+    return {"integration": view, "key": args.key, "removed": removed}, human
+
+
+def cmd_integration_resources(args, emitter):
+    result = integrations.resources(args.name, args.kind)
+    human = "\n".join("{}\t{}".format(i["value"], i["label"]) for i in result["items"]) or "no items"
+    if result["truncated"]:
+        human += "\n(more exist than were listed)"
+    return result, human
+
+
+#: The largest request body `integration call` sends. Far above any JSON a management API
+#: takes, and small enough that a mistaken --data-file cannot ship a large local file.
+CALL_BODY_MAX_BYTES = 1024 * 1024
+
+
+def _reject_constant(name):
+    raise ValueError(name)
+
+
+def _call_body(args):
+    """The JSON request body from ``--data`` or ``--data-file`` (``-`` is stdin), else ``None``."""
+    if args.data is not None and args.data_file is not None:
+        raise UsageError("pass --data or --data-file, not both")
+    if args.data_file is not None:
+        if args.data_file == "-":
+            text = sys.stdin.read(CALL_BODY_MAX_BYTES + 1) if sys.stdin is not None else ""
+        else:
+            try:
+                with open(args.data_file, "r", encoding="utf-8") as handle:
+                    text = handle.read(CALL_BODY_MAX_BYTES + 1)
+            except (OSError, UnicodeDecodeError) as exc:
+                raise UsageError("cannot read --data-file {}: {}".format(args.data_file, exc)) from None
+    elif args.data is not None:
+        text = args.data
+    else:
+        return None
+    if len(text.encode("utf-8")) > CALL_BODY_MAX_BYTES:
+        raise UsageError("the request body is larger than {} bytes".format(CALL_BODY_MAX_BYTES))
+    try:
+        # NaN and Infinity are not JSON: json.dumps would send them as invalid tokens.
+        body = json.loads(text, parse_constant=_reject_constant)
+    except ValueError:
+        raise UsageError("the request body is not valid JSON") from None
+    if not isinstance(body, (dict, list)):
+        raise UsageError("the request body must be a JSON object or array")
+    return body
+
+
+def cmd_integration_call(args, emitter):
+    root, project_id = _integration_project(args)
+    raw = getattr(args, "raw_argv", None) or []
+    result = integrations.call(
+        args.name,
+        args.method,
+        args.endpoint,
+        query=integrations.parse_query_args(args.query),
+        body=_call_body(args),
+        allow_write=args.allow_write,
+        project_root=root,
+        project_id=project_id,
+        canonical=integrations.is_canonical_call(raw, args.name, args.method),
+    )
+    return result, json.dumps(result["response"], indent=2, sort_keys=True)
+
+
+def _cred_project_id(args):
+    """``None`` for the global layer, this project's id otherwise."""
+    if getattr(args, "global_layer", False):
+        return None
+    _, project_id = _bound_project(getattr(args, "path", None))
+    return project_id
+
+
+def cmd_cred_list(args, emitter):
+    project_id = _cred_project_id(args)
+    entries = creds.list_entries(project_id)
+    rows = [
+        (e["key"], e["layer"], e["source"], ",".join(e["scope"]) or "-", e["purpose"])
+        for e in entries
+    ]
+    payload = {"project_id": project_id, "credentials": entries, "count": len(entries)}
+    human = (
+        _table(rows, ["KEY", "LAYER", "SOURCE", "SCOPE", "PURPOSE"])
+        if rows
+        else "no credentials declared — add one with `devteam cred set`"
+    )
+    return payload, human
+
+
+def cmd_cred_get(args, emitter):
+    # The one command whose stdout IS the payload. ADR-0010: it "prints the value on
+    # stdout and nothing else". Wrapping a secret in a `--json` document would put it
+    # into a structure a client is likely to log, so `--json` is refused here rather
+    # than silently honoured — a documented exception to the --json contract, because
+    # the alternative is a contract that leaks.
+    if emitter.as_json:
+        raise UsageError(
+            "`devteam cred get` does not support --json",
+            hint=(
+                "It writes the value to stdout and nothing else, so it cannot be wrapped "
+                "in a document without putting a secret somewhere a client would log. Use "
+                "`devteam cred list --json` for the references."
+            ),
+        )
+    project_id = _cred_project_id(args)
+    value = creds.get_value(args.key, project_id, agent=args.agent)
+    emitter.raw(value)
+    return {"key": args.key, "delivered": True}, None
+
+
+def cmd_cred_set(args, emitter):
+    project_id = _cred_project_id(args)
+    # Never from argv: a value in a command line is in the process table for every
+    # other user on the machine, and in the shell history of this one.
+    value = _read_secret_from_stdin(args.key)
+    scope = [s.strip() for s in (args.scope or "").split(",") if s.strip()]
+    result = creds.set_entry(
+        args.key,
+        args.purpose,
+        ref_scope=scope,
+        project_id=project_id,
+        value=value,
+        backend=args.backend,
+    )
+    lines = [
+        "stored {}".format(result["key"]),
+        "  layer    {}".format(result["layer"]),
+        "  source   {}".format(result["source"]),
+        "  ref      {}".format(result["ref"]),
+        "  scope    {}".format(", ".join(result["scope"]) or "(any agent)"),
+    ]
+    # Derived from `source`, not read from the result: `creds._public_view` builds its
+    # dicts by naming non-secret fields explicitly so a future field cannot leak by
+    # default, and that is worth more than saving this line.
+    if result.get("source") == "insecure":
+        emitter.warn(
+            "this machine has no secret store, so the value is in a mode-600 file: {}. "
+            "It is not encrypted — treat the machine as the boundary.".format(
+                paths.secrets_dir()
+            )
+        )
+    return result, "\n".join(lines)
+
+
+def _read_secret_from_stdin(key):
+    import getpass
+    import sys as _sys
+
+    if _stdin_is_console():
+        value = getpass.getpass("value for {} (not echoed): ".format(key))
+    else:
+        value = _sys.stdin.read()
+    # A trailing newline from a pipe or a heredoc is the shell's, not the secret's.
+    value = value.rstrip("\r\n")
+    if not value:
+        raise UsageError(
+            "no value was given for {}".format(key),
+            hint="Pipe it in (`printf %s \"$TOKEN\" | devteam cred set ...`) or run interactively.",
+        )
+    return value
+
+
+def cmd_cred_unset(args, emitter):
+    project_id = _cred_project_id(args)
+    result = creds.unset(args.key, project_id=project_id, forget_value=args.forget_value)
+    if not result["removed"]:
+        return result, "no reference named {} in this layer".format(result["key"])
+    lines = ["removed the reference {}".format(result["key"])]
+    if result["value_removed"]:
+        lines.append("  value    deleted from the secret store")
+    else:
+        lines.append("  value    kept — pass --forget-value to delete it too")
+    return result, "\n".join(lines)
+
+
+def _cred_local_root(args):
+    root, _project_id = _bound_project(getattr(args, "path", None))
+    return root
+
+
+def _cred_local_human(state):
+    lines = ["{}".format(state["path"])]
+    if not state["exists"]:
+        lines.append("  file     not created yet - `devteam cred local init` creates it")
+        return "\n".join(lines)
+    lines.append("  valid    {}".format("yes" if state["valid"] else "no"))
+    if state["error"]:
+        err = state["error"]
+        lines.append(
+            "  error    line {}, column {}: {}".format(err["line"], err["column"], err["message"])
+        )
+    lines.append("  hash     {}".format(state["hash"][:12]))
+    if state["valid"]:
+        hidden = []
+
+        def walk(node):
+            if isinstance(node, dict):
+                if node.get("secret") is True and "set" in node:
+                    hidden.append(node)
+                    return
+                for item in node.values():
+                    walk(item)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(state["data"])
+        lines.append("  secrets  {} hidden ({} marked in $secrets)".format(
+            len(hidden), sum(1 for item in hidden if item.get("marked"))
+        ))
+    return "\n".join(lines)
+
+
+def cmd_cred_local_show(args, emitter):
+    state = credentials_local.show(_cred_local_root(args))
+    return state, _cred_local_human(state)
+
+
+def cmd_cred_local_init(args, emitter):
+    state = credentials_local.init(_cred_local_root(args))
+    return state, "created " + _cred_local_human(state)
+
+
+def cmd_cred_local_patch(args, emitter):
+    import sys as _sys
+
+    if _sys.stdin is None or _sys.stdin.isatty():
+        raise UsageError(
+            "the operations are read from stdin",
+            hint='Pipe a JSON array: [{"op":"set","pointer":"/app/staging/appUrl","value":"..."}]',
+        )
+    text = _sys.stdin.read()
+    if not text.strip():
+        raise UsageError("no operations were given on stdin")
+    try:
+        ops = json.loads(text)
+    except ValueError as exc:
+        raise UsageError("the operations on stdin are not valid JSON: {}".format(exc)) from exc
+    except RecursionError as exc:
+        raise UsageError("the operations on stdin are nested too deeply") from exc
+    state = credentials_local.apply_patch(_cred_local_root(args), ops, args.expect_hash)
+    return state, "patched " + _cred_local_human(state)
+
+
+def cmd_cred_import(args, emitter):
+    project_id = _cred_project_id(args)
+    result = creds.import_file(args.file, project_id)
+    lines = [
+        "imported {}".format(args.file),
+        "  stored     {} value(s): {}".format(
+            len(result["imported"]), ", ".join(result["imported"]) or "(none)"
+        ),
+        "  references {}".format(paths.credentials_file(project_id)),
+        "  quarantine {}".format(result["quarantined_to"] or "(nothing to move)"),
+    ]
+    if result["non_secret"]:
+        lines.append(
+            "  kept as plain values (not secrets): {}".format(", ".join(result["non_secret"]))
+        )
+    if result["insecure"]:
+        emitter.warn(
+            "{} value(s) went to the last-resort plaintext backend at {} — it is not "
+            "encrypted. `devteam cred backends` says what this machine offers.".format(
+                len(result["insecure"]), paths.secrets_dir()
+            )
+        )
+    return result, "\n".join(lines)
+
+
+def cmd_cred_backends(args, emitter):
+    payload = secrets_module.describe()
+    rows = [
+        (name, "yes" if name in payload["available"] else "no", payload["probed"].get(name) or "")
+        for name in secrets_module.BACKENDS
+    ]
+    human = "\n".join(
+        [_table(rows, ["BACKEND", "AVAILABLE", "WHY NOT"]), "", "default: {}".format(payload["default"])]
+    )
+    return payload, human
+
+
+def cmd_cred_check(args, emitter):
+    project_id = _cred_project_id(args)
+    findings = creds.check(project_id)
+    # `problems` is always present, empty list included. It used to appear only on the
+    # findings branch — it exists to trigger `main()`'s exit-1 path, and that check is
+    # truthiness-based so `[]` still means success — but a key that comes and goes with
+    # the data makes the payload's shape depend on state, and ADR-0011 makes this shape
+    # public API. A client doing `payload.problems.length` would have worked until the
+    # day everything was fine. Found by the app-facing key-set tests.
+    payload = {"project_id": project_id, "findings": findings, "problems": findings}
+    if not findings:
+        return payload, "every declared credential resolves"
+    rows = [
+        (f["issue"], f["key"], f["layer"], str(f.get("detail") or ""))
+        for f in findings
+    ]
+    return payload, _table(rows, ["ISSUE", "KEY", "LAYER", "DETAIL"])
+
+
+def cmd_upgrade(args, emitter):
+    if args.apply:
+        result = upgrade.apply(args.path, emitter=emitter)
+        lines = [
+            "upgraded {}".format(result["path"]),
+            "  layout      {} -> {}".format(result["from_layout"], result["to_layout"]),
+            "  copied      {} file(s) to {}".format(result["copied"], result["destination"]),
+            "  quarantine  {}".format(result["quarantined"] or "(nothing to move)"),
+            "  pointers    {}, {}".format(result["state_pointer"], result["memory_pointer"]),
+            "  exclude     {}".format(result["git_exclude"]),
+        ]
+        if result["retained"]:
+            lines.append(
+                "  kept        {} (project-owned, stays committed)".format(
+                    ", ".join(result["retained"])
+                )
+            )
+        # `layout` lives in the committed project.json, so an uncommitted upgrade is
+        # invisible to a fresh clone — it comes back on layout 1 and asks to upgrade
+        # again. Observed in an end-to-end run; nothing else says this.
+        lines.append(
+            "  commit      {}/project.json — the new layout is committed state; a clone "
+            "without it returns to layout {}".format(
+                project.PROJECT_DIR, result["from_layout"]
+            )
+        )
+        if result["git_tracked"]:
+            lines.append(
+                "  git         commit the removal: git rm -r --cached {}".format(
+                    " ".join(result["git_tracked"])
+                )
+            )
+        return result, "\n".join(lines)
+
+    result = upgrade.plan(args.path)
+    lines = [
+        "upgrade plan for {} (nothing changed)".format(result["path"]),
+        "  layout {} -> {}".format(result["from_layout"], result["to_layout"]),
+    ]
+    lines.extend("  - {}".format(action) for action in result["actions"])
+    lines.append("  run again with --apply to execute")
+    return result, "\n".join(lines)
+
+
+
+def cmd_export(args, emitter):
+    result = store.export(args.to, include_machine=args.all)
+    lines = [
+        "exported {} file(s) to {} ({:.1f} MB)".format(
+            result["files"], result["archive"], result["bytes"] / (1024 * 1024)
+        )
+    ]
+    if result["portable_only"]:
+        lines.append("  portable only — left behind: {}".format(", ".join(result["excluded"])))
+        lines.append("  on the other machine: run `devteam bind` in each project")
+    else:
+        lines.append("  includes this machine's registry and manifests (absolute paths)")
+    return result, "\n".join(lines)
+
+
+def cmd_import(args, emitter):
+    result = store.import_archive(args.archive, force=args.force)
+    lines = ["imported {} into {}".format(result["archive"], result["data_dir"])]
+    if result["previous_kept_at"]:
+        lines.append("  previous store kept at {}".format(result["previous_kept_at"]))
+    if result["machine_records_kept"]:
+        lines.append(
+            "  kept this machine's own records: {}".format(
+                ", ".join(result["machine_records_kept"])
+            )
+        )
+    lines.append("  next: {}".format(result["next"]))
+    return result, "\n".join(lines)
+
+
+def cmd_uninstall(args, emitter):
+    if args.purge and not args.yes:
+        raise UsageError(
+            "--purge deletes your data store: every project's memory, preferences and "
+            "credential references",
+            hint="Run `devteam export` first, then repeat with --purge --yes.",
+        )
+    result = store.uninstall(purge=args.purge)
+    lines = ["removed {} path(s)".format(len(result["removed"]))]
+    for path in result["removed"]:
+        lines.append("  {}".format(path))
+    if result["data_kept"]:
+        lines.append("  kept your data store at {} (pass --purge to remove it too)".format(result["data_kept"]))
+    elif result["purged"]:
+        lines.append("  data store purged")
+    return result, "\n".join(lines)
+
+
+def build_parser():
+    # `--json` is declared on a parent parser and attached to every subcommand as
+    # well as the root, so both `devteam --json path` and `devteam path --json`
+    # work. SUPPRESS is what makes that safe: without it the subparser's own
+    # default would overwrite a flag passed before the subcommand.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="emit a single JSON document on stdout",
+    )
+    # The declaration seam, on every command for the same reason `--json` is: a client
+    # should not have to know whether this particular command takes it. SUPPRESS keeps a
+    # value passed before the subcommand from being overwritten by the subparser's
+    # default, exactly as for `--json`.
+    common.add_argument(
+        "--client-schemas",
+        dest="client_schemas",
+        metavar="PATH",
+        default=argparse.SUPPRESS,
+        help=(
+            "path to a JSON file naming the store shapes this caller understands; a "
+            "mutating command is refused when any shape is missing or behind "
+            "(env: {})".format(compat.CLIENT_SCHEMAS_ENV)
+        ),
+    )
+
+    parser = _Parser(
+        prog=PROGRAM,
+        parents=[common],
+        description="dev-team-agents — one install, many bound projects",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    def leaf(action, name, **kwargs):
+        # `add_subparsers` sets parser_class from the parser it is called on, so
+        # every subcommand is a _Parser and its errors honour the contract too.
+        kwargs.setdefault("parents", [common])
+        return action.add_parser(name, **kwargs)
+
+    leaf(sub, "path", help="show resolved store locations").set_defaults(func=cmd_path)
+    leaf(sub, "version", help="show core versions").set_defaults(func=cmd_version)
+
+    # No `--path`/`--global`: this describes the *store*, not a project — same
+    # discipline as `path`/`catalog`. Creates nothing, including no machine identity.
+    compat_parser = leaf(
+        sub, "compat", help="what this store requires, or whether a client's shapes can write to it"
+    )
+    compat_group = compat_parser.add_mutually_exclusive_group()
+    compat_group.add_argument("--client", help="JSON object: shape name -> integer schema version")
+    compat_group.add_argument("--client-file", help="path to a file containing the same JSON object")
+    compat_parser.set_defaults(func=cmd_compat)
+
+    store = leaf(sub, "store", help="manage the versioned core").add_subparsers(dest="store_cmd")
+    leaf(store, "list", help="list installed versions").set_defaults(func=cmd_store_list)
+    install = leaf(store, "install", help="install a version from a local tree")
+    install.add_argument("--from", dest="source", required=True, help="path to a dev-team-agents tree")
+    install.add_argument("--version", help="X.Y.Z (default: newest entry in the tree's CHANGELOG)")
+    install.add_argument("--force", action="store_true", help="replace the version if present")
+    install.add_argument(
+        "--activate", action="store_true", default=None, help="make it current after installing"
+    )
+    install.set_defaults(func=cmd_store_install)
+    use = leaf(store, "use", help="set the current version")
+    use.add_argument("version")
+    use.set_defaults(func=cmd_store_use)
+    gc = leaf(store, "gc", help="remove versions nothing references")
+    gc.add_argument("--apply", action="store_true", help="actually remove (default: preview)")
+    gc.set_defaults(func=cmd_store_gc)
+
+    bind_parser = leaf(sub, "bind", help="bind a project to the store")
+    bind_parser.add_argument("path", nargs="?", help="project root (default: current directory)")
+    bind_parser.add_argument(
+        "--provider",
+        action="append",
+        choices=providers.ALL_PROVIDERS,
+        help="repeatable; default: detect from the project",
+    )
+    bind_parser.add_argument("--mode", default="auto", choices=bind_module.MODES)
+    bind_parser.add_argument("--pin", help="pin this project to a version")
+    bind_parser.set_defaults(func=cmd_bind)
+
+    unbind = leaf(sub, "unbind", help="remove bind artifacts, keeping identity and memory")
+    unbind.add_argument("path", nargs="?")
+    unbind.add_argument("--project-id")
+    unbind.add_argument("--keep-artifacts", action="store_true")
+    unbind.set_defaults(func=cmd_unbind)
+
+    leaf(sub, "list", help="list bound projects").set_defaults(func=cmd_list)
+
+    sync = leaf(sub, "sync", help="rebuild bind artifacts from the store")
+    sync.add_argument("path", nargs="?")
+    sync.add_argument("--all", action="store_true", help="every bound project")
+    sync.add_argument("--project-id")
+    sync.set_defaults(func=cmd_sync)
+
+    pin = leaf(sub, "pin", help="pin this project to a version, or release the pin")
+    pin.add_argument("version", nargs="?")
+    pin.add_argument("--path")
+    pin.add_argument("--release", action="store_true")
+    pin.set_defaults(func=cmd_pin)
+
+    update_parser = leaf(sub, "update", help="fetch a release, activate it and sync")
+    update_parser.add_argument("--ref", help="tag to install (default: latest release)")
+    update_parser.add_argument("--check", action="store_true", help="report only")
+    update_parser.add_argument("--no-activate", action="store_true")
+    update_parser.add_argument("--no-sync", action="store_true")
+    update_parser.add_argument("--force", action="store_true")
+    update_parser.add_argument(
+        "--sha256", help="expected sha256 of the release archive (out-of-band pinning)"
+    )
+    update_parser.set_defaults(func=cmd_update)
+
+    migrate_parser = leaf(sub, "migrate", help="convert a v2 vendored install into a bind")
+    migrate_parser.add_argument("path", nargs="?")
+    migrate_parser.add_argument("--apply", action="store_true", help="execute (default: preview)")
+    migrate_parser.add_argument(
+        "--untrack",
+        action="store_true",
+        help="with --apply: `git rm -r --cached` the paths the plan lists (files stay on disk; nothing is committed)",
+    )
+    migrate_parser.add_argument(
+        "--provider", action="append", choices=providers.ALL_PROVIDERS
+    )
+    migrate_parser.add_argument("--mode", default="auto", choices=bind_module.MODES)
+    migrate_parser.add_argument("--pin")
+    migrate_parser.set_defaults(func=cmd_migrate)
+
+    notif_parser = leaf(
+        sub, "notifications", help="the notification queue the hooks write and the app shows"
+    ).add_subparsers(dest="notifications_cmd")
+    notif_list = leaf(notif_parser, "list", help="live notifications across bound projects")
+    notif_list.add_argument("--project", action="append", metavar="PROJECT_ID")
+    notif_list.add_argument("--unseen", action="store_true", help="only those not yet acknowledged")
+    notif_list.set_defaults(func=cmd_notifications_list)
+    notif_ack = leaf(notif_parser, "ack", help="mark notifications seen")
+    notif_ack.add_argument("ids", nargs="*", metavar="ID")
+    notif_ack.add_argument("--all", action="store_true", help="every live notification")
+    notif_ack.add_argument("--project", action="append", metavar="PROJECT_ID")
+    notif_ack.set_defaults(func=cmd_notifications_ack)
+    notif_watch = leaf(
+        notif_parser,
+        "watch",
+        help="stream new notifications until stdin closes or SIGTERM (JSON Lines with --json)",
+    )
+    notif_watch.add_argument(
+        "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
+    )
+    notif_watch.set_defaults(func=cmd_notifications_watch)
+
+    tasks_parser = leaf(
+        sub, "tasks", help="the cross-project task board the hooks feed and the app shows"
+    ).add_subparsers(dest="tasks_cmd")
+
+    def tasks_filters(action):
+        action.add_argument("--project", action="append", metavar="PROJECT_ID")
+        action.add_argument("--since", type=float, metavar="EPOCH", help="drop sessions idle since before this")
+        action.add_argument(
+            "--stale-after", type=int, default=tasks.DEFAULT_STALE_AFTER, metavar="SECONDS",
+            help="an in-progress task older than this is stale (default 3600)",
+        )
+        action.add_argument(
+            "--ended-after", type=int, default=tasks.DEFAULT_ENDED_AFTER, metavar="SECONDS",
+            help="a session unseen for this long counts as ended (default 21600)",
+        )
+
+    tasks_record = leaf(tasks_parser, "record", help="hook-only: fold a todo-tool payload from stdin into its session")
+    tasks_record.add_argument("--project-root", metavar="DIR")
+    tasks_record.add_argument("--provider", default="auto", choices=("auto",) + tasks.PROVIDERS)
+    tasks_record.set_defaults(func=cmd_tasks_record)
+    tasks_mark = leaf(tasks_parser, "mark", help="hook-only: mark the payload's session idle or ended")
+    tasks_mark.add_argument("--project-root", metavar="DIR")
+    tasks_mark.add_argument("--state", required=True, choices=("idle", "ended"))
+    tasks_mark.set_defaults(func=cmd_tasks_mark)
+    tasks_retitle = leaf(tasks_parser, "retitle", help="hook-only: write the payload's renamed session title into its record")
+    tasks_retitle.add_argument("--project-root", metavar="DIR")
+    tasks_retitle.set_defaults(func=cmd_tasks_retitle)
+    tasks_open = leaf(
+        tasks_parser, "review-open", help="hook-only: open or join a review window from a review trigger on stdin"
+    )
+    tasks_open.add_argument("--project-root", metavar="DIR")
+    tasks_open.set_defaults(func=cmd_tasks_review_open)
+    tasks_result = leaf(
+        tasks_parser, "review-result", help="hook-only: fold a finished review agent's output from stdin into its window"
+    )
+    tasks_result.add_argument("--project-root", metavar="DIR")
+    tasks_result.set_defaults(func=cmd_tasks_review_result)
+    tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
+    tasks_filters(tasks_list)
+    tasks_list.set_defaults(func=cmd_tasks_list)
+    tasks_watch = leaf(
+        tasks_parser,
+        "watch",
+        help="stream project snapshots until stdin closes or SIGTERM (JSON Lines with --json)",
+    )
+    tasks_filters(tasks_watch)
+    tasks_watch.add_argument(
+        "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
+    )
+    tasks_watch.set_defaults(func=cmd_tasks_watch)
+    plugin_parser = leaf(sub, "plugin", help="per-project integrations declared by the core")
+    plugin_sub = plugin_parser.add_subparsers(dest="plugin_cmd")
+    plugin_list = leaf(plugin_sub, "list", help="every plugin, its state and status")
+    plugin_list.add_argument("--path")
+    plugin_list.set_defaults(func=cmd_plugin_list)
+    plugin_show = leaf(plugin_sub, "show", help="one plugin")
+    plugin_show.add_argument("name")
+    plugin_show.add_argument("--path")
+    plugin_show.set_defaults(func=cmd_plugin_show)
+    plugin_enable = leaf(plugin_sub, "enable", help="turn a plugin on for this project")
+    plugin_enable.add_argument("name")
+    plugin_enable.add_argument("--force", action="store_true", help="enable although a requirement is missing")
+    plugin_enable.add_argument("--path")
+    plugin_enable.set_defaults(func=cmd_plugin_enable)
+    plugin_disable = leaf(plugin_sub, "disable", help="turn a plugin off, keeping its config")
+    plugin_disable.add_argument("name")
+    plugin_disable.add_argument("--path")
+    plugin_disable.set_defaults(func=cmd_plugin_disable)
+    plugin_config = leaf(plugin_sub, "config", help="read and write a plugin's config").add_subparsers(
+        dest="plugin_config_cmd"
+    )
+    plugin_config_get = leaf(plugin_config, "get", help="the effective config, or one key")
+    plugin_config_get.add_argument("name")
+    plugin_config_get.add_argument("key", nargs="?")
+    plugin_config_get.add_argument("--path")
+    plugin_config_get.set_defaults(func=cmd_plugin_config_get)
+    plugin_config_set = leaf(plugin_config, "set", help="write one key, parsed by its declared type")
+    plugin_config_set.add_argument("name")
+    plugin_config_set.add_argument("key")
+    plugin_config_set.add_argument("value")
+    plugin_config_set.add_argument("--path")
+    plugin_config_set.set_defaults(func=cmd_plugin_config_set)
+    plugin_config_unset = leaf(plugin_config, "unset", help="drop a key so its default applies")
+    plugin_config_unset.add_argument("name")
+    plugin_config_unset.add_argument("key")
+    plugin_config_unset.add_argument("--path")
+    plugin_config_unset.set_defaults(func=cmd_plugin_config_unset)
+    plugin_run = leaf(plugin_sub, "run", help="run an action the plugin's manifest declares")
+    plugin_run.add_argument("name")
+    plugin_run.add_argument("action")
+    plugin_run.add_argument("--path")
+    plugin_run.set_defaults(func=cmd_plugin_run)
+
+    prefs_parser = leaf(sub, "prefs", help="read and write the preference layers").add_subparsers(
+        dest="prefs_cmd"
+    )
+    prefs_list = leaf(prefs_parser, "list", help="every key, its value and which layer set it")
+    prefs_list.add_argument("--path")
+    prefs_list.set_defaults(func=cmd_prefs_list)
+    prefs_get = leaf(prefs_parser, "get", help="one key")
+    prefs_get.add_argument("key")
+    prefs_get.add_argument("--path")
+    prefs_get.set_defaults(func=cmd_prefs_get)
+    prefs_set = leaf(prefs_parser, "set", help="write a key into a layer")
+    prefs_set.add_argument("key")
+    prefs_set.add_argument("value")
+    prefs_set.add_argument("--scope", default="global", choices=prefs.SCOPES)
+    prefs_set.add_argument("--path")
+    prefs_set.set_defaults(func=cmd_prefs_set)
+    prefs_unset = leaf(prefs_parser, "unset", help="drop a key so the layer below applies")
+    prefs_unset.add_argument("key")
+    prefs_unset.add_argument("--scope", default="global", choices=prefs.SCOPES)
+    prefs_unset.add_argument("--path")
+    prefs_unset.set_defaults(func=cmd_prefs_unset)
+
+    integration_parser = leaf(
+        sub, "integration", help="account-level connections to GitHub, Jira and Cloudflare (token in the secret store)"
+    ).add_subparsers(dest="integration_cmd")
+
+    def integration_leaf(name, **kwargs):
+        leafp = leaf(integration_parser, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        return leafp
+
+    integration_list = integration_leaf("list", help="every integration, its state and this project's binding")
+    integration_list.set_defaults(func=cmd_integration_list)
+    integration_show = integration_leaf("show", help="one integration")
+    integration_show.add_argument("name")
+    integration_show.set_defaults(func=cmd_integration_show)
+    integration_connect = integration_leaf(
+        "connect", help="store the token (read from stdin) and account fields, then test"
+    )
+    integration_connect.add_argument("name")
+    integration_connect.add_argument(
+        "--field", action="append", default=[], metavar="KEY=VALUE", help="an account-scope field; repeatable"
+    )
+    integration_connect.set_defaults(func=cmd_integration_connect)
+    integration_test = integration_leaf("test", help="check the stored token against the API")
+    integration_test.add_argument("name")
+    integration_test.set_defaults(func=cmd_integration_test)
+    integration_disconnect = integration_leaf("disconnect", help="forget the token, keep the account config")
+    integration_disconnect.add_argument("name")
+    integration_disconnect.add_argument(
+        "--keep-token", action="store_true", help="keep the stored token, only clear the test result"
+    )
+    integration_disconnect.set_defaults(func=cmd_integration_disconnect)
+    integration_config = leaf(
+        integration_parser, "config", help="read and write an integration's fields"
+    ).add_subparsers(dest="integration_config_cmd")
+
+    def integration_config_leaf(name, **kwargs):
+        leafp = leaf(integration_config, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        leafp.add_argument("name")
+        return leafp
+
+    integration_config_get = integration_config_leaf("get", help="every field, or one key")
+    integration_config_get.add_argument("key", nargs="?")
+    integration_config_get.set_defaults(func=cmd_integration_config_get)
+    integration_config_set = integration_config_leaf("set", help="write one field to the scope it declares")
+    integration_config_set.add_argument("key")
+    integration_config_set.add_argument("value")
+    integration_config_set.set_defaults(func=cmd_integration_config_set)
+    integration_config_unset = integration_config_leaf("unset", help="drop one field")
+    integration_config_unset.add_argument("key")
+    integration_config_unset.set_defaults(func=cmd_integration_config_unset)
+    integration_resources = integration_leaf("resources", help="list what a field picker can offer")
+    integration_resources.add_argument("name")
+    integration_resources.add_argument("kind", help="github: repos; jira: projects; cloudflare: zones, accounts")
+    integration_resources.set_defaults(func=cmd_integration_resources)
+    # allow_abbrev=False: `--allow` must not parse as `--allow-write`, so a permission rule
+    # that matches the literal flag cannot be walked around with a prefix.
+    integration_call = integration_leaf(
+        "call", help="run one API request through the stored token (integrations that opt in)",
+        allow_abbrev=False,
+    )
+    integration_call.add_argument("name")
+    integration_call.add_argument("method", help="GET, POST, PUT, PATCH or DELETE")
+    integration_call.add_argument(
+        "endpoint", help="absolute API path; {field} placeholders take the configured values, e.g. /zones/{zone_id}"
+    )
+    integration_call.add_argument(
+        "--query", action="append", default=[], metavar="KEY=VALUE", help="a query parameter; repeatable"
+    )
+    integration_call.add_argument("--data", help="the JSON request body")
+    integration_call.add_argument("--data-file", metavar="FILE", help="read the JSON body from FILE (- for stdin)")
+    integration_call.add_argument(
+        "--allow-write", action="store_true",
+        help="required for POST, PUT, PATCH and DELETE; pass it only after the user confirmed the change",
+    )
+    integration_call.set_defaults(func=cmd_integration_call)
+
+    cred_parser = leaf(
+        sub, "cred", help="declare credentials as references; values go to the OS secret store"
+    ).add_subparsers(dest="cred_cmd")
+
+    def cred_leaf(name, **kwargs):
+        leafp = leaf(cred_parser, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        leafp.add_argument(
+            "--global",
+            dest="global_layer",
+            action="store_true",
+            help="act on the global layer instead of this project's",
+        )
+        return leafp
+
+    cred_list = cred_leaf("list", help="every declared credential — references only, never a value")
+    cred_list.set_defaults(func=cmd_cred_list)
+
+    cred_get = cred_leaf("get", help="print one value on stdout and nothing else")
+    cred_get.add_argument("key")
+    cred_get.add_argument("--agent", help="the agent asking, checked against the entry's scope")
+    cred_get.set_defaults(func=cmd_cred_get)
+
+    cred_set = cred_leaf("set", help="declare a credential; the value is read from stdin")
+    cred_set.add_argument("key")
+    cred_set.add_argument("--purpose", required=True, help="why this project needs it")
+    cred_set.add_argument("--scope", help="comma-separated agent names allowed to read it")
+    cred_set.add_argument(
+        "--backend", choices=secrets_module.BACKENDS, help="override the probed default"
+    )
+    cred_set.set_defaults(func=cmd_cred_set)
+
+    cred_unset = cred_leaf("unset", help="remove a reference; the value stays unless told otherwise")
+    cred_unset.add_argument("key")
+    cred_unset.add_argument(
+        "--forget-value",
+        dest="forget_value",
+        action="store_true",
+        help="also delete the value from the secret store",
+    )
+    cred_unset.set_defaults(func=cmd_cred_unset)
+
+    cred_import = cred_leaf("import", help="migrate a v2 credentials.local.json into references")
+    cred_import.add_argument("file", help="the file to import — never scanned for, always named")
+    cred_import.set_defaults(func=cmd_cred_import)
+
+    cred_check = cred_leaf("check", help="report references with no value, or an insecure backend")
+    cred_check.set_defaults(func=cmd_cred_check)
+
+    cred_local = leaf(
+        cred_parser, "local", help="the plaintext credentials.local.json - the desktop app's editor"
+    ).add_subparsers(dest="cred_local_cmd")
+
+    def cred_local_leaf(name, **kwargs):
+        leafp = leaf(cred_local, name, **kwargs)
+        leafp.add_argument("--path", help="project directory (default: the current one)")
+        return leafp
+
+    cred_local_leaf(
+        "show", help="read the file with every secret value replaced by a marker"
+    ).set_defaults(func=cmd_cred_local_show)
+    cred_local_leaf(
+        "init", help="create the file from the canonical template; refuses if it exists"
+    ).set_defaults(func=cmd_cred_local_init)
+    cred_local_patch = cred_local_leaf(
+        "patch", help="apply set/unset/move operations read from stdin, atomically"
+    )
+    cred_local_patch.add_argument(
+        "--expect-hash", dest="expect_hash", required=True,
+        help="the hash `show` returned; the patch is refused if the file changed since",
+    )
+    cred_local_patch.set_defaults(func=cmd_cred_local_patch)
+
+    cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
+    cred_backends.set_defaults(func=cmd_cred_backends)
+
+    upgrade_parser = leaf(
+        sub, "upgrade", help="move this project's memory into the store (asks first)"
+    )
+    upgrade_parser.add_argument("path", nargs="?")
+    upgrade_parser.add_argument("--apply", action="store_true", help="execute (default: preview)")
+    upgrade_parser.set_defaults(func=cmd_upgrade)
+
+    export_parser = leaf(sub, "export", help="archive the data store for another machine")
+    export_parser.add_argument("--to", help="destination file or directory")
+    export_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="also archive this machine's registry and bind manifests (absolute paths)",
+    )
+    export_parser.set_defaults(func=cmd_export)
+
+    import_parser = leaf(sub, "import", help="restore a data store from an archive")
+    import_parser.add_argument("archive")
+    import_parser.add_argument("--force", action="store_true", help="replace a populated store")
+    import_parser.set_defaults(func=cmd_import)
+
+    uninstall_parser = leaf(sub, "uninstall", help="remove the core; keeps your data store")
+    uninstall_parser.add_argument(
+        "--purge", action="store_true", help="ALSO delete the data store — memory included"
+    )
+    uninstall_parser.add_argument(
+        "--yes", action="store_true", help="required alongside --purge; there is no undo"
+    )
+    uninstall_parser.set_defaults(func=cmd_uninstall)
+
+    doctor_parser = leaf(sub, "doctor", help="diagnose the store and this project's bind")
+    doctor_parser.add_argument("path", nargs="?")
+    doctor_parser.add_argument(
+        "--no-project", action="store_true", help="check the store only, ignoring the cwd"
+    )
+    doctor_parser.add_argument(
+        "--reassign-identity",
+        action="store_true",
+        help="give this project a new project_id (fork case)",
+    )
+    doctor_parser.add_argument(
+        "--machine",
+        action="store_true",
+        help="check this machine's prerequisites (git, Python, provider CLIs) instead of a project",
+    )
+    doctor_parser.set_defaults(func=cmd_doctor)
+
+    detect_parser = leaf(sub, "detect", help="read a folder: providers, stack, project type, first task")
+    detect_parser.add_argument("--path", help="project directory (default: the current one)")
+    detect_parser.set_defaults(func=cmd_detect)
+
+    start_parser = leaf(sub, "start", help="set a folder up and suggest a first, read-only task")
+    start_parser.add_argument("--path", help="project directory (default: the current one)")
+    start_parser.add_argument("--provider", choices=providers.ALL_PROVIDERS, help="override the detected provider")
+    start_parser.add_argument(
+        "--type", choices=("new", "unfinished", "maintenance"), help="override the detected project type"
+    )
+    start_parser.set_defaults(func=cmd_start)
+
+    # Unlike `store`/`prefs`/`cred`, `catalog` alone is a valid, meaningful call
+    # (the summary) — so `func` is set on the parent parser itself, not only on
+    # its subcommands. A subparsers action only overwrites `func` on the shared
+    # namespace when a subcommand is actually chosen, so this default survives a
+    # bare `devteam catalog`.
+    catalog_parser = leaf(
+        sub, "catalog", help="browse the resolved version's agents, skills and commands (read-only)"
+    )
+    catalog_parser.add_argument("--path", help="project directory (default: the current one)")
+    catalog_parser.set_defaults(func=cmd_catalog)
+    catalog_sub = catalog_parser.add_subparsers(dest="catalog_cmd")
+
+    catalog_agents = leaf(catalog_sub, "agents", help="every agent in the resolved version")
+    catalog_agents.add_argument("--path", help="project directory (default: the current one)")
+    catalog_agents.set_defaults(func=cmd_catalog_agents)
+
+    catalog_skills = leaf(catalog_sub, "skills", help="every skill in the resolved version")
+    catalog_skills.add_argument("--path", help="project directory (default: the current one)")
+    catalog_skills.set_defaults(func=cmd_catalog_skills)
+
+    catalog_commands = leaf(catalog_sub, "commands", help="every command in the resolved version")
+    catalog_commands.add_argument("--path", help="project directory (default: the current one)")
+    catalog_commands.add_argument("--featured", action="store_true", help="only the five featured commands")
+    catalog_commands.set_defaults(func=cmd_catalog_commands)
+
+    catalog_show = leaf(catalog_sub, "show", help="one entry's metadata and its body")
+    catalog_show.add_argument("name", help="a bare agent, skill or command name")
+    catalog_show.add_argument("--path", help="project directory (default: the current one)")
+    catalog_show.set_defaults(func=cmd_catalog_show)
+
+    # The user-level skill directories each provider reads (ADR-0020) — outside every
+    # project and outside the store. No `--path`: nothing here depends on a project.
+    skills_parser = leaf(
+        sub, "skills", help="list, show, install and remove the providers' global skills"
+    ).add_subparsers(dest="skills_cmd")
+    provider_choices = global_skills.PROVIDERS + ("all",)
+
+    skills_list = leaf(skills_parser, "list", help="every skill in the global skill directories")
+    skills_list.add_argument("--provider", default="all", choices=provider_choices)
+    skills_list.set_defaults(func=cmd_skills_list)
+
+    skills_show = leaf(skills_parser, "show", help="one global skill's metadata, body and files")
+    skills_show.add_argument("name")
+    skills_show.add_argument("--root", help="the root id, when the name exists in more than one")
+    skills_show.set_defaults(func=cmd_skills_show)
+
+    skills_install = leaf(skills_parser, "install", help="install a skill from a directory or a .zip")
+    skills_install.add_argument(
+        "--source", required=True, help="a directory holding SKILL.md, or a .zip/.skill archive"
+    )
+    skills_install.add_argument(
+        "--provider",
+        action="append",
+        choices=provider_choices,
+        help="repeatable; each provider installs into its own target root (default: all)",
+    )
+    skills_install.add_argument("--root", action="append", help="repeatable; install into this root id")
+    skills_install.add_argument(
+        "--replace", action="store_true", help="move an existing skill of the same name to quarantine"
+    )
+    skills_install.add_argument(
+        "--link", action="store_true", help="symlink a directory source instead of copying it"
+    )
+    skills_install.set_defaults(func=cmd_skills_install)
+
+    skills_remove = leaf(
+        skills_parser, "remove", help="remove a global skill (a directory goes to quarantine)"
+    )
+    skills_remove.add_argument("name")
+    skills_remove.add_argument("--root", help="the root id, when the name exists in more than one")
+    skills_remove.set_defaults(func=cmd_skills_remove)
+
+    # The account commands (ADR-0029): the CLI owns the session, the app and the installers
+    # call these. Their handlers and parser live in `auth.py`.
+    auth.register(sub, leaf)
+
+    return parser
+
+
+#: Commands whose `--json` stdout is JSON Lines rather than one document. Every line,
+#: a failure included, is then one compact object (`Emitter.lines`).
+STREAMING_COMMANDS = frozenset({("notifications", "watch"), ("tasks", "watch")})
+
+
+def _looks_streaming(raw):
+    """Whether argv names a streaming command, for failures raised before parsing ends."""
+    words = [word for word in raw if not word.startswith("-")]
+    return any(tuple(words[i : i + 2]) in STREAMING_COMMANDS for i in range(len(words)))
+
+
+def resolved_command_path(parser, args):
+    """The leaf path the parse resolved to, e.g. ``("cred", "get")``.
+
+    Walked from the real parser rather than read off a hardcoded set of dest names
+    (`command`, `store_cmd`, `cred_cmd`, …): a new command group would otherwise resolve
+    to its parent path and be gated as the wrong thing, silently. Same discipline as
+    `tests/test_json_contract.py`'s discovery walk, and the same path tuples, so the
+    classification in `compat.py` is keyed by what both produce.
+
+    Returns a group path (``("store",)``) when no subcommand was chosen; `main` only
+    gates a path that actually resolved to a handler.
+    """
+    path = []
+    node = parser
+    while True:
+        action = next(
+            (a for a in node._actions if isinstance(a, argparse._SubParsersAction)), None
+        )
+        if action is None:
+            break
+        chosen = getattr(args, action.dest, None)
+        if not chosen or chosen not in action.choices:
+            break
+        path.append(chosen)
+        node = action.choices[chosen]
+    return tuple(path)
+
+
+def _ensure_utf8_stdio():
+    """Force ``sys.stdin``/``sys.stdout``/``sys.stderr`` to UTF-8, if the interpreter allows it.
+
+    Every human-facing message in this package is an ordinary Python string that
+    may contain non-ASCII punctuation — an em dash, mainly (`grep -rn "—"` finds
+    dozens, in hints and human output, not just comments). On Linux and macOS
+    that is never a problem: the stream is UTF-8 by default. On Windows it is
+    only UTF-8 when talking to a real console; the moment stdout/stderr are
+    redirected to a pipe or a file — exactly what every subprocess-driven test,
+    and every caller piping this CLI's output, does — Python falls back to
+    ``locale.getpreferredencoding()``, commonly ``cp1252``, and a bare em dash
+    raises ``UnicodeEncodeError`` or round-trips as a different byte than a
+    UTF-8-decoding caller expects. ``reconfigure`` exists on every stream this
+    matters for (Python 3.7+'s ``TextIOWrapper``) and is a no-op cost-wise; a
+    stream that lacks it (already replaced by a test double) is left alone.
+
+    stdin has the same problem in the other direction: a piped password or request
+    body (the desktop app sends both as UTF-8) was decoded as ``cp1252`` on Windows,
+    so a non-ASCII password reached the account service altered, or the read raised.
+    A console read goes through ``getpass`` and is unaffected.
+    """
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except (OSError, ValueError):
+                pass
+
+
+def main(argv=None, stdout=None, stderr=None):
+    # The emitter is built before parsing so a parse error can still honour
+    # `--json`; argv is scanned directly because argparse has not run yet.
+    if stdout is None and stderr is None:
+        # Only when both are about to default to the real `sys.stdout`/`sys.stderr`
+        # — a caller that supplied its own streams (every in-process test) gets
+        # exactly what it passed in, untouched.
+        _ensure_utf8_stdio()
+    argv_list = list(argv) if argv is not None else None
+    raw = argv_list if argv_list is not None else sys.argv[1:]
+    emitter = Emitter(as_json="--json" in raw, stdout=stdout, stderr=stderr)
+    # Before parsing, too: a bad `--interval` is a failure of the streaming command.
+    emitter.lines = _looks_streaming(raw)
+
+    try:
+        parser = build_parser()
+        args = parser.parse_args(argv_list)
+    except _HelpRequested:
+        return 0
+    except DevteamError as exc:
+        return emitter.fail(exc)
+
+    emitter.as_json = getattr(args, "json", emitter.as_json)
+    # `integration call` checks the literal command line a write arrived in (ADR-0032).
+    args.raw_argv = list(raw)
+
+    # The write gate, and it runs HERE — before `adopt_machine_layout()`, which is
+    # itself a store mutation, and before any handler. A refusal must leave the store
+    # byte-identical, so nothing that writes may run ahead of it.
+    #
+    # The declaration is resolved (and therefore validated) whenever one is present,
+    # even for a read-only command: a client whose declaration file is corrupt has a
+    # broken installation, and reporting that on its first call rather than on its first
+    # *write* removes the window where the gate silently is not there. The refusal
+    # itself applies only to a command that writes.
+    command_path = resolved_command_path(parser, args)
+    emitter.lines = command_path in STREAMING_COMMANDS
+    try:
+        declaration = compat.client_declaration(
+            getattr(args, "client_schemas", None), os.environ
+        )
+        # Computed here as well as inside `compat.gate` because the relocation decision
+        # below needs the comparison for a *read-only* command, where the gate
+        # deliberately does not raise. Both call `compat.unsupported_by` — the rule still
+        # has one definition; only the pure function runs twice.
+        unsupported = compat.unsupported_by(declaration.schemas) if declaration else {}
+        # `hasattr(args, "func")` keeps a group invoked with no subcommand — `devteam
+        # store`, `prefs`, `cred` — out of the gate. Its path resolves to the group, which
+        # is in neither classification table, so `is_mutating` would fail closed and turn
+        # a "needs a subcommand" usage error (exit 2) into a conflict (exit 4) about a
+        # command the caller never asked for.
+        if declaration is not None and hasattr(args, "func"):
+            compat.gate(command_path, declaration)
+    except DevteamError as exc:
+        return emitter.fail(exc)
+    except Exception as exc:  # noqa: BLE001 - the contract outranks a clean traceback
+        # The same net the handler call below carries, for the same reason and because
+        # this block parses caller-supplied text: `Path.read_text` raises
+        # `UnicodeDecodeError` and `json.loads` raises `RecursionError`, neither of which
+        # is an `OSError` or a `JSONDecodeError`. Both are converted to `UsageError` in
+        # `compat` now; this is what keeps the *next* one from reaching the shell as a
+        # traceback with an empty stdout under `--json`.
+        return emitter.fail(
+            EnvError(
+                "unexpected {} while reading the client declaration: {}".format(
+                    type(exc).__name__, exc
+                ),
+                hint="This is a bug in dev-team-agents; please report it.",
+            )
+        )
+
+    # The store's own shape is brought up to date before any command reads it: a
+    # command that found registry.json at the pre-split path would report every
+    # bound project as unbound. Idempotent, and a no-op for an already-split store.
+    #
+    # **Not on behalf of an incompatible client.** The relocation writes `registry` and
+    # `bind_manifest`; a client that declared it cannot read those shapes must not have
+    # them rewritten because it asked a read-only question. A read-only command then
+    # answers against the layout actually on disk — which every one of them does
+    # correctly except those in `compat.NEEDS_MACHINE_LAYOUT`, which are refused rather
+    # than allowed to answer wrong.
+    adopted = None
+    if unsupported and store.machine_layout_pending():
+        if command_path in compat.NEEDS_MACHINE_LAYOUT:
+            return emitter.fail(
+                compat.migration_required(command_path, declaration, unsupported)
+            )
+    else:
+        try:
+            adopted = store.adopt_machine_layout()
+        except (OSError, DevteamError) as exc:
+            return emitter.fail(
+                EnvError(
+                    "cannot bring the data store up to the current layout: {}".format(exc),
+                    hint="Check permissions on the data store, then retry.",
+                )
+            )
+    if adopted and (adopted["moved"] or adopted["quarantined"]):
+        emitter.warn(
+            "moved {} machine-local record(s) into {}; repointed {} project(s)".format(
+                len(adopted["moved"]), paths.machine_dir(), len(adopted["repointed"])
+            )
+        )
+
+    if not getattr(args, "command", None) or not hasattr(args, "func"):
+        if getattr(args, "command", None) == "store":
+            return emitter.fail(UsageError("store needs a subcommand: list, install, use, gc"))
+        if getattr(args, "command", None) == "prefs":
+            return emitter.fail(UsageError("prefs needs a subcommand: list, get, set, unset"))
+        if getattr(args, "command", None) == "plugin":
+            return emitter.fail(
+                UsageError("plugin needs a subcommand: list, show, enable, disable, config, run")
+            )
+        if getattr(args, "command", None) == "integration":
+            return emitter.fail(
+                UsageError(
+                    "integration needs a subcommand: list, show, connect, test, disconnect, config, resources, call"
+                )
+            )
+        if getattr(args, "command", None) == "cred":
+            return emitter.fail(
+                UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends, local")
+            )
+        if getattr(args, "command", None) == "notifications":
+            return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
+        if getattr(args, "command", None) == "tasks":
+            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, review-open, review-result, list, watch"))
+        if getattr(args, "command", None) == "skills":
+            return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
+        if getattr(args, "command", None) == "auth":
+            return emitter.fail(
+                UsageError(
+                    "auth needs a subcommand: login, logout, status, check, otp, password, profile, delete"
+                )
+            )
+        return emitter.fail(UsageError("no command given — run `devteam --help`"))
+
+    try:
+        args.account_gate = gate.apply(command_path, args, emitter)
+    except DevteamError as exc:
+        return emitter.fail(exc)
+
+    try:
+        payload, human = args.func(args, emitter)
+    except DevteamError as exc:
+        return emitter.fail(exc)
+    except KeyboardInterrupt:
+        emitter.warn("interrupted")
+        return 130
+    except OSError as exc:
+        return emitter.fail(
+            EnvError(
+                "{}: {}".format(type(exc).__name__, exc),
+                hint="Check permissions and that every path involved is reachable.",
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - the contract outranks a clean traceback
+        # An unexpected exception used to reach the shell as a traceback with an
+        # empty stdout under --json, which a client cannot tell from a findings
+        # result. One document always goes out.
+        return emitter.fail(
+            EnvError(
+                "unexpected {}: {}".format(type(exc).__name__, exc),
+                hint="This is a bug in dev-team-agents; please report it.",
+            )
+        )
+
+    ok = True
+    exit_code = 0
+    if args.command == "doctor":
+        # `1` is "ran and reported a problem it did not fix" — a WARN finding is
+        # exactly that, and returning 0 made every recoverable problem look like
+        # success to a client reading only the exit code.
+        if payload.get("status") in ("warn", "fail"):
+            ok = False
+            exit_code = 1
+    elif args.command == "compat":
+        # `1`, not `2` and not `3`: an incompatible client is a real, well-formed
+        # answer to a well-formed question — the store and the client both parsed
+        # fine, there is just a shape neither side can paper over. That is exactly
+        # what exit 1 means elsewhere in this CLI ("ran and reported a problem it
+        # did not fix"), so a caller already branching on `$?` for `cred check` or
+        # `sync` gets the same signal here instead of a third meaning to learn. `2`
+        # is reserved for a malformed question (bad JSON, wrong type) — those raise
+        # `UsageError` above and never reach this branch. A bare `devteam compat`
+        # with no `--client` has `may_write is None` and stays a clean `0`: nothing
+        # was asked, so nothing can be incompatible.
+        if payload.get("may_write") is False:
+            ok = False
+            exit_code = 1
+    elif payload.get("problems"):
+        # Applies to sync AND update: an update that activates a version but fails
+        # to sync N projects is not a success.
+        ok = False
+        exit_code = 1
+
+    if emitter.streamed:
+        # A streaming command's stdout is JSON Lines and already carried its last
+        # event (`end`); a trailing indented document would be unparseable there.
+        return exit_code
+
+    payload = dict(payload)
+    # `warn` only reaches stderr, and ADR-0011 makes the desktop app a client of this
+    # CLI: a store mutation it cannot observe in the document is a contract gap.
+    # `adopted` is None when the relocation was skipped because an incompatible client
+    # asked a read-only question — nothing moved, so there is nothing to report.
+    if adopted and (adopted["moved"] or adopted["quarantined"]):
+        payload["store_relocation"] = adopted
+    # `plugin run` answers with a `RunResult`, whose own `ok` says whether the *script*
+    # succeeded (ADR-0019 § 3). The command itself did succeed (exit 0), so that field
+    # must survive instead of being overwritten with the command's own verdict.
+    if not (args.command == "plugin" and "ok" in payload):
+        payload["ok"] = ok
+    emitter.emit(payload, human)
+    return exit_code

@@ -1,0 +1,42 @@
+{
+  "$schema": "internal://command-map.json",
+  "_comment": "Per-provider output form for slash commands. Source commands live at commands/<name>.md (no prefix). The renderer uses this map to decide where to write each command and what name it will be exposed as.",
+  "_ux_target": "`/devteam:<name>` is the canonical user-facing invocation string. Providers that prohibit `:` in command names use the closest legal alternative and are documented in docs/providers.md.",
+  "providers": {
+    "claude": {
+      "_comment": "Claude Code derives the slash name from the subdirectory: .claude/commands/devteam/<name>.md -> /devteam:<name>.",
+      "output_form": "subdir",
+      "target_path_template": ".claude/commands/devteam/{name}.md",
+      "exposed_name_template": "/devteam:{name}",
+      "frontmatter_passthrough": true,
+      "keep_body_verbatim": true
+    },
+    "opencode": {
+      "_comment": "opencode command names accept `:` when declared as a key in the `command` object of opencode.json. Renderer emits each command as an inline JSON entry and merges into the project's opencode.json(c).",
+      "output_form": "inline_config_key",
+      "target_path_template": "opencode.json:command:devteam:{name}",
+      "exposed_name_template": "/devteam:{name}",
+      "frontmatter_passthrough": false,
+      "frontmatter_to_inline": {
+        "description": "description",
+        "agent": "agent",
+        "model": "model",
+        "tier": "_resolved_to_model_via_tiers_json_",
+        "template": "_body_emitted_as_template_string_"
+      }
+    },
+    "codex": {
+      "_comment": "Codex uses project-local skills as the official command surface. The canonical identifier stays `devteam-<name>`, invoked as `$devteam-<name>`.",
+      "output_form": "skills_dir",
+      "target_path_template": ".codex/skills/devteam-{name}/SKILL.md",
+      "exposed_name_template": "$devteam-{name}",
+      "ux_divergence": "Codex does not preserve the `/devteam:<name>` slash namespace; the harness standardizes on project-local skills instead.",
+      "frontmatter_passthrough": false,
+      "frontmatter_to_inline": {
+        "_comment": "Codex command skills use SKILL.md frontmatter and delegate into provider-native tools from the command body.",
+        "description": "_first_paragraph_of_body_",
+        "body": "_body_emitted_verbatim_"
+      }
+    }
+  }
+}

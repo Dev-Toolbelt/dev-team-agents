@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+# Anonymous telemetry helper for dev-team-agents.
+#
+# Usage:
+#   telemetry-send.sh --queue EVENT_NAME [JSON_PROPERTIES]
+#   telemetry-send.sh --flush
+#   telemetry-send.sh --dry-run   (prints queue contents, sends nothing)
+#
+# The queue file (telemetry-queue.json) stores the anonymous ID, last flush
+# timestamp, and pending events. All operations are silent on failure.
+#
+# Privacy:
+#   - No PII is collected. The anonymous ID is a SHA-256 hash of hostname +
+#     home directory path and is not reversible.
+#   - No file paths, project names, code, or user identifiers are sent.
+#   - All data is sent over HTTPS to PostHog. Set telemetry: false in
+#     preferences.json to opt out permanently.
+#   - See PRIVACY.md for the full list of collected events and properties.
+
+set -euo pipefail
+
+# `python3` resolves to a working Python 3.9+ on Windows Git Bash too (see the file).
+_dta_py="$(dirname "${BASH_SOURCE[0]}")/../lib/python.sh"
+# shellcheck source=../lib/python.sh
+[ -f "$_dta_py" ] && . "$_dta_py"
+
+# ── PostHog configuration ──────────────────────────────────────────────────────
+# POSTHOG_API_KEY below is this project's PostHog *project* key (the `phc_`
+# prefix marks a write-only capture key). Such keys are designed to be embedded
+# in client-side code: they can submit events to the project and nothing else —
+# they cannot read, query, export or modify any data. Shipping it in this file
+# is intentional and is not a secret leak; it is what makes an installed copy
+# able to report at all. Both values can be overridden via the environment
+# (DEVTEAM_POSTHOG_KEY / DEVTEAM_POSTHOG_ENDPOINT) to point at a self-hosted
+# PostHog instance or at a test project.
+POSTHOG_API_KEY="${DEVTEAM_POSTHOG_KEY:-phc_wBFupbyPPEw8DWTJd8Z8UAjNMxwHJusBEPJsrURsQ93a}"
+POSTHOG_ENDPOINT="${DEVTEAM_POSTHOG_ENDPOINT:-https://us.i.posthog.com}"
+
+# ── Path resolution ────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Go up two levels: helpers/ -> scripts/ -> dev-team-agents/ (the install root)
+INSTALL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# DEVTEAM_USER_DATA_DIR can be set by tests or CI to override the default path.
+# QUEUE_FILE and STATE_FILE are machine-local (ADR-0013) and always live under
+# this one directory.
+USER_DATA_DIR="${DEVTEAM_USER_DATA_DIR:-"$INSTALL_DIR/user-data"}"
+QUEUE_FILE="$USER_DATA_DIR/telemetry-queue.json"
+STATE_FILE="$USER_DATA_DIR/state.json"
+# PREFS_FILE has its OWN override, separate from USER_DATA_DIR: preferences.json
+# is a portable record, not a machine-local one, and on a project that has run
+# `devteam bind`/`sync` it lives at the resolved cascade projection
+# (.dev-team-agents/resolved/preferences.json), not co-located with the queue/
+# state files. Callers that resolve that projection (pre-tool-use/02b-telemetry.sh,
+# stop/05-telemetry.sh) set DEVTEAM_PREFS_FILE explicitly; a caller that only
+# sets DEVTEAM_USER_DATA_DIR (existing tests/CI) keeps the old co-located default.
+PREFS_FILE="${DEVTEAM_PREFS_FILE:-"$USER_DATA_DIR/preferences.json"}"
+
+# shellcheck source=scripts/lib/state.sh
+if [ -f "$SCRIPT_DIR/../lib/state.sh" ]; then
+    . "$SCRIPT_DIR/../lib/state.sh"
+else
+    state_get() { echo ""; }
+fi
+
+FLUSH_TTL_HOURS=24
+QUEUE_MAX_EVENTS=100
+
+# ── Guard: consent check ───────────────────────────────────────────────────────
+# `_telemetry_enabled` is defined once, in scripts/lib/telemetry-guard.sh, and
+# fails closed there. If that file is missing, this script must not send.
+# Path is repo-root-relative on purpose: CI runs `shellcheck -x` from the repo
+# root, and a script-relative form resolves to nothing there (SC1091), which in
+# turn hides the guard's use of PREFS_FILE and raises a bogus SC2034 here.
+# shellcheck source=scripts/lib/telemetry-guard.sh
+if [ -f "$SCRIPT_DIR/../lib/telemetry-guard.sh" ]; then
+    . "$SCRIPT_DIR/../lib/telemetry-guard.sh"
+else
+    _telemetry_enabled() { return 1; }
+fi
+
+# ── Anonymous ID ───────────────────────────────────────────────────────────────
+# Persisted in state.json (survives a deleted/corrupted telemetry-queue.json),
+# with the queue file as a legacy fallback so an existing install's ID does
+# not change on upgrade. Always written back to state.json once resolved.
+_get_or_create_id() {
+    local existing
+
+    # 1. state.json — the durable home for this value
+    if command -v state_get >/dev/null 2>&1; then
+        existing="$(state_get telemetry_anon_id "$STATE_FILE")"
+        if [ -n "$existing" ]; then
+            echo "$existing"
+            return
+        fi
+    fi
+
+    # 2. queue file — legacy location, kept as fallback for existing installs
+    if [ -f "$QUEUE_FILE" ] && command -v python3 >/dev/null 2>&1; then
+        existing=$(python3 - "$QUEUE_FILE" <<'PYEOF' 2>/dev/null || echo ""
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    print(d.get("id", ""))
+except (json.JSONDecodeError, IOError, FileNotFoundError):
+    print("")
+PYEOF
+)
+        if [ -n "$existing" ]; then
+            command -v state_set >/dev/null 2>&1 && state_set telemetry_anon_id "$existing" "$STATE_FILE"
+            echo "$existing"
+            return
+        fi
+    fi
+
+    # 3. Generate fresh: SHA-256 of hostname + home dir (one-way, not reversible)
+    local raw="${HOSTNAME:-$(hostname 2>/dev/null || echo unknown)}:${HOME:-/unknown}"
+    local hashed
+    if command -v sha256sum >/dev/null 2>&1; then
+        hashed=$(printf '%s' "$raw" | sha256sum | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        hashed=$(printf '%s' "$raw" | shasum -a 256 | awk '{print $1}')
+    else
+        hashed="no-sha-$(date +%s)"
+    fi
+    command -v state_set >/dev/null 2>&1 && state_set telemetry_anon_id "$hashed" "$STATE_FILE"
+    echo "$hashed"
+}
+
+# ── Queue management ───────────────────────────────────────────────────────────
+_queue_event() {
+    local event_name="$1"
+    local props="${2:-}"
+    [ -n "$props" ] || props="{}"
+    local anon_id
+    anon_id=$(_get_or_create_id)
+    local version
+    version="$(state_get installed_version "$STATE_FILE")"
+    [ -n "$version" ] || version="unknown"
+    local os_name
+    os_name=$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "unknown")
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
+
+    command -v python3 >/dev/null 2>&1 || return 0
+
+    python3 - "$QUEUE_FILE" "$anon_id" "$event_name" "$props" \
+              "$version" "$os_name" "$timestamp" "$QUEUE_MAX_EVENTS" <<'PYEOF'
+import sys, json, os
+
+queue_file, anon_id, event_name, props_str = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+version, os_name, timestamp, max_events = sys.argv[5], sys.argv[6], sys.argv[7], int(sys.argv[8])
+
+queue = {"id": anon_id, "last_flush": 0, "events": []}
+if os.path.exists(queue_file):
+    try:
+        with open(queue_file, "r") as f:
+            queue = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        pass
+
+# Ensure ID is set (idempotent)
+if not queue.get("id"):
+    queue["id"] = anon_id
+
+# Parse extra properties
+try:
+    extra_props = json.loads(props_str)
+except (json.JSONDecodeError, ValueError):
+    extra_props = {}
+
+event = {
+    "event": event_name,
+    "timestamp": timestamp,
+    "properties": {
+        "$lib": "dev-team-agents",
+        "version": version,
+        "os": os_name,
+        **extra_props,
+    },
+}
+
+queue.setdefault("events", []).append(event)
+
+# Trim oldest events when over the cap (FIFO)
+if len(queue["events"]) > max_events:
+    queue["events"] = queue["events"][-max_events:]
+
+with open(queue_file, "w") as f:
+    json.dump(queue, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
+# ── Flush queue to PostHog ─────────────────────────────────────────────────────
+_should_flush() {
+    [ -f "$QUEUE_FILE" ] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
+
+    python3 - "$QUEUE_FILE" "$FLUSH_TTL_HOURS" "$QUEUE_MAX_EVENTS" <<'PYEOF'
+import sys, json, os, time
+
+queue_file, ttl_hours, max_cap = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+ttl_secs = ttl_hours * 3600
+
+try:
+    with open(queue_file, "r") as f:
+        queue = json.load(f)
+except (json.JSONDecodeError, IOError):
+    sys.exit(1)
+
+events = queue.get("events", [])
+if not events:
+    sys.exit(1)
+
+last_flush = queue.get("last_flush", 0)
+age = time.time() - last_flush
+if age >= ttl_secs or len(events) >= max_cap:
+    sys.exit(0)   # should flush
+sys.exit(1)       # not yet
+PYEOF
+}
+
+_flush_queue() {
+    [ -f "$QUEUE_FILE" ] || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+
+    local anon_id
+    anon_id=$(_get_or_create_id)
+    local dry_run="${1:-}"
+
+    # Build PostHog batch payload
+    local payload
+    payload=$(python3 - "$QUEUE_FILE" "$anon_id" "$POSTHOG_API_KEY" <<'PYEOF'
+import sys, json
+
+queue_file, anon_id, api_key = sys.argv[1], sys.argv[2], sys.argv[3]
+
+try:
+    with open(queue_file, "r") as f:
+        queue = json.load(f)
+except (json.JSONDecodeError, IOError):
+    sys.exit(0)
+
+events = queue.get("events", [])
+if not events:
+    sys.exit(0)
+
+batch = []
+for ev in events:
+    batch.append({
+        "distinct_id": anon_id,
+        "event": ev.get("event", "unknown"),
+        "timestamp": ev.get("timestamp", ""),
+        "properties": ev.get("properties", {}),
+    })
+
+print(json.dumps({"api_key": api_key, "batch": batch}))
+PYEOF
+    ) || return 0
+
+    [ -n "$payload" ] || return 0
+
+    if [ "$dry_run" = "--dry-run" ]; then
+        echo "=== telemetry dry-run: would send ==="
+        echo "$payload" | python3 -m json.tool 2>/dev/null || echo "$payload"
+        echo "======================================"
+        return 0
+    fi
+
+    # Send to PostHog. Exit status is captured (not swallowed) so a network
+    # failure leaves the queue untouched below instead of discarding events
+    # that were never actually delivered.
+    local send_ok=1
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL \
+            --connect-timeout 5 \
+            --max-time 10 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${POSTHOG_ENDPOINT}/batch/" \
+            >/dev/null 2>&1
+        send_ok=$?
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- \
+            --timeout=10 \
+            --post-data="$payload" \
+            --header="Content-Type: application/json" \
+            "${POSTHOG_ENDPOINT}/batch/" \
+            >/dev/null 2>&1
+        send_ok=$?
+    else
+        return 0
+    fi
+
+    [ "$send_ok" -eq 0 ] || return 0
+
+    # Update last_flush timestamp and clear sent events — only reached on
+    # confirmed delivery (send_ok=0 above)
+    python3 - "$QUEUE_FILE" <<'PYEOF'
+import sys, json, time
+
+queue_file = sys.argv[1]
+try:
+    with open(queue_file, "r") as f:
+        queue = json.load(f)
+except (json.JSONDecodeError, IOError):
+    sys.exit(0)
+
+queue["last_flush"] = time.time()
+queue["events"] = []
+
+with open(queue_file, "w") as f:
+    json.dump(queue, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
+# ── Main dispatch ──────────────────────────────────────────────────────────────
+MODE="${1:-}"
+
+case "$MODE" in
+    --queue)
+        _telemetry_enabled "$PREFS_FILE" || exit 0
+        EVENT="${2:-}"
+        PROPS="${3:-}"
+        [ -n "$PROPS" ] || PROPS="{}"
+        [ -n "$EVENT" ] || exit 0
+        mkdir -p "$USER_DATA_DIR"
+        _queue_event "$EVENT" "$PROPS"
+        ;;
+    --flush)
+        _telemetry_enabled "$PREFS_FILE" || exit 0
+        _should_flush || exit 0
+        _flush_queue
+        ;;
+    --dry-run)
+        _flush_queue --dry-run
+        ;;
+    *)
+        echo "Usage: telemetry-send.sh --queue EVENT [JSON_PROPS]" >&2
+        echo "       telemetry-send.sh --flush" >&2
+        echo "       telemetry-send.sh --dry-run" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

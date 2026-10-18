@@ -1,0 +1,15 @@
+Use /compact regularly or start a new session to keep your context window healthy and avoid hallucinations in long sessions.
+Run /devteam:review before opening a PR — it automatically calls code-reviewer, software-architect, and security-specialist.
+Record hard architectural decisions as ADRs: bash .dev-team-agents/scripts/new-adr.sh "title". This prevents agents from questioning settled choices.
+Use /devteam:plan at the start of any new feature — it runs a multi-agent analysis (architect + product + database + backend/frontend/devops as needed).
+Write non-obvious domain knowledge to the project wiki at docs/wiki/ after any revealing task — agents read it on startup.
+/devteam:commit groups your staged changes by layer and generates Conventional Commits automatically.
+Use /devteam:refactor for structured refactoring — it runs test-first coverage, maps dependencies, and produces ordered commit blocks.
+Run a health check occasionally: 'Run a health check on this project' — it auto-fixes stale hooks, broken symlinks, and outdated preferences.
+Use /devteam:security before any release or after touching auth, permissions, or data-handling code.
+The session-summary.md is read by agents on startup — keeping it updated means agents pick up context from your last session without re-asking questions.
+Use /devteam:dba when adding migrations or modifying schema — the database-specialist catches missed indexes and locking issues before they reach production.
+Set auto_update: true in preferences.json to get automatic updates of dev-team-agents when new versions are released.
+Use /devteam:docs to generate changelogs, runbooks, and release notes from your git history.
+Stack-specific skills (Next.js, Laravel, Vue, etc.) are auto-loaded by agents when detected — check .claude/skills/ for what is available in your project.
+Use /devteam:tester when you only need to add or update tests — it avoids spinning up the full dev team when scope is just coverage.

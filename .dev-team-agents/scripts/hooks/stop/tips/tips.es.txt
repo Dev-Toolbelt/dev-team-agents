@@ -1,0 +1,15 @@
+Usa /compact regularmente o inicia una nueva sesión para mantener tu ventana de contexto saludable y evitar alucinaciones en sesiones largas.
+Ejecuta /devteam:review antes de abrir un PR — llama automáticamente a code-reviewer, software-architect y security-specialist.
+Registra las decisiones arquitectónicas difíciles como ADRs: bash .dev-team-agents/scripts/new-adr.sh "título". Esto evita que los agentes cuestionen decisiones ya tomadas.
+Usa /devteam:plan al inicio de cualquier nueva funcionalidad — ejecuta un análisis multi-agente (architect + product + database + backend/frontend/devops según sea necesario).
+Escribe conocimiento de dominio no obvio en la wiki del proyecto en docs/wiki/ después de cualquier tarea reveladora — los agentes la leen al inicio.
+/devteam:commit agrupa tus cambios por capa y genera Conventional Commits automáticamente.
+Usa /devteam:refactor para refactorización estructurada — ejecuta cobertura test-first, mapea dependencias y produce bloques de commit ordenados.
+Ejecuta un health check ocasionalmente: 'Haz un health check en este proyecto' — corrige automáticamente hooks obsoletos, symlinks rotos y preferencias desactualizadas.
+Usa /devteam:security antes de cualquier release o después de tocar código de auth, permisos o manejo de datos.
+El session-summary.md es leído por agentes al inicio — mantenerlo actualizado significa que los agentes retoman el contexto de tu última sesión sin hacer preguntas repetidas.
+Usa /devteam:dba al agregar migraciones o modificar esquemas — el database-specialist detecta índices faltantes y problemas de bloqueo antes de que lleguen a producción.
+Establece auto_update: true en preferences.json para recibir actualizaciones automáticas de dev-team-agents cuando se publiquen nuevas versiones.
+Usa /devteam:docs para generar changelogs, runbooks y notas de versión desde tu historial git.
+Los skills específicos de stack (Next.js, Laravel, Vue, etc.) son cargados automáticamente por los agentes cuando se detectan — revisa .claude/skills/ para ver qué está disponible.
+Usa /devteam:tester cuando solo necesitas agregar o actualizar pruebas — evita activar al equipo completo cuando el alcance es solo cobertura.
