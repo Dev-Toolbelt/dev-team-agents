@@ -16,7 +16,7 @@
 # Resolved once, at source time, to an absolute path: a relative BASH_SOURCE would
 # point elsewhere if the caller changed directory before calling.
 # Logical cd on purpose (no -P): the result is the tree stop.sh itself came from.
-_DEVTEAM_SHIPPED_TREE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _DEVTEAM_SHIPPED_TREE=""
+_DEVTEAM_SHIPPED_TREE="$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _DEVTEAM_SHIPPED_TREE=""
 
 devteam_shipped_lint() {
     [ -n "$_DEVTEAM_SHIPPED_TREE" ] || return 0

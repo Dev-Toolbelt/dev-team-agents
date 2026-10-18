@@ -172,6 +172,7 @@ echo "Created: $FILENAME"
 # - Index with a `## Index` table: the row goes after the table's last row,
 #   wherever the table sits in the file. Never regenerated.
 # - Any other README.md (prose, a symlink): left untouched, with a notice.
+# shellcheck disable=SC2016 # the backticks are literal Markdown, not command substitution
 ROW=$(printf '| `%s` | Proposed | [keywords] | [read it when] |' "$(basename "$FILENAME")")
 if [ -L "$INDEX" ]; then
     echo "Not indexed: $INDEX is a symlink — add this row by hand: $ROW" >&2
@@ -183,6 +184,7 @@ if [ ! -f "$INDEX" ]; then
         printf '| ADR | Status | Keywords | Read it when |\n|-----|--------|----------|--------------|\n'
         adr_files | while IFS= read -r f; do
             [ "$f" = "$FILENAME" ] && continue
+            # shellcheck disable=SC2016 # the backticks are literal Markdown, not command substitution
             printf '| `%s` | [status] | [keywords] | [read it when] |\n' "$(basename "$f")"
         done
         printf '%s\n' "$ROW"
