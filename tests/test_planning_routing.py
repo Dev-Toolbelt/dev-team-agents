@@ -88,6 +88,67 @@ class PlanningRoutingTest(unittest.TestCase):
         self.assertIn("§ Sub-agent Question Relay", PLAN.read_text(encoding="utf-8"))
 
 
+def _template_block():
+    text = AUTO_ROUTING.read_text(encoding="utf-8")
+    start = text.index("```markdown\n## dev-team-agents")
+    end = text.index("\n```", start + 3)
+    return text[start:end + 4]
+
+
+class CompactRoutingTest(unittest.TestCase):
+    """The section is loaded on every turn, by every provider: it stays small and neutral."""
+
+    V3_MARKER = "<!-- devteam:routing v3 -->"
+    VERBOSE_NEEDLE = "#### `backend-developer`"
+
+    ROUTED = {
+        "backend-developer", "frontend-developer", "ui-ux-designer", "database-specialist",
+        "devops-specialist", "backend-test-specialist", "frontend-test-specialist",
+        "code-reviewer", "security-specialist", "qa-specialist", "technical-writer",
+    }
+    KEYS = (
+        "PROJECT_TYPE", "TESTS_REQUIRED", "CICD_PLATFORM", "GRAPHIFY", "BACKLOG_LOCATION",
+        "CLOUD_PROVIDER", "ISSUE_TRACKER", "ISSUE_TRACKER_ACCESS", "INACTIVE_AGENTS",
+    )
+
+    def test_block_stays_within_its_line_budget(self):
+        # Fences included, as the skill states.
+        self.assertLessEqual(len(_template_block().splitlines()), 50)
+
+    def test_block_names_no_provider_path(self):
+        # One text for CLAUDE.md and AGENTS.md: no provider path may appear in it.
+        block = _template_block()
+        for needle in (".claude/", ".codex/", ".opencode/"):
+            self.assertNotIn(needle, block)
+
+    def test_block_keeps_what_commands_and_checks_read(self):
+        block = _template_block()
+        for needle in (self.V3_MARKER, V2_MARKER, "AUTO_ROUTING: disabled") + tuple(k + ":" for k in self.KEYS):
+            self.assertIn(needle, block)
+
+    def test_every_routed_agent_exists(self):
+        names = set()
+        for line in _template_block().splitlines():
+            if line.startswith("| `"):
+                names.update(re.findall(r"`([a-z-]+)`", line.split("|")[1]))
+        self.assertEqual(names, self.ROUTED)
+        for name in names:
+            with self.subTest(agent=name):
+                self.assertTrue((REPO_ROOT / "agents" / (name + ".md")).is_file())
+
+    def test_health_check_migrates_the_verbose_section(self):
+        self.assertIn(self.VERBOSE_NEEDLE, CHECKS.read_text(encoding="utf-8"))
+        self.assertNotIn(self.VERBOSE_NEEDLE, _template_block())
+        self.assertIn("devteam:routing v3", FIXES.read_text(encoding="utf-8"))
+
+    def test_unedited_is_judged_against_the_shipped_legacy_block(self):
+        legacy = FIXES.parent / "legacy-routing-v2.md"
+        self.assertIn("legacy-routing-v2.md", FIXES.read_text(encoding="utf-8"))
+        text = legacy.read_text(encoding="utf-8")
+        self.assertIn(self.VERBOSE_NEEDLE, text)
+        self.assertIn("### Language", text)
+
+
 class SprintCommandTest(unittest.TestCase):
     def setUp(self):
         self.lib = render_provider.load_lib(REPO_ROOT / "scripts" / "lib")
