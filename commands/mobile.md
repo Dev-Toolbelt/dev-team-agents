@@ -7,7 +7,9 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
-If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — every spawned agent below treats its Given/When/Then as the implementation boundary and asks rather than assumes when something isn't covered.
+If the task links a spec (`docs/specs/<feature>.md`) or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md` and resolve it per § Task Resolution before anything else — a `draft` spec stops here per § Spec Status; a resolved task is marked `[~] In progress` when its agents are spawned. Every spawned agent below treats the resolved scenarios as the implementation boundary and asks rather than assumes when something isn't covered.
+
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. **If `yes` AND a spec was resolved:** test-first per the loaded spec-gate skill's § Test-First Derivation — Phase 0 derives failing tests from the resolved scenarios and commits them red (React Native / Expo → `frontend-test-specialist`; Flutter or native → `mobile-developer` in a tests-only spawn); Phase 1 then implements until they are green, and Phase 2 covers only what they do not.
 
 ---
 
@@ -31,7 +33,7 @@ Phase 2 — Tests (conditional) — spawn after Phase 1 completes:
 After Phase 1 (and Phase 2, if it ran) complete, **always** spawn the following in parallel via the Task tool — no user confirmation, this handoff is mandatory:
 
 - `code-reviewer` — scope: all files changed this session (`git diff` against the base branch); it will route to mobile-specific review as needed
-- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk
+- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk; when a spec was resolved, pass it per `spec-gate` § Task Resolution
 
 **After both complete**, synthesize their outputs into a single consolidated block of **critical findings only** and present it to the user:
 
@@ -79,29 +81,11 @@ Based on the user's choice:
 - **Não aplicar nada agora** → end the review
 - **Outro** → ask the user to describe their desired approach, then adapt accordingly
 
-**After the resolution agent(s) complete**, output a clear message indicating what was resolved:
-
-```
-✅ Code review findings resolvidos
-```
-
-or
-
-```
-✅ QA findings resolvidos
-```
-
-or
-
-```
-✅ Code review e QA findings resolvidos
-```
-
-depending on which were selected.
+**After the resolution agent(s) complete**, output exactly one line naming what was resolved — the code review findings, the QA findings, or both — matching the option chosen.
 
 ## Session close (mandatory)
 
-After the phases above complete — including any resolution agents:
+After the phases above complete — including any resolution agents. When a sprint task was resolved, first set it `[x] Done` if no BLOCKER is open, per `spec-gate` § Task Resolution:
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
 2. **Lessons learned (automatic)** — load `skills/shared/feature-learn/SKILL.md` and run its scoped promotion pass; skip silently if it finds nothing to promote.

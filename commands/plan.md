@@ -25,7 +25,7 @@ The `product-analyst` owns the content and the deliverable. Planning is business
 The `product-analyst` runs as a sub-agent, so its questions and approval gates reach the user through the main conversation, per the `interaction-patterns` skill § Sub-agent Question Relay. Each step below ends only when its report carries no `## Open Decisions` block.
 
 1. **Scope** — spawn `product-analyst`; relay its decision rounds; it writes the overview and returns it for approval; relay the approval.
-2. **Specs** — continue the same agent for Step 5b (one spec per feature, `skills/shared/spec-gate/SKILL.md`).
+2. **Specs** — continue the same agent for Step 5b (one spec per feature, `skills/shared/spec-gate/SKILL.md`); relay its spec approval gate, so every spec it returns is `approved` or stays `draft` by the user's choice.
 3. **Contract gate** — the main conversation evaluates § Gate Rule of `spec-gate` on each returned spec and spawns `software-architect` once for every spec that trips it, in parallel.
 4. **Close** — list the overview, specs, and contracts written, then offer sprint generation (Step 6) with `AskUserQuestion`; never generate sprints unasked. Once sprints exist, offer to execute the first one with `/devteam:sprint <scope-slug> 1` — never start it unasked.
 

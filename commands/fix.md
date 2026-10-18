@@ -9,7 +9,7 @@ Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $A
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
-If the bug links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — treat its Given/When/Then as the fix boundary and ask rather than assume when something isn't covered. This also loads its § Test-First Derivation rule, used below.
+If the bug links a spec (`docs/specs/<feature>.md`) or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md` and resolve it per § Task Resolution (it flips the task's status as that section says); a non-trivial bug in an existing feature with no spec gets the § Retroactive Spec offer first — treat its Given/When/Then as the fix boundary and ask rather than assume when something isn't covered. This also loads its § Test-First Derivation rule, used below.
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT write code directly in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
 
@@ -26,7 +26,7 @@ Skip tests entirely.
 
 **If `TESTS_REQUIRED=yes` (or the key is absent — default to running tests):** test-first — a failing regression test is written before the fix, per track:
 
-- Phase 1a — spawn the test-specialist(s) for the touched track(s) (`backend-test-specialist` and/or `frontend-test-specialist`) to write a test that reproduces the bug and fails against the current (broken) code. Derive the repro from the bug description in `$ARGUMENTS` as an implicit Given (repro state) / When (triggering action) / Then (expected correct behavior) — or from the linked spec's Given/When/Then if one exists, per the loaded skill's Test-First Derivation rule. If the expected correct behavior is ambiguous from the description alone, stop and ask via `AskUserQuestion` rather than guessing an assertion.
+- Phase 1a — spawn the test author(s) for the touched track(s) (`backend-test-specialist`, `frontend-test-specialist`, and/or `mobile-developer` in a tests-only spawn for Flutter/native) to write a test that reproduces the bug and fails against the current (broken) code. Derive the repro from the bug description in `$ARGUMENTS` as an implicit Given (repro state) / When (triggering action) / Then (expected correct behavior) — or from the linked spec's Given/When/Then if one exists, per the loaded skill's Test-First Derivation rule. If the expected correct behavior is ambiguous from the description alone, stop and ask via `AskUserQuestion` rather than guessing an assertion.
 - Phase 1b — after Phase 1a's tests are committed red, spawn the matching developer agent(s) in parallel to fix the bug until those tests (and the rest of the suite) are green:
   - `backend-developer` (if backend was touched)
   - `frontend-developer` (if frontend was touched)
@@ -37,6 +37,8 @@ Skip tests entirely.
 After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
 
 Then, if the fix touched UI, ask the **Visual Check Gate** from the same skill — after the review and any applied findings.
+
+When a sprint task was resolved: after the review returns with no open BLOCKER, set it `[x] Done` per `spec-gate` § Task Resolution (which also runs the `implemented` check). If the user declined the review, leave it `[~] In progress` and say so.
 
 ---
 
