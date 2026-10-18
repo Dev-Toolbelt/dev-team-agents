@@ -112,8 +112,12 @@ This document is the deliverable of the planning step — **ready to be turned i
 ## Step 5b — Spec per Feature (mandatory before sprints)
 
 Before generating sprints, write one spec to `docs/specs/<feature>.md` per feature/capability in the
-approved scope, using `.dev-team-agents/templates/spec-template.md`. Format, the `touches`/`depends_on` fields, and
-the auto-contract gate are defined in `skills/shared/spec-gate/SKILL.md` — load it here, not before.
+approved scope, using `.dev-team-agents/templates/spec-template.md`. Format, the `status`/`touches`/`depends_on` fields,
+scenario IDs, and the auto-contract gate are defined in `skills/shared/spec-gate/SKILL.md` — load it here, not before.
+Every spec is written `status: draft`; present the specs together for one approval gate (relayed as an Open
+Decision when you run as a sub-agent) and set `status: approved` only on the specs the user approved.
+
+For a feature that already exists (`/devteam:spec`), follow `spec-gate` § Retroactive Spec instead: describe the behavior as built, never a new scope.
 
 Skip this step only for a single-file, trivial change with no ambiguity (e.g. `/devteam:fix` scope) —
 state explicitly that no spec was written and why.
@@ -122,7 +126,7 @@ state explicitly that no spec was written and why.
 
 When the user asks to turn an approved scope into sprints (with several overviews, ask which one), generate them under **`docs/backlog/sprints/`**:
 
-- **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level (goal + acceptance criteria) unless the user asked for technical detail.
+- **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level unless the user asked for technical detail; spec-linked tasks follow the `backlog-template` Covers rule.
 - **`sprints.md`** — an index at `docs/backlog/sprints/sprints.md` with a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
 
 ### Design for Parallel Execution (mandatory)

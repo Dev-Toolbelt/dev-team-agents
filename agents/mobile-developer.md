@@ -24,7 +24,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/development/architecture.md`, `tech-stack.md`, and `code-standards.md` before writing a single line of code
 - Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before adding a new screen/component pattern
-- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation
+- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation; Flutter/native tests you write follow its § Test-First Derivation and § Traceability; for a retroactive spec, tag existing tests instead (§ Retroactive Spec)
 - Read `docs/backlog/` for the current task context
 - Follow `skills/shared/comments-policy/SKILL.md` for any code you write or review
 - Run `git log --oneline -10` — reveals recent patterns and active areas of the codebase

@@ -109,8 +109,8 @@ Scope-specific concerns (refactor, design, mobile, fullstack, review) are handle
 ### Contract Gate (auto-spawn from a spec)
 
 When spawned by the `spec-gate` rule (touches more than one layer, or introduces a new
-API/schema/integration point), write **only** `docs/specs/<feature>-contract.md` — interface shapes,
-schema fields, error format, technical dependency order. Load `skills/shared/spec-gate/SKILL.md`
+API/schema/integration point), write **only** `docs/specs/<feature>-contract.md` from
+`.dev-team-agents/templates/contract-template.md` — interfaces, schema, error format, dependency order. Load `skills/shared/spec-gate/SKILL.md`
 first. Do not touch the scope overview, restate the business rule, or make a product decision; a
 contradiction with the spec goes back to `product-analyst`, not a silent technical override.
 

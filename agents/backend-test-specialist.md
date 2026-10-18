@@ -49,6 +49,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Existing test files — understand the patterns, base classes, helpers, and factories already in use
 - Map existing coverage before writing: identify which paths of the target code are already tested, to avoid duplication and find the real gaps
 - The code under test — read it completely before deciding what to test
+- When the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md`: derive one test per scenario (only the task's `**Covers**:` IDs when given), before the implementation when the command runs test-first, and tag each with its `[spec:<feature>#S<n>]` token (§ Traceability); for a retroactive spec, tag existing tests instead of writing new ones (§ Retroactive Spec)
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
