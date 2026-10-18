@@ -1,0 +1,197 @@
+---
+description: Check for and apply dev-team-agents updates
+argument-hint: [<version tag>] [--yes] [--no] [--run-health-check|--skip-health-check]
+model: haiku
+---
+
+Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+---
+
+You are running the **`/devteam:update`** command.
+
+**IMPORTANT — Output rules:**
+- Be direct and terse. No analysis, no side notes, no observations, no commentary beyond what is specified below.
+- Do NOT add any personal remarks, flag issues you noticed, or mention things "worth flagging".
+- Do NOT explain what you are about to do before doing it.
+- Only output what each step below says to output.
+
+---
+
+## Arguments
+
+| Argument | Effect |
+|----------|--------|
+| _(none)_ | Check for updates and install if available |
+| `--yes` | Apply an available update without asking |
+| `--no` | Report an available update but do not apply it |
+| `--run-health-check` | After a successful update, run `/devteam:health-check` inline without asking |
+| `--skip-health-check` | After a successful update, skip the health-check question |
+| `--enable-auto` | Enable automatic updates |
+| `--disable-auto` | Disable automatic updates |
+| `vX.Y.Z` | Pin to a specific version |
+
+---
+
+## Step 0 — A v3-bound project is updated by the CLI
+
+If `.dev-team-agents/project.json` exists, run `devteam update` (`<version tag>` → `--ref <tag>`; `--no` → `--check`; `--enable-auto`/`--disable-auto` → `devteam prefs set auto_update true|false` instead), print its output, and **stop** — every step below is the v2 path, and `update.sh` refuses to run in a bound project.
+
+---
+
+## Step 1 — Read current version
+
+```bash
+source .dev-team-agents/scripts/lib/state.sh
+v=$(state_get installed_version .dev-team-agents/user-data/state.json); echo "${v:-unknown}"
+```
+
+Store the output as `<current-version>`. A missing **or empty** value both resolve to `unknown`.
+
+---
+
+## Step 2 — Repair path (only when `<current-version>` is exactly `unknown`)
+
+An `unknown` version means `installed_version` is missing from `.dev-team-agents/user-data/state.json` or the file is unreadable — the installation metadata is broken. Do **NOT** report "up to date" and do **NOT** run the version check (it cannot compare an unknown version). Force a fresh reinstall of the latest version to repair the metadata:
+
+```bash
+bash .dev-team-agents/scripts/update.sh latest
+rm -f .dev-team-agents/user-data/.last-releases-etag
+```
+
+Then read the repaired version:
+
+```bash
+source .dev-team-agents/scripts/lib/state.sh
+state_get installed_version .dev-team-agents/user-data/state.json 2>/dev/null || echo "unknown"
+```
+
+Output exactly (substituting the repaired version):
+
+```
+Installed version was missing — reinstalled latest.
+Now on <repaired-version>. Start a new session to pick up the changes.
+```
+
+Then skip Steps 3–5 and stop. Do not add anything else.
+
+---
+
+## Step 3 — Check for updates (only when `<current-version>` is a known version)
+
+```bash
+bash .dev-team-agents/scripts/check-updates.sh
+```
+
+It always asks GitHub afresh and prints at most one line.
+
+**If the script produces no output** → already up to date. Output exactly:
+
+```
+Installed: <current-version>
+Latest:    <current-version>
+
+Up to date.
+```
+
+Then stop. Do not add anything else.
+
+**If the output starts with `Could not check for updates:`** → print that line as is, then stop. Never report "Up to date" in this case.
+
+**If the output is `Update available: <current> → <latest>`** → take the latest version from it, then continue to Step 4.
+
+---
+
+## Step 4 — Offer to update
+
+Output exactly:
+
+```
+Update available: <current-version> → <latest-version>
+```
+
+Then immediately use the **`AskUserQuestion`** tool with a single question:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Apply update?",
+      "header": "Update",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes", "description": "Download and apply the update now." },
+        { "label": "No",  "description": "Skip this update and keep the current version." }
+      ]
+    }
+  ]
+}
+```
+
+Wait for the user's answer before proceeding.
+
+If `$ARGUMENTS` contains `--yes`, skip the question and proceed as if the user answered **Yes**.
+
+If `$ARGUMENTS` contains `--no`, skip the question and stop after printing `Update available: <current-version> → <latest-version>`.
+
+---
+
+## Step 5 — Apply the update (only if user said yes)
+
+```bash
+bash .dev-team-agents/scripts/update.sh latest
+```
+
+After the script exits successfully, output exactly:
+
+```
+Updated to <latest-version>. Start a new session to pick up the changes.
+```
+
+Then immediately use the **`AskUserQuestion`** tool to offer a health check:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Run a health check to verify the installation?",
+      "header": "Health check",
+      "multiSelect": false,
+      "options": [
+        { "label": "Yes", "description": "Run a health check on this project now." },
+        { "label": "No",  "description": "Skip the health check." }
+      ]
+    }
+  ]
+}
+```
+
+- If the user answers **Yes**: immediately execute the `/devteam:health-check` flow (`commands/health-check.md`) inline — Step 0 provider detection through Step 3 report — in this same turn. Do not stop after the answer and do not merely print a message describing the health check; run it.
+- If the user answers **No**: stop. Do not add anything else.
+
+If `$ARGUMENTS` contains `--run-health-check`, skip the question and run `/devteam:health-check` inline immediately after the update succeeds.
+
+If `$ARGUMENTS` contains `--skip-health-check`, skip the question and stop immediately after printing the update success line.
+
+---
+
+## Auto-update toggle (only if $ARGUMENTS contains a flag)
+
+| Argument | Command | Output |
+|----------|---------|--------|
+| `--enable-auto` | `bash .dev-team-agents/scripts/update.sh --enable-auto` | `Auto-update enabled.` |
+| `--disable-auto` | `bash .dev-team-agents/scripts/update.sh --disable-auto` | `Auto-update disabled.` |
+
+If either flag is present, skip Steps 1–5 and handle only the toggle.
+
+---
+
+## Pin to a specific version (only if $ARGUMENTS is a version tag like `v1.2.3`)
+
+Skip Steps 1–4. Run:
+
+```bash
+bash .dev-team-agents/scripts/update.sh $ARGUMENTS
+```
+
+Output exactly: `Installed <version>.`

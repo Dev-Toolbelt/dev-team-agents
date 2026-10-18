@@ -1,0 +1,199 @@
+---
+description: Consolidate this session's decisions into docs, wiki, and ADRs
+model: haiku
+---
+
+Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+**Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
+You are running the **`/devteam:learn`** command. **Purpose:** consolidate everything that happened in this session — decisions made, patterns established, conventions updated — into the project's persistent knowledge base. Run this at the end of any session where something non-obvious was learned, decided, or changed.
+
+## Step 1 — Gather session evidence
+
+Collect the raw material before classifying anything. Read only headers and first
+lines of the project docs — never whole files.
+
+```bash
+head -80 .dev-team-agents/user-data/session-summary.md 2>/dev/null || echo "(no session summary found)"
+git log --oneline -15
+git diff HEAD~3...HEAD --stat 2>/dev/null || git diff --stat
+find docs/ -newer .dev-team-agents/user-data/session-summary.md -type f 2>/dev/null | head -20
+head -5 docs/project.md docs/development/{architecture,code-standards,tech-stack}.md 2>/dev/null
+ls docs/wiki/ 2>/dev/null
+```
+
+**`--auto`:** derive the touched set per `skills/shared/feature-learn/SKILL.md` § Scope Derivation and
+pass it as a pathspec to every command above (`git log … -- <paths>`); an empty set ends the run as *nothing to update*.
+**`--embedded`** (the silent pass `/devteam:commit` runs before grouping): follow the same skill's § Embedded Commit Capture — no output, no question, no commit, no marker. Its rules override Steps 3–5 wherever they differ.
+
+Extract from that output:
+- **Done / Decisions / Next** from the most recent session-summary entry.
+- Which files changed, in which layers, and how many commits were made today.
+- Which docs were already updated this session (`find` hits) — skip those when patching.
+- Which project docs and wiki domains already exist, so updates land as patches.
+
+## Step 2 — Classify learnings into buckets
+
+Analyze the evidence collected in Step 1. Map each finding to one or more update buckets:
+
+| Bucket | Trigger | Target |
+|--------|---------|--------|
+| **Doc patch** | Architecture changed, new layer/module added, stack updated, standards detected or changed | `docs/development/*.md` or `docs/project.md` |
+| **Wiki entry** | Non-obvious flow discovered, gotcha hit, behavior that differs from what the name implies, cross-layer invariant | `docs/wiki/<domain>/` |
+| **ADR candidate** | Decision is hard to reverse, affects multiple components, has non-obvious reasoning | `docs/development/adrs/` |
+| **Reuse rule candidate** | Session standardized on a reusable component/helper, a file-location convention, or a design rule that must hold going forward | `docs/development/reuse-guidelines.md` |
+| **Session summary** | Summary missing for today OR decisions were made that aren't captured yet | `.dev-team-agents/user-data/session-summary.md` |
+| **Nothing to update** | Everything already documented, no decisions, trivial session | — |
+
+**Scoring rules:**
+- A finding goes into exactly one primary bucket; it may also flag a secondary bucket (e.g., an ADR candidate also triggers a wiki entry).
+- Only include findings that are **non-obvious** — derivable from reading the code doesn't count.
+- A changed pattern that already existed in docs requires a **patch** (update), not a new entry.
+
+## Step 3 — Present plan
+
+Before spawning any agent, present the classified findings as a plan:
+
+```
+## /devteam:learn — Session Knowledge Capture
+
+### Evidence summary
+[2–3 lines: what was done this session, sourced from Step 1]
+
+### Proposed updates
+
+| # | Bucket | Target file | What changes |
+|---|--------|-------------|--------------|
+| 1 | Doc patch | docs/development/architecture.md | [describe the patch] |
+| 2 | Wiki entry | docs/wiki/<domain>/<topic>.md | [describe the entry] |
+| 3 | ADR candidate | docs/development/adrs/NNNN-*.md | [describe the decision] |
+| 4 | Reuse rule candidate | docs/development/reuse-guidelines.md | [describe the rule, proposed `type`] |
+...
+
+### Agents to spawn
+- technical-writer (always) — doc patches, wiki entries, session summary, reuse rule candidates
+- software-architect (if ADR candidates detected) — ADR authoring and decision framing
+
+### Commit plan (auto-committed after execution)
+
+This command commits the knowledge-base updates automatically once the agents finish. Declare the commits up front — group the proposed updates by layer/type so each commit is atomic and conventional:
+
+| Commit # | Type & scope | Files | Message |
+|----------|--------------|-------|---------|
+| 1 | `docs(wiki)` | [wiki files] | [imperative summary] |
+| 2 | `docs(adr)` | [adr file] | [imperative summary] |
+| ... | ... | ... | ... |
+
+> **Total: N commits.** Message format is governed by the `conventional-commits` skill
+> (loaded in Step 5). Commits are local only; this command never pushes.
+
+Awaiting your approval before proceeding. Approving this plan authorizes the listed commits.
+```
+
+**`--auto`** (not `--embedded`, which prints nothing)**:** print the plan without the approval line and go straight to Step 4 — the flag is the approval, commits included. Reuse rule candidates become `/devteam:rule …` suggestions in the summary instead of a reuse-rule pass: that pass's per-row confirmation belongs to `reuse-guidelines` and is never skipped.
+
+If **nothing to update** was determined, output exactly `Nothing to capture — session knowledge is already up to date.`, record the run marker (see Step 5 item 4) and stop. Under `--embedded`: return an empty result silently, no marker.
+
+## Step 4 — Execute (after user approval, or directly with `--auto`)
+
+**MANDATORY:** Use the Task tool to spawn agents. Do NOT write files in the main context.
+
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
+### Always spawn:
+
+**`technical-writer`**
+
+Hand it this prompt, substituting the classified findings:
+
+```
+You are performing a /devteam:learn consolidation pass.
+
+Load `skills/shared/docs-sync/SKILL.md` before writing anything.
+
+Session evidence:
+[paste the evidence summary from Step 1]
+
+Approved updates to execute:
+[paste the approved table from Step 3]
+
+Rules:
+- **Location:** every documentation file goes under `docs/` at the project root, at the
+  target the docs-sync skill defines for it — never `.opencode/`, `.claude/`, or
+  `.dev-team-agents/`. Exception: the session summary, at
+  `.dev-team-agents/user-data/session-summary.md`.
+- Doc patches and wiki entries: follow docs-sync exactly — surgical Edit only, never a whole-file
+  rewrite, `<!-- last-updated -->` refreshed, its token-economy rules respected.
+- Session summary: if today's entry is missing or incomplete, write/append it now in the
+  format defined in CLAUDE.md.
+- For each file touched, output verbatim one line: "PATCHED <filepath>"
+```
+
+### Spawn conditionally (only if ADR candidates were detected):
+
+**`software-architect`**
+
+```
+You are performing a /devteam:learn ADR capture pass.
+
+Load `skills/shared/adr/SKILL.md`.
+
+ADR candidates identified this session:
+[paste ADR candidates from Step 3]
+
+For each candidate: run `bash .dev-team-agents/scripts/new-adr.sh "<decision title>"`, fill in
+Context/Decision/Consequences factually, set status to `Accepted` (`Proposed` under `--embedded`), output "ADR created: <filepath>".
+Skip decisions that are easily reversible or purely implementation-level.
+```
+
+### Spawn conditionally (only if reuse rule candidates were detected, and never under `--auto`/`--embedded`):
+
+**`technical-writer`**
+
+```
+You are performing a /devteam:learn reuse-rule capture pass.
+
+Load `skills/shared/reuse-guidelines/SKILL.md` — follow its "Growing the Registry"
+classify → propose → confirm → append routine exactly (do not reimplement it) for each
+reuse rule candidate below. Confirm each proposed row with `AskUserQuestion` before
+appending to `docs/development/reuse-guidelines.md`. Skip any candidate the user declines.
+
+Reuse rule candidates identified this session:
+[paste reuse rule candidates from Step 3]
+
+For each confirmed row, output: "Catalogado em docs/development/reuse-guidelines.md — regra <name> (<type>)."
+```
+
+## Step 5 — Auto-commit
+
+After all agents complete, execute the **Commit plan** declared in Step 3 — the plan approval (or `--auto`) already authorized these commits.
+
+1. Load `skills/shared/conventional-commits/SKILL.md` and follow it for message format, project-pattern detection and authorship rules.
+2. For each manifest row, stage only that row's files (`git add …`) and commit it. One
+   atomic commit per row; never mix layers; commit **locally only** — do not push.
+3. If a file in the manifest was not actually created/changed, skip its commit and note it.
+4. Record the run marker (any outcome, also on `--no-commit`; never under `--embedded`, whose caller records it) **after** the commits, so it holds the post-commit HEAD: `echo "$(date +%s) $(git rev-parse HEAD 2>/dev/null)" > .dev-team-agents/.learn-last-run` — read by the `commands/merge.md` § Step 4 nudge and `/devteam:commit`'s session guard.
+
+Then output a summary (not under `--embedded`, which returns only paths and suggestions):
+
+```
+## Session knowledge captured & committed
+
+[list each file patched/created, one per line]
+
+Commits created (N):
+[list each commit hash + message, one per line]
+```
+
+## $ARGUMENTS options
+
+| Argument | Effect |
+|----------|--------|
+| _(none)_ | Full learn pass — all buckets |
+| `docs` | Doc patches only — skip wiki and ADRs |
+| `wiki` | Wiki entries only |
+| `adr` | ADR candidates only |
+| `rule` | Reuse rule candidates only |
+| `--auto` | No approval question; scope limited to what this session/branch/worktree touched (Step 1, Step 3) |
+| `--embedded` | Silent pre-commit pass for `/devteam:commit` — see `feature-learn` § Embedded Commit Capture (Step 1) |
+| `--dry-run` | Show the classified plan (incl. commit manifest) only, do not spawn agents or commit — wins over `--auto` |
+| `--no-commit` | Run the full learn pass but skip the auto-commit — leave changes staged for manual commit |

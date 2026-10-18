@@ -1,0 +1,45 @@
+---
+description: Create a new Architecture Decision Record
+argument-hint: <ADR title>
+---
+
+Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
+
+---
+
+## Step 1 — Validate title
+
+`$ARGUMENTS` must contain the ADR title. If empty, stop and ask the user: "Please provide the ADR title, e.g.: `/devteam:adr Adopt PostgreSQL as primary database`"
+
+---
+
+## Step 2 — Create the ADR file
+
+Load `skills/shared/adr/SKILL.md` and run its Check Before Creating step against `docs/development/adrs/` — if the decision is already covered, follow that step's guidance (edit the existing file, or supersede it) instead of continuing here.
+
+Otherwise, run the ADR creation script to auto-number the file and place it in `docs/development/adrs/`:
+
+```bash
+bash .dev-team-agents/scripts/new-adr.sh "$ARGUMENTS"
+```
+
+Show the user the created file path.
+
+---
+
+## Step 3 — Fill the ADR template
+
+**MANDATORY:** Use the Task tool to spawn the agent below. Do NOT fill the template in the main context — always delegate.
+
+Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+
+- `software-architect` at `.claude/agents/dev-team/software-architect.md` — reads the generated ADR file, fills in Context, Decision, Consequences, and Alternatives using the current project context and the decision described in `$ARGUMENTS`. Changes status from `Proposed` to `Accepted` when the content is complete and the user approves.
+
+---
+
+**PLAN GATE — mandatory for the spawned agent:**
+1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
+2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before writing to the ADR file.
+3. Do not execute and then explain — plan first, execute second.
+
+Task: Fill ADR for decision: $ARGUMENTS
