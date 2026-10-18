@@ -23,12 +23,12 @@ if [ "${DEVTEAM_TOUCHED_COMPUTED:-0}" != "1" ]; then
 fi
 grep -qE '(^|/)docs/(specs|backlog/sprints)/' <<<"${DEVTEAM_TOUCHED_PATHS:-}" || exit 0
 
-# The lint shipped beside this hook first, then the bound copy — never a
-# `scripts/spec-lint.sh` the project provides, which would run repository code on
-# every Stop.
-SCRIPT="$(dirname "${BASH_SOURCE[0]}")/../../spec-lint.sh"
-[ -f "$SCRIPT" ] || SCRIPT="$REPO_ROOT/.dev-team-agents/scripts/spec-lint.sh"
-[ -f "$SCRIPT" ] || exit 0
+# Only the lint shipped beside this hook — never a project's own copy
+# (lib/shipped-lint.sh).
+# shellcheck source=scripts/hooks/lib/shipped-lint.sh
+. "$LIB_DIR/shipped-lint.sh" 2>/dev/null || exit 0
+SCRIPT="$(devteam_shipped_lint spec-lint.sh)"
+[ -n "$SCRIPT" ] || exit 0
 
 STATUS=0
 OUTPUT="$(bash "$SCRIPT" 2>&1)" || STATUS=$?

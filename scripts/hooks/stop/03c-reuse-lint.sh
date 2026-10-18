@@ -20,17 +20,13 @@ REGISTRY="$REPO_ROOT/docs/development/reuse-guidelines.md"
 
 # No path gate here by design: any touched file can violate a registered
 # reuse rule, so this runs whenever the dispatcher reports session changes.
-# The script ships beside this hook (scripts/hooks/stop → scripts/), which holds
-# in every layout; the project-relative paths are fallbacks.
+# Only the lint shipped beside this hook — never a project's own copy
+# (lib/shipped-lint.sh).
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$HOOK_DIR/../../reuse-lint.sh"
-[ -f "$SCRIPT" ] || SCRIPT="$REPO_ROOT/.dev-team-agents/scripts/reuse-lint.sh"
-# Only inside dev-team-agents itself: elsewhere `scripts/reuse-lint.sh` could be an
-# unrelated project script, executed on every Stop.
-if [ ! -f "$SCRIPT" ] && [ -f "$REPO_ROOT/scripts/lib/tiers.json" ]; then
-    SCRIPT="$REPO_ROOT/scripts/reuse-lint.sh"
-fi
-[ -f "$SCRIPT" ] || exit 0
+# shellcheck source=scripts/hooks/lib/shipped-lint.sh
+. "$HOOK_DIR/../lib/shipped-lint.sh" 2>/dev/null || exit 0
+SCRIPT="$(devteam_shipped_lint reuse-lint.sh)"
+[ -n "$SCRIPT" ] || exit 0
 
 # shellcheck source=scripts/hooks/lib/warn-once.sh
 if ! . "$HOOK_DIR/../lib/warn-once.sh" 2>/dev/null; then

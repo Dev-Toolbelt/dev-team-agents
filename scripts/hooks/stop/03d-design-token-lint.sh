@@ -9,9 +9,13 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 
-SCRIPT="$REPO_ROOT/.dev-team-agents/scripts/design-token-lint.sh"
-[ -f "$SCRIPT" ] || SCRIPT="$REPO_ROOT/scripts/design-token-lint.sh"
-[ -f "$SCRIPT" ] || exit 0
+# Only the lint shipped beside this hook — never a project's own
+# `scripts/design-token-lint.sh` (lib/shipped-lint.sh).
+# shellcheck source=scripts/hooks/lib/shipped-lint.sh
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
+. "$LIB_DIR/shipped-lint.sh" 2>/dev/null || exit 0
+SCRIPT="$(devteam_shipped_lint design-token-lint.sh)"
+[ -n "$SCRIPT" ] || exit 0
 
 # Never --quiet here: this script only ever exits 0, so quiet output would
 # make the check invisible. Only prints when it actually found something.
