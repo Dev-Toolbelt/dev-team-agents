@@ -61,7 +61,9 @@ class ReuseLintTest(StoreTestCase):
         result = subprocess.run(["bash", str(HOOK)], cwd=str(self.repo), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return result.returncode, result.stderr.decode()
 
-    MODAL = r"| modal | code-pattern | Use the shared Modal | `\b(new Modal\(\|<div class=\"modal)` | src/Modal.tsx | | | |"
+    # `\b` sits on the first branch only: there is no word boundary before `<` at line start, so
+    # GNU grep never matches the `<div` branch behind a leading `\b`.
+    MODAL = r'| modal | code-pattern | Use the shared Modal | `(\bnew Modal\(\|<div class="modal)` | src/Modal.tsx | | | |'
 
     def test_absent_registry_is_a_no_op(self):
         self.write("src/a.ts", "new Modal(\n")

@@ -54,7 +54,7 @@ class MergeWorktreeTests(unittest.TestCase):
         self.assertLess(session, branch)
 
     def test_flags_are_stripped_from_the_target(self):
-        self.assertIn("strip every `--flag` from `$ARGUMENTS`", _read("merge"))
+        self.assertIn("strip every `--flag` and the `skip-commit` / `abort-on-dirty` tokens from `$ARGUMENTS`", _read("merge"))
 
 
 if __name__ == "__main__":
