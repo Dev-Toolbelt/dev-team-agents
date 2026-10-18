@@ -7,7 +7,7 @@
 # the turn with the findings, and stop.sh downgrades a repeat while
 # stop_hook_active is set, so it cannot loop. WARN-only output (legacy specs,
 # uncovered scenarios) exits 2 once per distinct set of findings and then stays
-# quiet — the same marker scheme as 03e-adr-gap-check.sh. opencode only logs it.
+# quiet — lib/warn-once.sh, shared with 03c and 03e. opencode only logs it.
 set -euo pipefail
 
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
@@ -56,30 +56,8 @@ if [ "$STATUS" != 0 ]; then
 fi
 
 SIGNATURE="$(printf '%s\n' "$OUTPUT" | git hash-object --stdin 2>/dev/null || true)"
-MARKER=""
-if [ -n "$SIGNATURE" ]; then
-    # shellcheck source=scripts/hooks/lib/data-dirs.sh
-    . "$LIB_DIR/data-dirs.sh"
-    MAIN_REPO_ROOT="$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)" || MAIN_REPO_ROOT="$REPO_ROOT"
-    STATE_DIR="$(devteam_state_dir "${MAIN_REPO_ROOT:-$REPO_ROOT}" 2>/dev/null || true)"
-    [ -n "$STATE_DIR" ] && MARKER="$STATE_DIR/.spec-lint-warned"
-fi
-# Never read or written through a symlink: a cloned repository could commit one.
-if [ -n "$MARKER" ] && [ -L "$MARKER" ]; then
-    MARKER=""
-fi
-if [ -n "$MARKER" ] && [ -f "$MARKER" ] && [ "$(cat "$MARKER" 2>/dev/null)" = "$SIGNATURE" ]; then
-    exit 0
-fi
-if [ -n "$MARKER" ] && mkdir -p "$(dirname "$MARKER")" 2>/dev/null; then
-    TMP_MARKER="$(mktemp "$MARKER.XXXXXX" 2>/dev/null || true)"
-    if [ -n "$TMP_MARKER" ]; then
-        if printf '%s\n' "$SIGNATURE" 2>/dev/null >"$TMP_MARKER"; then
-            mv -f "$TMP_MARKER" "$MARKER" 2>/dev/null || rm -f "$TMP_MARKER"
-        else
-            rm -f "$TMP_MARKER"
-        fi
-    fi
-fi
+# shellcheck source=scripts/hooks/lib/warn-once.sh
+. "$LIB_DIR/warn-once.sh"
+devteam_warn_once .spec-lint-warned "$SIGNATURE" || exit 0
 _banner "WARNINGS"
 exit 2
