@@ -39,6 +39,7 @@ The health check runs unattended, on an installation it has just decided is brok
 | Path moved between versions | `mv` to the new path (merge if the target exists) | `rm` the source "after" migrating |
 | File in a superseded format | Adapt in place — add the new structure, keep existing content | Regenerate the file over the old one |
 | Config line replaced | Rewrite the line to its current form | Delete and re-add as two steps |
+| Unedited framework-written section superseded (e.g. a v1 `CLAUDE.md` routing section) | Copy it to quarantine, then rewrite it in place in one write | Rewrite a section the user edited — WARN and show the merge instead |
 | Content is unrecognized, orphaned, or ambiguous | `mv` to quarantine (below) | Delete as cleanup |
 | Directory left over and **empty** | `rmdir` without `-r` | `rm -rf` |
 | `<name>.pre-migration.bak` from `state_migrate_legacy`, confirmed | `rm` — only after Category 3 confirms the mapped key already holds a value in `state.json` | Delete before confirming, or on a mere assumption the migration ran |
@@ -79,7 +80,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` (directory checks skipped once `devteam upgrade` has moved state to the store) |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
 | 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity, and that a real refresh run actually rebuilds the output (not just that files exist) |
-| 6 | CLAUDE.md | `## dev-team-agents` section present |
+| 6 | CLAUDE.md / AGENTS.md | `## dev-team-agents` section present in each installed provider's file; no stale v1 planning-routing |
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `stop/04-notifier.sh` and `lib/notify.sh` present and executable; state files. Notices reach the user through the desktop app (ADR-0017) |

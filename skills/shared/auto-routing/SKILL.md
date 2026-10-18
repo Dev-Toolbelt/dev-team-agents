@@ -40,19 +40,18 @@ To disable routing permanently: add `AUTO_ROUTING: disabled` to this section.
 
 ### Auto-Routing: Planning
 
-**MANDATORY:** You MUST use the Task tool to spawn these three agents **in parallel, before writing any code**, whenever any condition below is true. Do NOT plan inline — always delegate. The only exception is when the user explicitly asks not to use agents (see Agent Opt-Out above).
+<!-- devteam:planning-routing v2 -->
+**MANDATORY:** a planning request is handled **exactly as the devteam `plan` command** — run it with the user's message as its task: `/devteam:plan` on Claude Code and opencode, `$devteam-plan` on Codex. That command is the only definition of the planning flow (who leads, when `software-architect` joins, who relays questions); do not plan inline and do not spawn planning agents from this list. The only exception is when the user explicitly asks not to use agents (see Agent Opt-Out above).
 
-- Message contains: plan, design, architect, structure, approach, strategy, how should we build, how should we implement, break into tasks, break down, create backlog, define scope, requirements, PRD, spec, user stories, acceptance criteria, ADR, trade-offs, what's the best way to, should we use
+Route to the plan flow when any condition below is true:
+
+- Message contains: plan, design a feature, how should we build, how should we implement, break into tasks, break down, create backlog, define scope, requirements, PRD, spec, user stories, acceptance criteria
 - Task requires multiple subtasks or agents
 - Business rules, flows, or scope are ambiguous
 - User enters plan mode or asks for a plan before execution
 - New feature or system is being designed from scratch
 
-| Agent | Path | Role |
-|---|---|---|
-| `product-analyst` | `.claude/agents/dev-team/product-analyst.md` | Scope closure, acceptance criteria, backlog generation |
-| `software-architect` | `.claude/agents/dev-team/software-architect.md` | System design, trade-offs, API contracts, ADR authoring |
-| `database-specialist` | `.claude/agents/dev-team/database-specialist.md` | Data modeling, schema decisions, migration planning |
+A **purely technical decision** with the scope already closed — ADR, trade-offs, architecture, "should we use X", "what's the best way to" — goes to the `architect` command instead (`/devteam:architect`, `$devteam-architect`); a database-engine or data-model choice goes to `dba` (`/devteam:dba`, `$devteam-dba`).
 
 Execution begins only after the plan is approved by the user.
 

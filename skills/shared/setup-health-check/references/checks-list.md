@@ -452,16 +452,21 @@ is not a finding.
 ## Category 6 — CLAUDE.md
 
 ```bash
-grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"
+[ -d .claude ] && { grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"; }
 grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/null && echo "OK: pre-compact-rule" || echo "MISSING: pre-compact-rule"
 grep -qF "<!-- dev-team-agents: commit-rule -->" CLAUDE.md 2>/dev/null && echo "OK: commit-rule" || echo "MISSING: commit-rule"
+grep -lF "spawn these three agents **in parallel" CLAUDE.md AGENTS.md 2>/dev/null | sed "s/^/STALE: planning-routing in /"
+# codex/opencode in this project (same signals as providers.detect_in_project) → AGENTS.md needs the section too
+{ [ -d .codex ] || [ -d .opencode ] || [ -f opencode.json ] || [ -f opencode.jsonc ]; } && ! grep -qE "^## dev-team-agents$" AGENTS.md 2>/dev/null && echo "MISSING SECTION: AGENTS.md"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
-| `## dev-team-agents` section present in `CLAUDE.md` | WARN — re-run setup (Step 5) to append the section |
+| `## dev-team-agents` section present in `CLAUDE.md` when Claude Code is in the project (`.claude/`) | WARN — re-run setup (Step 5) to append the section |
+| `## dev-team-agents` section present in `AGENTS.md` when Codex or opencode is installed (`MISSING SECTION: AGENTS.md`) | WARN — re-run setup (Step 5); Codex never reads `CLAUDE.md`, so without it plain-language requests are not routed there |
 | `<!-- dev-team-agents: pre-compact-auto-summary -->` marker present | Auto-fix: append the pre-compact auto-summary rule block (see fix-patterns.md) |
 | `<!-- dev-team-agents: commit-rule -->` marker present | Auto-fix: append the Commit Rule block (see fix-patterns.md) — without it, direct-prompt commits never load `conventional-commits` or show the Work Summary Table, since only `/devteam:commit` wires that in directly |
+| No `STALE: planning-routing in <file>` (`CLAUDE.md` or `AGENTS.md`) — the v1 `### Auto-Routing: Planning` section that spawns three planning agents in parallel | Auto-fix when the section is unedited, else WARN with the merge (see fix-patterns.md) — left alone, a plain-language planning request skips the `/devteam:plan` sequence |
 
 ## Category 7 — .gitignore
 

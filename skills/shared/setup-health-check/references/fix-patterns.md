@@ -262,6 +262,15 @@ done
 
 `BAK_UNCONFIRMED` entries are left untouched and reported as a WARN — an empty or missing key means the value was never actually copied into `state.json`, so the `.bak` is the only remaining copy and deleting it would be data loss, not cleanup.
 
+## Auto-fix for a stale planning-routing section in CLAUDE.md or AGENTS.md
+
+The section runs from the `### Auto-Routing: Planning` heading up to the next `---` line. Rewrite it only when it is **unedited**: it still contains the v1 three-agent table — the three rows `product-analyst`, `software-architect`, `database-specialist` with their `.claude/agents/dev-team/` paths — and no line outside the v1 template (the MANDATORY sentence, the five trigger bullets, the table, the `Execution begins only after the plan is approved` line). Then:
+
+1. Copy the old section to `$QUARANTINE/<file>-planning-routing.md` (§ Quarantine in `../SKILL.md`) and report the path.
+2. Replace it in place, in one write, with the current section from `skills/shared/auto-routing/SKILL.md` (it opens with `<!-- devteam:planning-routing v2 -->`).
+
+An edited section is not rewritten: report WARN and show the current section so the user merges it by hand.
+
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
 Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):

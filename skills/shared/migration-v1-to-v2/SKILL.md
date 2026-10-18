@@ -335,7 +335,7 @@ ISSUE_TRACKER_ACCESS: [read-only | read-write]
 | `.claude/docs/` | `docs/` |
 | `.claude/dev-team-agents/` | `.dev-team-agents/` |
 
-Replace keyword-based auto-routing sections with the v2 command table.
+Replace the v1 `### Auto-Routing: Planning` section (the one that spawns three planning agents in parallel) with the current one from `skills/shared/auto-routing/SKILL.md`, which routes planning requests through the devteam `plan` command. The execution and quality-gate keyword sections stay.
 
 ### 8. Sweep stale cross-references
 
