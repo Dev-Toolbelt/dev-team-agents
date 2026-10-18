@@ -1,5 +1,5 @@
-<!-- last-updated: 2026-10-13 -->
-**Last entries added:** app renderer Node version and useCall in-flight guard findings (2026-10-13)
+<!-- last-updated: 2026-10-18 -->
+**Last entries added:** command references are not rewritten per provider (2026-10-18)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -42,6 +42,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `python/path-containment-and-symlinks.md` | realpath, symlink, containment, relative_to, startswith, /private/var, path traversal | Deciding whether a path stays inside a directory before writing to or removing it |
 | `python/tarfile-extraction-filter.md` | tarfile, extractall, filter, data, tarslip, linkname, symlink, CVE, python 3.14 | Extracting an archive you did not create, or pinning which interpreter CI tests |
 | `render/rendered-paths-must-match-shipped-scripts.md` | render, path rewrite, tool-map.json, adr, script, render_provider.py, opencode, codex, tool_unavailable, docs/development | A path rewrite in tool-map.json breaks commands when shipped scripts don't follow it |
+| `render/command-references-are-not-rewritten-per-provider.md` | _CODEX_BODY_REPLACEMENTS, render_provider.py, command-map.json, $devteam-, /devteam:, Codex, opencode, inline command invocation, learn --auto | A command body runs another devteam command inline, or a Codex agent cannot find a `/devteam:<name>` reference |
 | `security/credential-guard-heredocs.md` | credential-guard, 03-credential-guard.sh, heredoc, credentials.local.json, session-summary, false positive, false negative, newline, segment, refuse, exit 2 | The credential guard blocks a heredoc that only mentions a credential file, or lets a dump on the line after a heredoc through |
 | `security/local-docker-service-role.md` | secret scanner, secret_scan.py, service_role, jwt, gitignore, .local, git ls-files, package scan | The secret scan flags a file, or you change what it scans |
 | `security/macOS-keychain-add-generic-password-double-entry.md` | macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag, readpassphrase, 128 characters, truncation, tty, security -i | Writing a value to the macOS keychain via `security add-generic-password` in a non-interactive context |
