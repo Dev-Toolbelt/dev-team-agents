@@ -16,15 +16,22 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 ## Protagonist — product-analyst
 
 Always spawn:
-- `product-analyst` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`docs/backlog/overview.md`) ready to become sprints. It stays out of technical design.
+- `product-analyst` — **the lead of this command.** It reads the request, interrogates it against its lenses, runs a short focused conversation to close the open decisions, and produces a **purely business-level** requirements document (`docs/backlog/overview-<scope-slug>.md`) ready to become sprints. It stays out of technical design.
 
-The `product-analyst` owns the conversation and the deliverable. Planning is business-first: the output is *what* and *why*, not *how*.
+The `product-analyst` owns the content and the deliverable. Planning is business-first: the output is *what* and *why*, not *how*.
 
-After `overview.md` is approved, `product-analyst` writes a spec per feature (Step 5b — see `skills/shared/spec-gate/SKILL.md`) before generating sprints.
+## Sequence — the main conversation owns it
+
+The `product-analyst` runs as a sub-agent, so its questions and approval gates reach the user through the main conversation, per the `interaction-patterns` skill § Sub-agent Question Relay. Each step below ends only when its report carries no `## Open Decisions` block.
+
+1. **Scope** — spawn `product-analyst`; relay its decision rounds; it writes the overview and returns it for approval; relay the approval.
+2. **Specs** — continue the same agent for Step 5b (one spec per feature, `skills/shared/spec-gate/SKILL.md`).
+3. **Contract gate** — the main conversation evaluates § Gate Rule of `spec-gate` on each returned spec and spawns `software-architect` once for every spec that trips it, in parallel.
+4. **Close** — list the overview, specs, and contracts written, then offer sprint generation (Step 6) with `AskUserQuestion`; never generate sprints unasked. Once sprints exist, offer to execute the first one with `/devteam:sprint <scope-slug> 1` — never start it unasked.
 
 ## Conditional — software-architect
 
-Spawn `software-architect` **explicitly** when the user asks for technical input in `$ARGUMENTS`, **or automatically** per the `spec-gate` rule: any spec whose `touches` field spans more than one layer, or that introduces a new API/schema/integration point, gets its `<feature>-contract.md` written by `software-architect` without waiting for the user to ask. Either way it contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
+Spawn `software-architect` **explicitly** when the user asks for technical input in `$ARGUMENTS` — after step 1, never in parallel with the scope conversation — **or automatically** at step 3 per the `spec-gate` rule: any spec whose `touches` field spans more than one layer, or that introduces a new API/schema/integration point, gets its `<feature>-contract.md` written by `software-architect` without waiting for the user to ask. Either way it contributes the technical layer **on top of** the product-analyst's business scope; it does not replace the product-analyst as lead.
 
 If the request is purely a feature/business ask and no spec trips the gate, do **not** spawn the software-architect — keep the plan business-only.
 
@@ -32,7 +39,7 @@ If the request is purely a feature/business ask and no spec trips the gate, do *
 
 **PLAN GATE — mandatory for every spawned agent:**
 1. Read `.dev-team-agents/resolved/preferences.json` → `language` field (default: `en`). Use that language for all responses, plans, and questions directed at the user.
-2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision.
+2. Present a structured plan following `skills/shared/plan-mode/SKILL.md` and wait for explicit user approval before executing any file operation, command, or decision — a sub-agent returns that approval as an Open Decision (§ Sub-agent Question Relay).
 3. Do not execute and then explain — plan first, execute second. If the user says "just do it": write the plan anyway, explain it protects both parties, and wait for approval.
 
 Task: $ARGUMENTS

@@ -24,21 +24,20 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 **Task prompt:**
 > $ARGUMENTS
 >
-> You are the orchestrator. Follow your full workflow including:
-> 1. Architecture planning and documentation in `docs/development/`
-> 2. User review gate — wait for explicit approval before proceeding to implementation
-> 3. Execution Strategy Gate — present worktree/branch options after plan approval
-> 4. **Autonomous Sprint Protocol** — if the user says "execute tudo autonomamente", "não me pergunte", "só me avise quando terminar", or similar: skip all questions, auto-resolve worktree from preferences.json, create the worktree/branch FIRST in your context, write the session file, THEN spawn sub-agents with WORKTREE_PATH in every prompt. Never let sub-agents write to the main tree.
-> 5. Delegate implementation to specialized agents via the Task tool using your "## EXECUTION — Delegate to Model-Aware Subagents" section
-> 6. Present a consolidated summary after all agents complete
->
-> Do NOT execute implementation tasks in your own context — always spawn subagents for implementation work.
+> Follow your full workflow: architecture planning and documentation in `docs/development/`, then delegation of the implementation to specialized agents. You cannot ask the user — return the plan approval and every other decision per `interaction-patterns` § Sub-agent Question Relay, and do not create a worktree or branch: the main conversation resolves them and continues you with `WORKTREE_PATH` and `BRANCH`. Every implementation spawn carries both, and no file is written outside `WORKTREE_PATH`. Do NOT execute implementation tasks in your own context.
+
+**Sequence — the main conversation owns it:**
+1. Spawn `software-architect`; relay its Open Decisions (§ Sub-agent Question Relay) until the plan is approved.
+2. Answer the architect's strategy Open Decision by running the **Execution Strategy Gate** from `skills/architecture/orchestration/SKILL.md` yourself — asked once, never twice — or its Autonomous Sprint Protocol when the user asked for autonomous execution — create the worktree or branch, and write the session file.
+3. Continue the same `software-architect` with `WORKTREE_PATH=<path>` and `BRANCH=<branch>` to delegate the implementation; keep relaying any decision it returns. Its report carries every spawned agent's run banner unchanged — those banners fill the summary below.
+
+Under the Autonomous Sprint Protocol, execution decisions take the protocol's defaults and its review cycle runs from the main conversation; a plan approval or a product decision is still asked — the relay never answers for the user.
 
 ---
 
 ## Post-execution — Consolidated Summary
 
-After the software-architect completes its full workflow (including any spawned implementation agents), present the consolidated summary to the user in the main context:
+After the software-architect completes its full workflow (including any spawned implementation agents), present the consolidated summary to the user in the main context — the agents list is filled from returned run banners only (orchestration § Spawn Integrity, check 3):
 
 ```
 ## Architecture & Implementation Complete
