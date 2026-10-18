@@ -271,6 +271,17 @@ The section runs from the `### Auto-Routing: Planning` heading up to the next `-
 
 An edited section is not rewritten: report WARN and show the current section so the user merges it by hand.
 
+## Auto-fix for a verbose routing section (compact routing)
+
+The section runs from the `## dev-team-agents` heading to the first of: the next `# ` or `## ` heading, a `<!-- dev-team-agents: … -->` marker line (the pre-compact and commit-rule blocks health-check appends start with one), or the end of the file. A section without `<!-- devteam:routing v3 -->` that still has `####` per-agent headings is the pre-v3 verbose form.
+
+Rewrite it only when it is **unedited**, judged by content, not by line type: apart from the config `KEY: value` lines, the agent `active|inactive` bullets, the `### Workflow` letter and blank lines, every line must appear verbatim in `legacy-routing-v2.md` (beside this file) — a `→ .claude/agents/dev-team/<agent>.md` suffix on a `####` heading is ignored. A project's own `**Files:**` paths, extra keywords, or a `### Language` sentence naming another language make the section edited. Then:
+
+1. Copy the old section to `$QUARANTINE/<file>-verbose-routing.md` (§ Quarantine in `../SKILL.md`) and report the path.
+2. Replace the section in place, in one write, with the current block from `skills/shared/auto-routing/SKILL.md`, carrying over every config value the old one had: agents marked `inactive` under `### Agent Activation` become `INACTIVE_AGENTS` (none → `none`); a `### Workflow` letter fills `PROJECT_TYPE` only when that key is missing (A → `new`, B → `inherited`, C → `maintenance`); `AUTO_ROUTING: disabled`, if present, is kept.
+
+An edited section is not rewritten: report WARN and show the current block so the user merges it by hand.
+
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
 Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):

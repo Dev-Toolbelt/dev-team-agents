@@ -305,28 +305,7 @@ EOF
 
 #### 6e. Configure AGENTS.md
 
-OpenCode reads `AGENTS.md` (takes precedence over `CLAUDE.md`). Create or update it with the dev-team-agents section:
-
-```markdown
-## dev-team-agents
-
-PROJECT_TYPE: [new | existing | migration | monorepo]
-TESTS_REQUIRED: yes
-CICD_PLATFORM: [github-actions | gitlab-ci | none]
-GRAPHIFY: [enabled | disabled]
-BACKLOG_LOCATION: local
-CLOUD_PROVIDER: [none | aws | gcp | azure]
-ISSUE_TRACKER: [none | jira | github]
-ISSUE_TRACKER_ACCESS: [read-only | read-write]
-
-### Agent Activation
-- product-analyst: active
-- software-architect: active
-- backend-test-specialist: active
-- frontend-test-specialist: active
-- ui-ux-designer: active
-- devops-specialist: active
-```
+OpenCode reads `AGENTS.md` (takes precedence over `CLAUDE.md`). Create or update it with the `## dev-team-agents` block from `skills/shared/auto-routing/SKILL.md` — the same text the project's `CLAUDE.md` carries, with its values.
 
 ### 7. Update `CLAUDE.md`
 
@@ -335,7 +314,7 @@ ISSUE_TRACKER_ACCESS: [read-only | read-write]
 | `.claude/docs/` | `docs/` |
 | `.claude/dev-team-agents/` | `.dev-team-agents/` |
 
-Replace the v1 `### Auto-Routing: Planning` section (the one that spawns three planning agents in parallel) with the current one from `skills/shared/auto-routing/SKILL.md`, which routes planning requests through the devteam `plan` command. The execution and quality-gate keyword sections stay.
+Replace the v1 `### Auto-Routing: Planning` section (the one that spawns three planning agents in parallel) with the current one from `skills/shared/auto-routing/SKILL.md`, which routes planning requests through the devteam `plan` command. If the section still has per-agent `####` keyword lists, the health check's compact-routing fix (`skills/shared/setup-health-check/references/fix-patterns.md`) brings it to the current block.
 
 ### 8. Sweep stale cross-references
 

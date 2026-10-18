@@ -80,7 +80,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` (directory checks skipped once `devteam upgrade` has moved state to the store) |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
 | 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity, and that a real refresh run actually rebuilds the output (not just that files exist) |
-| 6 | CLAUDE.md / AGENTS.md | `## dev-team-agents` section present in each installed provider's file; no stale v1 planning-routing |
+| 6 | CLAUDE.md / AGENTS.md | `## dev-team-agents` section present in each installed provider's file; no stale v1 planning-routing; no pre-v3 verbose routing |
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `stop/04-notifier.sh` and `lib/notify.sh` present and executable; state files. Notices reach the user through the desktop app (ADR-0017) |

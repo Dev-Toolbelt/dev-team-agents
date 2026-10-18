@@ -165,6 +165,19 @@ Read each file that exists. Combine the information into a unified understanding
 
 **Trivial-task exception**: when the task is confined to a single file with a small, well-specified change — the same bar as the Plan Mode "single-line typo fix" exception in `skills/shared/plan-mode/SKILL.md` — skip this loading order entirely and load only `CLAUDE.md` plus the target file. Fall back to the full order the moment the task turns out to touch more than one file or needs architectural context.
 
+**Focused tier**: between a Small change and the full order. It applies when the task stays inside **one layer or area** the request already names (one feature's backend, one screen, one script), raises no architectural question, and touches no public contract. Load:
+
+| Step | Focused load |
+|------|--------------|
+| 2, 6, 8 | The provider's instruction files (`CLAUDE.md`, `AGENTS.md`) and `.agents/` — project rules and overrides, always in full |
+| 1, 3 | `docs/project.md`; `README.md` only when `project.md` is absent |
+| 4 | The most recent session-summary entry |
+| 5 | ADR **titles** only; open an ADR only when its title names the area |
+| 9 | Only the `docs/development/` file the layer needs — `code-standards.md` for code — plus every unscoped `reuse-guidelines.md` row and the rows whose `scope` matches the paths you will touch |
+| 11 | The wiki index keyword lookup, as in the full order |
+
+Skip 7, 10 and 12 — unless the task comes from a sprint file, then read that one file. **Escalate to the full order** the moment the task crosses a second layer, needs a design choice, changes a contract, or a loaded source points somewhere you have not read. When unsure which tier applies, use the full order.
+
 ---
 
 ## Session Summary — Write Rules

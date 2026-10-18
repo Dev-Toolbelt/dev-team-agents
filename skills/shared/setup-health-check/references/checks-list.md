@@ -456,6 +456,7 @@ is not a finding.
 grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/null && echo "OK: pre-compact-rule" || echo "MISSING: pre-compact-rule"
 grep -qF "<!-- dev-team-agents: commit-rule -->" CLAUDE.md 2>/dev/null && echo "OK: commit-rule" || echo "MISSING: commit-rule"
 grep -lF "spawn these three agents **in parallel" CLAUDE.md AGENTS.md 2>/dev/null | sed "s/^/STALE: planning-routing in /"
+for f in CLAUDE.md AGENTS.md; do grep -qF '#### `backend-developer`' "$f" 2>/dev/null && ! grep -qF 'devteam:routing v3' "$f" && echo "STALE: verbose routing in $f"; done
 # codex/opencode in this project (same signals as providers.detect_in_project) → AGENTS.md needs the section too
 { [ -d .codex ] || [ -d .opencode ] || [ -f opencode.json ] || [ -f opencode.jsonc ]; } && ! grep -qE "^## dev-team-agents$" AGENTS.md 2>/dev/null && echo "MISSING SECTION: AGENTS.md"
 ```
@@ -467,6 +468,7 @@ grep -lF "spawn these three agents **in parallel" CLAUDE.md AGENTS.md 2>/dev/nul
 | `<!-- dev-team-agents: pre-compact-auto-summary -->` marker present | Auto-fix: append the pre-compact auto-summary rule block (see fix-patterns.md) |
 | `<!-- dev-team-agents: commit-rule -->` marker present | Auto-fix: append the Commit Rule block (see fix-patterns.md) — without it, direct-prompt commits never load `conventional-commits` or show the Work Summary Table, since only `/devteam:commit` wires that in directly |
 | No `STALE: planning-routing in <file>` (`CLAUDE.md` or `AGENTS.md`) — the v1 `### Auto-Routing: Planning` section that spawns three planning agents in parallel | Auto-fix when the section is unedited, else WARN with the merge (see fix-patterns.md) — left alone, a plain-language planning request skips the `/devteam:plan` sequence |
+| No `STALE: verbose routing in <file>` — a pre-v3 section with per-agent `####` keyword/file lists (~100 lines loaded on every turn) instead of the compact v3 tables | Auto-fix when unedited, else WARN with the merge (see fix-patterns.md § compact routing). Run after the planning-routing fix, so a v1 section is first brought to v2 |
 
 ## Category 7 — .gitignore
 
