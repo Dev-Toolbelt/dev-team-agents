@@ -150,8 +150,8 @@ def soften_plan_gate(body, provider, plan_gate_setting):
     """Remove or soften the mandatory PLAN GATE section for non-Claude providers.
     
     - Claude: keep verbatim
-    - codex/opencode with plan_gate="conditional": strip the mandatory gate,
-      replace with a lighter note
+    - codex/opencode with plan_gate="conditional": replace the gate with a
+      shorter note carrying the same plan-mode rule
     - codex/opencode with plan_gate="opt_out": strip entirely
     - codex/opencode with plan_gate="required": keep verbatim
     """
@@ -176,14 +176,15 @@ def soften_plan_gate(body, provider, plan_gate_setting):
     
     # plan_gate_setting == "conditional" — soften
     soft_note = (
-        "\n\n**Plan mode.** For complex or architecturally significant tasks, "
-        "present a brief plan before executing and wait for user approval. "
-        "For simple tasks (one-liner fixes, straightforward changes), "
-        "execute directly. Once a plan is approved, mirror its steps into your "
-        "native task list per `skills/shared/plan-mode/SKILL.md` "
-        "§ Task List Mirroring.\n"
+        "\n\n**Plan mode.** This session and every agent it spawns follow "
+        "`skills/shared/plan-mode/SKILL.md`: unless its § When a Plan Is Required "
+        "exempts the request, present a plan before changing anything and wait "
+        "for user approval, sized per § Plan Size — the compact plan only when "
+        "every Small-change condition holds, the full plan otherwise or when "
+        "unsure. Once a plan is approved, mirror its steps into your native task "
+        "list per § Task List Mirroring.\n"
     )
-    result = plan_gate_pattern.sub(soft_note, body)
+    result = plan_gate_pattern.sub(lambda _m: soft_note, body)
     # Keep Task: $ARGUMENTS reference
     return result
 

@@ -8,8 +8,8 @@
   "_featured_note": "`featured: true` marks the five commands a new user is shown (ADR-0030 section 5): the session-start banner, `devteam catalog commands --featured` and the app's catalog default view list only those. Exactly five carry it; the key is absent (not false) on every other command. It never hides or removes a command: every command stays installed on every provider. Presentation only, descriptions are not touched. Rendered into the Codex command skill as a `devteam-featured` marker comment; the Claude file is symlinked and the opencode config entry has no field for it, so on those two the banner and the catalog carry it.",
   "_related_note": "`related` lists the command names suggested once a command has been used (progressive reveal, scripts/lib/devteam/command_usage.py). Every target must be a file in commands/. Revealed = related of used commands, minus featured, minus already used, ordered by the source command's usage count.",
   "_plan_gate_values": {
-    "required": "Always present plan + wait for approval. Used for architectural/planning commands.",
-    "conditional": "Use plan mode for complex tasks; execute directly for simple ones. Plan gate text is softened for non-Claude providers.",
+    "required": "Always present plan + wait for approval; the PLAN GATE block is kept verbatim on every provider. Used for architectural/planning commands.",
+    "conditional": "Plan before changing anything, sized per skills/shared/plan-mode/SKILL.md § Plan Size (compact for a small change, full otherwise); read-only requests need no plan. For non-Claude providers the PLAN GATE block is replaced by a shorter note carrying the same rule.",
     "opt_out": "No plan gate. Used for thin runner commands (update, symlinks)."
   },
   "_interaction_mode_values": {
