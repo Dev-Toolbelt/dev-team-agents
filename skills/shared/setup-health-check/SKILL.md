@@ -85,7 +85,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `stop/04-notifier.sh` and `lib/notify.sh` present and executable; state files. Notices reach the user through the desktop app (ADR-0017) |
 | 10 | Credentials | `credentials.local.json` present/absent, no legacy copies, gitignored (via `devteam doctor`) |
-| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules` |
+| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules`; rule registry validity (`reuse-lint.sh --validate`) and standards-document staleness — WARN only |
 | 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
 | 13 | Productivity & Token-Efficiency Tools | `rg`, `fd`, `jq`, `ast-grep`, `tokei`, `delta` on PATH — WARN only, with OS-specific install hint per tool; not auto-installable |
 

@@ -201,6 +201,13 @@ When a conflict exists between our base standard and a project convention:
 
 **Explicit beats implicit.** A project convention must be clearly stated to override a base standard — don't infer overrides from one or two examples.
 
+### Between project sources
+
+The table above settles base standard against project. Two project sources against each other follow these rules:
+
+- **Scoped narrows global within the same source.** A registry row with a `scope` (or a section a document explicitly limits to an area) refines a repository-wide rule of the *same* source for files inside that scope — e.g. a scoped `reuse-guidelines.md` row over an unscoped one. It says nothing about files outside its scope.
+- **Across sources there is no fixed ranking.** The instruction files (`CLAUDE.md`, `AGENTS.md`, `.agents/`), ADRs, specs, and `docs/development/` standards never outrank each other by position — a scoped rule in one does not silently beat a global rule in another. When two of them disagree on what a task should do, flag both through the Contradiction Guard and let the user decide. Then update the losing source through its own change process — a superseding ADR (`skills/shared/adr/SKILL.md`), a spec Amendment Log entry (`skills/shared/spec-gate/SKILL.md`), an edit to an instruction file or standards doc — so the conflict does not recur.
+
 ---
 
 ## Immutability Warning
