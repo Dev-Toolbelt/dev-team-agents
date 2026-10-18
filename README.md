@@ -189,7 +189,7 @@ The `setup-assistant` will:
 3. **Ask** which type of project this is: new from scratch, inherited/unfinished, or maintenance on a live system
 4. **Collect** configuration in a single exchange: tests required, CI/CD platform, cloud provider, issue tracker
 5. **Present a plan** for your approval before creating or modifying anything
-6. **Generate** living context docs in `docs/` (stack, architecture, code standards, backlog index) and append a `## dev-team-agents` section to `CLAUDE.md`
+6. **Generate** living context docs in `docs/` (stack, architecture, code standards, backlog index) and append a compact `## dev-team-agents` routing section (under 50 lines, loaded every turn) to `CLAUDE.md` and, when Codex or opencode is installed, to `AGENTS.md` — the same text in both
 7. **Confirm** what was configured and point you to the relevant workflow guide
 
 The full setup typically takes 5–10 minutes. Re-running on an existing project triggers refresh mode — reads git history since the last run and patches only the affected docs.

@@ -189,7 +189,7 @@ O `setup-assistant` irá:
 3. **Perguntar** qual tipo de projeto é este: novo do zero, herdado/inacabado, ou manutenção de sistema em produção
 4. **Coletar** configuração em uma única troca: testes necessários, plataforma de CI/CD, provedor de nuvem, issue tracker
 5. **Apresentar um plano** para sua aprovação antes de criar ou modificar qualquer coisa
-6. **Gerar** documentos de contexto vivos em `docs/` (stack, arquitetura, padrões de código, índice de backlog) e acrescentar uma seção `## dev-team-agents` ao `CLAUDE.md`
+6. **Gerar** documentos de contexto vivos em `docs/` (stack, arquitetura, padrões de código, índice de backlog) e acrescentar uma seção compacta de roteamento `## dev-team-agents` (menos de 50 linhas, carregada a cada turno) ao `CLAUDE.md` e, quando Codex ou opencode está instalado, ao `AGENTS.md` — o mesmo texto nos dois
 7. **Confirmar** o que foi configurado e indicar o guia de workflow relevante
 
 O setup completo tipicamente leva de 5 a 10 minutos. Rodar novamente em um projeto existente ativa o modo refresh — lê o histórico git desde a última execução e aplica patches apenas nos docs afetados.
