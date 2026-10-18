@@ -209,11 +209,12 @@ After installation, Claude Code and opencode expose slash commands under the `/d
 | Command | What it does |
 |---------|-------------|
 | `/devteam:setup` | Onboarding — detects first run vs refresh, then setup-assistant configures `CLAUDE.md`, `docs/`, the wiki, and your preferences |
-| `/devteam:plan` | Planning — product-analyst leads and produces a business-only requirements doc ready for sprints; software-architect joins on explicit technical request |
+| `/devteam:plan` | Planning — product-analyst leads and produces a business-only requirements doc per scope plus a spec per feature; software-architect joins on explicit technical request or when a spec trips the contract gate. A plain-language planning request takes the same path |
 | `/devteam:backend` | Backend implementation — backend-developer + database-specialist → backend-test-specialist |
 | `/devteam:frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
+| `/devteam:sprint` | Execute an approved sprint from `/devteam:plan` wave by wave — worktree per task, the task's agent bound to its spec, review and merge into `sprint/<scope>-<n>` per wave, resumable |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
 | `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) |
