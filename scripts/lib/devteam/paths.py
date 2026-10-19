@@ -501,6 +501,9 @@ def locks_dir():
 #:
 #: `command-usage.json` counts how often this machine's user ran each devteam command
 #: (ADR-0030); it decides which commands the session-start banner reveals.
+#:
+#: `global-skills-lock.json` records what `devteam skills install` put into this machine's
+#: user-level skill roots, from which source, with which content hash (ADR-0040).
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -534,6 +537,10 @@ MACHINE_LOCAL_RECORDS = (
     # by signature, not a secret, but meaningless on another host.
     "entitlement.json",
     "account-session.json",
+    # What `devteam skills install` put into THIS machine's user-level skill roots, from
+    # which absolute source, with the content hash at install time. Source paths and
+    # hashes of directories under this host's home mean nothing on another host.
+    "global-skills-lock.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:
