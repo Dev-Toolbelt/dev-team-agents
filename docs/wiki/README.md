@@ -1,5 +1,5 @@
 <!-- last-updated: 2026-10-19 -->
-**Last entries added:** bash glob matching, control-character stripping, hashing a user-writable directory (2026-10-19)
+**Last entries added:** untrusted project run commands (2026-10-19)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -50,6 +50,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `security/local-docker-service-role.md` | secret scanner, secret_scan.py, service_role, jwt, gitignore, .local, git ls-files, package scan | The secret scan flags a file, or you change what it scans |
 | `security/macOS-keychain-add-generic-password-double-entry.md` | macOS, keychain, security, add-generic-password, double-entry, prompt, exit code, -w flag, readpassphrase, 128 characters, truncation, tty, security -i | Writing a value to the macOS keychain via `security add-generic-password` in a non-interactive context |
 | `security/test-seam-authz.md` | test seam, SR-44, DEVTEAM_AUTH_TEST_URL, DEVTEAM_AUTH_TEST_KID, DEVTEAM_AUTH_TEST_PUBKEY, DEVTEAM_AUTH_TEST_ANON_KEY, entitlement, loopback | Pointing the CLI at a local account service, or the seam seems to be ignored |
+| `security/untrusted-project-run-commands.md` | make -n, dry run, Makefile, npm scripts, pre/post hooks, compose project name, working_dir label, docker inspect, launch.json, preview_start | Showing or starting a repository's own commands (Make, npm, Compose, `.claude/launch.json`) before the user confirms them |
 | `store/bind-over-a-v2-install.md` | v2, vendored, bind, migrate, doctor, git, tracked, info/exclude, symlink, leftover | A project that used the v2 install was bound instead of migrated, or `git status` shows framework links as modified after a bind |
 | `store/v2-links-materialized-as-copies.md` | v2, migrate, bind, symlink, copy, materialized, dereference, windows, link file, quarantine, interrupted migration, preflight, project.json | `bind` says `.claude/...` "was not created by dev-team-agents" on a v2 project, or `migrate` says "no v2 install" on a project with framework copies |
 | `store/windows-symlink-stubs-recognized-as-v2-output.md` | Windows, symlink stub, core.symlinks=false, Git Bash, MSYS, Cygwin, Interix, migrate, bind, v2 | Symlink stubs are encoded in multiple formats on Windows, and `migrate` or `bind` fails with "already exists and was not created by dev-team-agents" |
