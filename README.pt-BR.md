@@ -246,6 +246,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:symlinks` | Reparo de symlinks — detecta o SO, repara links materializados como arquivos comuns e guia a correção quando o SO bloqueia symlinks nativos |
 | `/devteam:version` | Checagem de versão — imprime a versão instalada do dev-team-agents no mesmo layout do banner de início de sessão; uma única chamada bash, sem spawn de agente, custo mínimo de token |
 | `/devteam:status` | Snapshot do git status — branch/worktree, mudanças unstaged e staged, últimos 5 commits e totais em tabelas markdown formatadas; uma única chamada bash, sem spawn de agente, custo mínimo de token. `/devteam:status <nome-da-branch>` inspeciona essa branch em vez da atual |
+| `/devteam:up` · `/devteam:down` | Ambiente local — `/devteam:up` sobe o ambiente exatamente como o projeto documenta (Docker, nativo, por serviço), reaproveitando o que já roda para este checkout e confirmando os comandos antes; `/devteam:down` para o ambiente sem remover volumes nem dados. `/devteam:up docker` ou `/devteam:up local` escolhe o modo quando há mais de um documentado |
 
 **Exemplos de uso:**
 

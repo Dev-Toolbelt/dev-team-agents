@@ -246,6 +246,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
 | `/devteam:version` | Version check — prints the installed dev-team-agents version in the session-start banner layout; one bash call, no agent spawn, minimum token cost |
 | `/devteam:status` | Git status snapshot — branch/worktree, unstaged and staged changes, last 5 commits, and totals as formatted markdown tables; one bash call, no agent spawn, minimum token cost. `/devteam:status <branch-name>` inspects that branch instead of the current one |
+| `/devteam:up` · `/devteam:down` | Local environment — `/devteam:up` starts it exactly as the project documents it (Docker, native, per service), reusing what already runs for this checkout and confirming the commands first; `/devteam:down` stops it without removing volumes or data. `/devteam:up docker` or `/devteam:up local` picks a mode when several are documented |
 
 **Usage examples:**
 
